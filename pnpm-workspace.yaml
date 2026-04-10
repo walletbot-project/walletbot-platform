@@ -1,0 +1,9 @@
+packages:
+  - apps/*
+  - packages/*
+
+catalog:
+  '@convex-dev/better-auth': ^0.11.4
+  better-auth: ^1.6.2
+  convex: ^1.34.1
+  typescript: ^5.9.3

@@ -1,0 +1,24 @@
+{
+    "name": "@wallet-bot/backend",
+    "exports": {
+        "./api": "./convex/_generated/api.js"
+    },
+    "scripts": {
+        "dev": "convex dev",
+        "setup": "convex dev --until-success",
+        "typecheck": "tsc --noEmit -p convex"
+    },
+    "dependencies": {
+        "@convex-dev/better-auth": "catalog:",
+        "@convex-dev/workflow": "^0.3.8",
+        "@wallet-bot/shared": "workspace:*",
+        "better-auth": "catalog:",
+        "convex": "catalog:",
+        "convex-helpers": "^0.1.114",
+        "zod": "^3.25.76"
+    },
+    "devDependencies": {
+        "@types/node": "^24.12.0",
+        "typescript": "catalog:"
+    }
+}
