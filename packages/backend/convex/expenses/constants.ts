@@ -1,5 +1,3 @@
-export const MOCK_USER_ID = 'mock-user-demo'
-
 export const VALID_CATEGORIES = [
     'groceries',
     'transport',

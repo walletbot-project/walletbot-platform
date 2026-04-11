@@ -1,19 +1,39 @@
 import { api } from '@wallet-bot/backend/api'
-import type { ConvexHttpClient } from 'convex/browser'
+import type { ConvexClient } from 'convex/browser'
+import type { ConvexReactClient } from 'convex/react'
 
-const MOCK_USER_ID = 'mock-user-demo'
+type ConvexClientLike = ConvexClient | ConvexReactClient
 
 // ── Tool declarations (kept in sync with token constraints in convex/live/actions.ts) ──
 
 export const expenseToolDeclarations = [
     { name: 'addExpense' },
+    { name: 'updateExpense' },
     { name: 'deleteExpense' },
     { name: 'listExpenses' },
     { name: 'getExpenseSummary' },
 ]
 
-export const EXPENSE_SYSTEM_INSTRUCTION =
-    'You are a personal expense tracking assistant. Help the user track their spending by adding expenses, listing recent expenses, deleting expenses, and summarizing their spending. When the user mentions spending money, use the addExpense tool. When they ask about their expenses, use listExpenses or getExpenseSummary as appropriate. When they ask to delete an expense, use deleteExpense. Always confirm after adding or deleting an expense. The user can track expenses in USD (US dollars) or ARS (Argentine pesos). Default to USD unless the user says pesos or ARS. Always include the currency when confirming.'
+export const EXPENSE_SYSTEM_INSTRUCTION = `You are a personal expense tracking assistant. You help the user manage their expenses through voice.
+
+CAPABILITIES — you can:
+• Add new expenses (addExpense)
+• Edit existing expenses — change amount, description, category, currency, or date (updateExpense). Always list expenses first to get the ID.
+• Delete expenses (deleteExpense). Always list expenses first to get the ID.
+• List expenses with optional date range and/or category filter (listExpenses)
+• Get a spending summary with totals and category breakdown, optionally filtered by date range and/or category (getExpenseSummary)
+
+CATEGORIES: groceries, transport, dining, entertainment, utilities, health, shopping, other.
+
+CURRENCIES: USD (US dollars) or ARS (Argentine pesos). Default to USD unless the user says "pesos" or "ARS".
+
+RULES:
+• When the user mentions spending money, add the expense immediately.
+• When the user asks to see, find, or search expenses, use listExpenses. Use the category and date filters when the user specifies them (e.g. "show me dining expenses from last week").
+• When the user asks "how much did I spend on X", use getExpenseSummary with the appropriate category/date filters.
+• For edit or delete operations, call listExpenses first so you have the expense ID, then call updateExpense or deleteExpense.
+• Always confirm after adding, editing, or deleting an expense. Include the amount with currency.
+• Keep responses short and conversational.`
 
 // ── Tool execution ─────────────────────────────────────────────
 
@@ -34,7 +54,7 @@ function formatAmount(cents: number, currency: string): string {
 }
 
 export async function executeToolCall(
-    convexClient: ConvexHttpClient,
+    convexClient: ConvexClientLike,
     name: string,
     args: ToolCallArgs,
 ): Promise<Record<string, unknown>> {
@@ -44,7 +64,6 @@ export async function executeToolCall(
             const id = await convexClient.mutation(
                 api.expenses.mutations.addExpense,
                 {
-                    userId: MOCK_USER_ID,
                     amount: Math.round((args.amount ?? 0) * 100),
                     currency,
                     description: args.description ?? '',
@@ -58,9 +77,27 @@ export async function executeToolCall(
                 message: `Expense of ${formatAmount(Math.round((args.amount ?? 0) * 100), currency)} for "${args.description}" added successfully`,
             }
         }
+        case 'updateExpense': {
+            const updates: Record<string, string | number | undefined> = {}
+            if (args.amount !== undefined)
+                updates.amount = Math.round(args.amount * 100)
+            if (args.currency !== undefined) updates.currency = args.currency
+            if (args.description !== undefined)
+                updates.description = args.description
+            if (args.category !== undefined) updates.category = args.category
+            if (args.date !== undefined) updates.date = args.date
+
+            await convexClient.mutation(api.expenses.mutations.updateExpense, {
+                expenseId: args.expenseId ?? '',
+                ...updates,
+            })
+            return {
+                success: true,
+                message: 'Expense updated successfully',
+            }
+        }
         case 'deleteExpense': {
             await convexClient.mutation(api.expenses.mutations.deleteExpense, {
-                userId: MOCK_USER_ID,
                 expenseId: args.expenseId ?? '',
             })
             return {
@@ -72,9 +109,9 @@ export async function executeToolCall(
             const expenses = await convexClient.query(
                 api.expenses.queries.listExpensesByDateRange,
                 {
-                    userId: MOCK_USER_ID,
                     startDate: args.startDate ?? '2000-01-01',
                     endDate: args.endDate ?? '2099-12-31',
+                    category: args.category ?? undefined,
                 },
             )
             return {
@@ -93,9 +130,9 @@ export async function executeToolCall(
             const summary = await convexClient.query(
                 api.expenses.queries.getExpenseSummary,
                 {
-                    userId: MOCK_USER_ID,
                     startDate: args.startDate ?? undefined,
                     endDate: args.endDate ?? undefined,
+                    category: args.category ?? undefined,
                 },
             )
             return summary

@@ -11,27 +11,6 @@ export const router = createBrowserRouter([
         errorElement: <GlobalErrorBoundary />,
         children: [
             {
-                path: '/live-demo',
-                lazy: () =>
-                    import('@/pages/live-demo').then((m) => ({
-                        Component: m.LiveDemo,
-                    })),
-            },
-            {
-                path: '/live-demo-cloud',
-                lazy: () =>
-                    import('@/pages/live-demo-cloud').then((m) => ({
-                        Component: m.LiveDemoCloud,
-                    })),
-            },
-            {
-                path: '/expenses',
-                lazy: () =>
-                    import('@/pages/expenses').then((m) => ({
-                        Component: m.Expenses,
-                    })),
-            },
-            {
                 element: <PublicGuard />,
                 children: [
                     {
