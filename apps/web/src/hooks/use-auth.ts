@@ -1,4 +1,3 @@
-import type { RoleKey } from '@wallet-bot/shared/roles'
 import { useContext } from 'react'
 import {
     AuthContext,
@@ -24,18 +23,4 @@ export function useAuth(): AuthContextValue {
  */
 export function useUser(): AuthUser {
     return useAuth().user
-}
-
-/**
- * Current user's role keys.
- */
-export function useUserRoles(): string[] {
-    return useAuth().roles
-}
-
-/**
- * Check if the current user has a specific role (client-side, no server call).
- */
-export function useHasRole(role: RoleKey): boolean {
-    return useAuth().hasRole(role)
 }
