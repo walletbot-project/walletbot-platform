@@ -22,7 +22,7 @@ window.addEventListener('vite:preloadError', () => {
 const convex = new ConvexReactClient(
     import.meta.env.VITE_CONVEX_URL as string,
     {
-        expectAuth: true,
+        expectAuth: false,
     },
 )
 

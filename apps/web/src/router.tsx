@@ -25,6 +25,13 @@ export const router = createBrowserRouter([
                     })),
             },
             {
+                path: '/expenses',
+                lazy: () =>
+                    import('@/pages/expenses').then((m) => ({
+                        Component: m.Expenses,
+                    })),
+            },
+            {
                 element: <PublicGuard />,
                 children: [
                     {

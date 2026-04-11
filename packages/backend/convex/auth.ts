@@ -7,6 +7,7 @@ import { query } from './_generated/server'
 import authConfig from './auth.config'
 
 const siteUrl = process.env.SITE_URL!
+const convexSiteUrl = process.env.CONVEX_SITE_URL
 
 // The component client has methods needed for integrating Convex with Better Auth,
 // as well as helper methods for general use.
@@ -14,12 +15,19 @@ export const authComponent = createClient<DataModel>(components.betterAuth)
 
 export const createAuth = (ctx: GenericCtx<DataModel>) => {
     return betterAuth({
+        baseURL: convexSiteUrl,
         trustedOrigins: [siteUrl],
         database: authComponent.adapter(ctx),
         // Configure simple, non-verified email/password to get started
         emailAndPassword: {
-            enabled: true,
+            enabled: false,
             requireEmailVerification: false,
+        },
+        socialProviders: {
+            google: {
+                clientId: process.env.GOOGLE_CLIENT_ID as string,
+                clientSecret: process.env.GOOGLE_CLIENT_SECRET as string,
+            },
         },
         plugins: [
             // The cross domain plugin is required for client side frameworks
