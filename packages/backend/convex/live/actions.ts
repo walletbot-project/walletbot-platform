@@ -1,92 +1,173 @@
 'use node'
 
+import type { FunctionDeclaration } from '@google/genai'
 import { GoogleGenAI, Modality, Type } from '@google/genai'
 import { action } from '../_generated/server'
-import { VALID_CATEGORIES } from '../expenses/constants'
 
 const MODEL = 'gemini-3.1-flash-live-preview'
 const TOKEN_TTL_MS = 30 * 60 * 1000 // 30 minutes
 
-const SYSTEM_INSTRUCTION = `You are a personal expense tracking assistant. You help the user manage their expenses through voice.
+const SYSTEM_INSTRUCTION = `You are a personal finance tracking assistant. You help the user manage their expenses, income, and transfers through voice.
+
+LANGUAGE:
+• CRITICAL: Always respond in the same language the user is speaking. If they speak Spanish, respond in Spanish. If they switch to English, switch to English. Mirror their language at all times.
+• Tool calls always use English field names and enum values (e.g., category "groceries", type "expense"), but your spoken responses must be in the user's language.
 
 CAPABILITIES — you can:
-• Add new expenses (addExpense)
-• Edit existing expenses — change amount, description, category, currency, or date (updateExpense). Always list expenses first to get the ID.
-• Delete expenses (deleteExpense). Always list expenses first to get the ID.
-• List expenses with optional date range and/or category filter (listExpenses)
-• Get a spending summary with totals and category breakdown, optionally filtered by date range and/or category (getExpenseSummary)
+• Add transactions: expenses, income, or transfers (addTransaction)
+• Edit existing transactions (updateTransaction). Always list first to get the ID.
+• Delete transactions (deleteTransaction). Always list first to get the ID.
+• List transactions with optional filters: type, date range, category (listTransactions)
+• Get a spending/income summary with totals and breakdown (getTransactionSummary)
+• Check account balances (getAccountBalance)
+• Tag transactions (addTransaction or updateTransaction with tagNames)
 
-CATEGORIES: groceries, transport, dining, entertainment, utilities, health, shopping, other.
+TRANSACTION TYPES:
+• "expense" — money leaving an account (e.g., "I spent 50 on groceries" / "gasté 50 en supermercado")
+• "income" — money entering an account (e.g., "I got paid 3000" / "me pagaron 3000")
+• "transfer" — money moving between accounts (e.g., "I moved 500 from bank to cash" / "pasé 500 del banco a efectivo")
 
-CURRENCIES: USD (US dollars) or ARS (Argentine pesos). Default to USD unless the user says "pesos" or "ARS".
+CATEGORIES: groceries, transport, dining, entertainment, utilities, health, shopping, other, salary, freelance, investment, gift.
+
+CURRENCIES: USD (US dollars), ARS (Argentine pesos), EUR (euros), BRL (Brazilian reals).
+• Do NOT assume a default currency. The system will provide the correct default based on the user's account settings.
+• Only set currency explicitly when the user mentions a specific currency (e.g., "dollars", "pesos", "euros").
+• If the user does not mention currency, omit the currency field — the system will use the account's default.
+
+ACCOUNTS: Users have accounts like Cash, Bank, Credit Card. When not specified, use the default account.
+
+CALCULATOR:
+• You have a calculate tool — use it for ALL math. Never do mental math. This ensures precision.
+• Use it for: currency conversions, totaling amounts, splitting bills, percentages, tip calculation, any arithmetic the user asks about.
+• You can also use it to do follow-up math on query results. E.g., after getTransactionSummary, use calculate to compute "how much per day" or "what percentage is dining out of total".
+
+CURRENCY CONVERSIONS:
+• The user may ask you to convert amounts between currencies. Use fetchExchangeRate to get the current rate, then use calculate to do the math.
+• The user may also provide the rate themselves — in that case, just use calculate directly.
+• To record a currency exchange as a transaction (e.g. "I sold 100 USD and got 140,000 ARS"):
+  - Use type "transfer" with fromAccountId and toAccountId
+  - Set amount to the SOURCE amount (100), currency to the SOURCE currency (USD)
+  - Set destinationAmount to the DESTINATION amount (140000), destinationCurrency to ARS
+  - The description should mention the exchange (e.g. "USD to ARS exchange")
+• When the user asks "how much is X in Y", fetch the rate and calculate — don't record a transaction unless they ask to.
 
 RULES:
-• When the user mentions spending money, add the expense immediately.
-• When the user asks to see, find, or search expenses, use listExpenses. Use the category and date filters when the user specifies them (e.g. "show me dining expenses from last week").
-• When the user asks "how much did I spend on X", use getExpenseSummary with the appropriate category/date filters.
-• For edit or delete operations, call listExpenses first so you have the expense ID, then call updateExpense or deleteExpense.
-• Always confirm after adding, editing, or deleting an expense. Include the amount with currency.
+• When the user mentions spending money, add an expense immediately.
+• When the user mentions receiving money/salary, add income.
+• When the user mentions moving money between accounts, add a transfer.
+• When the user asks to see or search transactions, use listTransactions with appropriate filters.
+• When the user asks "how much did I spend", use getTransactionSummary.
+• When the user asks about their balance, use getAccountBalance.
+• For edit/delete operations, list transactions first to get the ID.
+• Always confirm after adding, editing, or deleting. Include amount with currency.
+• Tags can be used for cross-cutting labels like "vacation", "reimbursable", etc.
 • Keep responses short and conversational.`
 
-import type { FunctionDeclaration } from '@google/genai'
-
-const addExpenseTool: FunctionDeclaration = {
-    name: 'addExpense',
+const addTransactionTool: FunctionDeclaration = {
+    name: 'addTransaction',
     description:
-        'Add a new personal expense. Call this when the user mentions spending money on something.',
+        'Add a new transaction. Use type "expense" when spending, "income" when receiving money, "transfer" when moving between accounts.',
     parameters: {
         type: Type.OBJECT,
         properties: {
+            type: {
+                type: Type.STRING,
+                description: 'Transaction type',
+                enum: ['expense', 'income', 'transfer'],
+            },
             amount: {
                 type: Type.NUMBER,
                 description:
-                    'The expense amount (e.g. 12.50 for twelve and fifty cents)',
+                    'The amount (e.g. 12.50 for twelve and fifty cents)',
             },
             currency: {
                 type: Type.STRING,
                 description:
-                    'Currency code. Use "USD" for US dollars, "ARS" for Argentine pesos. Defaults to USD.',
-                enum: ['USD', 'ARS'],
+                    'Currency code. Only set if the user explicitly mentions a currency. Omit to use the account default.',
+                enum: ['USD', 'ARS', 'EUR', 'BRL'],
             },
             description: {
                 type: Type.STRING,
-                description: 'Brief description of what the expense was for',
+                description: 'Brief description of the transaction',
             },
             category: {
                 type: Type.STRING,
-                description: 'Expense category',
-                enum: [...VALID_CATEGORIES],
+                description:
+                    'Category name. Required for expenses, optional for income.',
+                enum: [
+                    'groceries',
+                    'transport',
+                    'dining',
+                    'entertainment',
+                    'utilities',
+                    'health',
+                    'shopping',
+                    'other',
+                    'salary',
+                    'freelance',
+                    'investment',
+                    'gift',
+                ],
+            },
+            fromAccountName: {
+                type: Type.STRING,
+                description:
+                    'Source account name (e.g. "Bank", "Cash"). Required for expense/transfer.',
+            },
+            toAccountName: {
+                type: Type.STRING,
+                description:
+                    'Destination account name. Required for income/transfer.',
             },
             date: {
                 type: Type.STRING,
+                description: 'Date in YYYY-MM-DD format. Defaults to today.',
+            },
+            tagNames: {
+                type: Type.ARRAY,
                 description:
-                    'Date of the expense in YYYY-MM-DD format. Defaults to today if not specified.',
+                    'Optional tag names (e.g. ["vacation", "reimbursable"])',
+                items: { type: Type.STRING },
+            },
+            notes: {
+                type: Type.STRING,
+                description: 'Optional notes',
+            },
+            destinationAmount: {
+                type: Type.NUMBER,
+                description:
+                    'For cross-currency transfers: the amount received in the destination currency. E.g., if selling 100 USD and getting 140000 ARS, amount=100, currency=USD, destinationAmount=140000, destinationCurrency=ARS.',
+            },
+            destinationCurrency: {
+                type: Type.STRING,
+                description:
+                    'Currency code for the destination side of a cross-currency transfer.',
+                enum: ['USD', 'ARS', 'EUR', 'BRL'],
             },
         },
-        required: ['amount', 'description', 'category'],
+        required: ['type', 'amount', 'description'],
     },
 }
 
-const updateExpenseTool: FunctionDeclaration = {
-    name: 'updateExpense',
+const updateTransactionTool: FunctionDeclaration = {
+    name: 'updateTransaction',
     description:
-        'Update an existing expense. Use listExpenses first to find the expense ID. Only include the fields you want to change.',
+        'Update an existing transaction. List transactions first to find the ID. Only include fields to change.',
     parameters: {
         type: Type.OBJECT,
         properties: {
-            expenseId: {
+            transactionId: {
                 type: Type.STRING,
-                description: 'The ID of the expense to update',
+                description: 'The ID of the transaction to update',
             },
             amount: {
                 type: Type.NUMBER,
-                description:
-                    'New amount (e.g. 12.50 for twelve and fifty cents). Only if changing.',
+                description: 'New amount. Only if changing.',
             },
             currency: {
                 type: Type.STRING,
-                description: 'New currency code. Only if changing.',
-                enum: ['USD', 'ARS'],
+                description: 'New currency. Only if changing.',
+                enum: ['USD', 'ARS', 'EUR', 'BRL'],
             },
             description: {
                 type: Type.STRING,
@@ -95,93 +176,183 @@ const updateExpenseTool: FunctionDeclaration = {
             category: {
                 type: Type.STRING,
                 description: 'New category. Only if changing.',
-                enum: [...VALID_CATEGORIES],
+                enum: [
+                    'groceries',
+                    'transport',
+                    'dining',
+                    'entertainment',
+                    'utilities',
+                    'health',
+                    'shopping',
+                    'other',
+                    'salary',
+                    'freelance',
+                    'investment',
+                    'gift',
+                ],
             },
             date: {
                 type: Type.STRING,
-                description: 'New date in YYYY-MM-DD format. Only if changing.',
+                description: 'New date in YYYY-MM-DD. Only if changing.',
             },
-        },
-        required: ['expenseId'],
-    },
-}
-
-const deleteExpenseTool: FunctionDeclaration = {
-    name: 'deleteExpense',
-    description:
-        'Delete an expense by its ID. Use listExpenses first to find the expense ID.',
-    parameters: {
-        type: Type.OBJECT,
-        properties: {
-            expenseId: {
+            tagNames: {
+                type: Type.ARRAY,
+                description: 'New tags. Replaces existing tags.',
+                items: { type: Type.STRING },
+            },
+            notes: {
                 type: Type.STRING,
-                description: 'The ID of the expense to delete',
+                description: 'New notes. Only if changing.',
             },
         },
-        required: ['expenseId'],
+        required: ['transactionId'],
     },
 }
 
-const listExpensesTool: FunctionDeclaration = {
-    name: 'listExpenses',
+const deleteTransactionTool: FunctionDeclaration = {
+    name: 'deleteTransaction',
     description:
-        'List expenses. Supports filtering by date range and/or category. Call this when the user asks to see, find, or search their expenses.',
+        'Delete a transaction by ID. List transactions first to find the ID.',
     parameters: {
         type: Type.OBJECT,
         properties: {
+            transactionId: {
+                type: Type.STRING,
+                description: 'The ID of the transaction to delete',
+            },
+        },
+        required: ['transactionId'],
+    },
+}
+
+const listTransactionsTool: FunctionDeclaration = {
+    name: 'listTransactions',
+    description:
+        'List transactions. Supports filtering by type, date range, and category.',
+    parameters: {
+        type: Type.OBJECT,
+        properties: {
+            type: {
+                type: Type.STRING,
+                description: 'Filter by type. Optional.',
+                enum: ['expense', 'income', 'transfer'],
+            },
             startDate: {
                 type: Type.STRING,
-                description:
-                    'Start date for filtering in YYYY-MM-DD format. Optional.',
+                description: 'Start date YYYY-MM-DD. Optional.',
             },
             endDate: {
                 type: Type.STRING,
-                description:
-                    'End date for filtering in YYYY-MM-DD format. Optional.',
+                description: 'End date YYYY-MM-DD. Optional.',
             },
             category: {
                 type: Type.STRING,
-                description: 'Filter by category. Optional.',
-                enum: [...VALID_CATEGORIES],
+                description: 'Filter by category name. Optional.',
+                enum: [
+                    'groceries',
+                    'transport',
+                    'dining',
+                    'entertainment',
+                    'utilities',
+                    'health',
+                    'shopping',
+                    'other',
+                    'salary',
+                    'freelance',
+                    'investment',
+                    'gift',
+                ],
             },
         },
         required: [],
     },
 }
 
-const getExpenseSummaryTool: FunctionDeclaration = {
-    name: 'getExpenseSummary',
+const getTransactionSummaryTool: FunctionDeclaration = {
+    name: 'getTransactionSummary',
     description:
-        'Get a spending summary with total amount and breakdown by category. Supports filtering by date range and/or category. Call this when the user asks "how much did I spend" or wants totals.',
+        'Get spending/income summary with totals and category breakdown. Call when user asks "how much did I spend".',
     parameters: {
         type: Type.OBJECT,
         properties: {
             startDate: {
                 type: Type.STRING,
-                description:
-                    'Start date for the summary period in YYYY-MM-DD format. Optional.',
+                description: 'Start date YYYY-MM-DD. Optional.',
             },
             endDate: {
                 type: Type.STRING,
-                description:
-                    'End date for the summary period in YYYY-MM-DD format. Optional.',
-            },
-            category: {
-                type: Type.STRING,
-                description: 'Filter summary to a single category. Optional.',
-                enum: [...VALID_CATEGORIES],
+                description: 'End date YYYY-MM-DD. Optional.',
             },
         },
         required: [],
+    },
+}
+
+const getAccountBalanceTool: FunctionDeclaration = {
+    name: 'getAccountBalance',
+    description:
+        'Get the balance of a specific account. Call when user asks "how much do I have" or about their balance.',
+    parameters: {
+        type: Type.OBJECT,
+        properties: {
+            accountName: {
+                type: Type.STRING,
+                description:
+                    'Account name (e.g. "Bank", "Cash", "Credit Card")',
+            },
+        },
+        required: ['accountName'],
+    },
+}
+
+const calculateTool: FunctionDeclaration = {
+    name: 'calculate',
+    description:
+        'Evaluate a math expression safely. Use this for any arithmetic the user asks about — currency conversions, splitting bills, percentages, etc. Supports +, -, *, /, parentheses, and variables.',
+    parameters: {
+        type: Type.OBJECT,
+        properties: {
+            expression: {
+                type: Type.STRING,
+                description:
+                    'Math expression to evaluate. E.g. "100 * 1400", "500 / 3", "0.1 + 0.2".',
+            },
+        },
+        required: ['expression'],
+    },
+}
+
+const fetchExchangeRateTool: FunctionDeclaration = {
+    name: 'fetchExchangeRate',
+    description:
+        'Fetch the current exchange rate between two currencies from the internet. Use this when the user asks for a conversion rate or wants to convert an amount and did not provide the rate themselves.',
+    parameters: {
+        type: Type.OBJECT,
+        properties: {
+            fromCurrency: {
+                type: Type.STRING,
+                description: 'Source currency code.',
+                enum: ['USD', 'ARS', 'EUR', 'BRL'],
+            },
+            toCurrency: {
+                type: Type.STRING,
+                description: 'Target currency code.',
+                enum: ['USD', 'ARS', 'EUR', 'BRL'],
+            },
+        },
+        required: ['fromCurrency', 'toCurrency'],
     },
 }
 
 const TOOL_DECLARATIONS: FunctionDeclaration[] = [
-    addExpenseTool,
-    updateExpenseTool,
-    deleteExpenseTool,
-    listExpensesTool,
-    getExpenseSummaryTool,
+    addTransactionTool,
+    updateTransactionTool,
+    deleteTransactionTool,
+    listTransactionsTool,
+    getTransactionSummaryTool,
+    getAccountBalanceTool,
+    calculateTool,
+    fetchExchangeRateTool,
 ]
 
 export const requestLiveToken = action({

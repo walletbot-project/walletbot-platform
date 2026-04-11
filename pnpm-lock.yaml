@@ -57,6 +57,9 @@ importers:
       '@wallet-bot/backend':
         specifier: workspace:*
         version: link:../../packages/backend
+      '@wallet-bot/shared':
+        specifier: workspace:*
+        version: link:../../packages/shared
       better-auth:
         specifier: 'catalog:'
         version: 1.5.6(@opentelemetry/api@1.9.1)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
@@ -178,6 +181,9 @@ importers:
       '@wallet-bot/shared':
         specifier: workspace:*
         version: link:../shared
+      a-calc:
+        specifier: ^3.0.0
+        version: 3.0.0(zod@3.25.76)
       better-auth:
         specifier: 'catalog:'
         version: 1.5.6(@opentelemetry/api@1.9.1)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
@@ -199,6 +205,10 @@ importers:
         version: 6.0.2
 
   packages/shared:
+    dependencies:
+      a-calc:
+        specifier: ^3.0.0
+        version: 3.0.0(zod@4.3.6)
     devDependencies:
       typescript:
         specifier: 'catalog:'
@@ -1892,6 +1902,10 @@ packages:
         optional: true
       babel-plugin-react-compiler:
         optional: true
+
+  a-calc@3.0.0:
+    resolution: {integrity: sha512-fTBKkR+huRQFH04RmUGSmNoskm0l6pvPjEe+fiYHEYIpUJloZcR3ylHhSSpyMNuNvM3dQM962Qheh4KPxySDCg==}
+    hasBin: true
 
   accepts@2.0.0:
     resolution: {integrity: sha512-5cvg6CtKwfgdmVqY1WIiXKc3Q1bkRqGLi+2W/6ao+6Y7gu/RCwRuAhGEzh5B4KlszSuTLgZYuqFqo5bImjNKng==}
@@ -3696,6 +3710,9 @@ packages:
       eslint: ^8.57.0 || ^9.0.0 || ^10.0.0
       typescript: '>=4.8.4 <6.1.0'
 
+  typescript-treasure@0.0.9:
+    resolution: {integrity: sha512-QPmpqJvQqZ7rt2iVNzPrtQNSFs1zVuTuP+jzE3np7qytEUcfSKtAW8RTDslldeAwaJjVJa0UM3ps1uVddpEMqQ==}
+
   typescript@6.0.2:
     resolution: {integrity: sha512-bGdAIrZ0wiGDo5l8c++HWtbaNCWTS4UTv7RaTH/ThVIgjkveJt83m74bBHMJkuCbslY8ixgLBVZJIOiQlQTjfQ==}
     engines: {node: '>=14.17'}
@@ -4741,6 +4758,28 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
+  '@modelcontextprotocol/sdk@1.29.0(zod@4.3.6)':
+    dependencies:
+      '@hono/node-server': 1.19.13(hono@4.12.12)
+      ajv: 8.18.0
+      ajv-formats: 3.0.1(ajv@8.18.0)
+      content-type: 1.0.5
+      cors: 2.8.6
+      cross-spawn: 7.0.6
+      eventsource: 3.0.7
+      eventsource-parser: 3.0.6
+      express: 5.2.1
+      express-rate-limit: 8.3.2(express@5.2.1)
+      hono: 4.12.12
+      jose: 6.2.2
+      json-schema-typed: 8.0.2
+      pkce-challenge: 5.0.1
+      raw-body: 3.0.2
+      zod: 4.3.6
+      zod-to-json-schema: 3.25.2(zod@4.3.6)
+    transitivePeerDependencies:
+      - supports-color
+
   '@mswjs/interceptors@0.41.3':
     dependencies:
       '@open-draft/deferred-promise': 2.2.0
@@ -5359,6 +5398,24 @@ snapshots:
     optionalDependencies:
       '@rolldown/plugin-babel': 0.2.2(@babel/core@7.29.0)(@babel/runtime@7.29.2)(rolldown@1.0.0-rc.15)(vite@8.0.8(@types/node@24.12.2)(esbuild@0.27.3)(jiti@2.6.1))
       babel-plugin-react-compiler: 1.0.0
+
+  a-calc@3.0.0(zod@3.25.76):
+    dependencies:
+      '@modelcontextprotocol/sdk': 1.29.0(zod@3.25.76)
+      typescript-treasure: 0.0.9
+    transitivePeerDependencies:
+      - '@cfworker/json-schema'
+      - supports-color
+      - zod
+
+  a-calc@3.0.0(zod@4.3.6):
+    dependencies:
+      '@modelcontextprotocol/sdk': 1.29.0(zod@4.3.6)
+      typescript-treasure: 0.0.9
+    transitivePeerDependencies:
+      - '@cfworker/json-schema'
+      - supports-color
+      - zod
 
   accepts@2.0.0:
     dependencies:
@@ -7143,6 +7200,8 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
+  typescript-treasure@0.0.9: {}
+
   typescript@6.0.2: {}
 
   undici-types@7.16.0: {}
@@ -7325,6 +7384,10 @@ snapshots:
   zod-to-json-schema@3.25.2(zod@3.25.76):
     dependencies:
       zod: 3.25.76
+
+  zod-to-json-schema@3.25.2(zod@4.3.6):
+    dependencies:
+      zod: 4.3.6
 
   zod-validation-error@4.0.2(zod@3.25.76):
     dependencies:

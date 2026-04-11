@@ -121,11 +121,3 @@ When working on Convex code, **always read `convex/_generated/ai/guidelines.md` 
 
 Convex agent skills for common tasks can be installed by running `npx convex ai-files install`.
 <!-- convex-ai-end -->
-
-## Violations report and journal
-
-After every major task, you must always do a full pass over all modified and other relevant files checking if any of the above rules were violated. If any, you must fix it and write a section in the VIOLATIONS.md file explaining the violation and why it happened. You must also report violations when a user remarks some error you made.
-
-After every major task you must write a small entry in the JOURNAL.md file describing what you did, what you learned for feature reference.
-
-Violations are not a way of excusing bad practices. You never remove violations. If you are 100% sure a violation is needed you must request authorization. Violation is to log mistakes you made violating rules, not a way of justifying breaking rules.

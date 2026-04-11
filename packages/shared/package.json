@@ -9,5 +9,8 @@
     },
     "devDependencies": {
         "typescript": "catalog:"
+    },
+    "dependencies": {
+        "a-calc": "^3.0.0"
     }
 }
