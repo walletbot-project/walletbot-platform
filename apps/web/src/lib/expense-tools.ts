@@ -17,6 +17,8 @@ export const transactionToolDeclarations = [
     { name: 'getAccountBalance' },
     { name: 'calculate' },
     { name: 'fetchExchangeRate' },
+    { name: 'createAccount' },
+    { name: 'listAccounts' },
 ]
 
 /** @deprecated Use transactionToolDeclarations */
@@ -57,6 +59,9 @@ interface ToolCallArgs {
     // Exchange rate
     fromCurrency?: string
     toCurrency?: string
+    // Account creation
+    name?: string
+    icon?: string
 }
 
 // ── Helpers ─────────────────────────────────────────────────────
@@ -132,11 +137,22 @@ export async function executeToolCall(
             const txType = args.type ?? 'expense'
             const amountCents = Math.round((args.amount ?? 0) * 100)
 
-            // Resolve accounts
-            const accounts = await convexClient.query(
+            // Resolve accounts — auto-seed if none exist
+            let accounts = await convexClient.query(
                 api.accounts.queries.listAccounts,
                 {},
             )
+            if (accounts.length === 0) {
+                await convexClient.mutation(
+                    api.accounts.mutations.seedDefaultAccounts,
+                    {},
+                )
+                accounts = await convexClient.query(
+                    api.accounts.queries.listAccounts,
+                    {},
+                )
+            }
+
             let fromAccountId: AddTxArgs['fromAccountId']
             let toAccountId: AddTxArgs['toAccountId']
 
@@ -355,6 +371,52 @@ export async function executeToolCall(
                 return {
                     error: `Could not fetch rate for ${args.fromCurrency} -> ${args.toCurrency}`,
                 }
+            }
+        }
+
+        case 'createAccount': {
+            if (!args.name) return { error: 'Account name is required' }
+            try {
+                const id = await convexClient.mutation(
+                    api.accounts.mutations.createAccount,
+                    {
+                        name: args.name,
+                        type: (args.type as 'asset' | 'liability') ?? 'asset',
+                        icon: args.icon ?? '💰',
+                        currency:
+                            (args.currency as AddTxArgs['currency']) ?? 'USD',
+                    },
+                )
+                return {
+                    success: true,
+                    accountId: id,
+                    message: `Account "${args.name}" created successfully`,
+                }
+            } catch (err) {
+                return {
+                    error:
+                        err instanceof Error
+                            ? err.message
+                            : 'Failed to create account',
+                }
+            }
+        }
+
+        case 'listAccounts': {
+            const allAccounts = await convexClient.query(
+                api.accounts.queries.listAccounts,
+                {},
+            )
+            return {
+                accounts: allAccounts.map((a) => ({
+                    id: a._id,
+                    name: a.name,
+                    type: a.type,
+                    icon: a.icon,
+                    currency: a.currency,
+                    isDefault: a.isDefault,
+                })),
+                count: allAccounts.length,
             }
         }
 

@@ -21,6 +21,7 @@ CAPABILITIES — you can:
 • Get a spending/income summary with totals and breakdown (getTransactionSummary)
 • Check account balances (getAccountBalance)
 • Tag transactions (addTransaction or updateTransaction with tagNames)
+• Create accounts (createAccount) and list existing accounts (listAccounts)
 
 TRANSACTION TYPES:
 • "expense" — money leaving an account (e.g., "I spent 50 on groceries" / "gasté 50 en supermercado")
@@ -34,7 +35,11 @@ CURRENCIES: USD (US dollars), ARS (Argentine pesos), EUR (euros), BRL (Brazilian
 • Only set currency explicitly when the user mentions a specific currency (e.g., "dollars", "pesos", "euros").
 • If the user does not mention currency, omit the currency field — the system will use the account's default.
 
-ACCOUNTS: Users have accounts like Cash, Bank, Credit Card. When not specified, use the default account.
+ACCOUNTS:
+• Users have accounts like Cash, Bank, Credit Card. When not specified, use the default account.
+• IMPORTANT: Before adding a transaction, if the user has no accounts yet, create one first. Ask the user what to call it (e.g., "Cash", "Bank") and what currency they use. If the user seems eager to just log a transaction quickly, create a "Cash" account with the currency they seem to be using (infer from context) and proceed immediately — don't block them.
+• You can list accounts with listAccounts to check what exists.
+• You can create accounts with createAccount. Provide name, type ("asset" for bank/cash/savings, "liability" for credit cards/loans), icon (emoji), and currency.
 
 CALCULATOR:
 • You have a calculate tool — use it for ALL math. Never do mental math. This ensures precision.
@@ -344,6 +349,50 @@ const fetchExchangeRateTool: FunctionDeclaration = {
     },
 }
 
+const createAccountTool: FunctionDeclaration = {
+    name: 'createAccount',
+    description:
+        'Create a new account for the user. Use this when the user has no accounts yet or wants to add a new one.',
+    parameters: {
+        type: Type.OBJECT,
+        properties: {
+            name: {
+                type: Type.STRING,
+                description:
+                    'Account name (e.g. "Cash", "Bank", "Credit Card")',
+            },
+            type: {
+                type: Type.STRING,
+                description:
+                    'Account type: "asset" for money the user has (bank, cash, savings), "liability" for money owed (credit card, loan)',
+                enum: ['asset', 'liability'],
+            },
+            icon: {
+                type: Type.STRING,
+                description:
+                    'Emoji icon for the account (e.g. "💵" for cash, "🏦" for bank, "💳" for credit card)',
+            },
+            currency: {
+                type: Type.STRING,
+                description: 'Default currency for this account',
+                enum: ['USD', 'ARS', 'EUR', 'BRL'],
+            },
+        },
+        required: ['name', 'type', 'icon', 'currency'],
+    },
+}
+
+const listAccountsTool: FunctionDeclaration = {
+    name: 'listAccounts',
+    description:
+        'List all user accounts. Use this to check if accounts exist before adding transactions, or when the user asks about their accounts.',
+    parameters: {
+        type: Type.OBJECT,
+        properties: {},
+        required: [],
+    },
+}
+
 const TOOL_DECLARATIONS: FunctionDeclaration[] = [
     addTransactionTool,
     updateTransactionTool,
@@ -353,6 +402,8 @@ const TOOL_DECLARATIONS: FunctionDeclaration[] = [
     getAccountBalanceTool,
     calculateTool,
     fetchExchangeRateTool,
+    createAccountTool,
+    listAccountsTool,
 ]
 
 export const requestLiveToken = action({
