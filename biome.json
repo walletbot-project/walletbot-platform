@@ -37,6 +37,9 @@
             },
             "performance": {
                 "noImgElement": "off"
+            },
+            "correctness": {
+                "noChildrenProp": "off"
             }
         },
         "domains": {
