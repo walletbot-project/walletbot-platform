@@ -238,14 +238,40 @@ export async function executeToolCall(
                 args.expenseId ??
                 '') as UpdateTxArgs['transactionId']
 
+            // Resolve account names to IDs if provided
+            let fromAccountId: UpdateTxArgs['fromAccountId']
+            let toAccountId: UpdateTxArgs['toAccountId']
+
+            if (args.fromAccountName || args.toAccountName) {
+                const accounts = await convexClient.query(
+                    api.accounts.queries.listAccounts,
+                    {},
+                )
+                if (args.fromAccountName) {
+                    const lower = args.fromAccountName.toLowerCase()
+                    fromAccountId = accounts.find(
+                        (a) => a.name.toLowerCase() === lower,
+                    )?._id
+                }
+                if (args.toAccountName) {
+                    const lower = args.toAccountName.toLowerCase()
+                    toAccountId = accounts.find(
+                        (a) => a.name.toLowerCase() === lower,
+                    )?._id
+                }
+            }
+
             const updateArgs: UpdateTxArgs = {
                 transactionId,
+                type: args.type,
                 amount:
                     args.amount !== undefined
                         ? Math.round(args.amount * 100)
                         : undefined,
                 currency: args.currency as UpdateTxArgs['currency'],
                 description: args.description,
+                fromAccountId,
+                toAccountId,
                 date: args.date,
                 notes: args.notes,
                 categoryId: args.category
@@ -282,15 +308,18 @@ export async function executeToolCall(
         }
 
         case 'listTransactions': {
-            const result = await convexClient.query(
-                api.transactions.queries.listTransactions,
-                {
+            const [result, accounts] = await Promise.all([
+                convexClient.query(api.transactions.queries.listTransactions, {
                     paginationOpts: { numItems: 20, cursor: null },
                     type: args.type,
                     startDate: args.startDate,
                     endDate: args.endDate,
-                },
-            )
+                }),
+                convexClient.query(api.accounts.queries.listAccounts, {}),
+            ])
+
+            const accountMap = new Map(accounts.map((a) => [a._id, a.name]))
+
             return {
                 transactions: result.page.map((t) => ({
                     id: t._id,
@@ -299,6 +328,12 @@ export async function executeToolCall(
                     amount: formatAmount(t.amount, t.currency),
                     currency: t.currency,
                     date: t.date,
+                    fromAccount: t.fromAccountId
+                        ? accountMap.get(t.fromAccountId)
+                        : undefined,
+                    toAccount: t.toAccountId
+                        ? accountMap.get(t.toAccountId)
+                        : undefined,
                 })),
                 count: result.page.length,
             }

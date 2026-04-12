@@ -15,7 +15,7 @@ LANGUAGE:
 
 CAPABILITIES — you can:
 • Add transactions: expenses, income, or transfers (addTransaction)
-• Edit existing transactions (updateTransaction). Always list first to get the ID.
+• Edit existing transactions (updateTransaction). Always list first to get the ID. Can change any field including the account (fromAccountName/toAccountName) and transaction type.
 • Delete transactions (deleteTransaction). Always list first to get the ID.
 • List transactions with optional filters: type, date range, category (listTransactions)
 • Get a spending/income summary with totals and breakdown (getTransactionSummary)
@@ -157,13 +157,19 @@ const addTransactionTool: FunctionDeclaration = {
 const updateTransactionTool: FunctionDeclaration = {
     name: 'updateTransaction',
     description:
-        'Update an existing transaction. List transactions first to find the ID. Only include fields to change.',
+        'Update an existing transaction. List transactions first to find the ID. Only include fields to change. Can change account, type, amount, description, category, date, tags, and notes.',
     parameters: {
         type: Type.OBJECT,
         properties: {
             transactionId: {
                 type: Type.STRING,
                 description: 'The ID of the transaction to update',
+            },
+            type: {
+                type: Type.STRING,
+                description:
+                    'New transaction type. Only if changing. Changing type may require updating accounts too.',
+                enum: ['expense', 'income', 'transfer'],
             },
             amount: {
                 type: Type.NUMBER,
@@ -195,6 +201,16 @@ const updateTransactionTool: FunctionDeclaration = {
                     'investment',
                     'gift',
                 ],
+            },
+            fromAccountName: {
+                type: Type.STRING,
+                description:
+                    'New source account name (e.g. "Bank", "Cash"). Use to move an expense or transfer to a different source account.',
+            },
+            toAccountName: {
+                type: Type.STRING,
+                description:
+                    'New destination account name. Use to move income or transfer to a different destination account.',
             },
             date: {
                 type: Type.STRING,
