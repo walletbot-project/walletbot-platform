@@ -1,10 +1,7 @@
 import { api } from '@wallet-bot/backend/api'
 import { useConvex } from 'convex/react'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import {
-    executeToolCall,
-    transactionToolDeclarations,
-} from '@/lib/expense-tools'
+import { agentToolDeclarations, executeToolCall } from '@/lib/agent-tools'
 
 // ── Constants ─────────────────────────────────────────────────
 
@@ -229,8 +226,7 @@ export function useVoice() {
                             systemInstruction: { parts: [{ text: '' }] },
                             tools: [
                                 {
-                                    functionDeclarations:
-                                        transactionToolDeclarations,
+                                    functionDeclarations: agentToolDeclarations,
                                 },
                             ],
                         },

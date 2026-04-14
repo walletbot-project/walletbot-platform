@@ -5,6 +5,8 @@ import { GlobalErrorBoundary } from '@/components/layout/error-boundary'
 import { PublicGuard } from '@/components/layout/public-guard'
 import { AuthLayout } from '@/layouts/auth-layout'
 import { RootLayout } from '@/layouts/root-layout'
+import Home from './pages/home'
+import { Login } from './pages/login'
 
 export const router = createBrowserRouter([
     {
@@ -18,10 +20,11 @@ export const router = createBrowserRouter([
                         children: [
                             {
                                 path: '/login',
-                                lazy: () =>
+                                element: <Login />,
+                                /* lazy: () =>
                                     import('@/pages/login').then((m) => ({
                                         Component: m.Login,
-                                    })),
+                                    })), */
                             },
                         ],
                     },
@@ -34,55 +37,8 @@ export const router = createBrowserRouter([
                         element: <RootLayout />,
                         children: [
                             {
-                                index: true,
-                                lazy: () =>
-                                    import('@/pages/dashboard').then((m) => ({
-                                        Component: m.Dashboard,
-                                    })),
-                            },
-                            {
-                                path: 'transactions',
-                                lazy: () =>
-                                    import('@/pages/transactions').then(
-                                        (m) => ({
-                                            Component: m.Transactions,
-                                        }),
-                                    ),
-                            },
-                            {
-                                path: 'accounts',
-                                lazy: () =>
-                                    import('@/pages/accounts').then((m) => ({
-                                        Component: m.Accounts,
-                                    })),
-                            },
-                            {
-                                path: 'categories',
-                                lazy: () =>
-                                    import('@/pages/categories').then((m) => ({
-                                        Component: m.Categories,
-                                    })),
-                            },
-                            {
-                                path: 'tags',
-                                lazy: () =>
-                                    import('@/pages/tags').then((m) => ({
-                                        Component: m.Tags,
-                                    })),
-                            },
-                            {
-                                path: 'recurrences',
-                                lazy: () =>
-                                    import('@/pages/recurrences').then((m) => ({
-                                        Component: m.Recurrences,
-                                    })),
-                            },
-                            {
-                                path: 'settings',
-                                lazy: () =>
-                                    import('@/pages/settings').then((m) => ({
-                                        Component: m.Settings,
-                                    })),
+                                path: '/',
+                                element: <Home />,
                             },
                             {
                                 path: '*',
