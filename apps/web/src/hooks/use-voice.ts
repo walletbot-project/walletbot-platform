@@ -1,14 +1,17 @@
+import {
+    GoogleGenAI,
+    type LiveServerMessage,
+    type Session,
+} from '@google/genai'
 import { api } from '@wallet-bot/backend/api'
 import { useConvex } from 'convex/react'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { agentToolDeclarations, executeToolCall } from '@/lib/agent-tools'
+import { executeToolCall } from '@/lib/agent-tools'
 
 // ── Constants ─────────────────────────────────────────────────
 
 const INPUT_SAMPLE_RATE = 16000
 const OUTPUT_SAMPLE_RATE = 24000
-const WS_BASE_URL =
-    'wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContentConstrained'
 
 // ── Audio helpers ─────────────────────────────────────────────
 
@@ -55,6 +58,14 @@ function computeRMS(float32: Float32Array): number {
 
 export type ConnectionStatus = 'disconnected' | 'connecting' | 'connected'
 
+export interface VoiceLogEntry {
+    id: number
+    timestamp: Date
+    type: 'info' | 'tool-call' | 'tool-response' | 'audio' | 'error'
+    message: string
+    detail?: unknown
+}
+
 export function useVoice() {
     const convex = useConvex()
 
@@ -64,8 +75,24 @@ export function useVoice() {
     const [micLevel, setMicLevel] = useState(0)
     const [devices, setDevices] = useState<MediaDeviceInfo[]>([])
     const [selectedDeviceId, setSelectedDeviceId] = useState<string>('')
+    const [logs, setLogs] = useState<VoiceLogEntry[]>([])
 
-    const wsRef = useRef<WebSocket | null>(null)
+    const logIdRef = useRef(0)
+    const pushLog = useCallback(
+        (type: VoiceLogEntry['type'], message: string, detail?: unknown) => {
+            const entry: VoiceLogEntry = {
+                id: ++logIdRef.current,
+                timestamp: new Date(),
+                type,
+                message,
+                detail,
+            }
+            setLogs((prev) => [...prev, entry])
+        },
+        [],
+    )
+
+    const sessionRef = useRef<Session | null>(null)
     const captureContextRef = useRef<AudioContext | null>(null)
     const captureWorkletRef = useRef<AudioWorkletNode | null>(null)
     const mediaStreamRef = useRef<MediaStream | null>(null)
@@ -136,18 +163,14 @@ export function useVoice() {
             setMicLevel(Math.min(1, rms * 10))
 
             if (isMutedRef.current) return
-            const ws = wsRef.current
-            if (!ws || ws.readyState !== WebSocket.OPEN) return
+            const session = sessionRef.current
+            if (!session) return
 
             const pcm = floatTo16BitPCM(float32)
             const base64 = arrayBufferToBase64(pcm)
-            ws.send(
-                JSON.stringify({
-                    realtimeInput: {
-                        audio: { data: base64, mimeType: 'audio/pcm' },
-                    },
-                }),
-            )
+            session.sendRealtimeInput({
+                audio: { data: base64, mimeType: 'audio/pcm;rate=16000' },
+            })
         }
 
         const source = captureCtx.createMediaStreamSource(stream)
@@ -186,6 +209,7 @@ export function useVoice() {
     // ── Connect ───────────────────────────────────────────────
     const connect = useCallback(async () => {
         setConnectionStatus('connecting')
+        pushLog('info', 'Connecting...')
         try {
             const tempStream = await navigator.mediaDevices.getUserMedia({
                 audio: true,
@@ -193,13 +217,12 @@ export function useVoice() {
             for (const track of tempStream.getTracks()) track.stop()
             await refreshDevicesRef.current()
 
+            pushLog('info', 'Requesting ephemeral token')
             const { token, model } = await convex.action(
                 api.live.actions.requestLiveToken,
                 {},
             )
-
-            const ws = new WebSocket(`${WS_BASE_URL}?access_token=${token}`)
-            wsRef.current = ws
+            pushLog('info', `Token received, model: ${model}`)
 
             const playbackCtx = new AudioContext({
                 sampleRate: OUTPUT_SAMPLE_RATE,
@@ -215,114 +238,110 @@ export function useVoice() {
             playbackContextRef.current = playbackCtx
             playbackWorkletRef.current = playbackNode
 
-            ws.onopen = () => {
-                ws.send(
-                    JSON.stringify({
-                        setup: {
-                            model: `models/${model}`,
-                            generationConfig: {
-                                responseModalities: ['AUDIO'],
-                            },
-                            systemInstruction: { parts: [{ text: '' }] },
-                            tools: [
-                                {
-                                    functionDeclarations: agentToolDeclarations,
-                                },
-                            ],
-                        },
-                    }),
-                )
-            }
-
-            ws.onmessage = async (event) => {
-                let data: string
-                if (event.data instanceof Blob) {
-                    data = await event.data.text()
-                } else {
-                    data = event.data
-                }
-
-                const msg = JSON.parse(data)
-
-                if (msg.setupComplete) {
-                    setConnectionStatus('connected')
-                    startMicCapture(selectedDeviceIdRef.current)
-                    return
-                }
-
-                if (msg.toolCall) {
-                    const functionCalls: {
-                        id: string
-                        name: string
-                        args: Record<string, unknown>
-                    }[] = msg.toolCall.functionCalls ?? []
-
-                    const functionResponses = []
-                    for (const fc of functionCalls) {
-                        const result = await executeToolCall(
-                            convex,
-                            fc.name,
-                            fc.args,
-                        )
-                        functionResponses.push({
-                            id: fc.id,
-                            name: fc.name,
-                            response: { result },
-                        })
-                    }
-
-                    ws.send(
-                        JSON.stringify({
-                            toolResponse: { functionResponses },
-                        }),
-                    )
-                    return
-                }
-
-                if (msg.toolCallCancellation) return
-
-                const serverContent = msg.serverContent
-                const parts = serverContent?.modelTurn?.parts
-                if (parts) {
-                    for (const part of parts) {
-                        if (part.inlineData?.data) {
-                            const float32 = base64ToPcmFloat32(
-                                part.inlineData.data,
-                            )
-                            playbackNode.port.postMessage(float32)
+            const ai = new GoogleGenAI({
+                apiKey: token,
+                httpOptions: { apiVersion: 'v1alpha' },
+            })
+            const session = await ai.live.connect({
+                model: `models/${model}`,
+                callbacks: {
+                    onmessage: async (msg: LiveServerMessage) => {
+                        if (msg.toolCall) {
+                            const functionCalls =
+                                msg.toolCall.functionCalls ?? []
+                            for (const fc of functionCalls) {
+                                pushLog('tool-call', `${fc.name}()`, fc.args)
+                            }
+                            const functionResponses = []
+                            for (const fc of functionCalls) {
+                                const result = await executeToolCall(
+                                    convex,
+                                    fc.name ?? '',
+                                    fc.args ?? {},
+                                )
+                                functionResponses.push({
+                                    id: fc.id,
+                                    name: fc.name,
+                                    response: { result },
+                                })
+                                pushLog(
+                                    'tool-response',
+                                    `${fc.name}() responded`,
+                                    result,
+                                )
+                            }
+                            session.sendToolResponse({ functionResponses })
+                            return
                         }
-                    }
-                }
 
-                if (serverContent?.interrupted) {
-                    playbackNode.port.postMessage('interrupt')
-                }
-            }
+                        if (msg.toolCallCancellation) {
+                            pushLog(
+                                'info',
+                                'Tool call cancelled',
+                                msg.toolCallCancellation.ids,
+                            )
+                            return
+                        }
 
-            ws.onerror = () => {
-                setConnectionStatus('disconnected')
-            }
+                        const parts = msg.serverContent?.modelTurn?.parts
+                        if (parts) {
+                            for (const part of parts) {
+                                if (part.inlineData?.data) {
+                                    const float32 = base64ToPcmFloat32(
+                                        part.inlineData.data,
+                                    )
+                                    playbackNode.port.postMessage(float32)
+                                }
+                                if (part.text) {
+                                    pushLog('info', `Model: ${part.text}`)
+                                }
+                            }
+                        }
 
-            ws.onclose = () => {
-                setConnectionStatus('disconnected')
-                setMicLevel(0)
-            }
-        } catch {
+                        if (msg.serverContent?.interrupted) {
+                            pushLog('info', 'Model interrupted')
+                            playbackNode.port.postMessage('interrupt')
+                        }
+                    },
+                    onerror: () => {
+                        pushLog('error', 'WebSocket error')
+                        setConnectionStatus('disconnected')
+                    },
+                    onclose: () => {
+                        pushLog('info', 'Disconnected')
+                        setConnectionStatus('disconnected')
+                        setMicLevel(0)
+                    },
+                },
+            })
+
+            sessionRef.current = session
+            setConnectionStatus('connected')
+            pushLog('info', 'Connected, starting mic capture')
+            await startMicCapture(selectedDeviceIdRef.current)
+        } catch (err) {
+            pushLog(
+                'error',
+                `Connection failed: ${err instanceof Error ? err.message : String(err)}`,
+            )
             setConnectionStatus('disconnected')
         }
-    }, [convex, startMicCapture])
+    }, [convex, startMicCapture, pushLog])
 
     // ── Disconnect ────────────────────────────────────────────
     const disconnect = useCallback(() => {
         stopMicCapture()
         playbackWorkletRef.current?.disconnect()
         playbackContextRef.current?.close()
-        wsRef.current?.close()
+        sessionRef.current?.close()
         playbackWorkletRef.current = null
         playbackContextRef.current = null
-        wsRef.current = null
+        sessionRef.current = null
         setConnectionStatus('disconnected')
-    }, [stopMicCapture])
+        pushLog('info', 'Disconnected by user')
+    }, [stopMicCapture, pushLog])
+
+    const clearLogs = useCallback(() => setLogs([]), [])
 
     useEffect(() => disconnect, [disconnect])
 
@@ -338,5 +357,7 @@ export function useVoice() {
         handleDeviceChange,
         connect,
         disconnect,
+        logs,
+        clearLogs,
     }
 }
