@@ -1,3 +1,4 @@
+import { useConvex } from 'convex/react'
 import {
     ArrowDownRight,
     AudioLines,
@@ -23,7 +24,7 @@ import {
 import { useVoice, type VoiceLogEntry } from '@/hooks/use-voice'
 import { cn } from '@/lib/utils'
 
-// ── Log entry rendering ──────────────────────────────────────
+// Log entry rendering
 
 const LOG_ICON: Record<VoiceLogEntry['type'], React.ReactNode> = {
     info: <Info className="size-3.5 text-muted-foreground" />,
@@ -62,7 +63,7 @@ function LogLine({ entry }: { entry: VoiceLogEntry }) {
     )
 }
 
-// ── Status badge ─────────────────────────────────────────────
+// Status badge
 
 function StatusBadge({ status }: { status: string }) {
     const variant =
@@ -75,10 +76,17 @@ function StatusBadge({ status }: { status: string }) {
     return <Badge variant={variant}>{status}</Badge>
 }
 
-// ── Page ─────────────────────────────────────────────────────
+// Page
 
 export default function Home() {
-    const voice = useVoice()
+    const client = useConvex()
+
+    const voice = useVoice({
+        context: {
+            client: client,
+        },
+    })
+
     const logEndRef = useRef<HTMLDivElement>(null)
 
     useEffect(() => {

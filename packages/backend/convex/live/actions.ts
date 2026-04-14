@@ -11,7 +11,7 @@ const TOKEN_TTL_MS = 30 * 60 * 1000 // 30 minutes
 
 const SYSTEM_INSTRUCTION = `You are a personal finance tracking assistant. You help the user manage their expenses, income, and transfers through voice.`
 
-// ── Shared → Google GenAI adapter ────────────────────────────
+// Shared → Google GenAI adapter
 
 const SCHEMA_TYPE_MAP: Record<string, Type> = {
     STRING: Type.STRING,

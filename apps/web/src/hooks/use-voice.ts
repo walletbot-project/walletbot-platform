@@ -7,13 +7,14 @@ import { api } from '@wallet-bot/backend/api'
 import { useConvex } from 'convex/react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { executeToolCall } from '@/lib/agent-tools'
+import type { AgentToolContext } from '@/lib/agent-tools/helpers'
 
-// ── Constants ─────────────────────────────────────────────────
+// Constants
 
 const INPUT_SAMPLE_RATE = 16000
 const OUTPUT_SAMPLE_RATE = 24000
 
-// ── Audio helpers ─────────────────────────────────────────────
+// Audio helpers
 
 function floatTo16BitPCM(float32: Float32Array): ArrayBuffer {
     const int16 = new Int16Array(float32.length)
@@ -54,7 +55,7 @@ function computeRMS(float32: Float32Array): number {
     return Math.sqrt(sum / float32.length)
 }
 
-// ── Hook ──────────────────────────────────────────────────────
+// Hook
 
 export type ConnectionStatus = 'disconnected' | 'connecting' | 'connected'
 
@@ -66,7 +67,12 @@ export interface VoiceLogEntry {
     detail?: unknown
 }
 
-export function useVoice() {
+export type UseVoiceOpts = {
+    onLog?: (entry: VoiceLogEntry) => void
+    context: AgentToolContext
+}
+
+export function useVoice(opts: UseVoiceOpts) {
     const convex = useConvex()
 
     const [connectionStatus, setConnectionStatus] =
@@ -92,6 +98,10 @@ export function useVoice() {
         [],
     )
 
+    const optsRef = useRef(opts)
+    // eslint-disable-next-line react-hooks/refs
+    optsRef.current = opts
+
     const sessionRef = useRef<Session | null>(null)
     const captureContextRef = useRef<AudioContext | null>(null)
     const captureWorkletRef = useRef<AudioWorkletNode | null>(null)
@@ -109,7 +119,7 @@ export function useVoice() {
         selectedDeviceIdRef.current = selectedDeviceId
     }, [selectedDeviceId])
 
-    // ── Enumerate microphones ─────────────────────────────────
+    // Enumerate microphones
     const refreshDevicesRef = useRef(async () => {
         const all = await navigator.mediaDevices.enumerateDevices()
         const mics = all.filter((d) => d.kind === 'audioinput')
@@ -133,7 +143,7 @@ export function useVoice() {
         }
     }, [])
 
-    // ── Mic capture (16kHz AudioWorklet) ──────────────────────
+    // Mic capture (16kHz AudioWorklet)
     const startMicCapture = useCallback(async (deviceId: string) => {
         const stream = await navigator.mediaDevices.getUserMedia({
             audio: {
@@ -180,7 +190,7 @@ export function useVoice() {
         captureWorkletRef.current = worklet
     }, [])
 
-    // ── Stop mic capture ──────────────────────────────────────
+    // Stop mic capture
     const stopMicCapture = useCallback(() => {
         captureWorkletRef.current?.disconnect()
         captureWorkletRef.current?.port.close()
@@ -194,7 +204,7 @@ export function useVoice() {
         setMicLevel(0)
     }, [])
 
-    // ── Switch mic while connected ────────────────────────────
+    // Switch mic while connected
     const handleDeviceChange = useCallback(
         async (deviceId: string) => {
             setSelectedDeviceId(deviceId)
@@ -206,7 +216,7 @@ export function useVoice() {
         [connectionStatus, stopMicCapture, startMicCapture],
     )
 
-    // ── Connect ───────────────────────────────────────────────
+    // Connect
     const connect = useCallback(async () => {
         setConnectionStatus('connecting')
         pushLog('info', 'Connecting...')
@@ -255,7 +265,7 @@ export function useVoice() {
                             const functionResponses = []
                             for (const fc of functionCalls) {
                                 const result = await executeToolCall(
-                                    convex,
+                                    optsRef.current.context,
                                     fc.name ?? '',
                                     fc.args ?? {},
                                 )
@@ -328,7 +338,7 @@ export function useVoice() {
         }
     }, [convex, startMicCapture, pushLog])
 
-    // ── Disconnect ────────────────────────────────────────────
+    // Disconnect
     const disconnect = useCallback(() => {
         stopMicCapture()
         playbackWorkletRef.current?.disconnect()
