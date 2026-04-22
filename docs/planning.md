@@ -14,26 +14,42 @@ La solución incluye:
 
 ## Etapa 1 — Fundaciones (Semanas 1–4)
 
-**Objetivo:** infraestructura sólida, flujo end-to-end de transacciones manuales funcional.
+Objetivo: infraestructura sólida, flujo end-to-end de transacciones manuales funcional.
 
 ### Epic 1: Infraestructura y Setup
-- Como desarrollador, quiero tener un schema Convex con las tablas `users`, `accounts`, `transactions`, `categories` y `tags` definidas, para poder construir las features de la app sobre una base de datos estructurada.
-- Como usuario, quiero poder registrarme e iniciar sesión con Google o con email y contraseña, para acceder a mis datos de forma segura.
-- Como desarrollador, quiero tener helpers de autorización que verifiquen el ownership de los datos por usuario, para que ningún usuario pueda acceder a información ajena.
-- Como desarrollador, quiero que cada PR pase validaciones automáticas de lint, typecheck y formato, para mantener la calidad del código sin esfuerzo manual.
 
-### Epic 2: Gestión de Cuentas
+- Como desarrollador, quiero tener un schema Convex con las tablas users, accounts, transactions, categories y tags definidas, para poder construir las features de la app sobre una base de datos estructurada.
+  - Tal vez tengamos que hablar mas como queremos modelar los datos, si hacerlo como un ledger / libro diario, double-entry accounting.
+- Como desarrollador, quiero tener helpers de autorización que verifiquen el ownership de los datos por usuario, para que ningún usuario pueda acceder a información ajena.
+  - setear librería de auth
+  - armar middleware para las funciones de Convex para checkear el usuario, si puede acceder a cierto recurso, etc
+- Como desarrollador, quiero que cada PR pase validaciones automáticas de lint, typecheck y formato, para mantener la calidad del código sin esfuerzo manual.
+- Como desarrollador quiere una estructura de páginas modular con ruteo. (react-router y el que sea en Flutter).
+
+### Epic 2: Gestion de Usuarios
+
+- Como usuario, quiero poder registrarme e iniciar sesión con Google o con email y contraseña, para acceder a mis datos de forma segura. (Mobile y webapp).
+- Como usuario, deberia poder cambiar o reestablecer contraseña.
+- Como usuario, deberia poder subir una foto de perfil.
+- Como usuario, deberia poder ingresar a la cuenta usando biometria.
+- Como usuario, deberia poder cambiar el email de mi cuenta.
+- Como usuario, quiero poder eliminar mi usuario.
+
+### Epic 3: Gestión de Cuentas
 - Como usuario, quiero poder crear cuentas de distintos tipos (efectivo, banco, tarjeta), para reflejar cómo organizo mi dinero en la vida real.
-- Como usuario, quiero asignar una moneda a cada cuenta, para que los montos se registren siempre en la moneda correcta.
+- Como usuario, quiero tener la posibilidad de poner mi balance inicial al momento de crear una cuenta.
+  - Deberia haber una pantalla donde te pregunte todas las cuentas que queres agregar, sus balances iniciales y poder subirlo todo de una en vez de cuenta por cuenta.
+- Como usuario, quiero asignar una moneda por defecto, y de no ser especificada otra, que mis cuentas usen esa moneda.
 - Como usuario, quiero ver el balance actualizado de cada cuenta, para saber cuánto dinero tengo disponible en cada una en todo momento.
 - Como usuario, quiero editar o eliminar una cuenta existente, para mantener mi lista de cuentas organizada y actualizada.
 
-### Epic 3: Registro Manual de Transacciones
-- Como usuario, quiero registrar un gasto o ingreso indicando cuenta, monto, fecha y descripción, para llevar un historial detallado de mis movimientos.
+### Epic 4: Registro Manual de Transacciones
+
+- Como usuario, quiero registrar un gasto o ingreso indicando cuenta, monto, fecha y titulo/descripción, para llevar un historial detallado de mis movimientos.
 - Como usuario, quiero editar o eliminar una transacción ya registrada, para corregir errores sin perder el historial.
 - Como usuario, quiero ver un listado paginado de mis transacciones con filtros por fecha y cuenta, para encontrar fácilmente movimientos pasados.
 
-### Epic 4: Categorías y Etiquetas
+### Epic 5: Categorías y Etiquetas
 - Como usuario, quiero organizar mis transacciones en categorías y subcategorías, para entender en qué rubros gasto más.
 - Como usuario, quiero agregar etiquetas libres a una transacción, para clasificarla con criterios propios que van más allá de las categorías fijas.
 - Como usuario, quiero crear, editar y eliminar mis propias categorías, para personalizar la organización según mis hábitos.
