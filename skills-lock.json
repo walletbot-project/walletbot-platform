@@ -30,6 +30,10 @@
             "source": "get-convex/agent-skills",
             "sourceType": "github",
             "computedHash": "92a5c170cf238f45f08439d9d5d7947af490b880ee8f15306183240483cbed02"
+        },
+        "gemini-live-api": {
+            "source": ".agents/skills/gemini-live-api",
+            "sourceType": "local"
         }
     }
 }

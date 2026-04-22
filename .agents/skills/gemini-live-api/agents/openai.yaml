@@ -1,0 +1,8 @@
+interface:
+  display_name: "Gemini Live API"
+  short_description: "Build real-time audio/video/text streaming clients for Google's Gemini Live WebSocket API."
+  brand_color: "#4285F4"
+  default_prompt: "Implement a Gemini Live API WebSocket client with real-time audio streaming and tool calling."
+
+policy:
+  allow_implicit_invocation: true
