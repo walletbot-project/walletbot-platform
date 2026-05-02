@@ -146,6 +146,7 @@ class Tags extends Table {
   Set<Column<Object>> get primaryKey => {id};
 }
 
+@TableIndex(name: 'transaction_tags_transaction_id', columns: {#transactionId})
 @TableIndex(name: 'transaction_tags_tag_id', columns: {#tagId})
 @TableIndex(name: 'transaction_tags_updated_at', columns: {#updatedAt})
 @TableIndex.sql('''
@@ -153,6 +154,7 @@ class Tags extends Table {
     WHERE remote_version IS NULL OR version != remote_version;
 ''')
 class TransactionTags extends Table {
+  TextColumn get id => text().named('id')();
   TextColumn get transactionId => text().named('transaction_id')();
   TextColumn get tagId => text().named('tag_id')();
 
@@ -165,11 +167,62 @@ class TransactionTags extends Table {
   Int64Column get remoteVersion => int64().named('remote_version').nullable()();
 
   @override
-  Set<Column<Object>> get primaryKey => {transactionId, tagId};
+  Set<Column<Object>> get primaryKey => {id};
+
+  @override
+  List<Set<Column>> get uniqueKeys => [
+    {transactionId, tagId},
+  ];
+}
+
+// Singleton — tracks the highest server-side seq the client has pulled.
+class SyncState extends Table {
+  TextColumn get id =>
+      text().named('id').withDefault(const Constant('singleton'))();
+  Int64Column get lastServerSeq =>
+      int64().named('last_server_seq').withDefault(Constant(BigInt.zero))();
+  Int64Column get lastSyncedAt => int64().named('last_synced_at').nullable()();
+
+  @override
+  Set<Column<Object>> get primaryKey => {id};
+}
+
+// Soft-delete record so deletes flow through sync. PK is the natural key
+// `(entity_table, entity_id)`. `version`/`remoteVersion` follow the same dirty
+// convention as entity tables: a row needs to be pushed when
+// `remote_version IS NULL OR version != remote_version`.
+@TableIndex(name: 'tombstones_entity_table', columns: {#entityTable})
+@TableIndex(name: 'tombstones_updated_at', columns: {#updatedAt})
+@TableIndex.sql('''
+  CREATE INDEX tombstones_needs_sync ON tombstones (updated_at)
+    WHERE remote_version IS NULL OR version != remote_version;
+''')
+class Tombstones extends Table {
+  TextColumn get entityTable => text().named('entity_table')();
+  TextColumn get entityId => text().named('entity_id')();
+  Int64Column get deletedAt => int64().named('deleted_at')();
+  Int64Column get createdAt => int64().named('created_at')();
+  Int64Column get updatedAt => int64().named('updated_at')();
+
+  // Sync
+  Int64Column get version =>
+      int64().named('version').withDefault(Constant(BigInt.from(1)))();
+  Int64Column get remoteVersion => int64().named('remote_version').nullable()();
+
+  @override
+  Set<Column<Object>> get primaryKey => {entityTable, entityId};
 }
 
 @DriftDatabase(
-  tables: [Accounts, Categories, Transactions, Tags, TransactionTags],
+  tables: [
+    Accounts,
+    Categories,
+    Transactions,
+    Tags,
+    TransactionTags,
+    SyncState,
+    Tombstones,
+  ],
 )
 class AppDatabase extends _$AppDatabase {
   // After generating code, this class needs to define a `schemaVersion` getter
