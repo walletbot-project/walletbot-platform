@@ -1,3 +1,5 @@
+import 'package:app/screens/add_screen.dart';
+import 'package:app/screens/home.dart';
 import 'package:flutter/material.dart';
 
 void main() {
@@ -12,50 +14,44 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       title: 'Wallet Bot',
       theme: ThemeData(colorScheme: .fromSeed(seedColor: Colors.green)),
-      home: const MyHomePage(title: 'Wallet Bot'),
+      home: const AppMain(title: 'Wallet Bot'),
     );
   }
 }
 
-class MyHomePage extends StatefulWidget {
-  const MyHomePage({super.key, required this.title});
+class AppMain extends StatefulWidget {
+  const AppMain({super.key, required this.title});
 
   final String title;
 
   @override
-  State<MyHomePage> createState() => _MyHomePageState();
+  State<AppMain> createState() => _AppMainState();
 }
 
-class _MyHomePageState extends State<MyHomePage> {
+class _AppMainState extends State<AppMain> {
   @override
   void initState() {
     super.initState();
   }
 
+  int selectedIndex = 0;
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        title: Text(widget.title),
-      ),
-      body: Center(
-        child: Column(
-          mainAxisAlignment: .center,
-          children: [
-            Text(
-              'Pedro pedro pedro',
-              style: Theme.of(context).textTheme.headlineMedium,
-            ),
-          ],
-        ),
+      body: IndexedStack(
+        index: selectedIndex,
+        children: [HomeScreen(), Placeholder(), Placeholder(), Placeholder()],
       ),
       floatingActionButton: FloatingActionButton(
-        onPressed: () {},
-        tooltip: 'Increment',
+        onPressed: () => Navigator.of(
+          context,
+        ).push(MaterialPageRoute(builder: (_) => AddScreen())),
+        tooltip: 'Add',
         child: const Icon(Icons.add),
       ),
       bottomNavigationBar: NavigationBar(
+        onDestinationSelected: (value) => setState(() => selectedIndex = value),
         destinations: [
           NavigationDestination(icon: Icon(Icons.home_rounded), label: "Home"),
           NavigationDestination(
@@ -63,8 +59,8 @@ class _MyHomePageState extends State<MyHomePage> {
             label: "Activity",
           ),
           NavigationDestination(
-            icon: Icon(Icons.list_rounded),
-            label: "Activity",
+            icon: Icon(Icons.account_balance_rounded),
+            label: "Cuentas",
           ),
           NavigationDestination(
             icon: Icon(Icons.list_rounded),
