@@ -27,9 +27,8 @@ class Accounts extends Table {
   Int64Column get updatedAt => int64().named('updated_at')();
 
   // Sync
-  Int64Column get version =>
-      int64().named('version').withDefault(Constant(BigInt.from(1)))();
-  Int64Column get remoteVersion => int64().named('remote_version').nullable()();
+  BoolColumn get dirty =>
+      boolean().named('dirty').withDefault(const Constant(false))();
 
   @override
   Set<Column<Object>> get primaryKey => {id};
@@ -52,9 +51,8 @@ class Categories extends Table {
   Int64Column get updatedAt => int64().named('updated_at')();
 
   // Sync
-  Int64Column get version =>
-      int64().named('version').withDefault(Constant(BigInt.from(1)))();
-  Int64Column get remoteVersion => int64().named('remote_version').nullable()();
+  BoolColumn get dirty =>
+      boolean().named('dirty').withDefault(const Constant(false))();
 
   @override
   Set<Column<Object>> get primaryKey => {id};
@@ -68,10 +66,7 @@ class Categories extends Table {
 @TableIndex(name: 'transactions_type', columns: {#type})
 @TableIndex(name: 'transactions_archived', columns: {#archived})
 @TableIndex(name: 'transactions_updated_at', columns: {#updatedAt})
-@TableIndex(
-  name: 'transactions_account_id_date',
-  columns: {#accountId, #date},
-)
+@TableIndex(name: 'transactions_account_id_date', columns: {#accountId, #date})
 @TableIndex(
   name: 'transactions_category_id_date',
   columns: {#categoryId, #date},
@@ -108,14 +103,13 @@ class Transactions extends Table {
       .nullable()(); // cents, for balance adjustments
 
   BoolColumn get archived =>
-      boolean().named('is_archived').withDefault(const Constant(false))();
+      boolean().named('archived').withDefault(const Constant(false))();
   Int64Column get createdAt => int64().named('created_at')();
   Int64Column get updatedAt => int64().named('updated_at')();
 
   // Sync
-  Int64Column get version =>
-      int64().named('version').withDefault(Constant(BigInt.from(1)))();
-  Int64Column get remoteVersion => int64().named('remote_version').nullable()();
+  BoolColumn get dirty =>
+      boolean().named('dirty').withDefault(const Constant(false))();
 
   @override
   Set<Column<Object>> get primaryKey => {id};
@@ -141,9 +135,8 @@ class Tags extends Table {
   Int64Column get updatedAt => int64().named('updated_at')();
 
   // Sync
-  Int64Column get version =>
-      int64().named('version').withDefault(Constant(BigInt.from(1)))();
-  Int64Column get remoteVersion => int64().named('remote_version').nullable()();
+  BoolColumn get dirty =>
+      boolean().named('dirty').withDefault(const Constant(false))();
 
   @override
   Set<Column<Object>> get primaryKey => {id};
@@ -165,9 +158,8 @@ class TransactionTags extends Table {
   Int64Column get updatedAt => int64().named('updated_at')();
 
   // Sync
-  Int64Column get version =>
-      int64().named('version').withDefault(Constant(BigInt.from(1)))();
-  Int64Column get remoteVersion => int64().named('remote_version').nullable()();
+  BoolColumn get dirty =>
+      boolean().named('dirty').withDefault(const Constant(false))();
 
   @override
   Set<Column<Object>> get primaryKey => {id};
@@ -208,9 +200,8 @@ class Tombstones extends Table {
   Int64Column get updatedAt => int64().named('updated_at')();
 
   // Sync
-  Int64Column get version =>
-      int64().named('version').withDefault(Constant(BigInt.from(1)))();
-  Int64Column get remoteVersion => int64().named('remote_version').nullable()();
+  BoolColumn get dirty =>
+      boolean().named('dirty').withDefault(const Constant(false))();
 
   @override
   Set<Column<Object>> get primaryKey => {entityTable, entityId};
