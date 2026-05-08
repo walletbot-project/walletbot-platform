@@ -18,17 +18,20 @@ Objetivo: infraestructura sólida, flujo end-to-end de transacciones manuales fu
 
 ### Epic 1: Infraestructura y Setup
 
-- Como desarrollador, quiero tener un schema Convex con las tablas users, accounts, transactions, categories y tags definidas, para poder construir las features de la app sobre una base de datos estructurada.
-  - Tal vez tengamos que hablar mas como queremos modelar los datos, si hacerlo como un ledger / libro diario, double-entry accounting.
+- ~~Como desarrollador, quiero tener un schema Convex con las tablas users, accounts, transactions, categories y tags definidas, para poder construir las features de la app sobre una base de datos estructurada.~~
+  - ~~Tal vez tengamos que hablar mas como queremos modelar los datos, si hacerlo como un ledger / libro diario, double-entry accounting.~~
 - Como desarrollador, quiero tener helpers de autorización que verifiquen el ownership de los datos por usuario, para que ningún usuario pueda acceder a información ajena.
-  - setear librería de auth
+  - ~~setear librería de auth~~ (better-auth + Google OAuth funcionando)
   - armar middleware para las funciones de Convex para checkear el usuario, si puede acceder a cierto recurso, etc
 - Como desarrollador, quiero que cada PR pase validaciones automáticas de lint, typecheck y formato, para mantener la calidad del código sin esfuerzo manual.
-- Como desarrollador quiere una estructura de páginas modular con ruteo. (react-router y el que sea en Flutter).
+- ~~Como desarrollador quiere una estructura de páginas modular con ruteo. (react-router y el que sea en Flutter).~~
 
 ### Epic 2: Gestion de Usuarios
 
 - Como usuario, quiero poder registrarme e iniciar sesión con Google o con email y contraseña, para acceder a mis datos de forma segura. (Mobile y webapp).
+  - ~~Login con Google en web~~ ✓
+  - Login con email y contraseña: deshabilitado
+  - Login con Google en Flutter: pendiente (UI existe pero OAuth no implementado)
 - Como usuario, deberia poder cambiar o reestablecer contraseña.
 - Como usuario, deberia poder subir una foto de perfil.
 - Como usuario, deberia poder ingresar a la cuenta usando biometria.
@@ -77,7 +80,7 @@ Objetivo: infraestructura sólida, flujo end-to-end de transacciones manuales fu
 - Como usuario, quiero ver el balance de cada cuenta y un total consolidado en la pantalla principal, para tener un resumen de mi situación financiera al abrir la app.
 
 ### Epic 8: Persistencia Local y Sincronización (Flutter)
-- Como usuario mobile, quiero poder registrar transacciones sin conexión a internet, para no perder datos cuando no tengo señal.
+- ~~Como usuario mobile, quiero poder registrar transacciones sin conexión a internet, para no perder datos cuando no tengo señal.~~ (schema local Drift implementado con flag `dirty` y tabla `tombstones`)
 - Como usuario mobile, quiero que mis datos se sincronicen automáticamente con el servidor cuando recupero la conexión, para que nada se pierda ni se duplique.
 - Como usuario que usa la app en varios dispositivos, quiero que los cambios hechos en uno se reflejen en los demás en tiempo real, para siempre ver información actualizada.
 
@@ -108,7 +111,7 @@ Objetivo: infraestructura sólida, flujo end-to-end de transacciones manuales fu
 - Como usuario mobile, quiero que la app me indique claramente si hubo un error de conexión o no me entendió, para saber cuándo tengo que repetir lo que dije.
 
 ### Epic 12: UI de Voz Web — Polish
-- Como usuario web, quiero ver un historial legible de la conversación con el asistente durante la sesión, para poder revisar qué registré sin buscar en el listado de transacciones.
+- ~~Como usuario web, quiero ver un historial legible de la conversación con el asistente durante la sesión, para poder revisar qué registré sin buscar en el listado de transacciones.~~ (event log implementado con timestamps y tipos)
 - Como usuario web, quiero ver una confirmación inline cada vez que el asistente registra una acción, para tener feedback inmediato sin depender del log técnico actual.
 - Como usuario mobile que usa la versión web, quiero que la interfaz de voz se adapte a pantallas pequeñas, para poder usarla cómodamente desde el celular.
 

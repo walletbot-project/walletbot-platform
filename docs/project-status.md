@@ -1,12 +1,12 @@
 # WalletBot — Estado Actual del Proyecto
 
-> Última actualización: 2026-04-22
+> Última actualización: 2026-05-08
 
 ---
 
 ## Resumen ejecutivo
 
-El proyecto tiene una base técnica sólida: autenticación funcionando, infraestructura de voz con Gemini Live implementada end-to-end en web, y el tooling del monorepo configurado. Sin embargo, la capa de datos (schema Convex, queries, mutations) está vacía, por lo que las tools del agente de voz retornan mocks y no persisten nada. El siguiente paso crítico es implementar el modelo de datos.
+El proyecto tiene una base técnica sólida: autenticación funcionando en web, infraestructura de voz con Gemini Live implementada end-to-end en web, schema Convex completamente definido con todas las tablas, y el schema local de Flutter con Drift también implementado con soporte de sincronización offline. Sin embargo, la capa de acceso a datos (queries, mutations) está vacía — el schema existe pero no hay ninguna función Convex que lea o escriba datos. Las tools del agente de voz siguen retornando mocks. El siguiente paso crítico es implementar queries y mutations en Convex.
 
 ---
 
@@ -18,18 +18,21 @@ El proyecto tiene una base técnica sólida: autenticación funcionando, infraes
 |-----------|--------|-------|
 | Auth (Google OAuth) | ✓ Completo | better-auth v1.5.6, Google OAuth configurado |
 | Auth (email/password) | ✗ Deshabilitado | Desactivado en la config actual |
-| Schema Convex | ✗ Pendiente | `convex/schema.ts` está vacío — no hay tablas definidas |
+| Schema Convex | ✓ Completo | Todas las tablas definidas con índices en `convex/schema/` |
 | Queries | ✗ Pendiente | No hay ninguna query implementada |
 | Mutations | ✗ Pendiente | No hay ninguna mutation implementada |
 | Autorización (user-scoped) | ✗ Pendiente | No hay checks de ownership sobre datos |
 | Token para Gemini Live | ✓ Completo | `convex/live/actions.ts` — genera token de 30 min con tools + system prompt |
 | Crons | — | Archivo placeholder vacío |
 
-**Tablas que faltan definir:**
-- `accounts` — cuentas del usuario (tipo, moneda, nombre)
-- `transactions` — gastos, ingresos, transferencias
-- `categories` — categorías jerárquicas
-- `tags` — etiquetas libres
+**Tablas definidas en `convex/schema/`:**
+- `accounts` — cuentas del usuario (nombre, moneda, color, ícono, descripción, isArchived, timestamps, seq de sync)
+- `transactions` — gastos, ingresos, transferencias, ajustes de balance; soporte multi-moneda con campos de transferencia opcionales
+- `categories` — categorías con flag de archivado
+- `tags` — etiquetas con soporte jerárquico (`parentId`)
+- `transactionTags` — tabla join many-to-many (transacción ↔ tag)
+- `syncCounters` — contador de secuencia por usuario (para sync offline)
+- `tombstones` — registros de soft-delete para sincronización
 
 ---
 
@@ -41,7 +44,7 @@ El proyecto tiene una base técnica sólida: autenticación funcionando, infraes
 | Routing y layouts | ✓ Completo | React Router 7, layouts de auth y root |
 | Auth guards | ✓ Completo | `AuthGuard` y `PublicGuard` funcionando |
 | Página de login | ✓ Completo | Google OAuth, UX básica |
-| UI de voz (home) | ✓ Completo | Panel con connect/disconnect, mute, mic level, device selector, event log |
+| UI de voz (home) | ✓ Completo | Panel con connect/disconnect, mute, mic level, device selector, event log con timestamps |
 | WebSocket Gemini Live | ✓ Completo | `hooks/use-voice.ts` — audio worklet 16kHz entrada / 24kHz salida |
 | Tool definitions (shared) | ✓ Completo | Zod schemas en `packages/shared`, adapter para Google AI |
 | Tool executors (frontend) | ⚠ Mock | `lib/agent-tools/executors.ts` — retorna datos hardcodeados, no llama a Convex |
@@ -67,16 +70,21 @@ El proyecto tiene una base técnica sólida: autenticación funcionando, infraes
 
 ---
 
-### Flutter App (`apps/native/`)
+### Flutter App (`apps/app/`)
 
 | Componente | Estado | Notas |
 |-----------|--------|-------|
-| Scaffold | ✓ Existe | Flutter 3.11+ con estructura básica |
-| Integración con Convex | ✗ Pendiente | No conectado al backend |
-| Auth | ✗ Pendiente | Sin pantallas de login |
-| Pantallas de la app | ✗ Pendiente | Solo el counter demo por defecto |
+| Scaffold + navegación | ✓ Completo | Bottom nav con 4 tabs (Home, Activity, Accounts, Settings), FAB para agregar |
+| Auth gate | ✓ Completo | Muestra LoginScreen o AppMain según estado de auth |
+| Login screen | ✓ Completo | Lista cuentas locales/remotas, switch de cuenta, "continuar sin cuenta" funcional |
+| Google Sign-In | ✗ Pendiente | Botón existe pero muestra "not implemented yet" |
+| Schema local (Drift) | ✓ Completo | Todas las tablas: accounts, transactions, categories, tags, transactionTags, syncState, tombstones. Flag `dirty` para sync. |
+| Pantalla Home | ⚠ Stub | Esqueleto básico con menú de usuario, sin contenido real |
+| Pantalla Activity | ✗ Stub | Placeholder solamente |
+| Pantalla Add | ✗ Stub | Placeholder solamente |
+| Integración con Convex | ✗ Pendiente | No hay cliente Convex ni lógica de sync |
+| Lógica de sync offline | ✗ Pendiente | Schema preparado pero sync no implementado |
 | UI de voz | ✗ Pendiente | Sin implementar |
-| Persistencia local (SQLite) | ✗ Pendiente | Sin implementar |
 
 ---
 
@@ -96,7 +104,7 @@ Usuario habla
 **Lo que falta para cerrarlo:**
 ```
     → Frontend recibe tool call → llama a Convex mutation/query real
-    → Convex persiste/lee datos del usuario
+    → Convex persiste/lee datos del usuario (con autorización)
     → Retorna resultado real a Gemini
 ```
 
@@ -104,11 +112,29 @@ Usuario habla
 
 ## Próximos pasos recomendados
 
-1. **Definir schema Convex** — tablas `accounts`, `transactions`, `categories`, `tags` con índices apropiados
-2. **Implementar queries y mutations básicas** — con autorización por userId
-3. **Reemplazar mocks** en `lib/agent-tools/executors.ts` con llamadas reales a Convex
-4. Con eso, el flujo de voz queda funcional end-to-end
-5. Luego construir las pantallas de UI manual (transacciones, cuentas, dashboard)
+### Prioridad alta (desbloquean todo lo demás)
+
+1. **Implementar queries y mutations Convex** con autorización por userId — todas las entidades: accounts, transactions, categories, tags
+   - Empezar por accounts y transactions (las más críticas para el flujo de voz)
+   - Usar paginación en todas las queries de listado
+   - Verificar `ctx.auth.getUserIdentity()` en cada función
+
+2. **Reemplazar mocks** en `apps/web/src/lib/agent-tools/executors.ts` con llamadas reales a Convex
+   - Con esto, el flujo de voz queda funcional end-to-end
+
+### Prioridad media (completar Etapa 1)
+
+3. **Pantallas web de UI manual** — transacciones, cuentas (no existe ninguna todavía)
+4. **Categorías** — queries, mutations y UI web
+5. **Google Sign-In en Flutter** — completar el OAuth flow
+6. **Conectar Flutter a Convex** — cliente + sync básico
+
+### Prioridad baja (Etapa 2+)
+
+7. **Lógica de sync Flutter** — tablas y flag `dirty` ya existen, falta la lógica de sincronización bidireccional
+8. **Dashboard y analytics** — gráficos, totales por cuenta
+9. **Multi-moneda y transferencias**
+10. **UI de voz en Flutter**
 
 ---
 
@@ -121,6 +147,7 @@ Usuario habla
 | Convex | ^1.35.1 — deployment: `modest-rooster-105.convex.cloud` |
 | better-auth | 1.5.6 |
 | Biome | formatter/linter |
+| Flutter | 3.11+ con Drift ORM para SQLite local |
 | Nix devenv | Configurado (`devenv.nix`) |
 
 **Scripts principales:**
