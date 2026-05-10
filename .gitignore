@@ -149,3 +149,5 @@ reference/
 
 # devenv
 .devenv/
+
+tmp/*
