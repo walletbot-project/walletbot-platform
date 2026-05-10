@@ -1,0 +1,17 @@
+title:	Integrar Gemini 3.1 Flash Live en flutter similar a como está en la versión web
+state:	OPEN
+author:	Martoxdlol
+labels:	Flutter, User Story
+comments:	1
+assignees:	
+projects:	
+milestone:	
+number:	104
+--
+En los docs del repo hay documentación de la API de Gemini Live. Mentira si hay lib: [https://firebase.google.com/docs/ai-logic/live-api?api=dev](<https://firebase.google.com/docs/ai-logic/live-api?api=dev>).
+
+Según mi investigación no hay ninguna lib ya hecha para Flutter, pero hay que investigar mejor.
+
+A/C:
+
+- [ ] Iniciar una session live que reconozca la voz, responda y pueda llamar tools
