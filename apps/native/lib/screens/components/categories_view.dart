@@ -1,6 +1,7 @@
 import 'package:app/database.dart';
 import 'package:app/screens/components/insight_count_models.dart';
 import 'package:app/screens/components/insights_section_header.dart';
+import 'package:drift/drift.dart' show Value;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -13,7 +14,9 @@ class CategoriesView extends StatelessWidget {
 
     return Column(
       children: [
-        InsightsSectionHeader(onAddPressed: () => _addCategoryDialog(context, db)),
+        InsightsSectionHeader(
+          onAddPressed: () => _addCategoryDialog(context, db),
+        ),
         Expanded(
           child: StreamBuilder<List<CategoryWithCount>>(
             stream: _watchCategoriesWithCounts(db),
@@ -32,7 +35,15 @@ class CategoriesView extends StatelessWidget {
                 itemBuilder: (context, index) {
                   final category = data[index];
 
-                  return ListTile(title: Text(category.category.name), trailing: Text('${category.transactionCount}'));
+                  return ListTile(
+                    title: GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onLongPress: () =>
+                          _editCategoryDialog(context, db, category.category),
+                      child: Text(category.category.name),
+                    ),
+                    trailing: Text('${category.transactionCount}'),
+                  );
                 },
               );
             },
@@ -88,7 +99,10 @@ class CategoriesView extends StatelessWidget {
           autofocus: true,
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
           TextButton(
             onPressed: () async {
               final name = nameController.text.trim();
@@ -111,6 +125,76 @@ class CategoriesView extends StatelessWidget {
             child: const Text('Create'),
           ),
         ],
+      ),
+    );
+  }
+
+  Future<void> _editCategoryDialog(
+    BuildContext context,
+    AppDatabase db,
+    Category category,
+  ) async {
+    final nameController = TextEditingController(text: category.name);
+
+    await showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Edit Category'),
+        content: TextField(
+          controller: nameController,
+          decoration: const InputDecoration(labelText: 'Name'),
+          autofocus: true,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () async {
+              await _deleteCategory(db, category.id);
+              if (context.mounted) Navigator.pop(context);
+            },
+            child: const Text('Delete'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () async {
+              final name = nameController.text.trim();
+              if (name.isNotEmpty) {
+                await _updateCategory(db, category.id, name);
+              }
+
+              if (context.mounted) Navigator.pop(context);
+            },
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _updateCategory(AppDatabase db, String id, String name) async {
+    final now = BigInt.from(DateTime.now().millisecondsSinceEpoch);
+    await (db.update(
+      db.categories,
+    )..where((category) => category.id.equals(id))).write(
+      CategoriesCompanion(
+        name: Value(name),
+        updatedAt: Value(now),
+        dirty: const Value(true),
+      ),
+    );
+  }
+
+  Future<void> _deleteCategory(AppDatabase db, String id) async {
+    final now = BigInt.from(DateTime.now().millisecondsSinceEpoch);
+    await (db.update(
+      db.categories,
+    )..where((category) => category.id.equals(id))).write(
+      CategoriesCompanion(
+        archived: const Value(true),
+        updatedAt: Value(now),
+        dirty: const Value(true),
       ),
     );
   }
