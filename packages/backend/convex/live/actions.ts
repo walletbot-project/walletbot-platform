@@ -4,7 +4,7 @@ import type { FunctionDeclaration, Schema } from '@google/genai'
 import { GoogleGenAI, Modality, Type } from '@google/genai'
 import type { ToolSchema } from '@wallet-bot/shared'
 import { TOOL_DEFINITIONS } from '@wallet-bot/shared'
-import { action } from '../_generated/server'
+import { action, internalAction } from '../_generated/server'
 
 const MODEL = 'gemini-3.1-flash-live-preview'
 const TOKEN_TTL_MS = 30 * 60 * 1000 // 30 minutes
@@ -59,6 +59,40 @@ function toFunctionDeclarations(
 
 const TOOL_DECLARATIONS = toFunctionDeclarations(TOOL_DEFINITIONS)
 
+async function createLiveToken() {
+    const apiKey = process.env.GEMINI_API_KEY
+    if (!apiKey) {
+        throw new Error('GEMINI_API_KEY environment variable is not set')
+    }
+
+    const client = new GoogleGenAI({ apiKey })
+    const expireTime = new Date(Date.now() + TOKEN_TTL_MS).toISOString()
+
+    const token = await client.authTokens.create({
+        config: {
+            uses: 1,
+            expireTime,
+            liveConnectConstraints: {
+                model: MODEL,
+                config: {
+                    responseModalities: [Modality.AUDIO],
+                    systemInstruction: SYSTEM_INSTRUCTION,
+                    tools: [{ functionDeclarations: TOOL_DECLARATIONS }],
+                },
+            },
+            httpOptions: {
+                apiVersion: 'v1alpha',
+            },
+        },
+    })
+
+    return {
+        token: token.name,
+        expireTime,
+        model: MODEL,
+    }
+}
+
 export const requestLiveToken = action({
     args: {},
     handler: async (ctx) => {
@@ -67,36 +101,13 @@ export const requestLiveToken = action({
             throw new Error('Unauthenticated')
         }
 
-        const apiKey = process.env.GEMINI_API_KEY
-        if (!apiKey) {
-            throw new Error('GEMINI_API_KEY environment variable is not set')
-        }
+        return createLiveToken()
+    },
+})
 
-        const client = new GoogleGenAI({ apiKey })
-        const expireTime = new Date(Date.now() + TOKEN_TTL_MS).toISOString()
-
-        const token = await client.authTokens.create({
-            config: {
-                uses: 1,
-                expireTime,
-                liveConnectConstraints: {
-                    model: MODEL,
-                    config: {
-                        responseModalities: [Modality.AUDIO],
-                        systemInstruction: SYSTEM_INSTRUCTION,
-                        tools: [{ functionDeclarations: TOOL_DECLARATIONS }],
-                    },
-                },
-                httpOptions: {
-                    apiVersion: 'v1alpha',
-                },
-            },
-        })
-
-        return {
-            token: token.name,
-            expireTime,
-            model: MODEL,
-        }
+export const requestLiveTokenForHttp = internalAction({
+    args: {},
+    handler: async () => {
+        return createLiveToken()
     },
 })

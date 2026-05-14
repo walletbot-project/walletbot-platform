@@ -31,6 +31,7 @@ class _VoiceScreenState extends State<VoiceScreen> {
 
   bool _isStarting = false;
   bool _isRecording = false;
+  bool _isMuted = false;
   double _level = 0;
   int _chunks = 0;
   int _bytes = 0;
@@ -68,6 +69,7 @@ class _VoiceScreenState extends State<VoiceScreen> {
 
     setState(() {
       _isStarting = true;
+      _isMuted = false;
       _chunks = 0;
       _bytes = 0;
       _level = 0;
@@ -100,8 +102,8 @@ class _VoiceScreenState extends State<VoiceScreen> {
 
       _command = widget.commandFactory.create();
       _commandEventsSubscription = _command?.events.listen(_addLog);
-      await _command?.start();
       _addLog('Command implementation: ${_command?.label}');
+      await _command?.start();
 
       final audioStream = await _recorder.startStream(_recordConfig);
       _audioSubscription = audioStream.listen(
@@ -172,7 +174,9 @@ class _VoiceScreenState extends State<VoiceScreen> {
 
   void _handleAudioChunk(Uint8List chunk) {
     if (!mounted) return;
-    unawaited(_command?.addAudioChunk(chunk));
+    if (!_isMuted) {
+      unawaited(_command?.addAudioChunk(chunk));
+    }
     setState(() {
       _chunks += 1;
       _bytes += chunk.length;
@@ -185,8 +189,10 @@ class _VoiceScreenState extends State<VoiceScreen> {
   void _addLog(String message) {
     if (!mounted) return;
     final now = TimeOfDay.now();
+    final formatted = '${now.format(context)} - $message';
+    debugPrint('[VoiceScreen] $formatted');
     setState(() {
-      _logs.insert(0, '${now.format(context)} - $message');
+      _logs.insert(0, formatted);
       if (_logs.length > 40) {
         _logs.removeLast();
       }
@@ -217,13 +223,18 @@ class _VoiceScreenState extends State<VoiceScreen> {
   @override
   Widget build(BuildContext context) {
     final status = _isRecording
-        ? 'Recording'
+        ? 'connected'
         : _isStarting
-        ? 'Starting'
-        : 'Idle';
+        ? 'connecting'
+        : 'disconnected';
+    final statusColor = switch (status) {
+      'connected' => Theme.of(context).colorScheme.primary,
+      'connecting' => Theme.of(context).colorScheme.secondary,
+      _ => Theme.of(context).colorScheme.outline,
+    };
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Voice Commands')),
+      appBar: AppBar(title: const Text('Live Voice')),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
@@ -236,33 +247,82 @@ class _VoiceScreenState extends State<VoiceScreen> {
                   Row(
                     children: [
                       Icon(
-                        _isRecording ? Icons.mic_rounded : Icons.mic_none,
+                        _isRecording && !_isMuted
+                            ? Icons.mic_rounded
+                            : Icons.mic_off_rounded,
                         color: _isRecording
                             ? Theme.of(context).colorScheme.primary
                             : null,
                       ),
                       const SizedBox(width: 8),
-                      Text(
-                        status,
-                        style: Theme.of(context).textTheme.titleMedium,
+                      Expanded(
+                        child: Text(
+                          'Live Voice',
+                          style: Theme.of(context).textTheme.titleMedium,
+                        ),
+                      ),
+                      DecoratedBox(
+                        decoration: BoxDecoration(
+                          border: Border.all(color: statusColor),
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 4,
+                          ),
+                          child: Text(
+                            status,
+                            style: TextStyle(color: statusColor),
+                          ),
+                        ),
                       ),
                     ],
                   ),
+                  if (_isRecording) ...[
+                    const SizedBox(height: 16),
+                    LinearProgressIndicator(value: _level),
+                    const SizedBox(height: 8),
+                    Text('Mic level: ${(_level * 100).round()}%'),
+                  ],
                   const SizedBox(height: 16),
-                  LinearProgressIndicator(value: _level),
-                  const SizedBox(height: 8),
-                  Text('Mic level: ${(_level * 100).round()}%'),
-                  const SizedBox(height: 16),
-                  FilledButton.icon(
-                    onPressed: _isStarting ? null : _toggleCapture,
-                    icon: Icon(
-                      _isRecording
-                          ? Icons.stop_rounded
-                          : Icons.play_arrow_rounded,
-                    ),
-                    label: Text(
-                      _isRecording ? 'Stop capture' : 'Start voice capture',
-                    ),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      if (!_isRecording)
+                        FilledButton.icon(
+                          onPressed: _isStarting ? null : _toggleCapture,
+                          icon: const Icon(Icons.phone_rounded),
+                          label: Text(
+                            _isStarting ? 'Connecting...' : 'Connect',
+                          ),
+                        )
+                      else
+                        FilledButton.icon(
+                          onPressed: _toggleCapture,
+                          icon: const Icon(Icons.phone_disabled_rounded),
+                          label: const Text('Disconnect'),
+                        ),
+                      if (_isRecording)
+                        OutlinedButton.icon(
+                          onPressed: () {
+                            setState(() {
+                              _isMuted = !_isMuted;
+                              if (_isMuted) {
+                                _level = 0;
+                              }
+                            });
+                            _addLog(_isMuted ? 'Muted' : 'Unmuted');
+                          },
+                          icon: Icon(
+                            _isMuted
+                                ? Icons.mic_off_rounded
+                                : Icons.mic_rounded,
+                          ),
+                          label: Text(_isMuted ? 'Unmute' : 'Mute'),
+                        ),
+                    ],
                   ),
                 ],
               ),
@@ -295,13 +355,26 @@ class _VoiceScreenState extends State<VoiceScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    'Debug log',
-                    style: Theme.of(context).textTheme.titleMedium,
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          'Event Log',
+                          style: Theme.of(context).textTheme.titleMedium,
+                        ),
+                      ),
+                      IconButton(
+                        tooltip: 'Clear log',
+                        onPressed: _logs.isEmpty
+                            ? null
+                            : () => setState(_logs.clear),
+                        icon: const Icon(Icons.delete_outline_rounded),
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 8),
                   if (_logs.isEmpty)
-                    const Text('No events yet.')
+                    const Text('No events yet. Connect to start.')
                   else
                     for (final log in _logs)
                       Padding(
