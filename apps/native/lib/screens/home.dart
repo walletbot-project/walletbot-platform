@@ -23,15 +23,20 @@ class _HomeScreenState extends State<HomeScreen> {
       _testResult = null;
     });
     try {
-      final result = await InternalConvexClient.instance.query(
-        name: 'test:hello',
-        args: encodeMap({}),
+      final auth = context.read<AuthController>();
+      final result = await auth.runConvexAuthenticated(
+        () => InternalConvexClient.instance.query(
+          name: 'test:hello',
+          args: encodeMap({}),
+        ),
       );
+      if (!mounted) return;
       setState(() => _testResult = result.toString());
     } catch (e) {
+      if (!mounted) return;
       setState(() => _testResult = 'ERROR: $e');
     } finally {
-      setState(() => _testing = false);
+      if (mounted) setState(() => _testing = false);
     }
   }
 

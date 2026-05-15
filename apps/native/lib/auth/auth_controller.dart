@@ -1,11 +1,14 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:app/auth/account.dart';
 import 'package:app/config.dart';
 import 'package:app/database.dart';
+import 'package:convex_dart/convex_dart.dart' show ConvexClientError;
 // ignore: implementation_imports
 import 'package:convex_dart/src/convex_dart_for_generated_code.dart'
     show InternalConvexClient;
+import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_better_auth/flutter_better_auth.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -13,15 +16,21 @@ import 'package:google_sign_in/google_sign_in.dart';
 
 class AuthController extends ChangeNotifier {
   AuthController({FlutterSecureStorage? storage})
-    : _storage = storage ?? const FlutterSecureStorage();
+    : _storage = storage ?? const FlutterSecureStorage() {
+    _attachDioInterceptors();
+  }
 
   static const _accountsKey = 'accounts';
   static const _activeIdKey = 'active_account_id';
+  // JWT lifetime is 15 minutes (see better-auth convex plugin config).
+  // Refresh comfortably before that to avoid mid-query expiry.
+  static const _convexJwtRefreshInterval = Duration(minutes: 13);
 
   final FlutterSecureStorage _storage;
 
   List<UserAccount> _accounts = const [];
   String? _activeId;
+  Timer? _convexJwtTimer;
 
   List<UserAccount> get accounts => List.unmodifiable(_accounts);
   String? get activeId => _activeId;
@@ -48,6 +57,9 @@ class AuthController extends ChangeNotifier {
     );
     _applyBearerToken(a?.token);
     await _applyConvexAuth(a?.convexJwt);
+    if (a != null && a.type == AccountType.remote) {
+      _startConvexJwtTimer();
+    }
     notifyListeners();
   }
 
@@ -61,6 +73,86 @@ class AuthController extends ChangeNotifier {
       FlutterBetterAuth.dioClient.options.headers['Authorization'] =
           'Bearer $token';
     }
+  }
+
+  void _attachDioInterceptors() {
+    FlutterBetterAuth.dioClient.interceptors.add(
+      InterceptorsWrapper(
+        onResponse: (response, handler) {
+          // Bearer plugin issues a rotated session token via this header when
+          // better-auth's `updateAge` threshold is crossed. Capture it so we
+          // don't keep replaying a token that's about to expire.
+          final rotated = response.headers.value('set-auth-token');
+          if (rotated != null && rotated.isNotEmpty) {
+            _handleRotatedBearerToken(rotated);
+          }
+          handler.next(response);
+        },
+      ),
+    );
+  }
+
+  void _handleRotatedBearerToken(String newToken) {
+    final active = activeAccount;
+    if (active == null || active.token == newToken) return;
+    _applyBearerToken(newToken);
+    final idx = _accounts.indexWhere((a) => a.id == active.id);
+    if (idx < 0) return;
+    _accounts = [
+      ..._accounts.sublist(0, idx),
+      _accounts[idx].copyWith(token: newToken),
+      ..._accounts.sublist(idx + 1),
+    ];
+    _persist();
+    notifyListeners();
+  }
+
+  void _startConvexJwtTimer() {
+    _convexJwtTimer?.cancel();
+    _convexJwtTimer = Timer.periodic(_convexJwtRefreshInterval, (_) {
+      unawaited(_refreshConvexJwtOnly());
+    });
+  }
+
+  void _stopConvexJwtTimer() {
+    _convexJwtTimer?.cancel();
+    _convexJwtTimer = null;
+  }
+
+  // Mint a fresh Convex JWT without round-tripping /get-session. Used by the
+  // periodic timer; keeps old JWT in place if the call fails (offline-first).
+  Future<void> _refreshConvexJwtOnly() async {
+    final active = activeAccount;
+    if (active == null || active.type != AccountType.remote) return;
+    final jwt = await _fetchConvexJwt();
+    if (jwt == null) return;
+    await _applyConvexAuth(jwt);
+    _setConvexJwt(active.id, jwt);
+  }
+
+  /// Wraps a Convex call so that if the backend reports an authentication
+  /// failure, we mint a fresh JWT and retry once. Use this for any Convex
+  /// query/mutation/action that requires the signed-in user.
+  ///
+  /// Note: brittle. convex_dart surfaces auth failures as a generic
+  /// ConvexClientError with a string message — we sniff for "unauthenticated"
+  /// since the library has no typed auth-error variant. If the library ever
+  /// changes that wording the retry will silently stop triggering.
+  Future<T> runConvexAuthenticated<T>(Future<T> Function() fn) async {
+    try {
+      return await fn();
+    } on ConvexClientError catch (e) {
+      if (!e.message.toLowerCase().contains('unauthenticated')) rethrow;
+      debugPrint('runConvexAuthenticated: caught auth error, refreshing JWT');
+      await _refreshConvexJwtOnly();
+      return await fn();
+    }
+  }
+
+  @override
+  void dispose() {
+    _stopConvexJwtTimer();
+    super.dispose();
   }
 
   Future<void> _applyConvexAuth(String? token) async {
@@ -170,6 +262,7 @@ class AuthController extends ChangeNotifier {
     ];
     _activeId = account.id;
     await _persist();
+    _startConvexJwtTimer();
     notifyListeners();
     return account;
   }
@@ -236,6 +329,11 @@ class AuthController extends ChangeNotifier {
     final a = activeAccount;
     _applyBearerToken(a?.token);
     await _applyConvexAuth(a?.convexJwt);
+    if (a != null && a.type == AccountType.remote) {
+      _startConvexJwtTimer();
+    } else {
+      _stopConvexJwtTimer();
+    }
     notifyListeners();
   }
 
@@ -244,6 +342,7 @@ class AuthController extends ChangeNotifier {
     await _persist();
     _applyBearerToken(null);
     await _applyConvexAuth(null);
+    _stopConvexJwtTimer();
     notifyListeners();
   }
 
