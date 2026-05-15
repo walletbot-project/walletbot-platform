@@ -22,8 +22,7 @@ class AuthController extends ChangeNotifier {
 
   static const _accountsKey = 'accounts';
   static const _activeIdKey = 'active_account_id';
-  // JWT lifetime is 15 minutes (see better-auth convex plugin config).
-  // Refresh comfortably before that to avoid mid-query expiry.
+  // JWT lifetime is 15 minutes; refresh comfortably before that.
   static const _convexJwtRefreshInterval = Duration(minutes: 13);
 
   final FlutterSecureStorage _storage;
@@ -52,9 +51,6 @@ class AuthController extends ChangeNotifier {
     }
     _activeId = await _storage.read(key: _activeIdKey);
     final a = activeAccount;
-    debugPrint(
-      'load: activeId=$_activeId convexJwt=${a?.convexJwt == null ? "null" : "<${a!.convexJwt!.length} chars>"} requiresReauth=${a?.requiresReauth}',
-    );
     _applyBearerToken(a?.token);
     await _applyConvexAuth(a?.convexJwt);
     if (a != null && a.type == AccountType.remote) {
@@ -143,7 +139,6 @@ class AuthController extends ChangeNotifier {
       return await fn();
     } on ConvexClientError catch (e) {
       if (!e.message.toLowerCase().contains('unauthenticated')) rethrow;
-      debugPrint('runConvexAuthenticated: caught auth error, refreshing JWT');
       await _refreshConvexJwtOnly();
       return await fn();
     }
@@ -157,11 +152,7 @@ class AuthController extends ChangeNotifier {
 
   Future<void> _applyConvexAuth(String? token) async {
     try {
-      debugPrint(
-        'ConvexClient.setAuth(${token == null ? "null" : "<jwt ${token.length} chars>"})',
-      );
       await InternalConvexClient.instance.setAuth(token: token);
-      debugPrint('ConvexClient.setAuth OK');
     } catch (e) {
       debugPrint('ConvexClient.setAuth failed: $e');
     }
@@ -172,12 +163,10 @@ class AuthController extends ChangeNotifier {
       final res = await FlutterBetterAuth.dioClient.get(
         '${AppConfig.betterAuthBaseUrl}/convex/token',
       );
-      debugPrint('fetchConvexJwt status=${res.statusCode} body=${res.data}');
       final data = res.data;
       if (data is Map && data['token'] is String) {
         return data['token'] as String;
       }
-      debugPrint('fetchConvexJwt: unexpected shape — returning null');
       return null;
     } catch (e) {
       debugPrint('fetchConvexJwt failed: $e');
@@ -196,16 +185,6 @@ class AuthController extends ChangeNotifier {
   }
 
   Future<UserAccount> signInWithGoogle() async {
-    try {
-      return await _signInWithGoogle();
-    } catch (e, s) {
-      debugPrint('signInWithGoogle FAILED: $e');
-      debugPrintStack(stackTrace: s);
-      rethrow;
-    }
-  }
-
-  Future<UserAccount> _signInWithGoogle() async {
     final googleAccount = await GoogleSignIn.instance.authenticate();
     final idToken = googleAccount.authentication.idToken;
     if (idToken == null) {
@@ -219,8 +198,6 @@ class AuthController extends ChangeNotifier {
     final signInData = signInResult.data;
     if (signInData == null) {
       final err = signInResult.error;
-      debugPrint('sign-in error [${err?.code}]: ${err?.message}');
-      debugPrint('sign-in stack: ${err?.stack}');
       throw StateError(
         'Better-auth sign-in failed [${err?.code}]: ${err?.message}',
       );
@@ -276,9 +253,6 @@ class AuthController extends ChangeNotifier {
     try {
       final res = await FlutterBetterAuth.dioClient.get(
         '${AppConfig.betterAuthBaseUrl}/get-session',
-      );
-      debugPrint(
-        'refreshActiveSession: status=${res.statusCode} body=${res.data}',
       );
       final data = res.data;
       final ok = data is Map && data['user'] != null;
