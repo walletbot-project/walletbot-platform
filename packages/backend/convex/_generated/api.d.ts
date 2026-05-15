@@ -18,6 +18,7 @@ import type * as schema_sync from "../schema/sync.js";
 import type * as schema_tags from "../schema/tags.js";
 import type * as schema_transactionTags from "../schema/transactionTags.js";
 import type * as schema_transactions from "../schema/transactions.js";
+import type * as test from "../test.js";
 
 import type {
   ApiFromModules,
@@ -36,6 +37,7 @@ declare const fullApi: ApiFromModules<{
   "schema/tags": typeof schema_tags;
   "schema/transactionTags": typeof schema_transactionTags;
   "schema/transactions": typeof schema_transactions;
+  test: typeof test;
 }>;
 
 /**

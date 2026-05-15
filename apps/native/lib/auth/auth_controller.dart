@@ -3,6 +3,9 @@ import 'dart:convert';
 import 'package:app/auth/account.dart';
 import 'package:app/config.dart';
 import 'package:app/database.dart';
+// ignore: implementation_imports
+import 'package:convex_dart/src/convex_dart_for_generated_code.dart'
+    show InternalConvexClient;
 import 'package:flutter/foundation.dart';
 import 'package:flutter_better_auth/flutter_better_auth.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -39,7 +42,55 @@ class AuthController extends ChangeNotifier {
           .toList();
     }
     _activeId = await _storage.read(key: _activeIdKey);
+    final a = activeAccount;
+    debugPrint(
+      'load: activeId=$_activeId convexJwt=${a?.convexJwt == null ? "null" : "<${a!.convexJwt!.length} chars>"} requiresReauth=${a?.requiresReauth}',
+    );
+    _applyBearerToken(a?.token);
+    await _applyConvexAuth(a?.convexJwt);
     notifyListeners();
+  }
+
+  // Sets/clears the Authorization header used by the better-auth bearer plugin
+  // on the shared dio client. Mobile uses bearer instead of cookies because
+  // cookie_jar persistence is unreliable.
+  void _applyBearerToken(String? token) {
+    if (token == null || token.isEmpty) {
+      FlutterBetterAuth.dioClient.options.headers.remove('Authorization');
+    } else {
+      FlutterBetterAuth.dioClient.options.headers['Authorization'] =
+          'Bearer $token';
+    }
+  }
+
+  Future<void> _applyConvexAuth(String? token) async {
+    try {
+      debugPrint(
+        'ConvexClient.setAuth(${token == null ? "null" : "<jwt ${token.length} chars>"})',
+      );
+      await InternalConvexClient.instance.setAuth(token: token);
+      debugPrint('ConvexClient.setAuth OK');
+    } catch (e) {
+      debugPrint('ConvexClient.setAuth failed: $e');
+    }
+  }
+
+  Future<String?> _fetchConvexJwt() async {
+    try {
+      final res = await FlutterBetterAuth.dioClient.get(
+        '${AppConfig.betterAuthBaseUrl}/convex/token',
+      );
+      debugPrint('fetchConvexJwt status=${res.statusCode} body=${res.data}');
+      final data = res.data;
+      if (data is Map && data['token'] is String) {
+        return data['token'] as String;
+      }
+      debugPrint('fetchConvexJwt: unexpected shape — returning null');
+      return null;
+    } catch (e) {
+      debugPrint('fetchConvexJwt failed: $e');
+      return null;
+    }
   }
 
   Future<UserAccount> addLocal({String? name}) async {
@@ -82,6 +133,7 @@ class AuthController extends ChangeNotifier {
         'Better-auth sign-in failed [${err?.code}]: ${err?.message}',
       );
     }
+    _applyBearerToken(signInData.token);
 
     // Bypass flutter_better_auth's getSession() because the Convex adapter
     // returns numeric ms-epoch timestamps and the freezed Session model
@@ -98,12 +150,16 @@ class AuthController extends ChangeNotifier {
       throw StateError('Session response had no user');
     }
 
+    final convexJwt = await _fetchConvexJwt();
+    await _applyConvexAuth(convexJwt);
+
     final account = UserAccount(
       id: userJson['id'] as String,
       type: AccountType.remote,
       name: userJson['name'] as String?,
       email: userJson['email'] as String?,
       token: signInData.token,
+      convexJwt: convexJwt,
       picture: userJson['image'] as String?,
     );
 
@@ -128,13 +184,36 @@ class AuthController extends ChangeNotifier {
       final res = await FlutterBetterAuth.dioClient.get(
         '${AppConfig.betterAuthBaseUrl}/get-session',
       );
+      debugPrint(
+        'refreshActiveSession: status=${res.statusCode} body=${res.data}',
+      );
       final data = res.data;
       final ok = data is Map && data['user'] != null;
       _setRequiresReauth(active.id, !ok);
+      if (ok) {
+        final jwt = await _fetchConvexJwt();
+        if (jwt != null) {
+          await _applyConvexAuth(jwt);
+          _setConvexJwt(active.id, jwt);
+        }
+      }
     } catch (e) {
-      debugPrint('refreshActiveSession failed (offline / 401 / etc): $e');
+      debugPrint('refreshActiveSession failed: $e');
       _setRequiresReauth(active.id, true);
     }
+  }
+
+  void _setConvexJwt(String id, String jwt) {
+    final idx = _accounts.indexWhere((a) => a.id == id);
+    if (idx < 0) return;
+    if (_accounts[idx].convexJwt == jwt) return;
+    _accounts = [
+      ..._accounts.sublist(0, idx),
+      _accounts[idx].copyWith(convexJwt: jwt),
+      ..._accounts.sublist(idx + 1),
+    ];
+    _persist();
+    notifyListeners();
   }
 
   void _setRequiresReauth(String id, bool value) {
@@ -154,12 +233,17 @@ class AuthController extends ChangeNotifier {
     if (!_accounts.any((a) => a.id == id)) return;
     _activeId = id;
     await _persist();
+    final a = activeAccount;
+    _applyBearerToken(a?.token);
+    await _applyConvexAuth(a?.convexJwt);
     notifyListeners();
   }
 
   Future<void> signOut() async {
     _activeId = null;
     await _persist();
+    _applyBearerToken(null);
+    await _applyConvexAuth(null);
     notifyListeners();
   }
 

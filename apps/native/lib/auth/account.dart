@@ -7,6 +7,7 @@ class UserAccount {
     this.name,
     this.email,
     this.token,
+    this.convexJwt,
     this.picture,
     this.requiresReauth = false,
   });
@@ -16,6 +17,9 @@ class UserAccount {
   final String? name;
   final String? email;
   final String? token;
+  // Short-lived JWT minted by better-auth's convex plugin. Used by
+  // ConvexClient.setAuth so Convex queries see ctx.auth.getUserIdentity().
+  final String? convexJwt;
   final String? picture;
   // Server says this session is dead, but we keep the account locally so the
   // user is never locked out — offline mode still works.
@@ -25,6 +29,7 @@ class UserAccount {
     String? name,
     String? email,
     String? token,
+    String? convexJwt,
     String? picture,
     bool? requiresReauth,
   }) {
@@ -34,6 +39,7 @@ class UserAccount {
       name: name ?? this.name,
       email: email ?? this.email,
       token: token ?? this.token,
+      convexJwt: convexJwt ?? this.convexJwt,
       picture: picture ?? this.picture,
       requiresReauth: requiresReauth ?? this.requiresReauth,
     );
@@ -45,6 +51,7 @@ class UserAccount {
     'name': name,
     'email': email,
     'token': token,
+    'convexJwt': convexJwt,
     'picture': picture,
     'requiresReauth': requiresReauth,
   };
@@ -56,6 +63,7 @@ class UserAccount {
       name: json['name'] as String?,
       email: json['email'] as String?,
       token: json['token'] as String?,
+      convexJwt: json['convexJwt'] as String?,
       picture: json['picture'] as String?,
       requiresReauth: json['requiresReauth'] as bool? ?? false,
     );

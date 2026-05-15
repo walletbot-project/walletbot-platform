@@ -1,5 +1,8 @@
 import 'package:app/auth/account.dart';
 import 'package:app/auth/auth_controller.dart';
+// ignore: implementation_imports
+import 'package:convex_dart/src/convex_dart_for_generated_code.dart'
+    show InternalConvexClient, encodeMap;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -11,6 +14,27 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  String? _testResult;
+  bool _testing = false;
+
+  Future<void> _runTestQuery() async {
+    setState(() {
+      _testing = true;
+      _testResult = null;
+    });
+    try {
+      final result = await InternalConvexClient.instance.query(
+        name: 'test:hello',
+        args: encodeMap({}),
+      );
+      setState(() => _testResult = result.toString());
+    } catch (e) {
+      setState(() => _testResult = 'ERROR: $e');
+    } finally {
+      setState(() => _testing = false);
+    }
+  }
+
   void showUserMenu() {
     showDialog(
       context: context,
@@ -80,7 +104,41 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ],
       ),
-      body: const Center(child: Text('Home Screen')),
+      body: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const Text('Home Screen'),
+            const SizedBox(height: 16),
+            FilledButton.icon(
+              onPressed: _testing ? null : _runTestQuery,
+              icon: _testing
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.cloud_sync_rounded),
+              label: const Text('Test Convex query (test:hello)'),
+            ),
+            if (_testResult != null) ...[
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  border: Border.all(color: Theme.of(context).dividerColor),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: SelectableText(
+                  _testResult!,
+                  style: const TextStyle(fontFamily: 'monospace'),
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
     );
   }
 }

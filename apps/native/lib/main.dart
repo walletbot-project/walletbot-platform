@@ -7,6 +7,9 @@ import 'package:app/screens/activity.dart';
 import 'package:app/screens/add.dart';
 import 'package:app/screens/home.dart';
 import 'package:app/screens/login.dart';
+// ignore: implementation_imports
+import 'package:convex_dart/src/convex_dart_for_generated_code.dart'
+    show InternalConvexClient;
 import 'package:flutter/material.dart';
 import 'package:flutter_better_auth/flutter_better_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
@@ -15,11 +18,15 @@ import 'package:provider/provider.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
+  await loadAppConfig();
+
   await FlutterBetterAuth.initialize(url: AppConfig.betterAuthBaseUrl);
   // Better-auth's origin-check middleware reads the standard `Origin` header.
   // The default flutter_better_auth dio sets `flutter-origin` but not `Origin`,
   // so we add it here. Must match a trustedOrigins entry on the server.
   FlutterBetterAuth.dioClient.options.headers['Origin'] = 'flutter://';
+
+  await InternalConvexClient.init(deploymentUrl: AppConfig.convexUrl);
 
   await GoogleSignIn.instance.initialize(
     serverClientId: AppConfig.googleServerClientId,
