@@ -1,9 +1,12 @@
 import 'dart:convert';
 
 import 'package:app/auth/account.dart';
+import 'package:app/config.dart';
 import 'package:app/database.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter_better_auth/flutter_better_auth.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 
 class AuthController extends ChangeNotifier {
   AuthController({FlutterSecureStorage? storage})
@@ -49,14 +52,102 @@ class AuthController extends ChangeNotifier {
     return account;
   }
 
-  Future<UserAccount> addRemote({
-    required String userId,
-    required String email,
-    required String token,
-    String? name,
-    String? picture,
-  }) {
-    throw UnimplementedError('Remote sign-in not wired yet');
+  Future<UserAccount> signInWithGoogle() async {
+    try {
+      return await _signInWithGoogle();
+    } catch (e, s) {
+      debugPrint('signInWithGoogle FAILED: $e');
+      debugPrintStack(stackTrace: s);
+      rethrow;
+    }
+  }
+
+  Future<UserAccount> _signInWithGoogle() async {
+    final googleAccount = await GoogleSignIn.instance.authenticate();
+    final idToken = googleAccount.authentication.idToken;
+    if (idToken == null) {
+      throw StateError('Google sign-in returned no idToken');
+    }
+
+    final signInResult = await FlutterBetterAuth.client.signIn.social(
+      provider: 'google',
+      idToken: SocialIdTokenBody(token: idToken),
+    );
+    final signInData = signInResult.data;
+    if (signInData == null) {
+      final err = signInResult.error;
+      debugPrint('sign-in error [${err?.code}]: ${err?.message}');
+      debugPrint('sign-in stack: ${err?.stack}');
+      throw StateError(
+        'Better-auth sign-in failed [${err?.code}]: ${err?.message}',
+      );
+    }
+
+    // Bypass flutter_better_auth's getSession() because the Convex adapter
+    // returns numeric ms-epoch timestamps and the freezed Session model
+    // hard-casts those fields to String for DateTime.parse, blowing up.
+    final raw = await FlutterBetterAuth.dioClient.get(
+      '${AppConfig.betterAuthBaseUrl}/get-session',
+    );
+    final data = raw.data as Map<String, Object?>?;
+    if (data == null) {
+      throw StateError('Empty session response');
+    }
+    final userJson = data['user'] as Map<String, Object?>?;
+    if (userJson == null) {
+      throw StateError('Session response had no user');
+    }
+
+    final account = UserAccount(
+      id: userJson['id'] as String,
+      type: AccountType.remote,
+      name: userJson['name'] as String?,
+      email: userJson['email'] as String?,
+      token: signInData.token,
+      picture: userJson['image'] as String?,
+    );
+
+    _accounts = [
+      for (final a in _accounts)
+        if (a.id != account.id) a,
+      account,
+    ];
+    _activeId = account.id;
+    await _persist();
+    notifyListeners();
+    return account;
+  }
+
+  /// Opportunistically validate the active remote session against the backend.
+  /// Never deletes local data. On 401 or network failure, marks the account
+  /// as needing re-auth so the UI can prompt — the user is never locked out.
+  Future<void> refreshActiveSession() async {
+    final active = activeAccount;
+    if (active == null || active.type != AccountType.remote) return;
+    try {
+      final res = await FlutterBetterAuth.dioClient.get(
+        '${AppConfig.betterAuthBaseUrl}/get-session',
+      );
+      final data = res.data;
+      final ok = data is Map && data['user'] != null;
+      _setRequiresReauth(active.id, !ok);
+    } catch (e) {
+      debugPrint('refreshActiveSession failed (offline / 401 / etc): $e');
+      _setRequiresReauth(active.id, true);
+    }
+  }
+
+  void _setRequiresReauth(String id, bool value) {
+    final idx = _accounts.indexWhere((a) => a.id == id);
+    if (idx < 0) return;
+    if (_accounts[idx].requiresReauth == value) return;
+    _accounts = [
+      ..._accounts.sublist(0, idx),
+      _accounts[idx].copyWith(requiresReauth: value),
+      ..._accounts.sublist(idx + 1),
+    ];
+    _persist();
+    notifyListeners();
   }
 
   Future<void> switchTo(String id) async {

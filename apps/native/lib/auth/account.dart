@@ -8,6 +8,7 @@ class UserAccount {
     this.email,
     this.token,
     this.picture,
+    this.requiresReauth = false,
   });
 
   final String id;
@@ -16,12 +17,16 @@ class UserAccount {
   final String? email;
   final String? token;
   final String? picture;
+  // Server says this session is dead, but we keep the account locally so the
+  // user is never locked out — offline mode still works.
+  final bool requiresReauth;
 
   UserAccount copyWith({
     String? name,
     String? email,
     String? token,
     String? picture,
+    bool? requiresReauth,
   }) {
     return UserAccount(
       id: id,
@@ -30,6 +35,7 @@ class UserAccount {
       email: email ?? this.email,
       token: token ?? this.token,
       picture: picture ?? this.picture,
+      requiresReauth: requiresReauth ?? this.requiresReauth,
     );
   }
 
@@ -40,6 +46,7 @@ class UserAccount {
     'email': email,
     'token': token,
     'picture': picture,
+    'requiresReauth': requiresReauth,
   };
 
   factory UserAccount.fromJson(Map<String, Object?> json) {
@@ -50,6 +57,7 @@ class UserAccount {
       email: json['email'] as String?,
       token: json['token'] as String?,
       picture: json['picture'] as String?,
+      requiresReauth: json['requiresReauth'] as bool? ?? false,
     );
   }
 }

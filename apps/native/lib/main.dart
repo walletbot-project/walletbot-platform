@@ -1,16 +1,34 @@
+import 'dart:async';
+
 import 'package:app/auth/auth_controller.dart';
+import 'package:app/config.dart';
 import 'package:app/database.dart';
 import 'package:app/screens/activity.dart';
 import 'package:app/screens/add.dart';
 import 'package:app/screens/home.dart';
 import 'package:app/screens/login.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_better_auth/flutter_better_auth.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 import 'package:provider/provider.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  await FlutterBetterAuth.initialize(url: AppConfig.betterAuthBaseUrl);
+  // Better-auth's origin-check middleware reads the standard `Origin` header.
+  // The default flutter_better_auth dio sets `flutter-origin` but not `Origin`,
+  // so we add it here. Must match a trustedOrigins entry on the server.
+  FlutterBetterAuth.dioClient.options.headers['Origin'] = 'flutter://';
+
+  await GoogleSignIn.instance.initialize(
+    serverClientId: AppConfig.googleServerClientId,
+  );
+
   final auth = AuthController();
   await auth.load();
+  // Fire-and-forget. Must not block app start — app must work offline.
+  unawaited(auth.refreshActiveSession());
   runApp(MyApp(auth: auth));
 }
 
@@ -65,14 +83,25 @@ class _AppMainState extends State<AppMain> {
 
   @override
   Widget build(BuildContext context) {
+    final needsReauth =
+        context.select<AuthController, bool>(
+          (a) => a.activeAccount?.requiresReauth ?? false,
+        );
     return Scaffold(
-      body: IndexedStack(
-        index: selectedIndex,
+      body: Column(
         children: [
-          HomeScreen(),
-          ActivityScreen(),
-          Placeholder(),
-          Placeholder(),
+          if (needsReauth) const _ReauthBanner(),
+          Expanded(
+            child: IndexedStack(
+              index: selectedIndex,
+              children: [
+                HomeScreen(),
+                ActivityScreen(),
+                Placeholder(),
+                Placeholder(),
+              ],
+            ),
+          ),
         ],
       ),
       floatingActionButton: FloatingActionButton(
@@ -102,6 +131,52 @@ class _AppMainState extends State<AppMain> {
         ],
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
+    );
+  }
+}
+
+class _ReauthBanner extends StatelessWidget {
+  const _ReauthBanner();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Material(
+      color: theme.colorScheme.errorContainer,
+      child: SafeArea(
+        bottom: false,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          child: Row(
+            children: [
+              Icon(
+                Icons.sync_problem_rounded,
+                color: theme.colorScheme.onErrorContainer,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  'Sync paused — sign in again to reconnect',
+                  style: TextStyle(color: theme.colorScheme.onErrorContainer),
+                ),
+              ),
+              TextButton(
+                onPressed: () async {
+                  final messenger = ScaffoldMessenger.of(context);
+                  try {
+                    await context.read<AuthController>().signInWithGoogle();
+                  } catch (e) {
+                    messenger.showSnackBar(
+                      SnackBar(content: Text('Reconnect failed: $e')),
+                    );
+                  }
+                },
+                child: const Text('Reconnect'),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
