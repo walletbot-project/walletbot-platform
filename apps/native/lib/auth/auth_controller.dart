@@ -8,6 +8,13 @@ import 'package:convex_dart/convex_dart.dart' show ConvexClientError;
 // ignore: implementation_imports
 import 'package:convex_dart/src/convex_dart_for_generated_code.dart'
     show InternalConvexClient;
+// ignore: implementation_imports
+import 'package:convex_dart/src/rust/base_client/query_result.dart'
+    show FunctionResult, FunctionResult_ErrorMessage, FunctionResult_Value;
+// ignore: implementation_imports
+import 'package:convex_dart/src/rust/dart.dart' show SubscriptionHandle;
+// ignore: implementation_imports
+import 'package:convex_dart/src/rust/lib.dart' show BTreeMapStringValue;
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_better_auth/flutter_better_auth.dart';
@@ -142,6 +149,61 @@ class AuthController extends ChangeNotifier {
       await _refreshConvexJwtOnly();
       return await fn();
     }
+  }
+
+  /// Subscribes to a Convex query and keeps the subscription alive across
+  /// JWT refreshes. If the backend reports an authentication failure, we
+  /// transparently mint a fresh JWT and re-subscribe under the same handle.
+  ///
+  /// Caller owns the returned handle and MUST call [ConvexSubscriptionHandle.cancel]
+  /// when no longer needed (typically in widget `dispose`).
+  ///
+  /// Same caveat as [runConvexAuthenticated]: auth failures are detected by
+  /// sniffing the error string for "unauthenticated".
+  Future<ConvexSubscriptionHandle> subscribeConvex({
+    required String name,
+    required BTreeMapStringValue args,
+    required FutureOr<void> Function(FunctionResult) onUpdate,
+  }) async {
+    final wrapper = ConvexSubscriptionHandle._();
+    var authRetries = 0;
+    const maxAuthRetries = 3;
+
+    Future<void> doSubscribe() async {
+      if (wrapper._cancelled) return;
+      late SubscriptionHandle handle;
+      handle = await InternalConvexClient.instance.subscribe(
+        name: name,
+        args: args,
+        onUpdate: (result) async {
+          // Drop stale callbacks from a handle that's been replaced or cancelled.
+          if (wrapper._cancelled || wrapper._current != handle) return;
+
+          if (result is FunctionResult_ErrorMessage &&
+              result.field0.toLowerCase().contains('unauthenticated')) {
+            if (authRetries >= maxAuthRetries) {
+              debugPrint(
+                'subscribeConvex($name): giving up after $maxAuthRetries auth retries',
+              );
+              return;
+            }
+            authRetries++;
+            handle.cancel();
+            wrapper._current = null;
+            await _refreshConvexJwtOnly();
+            await doSubscribe();
+            return;
+          }
+
+          if (result is FunctionResult_Value) authRetries = 0;
+          await onUpdate(result);
+        },
+      );
+      wrapper._current = handle;
+    }
+
+    await doSubscribe();
+    return wrapper;
   }
 
   @override
@@ -353,5 +415,22 @@ class AuthController extends ChangeNotifier {
     final encoded = jsonEncode(_accounts.map((a) => a.toJson()).toList());
     await _storage.write(key: _accountsKey, value: encoded);
     await _storage.write(key: _activeIdKey, value: _activeId);
+  }
+}
+
+/// Opaque handle for a Convex subscription that survives JWT refreshes. The
+/// underlying convex_dart [SubscriptionHandle] may be swapped transparently
+/// when re-subscribing after an auth failure; callers should never hold onto
+/// the inner one.
+class ConvexSubscriptionHandle {
+  ConvexSubscriptionHandle._();
+
+  bool _cancelled = false;
+  SubscriptionHandle? _current;
+
+  void cancel() {
+    _cancelled = true;
+    _current?.cancel();
+    _current = null;
   }
 }
