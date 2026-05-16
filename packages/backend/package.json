@@ -17,6 +17,7 @@
         "better-auth": "catalog:",
         "convex": "catalog:",
         "convex-helpers": "^0.1.114",
+        "jose": "^6.2.3",
         "zod": "^3.25.76"
     },
     "devDependencies": {

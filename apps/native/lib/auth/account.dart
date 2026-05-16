@@ -6,9 +6,11 @@ class UserAccount {
     required this.type,
     this.name,
     this.email,
-    this.token,
-    this.convexJwt,
     this.picture,
+    this.accessToken,
+    this.accessTokenExpiresAt,
+    this.refreshToken,
+    this.refreshTokenExpiresAt,
     this.requiresReauth = false,
   });
 
@@ -16,21 +18,35 @@ class UserAccount {
   final AccountType type;
   final String? name;
   final String? email;
-  final String? token;
-  // Short-lived JWT minted by better-auth's convex plugin. Used by
-  // ConvexClient.setAuth so Convex queries see ctx.auth.getUserIdentity().
-  final String? convexJwt;
   final String? picture;
-  // Server says this session is dead, but we keep the account locally so the
-  // user is never locked out — offline mode still works.
+
+  /// JWT signed by our backend ([CONVEX_SITE_URL]/native-auth issuer). Passed
+  /// to Convex via `setAuth` so `ctx.auth.getUserIdentity()` resolves.
+  final String? accessToken;
+
+  /// ms-epoch expiry of [accessToken] as reported by the backend at issue time.
+  final int? accessTokenExpiresAt;
+
+  /// Opaque rotating refresh secret. Posted to `/auth/refresh` to mint a new
+  /// `accessToken`; the server rotates it on every use.
+  final String? refreshToken;
+
+  /// ms-epoch expiry of [refreshToken] as reported by the backend at issue time.
+  final int? refreshTokenExpiresAt;
+
+  /// Server says this session is dead (refresh-token revoked / expired). We
+  /// keep the account locally so the user is never locked out — offline mode
+  /// still works.
   final bool requiresReauth;
 
   UserAccount copyWith({
     String? name,
     String? email,
-    String? token,
-    String? convexJwt,
     String? picture,
+    String? accessToken,
+    int? accessTokenExpiresAt,
+    String? refreshToken,
+    int? refreshTokenExpiresAt,
     bool? requiresReauth,
   }) {
     return UserAccount(
@@ -38,9 +54,12 @@ class UserAccount {
       type: type,
       name: name ?? this.name,
       email: email ?? this.email,
-      token: token ?? this.token,
-      convexJwt: convexJwt ?? this.convexJwt,
       picture: picture ?? this.picture,
+      accessToken: accessToken ?? this.accessToken,
+      accessTokenExpiresAt: accessTokenExpiresAt ?? this.accessTokenExpiresAt,
+      refreshToken: refreshToken ?? this.refreshToken,
+      refreshTokenExpiresAt:
+          refreshTokenExpiresAt ?? this.refreshTokenExpiresAt,
       requiresReauth: requiresReauth ?? this.requiresReauth,
     );
   }
@@ -50,9 +69,11 @@ class UserAccount {
     'type': type.name,
     'name': name,
     'email': email,
-    'token': token,
-    'convexJwt': convexJwt,
     'picture': picture,
+    'accessToken': accessToken,
+    'accessTokenExpiresAt': accessTokenExpiresAt,
+    'refreshToken': refreshToken,
+    'refreshTokenExpiresAt': refreshTokenExpiresAt,
     'requiresReauth': requiresReauth,
   };
 
@@ -62,9 +83,11 @@ class UserAccount {
       type: AccountType.values.firstWhere((t) => t.name == json['type']),
       name: json['name'] as String?,
       email: json['email'] as String?,
-      token: json['token'] as String?,
-      convexJwt: json['convexJwt'] as String?,
       picture: json['picture'] as String?,
+      accessToken: json['accessToken'] as String?,
+      accessTokenExpiresAt: (json['accessTokenExpiresAt'] as num?)?.toInt(),
+      refreshToken: json['refreshToken'] as String?,
+      refreshTokenExpiresAt: (json['refreshTokenExpiresAt'] as num?)?.toInt(),
       requiresReauth: json['requiresReauth'] as bool? ?? false,
     );
   }

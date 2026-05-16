@@ -21,8 +21,6 @@ class AppConfig {
       _googleServerClientIdDefine.isNotEmpty
       ? _googleServerClientIdDefine
       : dotenv.get('GOOGLE_SERVER_CLIENT_ID');
-
-  static String get betterAuthBaseUrl => '$convexSiteUrl/api/auth';
 }
 
 Future<void> loadAppConfig() async {

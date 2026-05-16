@@ -22,25 +22,21 @@ import 'package:http/http.dart' as http;
 
 class AuthController extends ChangeNotifier {
   AuthController({http.Client? httpClient, FlutterSecureStorage? storage})
-    : _storage = storage ?? const FlutterSecureStorage() {
-    _http = _AuthHttpClient(
-      inner: httpClient ?? http.Client(),
-      onRotatedToken: _handleRotatedBearerToken,
-    );
-  }
+    : _storage = storage ?? const FlutterSecureStorage(),
+      _http = httpClient ?? http.Client();
 
   static const _accountsKey = 'accounts';
   static const _activeIdKey = 'active_account_id';
-  // JWT lifetime is 15 minutes; refresh comfortably before that.
-  static const _convexJwtRefreshInterval = Duration(minutes: 13);
+  // Refresh the access token this far before its server-issued expiry.
+  static const _refreshLeeway = Duration(seconds: 60);
 
   final FlutterSecureStorage _storage;
-  late final _AuthHttpClient _http;
+  final http.Client _http;
 
   List<UserAccount> _accounts = const [];
   String? _activeId;
-  Timer? _convexJwtTimer;
-  Future<void>? _convexJwtRefreshInFlight;
+  Timer? _refreshTimer;
+  Future<bool>? _refreshInFlight;
   Future<void> _persistQueue = Future.value();
 
   List<UserAccount> get accounts => List.unmodifiable(_accounts);
@@ -63,107 +59,113 @@ class AuthController extends ChangeNotifier {
     }
     _activeId = await _storage.read(key: _activeIdKey);
     final a = activeAccount;
-    _applyBearerToken(a?.token);
-    await _applyConvexAuth(a?.convexJwt);
+    await _applyConvexAuth(a?.accessToken);
     if (a != null && a.type == AccountType.remote) {
-      _startConvexJwtTimer();
+      _scheduleNextRefresh();
     }
     notifyListeners();
   }
 
-  // Sets/clears the Authorization header used by the better-auth bearer plugin.
-  // Mobile uses bearer instead of cookies because cookie persistence is unreliable.
-  void _applyBearerToken(String? token) {
-    if (token == null || token.isEmpty) {
-      _http.headers.remove('Authorization');
-    } else {
-      _http.headers['Authorization'] = 'Bearer $token';
+  /// Sign in with Google → POST idToken to backend, store the access/refresh
+  /// pair, prime Convex auth. Backend handles user upsert via better-auth's
+  /// adapter so the same user record is shared with the web app.
+  Future<UserAccount> signInWithGoogle() async {
+    final googleAccount = await GoogleSignIn.instance.authenticate();
+    final idToken = googleAccount.authentication.idToken;
+    if (idToken == null) {
+      throw StateError('Google sign-in returned no idToken');
     }
-  }
 
-  void _handleRotatedBearerToken(String newToken) {
-    final active = activeAccount;
-    if (active == null || active.token == newToken) return;
-    _applyBearerToken(newToken);
-    _replaceAccount(active.id, (a) => a.copyWith(token: newToken));
-  }
+    final body = await _postJson('/auth/google', {'idToken': idToken});
+    final userJson = body['user'] as Map<String, Object?>?;
+    if (userJson == null) {
+      throw StateError('Sign-in response missing user');
+    }
 
-  /// Replaces an account in [_accounts] by id and schedules a save. No-op if
-  /// the id is unknown or [update] returns an equal value. Notifies listeners
-  /// only when state actually changed.
-  void _replaceAccount(String id, UserAccount Function(UserAccount) update) {
-    final idx = _accounts.indexWhere((a) => a.id == id);
-    if (idx < 0) return;
-    final current = _accounts[idx];
-    final updated = update(current);
-    if (identical(updated, current)) return;
+    final account = UserAccount(
+      id: userJson['id'] as String,
+      type: AccountType.remote,
+      name: userJson['name'] as String?,
+      email: userJson['email'] as String?,
+      picture: userJson['image'] as String?,
+      accessToken: body['accessToken'] as String,
+      accessTokenExpiresAt: (body['accessTokenExpiresAt'] as num).toInt(),
+      refreshToken: body['refreshToken'] as String,
+      refreshTokenExpiresAt: (body['refreshTokenExpiresAt'] as num).toInt(),
+    );
+
     _accounts = [
-      ..._accounts.sublist(0, idx),
-      updated,
-      ..._accounts.sublist(idx + 1),
+      for (final a in _accounts)
+        if (a.id != account.id) a,
+      account,
     ];
-    _scheduleSave();
+    _activeId = account.id;
+    await _persist();
+    await _applyConvexAuth(account.accessToken);
+    _scheduleNextRefresh();
     notifyListeners();
+    return account;
   }
 
-  /// True iff [message] looks like a Convex unauthenticated error. convex_dart
-  /// has no typed auth-error variant, so we sniff the string. If the upstream
-  /// wording ever changes, the auth-retry plumbing in [runConvexAuthenticated]
-  /// and [subscribeConvex] silently stops triggering — keep all sniffing here.
-  static bool _isAuthError(String message) =>
-      message.toLowerCase().contains('unauthenticated');
-
-  void _startConvexJwtTimer() {
-    _convexJwtTimer?.cancel();
-    _convexJwtTimer = Timer.periodic(_convexJwtRefreshInterval, (_) {
-      unawaited(_refreshConvexJwtOnly());
-    });
-  }
-
-  void _stopConvexJwtTimer() {
-    _convexJwtTimer?.cancel();
-    _convexJwtTimer = null;
-  }
-
-  // Mint a fresh Convex JWT without round-tripping /get-session. Used by the
-  // periodic timer; keeps old JWT in place if the call fails (offline-first).
-  //
-  // Coalesces concurrent callers: the 13-min timer and runConvexAuthenticated's
-  // retry path can fire simultaneously — without this, two refreshes race and
-  // the older JWT could land last via setAuth.
-  Future<void> _refreshConvexJwtOnly() {
-    final existing = _convexJwtRefreshInFlight;
-    if (existing != null) return existing;
-    final future = _doRefreshConvexJwt();
-    _convexJwtRefreshInFlight = future;
-    return future.whenComplete(() => _convexJwtRefreshInFlight = null);
-  }
-
-  Future<void> _doRefreshConvexJwt() async {
+  /// Opportunistic refresh — called on app resume. Cheap when the access token
+  /// is still fresh; forces a refresh otherwise. Never deletes local data.
+  Future<void> refreshActiveSession() async {
     final active = activeAccount;
     if (active == null || active.type != AccountType.remote) return;
-    final jwt = await _fetchConvexJwt();
-    if (jwt == null) return;
-    await _applyConvexAuth(jwt);
-    _setConvexJwt(active.id, jwt);
+    final exp = active.accessTokenExpiresAt;
+    if (exp != null) {
+      final remaining = exp - DateTime.now().millisecondsSinceEpoch;
+      if (remaining > _refreshLeeway.inMilliseconds) {
+        _scheduleNextRefresh();
+        return;
+      }
+    }
+    await _refreshAccessToken();
   }
 
-  /// Wraps a Convex call so that if the backend reports an authentication
-  /// failure, we mint a fresh JWT and retry once. Use this for any Convex
-  /// query/mutation/action that requires the signed-in user.
+  /// Wraps a Convex call so that on an "Unauthenticated" error we refresh the
+  /// access token and retry once. Proactive refresh handles the common case;
+  /// this catches the race where exp slips through (network blip, app frozen).
   Future<T> runConvexAuthenticated<T>(Future<T> Function() fn) async {
+    await _ensureFreshAuth();
     try {
       return await fn();
     } on ConvexClientError catch (e) {
       if (!_isAuthError(e.message)) rethrow;
-      await _refreshConvexJwtOnly();
+      final ok = await _refreshAccessToken();
+      if (!ok) rethrow;
       return await fn();
     }
   }
 
-  /// Subscribes to a Convex query and keeps the subscription alive across
-  /// JWT refreshes. If the backend reports an authentication failure, we
-  /// transparently mint a fresh JWT and re-subscribe under the same handle.
+  /// Pre-flight check before any authenticated Convex call:
+  ///   1. wait for any in-flight refresh so we don't fire with a token that's
+  ///      already being rotated out;
+  ///   2. if the access token is already past (or within leeway of) its server-
+  ///      issued exp, force a refresh now and wait for it.
+  ///
+  /// Needed because OS background suspension stops our refresh timer and drops
+  /// the Convex WebSocket. Without this, the first query after resume can hang
+  /// indefinitely inside convex_dart's reconnect/queue path before our retry
+  /// catch ever sees an error.
+  Future<void> _ensureFreshAuth() async {
+    final inFlight = _refreshInFlight;
+    if (inFlight != null) {
+      await inFlight;
+    }
+    final active = activeAccount;
+    if (active == null || active.type != AccountType.remote) return;
+    final exp = active.accessTokenExpiresAt;
+    if (exp == null) return;
+    final remaining = exp - DateTime.now().millisecondsSinceEpoch;
+    if (remaining <= _refreshLeeway.inMilliseconds) {
+      await _refreshAccessToken();
+    }
+  }
+
+  /// Subscribes to a Convex query and survives JWT swaps via [_applyConvexAuth].
+  /// If the backend reports auth failure we refresh once and re-subscribe under
+  /// the same handle; callers should never see the underlying handle change.
   ///
   /// Caller owns the returned handle and MUST call [ConvexSubscriptionHandle.cancel]
   /// when no longer needed (typically in widget `dispose`).
@@ -173,36 +175,34 @@ class AuthController extends ChangeNotifier {
     required FutureOr<void> Function(FunctionResult) onUpdate,
   }) async {
     final wrapper = ConvexSubscriptionHandle._();
-    var authRetries = 0;
-    const maxAuthRetries = 3;
+    var retried = false;
 
     Future<void> doSubscribe() async {
+      if (wrapper._cancelled) return;
+      await _ensureFreshAuth();
       if (wrapper._cancelled) return;
       late SubscriptionHandle handle;
       handle = await InternalConvexClient.instance.subscribe(
         name: name,
         args: args,
         onUpdate: (result) async {
-          // Drop stale callbacks from a handle that's been replaced or cancelled.
           if (wrapper._cancelled || wrapper._current != handle) return;
-
           if (result is FunctionResult_ErrorMessage &&
               _isAuthError(result.field0)) {
-            if (authRetries >= maxAuthRetries) {
+            if (retried) {
               debugPrint(
-                'subscribeConvex($name): giving up after $maxAuthRetries auth retries',
+                'subscribeConvex($name): auth error after retry — giving up',
               );
               return;
             }
-            authRetries++;
+            retried = true;
             handle.cancel();
             wrapper._current = null;
-            await _refreshConvexJwtOnly();
+            await _refreshAccessToken();
             await doSubscribe();
             return;
           }
-
-          if (result is FunctionResult_Value) authRetries = 0;
+          if (result is FunctionResult_Value) retried = false;
           await onUpdate(result);
         },
       );
@@ -211,34 +211,6 @@ class AuthController extends ChangeNotifier {
 
     await doSubscribe();
     return wrapper;
-  }
-
-  @override
-  void dispose() {
-    _stopConvexJwtTimer();
-    _http.close();
-    super.dispose();
-  }
-
-  Future<void> _applyConvexAuth(String? token) async {
-    try {
-      await InternalConvexClient.instance.setAuth(token: token);
-    } catch (e) {
-      debugPrint('ConvexClient.setAuth failed: $e');
-    }
-  }
-
-  Future<String?> _fetchConvexJwt() async {
-    try {
-      final data = await _http.jsonGet('/convex/token');
-      if (data is Map && data['token'] is String) {
-        return data['token'] as String;
-      }
-      return null;
-    } catch (e) {
-      debugPrint('fetchConvexJwt failed: $e');
-      return null;
-    }
   }
 
   Future<UserAccount> addLocal({String? name}) async {
@@ -251,133 +223,32 @@ class AuthController extends ChangeNotifier {
     return account;
   }
 
-  Future<UserAccount> signInWithGoogle() async {
-    final googleAccount = await GoogleSignIn.instance.authenticate();
-    final idToken = googleAccount.authentication.idToken;
-    if (idToken == null) {
-      throw StateError('Google sign-in returned no idToken');
-    }
-
-    final Object? signInData;
-    try {
-      signInData = await _http.jsonPost(
-        '/sign-in/social',
-        body: {
-          'provider': 'google',
-          'idToken': {'token': idToken},
-        },
-      );
-    } on HttpError catch (e) {
-      final body = e.body;
-      if (body is Map) {
-        throw StateError(
-          'Better-auth sign-in failed [${body['code']}]: ${body['message']}',
-        );
-      }
-      throw StateError('Better-auth sign-in failed: HTTP ${e.statusCode}');
-    }
-    final sessionToken = (signInData is Map ? signInData['token'] : null);
-    if (sessionToken is! String) {
-      throw StateError('Sign-in response missing token');
-    }
-    _applyBearerToken(sessionToken);
-
-    // The Convex better-auth adapter returns numeric ms-epoch timestamps for
-    // session fields, so we read /get-session as raw JSON instead of through
-    // a typed client that would try to parse them as ISO strings.
-    final data = await _http.jsonGet('/get-session') as Map<String, Object?>?;
-    if (data == null) {
-      throw StateError('Empty session response');
-    }
-    final userJson = data['user'] as Map<String, Object?>?;
-    if (userJson == null) {
-      throw StateError('Session response had no user');
-    }
-
-    final convexJwt = await _fetchConvexJwt();
-    await _applyConvexAuth(convexJwt);
-
-    final account = UserAccount(
-      id: userJson['id'] as String,
-      type: AccountType.remote,
-      name: userJson['name'] as String?,
-      email: userJson['email'] as String?,
-      token: sessionToken,
-      convexJwt: convexJwt,
-      picture: userJson['image'] as String?,
-    );
-
-    _accounts = [
-      for (final a in _accounts)
-        if (a.id != account.id) a,
-      account,
-    ];
-    _activeId = account.id;
-    await _persist();
-    _startConvexJwtTimer();
-    notifyListeners();
-    return account;
-  }
-
-  /// Opportunistically validate the active remote session against the backend.
-  /// Never deletes local data. On 401 or network failure, marks the account
-  /// as needing re-auth so the UI can prompt — the user is never locked out.
-  Future<void> refreshActiveSession() async {
-    final active = activeAccount;
-    if (active == null || active.type != AccountType.remote) return;
-    try {
-      final data = await _http.jsonGet('/get-session');
-      final ok = data is Map && data['user'] != null;
-      _setRequiresReauth(active.id, !ok);
-      if (ok) {
-        final jwt = await _fetchConvexJwt();
-        if (jwt != null) {
-          await _applyConvexAuth(jwt);
-          _setConvexJwt(active.id, jwt);
-        }
-      }
-    } catch (e) {
-      debugPrint('refreshActiveSession failed: $e');
-      _setRequiresReauth(active.id, true);
-    }
-  }
-
-  void _setConvexJwt(String id, String jwt) {
-    _replaceAccount(
-      id,
-      (a) => a.convexJwt == jwt ? a : a.copyWith(convexJwt: jwt),
-    );
-  }
-
-  void _setRequiresReauth(String id, bool value) {
-    _replaceAccount(
-      id,
-      (a) => a.requiresReauth == value ? a : a.copyWith(requiresReauth: value),
-    );
-  }
-
   Future<void> switchTo(String id) async {
     if (!_accounts.any((a) => a.id == id)) return;
     _activeId = id;
     await _persist();
     final a = activeAccount;
-    _applyBearerToken(a?.token);
-    await _applyConvexAuth(a?.convexJwt);
+    await _applyConvexAuth(a?.accessToken);
     if (a != null && a.type == AccountType.remote) {
-      _startConvexJwtTimer();
+      _scheduleNextRefresh();
     } else {
-      _stopConvexJwtTimer();
+      _stopRefreshTimer();
     }
     notifyListeners();
   }
 
   Future<void> signOut() async {
+    final active = activeAccount;
     _activeId = null;
+    _stopRefreshTimer();
     await _persist();
-    _applyBearerToken(null);
     await _applyConvexAuth(null);
-    _stopConvexJwtTimer();
     notifyListeners();
+    // Fire-and-forget revoke; never block the UI on the network.
+    final refresh = active?.refreshToken;
+    if (refresh != null) {
+      unawaited(_revokeRefreshToken(refresh));
+    }
   }
 
   Future<void> signOutRemote(String id) async {
@@ -388,9 +259,17 @@ class AuthController extends ChangeNotifier {
     // TODO: guard against unsynced data once sync is wired up.
     await AppDatabase.deleteForUser(id);
     _accounts = _accounts.where((a) => a.id != id).toList();
-    if (_activeId == id) _activeId = null;
+    if (_activeId == id) {
+      _activeId = null;
+      _stopRefreshTimer();
+      await _applyConvexAuth(null);
+    }
     await _persist();
     notifyListeners();
+    final refresh = account.refreshToken;
+    if (refresh != null) {
+      unawaited(_revokeRefreshToken(refresh));
+    }
   }
 
   Future<void> deleteLocal(String id) async {
@@ -409,6 +288,152 @@ class AuthController extends ChangeNotifier {
     throw UnimplementedError('Local→remote merge not implemented');
   }
 
+  @override
+  void dispose() {
+    _stopRefreshTimer();
+    _http.close();
+    super.dispose();
+  }
+
+  // ---------------------------------------------------------------------------
+  // Internals
+  // ---------------------------------------------------------------------------
+
+  static bool _isAuthError(String message) =>
+      message.toLowerCase().contains('unauthenticated');
+
+  Future<void> _applyConvexAuth(String? token) async {
+    try {
+      await InternalConvexClient.instance.setAuth(token: token);
+    } catch (e) {
+      debugPrint('ConvexClient.setAuth failed: $e');
+    }
+  }
+
+  Future<Map<String, Object?>> _postJson(
+    String path,
+    Map<String, Object?> body,
+  ) async {
+    final response = await _http.post(
+      Uri.parse('${AppConfig.convexSiteUrl}$path'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode(body),
+    );
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      Object? decoded;
+      try {
+        decoded = jsonDecode(response.body);
+      } catch (_) {}
+      throw _AuthHttpError(response.statusCode, decoded, response.body);
+    }
+    return jsonDecode(response.body) as Map<String, Object?>;
+  }
+
+  /// Coalesces concurrent refresh attempts: the proactive timer, the resume
+  /// callback, and the on-auth-error retry path can all fire at once.
+  Future<bool> _refreshAccessToken() {
+    final existing = _refreshInFlight;
+    if (existing != null) return existing;
+    final future = _doRefresh();
+    _refreshInFlight = future;
+    return future.whenComplete(() => _refreshInFlight = null);
+  }
+
+  Future<bool> _doRefresh() async {
+    final active = activeAccount;
+    final refresh = active?.refreshToken;
+    if (active == null ||
+        active.type != AccountType.remote ||
+        refresh == null) {
+      return false;
+    }
+    try {
+      final body = await _postJson('/auth/refresh', {'refreshToken': refresh});
+      final newAccess = body['accessToken'] as String;
+      final newAccessExp = (body['accessTokenExpiresAt'] as num).toInt();
+      final newRefresh = body['refreshToken'] as String;
+      final newRefreshExp = (body['refreshTokenExpiresAt'] as num).toInt();
+
+      _replaceAccount(
+        active.id,
+        (a) => a.copyWith(
+          accessToken: newAccess,
+          accessTokenExpiresAt: newAccessExp,
+          refreshToken: newRefresh,
+          refreshTokenExpiresAt: newRefreshExp,
+          requiresReauth: false,
+        ),
+      );
+      await _applyConvexAuth(newAccess);
+      _scheduleNextRefresh();
+      return true;
+    } on _AuthHttpError catch (e) {
+      if (e.statusCode == 401) {
+        // Refresh token invalid (revoked/expired). Keep local data — user
+        // re-signs in to reconnect; offline mode still works.
+        _setRequiresReauth(active.id, true);
+        _stopRefreshTimer();
+      } else {
+        debugPrint('refresh failed: ${e.statusCode} ${e.rawBody}');
+      }
+      return false;
+    } catch (e) {
+      debugPrint('refresh request failed: $e');
+      return false;
+    }
+  }
+
+  Future<void> _revokeRefreshToken(String refreshToken) async {
+    try {
+      await _postJson('/auth/signout', {'refreshToken': refreshToken});
+    } catch (e) {
+      debugPrint('signout request failed: $e');
+    }
+  }
+
+  void _scheduleNextRefresh() {
+    _stopRefreshTimer();
+    final active = activeAccount;
+    if (active == null || active.type != AccountType.remote) return;
+    final exp = active.accessTokenExpiresAt;
+    if (exp == null) return;
+    final remainingMs =
+        exp -
+        DateTime.now().millisecondsSinceEpoch -
+        _refreshLeeway.inMilliseconds;
+    final delay = remainingMs < 1000
+        ? const Duration(seconds: 1)
+        : Duration(milliseconds: remainingMs);
+    _refreshTimer = Timer(delay, () => unawaited(_refreshAccessToken()));
+  }
+
+  void _stopRefreshTimer() {
+    _refreshTimer?.cancel();
+    _refreshTimer = null;
+  }
+
+  void _replaceAccount(String id, UserAccount Function(UserAccount) update) {
+    final idx = _accounts.indexWhere((a) => a.id == id);
+    if (idx < 0) return;
+    final current = _accounts[idx];
+    final updated = update(current);
+    if (identical(updated, current)) return;
+    _accounts = [
+      ..._accounts.sublist(0, idx),
+      updated,
+      ..._accounts.sublist(idx + 1),
+    ];
+    _scheduleSave();
+    notifyListeners();
+  }
+
+  void _setRequiresReauth(String id, bool value) {
+    _replaceAccount(
+      id,
+      (a) => a.requiresReauth == value ? a : a.copyWith(requiresReauth: value),
+    );
+  }
+
   /// Awaitable save. Serialized via [_persistQueue] so concurrent saves can't
   /// interleave their two-key writes. The snapshot is captured at call time so
   /// each queued save writes the state-as-of-its-call, not as-of-execution.
@@ -425,9 +450,6 @@ class AuthController extends ChangeNotifier {
     return write;
   }
 
-  /// Fire-and-forget variant for reactive updates from background paths
-  /// (token rotation, JWT refresh). Goes through the same queue, so it can
-  /// never overlap with an awaitable [_persist].
   void _scheduleSave() {
     unawaited(_persist());
   }
@@ -450,85 +472,15 @@ class ConvexSubscriptionHandle {
   }
 }
 
-/// Thrown by [_AuthHttpClient.jsonGet] / [_AuthHttpClient.jsonPost] on non-2xx
-/// responses. [body] is the decoded JSON payload if the server returned one
-/// (e.g. better-auth's `{code, message}` shape), otherwise null.
-class HttpError implements Exception {
-  HttpError(this.statusCode, this.body);
+/// Thrown by [AuthController._postJson] on non-2xx responses. [body] is the
+/// decoded JSON payload if the server returned one, otherwise null.
+class _AuthHttpError implements Exception {
+  _AuthHttpError(this.statusCode, this.body, this.rawBody);
 
   final int statusCode;
   final Object? body;
+  final String rawBody;
 
   @override
-  String toString() => 'HTTP $statusCode: ${body ?? '(empty body)'}';
-}
-
-/// http.Client that injects default headers (Origin, Authorization) on every
-/// request and inspects responses for better-auth's rotated `set-auth-token`
-/// header so the controller can capture the new session token.
-class _AuthHttpClient extends http.BaseClient {
-  _AuthHttpClient({required http.Client inner, required this.onRotatedToken})
-    : _inner = inner;
-
-  final http.Client _inner;
-  final void Function(String) onRotatedToken;
-
-  // Better-auth's origin-check middleware reads the standard `Origin` header.
-  // `flutter://` must match a trustedOrigins entry on the server.
-  final Map<String, String> headers = {'Origin': 'flutter://'};
-
-  Uri _url(String path) => Uri.parse('${AppConfig.betterAuthBaseUrl}$path');
-
-  /// GETs [path] (resolved against the better-auth base URL) and returns the
-  /// decoded JSON body. Throws [HttpError] on non-2xx.
-  Future<Object?> jsonGet(String path) async {
-    final res = await get(_url(path));
-    return _decodeOrThrow(res);
-  }
-
-  /// POSTs JSON-encoded [body] to [path] (resolved against the better-auth
-  /// base URL) and returns the decoded JSON response body. Throws [HttpError]
-  /// on non-2xx.
-  Future<Object?> jsonPost(String path, {Map<String, Object?>? body}) async {
-    final res = await post(
-      _url(path),
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode(body ?? const {}),
-    );
-    return _decodeOrThrow(res);
-  }
-
-  Object? _decodeOrThrow(http.Response res) {
-    final decoded = _tryDecode(res.body);
-    if (res.statusCode < 200 || res.statusCode >= 300) {
-      throw HttpError(res.statusCode, decoded);
-    }
-    return decoded;
-  }
-
-  static Object? _tryDecode(String body) {
-    if (body.isEmpty) return null;
-    try {
-      return jsonDecode(body);
-    } catch (_) {
-      return null;
-    }
-  }
-
-  @override
-  Future<http.StreamedResponse> send(http.BaseRequest request) async {
-    headers.forEach((k, v) => request.headers.putIfAbsent(k, () => v));
-    final response = await _inner.send(request);
-    // Bearer plugin issues a rotated session token via this header when
-    // better-auth's `updateAge` threshold is crossed. Capture it so we
-    // don't keep replaying a token that's about to expire.
-    final rotated = response.headers['set-auth-token'];
-    if (rotated != null && rotated.isNotEmpty) {
-      onRotatedToken(rotated);
-    }
-    return response;
-  }
-
-  @override
-  void close() => _inner.close();
+  String toString() => 'HTTP $statusCode: ${body ?? rawBody}';
 }
