@@ -15,16 +15,18 @@ import 'package:convex_dart/src/rust/base_client/query_result.dart'
 import 'package:convex_dart/src/rust/dart.dart' show SubscriptionHandle;
 // ignore: implementation_imports
 import 'package:convex_dart/src/rust/lib.dart' show BTreeMapStringValue;
-import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
-import 'package:flutter_better_auth/flutter_better_auth.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+import 'package:http/http.dart' as http;
 
 class AuthController extends ChangeNotifier {
-  AuthController({FlutterSecureStorage? storage})
+  AuthController({http.Client? httpClient, FlutterSecureStorage? storage})
     : _storage = storage ?? const FlutterSecureStorage() {
-    _attachDioInterceptors();
+    _http = _AuthHttpClient(
+      inner: httpClient ?? http.Client(),
+      onRotatedToken: _handleRotatedBearerToken,
+    );
   }
 
   static const _accountsKey = 'accounts';
@@ -33,10 +35,13 @@ class AuthController extends ChangeNotifier {
   static const _convexJwtRefreshInterval = Duration(minutes: 13);
 
   final FlutterSecureStorage _storage;
+  late final _AuthHttpClient _http;
 
   List<UserAccount> _accounts = const [];
   String? _activeId;
   Timer? _convexJwtTimer;
+  Future<void>? _convexJwtRefreshInFlight;
+  Future<void> _persistQueue = Future.value();
 
   List<UserAccount> get accounts => List.unmodifiable(_accounts);
   String? get activeId => _activeId;
@@ -66,49 +71,47 @@ class AuthController extends ChangeNotifier {
     notifyListeners();
   }
 
-  // Sets/clears the Authorization header used by the better-auth bearer plugin
-  // on the shared dio client. Mobile uses bearer instead of cookies because
-  // cookie_jar persistence is unreliable.
+  // Sets/clears the Authorization header used by the better-auth bearer plugin.
+  // Mobile uses bearer instead of cookies because cookie persistence is unreliable.
   void _applyBearerToken(String? token) {
     if (token == null || token.isEmpty) {
-      FlutterBetterAuth.dioClient.options.headers.remove('Authorization');
+      _http.headers.remove('Authorization');
     } else {
-      FlutterBetterAuth.dioClient.options.headers['Authorization'] =
-          'Bearer $token';
+      _http.headers['Authorization'] = 'Bearer $token';
     }
-  }
-
-  void _attachDioInterceptors() {
-    FlutterBetterAuth.dioClient.interceptors.add(
-      InterceptorsWrapper(
-        onResponse: (response, handler) {
-          // Bearer plugin issues a rotated session token via this header when
-          // better-auth's `updateAge` threshold is crossed. Capture it so we
-          // don't keep replaying a token that's about to expire.
-          final rotated = response.headers.value('set-auth-token');
-          if (rotated != null && rotated.isNotEmpty) {
-            _handleRotatedBearerToken(rotated);
-          }
-          handler.next(response);
-        },
-      ),
-    );
   }
 
   void _handleRotatedBearerToken(String newToken) {
     final active = activeAccount;
     if (active == null || active.token == newToken) return;
     _applyBearerToken(newToken);
-    final idx = _accounts.indexWhere((a) => a.id == active.id);
+    _replaceAccount(active.id, (a) => a.copyWith(token: newToken));
+  }
+
+  /// Replaces an account in [_accounts] by id and schedules a save. No-op if
+  /// the id is unknown or [update] returns an equal value. Notifies listeners
+  /// only when state actually changed.
+  void _replaceAccount(String id, UserAccount Function(UserAccount) update) {
+    final idx = _accounts.indexWhere((a) => a.id == id);
     if (idx < 0) return;
+    final current = _accounts[idx];
+    final updated = update(current);
+    if (identical(updated, current)) return;
     _accounts = [
       ..._accounts.sublist(0, idx),
-      _accounts[idx].copyWith(token: newToken),
+      updated,
       ..._accounts.sublist(idx + 1),
     ];
-    _persist();
+    _scheduleSave();
     notifyListeners();
   }
+
+  /// True iff [message] looks like a Convex unauthenticated error. convex_dart
+  /// has no typed auth-error variant, so we sniff the string. If the upstream
+  /// wording ever changes, the auth-retry plumbing in [runConvexAuthenticated]
+  /// and [subscribeConvex] silently stops triggering — keep all sniffing here.
+  static bool _isAuthError(String message) =>
+      message.toLowerCase().contains('unauthenticated');
 
   void _startConvexJwtTimer() {
     _convexJwtTimer?.cancel();
@@ -124,7 +127,19 @@ class AuthController extends ChangeNotifier {
 
   // Mint a fresh Convex JWT without round-tripping /get-session. Used by the
   // periodic timer; keeps old JWT in place if the call fails (offline-first).
-  Future<void> _refreshConvexJwtOnly() async {
+  //
+  // Coalesces concurrent callers: the 13-min timer and runConvexAuthenticated's
+  // retry path can fire simultaneously — without this, two refreshes race and
+  // the older JWT could land last via setAuth.
+  Future<void> _refreshConvexJwtOnly() {
+    final existing = _convexJwtRefreshInFlight;
+    if (existing != null) return existing;
+    final future = _doRefreshConvexJwt();
+    _convexJwtRefreshInFlight = future;
+    return future.whenComplete(() => _convexJwtRefreshInFlight = null);
+  }
+
+  Future<void> _doRefreshConvexJwt() async {
     final active = activeAccount;
     if (active == null || active.type != AccountType.remote) return;
     final jwt = await _fetchConvexJwt();
@@ -136,16 +151,11 @@ class AuthController extends ChangeNotifier {
   /// Wraps a Convex call so that if the backend reports an authentication
   /// failure, we mint a fresh JWT and retry once. Use this for any Convex
   /// query/mutation/action that requires the signed-in user.
-  ///
-  /// Note: brittle. convex_dart surfaces auth failures as a generic
-  /// ConvexClientError with a string message — we sniff for "unauthenticated"
-  /// since the library has no typed auth-error variant. If the library ever
-  /// changes that wording the retry will silently stop triggering.
   Future<T> runConvexAuthenticated<T>(Future<T> Function() fn) async {
     try {
       return await fn();
     } on ConvexClientError catch (e) {
-      if (!e.message.toLowerCase().contains('unauthenticated')) rethrow;
+      if (!_isAuthError(e.message)) rethrow;
       await _refreshConvexJwtOnly();
       return await fn();
     }
@@ -157,9 +167,6 @@ class AuthController extends ChangeNotifier {
   ///
   /// Caller owns the returned handle and MUST call [ConvexSubscriptionHandle.cancel]
   /// when no longer needed (typically in widget `dispose`).
-  ///
-  /// Same caveat as [runConvexAuthenticated]: auth failures are detected by
-  /// sniffing the error string for "unauthenticated".
   Future<ConvexSubscriptionHandle> subscribeConvex({
     required String name,
     required BTreeMapStringValue args,
@@ -180,7 +187,7 @@ class AuthController extends ChangeNotifier {
           if (wrapper._cancelled || wrapper._current != handle) return;
 
           if (result is FunctionResult_ErrorMessage &&
-              result.field0.toLowerCase().contains('unauthenticated')) {
+              _isAuthError(result.field0)) {
             if (authRetries >= maxAuthRetries) {
               debugPrint(
                 'subscribeConvex($name): giving up after $maxAuthRetries auth retries',
@@ -209,6 +216,7 @@ class AuthController extends ChangeNotifier {
   @override
   void dispose() {
     _stopConvexJwtTimer();
+    _http.close();
     super.dispose();
   }
 
@@ -222,10 +230,7 @@ class AuthController extends ChangeNotifier {
 
   Future<String?> _fetchConvexJwt() async {
     try {
-      final res = await FlutterBetterAuth.dioClient.get(
-        '${AppConfig.betterAuthBaseUrl}/convex/token',
-      );
-      final data = res.data;
+      final data = await _http.jsonGet('/convex/token');
       if (data is Map && data['token'] is String) {
         return data['token'] as String;
       }
@@ -253,26 +258,34 @@ class AuthController extends ChangeNotifier {
       throw StateError('Google sign-in returned no idToken');
     }
 
-    final signInResult = await FlutterBetterAuth.client.signIn.social(
-      provider: 'google',
-      idToken: SocialIdTokenBody(token: idToken),
-    );
-    final signInData = signInResult.data;
-    if (signInData == null) {
-      final err = signInResult.error;
-      throw StateError(
-        'Better-auth sign-in failed [${err?.code}]: ${err?.message}',
+    final Object? signInData;
+    try {
+      signInData = await _http.jsonPost(
+        '/sign-in/social',
+        body: {
+          'provider': 'google',
+          'idToken': {'token': idToken},
+        },
       );
+    } on HttpError catch (e) {
+      final body = e.body;
+      if (body is Map) {
+        throw StateError(
+          'Better-auth sign-in failed [${body['code']}]: ${body['message']}',
+        );
+      }
+      throw StateError('Better-auth sign-in failed: HTTP ${e.statusCode}');
     }
-    _applyBearerToken(signInData.token);
+    final sessionToken = (signInData is Map ? signInData['token'] : null);
+    if (sessionToken is! String) {
+      throw StateError('Sign-in response missing token');
+    }
+    _applyBearerToken(sessionToken);
 
-    // Bypass flutter_better_auth's getSession() because the Convex adapter
-    // returns numeric ms-epoch timestamps and the freezed Session model
-    // hard-casts those fields to String for DateTime.parse, blowing up.
-    final raw = await FlutterBetterAuth.dioClient.get(
-      '${AppConfig.betterAuthBaseUrl}/get-session',
-    );
-    final data = raw.data as Map<String, Object?>?;
+    // The Convex better-auth adapter returns numeric ms-epoch timestamps for
+    // session fields, so we read /get-session as raw JSON instead of through
+    // a typed client that would try to parse them as ISO strings.
+    final data = await _http.jsonGet('/get-session') as Map<String, Object?>?;
     if (data == null) {
       throw StateError('Empty session response');
     }
@@ -289,7 +302,7 @@ class AuthController extends ChangeNotifier {
       type: AccountType.remote,
       name: userJson['name'] as String?,
       email: userJson['email'] as String?,
-      token: signInData.token,
+      token: sessionToken,
       convexJwt: convexJwt,
       picture: userJson['image'] as String?,
     );
@@ -313,10 +326,7 @@ class AuthController extends ChangeNotifier {
     final active = activeAccount;
     if (active == null || active.type != AccountType.remote) return;
     try {
-      final res = await FlutterBetterAuth.dioClient.get(
-        '${AppConfig.betterAuthBaseUrl}/get-session',
-      );
-      final data = res.data;
+      final data = await _http.jsonGet('/get-session');
       final ok = data is Map && data['user'] != null;
       _setRequiresReauth(active.id, !ok);
       if (ok) {
@@ -333,29 +343,17 @@ class AuthController extends ChangeNotifier {
   }
 
   void _setConvexJwt(String id, String jwt) {
-    final idx = _accounts.indexWhere((a) => a.id == id);
-    if (idx < 0) return;
-    if (_accounts[idx].convexJwt == jwt) return;
-    _accounts = [
-      ..._accounts.sublist(0, idx),
-      _accounts[idx].copyWith(convexJwt: jwt),
-      ..._accounts.sublist(idx + 1),
-    ];
-    _persist();
-    notifyListeners();
+    _replaceAccount(
+      id,
+      (a) => a.convexJwt == jwt ? a : a.copyWith(convexJwt: jwt),
+    );
   }
 
   void _setRequiresReauth(String id, bool value) {
-    final idx = _accounts.indexWhere((a) => a.id == id);
-    if (idx < 0) return;
-    if (_accounts[idx].requiresReauth == value) return;
-    _accounts = [
-      ..._accounts.sublist(0, idx),
-      _accounts[idx].copyWith(requiresReauth: value),
-      ..._accounts.sublist(idx + 1),
-    ];
-    _persist();
-    notifyListeners();
+    _replaceAccount(
+      id,
+      (a) => a.requiresReauth == value ? a : a.copyWith(requiresReauth: value),
+    );
   }
 
   Future<void> switchTo(String id) async {
@@ -411,10 +409,27 @@ class AuthController extends ChangeNotifier {
     throw UnimplementedError('Local→remote merge not implemented');
   }
 
-  Future<void> _persist() async {
+  /// Awaitable save. Serialized via [_persistQueue] so concurrent saves can't
+  /// interleave their two-key writes. The snapshot is captured at call time so
+  /// each queued save writes the state-as-of-its-call, not as-of-execution.
+  Future<void> _persist() {
     final encoded = jsonEncode(_accounts.map((a) => a.toJson()).toList());
-    await _storage.write(key: _accountsKey, value: encoded);
-    await _storage.write(key: _activeIdKey, value: _activeId);
+    final activeSnapshot = _activeId;
+    final write = _persistQueue.then((_) async {
+      await _storage.write(key: _accountsKey, value: encoded);
+      await _storage.write(key: _activeIdKey, value: activeSnapshot);
+    });
+    _persistQueue = write.catchError((Object e) {
+      debugPrint('persist failed: $e');
+    });
+    return write;
+  }
+
+  /// Fire-and-forget variant for reactive updates from background paths
+  /// (token rotation, JWT refresh). Goes through the same queue, so it can
+  /// never overlap with an awaitable [_persist].
+  void _scheduleSave() {
+    unawaited(_persist());
   }
 }
 
@@ -433,4 +448,87 @@ class ConvexSubscriptionHandle {
     _current?.cancel();
     _current = null;
   }
+}
+
+/// Thrown by [_AuthHttpClient.jsonGet] / [_AuthHttpClient.jsonPost] on non-2xx
+/// responses. [body] is the decoded JSON payload if the server returned one
+/// (e.g. better-auth's `{code, message}` shape), otherwise null.
+class HttpError implements Exception {
+  HttpError(this.statusCode, this.body);
+
+  final int statusCode;
+  final Object? body;
+
+  @override
+  String toString() => 'HTTP $statusCode: ${body ?? '(empty body)'}';
+}
+
+/// http.Client that injects default headers (Origin, Authorization) on every
+/// request and inspects responses for better-auth's rotated `set-auth-token`
+/// header so the controller can capture the new session token.
+class _AuthHttpClient extends http.BaseClient {
+  _AuthHttpClient({required http.Client inner, required this.onRotatedToken})
+    : _inner = inner;
+
+  final http.Client _inner;
+  final void Function(String) onRotatedToken;
+
+  // Better-auth's origin-check middleware reads the standard `Origin` header.
+  // `flutter://` must match a trustedOrigins entry on the server.
+  final Map<String, String> headers = {'Origin': 'flutter://'};
+
+  Uri _url(String path) => Uri.parse('${AppConfig.betterAuthBaseUrl}$path');
+
+  /// GETs [path] (resolved against the better-auth base URL) and returns the
+  /// decoded JSON body. Throws [HttpError] on non-2xx.
+  Future<Object?> jsonGet(String path) async {
+    final res = await get(_url(path));
+    return _decodeOrThrow(res);
+  }
+
+  /// POSTs JSON-encoded [body] to [path] (resolved against the better-auth
+  /// base URL) and returns the decoded JSON response body. Throws [HttpError]
+  /// on non-2xx.
+  Future<Object?> jsonPost(String path, {Map<String, Object?>? body}) async {
+    final res = await post(
+      _url(path),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode(body ?? const {}),
+    );
+    return _decodeOrThrow(res);
+  }
+
+  Object? _decodeOrThrow(http.Response res) {
+    final decoded = _tryDecode(res.body);
+    if (res.statusCode < 200 || res.statusCode >= 300) {
+      throw HttpError(res.statusCode, decoded);
+    }
+    return decoded;
+  }
+
+  static Object? _tryDecode(String body) {
+    if (body.isEmpty) return null;
+    try {
+      return jsonDecode(body);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  @override
+  Future<http.StreamedResponse> send(http.BaseRequest request) async {
+    headers.forEach((k, v) => request.headers.putIfAbsent(k, () => v));
+    final response = await _inner.send(request);
+    // Bearer plugin issues a rotated session token via this header when
+    // better-auth's `updateAge` threshold is crossed. Capture it so we
+    // don't keep replaying a token that's about to expire.
+    final rotated = response.headers['set-auth-token'];
+    if (rotated != null && rotated.isNotEmpty) {
+      onRotatedToken(rotated);
+    }
+    return response;
+  }
+
+  @override
+  void close() => _inner.close();
 }
