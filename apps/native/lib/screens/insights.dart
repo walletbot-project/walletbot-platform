@@ -1,5 +1,5 @@
-import 'package:app/screens/components/categories_view.dart';
-import 'package:app/screens/components/tags_view.dart';
+import 'package:app/components/categories_view.dart';
+import 'package:app/components/tags_view.dart';
 import 'package:flutter/material.dart';
 
 class InsightsScreen extends StatelessWidget {

@@ -1,7 +1,7 @@
 import 'package:app/database.dart';
-import 'package:app/screens/components/color_utils.dart';
-import 'package:app/screens/components/insight_count_models.dart';
-import 'package:app/screens/components/insights_section_header.dart';
+import 'package:app/components/color_utils.dart';
+import 'package:app/components/insight_count_models.dart';
+import 'package:app/components/insights_section_header.dart';
 import 'package:drift/drift.dart' show Value;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -36,18 +36,13 @@ class TagsView extends StatelessWidget {
                   final color = colorFromHex(tag.tag.color);
 
                   return ListTile(
+                    onLongPress: () => _editTagDialog(context, db, tag.tag),
                     title: Align(
                       alignment: Alignment.centerLeft,
-                      child: GestureDetector(
-                        onLongPress: () => _editTagDialog(context, db, tag.tag),
-                        child: ActionChip(
-                          avatar: const CircleAvatar(
-                            backgroundColor: Colors.white,
-                          ),
-                          backgroundColor: color,
-                          label: Text(tag.tag.name),
-                          onPressed: () {},
-                        ),
+                      child: Chip(
+                        avatar: const CircleAvatar(backgroundColor: Colors.white),
+                        backgroundColor: color,
+                        label: Text(tag.tag.name),
                       ),
                     ),
                     trailing: Text('${tag.transactionCount}'),
@@ -135,16 +130,9 @@ class TagsView extends StatelessWidget {
                         decoration: BoxDecoration(
                           color: color,
                           shape: BoxShape.circle,
-                          border: Border.all(
-                            color: isSelected
-                                ? Theme.of(context).colorScheme.onSurface
-                                : Colors.transparent,
-                            width: 2,
-                          ),
+                          border: Border.all(color: isSelected ? Theme.of(context).colorScheme.onSurface : Colors.transparent, width: 2),
                         ),
-                        child: isSelected
-                            ? const Icon(Icons.check, size: 18)
-                            : null,
+                        child: isSelected ? const Icon(Icons.check, size: 18) : null,
                       ),
                     );
                   }).toList(),
@@ -152,23 +140,17 @@ class TagsView extends StatelessWidget {
               ],
             ),
             actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('Cancel'),
-              ),
+              TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
               TextButton(
                 onPressed: () async {
                   final name = nameController.text.trim();
                   if (name.isNotEmpty) {
-                    final now = BigInt.from(
-                      DateTime.now().millisecondsSinceEpoch,
-                    );
+                    final now = BigInt.from(DateTime.now().millisecondsSinceEpoch);
                     await db
                         .into(db.tags)
                         .insert(
                           TagsCompanion.insert(
-                            id: DateTime.now().microsecondsSinceEpoch
-                                .toString(),
+                            id: DateTime.now().microsecondsSinceEpoch.toString(),
                             name: name,
                             color: Value(colorToHex(selectedColor)),
                             createdAt: now,
@@ -188,11 +170,7 @@ class TagsView extends StatelessWidget {
     );
   }
 
-  Future<void> _editTagDialog(
-    BuildContext context,
-    AppDatabase db,
-    Tag tag,
-  ) async {
+  Future<void> _editTagDialog(BuildContext context, AppDatabase db, Tag tag) async {
     final nameController = TextEditingController(text: tag.name);
     Color selectedColor = colorFromHex(tag.color);
 
@@ -230,16 +208,9 @@ class TagsView extends StatelessWidget {
                         decoration: BoxDecoration(
                           color: color,
                           shape: BoxShape.circle,
-                          border: Border.all(
-                            color: isSelected
-                                ? Theme.of(context).colorScheme.onSurface
-                                : Colors.transparent,
-                            width: 2,
-                          ),
+                          border: Border.all(color: isSelected ? Theme.of(context).colorScheme.onSurface : Colors.transparent, width: 2),
                         ),
-                        child: isSelected
-                            ? const Icon(Icons.check, size: 18)
-                            : null,
+                        child: isSelected ? const Icon(Icons.check, size: 18) : null,
                       ),
                     );
                   }).toList(),
@@ -254,10 +225,7 @@ class TagsView extends StatelessWidget {
                 },
                 child: const Text('Delete'),
               ),
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('Cancel'),
-              ),
+              TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
               TextButton(
                 onPressed: () async {
                   final name = nameController.text.trim();
@@ -276,31 +244,17 @@ class TagsView extends StatelessWidget {
     );
   }
 
-  Future<void> _updateTag(
-    AppDatabase db,
-    String id,
-    String name,
-    Color color,
-  ) async {
+  Future<void> _updateTag(AppDatabase db, String id, String name, Color color) async {
     final now = BigInt.from(DateTime.now().millisecondsSinceEpoch);
     await (db.update(db.tags)..where((tag) => tag.id.equals(id))).write(
-      TagsCompanion(
-        name: Value(name),
-        color: Value(colorToHex(color)),
-        updatedAt: Value(now),
-        dirty: const Value(true),
-      ),
+      TagsCompanion(name: Value(name), color: Value(colorToHex(color)), updatedAt: Value(now), dirty: const Value(true)),
     );
   }
 
   Future<void> _deleteTag(AppDatabase db, String id) async {
     final now = BigInt.from(DateTime.now().millisecondsSinceEpoch);
     await (db.update(db.tags)..where((tag) => tag.id.equals(id))).write(
-      TagsCompanion(
-        archived: const Value(true),
-        updatedAt: Value(now),
-        dirty: const Value(true),
-      ),
+      TagsCompanion(archived: const Value(true), updatedAt: Value(now), dirty: const Value(true)),
     );
   }
 }
