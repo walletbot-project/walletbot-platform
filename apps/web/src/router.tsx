@@ -21,10 +21,6 @@ export const router = createBrowserRouter([
                             {
                                 path: '/login',
                                 element: <Login />,
-                                /* lazy: () =>
-                                    import('@/pages/login').then((m) => ({
-                                        Component: m.Login,
-                                    })), */
                             },
                         ],
                     },
@@ -39,6 +35,34 @@ export const router = createBrowserRouter([
                             {
                                 path: '/',
                                 element: <Home />,
+                            },
+                            {
+                                path: '/activity',
+                                lazy: () =>
+                                    import('@/pages/activity').then((m) => ({
+                                        Component: m.Activity,
+                                    })),
+                            },
+                            {
+                                path: '/accounts',
+                                lazy: () =>
+                                    import('@/pages/accounts').then((m) => ({
+                                        Component: m.Accounts,
+                                    })),
+                            },
+                            {
+                                path: '/insights',
+                                lazy: () =>
+                                    import('@/pages/insights').then((m) => ({
+                                        Component: m.Insights,
+                                    })),
+                            },
+                            {
+                                path: '/add',
+                                lazy: () =>
+                                    import('@/pages/add').then((m) => ({
+                                        Component: m.Add,
+                                    })),
                             },
                             {
                                 path: '*',
