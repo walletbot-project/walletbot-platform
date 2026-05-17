@@ -11,7 +11,7 @@ part 'database.g.dart';
 @TableIndex(name: 'accounts_updated_at', columns: {#updatedAt})
 @TableIndex.sql('''
   CREATE INDEX accounts_needs_sync ON accounts (updated_at)
-    WHERE remote_version IS NULL OR version != remote_version;
+    WHERE dirty = 1;
 ''')
 class Accounts extends Table {
   TextColumn get id => text().named('id')();
@@ -38,7 +38,7 @@ class Accounts extends Table {
 @TableIndex(name: 'categories_updated_at', columns: {#updatedAt})
 @TableIndex.sql('''
   CREATE INDEX categories_needs_sync ON categories (updated_at)
-    WHERE remote_version IS NULL OR version != remote_version;
+    WHERE dirty = 1;
 ''')
 class Categories extends Table {
   TextColumn get id => text().named('id')();
@@ -73,7 +73,7 @@ class Categories extends Table {
 )
 @TableIndex.sql('''
   CREATE INDEX transactions_needs_sync ON transactions (updated_at)
-    WHERE remote_version IS NULL OR version != remote_version;
+    WHERE dirty = 1;
 ''')
 class Transactions extends Table {
   TextColumn get id => text().named('id')();
@@ -120,7 +120,7 @@ class Transactions extends Table {
 @TableIndex(name: 'tags_updated_at', columns: {#updatedAt})
 @TableIndex.sql('''
   CREATE INDEX tags_needs_sync ON tags (updated_at)
-    WHERE remote_version IS NULL OR version != remote_version;
+    WHERE dirty = 1;
 ''')
 class Tags extends Table {
   TextColumn get id => text().named('id')();
@@ -147,7 +147,7 @@ class Tags extends Table {
 @TableIndex(name: 'transaction_tags_updated_at', columns: {#updatedAt})
 @TableIndex.sql('''
   CREATE INDEX transaction_tags_needs_sync ON transaction_tags (updated_at)
-    WHERE remote_version IS NULL OR version != remote_version;
+    WHERE dirty = 1;
 ''')
 class TransactionTags extends Table {
   TextColumn get id => text().named('id')();
@@ -183,14 +183,12 @@ class SyncState extends Table {
 }
 
 // Soft-delete record so deletes flow through sync. PK is the natural key
-// `(entity_table, entity_id)`. `version`/`remoteVersion` follow the same dirty
-// convention as entity tables: a row needs to be pushed when
-// `remote_version IS NULL OR version != remote_version`.
+// `(entity_table, entity_id)`.
 @TableIndex(name: 'tombstones_entity_table', columns: {#entityTable})
 @TableIndex(name: 'tombstones_updated_at', columns: {#updatedAt})
 @TableIndex.sql('''
   CREATE INDEX tombstones_needs_sync ON tombstones (updated_at)
-    WHERE remote_version IS NULL OR version != remote_version;
+    WHERE dirty = 1;
 ''')
 class Tombstones extends Table {
   TextColumn get entityTable => text().named('entity_table')();
