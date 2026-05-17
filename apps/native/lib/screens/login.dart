@@ -50,12 +50,15 @@ class LoginScreen extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           OutlinedButton.icon(
-            onPressed: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Google sign-in not implemented yet'),
-                ),
-              );
+            onPressed: () async {
+              final messenger = ScaffoldMessenger.of(context);
+              try {
+                await context.read<AuthController>().signInWithGoogle();
+              } catch (e) {
+                messenger.showSnackBar(
+                  SnackBar(content: Text('Sign-in failed: $e')),
+                );
+              }
             },
             icon: const Icon(Icons.login),
             label: const Text('Sign in with Google'),

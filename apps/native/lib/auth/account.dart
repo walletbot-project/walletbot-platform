@@ -6,30 +6,41 @@ class UserAccount {
     required this.type,
     this.name,
     this.email,
-    this.token,
     this.picture,
+    this.sessionToken,
+    this.requiresReauth = false,
   });
 
   final String id;
   final AccountType type;
   final String? name;
   final String? email;
-  final String? token;
   final String? picture;
+
+  /// Long-lived opaque session secret. Exchanged for short-lived Convex JWTs
+  /// via `POST /auth/refresh`. Not rotated — stays valid until explicitly
+  /// revoked (signout, "remove this device").
+  final String? sessionToken;
+
+  /// Server says this session is dead (token revoked). We keep the account
+  /// locally so the user is never locked out — offline mode still works.
+  final bool requiresReauth;
 
   UserAccount copyWith({
     String? name,
     String? email,
-    String? token,
     String? picture,
+    String? sessionToken,
+    bool? requiresReauth,
   }) {
     return UserAccount(
       id: id,
       type: type,
       name: name ?? this.name,
       email: email ?? this.email,
-      token: token ?? this.token,
       picture: picture ?? this.picture,
+      sessionToken: sessionToken ?? this.sessionToken,
+      requiresReauth: requiresReauth ?? this.requiresReauth,
     );
   }
 
@@ -38,8 +49,9 @@ class UserAccount {
     'type': type.name,
     'name': name,
     'email': email,
-    'token': token,
     'picture': picture,
+    'sessionToken': sessionToken,
+    'requiresReauth': requiresReauth,
   };
 
   factory UserAccount.fromJson(Map<String, Object?> json) {
@@ -48,8 +60,10 @@ class UserAccount {
       type: AccountType.values.firstWhere((t) => t.name == json['type']),
       name: json['name'] as String?,
       email: json['email'] as String?,
-      token: json['token'] as String?,
       picture: json['picture'] as String?,
+      // Accept legacy `refreshToken` key from pre-setAuthWithRefresh storage.
+      sessionToken: (json['sessionToken'] ?? json['refreshToken']) as String?,
+      requiresReauth: json['requiresReauth'] as bool? ?? false,
     );
   }
 }
