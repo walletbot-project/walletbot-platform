@@ -189,12 +189,31 @@ class AuthController extends ChangeNotifier {
   }
 
   Future<String?> _fetchFreshAccessToken() async {
+    debugPrint('auth: fetching fresh access token');
     final active = activeAccount;
     final session = active?.sessionToken;
     if (active == null || session == null) return null;
-    debugPrint('auth: refreshing access token');
-    final body = await _postJson('/auth/refresh', {'refreshToken': session});
-    return body['accessToken'] as String;
+    try {
+      debugPrint('auth: refreshing access token');
+      final body = await _postJson('/auth/refresh', {'refreshToken': session});
+      return body['accessToken'] as String;
+    } catch (e) {
+      debugPrint('auth: token refresh failed: $e');
+      if (e is _AuthHttpError && e.statusCode == 401) {
+        await _markRequiresReauth(active.id);
+      }
+      rethrow;
+    }
+  }
+
+  Future<void> _markRequiresReauth(String accountId) async {
+    final idx = _accounts.indexWhere((a) => a.id == accountId);
+    if (idx == -1 || _accounts[idx].requiresReauth) return;
+    final updated = [..._accounts];
+    updated[idx] = updated[idx].copyWith(requiresReauth: true);
+    _accounts = updated;
+    await _persist();
+    notifyListeners();
   }
 
   Future<Map<String, Object?>> _postJson(
