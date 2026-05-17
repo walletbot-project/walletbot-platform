@@ -134,6 +134,8 @@ async function createLiveToken() {
                             prebuiltVoiceConfig: { voiceName: VOICE_NAME },
                         },
                     },
+                    inputAudioTranscription: {},
+                    outputAudioTranscription: {},
                 },
             },
             httpOptions: {
