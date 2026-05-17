@@ -7,10 +7,10 @@ import { TOOL_DEFINITIONS } from '@wallet-bot/shared'
 import { action, internalAction } from '../_generated/server'
 
 const MODEL = 'gemini-3.1-flash-live-preview'
-const VOICE_NAME = 'Charon'
 const TOKEN_TTL_MS = 30 * 60 * 1000 // 30 minutes
+const VOICE_NAME = 'Kore'
 
-const SYSTEM_INSTRUCTION = `You are a personal finance tracking assistant. You help the user manage their expenses, income, and transfers through voice.`
+const SYSTEM_INSTRUCTION = `You are a personal finance tracking assistant. You help the user manage their expenses, income, and transfers through voice. Keep the same voice, tone, and speaking style for the entire session.`
 
 // Shared → Google GenAI adapter
 

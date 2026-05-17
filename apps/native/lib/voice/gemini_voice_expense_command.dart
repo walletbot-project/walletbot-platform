@@ -41,6 +41,7 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
   }) : _executors = ToolExecutors(database);
 
   static const _model = 'gemini-3.1-flash-live-preview';
+  static const _voiceName = 'Kore';
 
   final AppDatabase database;
   final String apiKey;
@@ -112,6 +113,11 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
         'model': 'models/$_model',
         'generationConfig': {
           'responseModalities': ['AUDIO'],
+          'speechConfig': {
+            'voiceConfig': {
+              'prebuiltVoiceConfig': {'voiceName': _voiceName},
+            },
+          },
         },
         'systemInstruction': {
           'parts': [
@@ -119,11 +125,8 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
               'text':
                   'You are a personal finance tracking assistant. You help '
                   'the user manage expenses, income, and transfers through '
-                  'voice. The user typically speaks Spanish (es-AR). When '
-                  'the session starts, call listAccounts and listCategories '
-                  'so you know what is available. Resolve account / category '
-                  '/ tag references by name; on ambiguity, ask the user. '
-                  'Default transaction status is cleared.',
+                  'voice. Keep the same voice, tone, and speaking style for '
+                  'the entire session.',
             },
           ],
         },
