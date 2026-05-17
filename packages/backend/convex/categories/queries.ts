@@ -1,11 +1,11 @@
 import { v } from 'convex/values'
 import { query } from '../_generated/server'
-import { requireUserId } from '../users/helpers'
+import { requireAuth } from '../users/helpers'
 
 export const listActive = query({
     args: {},
     handler: async (ctx) => {
-        const userId = await requireUserId(ctx)
+        const userId = await requireAuth(ctx)
         return await ctx.db
             .query('categories')
             .withIndex('by_user_archived', (q) =>
@@ -18,7 +18,7 @@ export const listActive = query({
 export const listActiveWithCounts = query({
     args: {},
     handler: async (ctx) => {
-        const userId = await requireUserId(ctx)
+        const userId = await requireAuth(ctx)
         const categories = await ctx.db
             .query('categories')
             .withIndex('by_user_archived', (q) =>
@@ -50,7 +50,7 @@ export const listActiveWithCounts = query({
 export const get = query({
     args: { id: v.string() },
     handler: async (ctx, args) => {
-        const userId = await requireUserId(ctx)
+        const userId = await requireAuth(ctx)
         return await ctx.db
             .query('categories')
             .withIndex('by_user_id', (q) =>

@@ -3,7 +3,7 @@ import type { Doc } from '../_generated/dataModel'
 import type { MutationCtx } from '../_generated/server'
 import { mutation } from '../_generated/server'
 import { nextSeq, writeTombstone } from '../sync/helpers'
-import { requireUserId } from '../users/helpers'
+import { requireAuth } from '../users/helpers'
 
 async function getTagById(
     ctx: MutationCtx,
@@ -156,7 +156,7 @@ export const create = mutation({
         color: v.optional(v.string()),
     },
     handler: async (ctx, args) => {
-        const userId = await requireUserId(ctx)
+        const userId = await requireAuth(ctx)
 
         const existing = await getTagById(ctx, userId, args.id)
         if (existing) throw new Error('Tag with that id already exists')
@@ -201,7 +201,7 @@ export const update = mutation({
         color: v.optional(v.string()),
     },
     handler: async (ctx, args) => {
-        const userId = await requireUserId(ctx)
+        const userId = await requireAuth(ctx)
         const row = await getTagById(ctx, userId, args.id)
         if (!row) throw new Error('Tag not found')
 
@@ -286,7 +286,7 @@ export const archive = mutation({
         cascade: v.optional(v.boolean()),
     },
     handler: async (ctx, args) => {
-        const userId = await requireUserId(ctx)
+        const userId = await requireAuth(ctx)
         const row = await getTagById(ctx, userId, args.id)
         if (!row) return
 

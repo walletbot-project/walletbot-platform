@@ -1,7 +1,7 @@
 import { v } from 'convex/values'
 import { mutation } from '../_generated/server'
 import { nextSeq, writeTombstone } from '../sync/helpers'
-import { requireUserId } from '../users/helpers'
+import { requireAuth } from '../users/helpers'
 
 export const create = mutation({
     args: {
@@ -10,7 +10,7 @@ export const create = mutation({
         description: v.optional(v.string()),
     },
     handler: async (ctx, args) => {
-        const userId = await requireUserId(ctx)
+        const userId = await requireAuth(ctx)
 
         const existing = await ctx.db
             .query('categories')
@@ -47,7 +47,7 @@ export const update = mutation({
         description: v.optional(v.string()),
     },
     handler: async (ctx, args) => {
-        const userId = await requireUserId(ctx)
+        const userId = await requireAuth(ctx)
         const row = await ctx.db
             .query('categories')
             .withIndex('by_user_id', (q) =>
@@ -74,7 +74,7 @@ export const update = mutation({
 export const archive = mutation({
     args: { id: v.string() },
     handler: async (ctx, args) => {
-        const userId = await requireUserId(ctx)
+        const userId = await requireAuth(ctx)
         const row = await ctx.db
             .query('categories')
             .withIndex('by_user_id', (q) =>
