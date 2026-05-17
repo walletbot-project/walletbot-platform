@@ -1,6 +1,8 @@
 import { Check } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
+import { Combobox } from '@/components/ui/combobox'
 import {
     Dialog,
     DialogContent,
@@ -20,6 +22,14 @@ import { cn } from '@/lib/utils'
 export type TagFormValue = {
     name: string
     color: string
+    parentId: string | null
+}
+
+export type TagOption = {
+    id: string
+    name: string
+    color?: string
+    parentId?: string
 }
 
 export function TagDialog({
@@ -28,6 +38,7 @@ export function TagDialog({
     title,
     submitLabel,
     initialValue,
+    parentOptions,
     onSubmit,
     onDelete,
 }: {
@@ -36,27 +47,49 @@ export function TagDialog({
     title: string
     submitLabel: string
     initialValue?: TagFormValue
+    parentOptions: TagOption[]
     onSubmit: (value: TagFormValue) => Promise<void>
     onDelete?: () => Promise<void>
 }) {
     const [name, setName] = useState('')
     const [color, setColor] = useState(TAG_DEFAULT_COLOR)
+    const [isSubtag, setIsSubtag] = useState(false)
+    const [parentId, setParentId] = useState<string | null>(null)
     const [submitting, setSubmitting] = useState(false)
 
     useEffect(() => {
         if (open) {
             setName(initialValue?.name ?? '')
             setColor(normalizeTagColor(initialValue?.color))
+            const startParent = initialValue?.parentId ?? null
+            setParentId(startParent)
+            setIsSubtag(startParent !== null)
         }
     }, [open, initialValue])
+
+    const comboboxOptions = useMemo(
+        () =>
+            parentOptions.map((p) => ({
+                value: p.id,
+                label: p.name,
+            })),
+        [parentOptions],
+    )
+
+    const canShowSubtag = parentOptions.length > 0
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault()
         const trimmed = name.trim()
         if (!trimmed) return
+        if (isSubtag && !parentId) return
         setSubmitting(true)
         try {
-            await onSubmit({ name: trimmed, color })
+            await onSubmit({
+                name: trimmed,
+                color,
+                parentId: isSubtag ? parentId : null,
+            })
         } finally {
             setSubmitting(false)
         }
@@ -118,6 +151,40 @@ export function TagDialog({
                         </div>
                     </div>
 
+                    {canShowSubtag ? (
+                        <div className="flex items-center gap-2">
+                            <Checkbox
+                                id="tag-is-subtag"
+                                checked={isSubtag}
+                                onCheckedChange={(checked) => {
+                                    const next = checked === true
+                                    setIsSubtag(next)
+                                    if (!next) setParentId(null)
+                                }}
+                            />
+                            <Label htmlFor="tag-is-subtag">
+                                Create sub-tag
+                            </Label>
+                        </div>
+                    ) : null}
+
+                    {isSubtag && canShowSubtag ? (
+                        <div className="flex flex-col gap-2">
+                            <Label>Parent tag</Label>
+                            <Combobox
+                                value={parentId ? [parentId] : []}
+                                onChange={(values) =>
+                                    setParentId(values[0] ?? null)
+                                }
+                                options={comboboxOptions}
+                                placeholder="Select parent tag"
+                                searchPlaceholder="Search tags…"
+                                emptyMessage="No tags available"
+                                className="w-full"
+                            />
+                        </div>
+                    ) : null}
+
                     <DialogFooter>
                         {onDelete ? (
                             <Button
@@ -139,7 +206,11 @@ export function TagDialog({
                         </Button>
                         <Button
                             type="submit"
-                            disabled={submitting || !name.trim()}
+                            disabled={
+                                submitting ||
+                                !name.trim() ||
+                                (isSubtag && !parentId)
+                            }
                         >
                             {submitLabel}
                         </Button>

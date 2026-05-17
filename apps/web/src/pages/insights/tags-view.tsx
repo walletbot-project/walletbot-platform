@@ -1,17 +1,29 @@
 import { api } from '@wallet-bot/backend/api'
 import { useMutation, useQuery } from 'convex/react'
 import { Pencil, Plus } from 'lucide-react'
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
+import {
+    Dialog,
+    DialogContent,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from '@/components/ui/dialog'
 import { Skeleton } from '@/components/ui/skeleton'
 import { normalizeTagColor } from '@/lib/tag-colors'
-import { TagDialog, type TagFormValue } from '@/pages/insights/tag-dialog'
+import {
+    TagDialog,
+    type TagFormValue,
+    type TagOption,
+} from '@/pages/insights/tag-dialog'
 
 type TagRow = {
     id: string
     name: string
     color?: string
+    parentId?: string
     transactionCount: number
 }
 
@@ -23,6 +35,47 @@ export function TagsView() {
 
     const [editing, setEditing] = useState<TagRow | null>(null)
     const [creating, setCreating] = useState(false)
+    const [deleteTarget, setDeleteTarget] = useState<{
+        tag: TagRow
+        children: TagRow[]
+    } | null>(null)
+    const [deleting, setDeleting] = useState(false)
+
+    const tagList = useMemo(() => tags ?? [], [tags])
+
+    const parentOptionsForCreate: TagOption[] = useMemo(
+        () =>
+            tagList.map((t) => ({
+                id: t.id,
+                name: t.name,
+                color: t.color,
+                parentId: t.parentId,
+            })),
+        [tagList],
+    )
+
+    const parentOptionsForEdit: TagOption[] = useMemo(() => {
+        if (!editing) return []
+        const descendants = new Set<string>()
+        const queue: string[] = [editing.id]
+        while (queue.length > 0) {
+            const id = queue.shift() as string
+            for (const t of tagList) {
+                if (t.parentId === id && !descendants.has(t.id)) {
+                    descendants.add(t.id)
+                    queue.push(t.id)
+                }
+            }
+        }
+        return tagList
+            .filter((t) => t.id !== editing.id && !descendants.has(t.id))
+            .map((t) => ({
+                id: t.id,
+                name: t.name,
+                color: t.color,
+                parentId: t.parentId,
+            }))
+    }, [tagList, editing])
 
     const handleCreate = async (value: TagFormValue) => {
         const id = `${Date.now()}${Math.random().toString(36).slice(2, 8)}`
@@ -30,6 +83,7 @@ export function TagsView() {
             id,
             name: value.name,
             color: value.color,
+            parentId: value.parentId ?? undefined,
         })
         toast.promise(promise, {
             loading: 'Creating tag…',
@@ -45,6 +99,7 @@ export function TagsView() {
             id,
             name: value.name,
             color: value.color,
+            parentId: value.parentId === null ? null : value.parentId,
         })
         toast.promise(promise, {
             loading: 'Saving tag…',
@@ -55,15 +110,30 @@ export function TagsView() {
         setEditing(null)
     }
 
-    const handleDelete = async (id: string) => {
-        const promise = archiveTag({ id })
+    const requestDelete = async (tag: TagRow) => {
+        const children = tagList.filter((t) => t.parentId === tag.id)
+        if (children.length === 0) {
+            await performDelete(tag, false)
+            return
+        }
+        setDeleteTarget({ tag, children })
+    }
+
+    const performDelete = async (tag: TagRow, cascade: boolean) => {
+        setDeleting(true)
+        const promise = archiveTag({ id: tag.id, cascade })
         toast.promise(promise, {
             loading: 'Deleting tag…',
             success: 'Tag deleted',
             error: 'Failed to delete tag',
         })
-        await promise
-        setEditing(null)
+        try {
+            await promise
+            setEditing(null)
+            setDeleteTarget(null)
+        } finally {
+            setDeleting(false)
+        }
     }
 
     return (
@@ -84,38 +154,51 @@ export function TagsView() {
                     </p>
                 ) : (
                     <ul className="divide-y rounded-md border bg-card">
-                        {tags.map((tag) => (
-                            <li
-                                key={tag.id}
-                                className="flex items-center justify-between gap-3 px-4 py-3 text-sm"
-                            >
-                                <span
-                                    className="inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-medium text-foreground"
-                                    style={{
-                                        backgroundColor: normalizeTagColor(
-                                            tag.color,
-                                        ),
-                                    }}
+                        {tags.map((tag) => {
+                            const parent = tag.parentId
+                                ? tagList.find((t) => t.id === tag.parentId)
+                                : undefined
+                            return (
+                                <li
+                                    key={tag.id}
+                                    className="flex items-center justify-between gap-3 px-4 py-3 text-sm"
                                 >
-                                    <span className="size-2 rounded-full bg-white/70" />
-                                    {tag.name}
-                                </span>
-                                <div className="flex items-center gap-3">
-                                    <span className="text-sm tabular-nums text-muted-foreground">
-                                        {tag.transactionCount}
-                                    </span>
-                                    <Button
-                                        type="button"
-                                        variant="ghost"
-                                        size="icon-sm"
-                                        onClick={() => setEditing(tag)}
-                                        aria-label={`Edit ${tag.name}`}
-                                    >
-                                        <Pencil />
-                                    </Button>
-                                </div>
-                            </li>
-                        ))}
+                                    <div className="flex flex-col gap-1">
+                                        <span
+                                            className="inline-flex items-center gap-2 self-start rounded-full px-3 py-1 text-xs font-medium text-foreground"
+                                            style={{
+                                                backgroundColor:
+                                                    normalizeTagColor(
+                                                        tag.color,
+                                                    ),
+                                            }}
+                                        >
+                                            <span className="size-2 rounded-full bg-white/70" />
+                                            {tag.name}
+                                        </span>
+                                        {parent ? (
+                                            <span className="text-xs text-muted-foreground">
+                                                sub-tag of {parent.name}
+                                            </span>
+                                        ) : null}
+                                    </div>
+                                    <div className="flex items-center gap-3">
+                                        <span className="text-sm tabular-nums text-muted-foreground">
+                                            {tag.transactionCount}
+                                        </span>
+                                        <Button
+                                            type="button"
+                                            variant="ghost"
+                                            size="icon-sm"
+                                            onClick={() => setEditing(tag)}
+                                            aria-label={`Edit ${tag.name}`}
+                                        >
+                                            <Pencil />
+                                        </Button>
+                                    </div>
+                                </li>
+                            )
+                        })}
                     </ul>
                 )}
             </div>
@@ -125,6 +208,7 @@ export function TagsView() {
                 onOpenChange={setCreating}
                 title="New Tag"
                 submitLabel="Create"
+                parentOptions={parentOptionsForCreate}
                 onSubmit={handleCreate}
             />
 
@@ -135,11 +219,13 @@ export function TagsView() {
                 }}
                 title="Edit Tag"
                 submitLabel="Save"
+                parentOptions={parentOptionsForEdit}
                 initialValue={
                     editing
                         ? {
                               name: editing.name,
                               color: normalizeTagColor(editing.color),
+                              parentId: editing.parentId ?? null,
                           }
                         : undefined
                 }
@@ -148,8 +234,70 @@ export function TagsView() {
                         ? handleUpdate(editing.id, value)
                         : Promise.resolve()
                 }
-                onDelete={editing ? () => handleDelete(editing.id) : undefined}
+                onDelete={editing ? () => requestDelete(editing) : undefined}
             />
+
+            <Dialog
+                open={deleteTarget !== null}
+                onOpenChange={(open) => {
+                    if (!open && !deleting) setDeleteTarget(null)
+                }}
+            >
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Delete tag with sub-tags</DialogTitle>
+                    </DialogHeader>
+                    {deleteTarget ? (
+                        <div className="flex flex-col gap-3 text-sm">
+                            <p>
+                                <span className="font-medium">
+                                    {deleteTarget.tag.name}
+                                </span>{' '}
+                                has {deleteTarget.children.length} sub-tag
+                                {deleteTarget.children.length === 1 ? '' : 's'}.
+                                Do you want to delete the sub-tags too?
+                            </p>
+                            <ul className="list-disc pl-5 text-muted-foreground">
+                                {deleteTarget.children.map((c) => (
+                                    <li key={c.id}>{c.name}</li>
+                                ))}
+                            </ul>
+                        </div>
+                    ) : null}
+                    <DialogFooter>
+                        <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() => setDeleteTarget(null)}
+                            disabled={deleting}
+                        >
+                            Cancel
+                        </Button>
+                        <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() =>
+                                deleteTarget &&
+                                performDelete(deleteTarget.tag, false)
+                            }
+                            disabled={deleting}
+                        >
+                            Keep sub-tags
+                        </Button>
+                        <Button
+                            type="button"
+                            variant="destructive"
+                            onClick={() =>
+                                deleteTarget &&
+                                performDelete(deleteTarget.tag, true)
+                            }
+                            disabled={deleting}
+                        >
+                            Delete all
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     )
 }
