@@ -5,22 +5,27 @@ import 'dart:typed_data';
 import 'package:http/http.dart' as http;
 import 'package:web_socket_channel/web_socket_channel.dart';
 
+import '../database.dart';
 import 'pcm_audio_player.dart';
+import 'tool_executors.dart';
 import 'voice_expense_command.dart';
 
 class GeminiVoiceExpenseCommandFactory implements VoiceExpenseCommandFactory {
-  const GeminiVoiceExpenseCommandFactory({
+  GeminiVoiceExpenseCommandFactory({
+    required this.database,
     this.apiKey = const String.fromEnvironment('GEMINI_API_KEY'),
     this.liveToken = const String.fromEnvironment('GEMINI_LIVE_TOKEN'),
     this.convexSiteUrl = const String.fromEnvironment('CONVEX_SITE_URL'),
   });
 
+  final AppDatabase database;
   final String apiKey;
   final String liveToken;
   final String convexSiteUrl;
 
   @override
   VoiceExpenseCommand create() => GeminiVoiceExpenseCommand(
+    database: database,
     apiKey: apiKey,
     liveToken: liveToken,
     convexSiteUrl: convexSiteUrl,
@@ -29,16 +34,19 @@ class GeminiVoiceExpenseCommandFactory implements VoiceExpenseCommandFactory {
 
 class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
   GeminiVoiceExpenseCommand({
+    required this.database,
     required this.apiKey,
     required this.liveToken,
     required this.convexSiteUrl,
-  });
+  }) : _executors = ToolExecutors(database);
 
   static const _model = 'gemini-3.1-flash-live-preview';
 
+  final AppDatabase database;
   final String apiKey;
   final String liveToken;
   final String convexSiteUrl;
+  final ToolExecutors _executors;
   final _audioPlayer = PcmAudioPlayer();
   final _events = StreamController<String>.broadcast();
   final _setupComplete = Completer<void>();
@@ -95,6 +103,10 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
       },
     );
 
+    // Tools are pinned into the ephemeral token server-side (see
+    // packages/backend/convex/live/actions.ts → liveConnectConstraints.tools).
+    // We deliberately do NOT send tools in the setup frame to keep one source
+    // of truth and avoid drift between Dart and the shared Zod catalog.
     _send({
       'setup': {
         'model': 'models/$_model',
@@ -107,7 +119,11 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
               'text':
                   'You are a personal finance tracking assistant. You help '
                   'the user manage expenses, income, and transfers through '
-                  'voice.',
+                  'voice. The user typically speaks Spanish (es-AR). When '
+                  'the session starts, call listAccounts and listCategories '
+                  'so you know what is available. Resolve account / category '
+                  '/ tag references by name; on ambiguity, ask the user. '
+                  'Default transaction status is cleared.',
             },
           ],
         },
@@ -116,9 +132,6 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
             'startOfSpeechSensitivity': 'START_SENSITIVITY_LOW',
           },
         },
-        'tools': [
-          {'functionDeclarations': _toolDeclarations},
-        ],
       },
     });
 
@@ -316,7 +329,7 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
           : <String, dynamic>{};
 
       _events.add('Tool call: $name($args)');
-      final result = await _executeTool(name, args);
+      final result = await _executors.execute(name, args);
       _events.add('Tool response: $name -> $result');
 
       responses.add({
@@ -333,26 +346,6 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
     }
   }
 
-  Future<Map<String, dynamic>> _executeTool(
-    String name,
-    Map<String, dynamic> args,
-  ) async {
-    switch (name) {
-      case 'addTransaction':
-        return {
-          'success': true,
-          'message': 'Mock: transaction added',
-          'args': args,
-        };
-      case 'listTransactions':
-        return {'transactions': <Map<String, dynamic>>[], 'count': 0};
-      case 'listAccounts':
-        return {'accounts': <Map<String, dynamic>>[]};
-      default:
-        return {'error': 'Unknown tool: $name'};
-    }
-  }
-
   void _send(Map<String, dynamic> message) {
     _channel?.sink.add(jsonEncode(message));
   }
@@ -365,47 +358,3 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
     _connected = false;
   }
 }
-
-const _toolDeclarations = [
-  {
-    'name': 'addTransaction',
-    'description':
-        'Add a new transaction. Use type "expense" when spending, "income" '
-        'when receiving money, "transfer" when moving between accounts.',
-    'parameters': {
-      'type': 'OBJECT',
-      'properties': {
-        'type': {
-          'type': 'STRING',
-          'description': 'Transaction type',
-          'enum': ['expense', 'income', 'transfer'],
-        },
-        'amount': {'type': 'NUMBER', 'description': 'The amount, e.g. 12.50.'},
-        'description': {
-          'type': 'STRING',
-          'description': 'Brief description of the transaction.',
-        },
-      },
-      'required': ['type', 'amount', 'description'],
-    },
-  },
-  {
-    'name': 'listTransactions',
-    'description': 'List recent transactions. Supports filtering by type.',
-    'parameters': {
-      'type': 'OBJECT',
-      'properties': {
-        'type': {
-          'type': 'STRING',
-          'description': 'Filter by type. Optional.',
-          'enum': ['expense', 'income', 'transfer'],
-        },
-      },
-    },
-  },
-  {
-    'name': 'listAccounts',
-    'description': 'List all user accounts.',
-    'parameters': {'type': 'OBJECT', 'properties': <String, Object>{}},
-  },
-];

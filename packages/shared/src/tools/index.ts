@@ -6,10 +6,58 @@ import { zodToToolSchema } from './helpers'
 export { toolSchemas } from './definitions'
 
 const toolDescriptions = {
-    addTransaction:
-        'Add a new transaction. Use type "expense" when spending, "income" when receiving money, "transfer" when moving between accounts.',
-    listTransactions: 'List recent transactions. Supports filtering by type.',
-    listAccounts: 'List all user accounts.',
+    // Accounts
+    listAccounts:
+        'List user accounts. Returns id, name, currency, color, icon, isArchived.',
+    getAccount: 'Get a single account by UUID or name (case-insensitive).',
+    getAccountBalance: 'Get the current balance of an account in its currency.',
+    createAccount:
+        'Create a new account. Currency is immutable once set. Returns the new account id.',
+    updateAccount:
+        'Update an account. Currency cannot be changed; create a new account instead.',
+    archiveAccount: 'Archive an account (soft delete). Transactions remain.',
+
+    // Categories
+    listCategories: 'List user categories.',
+    getCategory: 'Get a category by UUID or name.',
+    createCategory:
+        'Create a category. Categories are type-agnostic — they classify both expenses and income.',
+    updateCategory: 'Update a category name or description.',
+    archiveCategory: 'Archive a category (soft delete).',
+
+    // Tags
+    listTags: 'List user tags. Tags can form a hierarchy via parent.',
+    getTag: 'Get a tag by UUID or name.',
+    createTag: 'Create a reusable tag. Optionally nest under a parent tag.',
+    updateTag: 'Update a tag.',
+    archiveTag: 'Archive a tag (soft delete).',
+
+    // Transactions: read
+    listTransactions:
+        'List transactions with optional filters: type, account, category, tag, status, date range.',
+    getTransaction: 'Get a single transaction by id including its tags.',
+    getRecentTransactions: 'Shortcut: list the N most recent transactions.',
+
+    // Transactions: write
+    addExpense:
+        'Record an expense (money out). Subtracts from the account balance. Requires account + category.',
+    addIncome:
+        'Record an income (money in). Adds to the account balance. Requires account + category.',
+    addTransfer:
+        'Record a transfer between two accounts. For cross-currency transfers, provide toAmount (and optionally exchangeRate).',
+    addBalanceAdjustment:
+        'Record that the actual balance of an account is balanceAfter. The system computes the difference. Use when the user counted cash or reconciles a statement.',
+    updateTransaction:
+        "Update a transaction's name, description, date, amount, category, or status.",
+    deleteTransaction: 'Delete a transaction. Updates balances accordingly.',
+    tagTransaction: 'Attach one or more tags to a transaction.',
+    untagTransaction: 'Detach one or more tags from a transaction.',
+
+    // Summaries
+    summarizeByCategory:
+        'Totals per category over a date range. Optionally filter by transaction type.',
+    summarizeByAccount:
+        'Per-account balance, money-in and money-out over a date range.',
 } as const satisfies Record<keyof typeof toolSchemas, string>
 
 // Derived types

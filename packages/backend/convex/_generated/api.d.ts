@@ -8,6 +8,9 @@
  * @module
  */
 
+import type * as accounts_mutations from "../accounts/mutations.js";
+import type * as accounts_queries from "../accounts/queries.js";
+import type * as aggregates from "../aggregates.js";
 import type * as auth from "../auth.js";
 import type * as authNative_http from "../authNative/http.js";
 import type * as authNative_mutations from "../authNative/mutations.js";
@@ -28,6 +31,9 @@ import type * as sync_helpers from "../sync/helpers.js";
 import type * as tags_mutations from "../tags/mutations.js";
 import type * as tags_queries from "../tags/queries.js";
 import type * as test from "../test.js";
+import type * as transactions_backfill from "../transactions/backfill.js";
+import type * as transactions_mutations from "../transactions/mutations.js";
+import type * as transactions_queries from "../transactions/queries.js";
 import type * as users_helpers from "../users/helpers.js";
 
 import type {
@@ -37,6 +43,9 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  "accounts/mutations": typeof accounts_mutations;
+  "accounts/queries": typeof accounts_queries;
+  aggregates: typeof aggregates;
   auth: typeof auth;
   "authNative/http": typeof authNative_http;
   "authNative/mutations": typeof authNative_mutations;
@@ -57,6 +66,9 @@ declare const fullApi: ApiFromModules<{
   "tags/mutations": typeof tags_mutations;
   "tags/queries": typeof tags_queries;
   test: typeof test;
+  "transactions/backfill": typeof transactions_backfill;
+  "transactions/mutations": typeof transactions_mutations;
+  "transactions/queries": typeof transactions_queries;
   "users/helpers": typeof users_helpers;
 }>;
 
@@ -88,4 +100,6 @@ export declare const internal: FilterApi<
 
 export declare const components: {
   betterAuth: import("@convex-dev/better-auth/_generated/component.js").ComponentApi<"betterAuth">;
+  outflowsByAccount: import("@convex-dev/aggregate/_generated/component.js").ComponentApi<"outflowsByAccount">;
+  inflowsByAccount: import("@convex-dev/aggregate/_generated/component.js").ComponentApi<"inflowsByAccount">;
 };

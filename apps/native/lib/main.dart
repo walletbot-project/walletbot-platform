@@ -107,15 +107,19 @@ class _AppMainState extends State<AppMain> {
         ],
       ),
       floatingActionButton: FloatingActionButton(
-        onPressed: () => Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (_) => VoiceScreen(
-              commandFactory: GeminiVoiceExpenseCommandFactory(
-                convexSiteUrl: AppConfig.convexSiteUrl,
+        onPressed: () {
+          final database = context.read<AppDatabase>();
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => VoiceScreen(
+                commandFactory: GeminiVoiceExpenseCommandFactory(
+                  database: database,
+                  convexSiteUrl: AppConfig.convexSiteUrl,
+                ),
               ),
             ),
-          ),
-        ),
+          );
+        },
         tooltip: 'Voice commands',
         child: const Icon(Icons.add),
       ),

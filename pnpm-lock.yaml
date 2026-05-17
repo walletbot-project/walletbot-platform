@@ -172,6 +172,9 @@ importers:
 
   packages/backend:
     dependencies:
+      '@convex-dev/aggregate':
+        specifier: ^0.2.1
+        version: 0.2.1(convex@1.35.1(react@19.2.5))
       '@convex-dev/better-auth':
         specifier: 'catalog:'
         version: 0.11.4(@standard-schema/spec@1.1.0)(better-auth@1.5.6(@opentelemetry/api@1.9.1)(react-dom@19.2.5(react@19.2.5))(react@19.2.5))(convex@1.35.1(react@19.2.5))(hono@4.12.12)(react@19.2.5)(typescript@6.0.2)
@@ -546,6 +549,11 @@ packages:
     engines: {node: '>=16'}
     cpu: [x64]
     os: [win32]
+
+  '@convex-dev/aggregate@0.2.1':
+    resolution: {integrity: sha512-z8GeUC+cIZEgtMXecX6WTBQHNW4E2ioRsc5IkO8BWnCjgDOru/Mw8zXe9JPe35JkqDjlSVKuwxiQHKs/jaYAyA==}
+    peerDependencies:
+      convex: ^1.24.8
 
   '@convex-dev/better-auth@0.11.4':
     resolution: {integrity: sha512-CsRsM7UaQgQKH1mt4z64QOZUfrhZKNsspkpWjlhqLiIz5THfnM2vaSVMQ3GOddcUvw7AgkNCNR3u8C8HjLQEMA==}
@@ -4275,6 +4283,10 @@ snapshots:
 
   '@cloudflare/workerd-windows-64@1.20260409.1':
     optional: true
+
+  '@convex-dev/aggregate@0.2.1(convex@1.35.1(react@19.2.5))':
+    dependencies:
+      convex: 1.35.1(react@19.2.5)
 
   '@convex-dev/better-auth@0.11.4(@standard-schema/spec@1.1.0)(better-auth@1.5.6(@opentelemetry/api@1.9.1)(react-dom@19.2.5(react@19.2.5))(react@19.2.5))(convex@1.35.1(react@19.2.5))(hono@4.12.12)(react@19.2.5)(typescript@6.0.2)':
     dependencies:
