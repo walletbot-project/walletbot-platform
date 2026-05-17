@@ -35,6 +35,7 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
   });
 
   static const _model = 'gemini-3.1-flash-live-preview';
+  static const _voiceName = 'Kore';
 
   final String apiKey;
   final String liveToken;
@@ -100,6 +101,11 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
         'model': 'models/$_model',
         'generationConfig': {
           'responseModalities': ['AUDIO'],
+          'speechConfig': {
+            'voiceConfig': {
+              'prebuiltVoiceConfig': {'voiceName': _voiceName},
+            },
+          },
         },
         'systemInstruction': {
           'parts': [
@@ -107,7 +113,8 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
               'text':
                   'You are a personal finance tracking assistant. You help '
                   'the user manage expenses, income, and transfers through '
-                  'voice.',
+                  'voice. Keep the same voice, tone, and speaking style for '
+                  'the entire session.',
             },
           ],
         },
