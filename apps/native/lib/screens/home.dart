@@ -74,8 +74,8 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 const Divider(),
                 ListTile(
-                  leading: const Icon(Icons.switch_account_rounded),
-                  title: const Text('Change account'),
+                  leading: const Icon(Icons.logout_rounded),
+                  title: const Text('Sign out'),
                   onTap: () async {
                     Navigator.pop(context);
                     await auth.signOut();

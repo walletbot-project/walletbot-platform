@@ -186,14 +186,13 @@ class AuthController extends ChangeNotifier {
     _authHandle = await ConvexClient.instance.setAuthWithRefresh(
       // Called immediately, on schedule (~60 s before JWT expiry), and on
       // every WebSocket reconnect. Must always return a *fresh* JWT.
+      //
+      // We intentionally do NOT use `onAuthChange` to drive `requiresReauth`:
+      // it fires on transient failures too (no network, suspended process),
+      // which would flip the banner on every backgrounding. The fetcher
+      // itself is the only thing that can distinguish "server says revoked"
+      // (definitive — banner) from "network blip" (silent retry).
       fetchToken: _fetchFreshAccessToken,
-      onAuthChange: (isAuthenticated) {
-        // Cleared by the Rust client when the fetcher returns null —
-        // typically because the session token was revoked server-side.
-        if (!isAuthenticated) {
-          _setRequiresReauth(active.id, true);
-        }
-      },
     );
   }
 
