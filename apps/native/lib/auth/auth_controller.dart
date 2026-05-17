@@ -11,16 +11,7 @@ import 'package:google_sign_in/google_sign_in.dart';
 import 'package:http/http.dart' as http;
 
 /// Owns the device's account list and the active Convex auth session.
-///
-/// Auth refresh is delegated entirely to `convex_flutter`'s `setAuthWithRefresh`
-/// — we register a token-fetcher and the Rust client calls it on schedule
-/// (60s before JWT expiry) and on every WebSocket reconnect. Our only job is
-/// to mint a fresh access JWT on demand by POSTing the long-lived session
-/// token to `/auth/refresh`.
-///
-/// Offline-first: we never delete local accounts on validation failure. If
-/// the session is revoked server-side, we flip [UserAccount.requiresReauth]
-/// so the UI can prompt; the account stays on disk.
+/// Auth refresh is delegated to `convex_flutter`'s `setAuthWithRefresh`.
 class AuthController extends ChangeNotifier {
   AuthController({http.Client? httpClient, FlutterSecureStorage? storage})
     : _storage = storage ?? const FlutterSecureStorage(),
@@ -184,14 +175,6 @@ class AuthController extends ChangeNotifier {
       return;
     }
     _authHandle = await ConvexClient.instance.setAuthWithRefresh(
-      // Called immediately, on schedule (~60 s before JWT expiry), and on
-      // every WebSocket reconnect. Must always return a *fresh* JWT.
-      //
-      // We intentionally do NOT use `onAuthChange` to drive `requiresReauth`:
-      // it fires on transient failures too (no network, suspended process),
-      // which would flip the banner on every backgrounding. The fetcher
-      // itself is the only thing that can distinguish "server says revoked"
-      // (definitive — banner) from "network blip" (silent retry).
       fetchToken: _fetchFreshAccessToken,
     );
   }
@@ -205,37 +188,13 @@ class AuthController extends ChangeNotifier {
     await ConvexClient.instance.setAuth(token: null);
   }
 
-  /// Token fetcher passed to `setAuthWithRefresh`. Returns a fresh access JWT
-  /// minted from the active account's session token, or `null` if the session
-  /// is revoked / no remote account is active. Returning `null` causes the
-  /// Rust client to clear auth and surface it via [onAuthChange].
   Future<String?> _fetchFreshAccessToken() async {
     final active = activeAccount;
     final session = active?.sessionToken;
-    if (active == null ||
-        active.type != AccountType.remote ||
-        session == null) {
-      return null;
-    }
-    try {
-      final body = await _postJson('/auth/refresh', {'refreshToken': session});
-      _setRequiresReauth(active.id, false);
-      return body['accessToken'] as String;
-    } on _AuthHttpError catch (e) {
-      // 401 means the session token is revoked or expired. Surface to the
-      // UI; keep the account on disk (offline mode).
-      if (e.statusCode == 401) {
-        _setRequiresReauth(active.id, true);
-        return null;
-      }
-      debugPrint('refresh failed: ${e.statusCode} ${e.rawBody}');
-      // Transient (5xx, network). Return null so the Rust client can retry
-      // later; don't flip requiresReauth on a server hiccup.
-      return null;
-    } catch (e) {
-      debugPrint('refresh request failed: $e');
-      return null;
-    }
+    if (active == null || session == null) return null;
+    debugPrint('auth: refreshing access token');
+    final body = await _postJson('/auth/refresh', {'refreshToken': session});
+    return body['accessToken'] as String;
   }
 
   Future<Map<String, Object?>> _postJson(
@@ -263,20 +222,6 @@ class AuthController extends ChangeNotifier {
     } catch (e) {
       debugPrint('signout request failed: $e');
     }
-  }
-
-  void _setRequiresReauth(String id, bool value) {
-    final idx = _accounts.indexWhere((a) => a.id == id);
-    if (idx < 0) return;
-    final current = _accounts[idx];
-    if (current.requiresReauth == value) return;
-    _accounts = [
-      ..._accounts.sublist(0, idx),
-      current.copyWith(requiresReauth: value),
-      ..._accounts.sublist(idx + 1),
-    ];
-    unawaited(_persist());
-    notifyListeners();
   }
 
   /// Awaitable save. Serialized via [_persistQueue] so concurrent saves can't
