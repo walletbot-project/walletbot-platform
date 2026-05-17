@@ -3,11 +3,9 @@ import { internal } from '../_generated/api'
 import { httpAction } from '../_generated/server'
 import { authComponent, createAuth } from '../auth'
 import {
-    generateFamilyId,
-    generateRefreshSecret,
-    hashRefreshSecret,
+    generateSessionSecret,
+    hashSessionSecret,
     mintAccessToken,
-    newRefreshLifetime,
 } from './utils'
 
 const jsonResponse = (body: unknown, init?: ResponseInit): Response => {
@@ -81,17 +79,13 @@ const googleSignIn = httpAction(async (ctx, req) => {
         )
     }
 
-    const refreshSecret = generateRefreshSecret()
-    const tokenHash = await hashRefreshSecret(refreshSecret)
-    const family = generateFamilyId()
-    const { expiresAt: refreshExpiresAt, createdAt } = newRefreshLifetime()
+    const sessionSecret = generateSessionSecret()
+    const tokenHash = await hashSessionSecret(sessionSecret)
 
-    await ctx.runMutation(internal.authNative.mutations.insertRefreshToken, {
+    await ctx.runMutation(internal.authNative.mutations.insertSessionToken, {
         userId: user.id,
         tokenHash,
-        family,
-        expiresAt: refreshExpiresAt,
-        createdAt,
+        createdAt: Date.now(),
         userAgent: req.headers.get('user-agent') ?? undefined,
     })
 
@@ -100,8 +94,7 @@ const googleSignIn = httpAction(async (ctx, req) => {
     return jsonResponse({
         accessToken: access.token,
         accessTokenExpiresAt: access.expiresAt,
-        refreshToken: refreshSecret,
-        refreshTokenExpiresAt: refreshExpiresAt,
+        refreshToken: sessionSecret,
         user: {
             id: user.id,
             email: user.email ?? null,
@@ -125,33 +118,21 @@ const refreshHandler = httpAction(async (ctx, req) => {
         return jsonError(400, 'bad_request', 'missing refreshToken')
     }
 
-    const presentedHash = await hashRefreshSecret(body.refreshToken)
-    const newSecret = generateRefreshSecret()
-    const newHash = await hashRefreshSecret(newSecret)
-    const { expiresAt: newExpiresAt, createdAt: newCreatedAt } =
-        newRefreshLifetime()
-
-    const rotation = await ctx.runMutation(
-        internal.authNative.mutations.rotateRefreshToken,
-        {
-            presentedHash,
-            newHash,
-            newExpiresAt,
-            newCreatedAt,
-        },
+    const tokenHash = await hashSessionSecret(body.refreshToken)
+    const validation = await ctx.runMutation(
+        internal.authNative.mutations.validateSessionToken,
+        { tokenHash },
     )
 
-    if (!rotation.ok) {
-        return jsonError(401, 'invalid_refresh_token', rotation.reason)
+    if (!validation.ok) {
+        return jsonError(401, 'invalid_refresh_token', validation.reason)
     }
 
-    const access = await mintAccessToken(rotation.userId)
+    const access = await mintAccessToken(validation.userId)
 
     return jsonResponse({
         accessToken: access.token,
         accessTokenExpiresAt: access.expiresAt,
-        refreshToken: newSecret,
-        refreshTokenExpiresAt: newExpiresAt,
     })
 })
 
@@ -166,9 +147,9 @@ const signOutHandler = httpAction(async (ctx, req) => {
         typeof body.refreshToken === 'string' &&
         body.refreshToken.length > 0
     ) {
-        const hash = await hashRefreshSecret(body.refreshToken)
+        const hash = await hashSessionSecret(body.refreshToken)
         await ctx.runMutation(
-            internal.authNative.mutations.revokeRefreshTokenByHash,
+            internal.authNative.mutations.revokeSessionTokenByHash,
             { tokenHash: hash },
         )
     }

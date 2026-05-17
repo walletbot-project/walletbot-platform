@@ -1,9 +1,7 @@
 import { type CryptoKey, importPKCS8, SignJWT } from 'jose'
 
 const ACCESS_TOKEN_TTL_SEC = 60
-const REFRESH_TOKEN_TTL_MS = 30 * 24 * 60 * 60 * 1000
-const REFRESH_TOKEN_BYTES = 32
-const FAMILY_ID_BYTES = 16
+const SESSION_TOKEN_BYTES = 32
 
 const AUDIENCE = 'walletbot-native'
 
@@ -79,25 +77,13 @@ const randomHex = (byteLength: number): string => {
     return toHex(buf)
 }
 
-export const generateRefreshSecret = (): string =>
-    randomHex(REFRESH_TOKEN_BYTES)
+export const generateSessionSecret = (): string =>
+    randomHex(SESSION_TOKEN_BYTES)
 
-export const generateFamilyId = (): string => randomHex(FAMILY_ID_BYTES)
-
-export const hashRefreshSecret = async (secret: string): Promise<string> => {
+export const hashSessionSecret = async (secret: string): Promise<string> => {
     const digest = await crypto.subtle.digest(
         'SHA-256',
         new TextEncoder().encode(secret),
     )
     return toHex(new Uint8Array(digest))
-}
-
-export type RefreshLifetime = {
-    expiresAt: number
-    createdAt: number
-}
-
-export const newRefreshLifetime = (): RefreshLifetime => {
-    const now = Date.now()
-    return { createdAt: now, expiresAt: now + REFRESH_TOKEN_TTL_MS }
 }

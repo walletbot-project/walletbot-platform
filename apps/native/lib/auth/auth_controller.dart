@@ -4,17 +4,7 @@ import 'dart:convert';
 import 'package:app/auth/account.dart';
 import 'package:app/config.dart';
 import 'package:app/database.dart';
-import 'package:convex_dart/convex_dart.dart' show ConvexClientError;
-// ignore: implementation_imports
-import 'package:convex_dart/src/convex_dart_for_generated_code.dart'
-    show InternalConvexClient;
-// ignore: implementation_imports
-import 'package:convex_dart/src/rust/base_client/query_result.dart'
-    show FunctionResult, FunctionResult_ErrorMessage, FunctionResult_Value;
-// ignore: implementation_imports
-import 'package:convex_dart/src/rust/dart.dart' show SubscriptionHandle;
-// ignore: implementation_imports
-import 'package:convex_dart/src/rust/lib.dart' show BTreeMapStringValue;
+import 'package:convex_flutter/convex_flutter.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:google_sign_in/google_sign_in.dart';
@@ -27,8 +17,11 @@ class AuthController extends ChangeNotifier {
 
   static const _accountsKey = 'accounts';
   static const _activeIdKey = 'active_account_id';
-  // Refresh the access token this far before its server-issued expiry.
-  static const _refreshLeeway = Duration(seconds: 60);
+  // Refresh the access token this far before its server-issued expiry. Picked
+  // so that with the (eventual) 15 min access TTL we refresh every ~10 min;
+  // with the current 60 s TTL we always refresh on demand. The session token
+  // doesn't rotate, so calling /auth/refresh frequently is idempotent.
+  static const _refreshLeeway = Duration(minutes: 5);
 
   final FlutterSecureStorage _storage;
   final http.Client _http;
@@ -91,7 +84,6 @@ class AuthController extends ChangeNotifier {
       accessToken: body['accessToken'] as String,
       accessTokenExpiresAt: (body['accessTokenExpiresAt'] as num).toInt(),
       refreshToken: body['refreshToken'] as String,
-      refreshTokenExpiresAt: (body['refreshTokenExpiresAt'] as num).toInt(),
     );
 
     _accounts = [
@@ -123,17 +115,23 @@ class AuthController extends ChangeNotifier {
     await _refreshAccessToken();
   }
 
-  /// Wraps a Convex call so that on an "Unauthenticated" error we refresh the
-  /// access token and retry once. Proactive refresh handles the common case;
-  /// this catches the race where exp slips through (network blip, app frozen).
+  /// Wraps a Convex call so that:
+  ///   - on "Unauthenticated" we refresh the access token and retry once
+  ///     (catches the race where exp slips through);
+  ///   - on [TimeoutException] (zombie WebSocket — Android froze it during
+  ///     background, `connectionState` may still say `connected`) we force a
+  ///     `ConvexClient.reconnect()` and retry once.
   Future<T> runConvexAuthenticated<T>(Future<T> Function() fn) async {
     await _ensureFreshAuth();
     try {
       return await fn();
-    } on ConvexClientError catch (e) {
-      if (!_isAuthError(e.message)) rethrow;
+    } on ClientError catch (e) {
+      if (!_isAuthError(_clientErrorMessage(e))) rethrow;
       final ok = await _refreshAccessToken();
       if (!ok) rethrow;
+      return await fn();
+    } on TimeoutException {
+      await ConvexClient.instance.reconnect();
       return await fn();
     }
   }
@@ -144,10 +142,8 @@ class AuthController extends ChangeNotifier {
   ///   2. if the access token is already past (or within leeway of) its server-
   ///      issued exp, force a refresh now and wait for it.
   ///
-  /// Needed because OS background suspension stops our refresh timer and drops
-  /// the Convex WebSocket. Without this, the first query after resume can hang
-  /// indefinitely inside convex_dart's reconnect/queue path before our retry
-  /// catch ever sees an error.
+  /// Needed because OS background suspension stops our refresh timer. Without
+  /// this, the first call after resume can fire with an expired token.
   Future<void> _ensureFreshAuth() async {
     final inFlight = _refreshInFlight;
     if (inFlight != null) {
@@ -171,8 +167,8 @@ class AuthController extends ChangeNotifier {
   /// when no longer needed (typically in widget `dispose`).
   Future<ConvexSubscriptionHandle> subscribeConvex({
     required String name,
-    required BTreeMapStringValue args,
-    required FutureOr<void> Function(FunctionResult) onUpdate,
+    required Map<String, dynamic> args,
+    required FutureOr<void> Function(String) onUpdate,
   }) async {
     final wrapper = ConvexSubscriptionHandle._();
     var retried = false;
@@ -182,30 +178,44 @@ class AuthController extends ChangeNotifier {
       await _ensureFreshAuth();
       if (wrapper._cancelled) return;
       late SubscriptionHandle handle;
-      handle = await InternalConvexClient.instance.subscribe(
-        name: name,
-        args: args,
-        onUpdate: (result) async {
-          if (wrapper._cancelled || wrapper._current != handle) return;
-          if (result is FunctionResult_ErrorMessage &&
-              _isAuthError(result.field0)) {
-            if (retried) {
-              debugPrint(
-                'subscribeConvex($name): auth error after retry — giving up',
-              );
+      try {
+        handle = await ConvexClient.instance.subscribe(
+          name: name,
+          args: args,
+          onUpdate: (value) async {
+            if (wrapper._cancelled || wrapper._current != handle) return;
+            retried = false;
+            await onUpdate(value);
+          },
+          onError: (message, value) async {
+            if (wrapper._cancelled || wrapper._current != handle) return;
+            if (_isAuthError(message)) {
+              if (retried) {
+                debugPrint(
+                  'subscribeConvex($name): auth error after retry — giving up',
+                );
+                return;
+              }
+              retried = true;
+              handle.cancel();
+              wrapper._current = null;
+              await _refreshAccessToken();
+              await doSubscribe();
               return;
             }
-            retried = true;
-            handle.cancel();
-            wrapper._current = null;
-            await _refreshAccessToken();
-            await doSubscribe();
-            return;
-          }
-          if (result is FunctionResult_Value) retried = false;
-          await onUpdate(result);
-        },
-      );
+            debugPrint(
+              'subscribeConvex($name): error: $message ${value ?? ""}',
+            );
+          },
+        );
+      } on TimeoutException {
+        // Zombie WebSocket — force a healthcheck round-trip and retry once.
+        if (retried || wrapper._cancelled) rethrow;
+        retried = true;
+        await ConvexClient.instance.reconnect();
+        await doSubscribe();
+        return;
+      }
       wrapper._current = handle;
     }
 
@@ -302,9 +312,15 @@ class AuthController extends ChangeNotifier {
   static bool _isAuthError(String message) =>
       message.toLowerCase().contains('unauthenticated');
 
+  static String _clientErrorMessage(ClientError e) => switch (e) {
+    ClientError_InternalError(:final msg) => msg,
+    ClientError_ConvexError(:final data) => data,
+    ClientError_ServerError(:final msg) => msg,
+  };
+
   Future<void> _applyConvexAuth(String? token) async {
     try {
-      await InternalConvexClient.instance.setAuth(token: token);
+      await ConvexClient.instance.setAuth(token: token);
     } catch (e) {
       debugPrint('ConvexClient.setAuth failed: $e');
     }
@@ -351,16 +367,12 @@ class AuthController extends ChangeNotifier {
       final body = await _postJson('/auth/refresh', {'refreshToken': refresh});
       final newAccess = body['accessToken'] as String;
       final newAccessExp = (body['accessTokenExpiresAt'] as num).toInt();
-      final newRefresh = body['refreshToken'] as String;
-      final newRefreshExp = (body['refreshTokenExpiresAt'] as num).toInt();
 
       _replaceAccount(
         active.id,
         (a) => a.copyWith(
           accessToken: newAccess,
           accessTokenExpiresAt: newAccessExp,
-          refreshToken: newRefresh,
-          refreshTokenExpiresAt: newRefreshExp,
           requiresReauth: false,
         ),
       );
@@ -369,8 +381,8 @@ class AuthController extends ChangeNotifier {
       return true;
     } on _AuthHttpError catch (e) {
       if (e.statusCode == 401) {
-        // Refresh token invalid (revoked/expired). Keep local data — user
-        // re-signs in to reconnect; offline mode still works.
+        // Session token revoked. Keep local data — user re-signs in to
+        // reconnect; offline mode still works.
         _setRequiresReauth(active.id, true);
         _stopRefreshTimer();
       } else {
@@ -456,9 +468,9 @@ class AuthController extends ChangeNotifier {
 }
 
 /// Opaque handle for a Convex subscription that survives JWT refreshes. The
-/// underlying convex_dart [SubscriptionHandle] may be swapped transparently
-/// when re-subscribing after an auth failure; callers should never hold onto
-/// the inner one.
+/// underlying [SubscriptionHandle] may be swapped transparently when
+/// re-subscribing after an auth failure; callers should never hold onto the
+/// inner one.
 class ConvexSubscriptionHandle {
   ConvexSubscriptionHandle._();
 

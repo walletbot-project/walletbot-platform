@@ -1,8 +1,6 @@
 import 'package:app/auth/account.dart';
 import 'package:app/auth/auth_controller.dart';
-// ignore: implementation_imports
-import 'package:convex_dart/src/convex_dart_for_generated_code.dart'
-    show InternalConvexClient, encodeMap;
+import 'package:convex_flutter/convex_flutter.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -25,13 +23,10 @@ class _HomeScreenState extends State<HomeScreen> {
     try {
       final auth = context.read<AuthController>();
       final result = await auth.runConvexAuthenticated(
-        () => InternalConvexClient.instance.query(
-          name: 'test:hello',
-          args: encodeMap({}),
-        ),
+        () => ConvexClient.instance.query('test:hello', {}),
       );
       if (!mounted) return;
-      setState(() => _testResult = result.toString());
+      setState(() => _testResult = result);
     } catch (e) {
       if (!mounted) return;
       setState(() => _testResult = 'ERROR: $e');

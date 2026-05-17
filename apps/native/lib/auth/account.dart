@@ -10,7 +10,6 @@ class UserAccount {
     this.accessToken,
     this.accessTokenExpiresAt,
     this.refreshToken,
-    this.refreshTokenExpiresAt,
     this.requiresReauth = false,
   });
 
@@ -27,16 +26,13 @@ class UserAccount {
   /// ms-epoch expiry of [accessToken] as reported by the backend at issue time.
   final int? accessTokenExpiresAt;
 
-  /// Opaque rotating refresh secret. Posted to `/auth/refresh` to mint a new
-  /// `accessToken`; the server rotates it on every use.
+  /// Long-lived opaque session secret. Posted to `/auth/refresh` to mint a
+  /// fresh [accessToken]. Not rotated — stays valid until explicitly revoked
+  /// (signout, "remove this device").
   final String? refreshToken;
 
-  /// ms-epoch expiry of [refreshToken] as reported by the backend at issue time.
-  final int? refreshTokenExpiresAt;
-
-  /// Server says this session is dead (refresh-token revoked / expired). We
-  /// keep the account locally so the user is never locked out — offline mode
-  /// still works.
+  /// Server says this session is dead (token revoked). We keep the account
+  /// locally so the user is never locked out — offline mode still works.
   final bool requiresReauth;
 
   UserAccount copyWith({
@@ -46,7 +42,6 @@ class UserAccount {
     String? accessToken,
     int? accessTokenExpiresAt,
     String? refreshToken,
-    int? refreshTokenExpiresAt,
     bool? requiresReauth,
   }) {
     return UserAccount(
@@ -58,8 +53,6 @@ class UserAccount {
       accessToken: accessToken ?? this.accessToken,
       accessTokenExpiresAt: accessTokenExpiresAt ?? this.accessTokenExpiresAt,
       refreshToken: refreshToken ?? this.refreshToken,
-      refreshTokenExpiresAt:
-          refreshTokenExpiresAt ?? this.refreshTokenExpiresAt,
       requiresReauth: requiresReauth ?? this.requiresReauth,
     );
   }
@@ -73,7 +66,6 @@ class UserAccount {
     'accessToken': accessToken,
     'accessTokenExpiresAt': accessTokenExpiresAt,
     'refreshToken': refreshToken,
-    'refreshTokenExpiresAt': refreshTokenExpiresAt,
     'requiresReauth': requiresReauth,
   };
 
@@ -87,7 +79,6 @@ class UserAccount {
       accessToken: json['accessToken'] as String?,
       accessTokenExpiresAt: (json['accessTokenExpiresAt'] as num?)?.toInt(),
       refreshToken: json['refreshToken'] as String?,
-      refreshTokenExpiresAt: (json['refreshTokenExpiresAt'] as num?)?.toInt(),
       requiresReauth: json['requiresReauth'] as bool? ?? false,
     );
   }

@@ -7,9 +7,7 @@ import 'package:app/screens/activity.dart';
 import 'package:app/screens/add.dart';
 import 'package:app/screens/home.dart';
 import 'package:app/screens/login.dart';
-// ignore: implementation_imports
-import 'package:convex_dart/src/convex_dart_for_generated_code.dart'
-    show InternalConvexClient;
+import 'package:convex_flutter/convex_flutter.dart';
 import 'package:flutter/material.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:provider/provider.dart';
@@ -19,7 +17,20 @@ Future<void> main() async {
 
   await loadAppConfig();
 
-  await InternalConvexClient.init(deploymentUrl: AppConfig.convexUrl);
+  await ConvexClient.initialize(
+    ConvexConfig(
+      deploymentUrl: AppConfig.convexUrl,
+      clientId: 'wallet-bot-flutter-1.0',
+      // Fail fast: the package default is 30 s, which means a hung WebSocket
+      // (Android froze it during background) stalls the UI for 30 s before
+      // anyone notices. Our retry wrapper catches the TimeoutException and
+      // forces a reconnect.
+      operationTimeout: const Duration(seconds: 7),
+      // Used by `ConvexClient.reconnect()` — without this, reconnect() is a
+      // no-op. `health:ping` is an unauthenticated round-trip.
+      healthCheckQuery: 'health:ping',
+    ),
+  );
 
   await GoogleSignIn.instance.initialize(
     serverClientId: AppConfig.googleServerClientId,
@@ -76,6 +87,13 @@ class _AuthGateState extends State<_AuthGate> with WidgetsBindingObserver {
     // Re-validate opportunistically; offline-safe — never logs the user out.
     if (state == AppLifecycleState.resumed) {
       unawaited(context.read<AuthController>().refreshActiveSession());
+      // Android suspends the WebSocket during background. The package's
+      // connection-state stream may still say `connected`, but the socket is
+      // dead — queries hang for `operationTimeout` before failing. Force a
+      // health-check round-trip; reconnect() re-establishes the socket if it's
+      // zombie. Fire-and-forget — failure is handled per-call by the retry
+      // wrapper in AuthController.
+      unawaited(ConvexClient.instance.reconnect());
     }
   }
 
@@ -109,10 +127,9 @@ class _AppMainState extends State<AppMain> {
 
   @override
   Widget build(BuildContext context) {
-    final needsReauth =
-        context.select<AuthController, bool>(
-          (a) => a.activeAccount?.requiresReauth ?? false,
-        );
+    final needsReauth = context.select<AuthController, bool>(
+      (a) => a.activeAccount?.requiresReauth ?? false,
+    );
     return Scaffold(
       body: Column(
         children: [

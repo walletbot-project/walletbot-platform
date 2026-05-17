@@ -1,12 +1,10 @@
 import { v } from 'convex/values'
 import { internalMutation } from '../_generated/server'
 
-export const insertRefreshToken = internalMutation({
+export const insertSessionToken = internalMutation({
     args: {
         userId: v.string(),
         tokenHash: v.string(),
-        family: v.string(),
-        expiresAt: v.number(),
         createdAt: v.number(),
         userAgent: v.optional(v.string()),
     },
@@ -16,63 +14,30 @@ export const insertRefreshToken = internalMutation({
     },
 })
 
-export const rotateRefreshToken = internalMutation({
-    args: {
-        presentedHash: v.string(),
-        newHash: v.string(),
-        newExpiresAt: v.number(),
-        newCreatedAt: v.number(),
-    },
+export const validateSessionToken = internalMutation({
+    args: { tokenHash: v.string() },
     handler: async (ctx, args) => {
-        const presented = await ctx.db
+        const row = await ctx.db
             .query('refreshTokens')
-            .withIndex('by_tokenHash', (q) =>
-                q.eq('tokenHash', args.presentedHash),
-            )
+            .withIndex('by_tokenHash', (q) => q.eq('tokenHash', args.tokenHash))
             .unique()
 
-        if (!presented) {
+        if (!row) {
             return { ok: false as const, reason: 'not_found' as const }
         }
-
-        if (presented.revokedAt !== undefined) {
-            // Refresh-token reuse: assume the family is compromised and revoke
-            // every still-live row sharing it. Caller must force re-auth.
-            const familyRows = await ctx.db
-                .query('refreshTokens')
-                .withIndex('by_family', (q) => q.eq('family', presented.family))
-                .take(256)
-            const now = Date.now()
-            for (const row of familyRows) {
-                if (row.revokedAt === undefined) {
-                    await ctx.db.patch(row._id, { revokedAt: now })
-                }
-            }
+        if (row.revokedAt !== undefined) {
             return { ok: false as const, reason: 'revoked' as const }
         }
-
-        if (presented.expiresAt <= Date.now()) {
+        // Legacy rows from the old rotating design may still carry expiresAt;
+        // honor it so they don't outlive their original lifetime.
+        if (row.expiresAt !== undefined && row.expiresAt <= Date.now()) {
             return { ok: false as const, reason: 'expired' as const }
         }
-
-        const newId = await ctx.db.insert('refreshTokens', {
-            userId: presented.userId,
-            tokenHash: args.newHash,
-            family: presented.family,
-            expiresAt: args.newExpiresAt,
-            createdAt: args.newCreatedAt,
-            userAgent: presented.userAgent,
-        })
-        await ctx.db.patch(presented._id, {
-            revokedAt: Date.now(),
-            replacedBy: newId,
-        })
-
-        return { ok: true as const, userId: presented.userId }
+        return { ok: true as const, userId: row.userId }
     },
 })
 
-export const revokeRefreshTokenByHash = internalMutation({
+export const revokeSessionTokenByHash = internalMutation({
     args: { tokenHash: v.string() },
     handler: async (ctx, args) => {
         const row = await ctx.db
