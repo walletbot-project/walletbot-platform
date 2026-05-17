@@ -127,14 +127,6 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
             },
           ],
         },
-        'realtimeInputConfig': {
-          'automaticActivityDetection': {
-            'startOfSpeechSensitivity': 'START_SENSITIVITY_LOW',
-            'endOfSpeechSensitivity': 'END_SENSITIVITY_LOW',
-            'prefixPaddingMs': 20,
-            'silenceDurationMs': 800,
-          },
-        },
       },
     });
 

@@ -44,9 +44,6 @@ class _VoiceScreenState extends State<VoiceScreen> {
     noiseSuppress: true,
     autoGain: false,
     streamBufferSize: 3200,
-    androidConfig: AndroidRecordConfig(
-      audioSource: AndroidAudioSource.voiceCommunication,
-    ),
   );
 
   @override
