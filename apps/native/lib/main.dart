@@ -1,10 +1,11 @@
 import 'package:app/auth/auth_controller.dart';
 import 'package:app/database.dart';
 import 'package:app/screens/activity.dart';
-import 'package:app/screens/add.dart';
 import 'package:app/screens/home.dart';
 import 'package:app/screens/insights.dart';
 import 'package:app/screens/login.dart';
+import 'package:app/screens/voice.dart';
+import 'package:app/voice/gemini_voice_expense_command.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -67,10 +68,24 @@ class _AppMainState extends State<AppMain> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: IndexedStack(index: selectedIndex, children: [HomeScreen(), ActivityScreen(), Placeholder(), InsightsScreen()]),
+      body: IndexedStack(
+        index: selectedIndex,
+        children: [
+          HomeScreen(),
+          ActivityScreen(),
+          VoiceScreen(),
+          Placeholder(),
+        ],
+      ),
       floatingActionButton: FloatingActionButton(
-        onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => AddScreen())),
-        tooltip: 'Add',
+        onPressed: () => Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => const VoiceScreen(
+              commandFactory: GeminiVoiceExpenseCommandFactory(),
+            ),
+          ),
+        ),
+        tooltip: 'Voice commands',
         child: const Icon(Icons.add),
       ),
       bottomNavigationBar: NavigationBar(
@@ -78,9 +93,15 @@ class _AppMainState extends State<AppMain> {
         onDestinationSelected: (value) => setState(() => selectedIndex = value),
         destinations: [
           NavigationDestination(icon: Icon(Icons.home_rounded), label: "Home"),
-          NavigationDestination(icon: Icon(Icons.list_rounded), label: "Activity"),
-          NavigationDestination(icon: Icon(Icons.account_balance_rounded), label: "Cuentas"),
-          NavigationDestination(icon: Icon(Icons.stacked_line_chart_rounded), label: "Insights"),
+          NavigationDestination(
+            icon: Icon(Icons.list_rounded),
+            label: "Activity",
+          ),
+          NavigationDestination(icon: Icon(Icons.mic_rounded), label: "Voz"),
+          NavigationDestination(
+            icon: Icon(Icons.settings_rounded),
+            label: "Settings",
+          ),
         ],
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
