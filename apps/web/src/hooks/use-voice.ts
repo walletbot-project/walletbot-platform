@@ -55,20 +55,51 @@ function computeRMS(float32: Float32Array): number {
     return Math.sqrt(sum / float32.length)
 }
 
-// Hook
+// Chat message model
 
 export type ConnectionStatus = 'disconnected' | 'connecting' | 'connected'
 
-export interface VoiceLogEntry {
-    id: number
-    timestamp: Date
-    type: 'info' | 'tool-call' | 'tool-response' | 'audio' | 'error'
-    message: string
-    detail?: unknown
-}
+export type ToolStatus = 'pending' | 'completed' | 'cancelled'
+
+export type SystemLevel = 'info' | 'success' | 'error'
+
+export type ChatMessage =
+    | {
+          kind: 'user'
+          id: string
+          at: Date
+          text: string
+          isFinal: boolean
+      }
+    | {
+          kind: 'agent'
+          id: string
+          at: Date
+          text: string
+          isFinal: boolean
+          wasInterrupted: boolean
+      }
+    | {
+          kind: 'tool'
+          id: string
+          at: Date
+          callId: string
+          name: string
+          args: Record<string, unknown>
+          result?: Record<string, unknown>
+          status: ToolStatus
+      }
+    | {
+          kind: 'system'
+          id: string
+          at: Date
+          message: string
+          level: SystemLevel
+      }
+
+// Hook
 
 export type UseVoiceOpts = {
-    onLog?: (entry: VoiceLogEntry) => void
     context: AgentToolContext
 }
 
@@ -81,22 +112,7 @@ export function useVoice(opts: UseVoiceOpts) {
     const [micLevel, setMicLevel] = useState(0)
     const [devices, setDevices] = useState<MediaDeviceInfo[]>([])
     const [selectedDeviceId, setSelectedDeviceId] = useState<string>('')
-    const [logs, setLogs] = useState<VoiceLogEntry[]>([])
-
-    const logIdRef = useRef(0)
-    const pushLog = useCallback(
-        (type: VoiceLogEntry['type'], message: string, detail?: unknown) => {
-            const entry: VoiceLogEntry = {
-                id: ++logIdRef.current,
-                timestamp: new Date(),
-                type,
-                message,
-                detail,
-            }
-            setLogs((prev) => [...prev, entry])
-        },
-        [],
-    )
+    const [messages, setMessages] = useState<ChatMessage[]>([])
 
     const optsRef = useRef(opts)
     // eslint-disable-next-line react-hooks/refs
@@ -111,6 +127,16 @@ export function useVoice(opts: UseVoiceOpts) {
     const isMutedRef = useRef(false)
     const selectedDeviceIdRef = useRef(selectedDeviceId)
 
+    // Aggregation state — refs so message handlers can mutate without
+    // re-creating the onmessage callback on every render.
+    const pendingUserIdRef = useRef<string | null>(null)
+    const pendingAgentIdRef = useRef<string | null>(null)
+    const idCounterRef = useRef(0)
+    const nextId = useCallback(
+        () => `m${++idCounterRef.current}_${Date.now()}`,
+        [],
+    )
+
     useEffect(() => {
         isMutedRef.current = isMuted
     }, [isMuted])
@@ -118,6 +144,169 @@ export function useVoice(opts: UseVoiceOpts) {
     useEffect(() => {
         selectedDeviceIdRef.current = selectedDeviceId
     }, [selectedDeviceId])
+
+    // Chat message helpers
+
+    const addSystem = useCallback(
+        (message: string, level: SystemLevel = 'info') => {
+            setMessages((prev) => [
+                ...prev,
+                {
+                    kind: 'system',
+                    id: nextId(),
+                    at: new Date(),
+                    message,
+                    level,
+                },
+            ])
+        },
+        [nextId],
+    )
+
+    const finalisePendingUser = useCallback(() => {
+        const pendingId = pendingUserIdRef.current
+        if (!pendingId) return
+        pendingUserIdRef.current = null
+        setMessages((prev) =>
+            prev.map((m) =>
+                m.id === pendingId && m.kind === 'user'
+                    ? { ...m, isFinal: true }
+                    : m,
+            ),
+        )
+    }, [])
+
+    const finalisePendingAgent = useCallback(
+        (opts?: { interrupted?: boolean }) => {
+            const pendingId = pendingAgentIdRef.current
+            if (!pendingId) return
+            pendingAgentIdRef.current = null
+            setMessages((prev) =>
+                prev.map((m) =>
+                    m.id === pendingId && m.kind === 'agent'
+                        ? {
+                              ...m,
+                              isFinal: true,
+                              wasInterrupted:
+                                  m.wasInterrupted || !!opts?.interrupted,
+                          }
+                        : m,
+                ),
+            )
+        },
+        [],
+    )
+
+    const appendUser = useCallback(
+        (chunk: string) => {
+            finalisePendingAgent()
+            if (pendingUserIdRef.current) {
+                const id = pendingUserIdRef.current
+                setMessages((prev) =>
+                    prev.map((m) =>
+                        m.id === id && m.kind === 'user'
+                            ? { ...m, text: m.text + chunk }
+                            : m,
+                    ),
+                )
+                return
+            }
+            const id = nextId()
+            pendingUserIdRef.current = id
+            setMessages((prev) => [
+                ...prev,
+                {
+                    kind: 'user',
+                    id,
+                    at: new Date(),
+                    text: chunk,
+                    isFinal: false,
+                },
+            ])
+        },
+        [finalisePendingAgent, nextId],
+    )
+
+    const appendAgent = useCallback(
+        (chunk: string) => {
+            finalisePendingUser()
+            if (pendingAgentIdRef.current) {
+                const id = pendingAgentIdRef.current
+                setMessages((prev) =>
+                    prev.map((m) =>
+                        m.id === id && m.kind === 'agent'
+                            ? { ...m, text: m.text + chunk }
+                            : m,
+                    ),
+                )
+                return
+            }
+            const id = nextId()
+            pendingAgentIdRef.current = id
+            setMessages((prev) => [
+                ...prev,
+                {
+                    kind: 'agent',
+                    id,
+                    at: new Date(),
+                    text: chunk,
+                    isFinal: false,
+                    wasInterrupted: false,
+                },
+            ])
+        },
+        [finalisePendingUser, nextId],
+    )
+
+    const addToolCall = useCallback(
+        (
+            callId: string,
+            name: string,
+            args: Record<string, unknown>,
+        ): string => {
+            finalisePendingUser()
+            finalisePendingAgent()
+            const id = nextId()
+            setMessages((prev) => [
+                ...prev,
+                {
+                    kind: 'tool',
+                    id,
+                    at: new Date(),
+                    callId,
+                    name,
+                    args,
+                    status: 'pending',
+                },
+            ])
+            return id
+        },
+        [finalisePendingUser, finalisePendingAgent, nextId],
+    )
+
+    const completeToolCall = useCallback(
+        (callId: string, result: Record<string, unknown>) => {
+            setMessages((prev) =>
+                prev.map((m) =>
+                    m.kind === 'tool' && m.callId === callId
+                        ? { ...m, result, status: 'completed' }
+                        : m,
+                ),
+            )
+        },
+        [],
+    )
+
+    const cancelToolCalls = useCallback((callIds: string[]) => {
+        const set = new Set(callIds)
+        setMessages((prev) =>
+            prev.map((m) =>
+                m.kind === 'tool' && set.has(m.callId)
+                    ? { ...m, status: 'cancelled' }
+                    : m,
+            ),
+        )
+    }, [])
 
     // Enumerate microphones
     const refreshDevicesRef = useRef(async () => {
@@ -218,8 +407,12 @@ export function useVoice(opts: UseVoiceOpts) {
 
     // Connect
     const connect = useCallback(async () => {
+        setMessages([])
+        pendingUserIdRef.current = null
+        pendingAgentIdRef.current = null
         setConnectionStatus('connecting')
-        pushLog('info', 'Connecting...')
+        addSystem('Connecting…', 'info')
+
         try {
             const tempStream = await navigator.mediaDevices.getUserMedia({
                 audio: true,
@@ -227,12 +420,11 @@ export function useVoice(opts: UseVoiceOpts) {
             for (const track of tempStream.getTracks()) track.stop()
             await refreshDevicesRef.current()
 
-            pushLog('info', 'Requesting ephemeral token')
             const { token, model } = await convex.action(
                 api.live.actions.requestLiveToken,
                 {},
             )
-            pushLog('info', `Token received, model: ${model}`)
+            addSystem(`Token received for ${model}`, 'info')
 
             const playbackCtx = new AudioContext({
                 sampleRate: OUTPUT_SAMPLE_RATE,
@@ -259,41 +451,58 @@ export function useVoice(opts: UseVoiceOpts) {
                         if (msg.toolCall) {
                             const functionCalls =
                                 msg.toolCall.functionCalls ?? []
+                            const functionResponses: {
+                                id?: string
+                                name?: string
+                                response: { result: Record<string, unknown> }
+                            }[] = []
                             for (const fc of functionCalls) {
-                                pushLog('tool-call', `${fc.name}()`, fc.args)
+                                addToolCall(
+                                    fc.id ?? '',
+                                    fc.name ?? '',
+                                    (fc.args ?? {}) as Record<string, unknown>,
+                                )
                             }
-                            const functionResponses = []
                             for (const fc of functionCalls) {
                                 const result = await executeToolCall(
                                     optsRef.current.context,
                                     fc.name ?? '',
-                                    fc.args ?? {},
+                                    (fc.args ?? {}) as Record<string, unknown>,
                                 )
+                                completeToolCall(fc.id ?? '', result)
                                 functionResponses.push({
                                     id: fc.id,
                                     name: fc.name,
                                     response: { result },
                                 })
-                                pushLog(
-                                    'tool-response',
-                                    `${fc.name}() responded`,
-                                    result,
-                                )
                             }
                             session.sendToolResponse({ functionResponses })
                             return
                         }
 
                         if (msg.toolCallCancellation) {
-                            pushLog(
-                                'info',
-                                'Tool call cancelled',
-                                msg.toolCallCancellation.ids,
-                            )
+                            const ids = (
+                                msg.toolCallCancellation.ids ?? []
+                            ).filter((x): x is string => typeof x === 'string')
+                            cancelToolCalls(ids)
                             return
                         }
 
-                        const parts = msg.serverContent?.modelTurn?.parts
+                        const sc = msg.serverContent
+                        if (!sc) return
+
+                        const inputText = sc.inputTranscription?.text
+                        if (inputText) appendUser(inputText)
+
+                        const outputText = sc.outputTranscription?.text
+                        if (outputText) appendAgent(outputText)
+
+                        if (sc.interrupted) {
+                            playbackNode.port.postMessage('interrupt')
+                            finalisePendingAgent({ interrupted: true })
+                        }
+
+                        const parts = sc.modelTurn?.parts
                         if (parts) {
                             for (const part of parts) {
                                 if (part.inlineData?.data) {
@@ -303,40 +512,52 @@ export function useVoice(opts: UseVoiceOpts) {
                                     playbackNode.port.postMessage(float32)
                                 }
                                 if (part.text) {
-                                    pushLog('info', `Model: ${part.text}`)
+                                    appendAgent(part.text)
                                 }
                             }
                         }
 
-                        if (msg.serverContent?.interrupted) {
-                            pushLog('info', 'Model interrupted')
-                            playbackNode.port.postMessage('interrupt')
+                        if (sc.turnComplete) {
+                            finalisePendingAgent()
                         }
                     },
                     onerror: () => {
-                        pushLog('error', 'WebSocket error')
+                        addSystem('WebSocket error', 'error')
                         setConnectionStatus('disconnected')
                     },
                     onclose: () => {
-                        pushLog('info', 'Disconnected')
+                        addSystem('Disconnected', 'info')
                         setConnectionStatus('disconnected')
                         setMicLevel(0)
+                        finalisePendingUser()
+                        finalisePendingAgent()
                     },
                 },
             })
 
             sessionRef.current = session
             setConnectionStatus('connected')
-            pushLog('info', 'Connected, starting mic capture')
+            addSystem('Connected. Start speaking.', 'success')
             await startMicCapture(selectedDeviceIdRef.current)
         } catch (err) {
-            pushLog(
-                'error',
+            addSystem(
                 `Connection failed: ${err instanceof Error ? err.message : String(err)}`,
+                'error',
             )
             setConnectionStatus('disconnected')
         }
-    }, [convex, startMicCapture, pushLog])
+    }, [
+        convex,
+        startMicCapture,
+        addSystem,
+        addToolCall,
+        completeToolCall,
+        cancelToolCalls,
+        appendUser,
+        appendAgent,
+        finalisePendingUser,
+        finalisePendingAgent,
+    ])
 
     // Disconnect
     const disconnect = useCallback(() => {
@@ -348,10 +569,11 @@ export function useVoice(opts: UseVoiceOpts) {
         playbackContextRef.current = null
         sessionRef.current = null
         setConnectionStatus('disconnected')
-        pushLog('info', 'Disconnected by user')
-    }, [stopMicCapture, pushLog])
+        finalisePendingUser()
+        finalisePendingAgent()
+    }, [stopMicCapture, finalisePendingUser, finalisePendingAgent])
 
-    const clearLogs = useCallback(() => setLogs([]), [])
+    const clearMessages = useCallback(() => setMessages([]), [])
 
     useEffect(() => disconnect, [disconnect])
 
@@ -367,7 +589,7 @@ export function useVoice(opts: UseVoiceOpts) {
         handleDeviceChange,
         connect,
         disconnect,
-        logs,
-        clearLogs,
+        messages,
+        clearMessages,
     }
 }

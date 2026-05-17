@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:typed_data';
 
+import 'voice_event.dart';
+
 abstract interface class VoiceExpenseCommandFactory {
   VoiceExpenseCommand create();
 }
@@ -8,7 +10,7 @@ abstract interface class VoiceExpenseCommandFactory {
 abstract interface class VoiceExpenseCommand {
   String get label;
 
-  Stream<String> get events;
+  Stream<VoiceEvent> get events;
 
   Future<void> start();
 
@@ -37,7 +39,7 @@ class DebugVoiceExpenseCommandFactory implements VoiceExpenseCommandFactory {
 }
 
 class DebugVoiceExpenseCommand implements VoiceExpenseCommand {
-  final _events = StreamController<String>.broadcast();
+  final _events = StreamController<VoiceEvent>.broadcast();
 
   int _chunks = 0;
   int _bytes = 0;
@@ -46,13 +48,14 @@ class DebugVoiceExpenseCommand implements VoiceExpenseCommand {
   String get label => 'Debug voice expense command';
 
   @override
-  Stream<String> get events => _events.stream;
+  Stream<VoiceEvent> get events => _events.stream;
 
   @override
   Future<void> start() async {
     _chunks = 0;
     _bytes = 0;
-    _events.add('Debug command started');
+    _events.add(VoiceConnectingEvent('Debug command started'));
+    _events.add(VoiceConnectedEvent());
   }
 
   @override
@@ -65,7 +68,8 @@ class DebugVoiceExpenseCommand implements VoiceExpenseCommand {
   Future<VoiceExpenseCommandResult> stop() async {
     final message =
         'Debug implementation received $_chunks audio chunks ($_bytes bytes).';
-    _events.add(message);
+    _events.add(VoiceSystemEvent(message));
+    _events.add(VoiceDisconnectedEvent());
     return VoiceExpenseCommandResult(message: message);
   }
 

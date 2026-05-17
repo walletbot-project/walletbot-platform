@@ -8,6 +8,7 @@ import 'package:web_socket_channel/web_socket_channel.dart';
 import '../database.dart';
 import 'pcm_audio_player.dart';
 import 'tool_executors.dart';
+import 'voice_event.dart';
 import 'voice_expense_command.dart';
 
 class GeminiVoiceExpenseCommandFactory implements VoiceExpenseCommandFactory {
@@ -49,7 +50,7 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
   final String convexSiteUrl;
   final ToolExecutors _executors;
   final _audioPlayer = PcmAudioPlayer();
-  final _events = StreamController<String>.broadcast();
+  final _events = StreamController<VoiceEvent>.broadcast();
   final _setupComplete = Completer<void>();
 
   WebSocketChannel? _channel;
@@ -59,13 +60,12 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
   int _inputChunks = 0;
   int _outputAudioChunks = 0;
   int _outputAudioBytes = 0;
-  DateTime? _lastAudioSummaryAt;
 
   @override
   String get label => 'Gemini Live voice expense command';
 
   @override
-  Stream<String> get events => _events.stream;
+  Stream<VoiceEvent> get events => _events.stream;
 
   @override
   Future<void> start() async {
@@ -82,7 +82,7 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
 
     final uri = _connectionUri(effectiveToken);
 
-    _events.add('Connecting to Gemini Live');
+    _events.add(VoiceConnectingEvent('Connecting to Gemini Live'));
     await _audioPlayer.start(sampleRate: 24000);
     final channel = WebSocketChannel.connect(uri);
     _channel = channel;
@@ -90,16 +90,15 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
     _subscription = channel.stream.listen(
       _handleServerMessage,
       onError: (Object error) {
-        _events.add('Gemini WebSocket error: $error');
+        _events.add(VoiceErrorEvent('WebSocket error: $error'));
       },
       onDone: () {
         _connected = false;
-        final code = channel.closeCode;
-        final reason = channel.closeReason;
         _events.add(
-          'Gemini WebSocket closed'
-          '${code == null ? '' : ' code=$code'}'
-          '${reason == null || reason.isEmpty ? '' : ' reason=$reason'}',
+          VoiceDisconnectedEvent(
+            code: channel.closeCode,
+            reason: channel.closeReason,
+          ),
         );
       },
     );
@@ -130,6 +129,8 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
             },
           ],
         },
+        'inputAudioTranscription': <String, dynamic>{},
+        'outputAudioTranscription': <String, dynamic>{},
       },
     });
 
@@ -140,7 +141,7 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
       },
     );
     _connected = true;
-    _events.add('Gemini Live session ready');
+    _events.add(VoiceConnectedEvent());
   }
 
   Future<String> _resolveLiveToken() async {
@@ -150,7 +151,7 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
     final base = Uri.parse(convexSiteUrl);
     final endpoint = base.replace(path: '/api/live/token');
 
-    _events.add('Requesting live token from Convex');
+    _events.add(VoiceSystemEvent('Requesting live token from Convex'));
     final response = await http.post(endpoint);
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw StateError(
@@ -163,7 +164,7 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
     final token = body['token'];
     final model = body['model'];
     if (model is String) {
-      _events.add('Live token received for model: $model');
+      _events.add(VoiceSystemEvent('Live token received for model: $model'));
     }
     if (token is! String || token.isEmpty) {
       throw StateError('Convex live token response did not include token');
@@ -210,14 +211,13 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
 
   @override
   Future<VoiceExpenseCommandResult> stop() async {
-    _events.add('Stopping Gemini session after $_inputChunks input chunks');
     await _closeChannel();
     await _audioPlayer.stop();
-    return VoiceExpenseCommandResult(
-      message:
-          'Gemini session stopped. Sent $_inputChunks input chunks and '
-          'received $_outputAudioChunks audio chunks ($_outputAudioBytes bytes).',
-    );
+    final summary =
+        'Sent $_inputChunks input chunks, received $_outputAudioChunks audio '
+        'chunks ($_outputAudioBytes bytes).';
+    _events.add(VoiceSystemEvent(summary));
+    return VoiceExpenseCommandResult(message: summary);
   }
 
   @override
@@ -241,7 +241,6 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
       if (!_setupComplete.isCompleted) {
         _setupComplete.complete();
       }
-      _events.add('Gemini setup complete');
       return;
     }
 
@@ -253,7 +252,11 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
 
     final cancellation = message['toolCallCancellation'];
     if (cancellation is Map<String, dynamic>) {
-      _events.add('Gemini cancelled tool calls: ${cancellation['ids']}');
+      final ids = cancellation['ids'];
+      final idList = ids is List
+          ? ids.map((e) => e.toString()).toList()
+          : <String>[];
+      _events.add(VoiceToolCancelledEvent(idList));
       return;
     }
 
@@ -265,50 +268,55 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
   }
 
   void _handleServerContent(Map<String, dynamic> serverContent) {
+    final inputTranscription = serverContent['inputTranscription'];
+    if (inputTranscription is Map<String, dynamic>) {
+      final t = inputTranscription['text'];
+      if (t is String && t.isNotEmpty) {
+        _events.add(VoiceUserTranscriptDelta(t));
+      }
+    }
+
+    final outputTranscription = serverContent['outputTranscription'];
+    if (outputTranscription is Map<String, dynamic>) {
+      final t = outputTranscription['text'];
+      if (t is String && t.isNotEmpty) {
+        _events.add(VoiceAgentTranscriptDelta(t));
+      }
+    }
+
     if (serverContent['interrupted'] == true) {
-      _events.add('Gemini response interrupted');
+      _events.add(VoiceAgentInterruptedEvent());
       unawaited(_audioPlayer.interrupt());
     }
 
     final modelTurn = serverContent['modelTurn'];
-    if (modelTurn is! Map<String, dynamic>) return;
+    if (modelTurn is Map<String, dynamic>) {
+      final parts = modelTurn['parts'];
+      if (parts is List) {
+        for (final part in parts) {
+          if (part is! Map<String, dynamic>) continue;
 
-    final parts = modelTurn['parts'];
-    if (parts is! List) return;
+          final text = part['text'];
+          if (text is String && text.isNotEmpty) {
+            _events.add(VoiceAgentTranscriptDelta(text));
+          }
 
-    for (final part in parts) {
-      if (part is! Map<String, dynamic>) continue;
-
-      final text = part['text'];
-      if (text is String && text.isNotEmpty) {
-        _events.add('Gemini: $text');
-      }
-
-      final inlineData = part['inlineData'];
-      if (inlineData is Map<String, dynamic>) {
-        final data = inlineData['data'];
-        if (data is String) {
-          final pcmBytes = base64Decode(data);
-          _outputAudioChunks += 1;
-          _outputAudioBytes += pcmBytes.length;
-          unawaited(_audioPlayer.enqueue(pcmBytes));
-          _emitAudioSummaryIfNeeded();
+          final inlineData = part['inlineData'];
+          if (inlineData is Map<String, dynamic>) {
+            final data = inlineData['data'];
+            if (data is String) {
+              final pcmBytes = base64Decode(data);
+              _outputAudioChunks += 1;
+              _outputAudioBytes += pcmBytes.length;
+              unawaited(_audioPlayer.enqueue(pcmBytes));
+            }
+          }
         }
       }
     }
-  }
 
-  void _emitAudioSummaryIfNeeded() {
-    final now = DateTime.now();
-    final last = _lastAudioSummaryAt;
-    if (_outputAudioChunks == 1 ||
-        last == null ||
-        now.difference(last) >= const Duration(seconds: 2)) {
-      _lastAudioSummaryAt = now;
-      _events.add(
-        'Gemini audio received: $_outputAudioChunks chunks, '
-        '$_outputAudioBytes bytes',
-      );
+    if (serverContent['turnComplete'] == true) {
+      _events.add(VoiceAgentTurnComplete());
     }
   }
 
@@ -320,18 +328,18 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
     for (final call in calls) {
       if (call is! Map<String, dynamic>) continue;
 
-      final id = call['id']?.toString();
+      final id = call['id']?.toString() ?? '';
       final name = call['name']?.toString() ?? '';
       final args = call['args'] is Map<String, dynamic>
           ? call['args'] as Map<String, dynamic>
           : <String, dynamic>{};
 
-      _events.add('Tool call: $name($args)');
+      _events.add(VoiceToolCallEvent(id: id, name: name, args: args));
       final result = await _executors.execute(name, args);
-      _events.add('Tool response: $name -> $result');
+      _events.add(VoiceToolResultEvent(id: id, name: name, result: result));
 
       responses.add({
-        'id': ?id,
+        if (id.isNotEmpty) 'id': id,
         'name': name,
         'response': {'result': result},
       });
