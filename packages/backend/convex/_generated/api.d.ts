@@ -9,9 +9,26 @@
  */
 
 import type * as auth from "../auth.js";
+import type * as authNative_http from "../authNative/http.js";
+import type * as authNative_mutations from "../authNative/mutations.js";
+import type * as authNative_utils from "../authNative/utils.js";
+import type * as categories_mutations from "../categories/mutations.js";
+import type * as categories_queries from "../categories/queries.js";
 import type * as crons from "../crons.js";
 import type * as http from "../http.js";
 import type * as live_actions from "../live/actions.js";
+import type * as schema_accounts from "../schema/accounts.js";
+import type * as schema_categories from "../schema/categories.js";
+import type * as schema_refreshTokens from "../schema/refreshTokens.js";
+import type * as schema_sync from "../schema/sync.js";
+import type * as schema_tags from "../schema/tags.js";
+import type * as schema_transactionTags from "../schema/transactionTags.js";
+import type * as schema_transactions from "../schema/transactions.js";
+import type * as sync_helpers from "../sync/helpers.js";
+import type * as tags_mutations from "../tags/mutations.js";
+import type * as tags_queries from "../tags/queries.js";
+import type * as test from "../test.js";
+import type * as users_helpers from "../users/helpers.js";
 
 import type {
   ApiFromModules,
@@ -21,9 +38,26 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   auth: typeof auth;
+  "authNative/http": typeof authNative_http;
+  "authNative/mutations": typeof authNative_mutations;
+  "authNative/utils": typeof authNative_utils;
+  "categories/mutations": typeof categories_mutations;
+  "categories/queries": typeof categories_queries;
   crons: typeof crons;
   http: typeof http;
   "live/actions": typeof live_actions;
+  "schema/accounts": typeof schema_accounts;
+  "schema/categories": typeof schema_categories;
+  "schema/refreshTokens": typeof schema_refreshTokens;
+  "schema/sync": typeof schema_sync;
+  "schema/tags": typeof schema_tags;
+  "schema/transactionTags": typeof schema_transactionTags;
+  "schema/transactions": typeof schema_transactions;
+  "sync/helpers": typeof sync_helpers;
+  "tags/mutations": typeof tags_mutations;
+  "tags/queries": typeof tags_queries;
+  test: typeof test;
+  "users/helpers": typeof users_helpers;
 }>;
 
 /**

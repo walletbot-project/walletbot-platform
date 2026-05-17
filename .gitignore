@@ -149,3 +149,8 @@ reference/
 
 # devenv
 .devenv/
+
+tmp/*
+
+# Logs
+/info*

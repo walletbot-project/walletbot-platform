@@ -1,0 +1,30 @@
+import { defineTable } from 'convex/server'
+import { v } from 'convex/values'
+
+// One row per user. Mutations that touch user-owned data must atomically
+// increment `value` and stamp the affected rows / tombstones with the new
+// value as their `seq`.
+export const syncCounters = defineTable({
+    userId: v.string(),
+    value: v.int64(),
+}).index('by_user', ['userId'])
+
+// Soft-delete record. When a user-owned row is deleted, the row is removed
+// and a tombstone is written so syncing clients can mirror the deletion.
+export const syncedTable = v.union(
+    v.literal('accounts'),
+    v.literal('categories'),
+    v.literal('transactions'),
+    v.literal('tags'),
+    v.literal('transactionTags'),
+)
+
+export const tombstones = defineTable({
+    userId: v.string(),
+    tableName: syncedTable,
+    entityId: v.string(), // the deleted row's client-side uuid
+    seq: v.int64(),
+    deletedAt: v.int64(),
+})
+    .index('by_user_seq', ['userId', 'seq'])
+    .index('by_user_table_entity', ['userId', 'tableName', 'entityId'])

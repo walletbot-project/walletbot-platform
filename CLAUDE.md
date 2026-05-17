@@ -2,6 +2,8 @@
 
 Wallet Bot — app for keeping track of personal expenses
 
+**Before working on auth, the native app, or anything touching `convex_flutter`, read [LESSONS.md](./LESSONS.md).** It documents recurring mistakes made on this codebase — every rule in it was paid for with a bug.
+
 ## Monorepo structure
 
 | Package | Path | Stack |
