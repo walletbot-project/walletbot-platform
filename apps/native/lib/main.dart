@@ -99,8 +99,8 @@ class _AppMainState extends State<AppMain> {
               children: [
                 HomeScreen(),
                 ActivityScreen(),
-                VoiceScreen(),
                 Placeholder(),
+                InsightsScreen(),
               ],
             ),
           ),
@@ -109,8 +109,10 @@ class _AppMainState extends State<AppMain> {
       floatingActionButton: FloatingActionButton(
         onPressed: () => Navigator.of(context).push(
           MaterialPageRoute(
-            builder: (_) => const VoiceScreen(
-              commandFactory: GeminiVoiceExpenseCommandFactory(),
+            builder: (_) => VoiceScreen(
+              commandFactory: GeminiVoiceExpenseCommandFactory(
+                convexSiteUrl: AppConfig.convexSiteUrl,
+              ),
             ),
           ),
         ),
@@ -126,10 +128,13 @@ class _AppMainState extends State<AppMain> {
             icon: Icon(Icons.list_rounded),
             label: "Activity",
           ),
-          NavigationDestination(icon: Icon(Icons.mic_rounded), label: "Voz"),
           NavigationDestination(
-            icon: Icon(Icons.settings_rounded),
-            label: "Settings",
+            icon: Icon(Icons.account_balance_rounded),
+            label: "Cuentas",
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.stacked_line_chart_rounded),
+            label: "Insights",
           ),
         ],
       ),
