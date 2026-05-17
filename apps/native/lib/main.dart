@@ -30,8 +30,6 @@ Future<void> main() async {
 
   final auth = AuthController();
   await auth.load();
-  // Fire-and-forget. Must not block app start — app must work offline.
-  unawaited(auth.refreshActiveSession());
   runApp(MyApp(auth: auth));
 }
 
@@ -53,34 +51,8 @@ class MyApp extends StatelessWidget {
   }
 }
 
-class _AuthGate extends StatefulWidget {
+class _AuthGate extends StatelessWidget {
   const _AuthGate();
-
-  @override
-  State<_AuthGate> createState() => _AuthGateState();
-}
-
-class _AuthGateState extends State<_AuthGate> with WidgetsBindingObserver {
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addObserver(this);
-  }
-
-  @override
-  void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
-    super.dispose();
-  }
-
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    // On resume the bearer/JWT may be stale (app was backgrounded for hours).
-    // Re-validate opportunistically; offline-safe — never logs the user out.
-    if (state == AppLifecycleState.resumed) {
-      unawaited(context.read<AuthController>().refreshActiveSession());
-    }
-  }
 
   @override
   Widget build(BuildContext context) {

@@ -21,10 +21,7 @@ class _HomeScreenState extends State<HomeScreen> {
       _testResult = null;
     });
     try {
-      final auth = context.read<AuthController>();
-      final result = await auth.runConvexAuthenticated(
-        () => ConvexClient.instance.query('test:hello', {}),
-      );
+      final result = await ConvexClient.instance.query('test:hello', {});
       if (!mounted) return;
       setState(() => _testResult = result);
     } catch (e) {

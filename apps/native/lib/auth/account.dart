@@ -7,9 +7,7 @@ class UserAccount {
     this.name,
     this.email,
     this.picture,
-    this.accessToken,
-    this.accessTokenExpiresAt,
-    this.refreshToken,
+    this.sessionToken,
     this.requiresReauth = false,
   });
 
@@ -19,17 +17,10 @@ class UserAccount {
   final String? email;
   final String? picture;
 
-  /// JWT signed by our backend ([CONVEX_SITE_URL]/native-auth issuer). Passed
-  /// to Convex via `setAuth` so `ctx.auth.getUserIdentity()` resolves.
-  final String? accessToken;
-
-  /// ms-epoch expiry of [accessToken] as reported by the backend at issue time.
-  final int? accessTokenExpiresAt;
-
-  /// Long-lived opaque session secret. Posted to `/auth/refresh` to mint a
-  /// fresh [accessToken]. Not rotated — stays valid until explicitly revoked
-  /// (signout, "remove this device").
-  final String? refreshToken;
+  /// Long-lived opaque session secret. Exchanged for short-lived Convex JWTs
+  /// via `POST /auth/refresh`. Not rotated — stays valid until explicitly
+  /// revoked (signout, "remove this device").
+  final String? sessionToken;
 
   /// Server says this session is dead (token revoked). We keep the account
   /// locally so the user is never locked out — offline mode still works.
@@ -39,9 +30,7 @@ class UserAccount {
     String? name,
     String? email,
     String? picture,
-    String? accessToken,
-    int? accessTokenExpiresAt,
-    String? refreshToken,
+    String? sessionToken,
     bool? requiresReauth,
   }) {
     return UserAccount(
@@ -50,9 +39,7 @@ class UserAccount {
       name: name ?? this.name,
       email: email ?? this.email,
       picture: picture ?? this.picture,
-      accessToken: accessToken ?? this.accessToken,
-      accessTokenExpiresAt: accessTokenExpiresAt ?? this.accessTokenExpiresAt,
-      refreshToken: refreshToken ?? this.refreshToken,
+      sessionToken: sessionToken ?? this.sessionToken,
       requiresReauth: requiresReauth ?? this.requiresReauth,
     );
   }
@@ -63,9 +50,7 @@ class UserAccount {
     'name': name,
     'email': email,
     'picture': picture,
-    'accessToken': accessToken,
-    'accessTokenExpiresAt': accessTokenExpiresAt,
-    'refreshToken': refreshToken,
+    'sessionToken': sessionToken,
     'requiresReauth': requiresReauth,
   };
 
@@ -76,9 +61,8 @@ class UserAccount {
       name: json['name'] as String?,
       email: json['email'] as String?,
       picture: json['picture'] as String?,
-      accessToken: json['accessToken'] as String?,
-      accessTokenExpiresAt: (json['accessTokenExpiresAt'] as num?)?.toInt(),
-      refreshToken: json['refreshToken'] as String?,
+      // Accept legacy `refreshToken` key from pre-setAuthWithRefresh storage.
+      sessionToken: (json['sessionToken'] ?? json['refreshToken']) as String?,
       requiresReauth: json['requiresReauth'] as bool? ?? false,
     );
   }
