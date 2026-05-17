@@ -13,7 +13,6 @@ import type * as authNative_http from "../authNative/http.js";
 import type * as authNative_mutations from "../authNative/mutations.js";
 import type * as authNative_utils from "../authNative/utils.js";
 import type * as crons from "../crons.js";
-import type * as health from "../health.js";
 import type * as http from "../http.js";
 import type * as live_actions from "../live/actions.js";
 import type * as schema_accounts from "../schema/accounts.js";
@@ -37,7 +36,6 @@ declare const fullApi: ApiFromModules<{
   "authNative/mutations": typeof authNative_mutations;
   "authNative/utils": typeof authNative_utils;
   crons: typeof crons;
-  health: typeof health;
   http: typeof http;
   "live/actions": typeof live_actions;
   "schema/accounts": typeof schema_accounts;

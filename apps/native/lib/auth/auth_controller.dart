@@ -115,12 +115,9 @@ class AuthController extends ChangeNotifier {
     await _refreshAccessToken();
   }
 
-  /// Wraps a Convex call so that:
-  ///   - on "Unauthenticated" we refresh the access token and retry once
-  ///     (catches the race where exp slips through);
-  ///   - on [TimeoutException] (zombie WebSocket — Android froze it during
-  ///     background, `connectionState` may still say `connected`) we force a
-  ///     `ConvexClient.reconnect()` and retry once.
+  /// Wraps a Convex call so that on an "Unauthenticated" error we refresh the
+  /// access token and retry once. Proactive refresh handles the common case;
+  /// this catches the race where exp slips through (network blip, app frozen).
   Future<T> runConvexAuthenticated<T>(Future<T> Function() fn) async {
     await _ensureFreshAuth();
     try {
@@ -129,9 +126,6 @@ class AuthController extends ChangeNotifier {
       if (!_isAuthError(_clientErrorMessage(e))) rethrow;
       final ok = await _refreshAccessToken();
       if (!ok) rethrow;
-      return await fn();
-    } on TimeoutException {
-      await ConvexClient.instance.reconnect();
       return await fn();
     }
   }
@@ -178,44 +172,33 @@ class AuthController extends ChangeNotifier {
       await _ensureFreshAuth();
       if (wrapper._cancelled) return;
       late SubscriptionHandle handle;
-      try {
-        handle = await ConvexClient.instance.subscribe(
-          name: name,
-          args: args,
-          onUpdate: (value) async {
-            if (wrapper._cancelled || wrapper._current != handle) return;
-            retried = false;
-            await onUpdate(value);
-          },
-          onError: (message, value) async {
-            if (wrapper._cancelled || wrapper._current != handle) return;
-            if (_isAuthError(message)) {
-              if (retried) {
-                debugPrint(
-                  'subscribeConvex($name): auth error after retry — giving up',
-                );
-                return;
-              }
-              retried = true;
-              handle.cancel();
-              wrapper._current = null;
-              await _refreshAccessToken();
-              await doSubscribe();
+      handle = await ConvexClient.instance.subscribe(
+        name: name,
+        args: args,
+        onUpdate: (value) async {
+          if (wrapper._cancelled || wrapper._current != handle) return;
+          retried = false;
+          await onUpdate(value);
+        },
+        onError: (message, value) async {
+          if (wrapper._cancelled || wrapper._current != handle) return;
+          if (_isAuthError(message)) {
+            if (retried) {
+              debugPrint(
+                'subscribeConvex($name): auth error after retry — giving up',
+              );
               return;
             }
-            debugPrint(
-              'subscribeConvex($name): error: $message ${value ?? ""}',
-            );
-          },
-        );
-      } on TimeoutException {
-        // Zombie WebSocket — force a healthcheck round-trip and retry once.
-        if (retried || wrapper._cancelled) rethrow;
-        retried = true;
-        await ConvexClient.instance.reconnect();
-        await doSubscribe();
-        return;
-      }
+            retried = true;
+            handle.cancel();
+            wrapper._current = null;
+            await _refreshAccessToken();
+            await doSubscribe();
+            return;
+          }
+          debugPrint('subscribeConvex($name): error: $message ${value ?? ""}');
+        },
+      );
       wrapper._current = handle;
     }
 

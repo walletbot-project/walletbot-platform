@@ -21,14 +21,6 @@ Future<void> main() async {
     ConvexConfig(
       deploymentUrl: AppConfig.convexUrl,
       clientId: 'wallet-bot-flutter-1.0',
-      // Fail fast: the package default is 30 s, which means a hung WebSocket
-      // (Android froze it during background) stalls the UI for 30 s before
-      // anyone notices. Our retry wrapper catches the TimeoutException and
-      // forces a reconnect.
-      operationTimeout: const Duration(seconds: 7),
-      // Used by `ConvexClient.reconnect()` — without this, reconnect() is a
-      // no-op. `health:ping` is an unauthenticated round-trip.
-      healthCheckQuery: 'health:ping',
     ),
   );
 
@@ -87,13 +79,6 @@ class _AuthGateState extends State<_AuthGate> with WidgetsBindingObserver {
     // Re-validate opportunistically; offline-safe — never logs the user out.
     if (state == AppLifecycleState.resumed) {
       unawaited(context.read<AuthController>().refreshActiveSession());
-      // Android suspends the WebSocket during background. The package's
-      // connection-state stream may still say `connected`, but the socket is
-      // dead — queries hang for `operationTimeout` before failing. Force a
-      // health-check round-trip; reconnect() re-establishes the socket if it's
-      // zombie. Fire-and-forget — failure is handled per-call by the retry
-      // wrapper in AuthController.
-      unawaited(ConvexClient.instance.reconnect());
     }
   }
 
