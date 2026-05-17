@@ -1,10 +1,15 @@
 package live.walletbot.app
 
+import android.content.Context
 import android.media.AudioAttributes
+import android.media.AudioDeviceInfo
 import android.media.AudioFormat
+import android.media.AudioManager
 import android.media.AudioTrack
+import android.os.Build
 import android.os.Handler
 import android.os.HandlerThread
+import android.util.Log
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.plugin.common.MethodCall
@@ -15,6 +20,10 @@ class MainActivity : FlutterActivity() {
     private var audioTrack: AudioTrack? = null
     private var audioThread: HandlerThread? = null
     private var audioHandler: Handler? = null
+    private var previousAudioMode: Int = AudioManager.MODE_NORMAL
+    private var previousSpeakerphoneOn: Boolean = false
+    private var audioModeChanged: Boolean = false
+    private var communicationDeviceSet: Boolean = false
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -96,6 +105,8 @@ class MainActivity : FlutterActivity() {
     private fun startPlayback(sampleRate: Int) {
         stopPlayback()
 
+        configureVoiceCommunicationMode()
+
         val minBufferSize = AudioTrack.getMinBufferSize(
             sampleRate,
             AudioFormat.CHANNEL_OUT_MONO,
@@ -106,7 +117,7 @@ class MainActivity : FlutterActivity() {
         val track = AudioTrack.Builder()
             .setAudioAttributes(
                 AudioAttributes.Builder()
-                    .setUsage(AudioAttributes.USAGE_MEDIA)
+                    .setUsage(AudioAttributes.USAGE_VOICE_COMMUNICATION)
                     .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
                     .build()
             )
@@ -145,5 +156,44 @@ class MainActivity : FlutterActivity() {
         audioThread?.quitSafely()
         audioThread = null
         audioHandler = null
+
+        restoreAudioMode()
+    }
+
+    private fun configureVoiceCommunicationMode() {
+        val audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
+        previousAudioMode = audioManager.mode
+        previousSpeakerphoneOn = audioManager.isSpeakerphoneOn
+        audioManager.mode = AudioManager.MODE_IN_COMMUNICATION
+        audioModeChanged = true
+        routeToLoudSpeaker(audioManager)
+    }
+
+    private fun routeToLoudSpeaker(audioManager: AudioManager) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            val speaker = audioManager.availableCommunicationDevices.firstOrNull {
+                it.type == AudioDeviceInfo.TYPE_BUILTIN_SPEAKER
+            }
+            if (speaker != null && audioManager.setCommunicationDevice(speaker)) {
+                communicationDeviceSet = true
+                return
+            }
+            Log.w("PcmAudio", "setCommunicationDevice(speaker) failed; falling back")
+        }
+        @Suppress("DEPRECATION")
+        audioManager.isSpeakerphoneOn = true
+    }
+
+    private fun restoreAudioMode() {
+        if (!audioModeChanged) return
+        val audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
+        if (communicationDeviceSet && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            audioManager.clearCommunicationDevice()
+            communicationDeviceSet = false
+        }
+        @Suppress("DEPRECATION")
+        audioManager.isSpeakerphoneOn = previousSpeakerphoneOn
+        audioManager.mode = previousAudioMode
+        audioModeChanged = false
     }
 }

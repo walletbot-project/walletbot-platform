@@ -1,0 +1,2189 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>WalletBot — Voice agent &amp; tools</title>
+        <style>
+            :root {
+                --bg: #fbfaf7;
+                --surface: #ffffff;
+                --surface-2: #f3f1ec;
+                --border: #e6e2d8;
+                --text: #1c1a16;
+                --text-muted: #6b665b;
+                --accent: #2f6f4f;
+                --accent-soft: #e8f1ec;
+                --code-bg: #f3f1ec;
+                --danger: #a14242;
+                --warn: #8a6b1a;
+                --shadow: 0 1px 2px rgba(0, 0, 0, 0.04),
+                    0 4px 16px rgba(0, 0, 0, 0.04);
+                --radius: 10px;
+                --mono:
+                    ui-monospace, "JetBrains Mono", "SF Mono", Menlo,
+                    Consolas, monospace;
+                --sans:
+                    "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI",
+                    sans-serif;
+            }
+
+            @media (prefers-color-scheme: dark) {
+                :root {
+                    --bg: #15140f;
+                    --surface: #1d1c18;
+                    --surface-2: #25241e;
+                    --border: #34322b;
+                    --text: #ecebe5;
+                    --text-muted: #98948a;
+                    --accent: #7bbf9b;
+                    --accent-soft: #1f2e26;
+                    --code-bg: #25241e;
+                    --danger: #d28181;
+                    --warn: #d6b765;
+                    --shadow:
+                        0 1px 2px rgba(0, 0, 0, 0.4),
+                        0 4px 16px rgba(0, 0, 0, 0.4);
+                }
+            }
+
+            * {
+                box-sizing: border-box;
+            }
+
+            html {
+                scroll-behavior: smooth;
+                scroll-padding-top: 1.5rem;
+            }
+
+            body {
+                margin: 0;
+                font-family: var(--sans);
+                background: var(--bg);
+                color: var(--text);
+                line-height: 1.55;
+                font-size: 16px;
+                -webkit-font-smoothing: antialiased;
+            }
+
+            .page {
+                max-width: 1100px;
+                margin: 0 auto;
+                padding: 2rem 1.25rem 6rem;
+            }
+
+            header.intro {
+                padding: 2.5rem 0 1.5rem;
+            }
+
+            header.intro h1 {
+                font-size: clamp(1.7rem, 4vw, 2.4rem);
+                margin: 0 0 0.5rem;
+                font-weight: 600;
+                letter-spacing: -0.01em;
+            }
+
+            header.intro p {
+                color: var(--text-muted);
+                margin: 0;
+                font-size: 1.05rem;
+                max-width: 65ch;
+            }
+
+            .layout {
+                display: grid;
+                gap: 2rem;
+                grid-template-columns: 1fr;
+            }
+
+            @media (min-width: 960px) {
+                .layout {
+                    grid-template-columns: 220px 1fr;
+                }
+            }
+
+            nav.toc {
+                position: sticky;
+                top: 1rem;
+                align-self: start;
+                background: var(--surface);
+                border: 1px solid var(--border);
+                border-radius: var(--radius);
+                padding: 0.85rem 1rem;
+                font-size: 0.9rem;
+                max-height: calc(100vh - 2rem);
+                overflow: auto;
+            }
+
+            nav.toc h2 {
+                margin: 0 0 0.5rem;
+                font-size: 0.7rem;
+                text-transform: uppercase;
+                letter-spacing: 0.06em;
+                color: var(--text-muted);
+                font-weight: 600;
+            }
+
+            nav.toc ul {
+                list-style: none;
+                padding: 0;
+                margin: 0;
+            }
+
+            nav.toc li {
+                margin: 0;
+            }
+
+            nav.toc a {
+                display: block;
+                padding: 0.25rem 0;
+                color: var(--text);
+                text-decoration: none;
+                border-radius: 4px;
+            }
+
+            nav.toc a:hover {
+                color: var(--accent);
+            }
+
+            nav.toc details {
+                margin-top: 0.5rem;
+            }
+
+            nav.toc summary {
+                cursor: pointer;
+                padding: 0.25rem 0;
+                font-weight: 500;
+            }
+
+            nav.toc details > ul {
+                padding-left: 0.75rem;
+                margin-top: 0.25rem;
+                border-left: 2px solid var(--border);
+            }
+
+            nav.toc details > ul a {
+                font-size: 0.85rem;
+                color: var(--text-muted);
+                padding: 0.15rem 0 0.15rem 0.5rem;
+            }
+
+            nav.toc details > ul a:hover {
+                color: var(--accent);
+            }
+
+            main {
+                min-width: 0;
+            }
+
+            section {
+                margin-bottom: 3rem;
+            }
+
+            section > h2 {
+                font-size: 1.45rem;
+                margin: 0 0 0.5rem;
+                font-weight: 600;
+                letter-spacing: -0.01em;
+            }
+
+            section > h2 + p,
+            section > .lede {
+                color: var(--text-muted);
+                margin-top: 0;
+                max-width: 65ch;
+            }
+
+            h3.group {
+                font-size: 0.75rem;
+                text-transform: uppercase;
+                letter-spacing: 0.08em;
+                color: var(--text-muted);
+                margin: 2rem 0 0.75rem;
+                font-weight: 600;
+            }
+
+            .card {
+                background: var(--surface);
+                border: 1px solid var(--border);
+                border-radius: var(--radius);
+                padding: 1rem 1.25rem;
+                box-shadow: var(--shadow);
+                margin-bottom: 1rem;
+            }
+
+            .arch-grid {
+                display: grid;
+                gap: 1rem;
+                grid-template-columns: 1fr;
+            }
+
+            @media (min-width: 720px) {
+                .arch-grid {
+                    grid-template-columns: 1fr 1fr;
+                }
+            }
+
+            .arch-card h4 {
+                margin: 0 0 0.35rem;
+                font-size: 0.95rem;
+            }
+
+            .arch-card p {
+                margin: 0;
+                color: var(--text-muted);
+                font-size: 0.92rem;
+            }
+
+            .tool {
+                background: var(--surface);
+                border: 1px solid var(--border);
+                border-radius: var(--radius);
+                margin-bottom: 0.85rem;
+                overflow: hidden;
+            }
+
+            .tool > summary {
+                cursor: pointer;
+                list-style: none;
+                padding: 0.9rem 1.1rem;
+                display: flex;
+                align-items: center;
+                gap: 0.75rem;
+                font-weight: 500;
+            }
+
+            .tool > summary::-webkit-details-marker {
+                display: none;
+            }
+
+            .tool > summary::before {
+                content: "›";
+                color: var(--text-muted);
+                transition: transform 0.15s;
+                font-size: 1.1rem;
+                line-height: 1;
+            }
+
+            .tool[open] > summary::before {
+                transform: rotate(90deg);
+            }
+
+            .tool .name {
+                font-family: var(--mono);
+                font-size: 0.92rem;
+                color: var(--text);
+            }
+
+            .tool .summary-desc {
+                color: var(--text-muted);
+                font-size: 0.88rem;
+                margin-left: auto;
+                text-align: right;
+                max-width: 60%;
+            }
+
+            @media (max-width: 600px) {
+                .tool .summary-desc {
+                    display: none;
+                }
+            }
+
+            .tool .body {
+                border-top: 1px solid var(--border);
+                padding: 1rem 1.1rem 1.25rem;
+                background: var(--surface);
+            }
+
+            .tool .body > p {
+                margin: 0 0 1rem;
+            }
+
+            .tool .args,
+            .tool .returns {
+                margin: 0 0 1rem;
+            }
+
+            .tool h5 {
+                font-size: 0.7rem;
+                text-transform: uppercase;
+                letter-spacing: 0.08em;
+                color: var(--text-muted);
+                margin: 0 0 0.5rem;
+                font-weight: 600;
+            }
+
+            table.args-table {
+                width: 100%;
+                border-collapse: collapse;
+                font-size: 0.9rem;
+            }
+
+            table.args-table th,
+            table.args-table td {
+                padding: 0.4rem 0.5rem;
+                text-align: left;
+                vertical-align: top;
+                border-bottom: 1px solid var(--border);
+            }
+
+            table.args-table th {
+                font-weight: 500;
+                color: var(--text-muted);
+                font-size: 0.78rem;
+                text-transform: uppercase;
+                letter-spacing: 0.05em;
+            }
+
+            table.args-table tr:last-child td {
+                border-bottom: none;
+            }
+
+            table.args-table td.name {
+                font-family: var(--mono);
+                font-size: 0.85rem;
+                white-space: nowrap;
+            }
+
+            table.args-table td.type {
+                font-family: var(--mono);
+                font-size: 0.82rem;
+                color: var(--accent);
+                white-space: nowrap;
+            }
+
+            table.args-table td.desc {
+                color: var(--text-muted);
+            }
+
+            .req {
+                color: var(--danger);
+                font-size: 0.7rem;
+                margin-left: 0.25rem;
+                font-family: var(--sans);
+            }
+
+            code,
+            pre {
+                font-family: var(--mono);
+                background: var(--code-bg);
+                border-radius: 5px;
+            }
+
+            code {
+                padding: 0.1rem 0.35rem;
+                font-size: 0.88em;
+            }
+
+            pre {
+                padding: 0.9rem 1rem;
+                overflow-x: auto;
+                font-size: 0.85rem;
+                line-height: 1.5;
+            }
+
+            pre code {
+                background: none;
+                padding: 0;
+            }
+
+            a {
+                color: var(--accent);
+            }
+
+            .pill {
+                display: inline-block;
+                font-size: 0.72rem;
+                font-weight: 500;
+                padding: 0.1rem 0.5rem;
+                border-radius: 999px;
+                background: var(--accent-soft);
+                color: var(--accent);
+                text-transform: uppercase;
+                letter-spacing: 0.04em;
+            }
+
+            .pill.write {
+                background: rgba(161, 66, 66, 0.12);
+                color: var(--danger);
+            }
+
+            .pill.write-dark {
+                background: rgba(138, 107, 26, 0.18);
+                color: var(--warn);
+            }
+
+            .meta {
+                display: flex;
+                gap: 0.5rem;
+                flex-wrap: wrap;
+                margin-bottom: 0.75rem;
+            }
+
+            .flow {
+                background: var(--surface-2);
+                border: 1px solid var(--border);
+                border-radius: var(--radius);
+                padding: 1rem 1.25rem;
+                font-family: var(--mono);
+                font-size: 0.85rem;
+                line-height: 1.7;
+                white-space: pre;
+                overflow-x: auto;
+            }
+
+            .note {
+                border-left: 3px solid var(--warn);
+                background: var(--surface-2);
+                padding: 0.75rem 1rem;
+                border-radius: 0 var(--radius) var(--radius) 0;
+                margin: 1rem 0;
+                font-size: 0.9rem;
+            }
+
+            footer {
+                color: var(--text-muted);
+                font-size: 0.85rem;
+                margin-top: 4rem;
+                padding-top: 1.5rem;
+                border-top: 1px solid var(--border);
+            }
+        </style>
+    </head>
+    <body>
+        <div class="page">
+            <header class="intro">
+                <h1>Voice agent &amp; tools</h1>
+                <p>
+                    WalletBot lets users record their movements by talking
+                    to a Gemini Live session. The model dispatches a
+                    catalogue of typed tools — the same on every surface —
+                    to read and mutate the user's ledger. This page
+                    documents how the agent is wired and what each tool
+                    does.
+                </p>
+            </header>
+
+            <div class="layout">
+                <nav class="toc" aria-label="Table of contents">
+                    <h2>Contents</h2>
+                    <ul>
+                        <li><a href="#overview">Overview</a></li>
+                        <li><a href="#architecture">Architecture</a></li>
+                        <li><a href="#conventions">Conventions</a></li>
+                        <li><a href="#tools">Tools</a></li>
+                    </ul>
+                    <details open>
+                        <summary>By domain</summary>
+                        <ul>
+                            <li><a href="#accounts">Accounts</a></li>
+                            <li><a href="#categories">Categories</a></li>
+                            <li><a href="#tags">Tags</a></li>
+                            <li>
+                                <a href="#transactions-read"
+                                    >Transactions · read</a
+                                >
+                            </li>
+                            <li>
+                                <a href="#transactions-write"
+                                    >Transactions · write</a
+                                >
+                            </li>
+                            <li><a href="#summaries">Summaries</a></li>
+                        </ul>
+                    </details>
+                </nav>
+
+                <main>
+                    <section id="overview">
+                        <h2>Overview</h2>
+                        <p class="lede">
+                            The agent is a Gemini Live session running over
+                            a WebSocket. The user speaks; the model
+                            transcribes, plans, and emits
+                            <code>toolCall</code> messages. Each
+                            <code>toolCall</code> is handled by a local
+                            executor — Convex on the web, Drift on the
+                            native app — which returns a result that the
+                            model can speak back.
+                        </p>
+                        <div class="flow">
+user ──┐
+       ▼
+  microphone ──▶ Gemini Live (WebSocket)
+                       │
+                       │  toolCall { name, args }
+                       ▼
+                  ToolExecutor
+                  ├── web   → Convex queries / mutations
+                  └── native → Drift (offline-first); sync pushes later
+                       │
+                       │  toolResponse { result }
+                       ▼
+                  Gemini Live ──▶ TTS ──▶ user
+                        </div>
+                    </section>
+
+                    <section id="architecture">
+                        <h2>Architecture</h2>
+                        <p>
+                            Tools are defined once in
+                            <code>packages/shared</code> and consumed in
+                            three places. The
+                            <strong>ephemeral session token</strong> issued
+                            by the backend is the single source of truth
+                            for what the model is allowed to call.
+                        </p>
+                        <div class="arch-grid">
+                            <div class="card arch-card">
+                                <h4>Shared catalog</h4>
+                                <p>
+                                    <code
+                                        >packages/shared/src/tools/definitions.ts</code
+                                    >
+                                    holds the Zod schemas; descriptions and
+                                    typed
+                                    <code>TOOL_DEFINITIONS</code> live
+                                    alongside.
+                                </p>
+                            </div>
+                            <div class="card arch-card">
+                                <h4>Token</h4>
+                                <p>
+                                    <code
+                                        >convex/live/actions.ts</code
+                                    >
+                                    serializes the catalog into the Live
+                                    session's
+                                    <code>liveConnectConstraints.tools</code>
+                                    when minting the ephemeral token.
+                                </p>
+                            </div>
+                            <div class="card arch-card">
+                                <h4>Web executor</h4>
+                                <p>
+                                    <code
+                                        >apps/web/src/lib/agent-tools/executors.ts</code
+                                    >
+                                    dispatches each tool to a Convex
+                                    query / mutation via
+                                    <code>ConvexReactClient</code>.
+                                </p>
+                            </div>
+                            <div class="card arch-card">
+                                <h4>Native executor</h4>
+                                <p>
+                                    <code
+                                        >apps/native/lib/voice/tool_executors.dart</code
+                                    >
+                                    runs every operation against the
+                                    local Drift database. Never calls
+                                    Convex directly — the sync layer
+                                    pushes writes when the device is
+                                    online.
+                                </p>
+                            </div>
+                        </div>
+
+                        <h3 class="group">Balance reads</h3>
+                        <p>
+                            Per-account balances are computed in
+                            <code>O(log n)</code> time via two
+                            TableAggregates over
+                            <code>transactions</code>: an
+                            <em>outflows</em> aggregate keyed by the source
+                            account and an <em>inflows</em> aggregate keyed
+                            by the transfer destination. Every transaction
+                            mutation keeps both aggregates in sync.
+                        </p>
+
+                        <div class="note">
+                            <strong>Balance adjustments.</strong> The user
+                            tells the agent the
+                            <em>observed balance</em>
+                            (<code>balanceAfter</code>). The server
+                            computes the delta:
+                            <code
+                                >amount = balanceAfter −
+                                currentBalance</code
+                            >. <code>balanceAfter</code> is sacred and
+                            never modified; <code>amount</code> is just
+                            the bookkeeping delta.
+                        </div>
+                    </section>
+
+                    <section id="conventions">
+                        <h2>Conventions</h2>
+                        <p>
+                            Every tool follows the same patterns so the
+                            model and the executors can be uniform.
+                        </p>
+                        <ul>
+                            <li>
+                                <strong>idOrName.</strong> Account /
+                                category / tag references accept a UUID
+                                or a case-insensitive name. On ambiguity
+                                the executor returns
+                                <code
+                                    >{ ok: false, error: "ambiguous",
+                                    candidates: […] }</code
+                                >.
+                            </li>
+                            <li>
+                                <strong>Amounts.</strong> Decimal in user
+                                units (<code>12.50</code>); the executor
+                                converts to int64 cents internally.
+                            </li>
+                            <li>
+                                <strong>Dates.</strong> ISO 8601 or
+                                natural-language (<code>"today"</code>,
+                                <code>"hoy"</code>, <code>"yesterday"</code
+                                >, <code>"ayer"</code>). Omitted ⇒ now.
+                            </li>
+                            <li>
+                                <strong>Currency.</strong> Inferred from
+                                the resolved account on every write.
+                                Never an LLM-supplied arg except in
+                                <code>createAccount</code>.
+                            </li>
+                            <li>
+                                <strong>Return shape.</strong>
+                                <code>{ ok: true, … }</code> on success,
+                                <code
+                                    >{ ok: false, error: "…" }</code
+                                >
+                                on failure. The model speaks the error to
+                                the user.
+                            </li>
+                        </ul>
+                    </section>
+
+                    <section id="tools">
+                        <h2>Tools</h2>
+                        <p class="lede">
+                            Twenty-eight tools across six domains. Click
+                            to expand the args and return shape.
+                        </p>
+
+                        <h3 class="group" id="accounts">Accounts</h3>
+
+                        <details class="tool" id="listAccounts">
+                            <summary>
+                                <span class="name">listAccounts</span>
+                                <span class="summary-desc"
+                                    >List the user's accounts</span
+                                >
+                            </summary>
+                            <div class="body">
+                                <div class="meta">
+                                    <span class="pill">read</span>
+                                </div>
+                                <p>
+                                    Returns id, name, currency, color,
+                                    icon, isArchived for each account.
+                                    Archived accounts are excluded by
+                                    default.
+                                </p>
+                                <div class="args">
+                                    <h5>Arguments</h5>
+                                    <table class="args-table">
+                                        <tr>
+                                            <th>Name</th>
+                                            <th>Type</th>
+                                            <th>Description</th>
+                                        </tr>
+                                        <tr>
+                                            <td class="name">
+                                                includeArchived
+                                            </td>
+                                            <td class="type">boolean?</td>
+                                            <td class="desc">
+                                                Include archived accounts.
+                                                Defaults to false.
+                                            </td>
+                                        </tr>
+                                    </table>
+                                </div>
+                                <div class="returns">
+                                    <h5>Returns</h5>
+                                    <pre><code>{ ok: true, accounts: [{ id, name, currency, color?, icon?, isArchived }] }</code></pre>
+                                </div>
+                            </div>
+                        </details>
+
+                        <details class="tool" id="getAccount">
+                            <summary>
+                                <span class="name">getAccount</span>
+                                <span class="summary-desc"
+                                    >Look up one account by id or
+                                    name</span
+                                >
+                            </summary>
+                            <div class="body">
+                                <div class="meta">
+                                    <span class="pill">read</span>
+                                </div>
+                                <p>
+                                    Resolves an account reference. Returns
+                                    <code>not_found</code> or
+                                    <code>ambiguous</code> on failure.
+                                </p>
+                                <div class="args">
+                                    <h5>Arguments</h5>
+                                    <table class="args-table">
+                                        <tr>
+                                            <th>Name</th>
+                                            <th>Type</th>
+                                            <th>Description</th>
+                                        </tr>
+                                        <tr>
+                                            <td class="name">
+                                                idOrName<span class="req"
+                                                    >required</span
+                                                >
+                                            </td>
+                                            <td class="type">string</td>
+                                            <td class="desc">
+                                                UUID or human name.
+                                            </td>
+                                        </tr>
+                                    </table>
+                                </div>
+                            </div>
+                        </details>
+
+                        <details class="tool" id="getAccountBalance">
+                            <summary>
+                                <span class="name">getAccountBalance</span>
+                                <span class="summary-desc"
+                                    >Current balance of one account</span
+                                >
+                            </summary>
+                            <div class="body">
+                                <div class="meta">
+                                    <span class="pill">read</span>
+                                </div>
+                                <p>
+                                    Backed by the
+                                    <code>outflowsByAccount</code> +
+                                    <code>inflowsByAccount</code> aggregates
+                                    server-side (O(log n)). On native, sums
+                                    the local transactions.
+                                </p>
+                                <div class="args">
+                                    <h5>Arguments</h5>
+                                    <table class="args-table">
+                                        <tr>
+                                            <th>Name</th>
+                                            <th>Type</th>
+                                            <th>Description</th>
+                                        </tr>
+                                        <tr>
+                                            <td class="name">
+                                                idOrName<span class="req"
+                                                    >required</span
+                                                >
+                                            </td>
+                                            <td class="type">string</td>
+                                            <td class="desc">
+                                                Account UUID or name.
+                                            </td>
+                                        </tr>
+                                    </table>
+                                </div>
+                                <div class="returns">
+                                    <h5>Returns</h5>
+                                    <pre><code>{ ok: true, accountId, accountName, balance, currency }</code></pre>
+                                </div>
+                            </div>
+                        </details>
+
+                        <details class="tool" id="createAccount">
+                            <summary>
+                                <span class="name">createAccount</span>
+                                <span class="summary-desc"
+                                    >Create a new account</span
+                                >
+                            </summary>
+                            <div class="body">
+                                <div class="meta">
+                                    <span class="pill write">write</span>
+                                </div>
+                                <p>
+                                    Currency is set at creation and
+                                    immutable after. The agent should ask
+                                    the user for currency when not
+                                    obvious.
+                                </p>
+                                <div class="args">
+                                    <h5>Arguments</h5>
+                                    <table class="args-table">
+                                        <tr>
+                                            <th>Name</th>
+                                            <th>Type</th>
+                                            <th>Description</th>
+                                        </tr>
+                                        <tr>
+                                            <td class="name">
+                                                name<span class="req"
+                                                    >required</span
+                                                >
+                                            </td>
+                                            <td class="type">string</td>
+                                            <td class="desc">
+                                                e.g. "BBVA", "Efectivo".
+                                            </td>
+                                        </tr>
+                                        <tr>
+                                            <td class="name">
+                                                currency<span class="req"
+                                                    >required</span
+                                                >
+                                            </td>
+                                            <td class="type">string</td>
+                                            <td class="desc">
+                                                ISO 4217. Immutable.
+                                            </td>
+                                        </tr>
+                                        <tr>
+                                            <td class="name">color</td>
+                                            <td class="type">string?</td>
+                                            <td class="desc">
+                                                Hex (e.g. "#4F46E5").
+                                            </td>
+                                        </tr>
+                                        <tr>
+                                            <td class="name">icon</td>
+                                            <td class="type">string?</td>
+                                            <td class="desc">
+                                                Icon name from the
+                                                predefined set.
+                                            </td>
+                                        </tr>
+                                        <tr>
+                                            <td class="name">description</td>
+                                            <td class="type">string?</td>
+                                            <td class="desc">Free-form.</td>
+                                        </tr>
+                                    </table>
+                                </div>
+                                <div class="returns">
+                                    <h5>Returns</h5>
+                                    <pre><code>{ ok: true, id }</code></pre>
+                                </div>
+                            </div>
+                        </details>
+
+                        <details class="tool" id="updateAccount">
+                            <summary>
+                                <span class="name">updateAccount</span>
+                                <span class="summary-desc"
+                                    >Edit an account</span
+                                >
+                            </summary>
+                            <div class="body">
+                                <div class="meta">
+                                    <span class="pill write">write</span>
+                                </div>
+                                <p>
+                                    Currency cannot be changed — create a
+                                    new account instead. Any field left
+                                    undefined is preserved.
+                                </p>
+                                <div class="args">
+                                    <h5>Arguments</h5>
+                                    <table class="args-table">
+                                        <tr>
+                                            <th>Name</th>
+                                            <th>Type</th>
+                                            <th>Description</th>
+                                        </tr>
+                                        <tr>
+                                            <td class="name">
+                                                idOrName<span class="req"
+                                                    >required</span
+                                                >
+                                            </td>
+                                            <td class="type">string</td>
+                                        </tr>
+                                        <tr>
+                                            <td class="name">name</td>
+                                            <td class="type">string?</td>
+                                        </tr>
+                                        <tr>
+                                            <td class="name">color</td>
+                                            <td class="type">string?</td>
+                                        </tr>
+                                        <tr>
+                                            <td class="name">icon</td>
+                                            <td class="type">string?</td>
+                                        </tr>
+                                        <tr>
+                                            <td class="name">description</td>
+                                            <td class="type">string?</td>
+                                        </tr>
+                                    </table>
+                                </div>
+                            </div>
+                        </details>
+
+                        <details class="tool" id="archiveAccount">
+                            <summary>
+                                <span class="name">archiveAccount</span>
+                                <span class="summary-desc"
+                                    >Soft-delete an account</span
+                                >
+                            </summary>
+                            <div class="body">
+                                <div class="meta">
+                                    <span class="pill write">write</span>
+                                </div>
+                                <p>
+                                    The account stops appearing in pickers
+                                    but its transactions stay intact and
+                                    keep counting toward reports.
+                                </p>
+                                <div class="args">
+                                    <h5>Arguments</h5>
+                                    <table class="args-table">
+                                        <tr>
+                                            <th>Name</th>
+                                            <th>Type</th>
+                                            <th>Description</th>
+                                        </tr>
+                                        <tr>
+                                            <td class="name">
+                                                idOrName<span class="req"
+                                                    >required</span
+                                                >
+                                            </td>
+                                            <td class="type">string</td>
+                                        </tr>
+                                    </table>
+                                </div>
+                            </div>
+                        </details>
+
+                        <h3 class="group" id="categories">Categories</h3>
+
+                        <details class="tool" id="listCategories">
+                            <summary>
+                                <span class="name">listCategories</span>
+                                <span class="summary-desc"
+                                    >List the user's categories</span
+                                >
+                            </summary>
+                            <div class="body">
+                                <div class="meta">
+                                    <span class="pill">read</span>
+                                </div>
+                                <p>
+                                    Categories are type-agnostic —
+                                    "Gifts" can be used for either an
+                                    expense or an income.
+                                </p>
+                                <div class="args">
+                                    <h5>Arguments</h5>
+                                    <table class="args-table">
+                                        <tr>
+                                            <th>Name</th>
+                                            <th>Type</th>
+                                            <th>Description</th>
+                                        </tr>
+                                        <tr>
+                                            <td class="name">
+                                                includeArchived
+                                            </td>
+                                            <td class="type">boolean?</td>
+                                        </tr>
+                                    </table>
+                                </div>
+                            </div>
+                        </details>
+
+                        <details class="tool" id="getCategory">
+                            <summary>
+                                <span class="name">getCategory</span>
+                                <span class="summary-desc"
+                                    >Resolve a category by id or name</span
+                                >
+                            </summary>
+                            <div class="body">
+                                <div class="meta">
+                                    <span class="pill">read</span>
+                                </div>
+                                <div class="args">
+                                    <h5>Arguments</h5>
+                                    <table class="args-table">
+                                        <tr>
+                                            <th>Name</th>
+                                            <th>Type</th>
+                                        </tr>
+                                        <tr>
+                                            <td class="name">
+                                                idOrName<span class="req"
+                                                    >required</span
+                                                >
+                                            </td>
+                                            <td class="type">string</td>
+                                        </tr>
+                                    </table>
+                                </div>
+                            </div>
+                        </details>
+
+                        <details class="tool" id="createCategory">
+                            <summary>
+                                <span class="name">createCategory</span>
+                                <span class="summary-desc"
+                                    >Create a category</span
+                                >
+                            </summary>
+                            <div class="body">
+                                <div class="meta">
+                                    <span class="pill write">write</span>
+                                </div>
+                                <div class="args">
+                                    <h5>Arguments</h5>
+                                    <table class="args-table">
+                                        <tr>
+                                            <th>Name</th>
+                                            <th>Type</th>
+                                        </tr>
+                                        <tr>
+                                            <td class="name">
+                                                name<span class="req"
+                                                    >required</span
+                                                >
+                                            </td>
+                                            <td class="type">string</td>
+                                        </tr>
+                                        <tr>
+                                            <td class="name">description</td>
+                                            <td class="type">string?</td>
+                                        </tr>
+                                    </table>
+                                </div>
+                            </div>
+                        </details>
+
+                        <details class="tool" id="updateCategory">
+                            <summary>
+                                <span class="name">updateCategory</span>
+                                <span class="summary-desc"
+                                    >Edit a category</span
+                                >
+                            </summary>
+                            <div class="body">
+                                <div class="meta">
+                                    <span class="pill write">write</span>
+                                </div>
+                                <div class="args">
+                                    <h5>Arguments</h5>
+                                    <table class="args-table">
+                                        <tr>
+                                            <th>Name</th>
+                                            <th>Type</th>
+                                        </tr>
+                                        <tr>
+                                            <td class="name">
+                                                idOrName<span class="req"
+                                                    >required</span
+                                                >
+                                            </td>
+                                            <td class="type">string</td>
+                                        </tr>
+                                        <tr>
+                                            <td class="name">name</td>
+                                            <td class="type">string?</td>
+                                        </tr>
+                                        <tr>
+                                            <td class="name">description</td>
+                                            <td class="type">string?</td>
+                                        </tr>
+                                    </table>
+                                </div>
+                            </div>
+                        </details>
+
+                        <details class="tool" id="archiveCategory">
+                            <summary>
+                                <span class="name">archiveCategory</span>
+                                <span class="summary-desc"
+                                    >Soft-delete a category</span
+                                >
+                            </summary>
+                            <div class="body">
+                                <div class="meta">
+                                    <span class="pill write">write</span>
+                                </div>
+                                <p>
+                                    Existing transactions still reference
+                                    it; the category just stops appearing
+                                    in pickers.
+                                </p>
+                                <div class="args">
+                                    <h5>Arguments</h5>
+                                    <table class="args-table">
+                                        <tr>
+                                            <th>Name</th>
+                                            <th>Type</th>
+                                        </tr>
+                                        <tr>
+                                            <td class="name">
+                                                idOrName<span class="req"
+                                                    >required</span
+                                                >
+                                            </td>
+                                            <td class="type">string</td>
+                                        </tr>
+                                    </table>
+                                </div>
+                            </div>
+                        </details>
+
+                        <h3 class="group" id="tags">Tags</h3>
+
+                        <details class="tool" id="listTags">
+                            <summary>
+                                <span class="name">listTags</span>
+                                <span class="summary-desc"
+                                    >List user tags (with parent chain)</span
+                                >
+                            </summary>
+                            <div class="body">
+                                <div class="meta">
+                                    <span class="pill">read</span>
+                                </div>
+                                <p>
+                                    Tags can form a hierarchy via
+                                    <code>parentId</code>; a tag belongs
+                                    to many movements and a movement can
+                                    carry many tags.
+                                </p>
+                                <div class="args">
+                                    <h5>Arguments</h5>
+                                    <table class="args-table">
+                                        <tr>
+                                            <th>Name</th>
+                                            <th>Type</th>
+                                        </tr>
+                                        <tr>
+                                            <td class="name">
+                                                includeArchived
+                                            </td>
+                                            <td class="type">boolean?</td>
+                                        </tr>
+                                    </table>
+                                </div>
+                            </div>
+                        </details>
+
+                        <details class="tool" id="getTag">
+                            <summary>
+                                <span class="name">getTag</span>
+                                <span class="summary-desc"
+                                    >Resolve a tag by id or name</span
+                                >
+                            </summary>
+                            <div class="body">
+                                <div class="meta">
+                                    <span class="pill">read</span>
+                                </div>
+                                <div class="args">
+                                    <h5>Arguments</h5>
+                                    <table class="args-table">
+                                        <tr>
+                                            <th>Name</th>
+                                            <th>Type</th>
+                                        </tr>
+                                        <tr>
+                                            <td class="name">
+                                                idOrName<span class="req"
+                                                    >required</span
+                                                >
+                                            </td>
+                                            <td class="type">string</td>
+                                        </tr>
+                                    </table>
+                                </div>
+                            </div>
+                        </details>
+
+                        <details class="tool" id="createTag">
+                            <summary>
+                                <span class="name">createTag</span>
+                                <span class="summary-desc"
+                                    >Create a (possibly nested) tag</span
+                                >
+                            </summary>
+                            <div class="body">
+                                <div class="meta">
+                                    <span class="pill write">write</span>
+                                </div>
+                                <div class="args">
+                                    <h5>Arguments</h5>
+                                    <table class="args-table">
+                                        <tr>
+                                            <th>Name</th>
+                                            <th>Type</th>
+                                            <th>Description</th>
+                                        </tr>
+                                        <tr>
+                                            <td class="name">
+                                                name<span class="req"
+                                                    >required</span
+                                                >
+                                            </td>
+                                            <td class="type">string</td>
+                                            <td class="desc"></td>
+                                        </tr>
+                                        <tr>
+                                            <td class="name">
+                                                parentIdOrName
+                                            </td>
+                                            <td class="type">string?</td>
+                                            <td class="desc">
+                                                Nest under an existing
+                                                tag.
+                                            </td>
+                                        </tr>
+                                        <tr>
+                                            <td class="name">color</td>
+                                            <td class="type">string?</td>
+                                            <td class="desc">Hex.</td>
+                                        </tr>
+                                        <tr>
+                                            <td class="name">description</td>
+                                            <td class="type">string?</td>
+                                            <td class="desc"></td>
+                                        </tr>
+                                    </table>
+                                </div>
+                            </div>
+                        </details>
+
+                        <details class="tool" id="updateTag">
+                            <summary>
+                                <span class="name">updateTag</span>
+                                <span class="summary-desc"
+                                    >Edit a tag</span
+                                >
+                            </summary>
+                            <div class="body">
+                                <div class="meta">
+                                    <span class="pill write">write</span>
+                                </div>
+                                <div class="args">
+                                    <h5>Arguments</h5>
+                                    <table class="args-table">
+                                        <tr>
+                                            <th>Name</th>
+                                            <th>Type</th>
+                                        </tr>
+                                        <tr>
+                                            <td class="name">
+                                                idOrName<span class="req"
+                                                    >required</span
+                                                >
+                                            </td>
+                                            <td class="type">string</td>
+                                        </tr>
+                                        <tr>
+                                            <td class="name">name</td>
+                                            <td class="type">string?</td>
+                                        </tr>
+                                        <tr>
+                                            <td class="name">
+                                                parentIdOrName
+                                            </td>
+                                            <td class="type">string?</td>
+                                        </tr>
+                                        <tr>
+                                            <td class="name">color</td>
+                                            <td class="type">string?</td>
+                                        </tr>
+                                        <tr>
+                                            <td class="name">description</td>
+                                            <td class="type">string?</td>
+                                        </tr>
+                                    </table>
+                                </div>
+                            </div>
+                        </details>
+
+                        <details class="tool" id="archiveTag">
+                            <summary>
+                                <span class="name">archiveTag</span>
+                                <span class="summary-desc"
+                                    >Soft-delete a tag</span
+                                >
+                            </summary>
+                            <div class="body">
+                                <div class="meta">
+                                    <span class="pill write">write</span>
+                                </div>
+                                <div class="args">
+                                    <h5>Arguments</h5>
+                                    <table class="args-table">
+                                        <tr>
+                                            <th>Name</th>
+                                            <th>Type</th>
+                                        </tr>
+                                        <tr>
+                                            <td class="name">
+                                                idOrName<span class="req"
+                                                    >required</span
+                                                >
+                                            </td>
+                                            <td class="type">string</td>
+                                        </tr>
+                                    </table>
+                                </div>
+                            </div>
+                        </details>
+
+                        <h3 class="group" id="transactions-read">
+                            Transactions · read
+                        </h3>
+
+                        <details class="tool" id="listTransactions">
+                            <summary>
+                                <span class="name">listTransactions</span>
+                                <span class="summary-desc"
+                                    >List with filters</span
+                                >
+                            </summary>
+                            <div class="body">
+                                <div class="meta">
+                                    <span class="pill">read</span>
+                                </div>
+                                <p>
+                                    Picks the narrowest index available
+                                    given the filters. Tag filtering is
+                                    applied client-side.
+                                </p>
+                                <div class="args">
+                                    <h5>Arguments</h5>
+                                    <table class="args-table">
+                                        <tr>
+                                            <th>Name</th>
+                                            <th>Type</th>
+                                            <th>Description</th>
+                                        </tr>
+                                        <tr>
+                                            <td class="name">type</td>
+                                            <td class="type">
+                                                "expense" | "income" |
+                                                "transfer"
+                                            </td>
+                                            <td class="desc"></td>
+                                        </tr>
+                                        <tr>
+                                            <td class="name">
+                                                accountIdOrName
+                                            </td>
+                                            <td class="type">string?</td>
+                                            <td class="desc"></td>
+                                        </tr>
+                                        <tr>
+                                            <td class="name">
+                                                categoryIdOrName
+                                            </td>
+                                            <td class="type">string?</td>
+                                            <td class="desc"></td>
+                                        </tr>
+                                        <tr>
+                                            <td class="name">tagIdOrName</td>
+                                            <td class="type">string?</td>
+                                            <td class="desc"></td>
+                                        </tr>
+                                        <tr>
+                                            <td class="name">status</td>
+                                            <td class="type">
+                                                "pending" | "cleared"
+                                            </td>
+                                            <td class="desc"></td>
+                                        </tr>
+                                        <tr>
+                                            <td class="name">dateFrom</td>
+                                            <td class="type">date?</td>
+                                            <td class="desc"></td>
+                                        </tr>
+                                        <tr>
+                                            <td class="name">dateTo</td>
+                                            <td class="type">date?</td>
+                                            <td class="desc"></td>
+                                        </tr>
+                                        <tr>
+                                            <td class="name">limit</td>
+                                            <td class="type">int?</td>
+                                            <td class="desc">
+                                                Defaults to 50.
+                                            </td>
+                                        </tr>
+                                    </table>
+                                </div>
+                                <div class="returns">
+                                    <h5>Returns</h5>
+                                    <pre><code>{ ok: true, items: [...], isDone?, nextCursor? }</code></pre>
+                                </div>
+                            </div>
+                        </details>
+
+                        <details class="tool" id="getTransaction">
+                            <summary>
+                                <span class="name">getTransaction</span>
+                                <span class="summary-desc"
+                                    >Read one transaction with its
+                                    tags</span
+                                >
+                            </summary>
+                            <div class="body">
+                                <div class="meta">
+                                    <span class="pill">read</span>
+                                </div>
+                                <div class="args">
+                                    <h5>Arguments</h5>
+                                    <table class="args-table">
+                                        <tr>
+                                            <th>Name</th>
+                                            <th>Type</th>
+                                        </tr>
+                                        <tr>
+                                            <td class="name">
+                                                id<span class="req"
+                                                    >required</span
+                                                >
+                                            </td>
+                                            <td class="type">string</td>
+                                        </tr>
+                                    </table>
+                                </div>
+                            </div>
+                        </details>
+
+                        <details class="tool" id="getRecentTransactions">
+                            <summary>
+                                <span class="name"
+                                    >getRecentTransactions</span
+                                >
+                                <span class="summary-desc"
+                                    >Last N transactions</span
+                                >
+                            </summary>
+                            <div class="body">
+                                <div class="meta">
+                                    <span class="pill">read</span>
+                                </div>
+                                <p>
+                                    Shortcut over listTransactions
+                                    ordered by date descending. Defaults
+                                    to 10.
+                                </p>
+                                <div class="args">
+                                    <h5>Arguments</h5>
+                                    <table class="args-table">
+                                        <tr>
+                                            <th>Name</th>
+                                            <th>Type</th>
+                                        </tr>
+                                        <tr>
+                                            <td class="name">limit</td>
+                                            <td class="type">int?</td>
+                                        </tr>
+                                    </table>
+                                </div>
+                            </div>
+                        </details>
+
+                        <h3 class="group" id="transactions-write">
+                            Transactions · write
+                        </h3>
+
+                        <details class="tool" id="addExpense">
+                            <summary>
+                                <span class="name">addExpense</span>
+                                <span class="summary-desc"
+                                    >Record money leaving an account</span
+                                >
+                            </summary>
+                            <div class="body">
+                                <div class="meta">
+                                    <span class="pill write">write</span>
+                                </div>
+                                <p>
+                                    Subtracts <code>amount</code> from the
+                                    account balance. Requires both account
+                                    and category.
+                                </p>
+                                <div class="args">
+                                    <h5>Arguments</h5>
+                                    <table class="args-table">
+                                        <tr>
+                                            <th>Name</th>
+                                            <th>Type</th>
+                                            <th>Description</th>
+                                        </tr>
+                                        <tr>
+                                            <td class="name">
+                                                amount<span class="req"
+                                                    >required</span
+                                                >
+                                            </td>
+                                            <td class="type">number</td>
+                                            <td class="desc">
+                                                Decimal user units.
+                                            </td>
+                                        </tr>
+                                        <tr>
+                                            <td class="name">
+                                                accountIdOrName<span
+                                                    class="req"
+                                                    >required</span
+                                                >
+                                            </td>
+                                            <td class="type">string</td>
+                                            <td class="desc"></td>
+                                        </tr>
+                                        <tr>
+                                            <td class="name">
+                                                categoryIdOrName<span
+                                                    class="req"
+                                                    >required</span
+                                                >
+                                            </td>
+                                            <td class="type">string</td>
+                                            <td class="desc"></td>
+                                        </tr>
+                                        <tr>
+                                            <td class="name">
+                                                name<span class="req"
+                                                    >required</span
+                                                >
+                                            </td>
+                                            <td class="type">string</td>
+                                            <td class="desc">
+                                                e.g. "Starbucks".
+                                            </td>
+                                        </tr>
+                                        <tr>
+                                            <td class="name">date</td>
+                                            <td class="type">date?</td>
+                                            <td class="desc"></td>
+                                        </tr>
+                                        <tr>
+                                            <td class="name">description</td>
+                                            <td class="type">string?</td>
+                                            <td class="desc"></td>
+                                        </tr>
+                                        <tr>
+                                            <td class="name">
+                                                tagIdsOrNames
+                                            </td>
+                                            <td class="type">string[]?</td>
+                                            <td class="desc">
+                                                Existing tag UUIDs or
+                                                names.
+                                            </td>
+                                        </tr>
+                                        <tr>
+                                            <td class="name">status</td>
+                                            <td class="type">
+                                                "pending" | "cleared"
+                                            </td>
+                                            <td class="desc">
+                                                Defaults to "cleared".
+                                            </td>
+                                        </tr>
+                                    </table>
+                                </div>
+                            </div>
+                        </details>
+
+                        <details class="tool" id="addIncome">
+                            <summary>
+                                <span class="name">addIncome</span>
+                                <span class="summary-desc"
+                                    >Record money entering an account</span
+                                >
+                            </summary>
+                            <div class="body">
+                                <div class="meta">
+                                    <span class="pill write">write</span>
+                                </div>
+                                <p>
+                                    Same shape as <code>addExpense</code>,
+                                    different sign on the balance.
+                                </p>
+                                <div class="args">
+                                    <h5>Arguments</h5>
+                                    <table class="args-table">
+                                        <tr>
+                                            <th>Name</th>
+                                            <th>Type</th>
+                                        </tr>
+                                        <tr>
+                                            <td class="name">
+                                                amount<span class="req"
+                                                    >required</span
+                                                >
+                                            </td>
+                                            <td class="type">number</td>
+                                        </tr>
+                                        <tr>
+                                            <td class="name">
+                                                accountIdOrName<span
+                                                    class="req"
+                                                    >required</span
+                                                >
+                                            </td>
+                                            <td class="type">string</td>
+                                        </tr>
+                                        <tr>
+                                            <td class="name">
+                                                categoryIdOrName<span
+                                                    class="req"
+                                                    >required</span
+                                                >
+                                            </td>
+                                            <td class="type">string</td>
+                                        </tr>
+                                        <tr>
+                                            <td class="name">
+                                                name<span class="req"
+                                                    >required</span
+                                                >
+                                            </td>
+                                            <td class="type">string</td>
+                                        </tr>
+                                        <tr>
+                                            <td class="name">date</td>
+                                            <td class="type">date?</td>
+                                        </tr>
+                                        <tr>
+                                            <td class="name">description</td>
+                                            <td class="type">string?</td>
+                                        </tr>
+                                        <tr>
+                                            <td class="name">
+                                                tagIdsOrNames
+                                            </td>
+                                            <td class="type">string[]?</td>
+                                        </tr>
+                                        <tr>
+                                            <td class="name">status</td>
+                                            <td class="type">
+                                                "pending" | "cleared"
+                                            </td>
+                                        </tr>
+                                    </table>
+                                </div>
+                            </div>
+                        </details>
+
+                        <details class="tool" id="addTransfer">
+                            <summary>
+                                <span class="name">addTransfer</span>
+                                <span class="summary-desc"
+                                    >Move money between accounts</span
+                                >
+                            </summary>
+                            <div class="body">
+                                <div class="meta">
+                                    <span class="pill write">write</span>
+                                </div>
+                                <p>
+                                    For same-currency transfers, only
+                                    <code>amount</code> is needed. For
+                                    cross-currency, also pass
+                                    <code>toAmount</code> (and optionally
+                                    <code>exchangeRate</code>).
+                                </p>
+                                <div class="args">
+                                    <h5>Arguments</h5>
+                                    <table class="args-table">
+                                        <tr>
+                                            <th>Name</th>
+                                            <th>Type</th>
+                                            <th>Description</th>
+                                        </tr>
+                                        <tr>
+                                            <td class="name">
+                                                amount<span class="req"
+                                                    >required</span
+                                                >
+                                            </td>
+                                            <td class="type">number</td>
+                                            <td class="desc">
+                                                Taken from source account.
+                                            </td>
+                                        </tr>
+                                        <tr>
+                                            <td class="name">
+                                                fromAccountIdOrName<span
+                                                    class="req"
+                                                    >required</span
+                                                >
+                                            </td>
+                                            <td class="type">string</td>
+                                            <td class="desc"></td>
+                                        </tr>
+                                        <tr>
+                                            <td class="name">
+                                                toAccountIdOrName<span
+                                                    class="req"
+                                                    >required</span
+                                                >
+                                            </td>
+                                            <td class="type">string</td>
+                                            <td class="desc"></td>
+                                        </tr>
+                                        <tr>
+                                            <td class="name">toAmount</td>
+                                            <td class="type">number?</td>
+                                            <td class="desc">
+                                                Required for cross-currency.
+                                            </td>
+                                        </tr>
+                                        <tr>
+                                            <td class="name">
+                                                exchangeRate
+                                            </td>
+                                            <td class="type">number?</td>
+                                            <td class="desc"></td>
+                                        </tr>
+                                        <tr>
+                                            <td class="name">
+                                                name<span class="req"
+                                                    >required</span
+                                                >
+                                            </td>
+                                            <td class="type">string</td>
+                                            <td class="desc"></td>
+                                        </tr>
+                                        <tr>
+                                            <td class="name">
+                                                categoryIdOrName
+                                            </td>
+                                            <td class="type">string?</td>
+                                            <td class="desc">
+                                                Optional for transfers.
+                                            </td>
+                                        </tr>
+                                        <tr>
+                                            <td class="name">date</td>
+                                            <td class="type">date?</td>
+                                            <td class="desc"></td>
+                                        </tr>
+                                        <tr>
+                                            <td class="name">description</td>
+                                            <td class="type">string?</td>
+                                            <td class="desc"></td>
+                                        </tr>
+                                        <tr>
+                                            <td class="name">
+                                                tagIdsOrNames
+                                            </td>
+                                            <td class="type">string[]?</td>
+                                            <td class="desc"></td>
+                                        </tr>
+                                    </table>
+                                </div>
+                            </div>
+                        </details>
+
+                        <details class="tool" id="addBalanceAdjustment">
+                            <summary>
+                                <span class="name"
+                                    >addBalanceAdjustment</span
+                                >
+                                <span class="summary-desc"
+                                    >Reconcile against observed
+                                    balance</span
+                                >
+                            </summary>
+                            <div class="body">
+                                <div class="meta">
+                                    <span class="pill write">write</span>
+                                </div>
+                                <p>
+                                    The user reports the
+                                    <em>real</em> balance they observed
+                                    (counted cash, statement reconcile).
+                                    The system computes the delta. The
+                                    agent never asks for the delta — only
+                                    <code>balanceAfter</code>.
+                                </p>
+                                <div class="args">
+                                    <h5>Arguments</h5>
+                                    <table class="args-table">
+                                        <tr>
+                                            <th>Name</th>
+                                            <th>Type</th>
+                                            <th>Description</th>
+                                        </tr>
+                                        <tr>
+                                            <td class="name">
+                                                accountIdOrName<span
+                                                    class="req"
+                                                    >required</span
+                                                >
+                                            </td>
+                                            <td class="type">string</td>
+                                            <td class="desc"></td>
+                                        </tr>
+                                        <tr>
+                                            <td class="name">
+                                                balanceAfter<span
+                                                    class="req"
+                                                    >required</span
+                                                >
+                                            </td>
+                                            <td class="type">number</td>
+                                            <td class="desc">
+                                                Observed final balance.
+                                            </td>
+                                        </tr>
+                                        <tr>
+                                            <td class="name">name</td>
+                                            <td class="type">string?</td>
+                                            <td class="desc">
+                                                Defaults to "Ajuste de
+                                                saldo".
+                                            </td>
+                                        </tr>
+                                        <tr>
+                                            <td class="name">date</td>
+                                            <td class="type">date?</td>
+                                            <td class="desc"></td>
+                                        </tr>
+                                        <tr>
+                                            <td class="name">description</td>
+                                            <td class="type">string?</td>
+                                            <td class="desc"></td>
+                                        </tr>
+                                    </table>
+                                </div>
+                            </div>
+                        </details>
+
+                        <details class="tool" id="updateTransaction">
+                            <summary>
+                                <span class="name">updateTransaction</span>
+                                <span class="summary-desc"
+                                    >Edit a movement in place</span
+                                >
+                            </summary>
+                            <div class="body">
+                                <div class="meta">
+                                    <span class="pill write">write</span>
+                                </div>
+                                <p>
+                                    Only the listed fields are mutable.
+                                    The <code>type</code> of a transaction
+                                    is fixed — to change type, delete and
+                                    re-create.
+                                </p>
+                                <div class="args">
+                                    <h5>Arguments</h5>
+                                    <table class="args-table">
+                                        <tr>
+                                            <th>Name</th>
+                                            <th>Type</th>
+                                        </tr>
+                                        <tr>
+                                            <td class="name">
+                                                id<span class="req"
+                                                    >required</span
+                                                >
+                                            </td>
+                                            <td class="type">string</td>
+                                        </tr>
+                                        <tr>
+                                            <td class="name">name</td>
+                                            <td class="type">string?</td>
+                                        </tr>
+                                        <tr>
+                                            <td class="name">description</td>
+                                            <td class="type">string?</td>
+                                        </tr>
+                                        <tr>
+                                            <td class="name">date</td>
+                                            <td class="type">date?</td>
+                                        </tr>
+                                        <tr>
+                                            <td class="name">amount</td>
+                                            <td class="type">number?</td>
+                                        </tr>
+                                        <tr>
+                                            <td class="name">
+                                                categoryIdOrName
+                                            </td>
+                                            <td class="type">string?</td>
+                                        </tr>
+                                        <tr>
+                                            <td class="name">status</td>
+                                            <td class="type">
+                                                "pending" | "cleared"
+                                            </td>
+                                        </tr>
+                                    </table>
+                                </div>
+                            </div>
+                        </details>
+
+                        <details class="tool" id="deleteTransaction">
+                            <summary>
+                                <span class="name">deleteTransaction</span>
+                                <span class="summary-desc"
+                                    >Archive + tombstone for sync</span
+                                >
+                            </summary>
+                            <div class="body">
+                                <div class="meta">
+                                    <span class="pill write">write</span>
+                                </div>
+                                <p>
+                                    Soft-deletes the transaction
+                                    (<code>isArchived: true</code>) and
+                                    writes a tombstone so the deletion
+                                    propagates to the other device on
+                                    next sync.
+                                </p>
+                                <div class="args">
+                                    <h5>Arguments</h5>
+                                    <table class="args-table">
+                                        <tr>
+                                            <th>Name</th>
+                                            <th>Type</th>
+                                        </tr>
+                                        <tr>
+                                            <td class="name">
+                                                id<span class="req"
+                                                    >required</span
+                                                >
+                                            </td>
+                                            <td class="type">string</td>
+                                        </tr>
+                                    </table>
+                                </div>
+                            </div>
+                        </details>
+
+                        <details class="tool" id="tagTransaction">
+                            <summary>
+                                <span class="name">tagTransaction</span>
+                                <span class="summary-desc"
+                                    >Attach tags to a transaction</span
+                                >
+                            </summary>
+                            <div class="body">
+                                <div class="meta">
+                                    <span class="pill write">write</span>
+                                </div>
+                                <p>
+                                    Idempotent — already-attached tags are
+                                    skipped. Unresolved names are returned
+                                    in <code>missing</code>.
+                                </p>
+                                <div class="args">
+                                    <h5>Arguments</h5>
+                                    <table class="args-table">
+                                        <tr>
+                                            <th>Name</th>
+                                            <th>Type</th>
+                                        </tr>
+                                        <tr>
+                                            <td class="name">
+                                                transactionId<span
+                                                    class="req"
+                                                    >required</span
+                                                >
+                                            </td>
+                                            <td class="type">string</td>
+                                        </tr>
+                                        <tr>
+                                            <td class="name">
+                                                tagIdsOrNames<span
+                                                    class="req"
+                                                    >required</span
+                                                >
+                                            </td>
+                                            <td class="type">string[]</td>
+                                        </tr>
+                                    </table>
+                                </div>
+                                <div class="returns">
+                                    <h5>Returns</h5>
+                                    <pre><code>{ ok: true, added: number, missing: string[] }</code></pre>
+                                </div>
+                            </div>
+                        </details>
+
+                        <details class="tool" id="untagTransaction">
+                            <summary>
+                                <span class="name">untagTransaction</span>
+                                <span class="summary-desc"
+                                    >Detach tags from a transaction</span
+                                >
+                            </summary>
+                            <div class="body">
+                                <div class="meta">
+                                    <span class="pill write">write</span>
+                                </div>
+                                <div class="args">
+                                    <h5>Arguments</h5>
+                                    <table class="args-table">
+                                        <tr>
+                                            <th>Name</th>
+                                            <th>Type</th>
+                                        </tr>
+                                        <tr>
+                                            <td class="name">
+                                                transactionId<span
+                                                    class="req"
+                                                    >required</span
+                                                >
+                                            </td>
+                                            <td class="type">string</td>
+                                        </tr>
+                                        <tr>
+                                            <td class="name">
+                                                tagIdsOrNames<span
+                                                    class="req"
+                                                    >required</span
+                                                >
+                                            </td>
+                                            <td class="type">string[]</td>
+                                        </tr>
+                                    </table>
+                                </div>
+                            </div>
+                        </details>
+
+                        <h3 class="group" id="summaries">Summaries</h3>
+
+                        <details class="tool" id="summarizeByCategory">
+                            <summary>
+                                <span class="name">summarizeByCategory</span>
+                                <span class="summary-desc"
+                                    >Totals per category over a range</span
+                                >
+                            </summary>
+                            <div class="body">
+                                <div class="meta">
+                                    <span class="pill">read</span>
+                                </div>
+                                <p>
+                                    Transfers are excluded (they aren't
+                                    expense / income). Optional currency
+                                    filter to avoid mixing ARS and USD in
+                                    one sum.
+                                </p>
+                                <div class="args">
+                                    <h5>Arguments</h5>
+                                    <table class="args-table">
+                                        <tr>
+                                            <th>Name</th>
+                                            <th>Type</th>
+                                        </tr>
+                                        <tr>
+                                            <td class="name">
+                                                dateFrom<span class="req"
+                                                    >required</span
+                                                >
+                                            </td>
+                                            <td class="type">date</td>
+                                        </tr>
+                                        <tr>
+                                            <td class="name">
+                                                dateTo<span class="req"
+                                                    >required</span
+                                                >
+                                            </td>
+                                            <td class="type">date</td>
+                                        </tr>
+                                        <tr>
+                                            <td class="name">type</td>
+                                            <td class="type">
+                                                "expense" | "income"
+                                            </td>
+                                        </tr>
+                                        <tr>
+                                            <td class="name">currency</td>
+                                            <td class="type">string?</td>
+                                        </tr>
+                                    </table>
+                                </div>
+                                <div class="returns">
+                                    <h5>Returns</h5>
+                                    <pre><code>{ ok: true, rows: [{ categoryId, name, total }] }</code></pre>
+                                </div>
+                            </div>
+                        </details>
+
+                        <details class="tool" id="summarizeByAccount">
+                            <summary>
+                                <span class="name">summarizeByAccount</span>
+                                <span class="summary-desc"
+                                    >In / out / net per account</span
+                                >
+                            </summary>
+                            <div class="body">
+                                <div class="meta">
+                                    <span class="pill">read</span>
+                                </div>
+                                <p>
+                                    For each account: money in (income +
+                                    incoming transfers), money out
+                                    (expense + outgoing transfers), and
+                                    net.
+                                </p>
+                                <div class="args">
+                                    <h5>Arguments</h5>
+                                    <table class="args-table">
+                                        <tr>
+                                            <th>Name</th>
+                                            <th>Type</th>
+                                        </tr>
+                                        <tr>
+                                            <td class="name">
+                                                dateFrom<span class="req"
+                                                    >required</span
+                                                >
+                                            </td>
+                                            <td class="type">date</td>
+                                        </tr>
+                                        <tr>
+                                            <td class="name">
+                                                dateTo<span class="req"
+                                                    >required</span
+                                                >
+                                            </td>
+                                            <td class="type">date</td>
+                                        </tr>
+                                    </table>
+                                </div>
+                                <div class="returns">
+                                    <h5>Returns</h5>
+                                    <pre><code>{ ok: true, rows: [{ accountId, name, currency, in, out, net }] }</code></pre>
+                                </div>
+                            </div>
+                        </details>
+                    </section>
+
+                    <footer>
+                        Source of truth:
+                        <code
+                            >packages/shared/src/tools/definitions.ts</code
+                        >. Web dispatch:
+                        <code>apps/web/src/lib/agent-tools/</code>.
+                        Native dispatch:
+                        <code>apps/native/lib/voice/tool_executors.dart</code>.
+                    </footer>
+                </main>
+            </div>
+        </div>
+    </body>
+</html>

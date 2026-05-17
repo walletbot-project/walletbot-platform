@@ -7,6 +7,7 @@ import { TOOL_DEFINITIONS } from '@wallet-bot/shared'
 import { action, internalAction } from '../_generated/server'
 
 const MODEL = 'gemini-3.1-flash-live-preview'
+const VOICE_NAME = 'Charon'
 const TOKEN_TTL_MS = 30 * 60 * 1000 // 30 minutes
 
 const SYSTEM_INSTRUCTION = `You are a personal finance tracking assistant. You help the user manage their expenses, income, and transfers through voice.`
@@ -78,6 +79,11 @@ async function createLiveToken() {
                     responseModalities: [Modality.AUDIO],
                     systemInstruction: SYSTEM_INSTRUCTION,
                     tools: [{ functionDeclarations: TOOL_DECLARATIONS }],
+                    speechConfig: {
+                        voiceConfig: {
+                            prebuiltVoiceConfig: { voiceName: VOICE_NAME },
+                        },
+                    },
                 },
             },
             httpOptions: {

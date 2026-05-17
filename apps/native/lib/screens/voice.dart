@@ -42,8 +42,11 @@ class _VoiceScreenState extends State<VoiceScreen> {
     numChannels: 1,
     echoCancel: true,
     noiseSuppress: true,
-    autoGain: true,
+    autoGain: false,
     streamBufferSize: 3200,
+    androidConfig: AndroidRecordConfig(
+      audioSource: AndroidAudioSource.voiceCommunication,
+    ),
   );
 
   @override
