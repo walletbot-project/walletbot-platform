@@ -1,6 +1,6 @@
 import { type CryptoKey, importPKCS8, SignJWT } from 'jose'
 
-const ACCESS_TOKEN_TTL_SEC = 75
+const ACCESS_TOKEN_TTL_SEC = 86400
 const SESSION_TOKEN_BYTES = 32
 
 const AUDIENCE = 'walletbot-native'
