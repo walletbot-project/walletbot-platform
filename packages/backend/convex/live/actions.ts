@@ -77,15 +77,13 @@ async function createLiveToken() {
                 model: MODEL,
                 config: {
                     responseModalities: [Modality.AUDIO],
-                    speechConfig: {
-                        voiceConfig: {
-                            prebuiltVoiceConfig: {
-                                voiceName: VOICE_NAME,
-                            },
-                        },
-                    },
                     systemInstruction: SYSTEM_INSTRUCTION,
                     tools: [{ functionDeclarations: TOOL_DECLARATIONS }],
+                    speechConfig: {
+                        voiceConfig: {
+                            prebuiltVoiceConfig: { voiceName: VOICE_NAME },
+                        },
+                    },
                 },
             },
             httpOptions: {

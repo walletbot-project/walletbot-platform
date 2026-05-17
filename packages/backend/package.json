@@ -9,6 +9,7 @@
         "typecheck": "tsc --noEmit -p convex"
     },
     "dependencies": {
+        "@convex-dev/aggregate": "^0.2.1",
         "@convex-dev/better-auth": "catalog:",
         "@convex-dev/workflow": "^0.3.8",
         "@google/genai": "^1.49.0",
