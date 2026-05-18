@@ -40,6 +40,9 @@ Wallet Bot — app for keeping track of personal expenses
 - Avoid reading dependencies source, always try to use skills and documentation.
 - Do not remove imports unless you are 100% sure they are not used, also `pnpm format` already removes unused imports, you don't need to do it manually.
 - PLEASE consider Convex workflows for complex long running or multi steps processes
+- After implementing a feature, review `docs/riesgos.md` and decide whether
+  the feature mitigates an existing risk, changes its probability or impact, or
+  introduces a new risk that should be added.
 - After all steps of any task run a CLAUDE.md rules check
 - Always report violations
 

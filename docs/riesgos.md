@@ -9,20 +9,22 @@ cambie la probabilidad, el impacto o la mitigación de un riesgo.
 ## Criterios
 
 - Probabilidad: Baja, Media, Alta.
-- Impacto: Bajo, Medio, Alto.
+- Impacto: Bajo, Medio, Alto, Crítico.
 - ID: identificador estable para referenciar riesgos en issues, PRs o reuniones.
+- Prioridad: orden relativo de importancia actual; puede cambiar sin cambiar el
+  ID del riesgo.
 - Mantener cada mitigación como una acción concreta y verificable.
 - Si un riesgo deja de aplicar, moverlo a una sección de riesgos cerrados en
   lugar de borrarlo.
 
 ## Riesgos actuales
 
-| ID | Riesgo | Categoría | Probabilidad | Impacto | Mitigación |
-| --- | --- | --- | --- | --- | --- |
-| R-001 | El modo de voz interpreta mal un gasto, ingreso o transferencia y registra datos incorrectos. | Producto / IA | Media | Alto | Mostrar visualmente los movimientos detectados y pedir confirmación antes de guardarlos. |
-| R-002 | Se exponen datos financieros personales por errores de autorización, logging o configuración de entorno. | Seguridad / Privacidad | Media | Alto | Requiere más análisis específico de privacidad y seguridad; mientras tanto, derivar siempre el usuario desde la sesión server-side y evitar logs con datos financieros sensibles. |
-| R-003 | Cambios en APIs externas de voz, IA, Better Auth o Convex rompen flujos principales. | Dependencias externas | Media | Medio | Encapsular integraciones detrás de helpers propios, fijar versiones compatibles, documentar variables requeridas y mantener un flujo manual de smoke test para login, voz y persistencia. |
-| R-004 | La app web y la app nativa divergen en experiencia de usuario. | UX | Media | Medio | Definir criterios compartidos para los flujos principales y revisar paridad visual y funcional en cada feature que toque movimientos, cuentas o categorías. |
-| R-005 | El usuario no detecta o no puede corregir fácilmente registros creados por la conversación. | UX / Calidad de datos | Alta | Medio | Priorizar pantallas de revisión y edición rápida, incluir estados claros para acciones pendientes/confirmadas y permitir deshacer o corregir el último movimiento. |
-| R-006 | No tener una estimación clara del consumo de tokens en features clave vuelve inviable la app por costos o límites de uso. | Costos / IA | Media | Alto | Medir consumo real por flujo crítico, definir presupuestos por sesión o usuario y evaluar estrategias de reducción antes de escalar el uso. |
-| R-007 | Cambios en el modelo de pricing del modelo de IA utilizado dejan a la app fuera de mercado. | Costos / Dependencias externas | Media | Alto | Monitorear cambios de pricing, mantener alternativas de proveedor o modelo evaluadas y definir umbrales de costo por usuario que disparen una revisión de producto. |
+| Prioridad | ID | Riesgo | Categoría | Probabilidad | Impacto | Mitigación |
+| --- | --- | --- | --- | --- | --- | --- |
+| 1 | R-001 | El modo de voz interpreta mal un gasto, ingreso o transferencia y registra datos incorrectos. | Producto / IA | Media | Alto | Mostrar visualmente los movimientos detectados y pedir confirmación antes de guardarlos. |
+| 2 | R-005 | El usuario no detecta o no puede corregir fácilmente registros creados por la conversación. | UX / Calidad de datos | Alta | Medio | Priorizar pantallas de revisión y edición rápida, incluir estados claros para acciones pendientes/confirmadas y permitir deshacer o corregir el último movimiento. |
+| 3 | R-006 | No tener una estimación clara del consumo de tokens en features clave vuelve inviable la app por costos o límites de uso. | Costos / IA | Media | Alto | Medir consumo real por flujo crítico, definir presupuestos por sesión o usuario y evaluar estrategias de reducción antes de escalar el uso. |
+| 4 | R-007 | Cambios en el modelo de pricing del modelo de IA utilizado dejan a la app fuera de mercado. | Costos / Dependencias externas | Media | Alto | Monitorear cambios de pricing, mantener alternativas de proveedor o modelo evaluadas y definir umbrales de costo por usuario que disparen una revisión de producto. |
+| 5 | R-003 | Cambios en APIs externas de voz, IA, Better Auth o Convex rompen flujos principales. | Dependencias externas | Media | Medio | Encapsular integraciones detrás de helpers propios, fijar versiones compatibles, documentar variables requeridas y mantener un flujo manual de smoke test para login, voz y persistencia. |
+| 6 | R-002 | Se exponen datos financieros personales por errores de autorización, logging o configuración de entorno. | Seguridad / Privacidad | Baja | Crítico | Requiere más análisis específico de privacidad y seguridad; mientras tanto, derivar siempre el usuario desde la sesión server-side y evitar logs con datos financieros sensibles. |
+| 7 | R-004 | La app web y la app nativa divergen en experiencia de usuario. | UX | Media | Bajo | Definir criterios compartidos para los flujos principales y revisar paridad visual y funcional en cada feature que toque movimientos, cuentas o categorías. |
