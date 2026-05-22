@@ -144,7 +144,6 @@ vite.config.ts.timestamp-*
 
 # Local backup and AI tooling
 backup/
-.claude/
 reference/
 
 # devenv
