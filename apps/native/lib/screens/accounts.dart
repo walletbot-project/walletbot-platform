@@ -6,59 +6,66 @@ import 'package:provider/provider.dart';
 class AccountsScreen extends StatelessWidget {
   const AccountsScreen({super.key});
 
-  void _openCreate(BuildContext context) {
-    final db = context.read<AppDatabase>();
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => Provider<AppDatabase>.value(
-          value: db,
-          child: const CreateAccountScreen(),
-        ),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final db = context.read<AppDatabase>();
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Cuentas'),
-        actions: [
-          IconButton(
-            tooltip: 'Nueva cuenta',
-            onPressed: () => _openCreate(context),
-            icon: const Icon(Icons.add),
-          ),
-        ],
-      ),
-      body: StreamBuilder<List<Account>>(
-        stream: db.watchAccounts(),
-        builder: (context, snapshot) {
-          final loading = snapshot.connectionState == ConnectionState.waiting;
-          final list = snapshot.data ?? [];
+    return StreamBuilder<List<Account>>(
+      stream: db.watchAccounts(),
+      builder: (context, snapshot) {
+        final loading = snapshot.connectionState == ConnectionState.waiting;
+        final list = snapshot.data ?? [];
 
-          if (loading) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          if (list.isEmpty) {
-            return _EmptyBody(onCreateTap: () => _openCreate(context));
-          }
-          return ListView.builder(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 96),
-            itemCount: list.length,
-            itemBuilder: (context, i) => _AccountCard(account: list[i]),
-          );
-        },
-      ),
+        return MediaQuery.removePadding(
+          context: context,
+          removeTop: true,
+          child: CustomScrollView(
+            slivers: [
+              const SliverAppBar.large(title: Text('Cuentas')),
+              if (loading)
+                const SliverFillRemaining(
+                  child: Center(child: CircularProgressIndicator()),
+                )
+              else if (list.isEmpty)
+                const SliverFillRemaining(child: _EmptyBody())
+              else ...[
+                SliverPadding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                  sliver: SliverList.builder(
+                    itemCount: list.length,
+                    itemBuilder: (context, i) => _AccountCard(account: list[i]),
+                  ),
+                ),
+                SliverPadding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 96),
+                  sliver: SliverToBoxAdapter(
+                    child: FilledButton.icon(
+                      onPressed: () {
+                        final db = context.read<AppDatabase>();
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => Provider<AppDatabase>.value(
+                              value: db,
+                              child: const CreateAccountScreen(),
+                            ),
+                          ),
+                        );
+                      },
+                      icon: const Icon(Icons.add),
+                      label: const Text('Crear cuenta'),
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        );
+      },
     );
   }
 }
 
 class _EmptyBody extends StatelessWidget {
-  const _EmptyBody({required this.onCreateTap});
-
-  final VoidCallback onCreateTap;
+  const _EmptyBody();
 
   @override
   Widget build(BuildContext context) {
@@ -87,7 +94,17 @@ class _EmptyBody extends StatelessWidget {
           ),
           const SizedBox(height: 24),
           FilledButton.icon(
-            onPressed: onCreateTap,
+            onPressed: () {
+              final db = context.read<AppDatabase>();
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => Provider<AppDatabase>.value(
+                    value: db,
+                    child: const CreateAccountScreen(),
+                  ),
+                ),
+              );
+            },
             icon: const Icon(Icons.add),
             label: const Text('Crear cuenta'),
           ),
