@@ -234,6 +234,27 @@ class AppDatabase extends _$AppDatabase {
     );
   }
 
+  Stream<List<Account>> watchAccounts() => (select(accounts)
+        ..where((a) => a.archived.equals(false))
+        ..orderBy([(a) => OrderingTerm(expression: a.createdAt)]))
+      .watch();
+
+  Future<void> insertAccount({
+    required String id,
+    required String name,
+    required String currency,
+  }) {
+    final now = BigInt.from(DateTime.now().millisecondsSinceEpoch);
+    return into(accounts).insert(AccountsCompanion.insert(
+      id: id,
+      name: name,
+      currency: currency,
+      createdAt: now,
+      updatedAt: now,
+      dirty: const Value(true),
+    ));
+  }
+
   static Future<void> deleteForUser(String userId) async {
     final dir = await getApplicationSupportDirectory();
     final base = p.join(dir.path, '${_dbNameFor(userId)}.sqlite');

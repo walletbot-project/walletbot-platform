@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:app/auth/auth_controller.dart';
 import 'package:app/config.dart';
 import 'package:app/database.dart';
+import 'package:app/screens/accounts.dart';
 import 'package:app/screens/activity.dart';
 import 'package:app/screens/home.dart';
 import 'package:app/screens/insights.dart';
@@ -99,7 +100,7 @@ class _AppMainState extends State<AppMain> {
               children: [
                 HomeScreen(),
                 ActivityScreen(),
-                Placeholder(),
+                AccountsScreen(),
                 InsightsScreen(),
               ],
             ),
