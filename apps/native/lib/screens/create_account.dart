@@ -77,12 +77,14 @@ class CreateAccountScreen extends StatefulWidget {
 class _CreateAccountScreenState extends State<CreateAccountScreen> {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
+  final _balanceController = TextEditingController();
   String _currency = 'ARS';
   bool _saving = false;
 
   @override
   void dispose() {
     _nameController.dispose();
+    _balanceController.dispose();
     super.dispose();
   }
 
@@ -103,16 +105,43 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
 
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
+
+    final rawBalance = _balanceController.text.trim();
+    BigInt? initialAmountCents;
+    if (rawBalance.isNotEmpty) {
+      final parsed = double.tryParse(rawBalance.replaceAll(',', '.'));
+      initialAmountCents = BigInt.from((parsed! * 100).round());
+    }
+
     setState(() => _saving = true);
     try {
       final db = context.read<AppDatabase>();
-      await db.insertAccount(
-        id: const Uuid().v4(),
-        name: _nameController.text.trim(),
-        currency: _currency,
-      );
+      final accountId = const Uuid().v4();
+      await db.transaction(() async {
+        await db.insertAccount(
+          id: accountId,
+          name: _nameController.text.trim(),
+          currency: _currency,
+        );
+        if (initialAmountCents != null) {
+          final now = BigInt.from(DateTime.now().millisecondsSinceEpoch);
+          await db.insertTransaction(
+            id: const Uuid().v4(),
+            type: 'balance_adjustment',
+            name: 'Balance inicial',
+            status: 'cleared',
+            date: now,
+            accountId: accountId,
+            categoryId: '',
+            amount: initialAmountCents,
+            currency: _currency,
+            balanceAfter: initialAmountCents,
+          );
+        }
+      });
       if (mounted) Navigator.of(context).pop();
-    } catch (_) {
+    } catch (e, st) {
+      debugPrint('Error creating account: $e\n$st');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Error al crear la cuenta')),
@@ -170,6 +199,47 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                 ),
                 child: Text(_currency),
               ),
+            ),
+            const SizedBox(height: 16),
+            ExpansionTile(
+              title: const Text('Balance inicial'),
+              subtitle: const Text('Opcional'),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(4),
+                side: BorderSide(
+                  color: Theme.of(context).colorScheme.outline,
+                ),
+              ),
+              collapsedShape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(4),
+                side: BorderSide(
+                  color: Theme.of(context).colorScheme.outline,
+                ),
+              ),
+              childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+              children: [
+                TextFormField(
+                  controller: _balanceController,
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
+                  decoration: InputDecoration(
+                    labelText: 'Monto',
+                    hintText: '0.00',
+                    prefixText: '$_currency ',
+                    border: const OutlineInputBorder(),
+                  ),
+                  validator: (v) {
+                    if (v == null || v.trim().isEmpty) return null;
+                    final parsed =
+                        double.tryParse(v.trim().replaceAll(',', '.'));
+                    if (parsed == null || parsed < 0) {
+                      return 'Ingresá un monto válido';
+                    }
+                    return null;
+                  },
+                ),
+              ],
             ),
             const SizedBox(height: 32),
             FilledButton(

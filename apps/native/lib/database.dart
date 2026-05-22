@@ -255,6 +255,37 @@ class AppDatabase extends _$AppDatabase {
     ));
   }
 
+  Future<void> insertTransaction({
+    required String id,
+    required String type,
+    required String name,
+    required String status,
+    required BigInt date,
+    required String accountId,
+    required String categoryId,
+    required BigInt amount,
+    required String currency,
+    BigInt? balanceAfter,
+  }) {
+    final now = BigInt.from(DateTime.now().millisecondsSinceEpoch);
+    return into(transactions).insert(TransactionsCompanion.insert(
+      id: id,
+      type: type,
+      name: name,
+      status: status,
+      date: date,
+      accountId: accountId,
+      categoryId: categoryId,
+      amount: amount,
+      currency: currency,
+      balanceAfter:
+          balanceAfter != null ? Value(balanceAfter) : const Value.absent(),
+      createdAt: now,
+      updatedAt: now,
+      dirty: const Value(true),
+    ));
+  }
+
   static Future<void> deleteForUser(String userId) async {
     final dir = await getApplicationSupportDirectory();
     final base = p.join(dir.path, '${_dbNameFor(userId)}.sqlite');

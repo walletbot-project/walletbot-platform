@@ -3907,10 +3907,6 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     'transaction_tags_transaction_id',
     'CREATE INDEX transaction_tags_transaction_id ON transaction_tags (transaction_id)',
   );
-  late final Index transactionTagsTransactionId = Index(
-    'transaction_tags_transaction_id',
-    'CREATE INDEX transaction_tags_transaction_id ON transaction_tags (transaction_id)',
-  );
   late final Index transactionTagsTagId = Index(
     'transaction_tags_tag_id',
     'CREATE INDEX transaction_tags_tag_id ON transaction_tags (tag_id)',
@@ -3934,18 +3930,6 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final Index tombstonesNeedsSync = Index(
     'tombstones_needs_sync',
     'CREATE INDEX tombstones_needs_sync ON tombstones (updated_at) WHERE dirty = 1',
-  );
-  late final Index tombstonesEntityTable = Index(
-    'tombstones_entity_table',
-    'CREATE INDEX tombstones_entity_table ON tombstones (entity_table)',
-  );
-  late final Index tombstonesUpdatedAt = Index(
-    'tombstones_updated_at',
-    'CREATE INDEX tombstones_updated_at ON tombstones (updated_at)',
-  );
-  late final Index tombstonesNeedsSync = Index(
-    'tombstones_needs_sync',
-    'CREATE INDEX tombstones_needs_sync ON tombstones (updated_at) WHERE remote_version IS NULL OR version != remote_version',
   );
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>

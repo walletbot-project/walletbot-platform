@@ -9,14 +9,16 @@ class AccountsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final db = context.read<AppDatabase>();
-    return Scaffold(
-      body: StreamBuilder<List<Account>>(
-        stream: db.watchAccounts(),
-        builder: (context, snapshot) {
-          final loading = snapshot.connectionState == ConnectionState.waiting;
-          final list = snapshot.data ?? [];
+    return StreamBuilder<List<Account>>(
+      stream: db.watchAccounts(),
+      builder: (context, snapshot) {
+        final loading = snapshot.connectionState == ConnectionState.waiting;
+        final list = snapshot.data ?? [];
 
-          return CustomScrollView(
+        return MediaQuery.removePadding(
+          context: context,
+          removeTop: true,
+          child: CustomScrollView(
             slivers: [
               const SliverAppBar.large(title: Text('Cuentas')),
               if (loading)
@@ -25,25 +27,39 @@ class AccountsScreen extends StatelessWidget {
                 )
               else if (list.isEmpty)
                 const SliverFillRemaining(child: _EmptyBody())
-              else
+              else ...[
                 SliverPadding(
-                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 96),
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
                   sliver: SliverList.builder(
                     itemCount: list.length,
-                    itemBuilder: (context, i) =>
-                        _AccountCard(account: list[i]),
+                    itemBuilder: (context, i) => _AccountCard(account: list[i]),
                   ),
                 ),
+                SliverPadding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 96),
+                  sliver: SliverToBoxAdapter(
+                    child: FilledButton.icon(
+                      onPressed: () {
+                        final db = context.read<AppDatabase>();
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => Provider<AppDatabase>.value(
+                              value: db,
+                              child: const CreateAccountScreen(),
+                            ),
+                          ),
+                        );
+                      },
+                      icon: const Icon(Icons.add),
+                      label: const Text('Crear cuenta'),
+                    ),
+                  ),
+                ),
+              ],
             ],
-          );
-        },
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () => Navigator.of(context).push(
-          MaterialPageRoute(builder: (_) => const CreateAccountScreen()),
-        ),
-        child: const Icon(Icons.add),
-      ),
+          ),
+        );
+      },
     );
   }
 }
@@ -78,9 +94,17 @@ class _EmptyBody extends StatelessWidget {
           ),
           const SizedBox(height: 24),
           FilledButton.icon(
-            onPressed: () => Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => const CreateAccountScreen()),
-            ),
+            onPressed: () {
+              final db = context.read<AppDatabase>();
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => Provider<AppDatabase>.value(
+                    value: db,
+                    child: const CreateAccountScreen(),
+                  ),
+                ),
+              );
+            },
             icon: const Icon(Icons.add),
             label: const Text('Crear cuenta'),
           ),
