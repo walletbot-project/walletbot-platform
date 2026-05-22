@@ -1,3 +1,7 @@
+env:
+  NIXPKGS_ACCEPT_ANDROID_SDK_LICENSE: "1"
+  NIXPKGS_ALLOW_UNFREE: "1"
+
 inputs:
   git-hooks:
     url: github:cachix/git-hooks.nix
@@ -6,3 +10,12 @@ inputs:
         follows: nixpkgs
   nixpkgs:
     url: github:NixOS/nixpkgs/nixpkgs-unstable
+  rust-overlay:
+    url: github:oxalica/rust-overlay
+    inputs:
+      nixpkgs:
+        follows: nixpkgs
+
+nixpkgs:
+  androidSdk.acceptLicense: true
+  allowUnfree: true

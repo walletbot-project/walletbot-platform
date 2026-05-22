@@ -149,8 +149,10 @@ reference/
 
 # devenv
 .devenv/
+local.properties
 
 tmp/*
 
 # Logs
 /info*
+.android/

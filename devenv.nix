@@ -1,9 +1,23 @@
 { pkgs, ... }:
 {
-  packages = [
-    pkgs.git
-    pkgs.flutter
+  packages = with pkgs; [
+    git
+    android-tools
+    rustup
   ];
+
+  android = {
+    enable = true;
+    # Optional: Customize versions
+    platforms.version = [ "33" "34" "35" "36" ];
+    # buildTools.version = [ "34.0.0" ];
+
+    # Enable emulator and NDK
+    # emulator.enable = true;
+    ndk.enable = true;
+
+    flutter.enable = true;
+  };
 
   languages = {
     javascript = {
@@ -18,6 +32,17 @@
     typescript.enable = true;
 
     dart.enable = true;
+
+    rust = {
+      enable = true;
+      channel = "stable";
+      targets = [
+        "aarch64-linux-android"
+        "i686-linux-android"
+        "x86_64-linux-android"
+        "armv7-linux-androideabi"
+      ];
+    };
   };
 
   scripts = {
