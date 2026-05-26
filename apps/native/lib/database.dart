@@ -221,21 +221,7 @@ class AppDatabase extends _$AppDatabase {
     : super(_openConnection(_dbNameFor(userId)));
 
   @override
-  int get schemaVersion => 2;
-
-  // v2: rename `is_archived` -> `archived` on accounts, categories, tags.
-  // Pre-launch app; we don't preserve data, just rebuild from a clean schema.
-  @override
-  MigrationStrategy get migration => MigrationStrategy(
-    onUpgrade: (m, from, to) async {
-      if (from < 2) {
-        for (final t in allTables) {
-          await m.deleteTable(t.actualTableName);
-        }
-        await m.createAll();
-      }
-    },
-  );
+  int get schemaVersion => 1;
 
   static String _dbNameFor(String userId) => 'app_database_$userId';
 

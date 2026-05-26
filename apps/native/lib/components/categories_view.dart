@@ -1,6 +1,7 @@
 import 'package:app/database.dart';
 import 'package:app/components/insight_count_models.dart';
 import 'package:app/components/insights_section_header.dart';
+import 'package:app/sync/local_writes.dart';
 import 'package:drift/drift.dart' show Value;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -14,7 +15,9 @@ class CategoriesView extends StatelessWidget {
 
     return Column(
       children: [
-        InsightsSectionHeader(onAddPressed: () => _addCategoryDialog(context, db)),
+        InsightsSectionHeader(
+          onAddPressed: () => _addCategoryDialog(context, db),
+        ),
         Expanded(
           child: StreamBuilder<List<CategoryWithCount>>(
             stream: _watchCategoriesWithCounts(db),
@@ -36,7 +39,8 @@ class CategoriesView extends StatelessWidget {
                   return ListTile(
                     title: GestureDetector(
                       behavior: HitTestBehavior.opaque,
-                      onLongPress: () => _editCategoryDialog(context, db, category.category),
+                      onLongPress: () =>
+                          _editCategoryDialog(context, db, category.category),
                       child: Text(category.category.name),
                     ),
                     trailing: Text('${category.transactionCount}'),
@@ -96,7 +100,10 @@ class CategoriesView extends StatelessWidget {
           autofocus: true,
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
           TextButton(
             onPressed: () async {
               final name = nameController.text.trim();
@@ -110,6 +117,7 @@ class CategoriesView extends StatelessWidget {
                         name: name,
                         createdAt: now,
                         updatedAt: now,
+                        dirty: Value(true),
                       ),
                     );
               }
@@ -123,7 +131,11 @@ class CategoriesView extends StatelessWidget {
     );
   }
 
-  Future<void> _editCategoryDialog(BuildContext context, AppDatabase db, Category category) async {
+  Future<void> _editCategoryDialog(
+    BuildContext context,
+    AppDatabase db,
+    Category category,
+  ) async {
     final nameController = TextEditingController(text: category.name);
 
     await showDialog<void>(
@@ -143,7 +155,10 @@ class CategoriesView extends StatelessWidget {
             },
             child: const Text('Delete'),
           ),
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
           TextButton(
             onPressed: () async {
               final name = nameController.text.trim();
@@ -162,15 +177,30 @@ class CategoriesView extends StatelessWidget {
 
   Future<void> _updateCategory(AppDatabase db, String id, String name) async {
     final now = BigInt.from(DateTime.now().millisecondsSinceEpoch);
-    await (db.update(db.categories)..where((category) => category.id.equals(id))).write(
-      CategoriesCompanion(name: Value(name), updatedAt: Value(now), dirty: const Value(true)),
+    await (db.update(
+      db.categories,
+    )..where((category) => category.id.equals(id))).write(
+      CategoriesCompanion(
+        name: Value(name),
+        updatedAt: Value(now),
+        dirty: const Value(true),
+      ),
     );
   }
 
   Future<void> _deleteCategory(AppDatabase db, String id) async {
     final now = BigInt.from(DateTime.now().millisecondsSinceEpoch);
-    await (db.update(db.categories)..where((category) => category.id.equals(id))).write(
-      CategoriesCompanion(archived: const Value(true), updatedAt: Value(now), dirty: const Value(true)),
-    );
+    await db.transaction(() async {
+      await (db.update(
+        db.categories,
+      )..where((category) => category.id.equals(id))).write(
+        CategoriesCompanion(
+          archived: const Value(true),
+          updatedAt: Value(now),
+          dirty: const Value(true),
+        ),
+      );
+      await writeTombstone(db, 'categories', id);
+    });
   }
 }
