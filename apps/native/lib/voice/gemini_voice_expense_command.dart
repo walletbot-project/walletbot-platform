@@ -57,6 +57,7 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
   StreamSubscription? _subscription;
   bool _connected = false;
   bool _disposed = false;
+  bool _audioPlaybackEnabled = true;
   int _inputChunks = 0;
   int _outputAudioChunks = 0;
   int _outputAudioBytes = 0;
@@ -68,7 +69,8 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
   Stream<VoiceEvent> get events => _events.stream;
 
   @override
-  Future<void> start() async {
+  Future<void> start({bool respondWithAudio = true}) async {
+    _audioPlaybackEnabled = respondWithAudio;
     final effectiveToken = await _resolveLiveToken();
 
     if (apiKey.isEmpty && effectiveToken.isEmpty) {
@@ -103,10 +105,12 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
       },
     );
 
-    // Tools are pinned into the ephemeral token server-side (see
-    // packages/backend/convex/live/actions.ts → liveConnectConstraints.tools).
-    // We deliberately do NOT send tools in the setup frame to keep one source
-    // of truth and avoid drift between Dart and the shared Zod catalog.
+    // Tools, system instruction, response modality, and speech config are
+    // pinned into the ephemeral token server-side (see
+    // packages/backend/convex/live/actions.ts → liveConnectConstraints). The
+    // session is always AUDIO at the protocol level; silent ("text-only")
+    // sessions are achieved client-side by dropping inbound audio playback
+    // while keeping the output transcription for the chat UI.
     _send({
       'setup': {
         'model': 'models/$_model',
@@ -117,17 +121,6 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
               'prebuiltVoiceConfig': {'voiceName': _voiceName},
             },
           },
-        },
-        'systemInstruction': {
-          'parts': [
-            {
-              'text':
-                  'You are a personal finance tracking assistant. You help '
-                  'the user manage expenses, income, and transfers through '
-                  'voice. Keep the same voice, tone, and speaking style for '
-                  'the entire session.',
-            },
-          ],
         },
         'inputAudioTranscription': <String, dynamic>{},
         'outputAudioTranscription': <String, dynamic>{},
@@ -206,6 +199,21 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
           'mimeType': 'audio/pcm;rate=16000',
         },
       },
+    });
+  }
+
+  @override
+  void setAudioPlaybackEnabled(bool enabled) {
+    _audioPlaybackEnabled = enabled;
+  }
+
+  @override
+  Future<void> sendText(String text) async {
+    if (!_connected || _disposed) return;
+    final trimmed = text.trim();
+    if (trimmed.isEmpty) return;
+    _send({
+      'realtimeInput': {'text': trimmed},
     });
   }
 
@@ -308,7 +316,9 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
               final pcmBytes = base64Decode(data);
               _outputAudioChunks += 1;
               _outputAudioBytes += pcmBytes.length;
-              unawaited(_audioPlayer.enqueue(pcmBytes));
+              if (_audioPlaybackEnabled) {
+                unawaited(_audioPlayer.enqueue(pcmBytes));
+              }
             }
           }
         }

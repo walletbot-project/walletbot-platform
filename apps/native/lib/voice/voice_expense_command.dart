@@ -12,9 +12,13 @@ abstract interface class VoiceExpenseCommand {
 
   Stream<VoiceEvent> get events;
 
-  Future<void> start();
+  Future<void> start({bool respondWithAudio = true});
 
   Future<void> addAudioChunk(Uint8List chunk);
+
+  Future<void> sendText(String text);
+
+  void setAudioPlaybackEnabled(bool enabled);
 
   Future<VoiceExpenseCommandResult> stop();
 
@@ -51,10 +55,14 @@ class DebugVoiceExpenseCommand implements VoiceExpenseCommand {
   Stream<VoiceEvent> get events => _events.stream;
 
   @override
-  Future<void> start() async {
+  Future<void> start({bool respondWithAudio = true}) async {
     _chunks = 0;
     _bytes = 0;
-    _events.add(VoiceConnectingEvent('Debug command started'));
+    _events.add(
+      VoiceConnectingEvent(
+        'Debug command started (respondWithAudio=$respondWithAudio)',
+      ),
+    );
     _events.add(VoiceConnectedEvent());
   }
 
@@ -62,6 +70,16 @@ class DebugVoiceExpenseCommand implements VoiceExpenseCommand {
   Future<void> addAudioChunk(Uint8List chunk) async {
     _chunks += 1;
     _bytes += chunk.length;
+  }
+
+  @override
+  Future<void> sendText(String text) async {
+    _events.add(VoiceSystemEvent('Debug received text: $text'));
+  }
+
+  @override
+  void setAudioPlaybackEnabled(bool enabled) {
+    _events.add(VoiceSystemEvent('Debug audio playback: $enabled'));
   }
 
   @override

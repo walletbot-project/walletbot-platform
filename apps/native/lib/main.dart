@@ -107,6 +107,7 @@ class _AppMainState extends State<AppMain> {
         ],
       ),
       floatingActionButton: FloatingActionButton(
+        heroTag: 'voiceFab',
         onPressed: () {
           final database = context.read<AppDatabase>();
           Navigator.of(context).push(
@@ -121,7 +122,7 @@ class _AppMainState extends State<AppMain> {
           );
         },
         tooltip: 'Voice commands',
-        child: const Icon(Icons.add),
+        child: const Text('🤖'),
       ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: selectedIndex,
