@@ -554,6 +554,13 @@ Future<void> _deleteTag(
             );
       }
     } else {
+      // Re-parent direct children to the deleted tag's parent so they keep
+      // their place in the tree (becoming top-level when there is no parent).
+      final deletedTag = await (db.select(
+        db.tags,
+      )..where((t) => t.id.equals(id))).getSingleOrNull();
+      final grandparentId = deletedTag?.parentId;
+
       final directChildren = await (db.select(db.tags)
             ..where((t) => t.parentId.equals(id))
             ..where((t) => t.archived.equals(false)))
@@ -561,7 +568,7 @@ Future<void> _deleteTag(
       for (final child in directChildren) {
         await (db.update(db.tags)..where((t) => t.id.equals(child.id))).write(
           TagsCompanion(
-            parentId: const Value(null),
+            parentId: Value(grandparentId),
             updatedAt: Value(now),
             dirty: const Value(true),
           ),
