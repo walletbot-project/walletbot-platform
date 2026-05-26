@@ -1,6 +1,6 @@
 import { api } from '@wallet-bot/backend/api'
 import { useMutation, useQuery } from 'convex/react'
-import { Pencil, Plus } from 'lucide-react'
+import { Pencil } from 'lucide-react'
 import { useState } from 'react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -16,14 +16,21 @@ type CategoryRow = {
     transactionCount: number
 }
 
-export function CategoriesView() {
+type CategoriesViewProps = {
+    creating: boolean
+    onCreatingChange: (open: boolean) => void
+}
+
+export function CategoriesView({
+    creating,
+    onCreatingChange,
+}: CategoriesViewProps) {
     const categories = useQuery(api.categories.queries.listActiveWithCounts)
     const createCategory = useMutation(api.categories.mutations.create)
     const updateCategory = useMutation(api.categories.mutations.update)
     const archiveCategory = useMutation(api.categories.mutations.archive)
 
     const [editing, setEditing] = useState<CategoryRow | null>(null)
-    const [creating, setCreating] = useState(false)
 
     const handleCreate = async (value: CategoryFormValue) => {
         const id = `${Date.now()}${Math.random().toString(36).slice(2, 8)}`
@@ -34,7 +41,7 @@ export function CategoriesView() {
             error: 'Failed to create category',
         })
         await promise
-        setCreating(false)
+        onCreatingChange(false)
     }
 
     const handleUpdate = async (id: string, value: CategoryFormValue) => {
@@ -61,14 +68,7 @@ export function CategoriesView() {
 
     return (
         <div className="flex flex-1 flex-col">
-            <div className="flex justify-end p-4">
-                <Button size="sm" onClick={() => setCreating(true)}>
-                    <Plus data-icon="inline-start" />
-                    New
-                </Button>
-            </div>
-
-            <div className="flex-1 px-4 pb-4">
+            <div className="flex-1 p-4">
                 {categories === undefined ? (
                     <CategoriesSkeleton />
                 ) : categories.length === 0 ? (
@@ -107,7 +107,7 @@ export function CategoriesView() {
 
             <CategoryDialog
                 open={creating}
-                onOpenChange={setCreating}
+                onOpenChange={onCreatingChange}
                 title="New Category"
                 submitLabel="Create"
                 onSubmit={handleCreate}

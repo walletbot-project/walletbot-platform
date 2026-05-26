@@ -1,6 +1,6 @@
 import { api } from '@wallet-bot/backend/api'
 import { useMutation, useQuery } from 'convex/react'
-import { Pencil, Plus } from 'lucide-react'
+import { Pencil } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -27,14 +27,18 @@ type TagRow = {
     transactionCount: number
 }
 
-export function TagsView() {
+type TagsViewProps = {
+    creating: boolean
+    onCreatingChange: (open: boolean) => void
+}
+
+export function TagsView({ creating, onCreatingChange }: TagsViewProps) {
     const tags = useQuery(api.tags.queries.listActiveWithCounts)
     const createTag = useMutation(api.tags.mutations.create)
     const updateTag = useMutation(api.tags.mutations.update)
     const archiveTag = useMutation(api.tags.mutations.archive)
 
     const [editing, setEditing] = useState<TagRow | null>(null)
-    const [creating, setCreating] = useState(false)
     const [deleteTarget, setDeleteTarget] = useState<{
         tag: TagRow
         children: TagRow[]
@@ -42,6 +46,8 @@ export function TagsView() {
     const [deleting, setDeleting] = useState(false)
 
     const tagList = useMemo(() => tags ?? [], [tags])
+
+    const orderedTagTree = useMemo(() => buildTagTree(tagList), [tagList])
 
     const parentOptionsForCreate: TagOption[] = useMemo(
         () =>
@@ -91,7 +97,7 @@ export function TagsView() {
             error: 'Failed to create tag',
         })
         await promise
-        setCreating(false)
+        onCreatingChange(false)
     }
 
     const handleUpdate = async (id: string, value: TagFormValue) => {
@@ -138,14 +144,7 @@ export function TagsView() {
 
     return (
         <div className="flex flex-1 flex-col">
-            <div className="flex justify-end p-4">
-                <Button size="sm" onClick={() => setCreating(true)}>
-                    <Plus data-icon="inline-start" />
-                    New
-                </Button>
-            </div>
-
-            <div className="flex-1 px-4 pb-4">
+            <div className="flex-1 p-4">
                 {tags === undefined ? (
                     <TagsSkeleton />
                 ) : tags.length === 0 ? (
@@ -154,58 +153,48 @@ export function TagsView() {
                     </p>
                 ) : (
                     <ul className="divide-y rounded-md border bg-card">
-                        {tags.map((tag) => {
-                            const parent = tag.parentId
-                                ? tagList.find((t) => t.id === tag.parentId)
-                                : undefined
-                            return (
-                                <li
-                                    key={tag.id}
-                                    className="flex items-center justify-between gap-3 px-4 py-3 text-sm"
+                        {orderedTagTree.map(({ tag, depth }) => (
+                            <li
+                                key={tag.id}
+                                className="flex items-center justify-between gap-3 py-3 pr-4 text-sm"
+                                style={{
+                                    paddingLeft: `${16 + depth * 20}px`,
+                                }}
+                            >
+                                <span
+                                    className="inline-flex items-center gap-2 self-start rounded-full px-3 py-1 text-xs font-medium text-foreground"
+                                    style={{
+                                        backgroundColor: normalizeTagColor(
+                                            tag.color,
+                                        ),
+                                    }}
                                 >
-                                    <div className="flex flex-col gap-1">
-                                        <span
-                                            className="inline-flex items-center gap-2 self-start rounded-full px-3 py-1 text-xs font-medium text-foreground"
-                                            style={{
-                                                backgroundColor:
-                                                    normalizeTagColor(
-                                                        tag.color,
-                                                    ),
-                                            }}
-                                        >
-                                            <span className="size-2 rounded-full bg-white/70" />
-                                            {tag.name}
-                                        </span>
-                                        {parent ? (
-                                            <span className="text-xs text-muted-foreground">
-                                                sub-tag of {parent.name}
-                                            </span>
-                                        ) : null}
-                                    </div>
-                                    <div className="flex items-center gap-3">
-                                        <span className="text-sm tabular-nums text-muted-foreground">
-                                            {tag.transactionCount}
-                                        </span>
-                                        <Button
-                                            type="button"
-                                            variant="ghost"
-                                            size="icon-sm"
-                                            onClick={() => setEditing(tag)}
-                                            aria-label={`Edit ${tag.name}`}
-                                        >
-                                            <Pencil />
-                                        </Button>
-                                    </div>
-                                </li>
-                            )
-                        })}
+                                    <span className="size-2 rounded-full bg-white/70" />
+                                    {tag.name}
+                                </span>
+                                <div className="flex items-center gap-3">
+                                    <span className="text-sm tabular-nums text-muted-foreground">
+                                        {tag.transactionCount}
+                                    </span>
+                                    <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="icon-sm"
+                                        onClick={() => setEditing(tag)}
+                                        aria-label={`Edit ${tag.name}`}
+                                    >
+                                        <Pencil />
+                                    </Button>
+                                </div>
+                            </li>
+                        ))}
                     </ul>
                 )}
             </div>
 
             <TagDialog
                 open={creating}
-                onOpenChange={setCreating}
+                onOpenChange={onCreatingChange}
                 title="New Tag"
                 submitLabel="Create"
                 parentOptions={parentOptionsForCreate}
@@ -300,6 +289,31 @@ export function TagsView() {
             </Dialog>
         </div>
     )
+}
+
+function buildTagTree(tags: TagRow[]): { tag: TagRow; depth: number }[] {
+    const tagsById = new Map(tags.map((t) => [t.id, t]))
+    const childrenByParent = new Map<string, TagRow[]>()
+    const roots: TagRow[] = []
+
+    for (const tag of tags) {
+        if (tag.parentId && tagsById.has(tag.parentId)) {
+            const list = childrenByParent.get(tag.parentId) ?? []
+            list.push(tag)
+            childrenByParent.set(tag.parentId, list)
+        } else {
+            roots.push(tag)
+        }
+    }
+
+    const result: { tag: TagRow; depth: number }[] = []
+    const visit = (tag: TagRow, depth: number) => {
+        result.push({ tag, depth })
+        const children = childrenByParent.get(tag.id) ?? []
+        for (const child of children) visit(child, depth + 1)
+    }
+    for (const root of roots) visit(root, 0)
+    return result
 }
 
 function TagsSkeleton() {
