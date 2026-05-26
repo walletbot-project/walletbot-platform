@@ -53,12 +53,12 @@ class CategoriesView extends StatelessWidget {
   Stream<List<CategoryWithCount>> _watchCategoriesWithCounts(AppDatabase db) {
     final query = db.customSelect(
       '''
-        SELECT c.id, c.name, c.description, c.is_archived, c.created_at,
+        SELECT c.id, c.name, c.description, c.archived, c.created_at,
                c.updated_at, c.dirty, COUNT(t.id) AS transaction_count
         FROM categories c
         LEFT JOIN transactions t ON t.category_id = c.id
-        WHERE c.is_archived = 0
-        GROUP BY c.id, c.name, c.description, c.is_archived, c.created_at,
+        WHERE c.archived = 0
+        GROUP BY c.id, c.name, c.description, c.archived, c.created_at,
                  c.updated_at, c.dirty
         ORDER BY c.name COLLATE NOCASE
       ''',
@@ -72,7 +72,7 @@ class CategoriesView extends StatelessWidget {
             id: row.read<String>('id'),
             name: row.read<String>('name'),
             description: row.readNullable<String>('description'),
-            archived: row.read<bool>('is_archived'),
+            archived: row.read<bool>('archived'),
             createdAt: row.read<BigInt>('created_at'),
             updatedAt: row.read<BigInt>('updated_at'),
             dirty: row.read<bool>('dirty'),

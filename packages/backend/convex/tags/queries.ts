@@ -9,7 +9,7 @@ export const listActive = query({
         return await ctx.db
             .query('tags')
             .withIndex('by_user_archived', (q) =>
-                q.eq('userId', userId).eq('isArchived', false),
+                q.eq('userId', userId).eq('archived', false),
             )
             .collect()
     },
@@ -22,7 +22,7 @@ export const listActiveWithCounts = query({
         const tags = await ctx.db
             .query('tags')
             .withIndex('by_user_archived', (q) =>
-                q.eq('userId', userId).eq('isArchived', false),
+                q.eq('userId', userId).eq('archived', false),
             )
             .collect()
 

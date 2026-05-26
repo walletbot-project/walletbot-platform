@@ -31,7 +31,7 @@ export function inflowsNamespace(doc: Doc<'transactions'>): string {
 }
 
 export function outflowsValue(doc: Doc<'transactions'>): number {
-    if (doc.isArchived) return 0
+    if (doc.archived) return 0
     const amount = Number(doc.amount)
     switch (doc.type) {
         case 'expense':
@@ -46,7 +46,7 @@ export function outflowsValue(doc: Doc<'transactions'>): number {
 }
 
 export function inflowsValue(doc: Doc<'transactions'>): number {
-    if (doc.isArchived) return 0
+    if (doc.archived) return 0
     if (doc.type !== 'transfer') return 0
     return Number(doc.toAmount ?? doc.amount)
 }

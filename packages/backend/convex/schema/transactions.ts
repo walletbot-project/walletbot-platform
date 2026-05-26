@@ -29,7 +29,7 @@ export const transactions = defineTable({
     // Balance adjustments
     balanceAfter: v.optional(v.int64()), // cents
 
-    isArchived: v.boolean(),
+    archived: v.boolean(),
     createdAt: v.int64(),
     updatedAt: v.int64(),
     seq: v.int64(),

@@ -33,7 +33,7 @@ export const toolExecutors = {
                 currency: a.currency,
                 color: a.color,
                 icon: a.icon,
-                isArchived: a.isArchived,
+                archived: a.archived,
             })),
         }
     }),

@@ -71,13 +71,13 @@ class $AccountsTable extends Accounts with TableInfo<$AccountsTable, Account> {
   );
   @override
   late final GeneratedColumn<bool> archived = GeneratedColumn<bool>(
-    'is_archived',
+    'archived',
     aliasedName,
     false,
     type: DriftSqlType.bool,
     requiredDuringInsert: false,
     defaultConstraints: GeneratedColumn.constraintIsAlways(
-      'CHECK ("is_archived" IN (0, 1))',
+      'CHECK ("archived" IN (0, 1))',
     ),
     defaultValue: const Constant(false),
   );
@@ -183,10 +183,10 @@ class $AccountsTable extends Accounts with TableInfo<$AccountsTable, Account> {
         icon.isAcceptableOrUnknown(data['icon']!, _iconMeta),
       );
     }
-    if (data.containsKey('is_archived')) {
+    if (data.containsKey('archived')) {
       context.handle(
         _archivedMeta,
-        archived.isAcceptableOrUnknown(data['is_archived']!, _archivedMeta),
+        archived.isAcceptableOrUnknown(data['archived']!, _archivedMeta),
       );
     }
     if (data.containsKey('created_at')) {
@@ -246,7 +246,7 @@ class $AccountsTable extends Accounts with TableInfo<$AccountsTable, Account> {
       ),
       archived: attachedDatabase.typeMapping.read(
         DriftSqlType.bool,
-        data['${effectivePrefix}is_archived'],
+        data['${effectivePrefix}archived'],
       )!,
       createdAt: attachedDatabase.typeMapping.read(
         DriftSqlType.bigInt,
@@ -307,7 +307,7 @@ class Account extends DataClass implements Insertable<Account> {
     if (!nullToAbsent || icon != null) {
       map['icon'] = Variable<String>(icon);
     }
-    map['is_archived'] = Variable<bool>(archived);
+    map['archived'] = Variable<bool>(archived);
     map['created_at'] = Variable<BigInt>(createdAt);
     map['updated_at'] = Variable<BigInt>(updatedAt);
     map['dirty'] = Variable<bool>(dirty);
@@ -516,7 +516,7 @@ class AccountsCompanion extends UpdateCompanion<Account> {
       if (description != null) 'description': description,
       if (color != null) 'color': color,
       if (icon != null) 'icon': icon,
-      if (archived != null) 'is_archived': archived,
+      if (archived != null) 'archived': archived,
       if (createdAt != null) 'created_at': createdAt,
       if (updatedAt != null) 'updated_at': updatedAt,
       if (dirty != null) 'dirty': dirty,
@@ -574,7 +574,7 @@ class AccountsCompanion extends UpdateCompanion<Account> {
       map['icon'] = Variable<String>(icon.value);
     }
     if (archived.present) {
-      map['is_archived'] = Variable<bool>(archived.value);
+      map['archived'] = Variable<bool>(archived.value);
     }
     if (createdAt.present) {
       map['created_at'] = Variable<BigInt>(createdAt.value);
@@ -650,13 +650,13 @@ class $CategoriesTable extends Categories
   );
   @override
   late final GeneratedColumn<bool> archived = GeneratedColumn<bool>(
-    'is_archived',
+    'archived',
     aliasedName,
     false,
     type: DriftSqlType.bool,
     requiredDuringInsert: false,
     defaultConstraints: GeneratedColumn.constraintIsAlways(
-      'CHECK ("is_archived" IN (0, 1))',
+      'CHECK ("archived" IN (0, 1))',
     ),
     defaultValue: const Constant(false),
   );
@@ -739,10 +739,10 @@ class $CategoriesTable extends Categories
         ),
       );
     }
-    if (data.containsKey('is_archived')) {
+    if (data.containsKey('archived')) {
       context.handle(
         _archivedMeta,
-        archived.isAcceptableOrUnknown(data['is_archived']!, _archivedMeta),
+        archived.isAcceptableOrUnknown(data['archived']!, _archivedMeta),
       );
     }
     if (data.containsKey('created_at')) {
@@ -790,7 +790,7 @@ class $CategoriesTable extends Categories
       ),
       archived: attachedDatabase.typeMapping.read(
         DriftSqlType.bool,
-        data['${effectivePrefix}is_archived'],
+        data['${effectivePrefix}archived'],
       )!,
       createdAt: attachedDatabase.typeMapping.read(
         DriftSqlType.bigInt,
@@ -838,7 +838,7 @@ class Category extends DataClass implements Insertable<Category> {
     if (!nullToAbsent || description != null) {
       map['description'] = Variable<String>(description);
     }
-    map['is_archived'] = Variable<bool>(archived);
+    map['archived'] = Variable<bool>(archived);
     map['created_at'] = Variable<BigInt>(createdAt);
     map['updated_at'] = Variable<BigInt>(updatedAt);
     map['dirty'] = Variable<bool>(dirty);
@@ -995,7 +995,7 @@ class CategoriesCompanion extends UpdateCompanion<Category> {
       if (id != null) 'id': id,
       if (name != null) 'name': name,
       if (description != null) 'description': description,
-      if (archived != null) 'is_archived': archived,
+      if (archived != null) 'archived': archived,
       if (createdAt != null) 'created_at': createdAt,
       if (updatedAt != null) 'updated_at': updatedAt,
       if (dirty != null) 'dirty': dirty,
@@ -1038,7 +1038,7 @@ class CategoriesCompanion extends UpdateCompanion<Category> {
       map['description'] = Variable<String>(description.value);
     }
     if (archived.present) {
-      map['is_archived'] = Variable<bool>(archived.value);
+      map['archived'] = Variable<bool>(archived.value);
     }
     if (createdAt.present) {
       map['created_at'] = Variable<BigInt>(createdAt.value);
@@ -2190,13 +2190,13 @@ class $TagsTable extends Tags with TableInfo<$TagsTable, Tag> {
   );
   @override
   late final GeneratedColumn<bool> archived = GeneratedColumn<bool>(
-    'is_archived',
+    'archived',
     aliasedName,
     false,
     type: DriftSqlType.bool,
     requiredDuringInsert: false,
     defaultConstraints: GeneratedColumn.constraintIsAlways(
-      'CHECK ("is_archived" IN (0, 1))',
+      'CHECK ("archived" IN (0, 1))',
     ),
     defaultValue: const Constant(false),
   );
@@ -2293,10 +2293,10 @@ class $TagsTable extends Tags with TableInfo<$TagsTable, Tag> {
         color.isAcceptableOrUnknown(data['color']!, _colorMeta),
       );
     }
-    if (data.containsKey('is_archived')) {
+    if (data.containsKey('archived')) {
       context.handle(
         _archivedMeta,
-        archived.isAcceptableOrUnknown(data['is_archived']!, _archivedMeta),
+        archived.isAcceptableOrUnknown(data['archived']!, _archivedMeta),
       );
     }
     if (data.containsKey('created_at')) {
@@ -2352,7 +2352,7 @@ class $TagsTable extends Tags with TableInfo<$TagsTable, Tag> {
       ),
       archived: attachedDatabase.typeMapping.read(
         DriftSqlType.bool,
-        data['${effectivePrefix}is_archived'],
+        data['${effectivePrefix}archived'],
       )!,
       createdAt: attachedDatabase.typeMapping.read(
         DriftSqlType.bigInt,
@@ -2410,7 +2410,7 @@ class Tag extends DataClass implements Insertable<Tag> {
     if (!nullToAbsent || color != null) {
       map['color'] = Variable<String>(color);
     }
-    map['is_archived'] = Variable<bool>(archived);
+    map['archived'] = Variable<bool>(archived);
     map['created_at'] = Variable<BigInt>(createdAt);
     map['updated_at'] = Variable<BigInt>(updatedAt);
     map['dirty'] = Variable<bool>(dirty);
@@ -2606,7 +2606,7 @@ class TagsCompanion extends UpdateCompanion<Tag> {
       if (description != null) 'description': description,
       if (parentId != null) 'parent_id': parentId,
       if (color != null) 'color': color,
-      if (archived != null) 'is_archived': archived,
+      if (archived != null) 'archived': archived,
       if (createdAt != null) 'created_at': createdAt,
       if (updatedAt != null) 'updated_at': updatedAt,
       if (dirty != null) 'dirty': dirty,
@@ -2659,7 +2659,7 @@ class TagsCompanion extends UpdateCompanion<Tag> {
       map['color'] = Variable<String>(color.value);
     }
     if (archived.present) {
-      map['is_archived'] = Variable<bool>(archived.value);
+      map['archived'] = Variable<bool>(archived.value);
     }
     if (createdAt.present) {
       map['created_at'] = Variable<BigInt>(createdAt.value);
@@ -3821,7 +3821,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $TombstonesTable tombstones = $TombstonesTable(this);
   late final Index accountsArchived = Index(
     'accounts_archived',
-    'CREATE INDEX accounts_archived ON accounts (is_archived)',
+    'CREATE INDEX accounts_archived ON accounts (archived)',
   );
   late final Index accountsUpdatedAt = Index(
     'accounts_updated_at',
@@ -3833,7 +3833,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   );
   late final Index categoriesArchived = Index(
     'categories_archived',
-    'CREATE INDEX categories_archived ON categories (is_archived)',
+    'CREATE INDEX categories_archived ON categories (archived)',
   );
   late final Index categoriesUpdatedAt = Index(
     'categories_updated_at',
@@ -3893,7 +3893,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   );
   late final Index tagsArchived = Index(
     'tags_archived',
-    'CREATE INDEX tags_archived ON tags (is_archived)',
+    'CREATE INDEX tags_archived ON tags (archived)',
   );
   late final Index tagsUpdatedAt = Index(
     'tags_updated_at',

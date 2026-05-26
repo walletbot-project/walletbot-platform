@@ -30,7 +30,7 @@ export const create = mutation({
             id: args.id,
             name: args.name,
             description: args.description,
-            isArchived: false,
+            archived: false,
             createdAt: now,
             updatedAt: now,
             seq,
@@ -87,7 +87,7 @@ export const archive = mutation({
         const now = BigInt(Date.now())
 
         await ctx.db.patch(row._id, {
-            isArchived: true,
+            archived: true,
             updatedAt: now,
             seq,
         })

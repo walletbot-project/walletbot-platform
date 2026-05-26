@@ -9,7 +9,7 @@ export const listActive = query({
         return await ctx.db
             .query('categories')
             .withIndex('by_user_archived', (q) =>
-                q.eq('userId', userId).eq('isArchived', false),
+                q.eq('userId', userId).eq('archived', false),
             )
             .collect()
     },
@@ -22,7 +22,7 @@ export const listActiveWithCounts = query({
         const categories = await ctx.db
             .query('categories')
             .withIndex('by_user_archived', (q) =>
-                q.eq('userId', userId).eq('isArchived', false),
+                q.eq('userId', userId).eq('archived', false),
             )
             .collect()
 
@@ -36,7 +36,7 @@ export const listActiveWithCounts = query({
                     .collect()
                 return {
                     ...category,
-                    transactionCount: txns.filter((t) => !t.isArchived).length,
+                    transactionCount: txns.filter((t) => !t.archived).length,
                 }
             }),
         )

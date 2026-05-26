@@ -8,7 +8,7 @@ export { toolSchemas } from './definitions'
 const toolDescriptions = {
     // Accounts
     listAccounts:
-        'List user accounts. Returns id, name, currency, color, icon, isArchived.',
+        'List user accounts. Returns id, name, currency, color, icon, archived.',
     getAccount: 'Get a single account by UUID or name (case-insensitive).',
     getAccountBalance: 'Get the current balance of an account in its currency.',
     createAccount:

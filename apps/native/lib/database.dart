@@ -22,7 +22,7 @@ class Accounts extends Table {
   TextColumn get icon => text().named('icon').nullable()(); // from defined list
 
   BoolColumn get archived =>
-      boolean().named('is_archived').withDefault(const Constant(false))();
+      boolean().named('archived').withDefault(const Constant(false))();
   Int64Column get createdAt => int64().named('created_at')();
   Int64Column get updatedAt => int64().named('updated_at')();
 
@@ -46,7 +46,7 @@ class Categories extends Table {
   TextColumn get description => text().named('description').nullable()();
 
   BoolColumn get archived =>
-      boolean().named('is_archived').withDefault(const Constant(false))();
+      boolean().named('archived').withDefault(const Constant(false))();
   Int64Column get createdAt => int64().named('created_at')();
   Int64Column get updatedAt => int64().named('updated_at')();
 
@@ -130,7 +130,7 @@ class Tags extends Table {
   TextColumn get color => text().named('color').nullable()(); // hex color code
 
   BoolColumn get archived =>
-      boolean().named('is_archived').withDefault(const Constant(false))();
+      boolean().named('archived').withDefault(const Constant(false))();
   Int64Column get createdAt => int64().named('created_at')();
   Int64Column get updatedAt => int64().named('updated_at')();
 
@@ -221,7 +221,21 @@ class AppDatabase extends _$AppDatabase {
     : super(_openConnection(_dbNameFor(userId)));
 
   @override
-  int get schemaVersion => 1;
+  int get schemaVersion => 2;
+
+  // v2: rename `is_archived` -> `archived` on accounts, categories, tags.
+  // Pre-launch app; we don't preserve data, just rebuild from a clean schema.
+  @override
+  MigrationStrategy get migration => MigrationStrategy(
+    onUpgrade: (m, from, to) async {
+      if (from < 2) {
+        for (final t in allTables) {
+          await m.deleteTable(t.actualTableName);
+        }
+        await m.createAll();
+      }
+    },
+  );
 
   static String _dbNameFor(String userId) => 'app_database_$userId';
 

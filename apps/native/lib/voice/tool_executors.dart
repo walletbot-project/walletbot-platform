@@ -193,7 +193,7 @@ class ToolExecutors {
               'currency': a.currency,
               'color': a.color,
               'icon': a.icon,
-              'isArchived': a.archived,
+              'archived': a.archived,
             },
           )
           .toList(),
