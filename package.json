@@ -6,7 +6,8 @@
         "dev": "pnpm --parallel -r run dev",
         "typecheck": "pnpm -r run typecheck",
         "format": "biome check --write --unsafe",
-        "native": "cd apps/native && flutter run"
+        "native": "cd apps/native && flutter run",
+        "build-flutter": "cd apps/native && flutter build apk --debug"
     },
     "devDependencies": {
         "@biomejs/biome": "2.4.7",
