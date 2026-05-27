@@ -1,3 +1,4 @@
+import 'package:app/components/currency-picker.dart';
 import 'package:app/database.dart';
 import 'package:app/screens/create_account.dart';
 import 'package:flutter/material.dart';
@@ -14,6 +15,8 @@ class _AccountsScreenState extends State<AccountsScreen> {
   // Null means no account is being edited.
   String? _editingAccountId;
   final _editController = TextEditingController();
+  // Pending currency while an edit is in progress.
+  String _editCurrency = '';
 
   bool _isManagementMode = false;
   final Set<String> _selectedIds = {};
@@ -26,11 +29,26 @@ class _AccountsScreenState extends State<AccountsScreen> {
 
   // ── Edit ────────────────────────────────────────────────────────────────────
 
-  void _startEdit(String id, String currentName) {
+  void _startEdit(String id, String currentName, String currentCurrency) {
     _editController.text = currentName;
     _editController.selection =
         TextSelection.fromPosition(TextPosition(offset: currentName.length));
-    setState(() => _editingAccountId = id);
+    setState(() {
+      _editingAccountId = id;
+      _editCurrency = currentCurrency;
+    });
+  }
+
+  Future<void> _pickEditCurrency() async {
+    final picked = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (_) => CurrencyPickerSheet(selected: _editCurrency),
+    );
+    if (picked != null && mounted) {
+      setState(() => _editCurrency = picked);
+    }
   }
 
   Future<void> _confirmEdit() async {
@@ -45,16 +63,19 @@ class _AccountsScreenState extends State<AccountsScreen> {
       return;
     }
 
+    // Snapshot before clearing state so the async call has the right values.
+    final currency = _editCurrency;
+
     // Close edit mode before the async call so the UI is never stuck.
     setState(() => _editingAccountId = null);
 
     try {
-      await context.read<AppDatabase>().updateAccountName(id, newName);
+      await context.read<AppDatabase>().updateAccount(id, newName, currency);
     } catch (e, st) {
-      debugPrint('Error renaming account: $e\n$st');
+      debugPrint('Error updating account: $e\n$st');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Error al renombrar la cuenta')),
+          const SnackBar(content: Text('Error al guardar los cambios')),
         );
       }
     }
@@ -246,16 +267,25 @@ class _AccountsScreenState extends State<AccountsScreen> {
                           itemCount: list.length,
                           itemBuilder: (context, i) {
                             final account = list[i];
+                            final isEditing =
+                                _editingAccountId == account.id;
                             return _AccountCard(
                               account: account,
-                              isEditing: _editingAccountId == account.id,
+                              isEditing: isEditing,
                               editController: _editController,
+                              editCurrency: isEditing
+                                  ? _editCurrency
+                                  : account.currency,
                               isManagementMode: _isManagementMode,
                               isSelected: _selectedIds.contains(account.id),
-                              onStartEdit: () =>
-                                  _startEdit(account.id, account.name),
+                              onStartEdit: () => _startEdit(
+                                account.id,
+                                account.name,
+                                account.currency,
+                              ),
                               onConfirmEdit: _confirmEdit,
                               onCancelEdit: _cancelEdit,
+                              onTapCurrency: _pickEditCurrency,
                               onDelete: () =>
                                   _requestDelete(account.id, account.name),
                               onLongPress: () =>
@@ -393,11 +423,13 @@ class _AccountCard extends StatelessWidget {
     required this.account,
     required this.isEditing,
     required this.editController,
+    required this.editCurrency,
     required this.isManagementMode,
     required this.isSelected,
     required this.onStartEdit,
     required this.onConfirmEdit,
     required this.onCancelEdit,
+    required this.onTapCurrency,
     required this.onDelete,
     required this.onLongPress,
     required this.onToggleSelect,
@@ -406,11 +438,15 @@ class _AccountCard extends StatelessWidget {
   final Account account;
   final bool isEditing;
   final TextEditingController editController;
+  // Current pending currency while editing; equals account.currency otherwise.
+  final String editCurrency;
   final bool isManagementMode;
   final bool isSelected;
   final VoidCallback onStartEdit;
   final VoidCallback onConfirmEdit;
   final VoidCallback onCancelEdit;
+  // Opens the currency picker when in edit mode.
+  final VoidCallback onTapCurrency;
   final VoidCallback onDelete;
   final VoidCallback onLongPress;
   final VoidCallback onToggleSelect;
@@ -465,7 +501,12 @@ class _AccountCard extends StatelessWidget {
       trailing = Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Chip(label: Text(account.currency)),
+          ActionChip(
+            label: Text(editCurrency),
+            avatar: const Icon(Icons.arrow_drop_down, size: 18),
+            onPressed: onTapCurrency,
+            tooltip: 'Cambiar moneda',
+          ),
           IconButton(
             icon: Icon(Icons.check_rounded, color: Colors.green.shade700),
             iconSize: 20,

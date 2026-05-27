@@ -255,11 +255,12 @@ class AppDatabase extends _$AppDatabase {
     ));
   }
 
-  Future<void> updateAccountName(String id, String newName) {
+  Future<void> updateAccount(String id, String name, String currency) {
     final now = BigInt.from(DateTime.now().millisecondsSinceEpoch);
     return (update(accounts)..where((a) => a.id.equals(id))).write(
       AccountsCompanion(
-        name: Value(newName),
+        name: Value(name),
+        currency: Value(currency),
         updatedAt: Value(now),
         dirty: const Value(true),
       ),
