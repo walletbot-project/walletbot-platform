@@ -77,49 +77,10 @@ Stream<List<CategoryWithCount>> _watchCategoriesWithCounts(AppDatabase db) {
   });
 }
 
-Future<void> showAddCategoryDialog(
-  BuildContext context,
-  AppDatabase db,
-) async {
-  final nameController = TextEditingController();
-
-  await showDialog<void>(
+Future<void> showAddCategoryDialog(BuildContext context, AppDatabase db) {
+  return showDialog<_CategoryDialogAction>(
     context: context,
-    builder: (context) => AlertDialog(
-      title: const Text('New Category'),
-      content: TextField(
-        controller: nameController,
-        decoration: const InputDecoration(labelText: 'Name'),
-        autofocus: true,
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text('Cancel'),
-        ),
-        TextButton(
-          onPressed: () async {
-            final name = nameController.text.trim();
-            if (name.isNotEmpty) {
-              final now = BigInt.from(DateTime.now().millisecondsSinceEpoch);
-              await db
-                  .into(db.categories)
-                  .insert(
-                    CategoriesCompanion.insert(
-                      id: DateTime.now().microsecondsSinceEpoch.toString(),
-                      name: name,
-                      createdAt: now,
-                      updatedAt: now,
-                    ),
-                  );
-            }
-
-            if (context.mounted) Navigator.pop(context);
-          },
-          child: const Text('Create'),
-        ),
-      ],
-    ),
+    builder: (context) => _CategoryDialog(db: db),
   );
 }
 
@@ -128,50 +89,106 @@ Future<void> _editCategoryDialog(
   AppDatabase db,
   Category category,
 ) async {
-  final nameController = TextEditingController(text: category.name);
-
-  await showDialog<void>(
+  final action = await showDialog<_CategoryDialogAction>(
     context: context,
-    builder: (context) => AlertDialog(
-      title: const Text('Edit Category'),
+    builder: (context) => _CategoryDialog(db: db, category: category),
+  );
+
+  if (action == _CategoryDialogAction.delete) {
+    await _deleteCategory(db, category.id);
+  }
+}
+
+enum _CategoryDialogAction { saved, delete }
+
+// Owns the name controller so it lives exactly as long as the dialog widget
+// and is disposed from State.dispose(), per the Flutter docs for
+// TextEditingController.
+class _CategoryDialog extends StatefulWidget {
+  const _CategoryDialog({required this.db, this.category});
+
+  final AppDatabase db;
+  final Category? category;
+
+  @override
+  State<_CategoryDialog> createState() => _CategoryDialogState();
+}
+
+class _CategoryDialogState extends State<_CategoryDialog> {
+  late final TextEditingController _nameController;
+
+  bool get _isEditing => widget.category != null;
+
+  @override
+  void initState() {
+    super.initState();
+    _nameController = TextEditingController(text: widget.category?.name ?? '');
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    final name = _nameController.text.trim();
+    final navigator = Navigator.of(context);
+    if (name.isNotEmpty) {
+      final category = widget.category;
+      if (category != null) {
+        await _updateCategory(widget.db, category.id, name);
+      } else {
+        await _createCategory(widget.db, name);
+      }
+    }
+    navigator.pop(_CategoryDialogAction.saved);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Text(_isEditing ? 'Edit Category' : 'New Category'),
       content: TextField(
-        controller: nameController,
+        controller: _nameController,
         decoration: const InputDecoration(labelText: 'Name'),
         autofocus: true,
       ),
       actions: [
-        TextButton(
-          onPressed: () async {
-            await _deleteCategory(db, category.id);
-            if (context.mounted) Navigator.pop(context);
-          },
-          child: const Text('Delete'),
-        ),
+        if (_isEditing)
+          TextButton(
+            onPressed: () =>
+                Navigator.pop(context, _CategoryDialogAction.delete),
+            child: const Text('Delete'),
+          ),
         TextButton(
           onPressed: () => Navigator.pop(context),
           child: const Text('Cancel'),
         ),
         TextButton(
-          onPressed: () async {
-            final name = nameController.text.trim();
-            if (name.isNotEmpty) {
-              await _updateCategory(db, category.id, name);
-            }
-
-            if (context.mounted) Navigator.pop(context);
-          },
-          child: const Text('Save'),
+          onPressed: _submit,
+          child: Text(_isEditing ? 'Save' : 'Create'),
         ),
       ],
-    ),
-  );
+    );
+  }
 }
 
-Future<void> _updateCategory(
-  AppDatabase db,
-  String id,
-  String name,
-) async {
+Future<void> _createCategory(AppDatabase db, String name) async {
+  final now = BigInt.from(DateTime.now().millisecondsSinceEpoch);
+  await db
+      .into(db.categories)
+      .insert(
+        CategoriesCompanion.insert(
+          id: DateTime.now().microsecondsSinceEpoch.toString(),
+          name: name,
+          createdAt: now,
+          updatedAt: now,
+        ),
+      );
+}
+
+Future<void> _updateCategory(AppDatabase db, String id, String name) async {
   final now = BigInt.from(DateTime.now().millisecondsSinceEpoch);
   await (db.update(db.categories)..where((category) => category.id.equals(id)))
       .write(

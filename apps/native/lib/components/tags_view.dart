@@ -170,107 +170,12 @@ Set<String> _descendantIds(List<Tag> all, String rootId) {
 }
 
 Future<void> showAddTagDialog(BuildContext context, AppDatabase db) async {
-  final existing = await _loadActiveTags(db);
+  final parentCandidates = await _loadActiveTags(db);
   if (!context.mounted) return;
-  final parentCandidates = existing.toList();
-  final nameController = TextEditingController();
-  Color selectedColor = tagDefaultColor;
-  bool isSubtag = false;
-  String? parentId;
-
-  await showDialog<void>(
+  await showDialog<_TagDialogAction>(
     context: context,
-    builder: (context) => StatefulBuilder(
-      builder: (context, setState) {
-        return AlertDialog(
-          title: const Text('New Tag'),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                TextField(
-                  controller: nameController,
-                  decoration: const InputDecoration(labelText: 'Name'),
-                  autofocus: true,
-                ),
-                const SizedBox(height: 20),
-                Text(
-                  'Color',
-                  style: Theme.of(context).textTheme.labelLarge,
-                ),
-                const SizedBox(height: 12),
-                _ColorPicker(
-                  selected: selectedColor,
-                  onChanged: (c) => setState(() => selectedColor = c),
-                ),
-                if (parentCandidates.isNotEmpty) ...[
-                  const SizedBox(height: 20),
-                  Row(
-                    children: [
-                      Checkbox(
-                        value: isSubtag,
-                        onChanged: (v) => setState(() {
-                          isSubtag = v ?? false;
-                          if (!isSubtag) parentId = null;
-                        }),
-                      ),
-                      const Text('Create sub-tag'),
-                    ],
-                  ),
-                ],
-                if (isSubtag && parentCandidates.isNotEmpty) ...[
-                  const SizedBox(height: 12),
-                  Text(
-                    'Parent tag',
-                    style: Theme.of(context).textTheme.labelLarge,
-                  ),
-                  const SizedBox(height: 8),
-                  DropdownButtonFormField<String>(
-                    initialValue: parentId,
-                    isExpanded: true,
-                    decoration: const InputDecoration(
-                      border: OutlineInputBorder(),
-                    ),
-                    hint: const Text('Select parent tag'),
-                    items: parentCandidates
-                        .map(
-                          (t) => DropdownMenuItem(
-                            value: t.id,
-                            child: Text(t.name),
-                          ),
-                        )
-                        .toList(),
-                    onChanged: (v) => setState(() => parentId = v),
-                  ),
-                ],
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel'),
-            ),
-            TextButton(
-              onPressed: () async {
-                final name = nameController.text.trim();
-                if (name.isEmpty) return;
-                if (isSubtag && parentId == null) return;
-                await _createTag(
-                  db,
-                  name: name,
-                  color: selectedColor,
-                  parentId: isSubtag ? parentId : null,
-                );
-                if (context.mounted) Navigator.pop(context);
-              },
-              child: const Text('Create'),
-            ),
-          ],
-        );
-      },
-    ),
+    builder: (context) =>
+        _TagDialog(db: db, parentCandidates: parentCandidates),
   );
 }
 
@@ -285,116 +190,171 @@ Future<void> _editTagDialog(
       .where((t) => t.id != tag.id && !descendants.contains(t.id))
       .toList();
 
-  final nameController = TextEditingController(text: tag.name);
-  Color selectedColor = colorFromHex(tag.color);
-  bool isSubtag = tag.parentId != null;
-  String? parentId = tag.parentId;
-
-  await showDialog<void>(
+  final action = await showDialog<_TagDialogAction>(
     context: context,
-    builder: (context) => StatefulBuilder(
-      builder: (context, setState) {
-        return AlertDialog(
-          title: const Text('Edit Tag'),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                TextField(
-                  controller: nameController,
-                  decoration: const InputDecoration(labelText: 'Name'),
-                  autofocus: true,
-                ),
-                const SizedBox(height: 20),
-                Text(
-                  'Color',
-                  style: Theme.of(context).textTheme.labelLarge,
-                ),
-                const SizedBox(height: 12),
-                _ColorPicker(
-                  selected: selectedColor,
-                  onChanged: (c) => setState(() => selectedColor = c),
-                ),
-                if (parentCandidates.isNotEmpty) ...[
-                  const SizedBox(height: 20),
-                  Row(
-                    children: [
-                      Checkbox(
-                        value: isSubtag,
-                        onChanged: (v) => setState(() {
-                          isSubtag = v ?? false;
-                          if (!isSubtag) parentId = null;
-                        }),
-                      ),
-                      const Text('Create sub-tag'),
-                    ],
-                  ),
-                ],
-                if (isSubtag && parentCandidates.isNotEmpty) ...[
-                  const SizedBox(height: 12),
-                  Text(
-                    'Parent tag',
-                    style: Theme.of(context).textTheme.labelLarge,
-                  ),
-                  const SizedBox(height: 8),
-                  DropdownButtonFormField<String>(
-                    initialValue: parentId,
-                    isExpanded: true,
-                    decoration: const InputDecoration(
-                      border: OutlineInputBorder(),
-                    ),
-                    hint: const Text('Select parent tag'),
-                    items: parentCandidates
-                        .map(
-                          (t) => DropdownMenuItem(
-                            value: t.id,
-                            child: Text(t.name),
-                          ),
-                        )
-                        .toList(),
-                    onChanged: (v) => setState(() => parentId = v),
-                  ),
-                ],
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () async {
-                Navigator.pop(context);
-                final children = allActive
-                    .where((t) => t.parentId == tag.id)
-                    .toList();
-                await _confirmAndDeleteTag(context, db, tag, children);
-              },
-              child: const Text('Delete'),
-            ),
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel'),
-            ),
-            TextButton(
-              onPressed: () async {
-                final name = nameController.text.trim();
-                if (name.isEmpty) return;
-                if (isSubtag && parentId == null) return;
-                await _updateTag(
-                  db,
-                  tag: tag,
-                  name: name,
-                  color: selectedColor,
-                  newParentId: isSubtag ? parentId : null,
-                );
-                if (context.mounted) Navigator.pop(context);
-              },
-              child: const Text('Save'),
-            ),
-          ],
-        );
-      },
-    ),
+    builder: (context) =>
+        _TagDialog(db: db, parentCandidates: parentCandidates, tag: tag),
   );
+
+  if (action == _TagDialogAction.delete) {
+    if (!context.mounted) return;
+    final children = allActive.where((t) => t.parentId == tag.id).toList();
+    await _confirmAndDeleteTag(context, db, tag, children);
+  }
+}
+
+enum _TagDialogAction { saved, delete }
+
+// Owns the name controller so it lives exactly as long as the dialog widget
+// and is disposed from State.dispose(), per the Flutter docs for
+// TextEditingController.
+class _TagDialog extends StatefulWidget {
+  const _TagDialog({
+    required this.db,
+    required this.parentCandidates,
+    this.tag,
+  });
+
+  final AppDatabase db;
+  final List<Tag> parentCandidates;
+  final Tag? tag;
+
+  @override
+  State<_TagDialog> createState() => _TagDialogState();
+}
+
+class _TagDialogState extends State<_TagDialog> {
+  late final TextEditingController _nameController;
+  late Color _selectedColor;
+  late bool _isSubtag;
+  String? _parentId;
+
+  bool get _isEditing => widget.tag != null;
+
+  @override
+  void initState() {
+    super.initState();
+    final tag = widget.tag;
+    _nameController = TextEditingController(text: tag?.name ?? '');
+    _selectedColor = tag != null ? colorFromHex(tag.color) : tagDefaultColor;
+    _isSubtag = tag?.parentId != null;
+    _parentId = tag?.parentId;
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    final name = _nameController.text.trim();
+    if (name.isEmpty) return;
+    if (_isSubtag && _parentId == null) return;
+    final navigator = Navigator.of(context);
+    final tag = widget.tag;
+    if (tag != null) {
+      await _updateTag(
+        widget.db,
+        tag: tag,
+        name: name,
+        color: _selectedColor,
+        newParentId: _isSubtag ? _parentId : null,
+      );
+    } else {
+      await _createTag(
+        widget.db,
+        name: name,
+        color: _selectedColor,
+        parentId: _isSubtag ? _parentId : null,
+      );
+    }
+    navigator.pop(_TagDialogAction.saved);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final parentCandidates = widget.parentCandidates;
+
+    return AlertDialog(
+      title: Text(_isEditing ? 'Edit Tag' : 'New Tag'),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            TextField(
+              controller: _nameController,
+              decoration: const InputDecoration(labelText: 'Name'),
+              autofocus: true,
+            ),
+            const SizedBox(height: 20),
+            Text('Color', style: Theme.of(context).textTheme.labelLarge),
+            const SizedBox(height: 12),
+            _ColorPicker(
+              selected: _selectedColor,
+              onChanged: (c) => setState(() => _selectedColor = c),
+            ),
+            if (parentCandidates.isNotEmpty) ...[
+              const SizedBox(height: 20),
+              Row(
+                children: [
+                  Checkbox(
+                    value: _isSubtag,
+                    onChanged: (v) => setState(() {
+                      _isSubtag = v ?? false;
+                      if (!_isSubtag) _parentId = null;
+                    }),
+                  ),
+                  const Text('Create sub-tag'),
+                ],
+              ),
+            ],
+            if (_isSubtag && parentCandidates.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              Text(
+                'Parent tag',
+                style: Theme.of(context).textTheme.labelLarge,
+              ),
+              const SizedBox(height: 8),
+              DropdownButtonFormField<String>(
+                initialValue: _parentId,
+                isExpanded: true,
+                decoration: const InputDecoration(
+                  border: OutlineInputBorder(),
+                ),
+                hint: const Text('Select parent tag'),
+                items: parentCandidates
+                    .map(
+                      (t) => DropdownMenuItem(
+                        value: t.id,
+                        child: Text(t.name),
+                      ),
+                    )
+                    .toList(),
+                onChanged: (v) => setState(() => _parentId = v),
+              ),
+            ],
+          ],
+        ),
+      ),
+      actions: [
+        if (_isEditing)
+          TextButton(
+            onPressed: () => Navigator.pop(context, _TagDialogAction.delete),
+            child: const Text('Delete'),
+          ),
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancel'),
+        ),
+        TextButton(
+          onPressed: _submit,
+          child: Text(_isEditing ? 'Save' : 'Create'),
+        ),
+      ],
+    );
+  }
 }
 
 Future<void> _createTag(
