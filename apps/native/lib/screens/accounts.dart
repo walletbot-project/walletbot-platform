@@ -3,12 +3,199 @@ import 'package:app/screens/create_account.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-class AccountsScreen extends StatelessWidget {
+class AccountsScreen extends StatefulWidget {
   const AccountsScreen({super.key});
+
+  @override
+  State<AccountsScreen> createState() => _AccountsScreenState();
+}
+
+class _AccountsScreenState extends State<AccountsScreen> {
+  // Null means no account is being edited.
+  String? _editingAccountId;
+  final _editController = TextEditingController();
+
+  bool _isManagementMode = false;
+  final Set<String> _selectedIds = {};
+
+  @override
+  void dispose() {
+    _editController.dispose();
+    super.dispose();
+  }
+
+  // ── Edit ────────────────────────────────────────────────────────────────────
+
+  void _startEdit(String id, String currentName) {
+    _editController.text = currentName;
+    _editController.selection =
+        TextSelection.fromPosition(TextPosition(offset: currentName.length));
+    setState(() => _editingAccountId = id);
+  }
+
+  Future<void> _confirmEdit() async {
+    final id = _editingAccountId;
+    if (id == null) return;
+
+    final newName = _editController.text.trim();
+    if (newName.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('El nombre no puede estar vacío')),
+      );
+      return;
+    }
+
+    // Close edit mode before the async call so the UI is never stuck.
+    setState(() => _editingAccountId = null);
+
+    try {
+      await context.read<AppDatabase>().updateAccountName(id, newName);
+    } catch (e, st) {
+      debugPrint('Error renaming account: $e\n$st');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Error al renombrar la cuenta')),
+        );
+      }
+    }
+  }
+
+  void _cancelEdit() => setState(() => _editingAccountId = null);
+
+  // ── Delete (single) ─────────────────────────────────────────────────────────
+
+  Future<void> _requestDelete(String id, String name) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('¿Eliminar cuenta?'),
+        content: Text('Se eliminará "$name" de forma permanente.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(ctx).colorScheme.error,
+              foregroundColor: Theme.of(ctx).colorScheme.onError,
+            ),
+            child: const Text('Eliminar'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    try {
+      await context.read<AppDatabase>().archiveAccount(id);
+    } catch (e, st) {
+      debugPrint('Error archiving account: $e\n$st');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Error al eliminar la cuenta')),
+        );
+      }
+    }
+  }
+
+  // ── Management mode (multi-select) ──────────────────────────────────────────
+
+  void _enterManagementMode(String id) {
+    setState(() {
+      _isManagementMode = true;
+      _selectedIds.add(id);
+    });
+  }
+
+  void _exitManagementMode() {
+    setState(() {
+      _isManagementMode = false;
+      _selectedIds.clear();
+    });
+  }
+
+  void _toggleSelection(String id) {
+    setState(() {
+      if (_selectedIds.contains(id)) {
+        _selectedIds.remove(id);
+      } else {
+        _selectedIds.add(id);
+      }
+    });
+  }
+
+  Future<void> _deleteSelected() async {
+    final count = _selectedIds.length;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(
+          count == 1 ? '¿Eliminar 1 cuenta?' : '¿Eliminar $count cuentas?',
+        ),
+        content: Text(
+          count == 1
+              ? 'Se eliminará 1 cuenta de forma permanente.'
+              : 'Se eliminarán $count cuentas de forma permanente.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(ctx).colorScheme.error,
+              foregroundColor: Theme.of(ctx).colorScheme.onError,
+            ),
+            child: Text(count == 1 ? 'Eliminar' : 'Eliminar $count'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    // Snapshot IDs and exit management mode before async work so the UI
+    // updates immediately and the user can keep interacting.
+    final ids = Set<String>.from(_selectedIds);
+    _exitManagementMode();
+
+    try {
+      final db = context.read<AppDatabase>();
+      await Future.wait(ids.map(db.archiveAccount));
+    } catch (e, st) {
+      debugPrint('Error archiving accounts: $e\n$st');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Error al eliminar las cuentas')),
+        );
+      }
+    }
+  }
+
+  // ── Navigation ──────────────────────────────────────────────────────────────
+
+  void _navigateToCreateAccount() {
+    final db = context.read<AppDatabase>();
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => Provider<AppDatabase>.value(
+          value: db,
+          child: const CreateAccountScreen(),
+        ),
+      ),
+    );
+  }
+
+  // ── Build ────────────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
     final db = context.read<AppDatabase>();
+    final selCount = _selectedIds.length;
+
     return StreamBuilder<List<Account>>(
       stream: db.watchAccounts(),
       builder: (context, snapshot) {
@@ -18,44 +205,79 @@ class AccountsScreen extends StatelessWidget {
         return MediaQuery.removePadding(
           context: context,
           removeTop: true,
-          child: CustomScrollView(
-            slivers: [
-              const SliverAppBar.large(title: Text('Cuentas')),
-              if (loading)
-                const SliverFillRemaining(
-                  child: Center(child: CircularProgressIndicator()),
-                )
-              else if (list.isEmpty)
-                const SliverFillRemaining(child: _EmptyBody())
-              else ...[
-                SliverPadding(
-                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-                  sliver: SliverList.builder(
-                    itemCount: list.length,
-                    itemBuilder: (context, i) => _AccountCard(account: list[i]),
-                  ),
-                ),
-                SliverPadding(
-                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 96),
-                  sliver: SliverToBoxAdapter(
-                    child: FilledButton.icon(
-                      onPressed: () {
-                        final db = context.read<AppDatabase>();
-                        Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (_) => Provider<AppDatabase>.value(
-                              value: db,
-                              child: const CreateAccountScreen(),
-                            ),
+          child: Column(
+            children: [
+              Expanded(
+                child: CustomScrollView(
+                  slivers: [
+                    SliverAppBar.large(
+                      title: _isManagementMode
+                          ? Text(
+                              selCount == 0
+                                  ? 'Seleccionando'
+                                  : selCount == 1
+                                      ? '1 cuenta'
+                                      : '$selCount cuentas',
+                            )
+                          : const Text('Cuentas'),
+                      actions: [
+                        if (!_isManagementMode)
+                          IconButton(
+                            tooltip: 'Nueva cuenta',
+                            onPressed: _navigateToCreateAccount,
+                            icon: const Icon(Icons.add),
                           ),
-                        );
-                      },
-                      icon: const Icon(Icons.add),
-                      label: const Text('Crear cuenta'),
+                      ],
                     ),
-                  ),
+                    if (loading)
+                      const SliverFillRemaining(
+                        child: Center(child: CircularProgressIndicator()),
+                      )
+                    else if (list.isEmpty)
+                      SliverFillRemaining(
+                        child: _EmptyBody(
+                          onCreateTap: _navigateToCreateAccount,
+                        ),
+                      )
+                    else
+                      SliverPadding(
+                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 96),
+                        sliver: SliverList.builder(
+                          itemCount: list.length,
+                          itemBuilder: (context, i) {
+                            final account = list[i];
+                            return _AccountCard(
+                              account: account,
+                              isEditing: _editingAccountId == account.id,
+                              editController: _editController,
+                              isManagementMode: _isManagementMode,
+                              isSelected: _selectedIds.contains(account.id),
+                              onStartEdit: () =>
+                                  _startEdit(account.id, account.name),
+                              onConfirmEdit: _confirmEdit,
+                              onCancelEdit: _cancelEdit,
+                              onDelete: () =>
+                                  _requestDelete(account.id, account.name),
+                              onLongPress: () =>
+                                  _enterManagementMode(account.id),
+                              onToggleSelect: () =>
+                                  _toggleSelection(account.id),
+                            );
+                          },
+                        ),
+                      ),
+                  ],
                 ),
-              ],
+              ),
+              // Management mode action bar — rendered outside the scroll view
+              // so it always sits above the NavigationBar and the Android system
+              // navigation area regardless of scroll position.
+              if (_isManagementMode)
+                _ManagementBar(
+                  selectedCount: selCount,
+                  onCancel: _exitManagementMode,
+                  onDelete: selCount > 0 ? _deleteSelected : null,
+                ),
             ],
           ),
         );
@@ -64,8 +286,12 @@ class AccountsScreen extends StatelessWidget {
   }
 }
 
+// ── Empty state ──────────────────────────────────────────────────────────────
+
 class _EmptyBody extends StatelessWidget {
-  const _EmptyBody();
+  const _EmptyBody({required this.onCreateTap});
+
+  final VoidCallback onCreateTap;
 
   @override
   Widget build(BuildContext context) {
@@ -94,17 +320,7 @@ class _EmptyBody extends StatelessWidget {
           ),
           const SizedBox(height: 24),
           FilledButton.icon(
-            onPressed: () {
-              final db = context.read<AppDatabase>();
-              Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (_) => Provider<AppDatabase>.value(
-                    value: db,
-                    child: const CreateAccountScreen(),
-                  ),
-                ),
-              );
-            },
+            onPressed: onCreateTap,
             icon: const Icon(Icons.add),
             label: const Text('Crear cuenta'),
           ),
@@ -114,25 +330,193 @@ class _EmptyBody extends StatelessWidget {
   }
 }
 
-class _AccountCard extends StatelessWidget {
-  const _AccountCard({required this.account});
+// ── Management mode bottom bar ───────────────────────────────────────────────
 
-  final Account account;
+class _ManagementBar extends StatelessWidget {
+  const _ManagementBar({
+    required this.selectedCount,
+    required this.onCancel,
+    required this.onDelete,
+  });
+
+  final int selectedCount;
+  final VoidCallback onCancel;
+  // Null when nothing is selected — disables the delete button.
+  final VoidCallback? onDelete;
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final label = selectedCount == 0
+        ? 'Eliminar'
+        : selectedCount == 1
+            ? 'Eliminar 1'
+            : 'Eliminar $selectedCount';
+
+    // SafeArea(top: false) ensures the bar clears the Android system
+    // navigation bar (gesture strip or 3-button bar) without adding
+    // redundant top padding.
+    return SafeArea(
+      top: false,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+        child: Row(
+          children: [
+            Expanded(
+              child: OutlinedButton(
+                onPressed: onCancel,
+                child: const Text('Cancelar'),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: FilledButton(
+                onPressed: onDelete,
+                style: FilledButton.styleFrom(
+                  backgroundColor: colorScheme.error,
+                  foregroundColor: colorScheme.onError,
+                ),
+                child: Text(label),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ── Account tile ─────────────────────────────────────────────────────────────
+
+class _AccountCard extends StatelessWidget {
+  const _AccountCard({
+    required this.account,
+    required this.isEditing,
+    required this.editController,
+    required this.isManagementMode,
+    required this.isSelected,
+    required this.onStartEdit,
+    required this.onConfirmEdit,
+    required this.onCancelEdit,
+    required this.onDelete,
+    required this.onLongPress,
+    required this.onToggleSelect,
+  });
+
+  final Account account;
+  final bool isEditing;
+  final TextEditingController editController;
+  final bool isManagementMode;
+  final bool isSelected;
+  final VoidCallback onStartEdit;
+  final VoidCallback onConfirmEdit;
+  final VoidCallback onCancelEdit;
+  final VoidCallback onDelete;
+  final VoidCallback onLongPress;
+  final VoidCallback onToggleSelect;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    // Compact icon buttons to fit alongside the currency chip.
+    ButtonStyle compactIcon() => IconButton.styleFrom(
+          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          padding: const EdgeInsets.symmetric(horizontal: 4),
+        );
+
+    final Widget leading = isManagementMode
+        ? Checkbox(
+            value: isSelected,
+            onChanged: (_) => onToggleSelect(),
+          )
+        : CircleAvatar(
+            backgroundColor: colorScheme.primaryContainer,
+            child: Icon(
+              Icons.account_balance_wallet_rounded,
+              color: colorScheme.onPrimaryContainer,
+            ),
+          );
+
+    final Widget title = isEditing
+        ? TextField(
+            controller: editController,
+            autofocus: true,
+            textCapitalization: TextCapitalization.sentences,
+            decoration: InputDecoration(
+              filled: true,
+              fillColor: colorScheme.surfaceContainerHighest,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide: BorderSide.none,
+              ),
+              isDense: true,
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 8,
+                vertical: 6,
+              ),
+            ),
+            onSubmitted: (_) => onConfirmEdit(),
+          )
+        : Text(account.name);
+
+    final Widget trailing;
+    if (isEditing) {
+      trailing = Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Chip(label: Text(account.currency)),
+          IconButton(
+            icon: Icon(Icons.check_rounded, color: Colors.green.shade700),
+            iconSize: 20,
+            style: compactIcon(),
+            onPressed: onConfirmEdit,
+            tooltip: 'Confirmar',
+          ),
+          IconButton(
+            icon: Icon(Icons.close_rounded, color: colorScheme.error),
+            iconSize: 20,
+            style: compactIcon(),
+            onPressed: onCancelEdit,
+            tooltip: 'Cancelar',
+          ),
+        ],
+      );
+    } else if (isManagementMode) {
+      trailing = Chip(label: Text(account.currency));
+    } else {
+      trailing = Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Chip(label: Text(account.currency)),
+          IconButton(
+            icon: const Icon(Icons.edit_outlined),
+            iconSize: 20,
+            style: compactIcon(),
+            onPressed: onStartEdit,
+            tooltip: 'Editar nombre',
+          ),
+          IconButton(
+            icon: Icon(Icons.delete_outline, color: colorScheme.error),
+            iconSize: 20,
+            style: compactIcon(),
+            onPressed: onDelete,
+            tooltip: 'Eliminar',
+          ),
+        ],
+      );
+    }
+
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
       child: ListTile(
-        leading: CircleAvatar(
-          backgroundColor: Theme.of(context).colorScheme.primaryContainer,
-          child: Icon(
-            Icons.account_balance_wallet_rounded,
-            color: Theme.of(context).colorScheme.onPrimaryContainer,
-          ),
-        ),
-        title: Text(account.name),
-        trailing: Chip(label: Text(account.currency)),
+        leading: leading,
+        title: title,
+        trailing: trailing,
+        // In management mode the whole tile toggles selection; in normal mode
+        // a long-press enters management mode.
+        onTap: isManagementMode ? onToggleSelect : null,
+        onLongPress: isManagementMode ? null : onLongPress,
       ),
     );
   }

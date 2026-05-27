@@ -255,6 +255,28 @@ class AppDatabase extends _$AppDatabase {
     ));
   }
 
+  Future<void> updateAccountName(String id, String newName) {
+    final now = BigInt.from(DateTime.now().millisecondsSinceEpoch);
+    return (update(accounts)..where((a) => a.id.equals(id))).write(
+      AccountsCompanion(
+        name: Value(newName),
+        updatedAt: Value(now),
+        dirty: const Value(true),
+      ),
+    );
+  }
+
+  Future<void> archiveAccount(String id) {
+    final now = BigInt.from(DateTime.now().millisecondsSinceEpoch);
+    return (update(accounts)..where((a) => a.id.equals(id))).write(
+      AccountsCompanion(
+        archived: const Value(true),
+        updatedAt: Value(now),
+        dirty: const Value(true),
+      ),
+    );
+  }
+
   Future<void> insertTransaction({
     required String id,
     required String type,
