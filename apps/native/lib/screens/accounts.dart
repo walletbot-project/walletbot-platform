@@ -9,57 +9,49 @@ class AccountsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final db = context.read<AppDatabase>();
-    return StreamBuilder<List<Account>>(
-      stream: db.watchAccounts(),
-      builder: (context, snapshot) {
-        final loading = snapshot.connectionState == ConnectionState.waiting;
-        final list = snapshot.data ?? [];
+    return Scaffold(
+      appBar: AppBar(title: const Text('Cuentas')),
+      body: StreamBuilder<List<Account>>(
+        stream: db.watchAccounts(),
+        builder: (context, snapshot) {
+          final loading = snapshot.connectionState == ConnectionState.waiting;
+          final list = snapshot.data ?? [];
 
-        return MediaQuery.removePadding(
-          context: context,
-          removeTop: true,
-          child: CustomScrollView(
-            slivers: [
-              const SliverAppBar.large(title: Text('Cuentas')),
-              if (loading)
-                const SliverFillRemaining(
-                  child: Center(child: CircularProgressIndicator()),
-                )
-              else if (list.isEmpty)
-                const SliverFillRemaining(child: _EmptyBody())
-              else ...[
-                SliverPadding(
-                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-                  sliver: SliverList.builder(
-                    itemCount: list.length,
-                    itemBuilder: (context, i) => _AccountCard(account: list[i]),
-                  ),
+          if (loading) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          if (list.isEmpty) {
+            return const _EmptyBody();
+          }
+          return ListView.builder(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 96),
+            itemCount: list.length + 1,
+            itemBuilder: (context, i) {
+              if (i < list.length) {
+                return _AccountCard(account: list[i]);
+              }
+              return Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: FilledButton.icon(
+                  onPressed: () {
+                    final db = context.read<AppDatabase>();
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => Provider<AppDatabase>.value(
+                          value: db,
+                          child: const CreateAccountScreen(),
+                        ),
+                      ),
+                    );
+                  },
+                  icon: const Icon(Icons.add),
+                  label: const Text('Crear cuenta'),
                 ),
-                SliverPadding(
-                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 96),
-                  sliver: SliverToBoxAdapter(
-                    child: FilledButton.icon(
-                      onPressed: () {
-                        final db = context.read<AppDatabase>();
-                        Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (_) => Provider<AppDatabase>.value(
-                              value: db,
-                              child: const CreateAccountScreen(),
-                            ),
-                          ),
-                        );
-                      },
-                      icon: const Icon(Icons.add),
-                      label: const Text('Crear cuenta'),
-                    ),
-                  ),
-                ),
-              ],
-            ],
-          ),
-        );
-      },
+              );
+            },
+          );
+        },
+      ),
     );
   }
 }
