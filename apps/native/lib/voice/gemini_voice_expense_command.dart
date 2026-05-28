@@ -58,6 +58,7 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
   bool _connected = false;
   bool _disposed = false;
   bool _audioPlaybackEnabled = true;
+  bool _audioStreamOpen = false;
   int _inputChunks = 0;
   int _outputAudioChunks = 0;
   int _outputAudioBytes = 0;
@@ -192,6 +193,7 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
   Future<void> addAudioChunk(Uint8List chunk) async {
     if (!_connected || _disposed) return;
     _inputChunks += 1;
+    _audioStreamOpen = true;
     _send({
       'realtimeInput': {
         'audio': {
@@ -199,6 +201,19 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
           'mimeType': 'audio/pcm;rate=16000',
         },
       },
+    });
+  }
+
+  @override
+  Future<void> endAudioStream() async {
+    if (!_connected || _disposed) return;
+    if (!_audioStreamOpen) return;
+    _audioStreamOpen = false;
+    // Gemini Live (automatic VAD): tells the server to flush any cached
+    // audio and finalise the current turn so the next utterance starts
+    // clean. See https://ai.google.dev/gemini-api/docs/live-api/capabilities.
+    _send({
+      'realtimeInput': {'audioStreamEnd': true},
     });
   }
 
@@ -212,6 +227,9 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
     if (!_connected || _disposed) return;
     final trimmed = text.trim();
     if (trimmed.isEmpty) return;
+    // Close any open audio turn first so half-spoken audio doesn't bleed
+    // into the text turn.
+    await endAudioStream();
     _send({
       'realtimeInput': {'text': trimmed},
     });

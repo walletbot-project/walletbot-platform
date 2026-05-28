@@ -88,9 +88,21 @@ class _VoiceScreenState extends State<VoiceScreen> {
     super.dispose();
   }
 
+  bool _wasTextComposing = false;
+
   void _onTextChanged() {
     if (!mounted) return;
+    final isComposing = _isTextComposing;
+    final startedComposing = isComposing && !_wasTextComposing;
+    _wasTextComposing = isComposing;
     setState(() {});
+    if (startedComposing && _isConnected && _micActive) {
+      // User started typing while the mic was open: we already stop
+      // forwarding audio chunks via _isMicEffectivelyMuted, but the
+      // server still has buffered audio for this turn. Flush it so the
+      // next utterance starts clean once the user goes back to voice.
+      unawaited(_command?.endAudioStream());
+    }
   }
 
   // -- Voice button gestures ------------------------------------------------
@@ -106,10 +118,16 @@ class _VoiceScreenState extends State<VoiceScreen> {
       unawaited(_startMicCapture(turnOn: true));
       return;
     }
+    final wasOn = _userMicOn;
     setState(() {
-      _userMicOn = !_userMicOn;
+      _userMicOn = !wasOn;
       if (!_userMicOn) _level = 0;
     });
+    if (wasOn) {
+      // Mic just went from on → off mid-turn: flush whatever the server
+      // has buffered so the next utterance starts clean.
+      unawaited(_command?.endAudioStream());
+    }
   }
 
   void _handleVoiceLongPressStart() {
@@ -137,10 +155,14 @@ class _VoiceScreenState extends State<VoiceScreen> {
 
   void _handleVoiceLongPressEnd() {
     if (!mounted) return;
+    final wasOn = _userMicOn;
     setState(() {
       _userMicOn = false;
       _level = 0;
     });
+    if (wasOn) {
+      unawaited(_command?.endAudioStream());
+    }
   }
 
   // -- Text input -----------------------------------------------------------
@@ -150,6 +172,7 @@ class _VoiceScreenState extends State<VoiceScreen> {
     if (text.isEmpty) return;
 
     final startingFresh = !_isConnected && !_isStarting;
+    final wasConnected = _isConnected;
 
     setState(() {
       if (startingFresh) {
@@ -160,18 +183,19 @@ class _VoiceScreenState extends State<VoiceScreen> {
       _items.add(
         _UserBubbleItem(at: DateTime.now(), text: text, isFinal: true),
       );
-
-      if (_isConnected) {
-        // Text send → expect a silent (text-only) reply, even mid-session.
-        _command?.setAudioPlaybackEnabled(false);
-        unawaited(_command?.sendText(text));
-      } else {
+      if (!wasConnected) {
         _pendingTextSend = text;
-        if (startingFresh) {
-          unawaited(_startSession(mode: _SessionMode.text));
-        }
       }
     });
+
+    if (wasConnected) {
+      // Text send → expect a silent (text-only) reply, even mid-session.
+      // sendText() also flushes any open audio turn server-side.
+      _command?.setAudioPlaybackEnabled(false);
+      unawaited(_command?.sendText(text));
+    } else if (startingFresh) {
+      unawaited(_startSession(mode: _SessionMode.text));
+    }
 
     _textController.clear();
     _scrollToBottom();
@@ -307,6 +331,9 @@ class _VoiceScreenState extends State<VoiceScreen> {
     } catch (_) {
       // best-effort cleanup
     }
+
+    // Mic is going away entirely — flush any buffered audio on the server.
+    await _command?.endAudioStream();
 
     if (!mounted) return;
     setState(() {
@@ -1138,10 +1165,7 @@ class _StatusChip extends StatelessWidget {
             Container(
               width: 8,
               height: 8,
-              decoration: BoxDecoration(
-                color: color,
-                shape: BoxShape.circle,
-              ),
+              decoration: BoxDecoration(color: color, shape: BoxShape.circle),
             ),
           const SizedBox(width: 6),
           Text(label, style: TextStyle(color: color, fontSize: 12)),
