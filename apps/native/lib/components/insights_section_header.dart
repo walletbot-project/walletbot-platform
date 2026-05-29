@@ -13,6 +13,7 @@ class InsightsSectionHeader extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.end,
         children: [
           FloatingActionButton.small(
+            heroTag: 'insightsAddFab',
             onPressed: onAddPressed,
             backgroundColor: Colors.greenAccent,
             foregroundColor: Colors.black,

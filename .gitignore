@@ -2,6 +2,9 @@
 .DS_Store
 desktop.ini
 
+# Claude Code — per-developer local overrides only
+.claude/settings.local.json
+
 # Logs
 logs
 *.log
@@ -155,3 +158,6 @@ tmp/*
 # Logs
 /info*
 .android/
+
+# Local misc files
+.local
