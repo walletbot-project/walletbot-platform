@@ -281,8 +281,9 @@ export const archive = mutation({
     args: {
         id: v.string(),
         // When true, descendant tags are archived too. When false, direct
-        // children are detached (parentId cleared) so they become independent
-        // top-level tags; their own descendants stay attached to them.
+        // children are re-parented to the deleted tag's parent (becoming
+        // top-level when the deleted tag had no parent); their own descendants
+        // stay attached to them.
         cascade: v.optional(v.boolean()),
     },
     handler: async (ctx, args) => {
@@ -325,7 +326,7 @@ export const archive = mutation({
                 const cSeq = await nextSeq(ctx, userId)
                 const cNow = BigInt(Date.now())
                 await replaceTagWith(ctx, child, {
-                    parentId: null,
+                    parentId: row.parentId ?? null,
                     updatedAt: cNow,
                     seq: cSeq,
                 })
