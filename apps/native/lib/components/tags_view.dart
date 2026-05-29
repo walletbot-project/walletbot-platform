@@ -78,13 +78,13 @@ class TagsView extends StatelessWidget {
     final query = db.customSelect(
       '''
         SELECT tg.id, tg.name, tg.description, tg.parent_id, tg.color,
-               tg.archived, tg.created_at, tg.updated_at, tg.dirty,
+               tg.is_archived, tg.created_at, tg.updated_at, tg.dirty,
                COUNT(tt.id) AS transaction_count
         FROM tags tg
         LEFT JOIN transaction_tags tt ON tt.tag_id = tg.id
-        WHERE tg.archived = 0
+        WHERE tg.is_archived = 0
         GROUP BY tg.id, tg.name, tg.description, tg.parent_id, tg.color,
-                 tg.archived, tg.created_at, tg.updated_at, tg.dirty
+                 tg.is_archived, tg.created_at, tg.updated_at, tg.dirty
         ORDER BY tg.name COLLATE NOCASE
       ''',
       readsFrom: {db.tags, db.transactionTags},
@@ -99,7 +99,7 @@ class TagsView extends StatelessWidget {
             description: row.readNullable<String>('description'),
             parentId: row.readNullable<String>('parent_id'),
             color: row.readNullable<String>('color'),
-            archived: row.read<bool>('archived'),
+            archived: row.read<bool>('is_archived'),
             createdAt: row.read<BigInt>('created_at'),
             updatedAt: row.read<BigInt>('updated_at'),
             dirty: row.read<bool>('dirty'),

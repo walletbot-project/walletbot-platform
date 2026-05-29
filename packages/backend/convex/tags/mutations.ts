@@ -34,7 +34,7 @@ async function collectAncestorIds(
         seen.add(cursor)
         ancestors.push(cursor)
         const parent: Doc<'tags'> | null = await getTagById(ctx, userId, cursor)
-        if (!parent || parent.archived) break
+        if (!parent || parent.isArchived) break
         cursor = parent.parentId
     }
     return ancestors
@@ -56,7 +56,7 @@ async function collectDescendantIds(
             )
             .collect()
         for (const child of children) {
-            if (child.archived) continue
+            if (child.isArchived) continue
             out.push(child.id)
             queue.push(child.id)
         }
@@ -105,7 +105,7 @@ async function replaceTagWith(
         description?: string | undefined
         color?: string | undefined
         parentId?: string | null
-        archived?: boolean
+        isArchived?: boolean
         updatedAt: bigint
         seq: bigint
     },
@@ -124,7 +124,7 @@ async function replaceTagWith(
         userId: string
         id: string
         name: string
-        archived: boolean
+        isArchived: boolean
         createdAt: bigint
         updatedAt: bigint
         seq: bigint
@@ -135,7 +135,7 @@ async function replaceTagWith(
         userId: row.userId,
         id: row.id,
         name: next.name ?? row.name,
-        archived: next.archived ?? row.archived,
+        isArchived: next.isArchived ?? row.isArchived,
         createdAt: row.createdAt,
         updatedAt: next.updatedAt,
         seq: next.seq,
@@ -166,7 +166,7 @@ export const create = mutation({
                 throw new Error('A tag cannot be its own parent')
             }
             const parent = await getTagById(ctx, userId, args.parentId)
-            if (!parent || parent.archived) {
+            if (!parent || parent.isArchived) {
                 throw new Error('Parent tag not found')
             }
         }
@@ -181,7 +181,7 @@ export const create = mutation({
             description: args.description,
             parentId: args.parentId,
             color: args.color,
-            archived: false,
+            isArchived: false,
             createdAt: now,
             updatedAt: now,
             seq,
@@ -211,7 +211,7 @@ export const update = mutation({
                 throw new Error('A tag cannot be its own parent')
             }
             const parent = await getTagById(ctx, userId, args.parentId)
-            if (!parent || parent.archived) {
+            if (!parent || parent.isArchived) {
                 throw new Error('Parent tag not found')
             }
             const chain = await collectAncestorIds(
@@ -298,11 +298,11 @@ export const archive = mutation({
             )
             for (const descendantId of descendantIds) {
                 const descendant = await getTagById(ctx, userId, descendantId)
-                if (!descendant || descendant.archived) continue
+                if (!descendant || descendant.isArchived) continue
                 const dSeq = await nextSeq(ctx, userId)
                 const dNow = BigInt(Date.now())
                 await ctx.db.patch(descendant._id, {
-                    archived: true,
+                    isArchived: true,
                     updatedAt: dNow,
                     seq: dSeq,
                 })
@@ -321,7 +321,7 @@ export const archive = mutation({
                 )
                 .collect()
             for (const child of directChildren) {
-                if (child.archived) continue
+                if (child.isArchived) continue
                 const cSeq = await nextSeq(ctx, userId)
                 const cNow = BigInt(Date.now())
                 await replaceTagWith(ctx, child, {
@@ -336,7 +336,7 @@ export const archive = mutation({
         const now = BigInt(Date.now())
 
         await ctx.db.patch(row._id, {
-            archived: true,
+            isArchived: true,
             updatedAt: now,
             seq,
         })

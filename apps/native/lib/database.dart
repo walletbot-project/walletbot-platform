@@ -22,7 +22,7 @@ class Accounts extends Table {
   TextColumn get icon => text().named('icon').nullable()(); // from defined list
 
   BoolColumn get archived =>
-      boolean().named('archived').withDefault(const Constant(false))();
+      boolean().named('is_archived').withDefault(const Constant(false))();
   Int64Column get createdAt => int64().named('created_at')();
   Int64Column get updatedAt => int64().named('updated_at')();
 
@@ -46,7 +46,7 @@ class Categories extends Table {
   TextColumn get description => text().named('description').nullable()();
 
   BoolColumn get archived =>
-      boolean().named('archived').withDefault(const Constant(false))();
+      boolean().named('is_archived').withDefault(const Constant(false))();
   Int64Column get createdAt => int64().named('created_at')();
   Int64Column get updatedAt => int64().named('updated_at')();
 
@@ -103,7 +103,7 @@ class Transactions extends Table {
       .nullable()(); // cents, for balance adjustments
 
   BoolColumn get archived =>
-      boolean().named('archived').withDefault(const Constant(false))();
+      boolean().named('is_archived').withDefault(const Constant(false))();
   Int64Column get createdAt => int64().named('created_at')();
   Int64Column get updatedAt => int64().named('updated_at')();
 
@@ -130,7 +130,7 @@ class Tags extends Table {
   TextColumn get color => text().named('color').nullable()(); // hex color code
 
   BoolColumn get archived =>
-      boolean().named('archived').withDefault(const Constant(false))();
+      boolean().named('is_archived').withDefault(const Constant(false))();
   Int64Column get createdAt => int64().named('created_at')();
   Int64Column get updatedAt => int64().named('updated_at')();
 

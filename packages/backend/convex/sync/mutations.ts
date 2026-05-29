@@ -13,7 +13,7 @@ const accountUpsert = v.object({
     description: v.optional(v.string()),
     color: v.optional(v.string()),
     icon: v.optional(v.string()),
-    archived: v.boolean(),
+    isArchived: v.boolean(),
     createdAt: v.int64(),
     updatedAt: v.int64(),
 })
@@ -22,7 +22,7 @@ const categoryUpsert = v.object({
     id: v.string(),
     name: v.string(),
     description: v.optional(v.string()),
-    archived: v.boolean(),
+    isArchived: v.boolean(),
     createdAt: v.int64(),
     updatedAt: v.int64(),
 })
@@ -33,7 +33,7 @@ const tagUpsert = v.object({
     description: v.optional(v.string()),
     parentId: v.optional(v.string()),
     color: v.optional(v.string()),
-    archived: v.boolean(),
+    isArchived: v.boolean(),
     createdAt: v.int64(),
     updatedAt: v.int64(),
 })
@@ -59,7 +59,7 @@ const transactionUpsert = v.object({
     toCurrency: v.optional(v.string()),
     exchangeRate: v.optional(v.number()),
     balanceAfter: v.optional(v.int64()),
-    archived: v.boolean(),
+    isArchived: v.boolean(),
     createdAt: v.int64(),
     updatedAt: v.int64(),
 })
@@ -94,7 +94,7 @@ type AccountUpsert = {
     description?: string
     color?: string
     icon?: string
-    archived: boolean
+    isArchived: boolean
     createdAt: bigint
     updatedAt: bigint
 }
@@ -102,7 +102,7 @@ type CategoryUpsert = {
     id: string
     name: string
     description?: string
-    archived: boolean
+    isArchived: boolean
     createdAt: bigint
     updatedAt: bigint
 }
@@ -112,7 +112,7 @@ type TagUpsert = {
     description?: string
     parentId?: string
     color?: string
-    archived: boolean
+    isArchived: boolean
     createdAt: bigint
     updatedAt: bigint
 }
@@ -132,7 +132,7 @@ type TransactionUpsert = {
     toCurrency?: string
     exchangeRate?: number
     balanceAfter?: bigint
-    archived: boolean
+    isArchived: boolean
     createdAt: bigint
     updatedAt: bigint
 }
@@ -187,7 +187,7 @@ async function applyAccountUpsert(
         description: payload.description,
         color: payload.color,
         icon: payload.icon,
-        archived: payload.archived,
+        isArchived: payload.isArchived,
         createdAt: payload.createdAt,
         updatedAt: payload.updatedAt,
         seq,
@@ -222,7 +222,7 @@ async function applyCategoryUpsert(
         id: payload.id,
         name: payload.name,
         description: payload.description,
-        archived: payload.archived,
+        isArchived: payload.isArchived,
         createdAt: payload.createdAt,
         updatedAt: payload.updatedAt,
         seq,
@@ -274,7 +274,7 @@ async function applyTagUpsert(
         description: payload.description,
         parentId: payload.parentId,
         color: payload.color,
-        archived: payload.archived,
+        isArchived: payload.isArchived,
         createdAt: payload.createdAt,
         updatedAt: payload.updatedAt,
         seq,
@@ -390,7 +390,7 @@ async function applyTransactionUpsert(
         toCurrency: payload.toCurrency,
         exchangeRate: payload.exchangeRate,
         balanceAfter: payload.balanceAfter,
-        archived: payload.archived,
+        isArchived: payload.isArchived,
         createdAt: payload.createdAt,
         updatedAt: payload.updatedAt,
         seq,

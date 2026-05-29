@@ -498,7 +498,7 @@ class SyncEngine extends ChangeNotifier {
         if (row.description != null) 'description': row.description,
         if (row.color != null) 'color': row.color,
         if (row.icon != null) 'icon': row.icon,
-        'archived': row.archived,
+        'isArchived': row.archived,
         'createdAt': row.createdAt,
         'updatedAt': row.updatedAt,
       };
@@ -507,7 +507,7 @@ class SyncEngine extends ChangeNotifier {
         'id': row.id,
         'name': row.name,
         if (row.description != null) 'description': row.description,
-        'archived': row.archived,
+        'isArchived': row.archived,
         'createdAt': row.createdAt,
         'updatedAt': row.updatedAt,
       };
@@ -518,7 +518,7 @@ class SyncEngine extends ChangeNotifier {
         if (row.description != null) 'description': row.description,
         if (row.parentId != null) 'parentId': row.parentId,
         if (row.color != null) 'color': row.color,
-        'archived': row.archived,
+        'isArchived': row.archived,
         'createdAt': row.createdAt,
         'updatedAt': row.updatedAt,
       };
@@ -539,7 +539,7 @@ class SyncEngine extends ChangeNotifier {
         if (row.toCurrency != null) 'toCurrency': row.toCurrency,
         if (row.exchangeRate != null) 'exchangeRate': row.exchangeRate,
         if (row.balanceAfter != null) 'balanceAfter': row.balanceAfter,
-        'archived': row.archived,
+        'isArchived': row.archived,
         'createdAt': row.createdAt,
         'updatedAt': row.updatedAt,
       };

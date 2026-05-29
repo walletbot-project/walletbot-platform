@@ -113,7 +113,7 @@ export const createExpense = mutation({
             categoryId: args.categoryId,
             amount: args.amount,
             currency: account.currency,
-            archived: false,
+            isArchived: false,
             createdAt: now,
             updatedAt: now,
             seq,
@@ -158,7 +158,7 @@ export const createIncome = mutation({
             categoryId: args.categoryId,
             amount: args.amount,
             currency: account.currency,
-            archived: false,
+            isArchived: false,
             createdAt: now,
             updatedAt: now,
             seq,
@@ -233,7 +233,7 @@ export const createTransfer = mutation({
             toAmount,
             toCurrency: toAcc.currency,
             exchangeRate: args.exchangeRate,
-            archived: false,
+            isArchived: false,
             createdAt: now,
             updatedAt: now,
             seq,
@@ -286,7 +286,7 @@ export const createBalanceAdjustment = mutation({
             amount,
             currency: account.currency,
             balanceAfter: args.balanceAfter,
-            archived: false,
+            isArchived: false,
             createdAt: now,
             updatedAt: now,
             seq,
@@ -369,7 +369,7 @@ export const archive = mutation({
         const seq = await nextSeq(ctx, userId)
         const now = BigInt(Date.now())
         await ctx.db.patch(row._id, {
-            archived: true,
+            isArchived: true,
             updatedAt: now,
             seq,
         })
@@ -405,7 +405,7 @@ export const tag = mutation({
                     q.eq('userId', userId).eq('id', tagId),
                 )
                 .unique()
-            if (!tagRow || tagRow.archived) continue
+            if (!tagRow || tagRow.isArchived) continue
 
             const existing = await ctx.db
                 .query('transactionTags')
