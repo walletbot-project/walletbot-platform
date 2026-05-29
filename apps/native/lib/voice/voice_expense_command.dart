@@ -16,6 +16,14 @@ abstract interface class VoiceExpenseCommand {
 
   Future<void> addAudioChunk(Uint8List chunk);
 
+  /// Flushes any audio buffered server-side since the last chunk so the
+  /// model treats the current audio turn as complete. Safe to call when no
+  /// audio has been sent since the last flush — implementations no-op in
+  /// that case. Required by Gemini Live's automatic VAD whenever the
+  /// client pauses the stream (mic mute, switching to text input, etc.)
+  /// so that the next utterance isn't concatenated with a half-spoken one.
+  Future<void> endAudioStream();
+
   Future<void> sendText(String text);
 
   void setAudioPlaybackEnabled(bool enabled);
@@ -70,6 +78,11 @@ class DebugVoiceExpenseCommand implements VoiceExpenseCommand {
   Future<void> addAudioChunk(Uint8List chunk) async {
     _chunks += 1;
     _bytes += chunk.length;
+  }
+
+  @override
+  Future<void> endAudioStream() async {
+    _events.add(VoiceSystemEvent('Debug audio stream ended'));
   }
 
   @override
