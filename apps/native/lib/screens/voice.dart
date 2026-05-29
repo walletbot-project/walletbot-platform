@@ -9,6 +9,13 @@ import 'package:record/record.dart';
 import '../voice/voice_event.dart';
 import '../voice/voice_expense_command.dart';
 
+/// Whether the model should respond with audio (TTS) when the user starts
+/// the session by sending a text message. Hardcoded for now; future work will
+/// expose this as a user-configurable preference.
+const bool _kRespondToTextWithAudio = false;
+
+enum _SessionMode { audio, text }
+
 class VoiceScreen extends StatefulWidget {
   const VoiceScreen({
     super.key,
@@ -24,6 +31,8 @@ class VoiceScreen extends StatefulWidget {
 class _VoiceScreenState extends State<VoiceScreen> {
   final AudioRecorder _recorder = AudioRecorder();
   final ScrollController _scrollController = ScrollController();
+  final TextEditingController _textController = TextEditingController();
+  final FocusNode _textFocusNode = FocusNode();
   final List<_ChatItem> _items = [];
   final Map<String, _ToolItem> _toolsById = {};
 
@@ -35,10 +44,16 @@ class _VoiceScreenState extends State<VoiceScreen> {
   _UserBubbleItem? _pendingUser;
   _AgentBubbleItem? _pendingAgent;
 
+  String? _pendingTextSend;
   bool _isStarting = false;
   bool _isConnected = false;
-  bool _isMuted = false;
+  bool _micActive = false;
+  bool _userMicOn = false;
   double _level = 0;
+
+  bool get _isTextComposing => _textController.text.trim().isNotEmpty;
+  bool get _isMicEffectivelyMuted =>
+      !_micActive || !_userMicOn || _isTextComposing;
 
   static const _recordConfig = RecordConfig(
     encoder: AudioEncoder.pcm16bits,
@@ -54,6 +69,12 @@ class _VoiceScreenState extends State<VoiceScreen> {
   );
 
   @override
+  void initState() {
+    super.initState();
+    _textController.addListener(_onTextChanged);
+  }
+
+  @override
   void dispose() {
     unawaited(_audioSubscription?.cancel());
     unawaited(_amplitudeSubscription?.cancel());
@@ -61,31 +82,176 @@ class _VoiceScreenState extends State<VoiceScreen> {
     unawaited(_command?.dispose());
     unawaited(_recorder.dispose());
     _scrollController.dispose();
+    _textController.removeListener(_onTextChanged);
+    _textController.dispose();
+    _textFocusNode.dispose();
     super.dispose();
+  }
+
+  bool _wasTextComposing = false;
+
+  void _onTextChanged() {
+    if (!mounted) return;
+    final isComposing = _isTextComposing;
+    final startedComposing = isComposing && !_wasTextComposing;
+    _wasTextComposing = isComposing;
+    setState(() {});
+    if (startedComposing && _isConnected && _micActive) {
+      // User started typing while the mic was open: we already stop
+      // forwarding audio chunks via _isMicEffectivelyMuted, but the
+      // server still has buffered audio for this turn. Flush it so the
+      // next utterance starts clean once the user goes back to voice.
+      unawaited(_command?.endAudioStream());
+    }
+  }
+
+  // -- Voice button gestures ------------------------------------------------
+
+  void _handleVoiceTap() {
+    if (_isStarting || _isTextComposing) return;
+    if (!_isConnected) {
+      setState(_resetChatLog);
+      unawaited(_startSession(mode: _SessionMode.audio));
+      return;
+    }
+    if (!_micActive) {
+      unawaited(_startMicCapture(turnOn: true));
+      return;
+    }
+    final wasOn = _userMicOn;
+    setState(() {
+      _userMicOn = !wasOn;
+      if (!_userMicOn) _level = 0;
+    });
+    if (wasOn) {
+      // Mic just went from on → off mid-turn: flush whatever the server
+      // has buffered so the next utterance starts clean.
+      unawaited(_command?.endAudioStream());
+    }
+  }
+
+  void _handleVoiceLongPressStart() {
+    if (_isStarting || _isTextComposing) return;
+    if (!_isConnected) {
+      setState(_resetChatLog);
+      unawaited(_startSession(mode: _SessionMode.audio));
+      return;
+    }
+    if (!_micActive) {
+      unawaited(_startMicCapture(turnOn: true));
+      return;
+    }
+    setState(() {
+      _userMicOn = true;
+    });
+  }
+
+  void _resetChatLog() {
+    _items.clear();
+    _toolsById.clear();
+    _pendingUser = null;
+    _pendingAgent = null;
+  }
+
+  void _handleVoiceLongPressEnd() {
+    if (!mounted) return;
+    final wasOn = _userMicOn;
+    setState(() {
+      _userMicOn = false;
+      _level = 0;
+    });
+    if (wasOn) {
+      unawaited(_command?.endAudioStream());
+    }
+  }
+
+  // -- Text input -----------------------------------------------------------
+
+  void _handleSendText() {
+    final text = _textController.text.trim();
+    if (text.isEmpty) return;
+
+    final startingFresh = !_isConnected && !_isStarting;
+    final wasConnected = _isConnected;
+
+    setState(() {
+      if (startingFresh) {
+        _resetChatLog();
+      } else {
+        _finalisePending();
+      }
+      _items.add(
+        _UserBubbleItem(at: DateTime.now(), text: text, isFinal: true),
+      );
+      if (!wasConnected) {
+        _pendingTextSend = text;
+      }
+    });
+
+    if (wasConnected) {
+      // Text send → expect a silent (text-only) reply, even mid-session.
+      // sendText() also flushes any open audio turn server-side.
+      _command?.setAudioPlaybackEnabled(false);
+      unawaited(_command?.sendText(text));
+    } else if (startingFresh) {
+      unawaited(_startSession(mode: _SessionMode.text));
+    }
+
+    _textController.clear();
+    _scrollToBottom();
+  }
+
+  void _flushPendingText() {
+    final pending = _pendingTextSend;
+    if (pending == null) return;
+    _pendingTextSend = null;
+    unawaited(_command?.sendText(pending));
   }
 
   // -- Session lifecycle ----------------------------------------------------
 
-  Future<void> _toggle() async {
-    if (_isConnected) {
-      await _stop();
-    } else {
-      await _start();
-    }
-  }
-
-  Future<void> _start() async {
+  Future<void> _startSession({required _SessionMode mode}) async {
     if (_isStarting || _isConnected) return;
 
     setState(() {
       _isStarting = true;
-      _isMuted = false;
+      _userMicOn = false;
       _level = 0;
-      _items.clear();
-      _toolsById.clear();
-      _pendingUser = null;
-      _pendingAgent = null;
     });
+
+    final respondWithAudio = switch (mode) {
+      _SessionMode.audio => true,
+      _SessionMode.text => _kRespondToTextWithAudio,
+    };
+
+    try {
+      _command = widget.commandFactory.create();
+      _commandEventsSubscription = _command?.events.listen(_onVoiceEvent);
+      await _command?.start(respondWithAudio: respondWithAudio);
+    } catch (error) {
+      _addSystemSetState('Failed to start: $error', kind: _SystemKind.error);
+      await _stop();
+      return;
+    }
+
+    if (mode == _SessionMode.audio) {
+      await _startMicCapture(turnOn: true);
+    }
+
+    if (mounted) {
+      setState(() {
+        _isStarting = false;
+      });
+    }
+  }
+
+  Future<void> _startMicCapture({required bool turnOn}) async {
+    if (_micActive) {
+      if (turnOn && mounted) {
+        setState(() => _userMicOn = true);
+      }
+      return;
+    }
 
     try {
       final permission = await Permission.microphone.request();
@@ -119,10 +285,6 @@ class _VoiceScreenState extends State<VoiceScreen> {
         return;
       }
 
-      _command = widget.commandFactory.create();
-      _commandEventsSubscription = _command?.events.listen(_onVoiceEvent);
-      await _command?.start();
-
       final audioStream = await _recorder.startStream(_recordConfig);
       _audioSubscription = audioStream.listen(
         _handleAudioChunk,
@@ -131,7 +293,7 @@ class _VoiceScreenState extends State<VoiceScreen> {
             'Audio stream error: $error',
             kind: _SystemKind.error,
           );
-          unawaited(_stop());
+          unawaited(_stopMicCapture());
         },
       );
 
@@ -143,19 +305,20 @@ class _VoiceScreenState extends State<VoiceScreen> {
               _level = _dbfsToLevel(amplitude.current);
             });
           });
-    } catch (error) {
-      _addSystemSetState('Failed to start: $error', kind: _SystemKind.error);
-      await _stop();
-    } finally {
+
       if (mounted) {
         setState(() {
-          _isStarting = false;
+          _micActive = true;
+          if (turnOn) _userMicOn = true;
         });
       }
+    } catch (error) {
+      _addSystemSetState('Failed to open mic: $error', kind: _SystemKind.error);
+      await _stopMicCapture();
     }
   }
 
-  Future<void> _stop() async {
+  Future<void> _stopMicCapture() async {
     await _audioSubscription?.cancel();
     await _amplitudeSubscription?.cancel();
     _audioSubscription = null;
@@ -165,6 +328,25 @@ class _VoiceScreenState extends State<VoiceScreen> {
       if (await _recorder.isRecording()) {
         await _recorder.stop();
       }
+    } catch (_) {
+      // best-effort cleanup
+    }
+
+    // Mic is going away entirely — flush any buffered audio on the server.
+    await _command?.endAudioStream();
+
+    if (!mounted) return;
+    setState(() {
+      _micActive = false;
+      _userMicOn = false;
+      _level = 0;
+    });
+  }
+
+  Future<void> _stop() async {
+    await _stopMicCapture();
+
+    try {
       await _command?.stop();
     } catch (error) {
       _addSystemSetState(
@@ -182,17 +364,17 @@ class _VoiceScreenState extends State<VoiceScreen> {
     setState(() {
       _isConnected = false;
       _isStarting = false;
-      _level = 0;
+      _pendingTextSend = null;
       _finalisePending();
     });
   }
 
   void _handleAudioChunk(Uint8List chunk) {
     if (!mounted) return;
-    if (!_isMuted) {
+    if (!_isMicEffectivelyMuted) {
       unawaited(_command?.addAudioChunk(chunk));
     }
-    if (_level == 0) {
+    if (_level == 0 && !_isMicEffectivelyMuted) {
       setState(() {
         _level = _estimatePcmLevel(chunk);
       });
@@ -205,25 +387,23 @@ class _VoiceScreenState extends State<VoiceScreen> {
     if (!mounted) return;
     setState(() {
       switch (event) {
-        case VoiceConnectingEvent(:final message):
-          _addSystem(message, kind: _SystemKind.info);
+        case VoiceConnectingEvent():
+          break;
         case VoiceConnectedEvent():
           _isConnected = true;
-          _addSystem('Connected. Start speaking.', kind: _SystemKind.success);
-        case VoiceDisconnectedEvent(:final code, :final reason):
+          _flushPendingText();
+        case VoiceDisconnectedEvent():
           _isConnected = false;
-          final parts = <String>[
-            'Disconnected',
-            if (code != null) 'code $code',
-            if (reason != null && reason.isNotEmpty) reason,
-          ];
-          _addSystem(parts.join(' · '), kind: _SystemKind.info);
+          _pendingTextSend = null;
           _finalisePending();
         case VoiceErrorEvent(:final message):
+          _pendingTextSend = null;
           _addSystem(message, kind: _SystemKind.error);
-        case VoiceSystemEvent(:final message):
-          _addSystem(message, kind: _SystemKind.info);
+        case VoiceSystemEvent():
+          break;
         case VoiceUserTranscriptDelta(:final text):
+          // Voice input confirmed by server transcription → next reply is audio.
+          _command?.setAudioPlaybackEnabled(true);
           _appendUser(text);
         case VoiceAgentTranscriptDelta(:final text):
           _appendAgent(text);
@@ -407,8 +587,19 @@ class _VoiceScreenState extends State<VoiceScreen> {
         title: const Text('Live Voice'),
         actions: [
           Padding(
-            padding: const EdgeInsets.only(right: 12),
-            child: Center(child: _StatusChip(level: status)),
+            padding: EdgeInsets.only(right: _isConnected ? 4 : 12),
+            child: Center(
+              child: _isConnected
+                  ? IconButton(
+                      icon: Icon(
+                        Icons.call_end_rounded,
+                        color: theme.colorScheme.error,
+                      ),
+                      tooltip: 'End session',
+                      onPressed: () => unawaited(_stop()),
+                    )
+                  : _StatusChip(level: status),
+            ),
           ),
         ],
       ),
@@ -434,19 +625,17 @@ class _VoiceScreenState extends State<VoiceScreen> {
                   ),
           ),
           _ControlBar(
-            isConnected: _isConnected,
             isStarting: _isStarting,
-            isMuted: _isMuted,
+            isMicActive: _micActive,
+            isMicMuted: _isMicEffectivelyMuted,
+            isTextComposing: _isTextComposing,
             level: _level,
-            onToggle: _isStarting ? null : _toggle,
-            onToggleMute: _isConnected
-                ? () {
-                    setState(() {
-                      _isMuted = !_isMuted;
-                      if (_isMuted) _level = 0;
-                    });
-                  }
-                : null,
+            textController: _textController,
+            textFocusNode: _textFocusNode,
+            onSendText: _handleSendText,
+            onTap: _handleVoiceTap,
+            onLongPressStart: _handleVoiceLongPressStart,
+            onLongPressEnd: _handleVoiceLongPressEnd,
           ),
         ],
       ),
@@ -966,11 +1155,18 @@ class _StatusChip extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Container(
-            width: 8,
-            height: 8,
-            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-          ),
+          if (level == _StatusLevel.connecting)
+            SizedBox(
+              width: 10,
+              height: 10,
+              child: CircularProgressIndicator(strokeWidth: 1.5, color: color),
+            )
+          else
+            Container(
+              width: 8,
+              height: 8,
+              decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+            ),
           const SizedBox(width: 6),
           Text(label, style: TextStyle(color: color, fontSize: 12)),
         ],
@@ -1010,70 +1206,75 @@ class _EmptyState extends StatelessWidget {
 
 class _ControlBar extends StatelessWidget {
   const _ControlBar({
-    required this.isConnected,
     required this.isStarting,
-    required this.isMuted,
+    required this.isMicActive,
+    required this.isMicMuted,
+    required this.isTextComposing,
     required this.level,
-    required this.onToggle,
-    required this.onToggleMute,
+    required this.textController,
+    required this.textFocusNode,
+    required this.onSendText,
+    required this.onTap,
+    required this.onLongPressStart,
+    required this.onLongPressEnd,
   });
 
-  final bool isConnected;
   final bool isStarting;
-  final bool isMuted;
+  final bool isMicActive;
+  final bool isMicMuted;
+  final bool isTextComposing;
   final double level;
-  final VoidCallback? onToggle;
-  final VoidCallback? onToggleMute;
+  final TextEditingController textController;
+  final FocusNode textFocusNode;
+  final VoidCallback onSendText;
+  final VoidCallback onTap;
+  final VoidCallback onLongPressStart;
+  final VoidCallback onLongPressEnd;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final showLevel = isMicActive && !isMicMuted;
     return Material(
       color: theme.colorScheme.surfaceContainer,
       child: SafeArea(
         top: false,
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+          padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              if (isConnected)
+              if (showLevel) ...[
                 ClipRRect(
                   borderRadius: BorderRadius.circular(999),
                   child: LinearProgressIndicator(
-                    value: isMuted ? 0 : level,
+                    value: level,
                     minHeight: 4,
                     backgroundColor: theme.colorScheme.surfaceContainerHighest,
                   ),
                 ),
-              if (isConnected) const SizedBox(height: 12),
+                const SizedBox(height: 10),
+              ],
               Row(
-                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
-                  if (isConnected) ...[
-                    _RoundIconButton(
-                      icon: isMuted ? Icons.mic_off_rounded : Icons.mic_rounded,
-                      tooltip: isMuted ? 'Unmute' : 'Mute',
-                      onPressed: onToggleMute,
-                      color: isMuted
-                          ? theme.colorScheme.error
-                          : theme.colorScheme.primary,
-                      filled: false,
+                  Expanded(
+                    child: _TextComposer(
+                      controller: textController,
+                      focusNode: textFocusNode,
+                      onSend: onSendText,
                     ),
-                    const SizedBox(width: 16),
-                  ],
-                  _RoundIconButton(
-                    icon: isConnected
-                        ? Icons.call_end_rounded
-                        : Icons.phone_rounded,
-                    tooltip: isConnected ? 'Disconnect' : 'Connect',
-                    onPressed: onToggle,
-                    color: isConnected
-                        ? theme.colorScheme.error
-                        : theme.colorScheme.primary,
-                    filled: true,
-                    large: true,
-                    busy: isStarting,
+                  ),
+                  const SizedBox(width: 8),
+                  _PrimaryActionButton(
+                    isStarting: isStarting,
+                    isMicActive: isMicActive,
+                    isMicMuted: isMicMuted,
+                    hasText: isTextComposing,
+                    onTap: onTap,
+                    onLongPressStart: onLongPressStart,
+                    onLongPressEnd: onLongPressEnd,
+                    onSend: onSendText,
                   ),
                 ],
               ),
@@ -1085,63 +1286,127 @@ class _ControlBar extends StatelessWidget {
   }
 }
 
-class _RoundIconButton extends StatelessWidget {
-  const _RoundIconButton({
-    required this.icon,
-    required this.tooltip,
-    required this.onPressed,
-    required this.color,
-    this.filled = false,
-    this.large = false,
-    this.busy = false,
+class _TextComposer extends StatelessWidget {
+  const _TextComposer({
+    required this.controller,
+    required this.focusNode,
+    required this.onSend,
   });
 
-  final IconData icon;
-  final String tooltip;
-  final VoidCallback? onPressed;
-  final Color color;
-  final bool filled;
-  final bool large;
-  final bool busy;
+  final TextEditingController controller;
+  final FocusNode focusNode;
+  final VoidCallback onSend;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final size = large ? 64.0 : 48.0;
-    final iconSize = large ? 28.0 : 22.0;
-    final bg = filled ? color : Colors.transparent;
-    final fg = filled ? theme.colorScheme.onPrimary : color;
-    return Tooltip(
-      message: tooltip,
-      child: SizedBox(
-        width: size,
-        height: size,
-        child: Material(
-          color: bg,
-          shape: CircleBorder(
-            side: filled
-                ? BorderSide.none
-                : BorderSide(color: color, width: 1.5),
-          ),
-          elevation: filled ? 2 : 0,
-          child: InkWell(
-            onTap: onPressed,
-            customBorder: const CircleBorder(),
-            child: Center(
-              child: busy
-                  ? SizedBox(
-                      width: iconSize,
-                      height: iconSize,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2.5,
-                        color: fg,
-                      ),
-                    )
-                  : Icon(icon, color: fg, size: iconSize),
-            ),
-          ),
+    return Container(
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: theme.colorScheme.outlineVariant),
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: TextField(
+        controller: controller,
+        focusNode: focusNode,
+        maxLines: 4,
+        minLines: 1,
+        textInputAction: TextInputAction.send,
+        onSubmitted: (_) {
+          if (controller.text.trim().isNotEmpty) onSend();
+        },
+        decoration: const InputDecoration(
+          hintText: 'Type a message…',
+          border: InputBorder.none,
+          isDense: true,
+          contentPadding: EdgeInsets.symmetric(vertical: 12),
         ),
       ),
+    );
+  }
+}
+
+class _PrimaryActionButton extends StatelessWidget {
+  const _PrimaryActionButton({
+    required this.isStarting,
+    required this.isMicActive,
+    required this.isMicMuted,
+    required this.hasText,
+    required this.onTap,
+    required this.onLongPressStart,
+    required this.onLongPressEnd,
+    required this.onSend,
+  });
+
+  final bool isStarting;
+  final bool isMicActive;
+  final bool isMicMuted;
+  final bool hasText;
+  final VoidCallback onTap;
+  final VoidCallback onLongPressStart;
+  final VoidCallback onLongPressEnd;
+  final VoidCallback onSend;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final showMutedStyle = !hasText && isMicActive && isMicMuted;
+
+    final Color bg;
+    final Color fg;
+    final BorderSide border;
+    final double elevation;
+
+    if (showMutedStyle) {
+      bg = Colors.transparent;
+      fg = theme.colorScheme.onSurfaceVariant;
+      border = BorderSide(color: theme.colorScheme.outline, width: 1.5);
+      elevation = 0;
+    } else {
+      bg = theme.colorScheme.primary;
+      fg = theme.colorScheme.onPrimary;
+      border = BorderSide.none;
+      elevation = 2;
+    }
+
+    final IconData iconData;
+    if (hasText) {
+      iconData = Icons.arrow_upward_rounded;
+    } else if (showMutedStyle) {
+      iconData = Icons.mic_off_rounded;
+    } else {
+      iconData = Icons.mic_rounded;
+    }
+
+    final button = SizedBox(
+      width: 56,
+      height: 56,
+      child: Material(
+        color: bg,
+        shape: CircleBorder(side: border),
+        elevation: elevation,
+        child: Center(
+          child: isStarting && !hasText
+              ? SizedBox(
+                  width: 26,
+                  height: 26,
+                  child: CircularProgressIndicator(strokeWidth: 2.5, color: fg),
+                )
+              : Icon(iconData, color: fg, size: 26),
+        ),
+      ),
+    );
+
+    if (hasText) {
+      return GestureDetector(onTap: onSend, child: button);
+    }
+
+    return GestureDetector(
+      onTap: onTap,
+      onLongPressStart: (_) => onLongPressStart(),
+      onLongPressEnd: (_) => onLongPressEnd(),
+      child: button,
     );
   }
 }
