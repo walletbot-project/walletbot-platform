@@ -1,6 +1,6 @@
-import 'package:app/components/currency-picker.dart';
 import 'package:app/database.dart';
 import 'package:app/screens/create_account.dart';
+import 'package:app/screens/edit-account.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -12,76 +12,8 @@ class AccountsScreen extends StatefulWidget {
 }
 
 class _AccountsScreenState extends State<AccountsScreen> {
-  // Null means no account is being edited.
-  String? _editingAccountId;
-  final _editController = TextEditingController();
-  // Pending currency while an edit is in progress.
-  String _editCurrency = '';
-
   bool _isManagementMode = false;
   final Set<String> _selectedIds = {};
-
-  @override
-  void dispose() {
-    _editController.dispose();
-    super.dispose();
-  }
-
-  // ── Edit ────────────────────────────────────────────────────────────────────
-
-  void _startEdit(String id, String currentName, String currentCurrency) {
-    _editController.text = currentName;
-    _editController.selection =
-        TextSelection.fromPosition(TextPosition(offset: currentName.length));
-    setState(() {
-      _editingAccountId = id;
-      _editCurrency = currentCurrency;
-    });
-  }
-
-  Future<void> _pickEditCurrency() async {
-    final picked = await showModalBottomSheet<String>(
-      context: context,
-      isScrollControlled: true,
-      showDragHandle: true,
-      builder: (_) => CurrencyPickerSheet(selected: _editCurrency),
-    );
-    if (picked != null && mounted) {
-      setState(() => _editCurrency = picked);
-    }
-  }
-
-  Future<void> _confirmEdit() async {
-    final id = _editingAccountId;
-    if (id == null) return;
-
-    final newName = _editController.text.trim();
-    if (newName.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('El nombre no puede estar vacío')),
-      );
-      return;
-    }
-
-    // Snapshot before clearing state so the async call has the right values.
-    final currency = _editCurrency;
-
-    // Close edit mode before the async call so the UI is never stuck.
-    setState(() => _editingAccountId = null);
-
-    try {
-      await context.read<AppDatabase>().updateAccount(id, newName, currency);
-    } catch (e, st) {
-      debugPrint('Error updating account: $e\n$st');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Error al guardar los cambios')),
-        );
-      }
-    }
-  }
-
-  void _cancelEdit() => setState(() => _editingAccountId = null);
 
   // ── Delete (single) ─────────────────────────────────────────────────────────
 
@@ -210,6 +142,18 @@ class _AccountsScreenState extends State<AccountsScreen> {
     );
   }
 
+  void _navigateToEditAccount(Account account) {
+    final db = context.read<AppDatabase>();
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => Provider<AppDatabase>.value(
+          value: db,
+          child: EditAccountScreen(account: account),
+        ),
+      ),
+    );
+  }
+
   // ── Build ────────────────────────────────────────────────────────────────────
 
   @override
@@ -217,101 +161,73 @@ class _AccountsScreenState extends State<AccountsScreen> {
     final db = context.read<AppDatabase>();
     final selCount = _selectedIds.length;
 
-    return StreamBuilder<List<Account>>(
-      stream: db.watchAccounts(),
-      builder: (context, snapshot) {
-        final loading = snapshot.connectionState == ConnectionState.waiting;
-        final list = snapshot.data ?? [];
+    return Scaffold(
+      appBar: AppBar(
+        title: _isManagementMode
+            ? Text(
+                selCount == 0
+                    ? 'Seleccionando'
+                    : selCount == 1
+                        ? '1 cuenta'
+                        : '$selCount cuentas',
+              )
+            : const Text('Cuentas'),
+        actions: [
+          if (!_isManagementMode)
+            IconButton(
+              tooltip: 'Nueva cuenta',
+              onPressed: _navigateToCreateAccount,
+              icon: const Icon(Icons.add),
+            ),
+        ],
+      ),
+      body: Column(
+        children: [
+          Expanded(
+            child: StreamBuilder<List<Account>>(
+              stream: db.watchAccounts(),
+              builder: (context, snapshot) {
+                final loading =
+                    snapshot.connectionState == ConnectionState.waiting;
+                final list = snapshot.data ?? [];
 
-        return MediaQuery.removePadding(
-          context: context,
-          removeTop: true,
-          child: Column(
-            children: [
-              Expanded(
-                child: CustomScrollView(
-                  slivers: [
-                    SliverAppBar.large(
-                      title: _isManagementMode
-                          ? Text(
-                              selCount == 0
-                                  ? 'Seleccionando'
-                                  : selCount == 1
-                                      ? '1 cuenta'
-                                      : '$selCount cuentas',
-                            )
-                          : const Text('Cuentas'),
-                      actions: [
-                        if (!_isManagementMode)
-                          IconButton(
-                            tooltip: 'Nueva cuenta',
-                            onPressed: _navigateToCreateAccount,
-                            icon: const Icon(Icons.add),
-                          ),
-                      ],
-                    ),
-                    if (loading)
-                      const SliverFillRemaining(
-                        child: Center(child: CircularProgressIndicator()),
-                      )
-                    else if (list.isEmpty)
-                      SliverFillRemaining(
-                        child: _EmptyBody(
-                          onCreateTap: _navigateToCreateAccount,
-                        ),
-                      )
-                    else
-                      SliverPadding(
-                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 96),
-                        sliver: SliverList.builder(
-                          itemCount: list.length,
-                          itemBuilder: (context, i) {
-                            final account = list[i];
-                            final isEditing =
-                                _editingAccountId == account.id;
-                            return _AccountCard(
-                              account: account,
-                              isEditing: isEditing,
-                              editController: _editController,
-                              editCurrency: isEditing
-                                  ? _editCurrency
-                                  : account.currency,
-                              isManagementMode: _isManagementMode,
-                              isSelected: _selectedIds.contains(account.id),
-                              onStartEdit: () => _startEdit(
-                                account.id,
-                                account.name,
-                                account.currency,
-                              ),
-                              onConfirmEdit: _confirmEdit,
-                              onCancelEdit: _cancelEdit,
-                              onTapCurrency: _pickEditCurrency,
-                              onDelete: () =>
-                                  _requestDelete(account.id, account.name),
-                              onLongPress: () =>
-                                  _enterManagementMode(account.id),
-                              onToggleSelect: () =>
-                                  _toggleSelection(account.id),
-                            );
-                          },
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-              // Management mode action bar — rendered outside the scroll view
-              // so it always sits above the NavigationBar and the Android system
-              // navigation area regardless of scroll position.
-              if (_isManagementMode)
-                _ManagementBar(
-                  selectedCount: selCount,
-                  onCancel: _exitManagementMode,
-                  onDelete: selCount > 0 ? _deleteSelected : null,
-                ),
-            ],
+                if (loading) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+                if (list.isEmpty) {
+                  return _EmptyBody(onCreateTap: _navigateToCreateAccount);
+                }
+                return ListView.builder(
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 96),
+                  itemCount: list.length,
+                  itemBuilder: (context, i) {
+                    final account = list[i];
+                    return _AccountCard(
+                      account: account,
+                      isManagementMode: _isManagementMode,
+                      isSelected: _selectedIds.contains(account.id),
+                      onEdit: () => _navigateToEditAccount(account),
+                      onDelete: () =>
+                          _requestDelete(account.id, account.name),
+                      onLongPress: () => _enterManagementMode(account.id),
+                      onToggleSelect: () => _toggleSelection(account.id),
+                    );
+                  },
+                );
+              },
+            ),
           ),
-        );
-      },
+          // Management mode action bar — rendered outside the scroll view
+          // so it always sits above the NavigationBar and the Android system
+          // navigation area regardless of scroll position.
+          if (_isManagementMode)
+            _ManagementBar(
+              selectedCount: selCount,
+              onCancel: _exitManagementMode,
+              onDelete: selCount > 0 ? _deleteSelected : null,
+            ),
+        ],
+      ),
     );
   }
 }
@@ -421,32 +337,18 @@ class _ManagementBar extends StatelessWidget {
 class _AccountCard extends StatelessWidget {
   const _AccountCard({
     required this.account,
-    required this.isEditing,
-    required this.editController,
-    required this.editCurrency,
     required this.isManagementMode,
     required this.isSelected,
-    required this.onStartEdit,
-    required this.onConfirmEdit,
-    required this.onCancelEdit,
-    required this.onTapCurrency,
+    required this.onEdit,
     required this.onDelete,
     required this.onLongPress,
     required this.onToggleSelect,
   });
 
   final Account account;
-  final bool isEditing;
-  final TextEditingController editController;
-  // Current pending currency while editing; equals account.currency otherwise.
-  final String editCurrency;
   final bool isManagementMode;
   final bool isSelected;
-  final VoidCallback onStartEdit;
-  final VoidCallback onConfirmEdit;
-  final VoidCallback onCancelEdit;
-  // Opens the currency picker when in edit mode.
-  final VoidCallback onTapCurrency;
+  final VoidCallback onEdit;
   final VoidCallback onDelete;
   final VoidCallback onLongPress;
   final VoidCallback onToggleSelect;
@@ -455,7 +357,6 @@ class _AccountCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
 
-    // Compact icon buttons to fit alongside the currency chip.
     ButtonStyle compactIcon() => IconButton.styleFrom(
           tapTargetSize: MaterialTapTargetSize.shrinkWrap,
           padding: const EdgeInsets.symmetric(horizontal: 4),
@@ -474,88 +375,35 @@ class _AccountCard extends StatelessWidget {
             ),
           );
 
-    final Widget title = isEditing
-        ? TextField(
-            controller: editController,
-            autofocus: true,
-            textCapitalization: TextCapitalization.sentences,
-            decoration: InputDecoration(
-              filled: true,
-              fillColor: colorScheme.surfaceContainerHighest,
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: BorderSide.none,
+    final Widget trailing = isManagementMode
+        ? Chip(label: Text(account.currency))
+        : Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Chip(label: Text(account.currency)),
+              IconButton(
+                icon: const Icon(Icons.edit_outlined),
+                iconSize: 20,
+                style: compactIcon(),
+                onPressed: onEdit,
+                tooltip: 'Editar',
               ),
-              isDense: true,
-              contentPadding: const EdgeInsets.symmetric(
-                horizontal: 8,
-                vertical: 6,
+              IconButton(
+                icon: Icon(Icons.delete_outline, color: colorScheme.error),
+                iconSize: 20,
+                style: compactIcon(),
+                onPressed: onDelete,
+                tooltip: 'Eliminar',
               ),
-            ),
-            onSubmitted: (_) => onConfirmEdit(),
-          )
-        : Text(account.name);
-
-    final Widget trailing;
-    if (isEditing) {
-      trailing = Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          ActionChip(
-            label: Text(editCurrency),
-            avatar: const Icon(Icons.arrow_drop_down, size: 18),
-            onPressed: onTapCurrency,
-            tooltip: 'Cambiar moneda',
-          ),
-          IconButton(
-            icon: Icon(Icons.check_rounded, color: Colors.green.shade700),
-            iconSize: 20,
-            style: compactIcon(),
-            onPressed: onConfirmEdit,
-            tooltip: 'Confirmar',
-          ),
-          IconButton(
-            icon: Icon(Icons.close_rounded, color: colorScheme.error),
-            iconSize: 20,
-            style: compactIcon(),
-            onPressed: onCancelEdit,
-            tooltip: 'Cancelar',
-          ),
-        ],
-      );
-    } else if (isManagementMode) {
-      trailing = Chip(label: Text(account.currency));
-    } else {
-      trailing = Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Chip(label: Text(account.currency)),
-          IconButton(
-            icon: const Icon(Icons.edit_outlined),
-            iconSize: 20,
-            style: compactIcon(),
-            onPressed: onStartEdit,
-            tooltip: 'Editar nombre',
-          ),
-          IconButton(
-            icon: Icon(Icons.delete_outline, color: colorScheme.error),
-            iconSize: 20,
-            style: compactIcon(),
-            onPressed: onDelete,
-            tooltip: 'Eliminar',
-          ),
-        ],
-      );
-    }
+            ],
+          );
 
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
       child: ListTile(
         leading: leading,
-        title: title,
+        title: Text(account.name),
         trailing: trailing,
-        // In management mode the whole tile toggles selection; in normal mode
-        // a long-press enters management mode.
         onTap: isManagementMode ? onToggleSelect : null,
         onLongPress: isManagementMode ? null : onLongPress,
       ),
