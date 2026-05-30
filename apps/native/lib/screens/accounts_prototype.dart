@@ -290,18 +290,6 @@ class CardLikeListTile extends StatelessWidget {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
-                  // Description shown as subtitle only when present.
-                  if (account.description != null) ...[
-                    const SizedBox(height: 2),
-                    Text(
-                      account.description!,
-                      style: textTheme.bodyMedium?.copyWith(
-                        color: colors.onSurfaceVariant,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ],
                 ],
               ),
             ),
