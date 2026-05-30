@@ -1,6 +1,8 @@
 import 'package:app/auth/account.dart';
 import 'package:app/auth/auth_controller.dart';
 import 'package:app/screens/accounts_prototype.dart';
+import 'package:app/screens/categories_prototype.dart';
+import 'package:app/screens/tags_prototype.dart';
 import 'package:convex_flutter/convex_flutter.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -107,7 +109,25 @@ class _HomeScreenState extends State<HomeScreen> {
                 MaterialPageRoute(builder: (_) => const AccountsPage()),
               );
             },
-            icon: const Icon(Icons.account_tree_sharp),
+            icon: const Icon(Icons.account_balance_wallet_outlined),
+          ),
+          IconButton(
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const CategoriesPage()),
+              );
+            },
+            icon: const Icon(Icons.category_outlined),
+          ),
+          IconButton(
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const TagsPage()),
+              );
+            },
+            icon: const Icon(Icons.sell_outlined),
           ),
         ],
       ),
