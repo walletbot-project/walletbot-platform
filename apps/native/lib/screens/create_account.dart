@@ -201,45 +201,25 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
               ),
             ),
             const SizedBox(height: 16),
-            ExpansionTile(
-              title: const Text('Balance inicial'),
-              subtitle: const Text('Opcional'),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(4),
-                side: BorderSide(
-                  color: Theme.of(context).colorScheme.outline,
-                ),
+            TextFormField(
+              controller: _balanceController,
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
               ),
-              collapsedShape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(4),
-                side: BorderSide(
-                  color: Theme.of(context).colorScheme.outline,
-                ),
+              decoration: InputDecoration(
+                labelText: 'Balance inicial (opcional)',
+                hintText: '0.00',
+                prefixText: '$_currency ',
+                border: const OutlineInputBorder(),
               ),
-              childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-              children: [
-                TextFormField(
-                  controller: _balanceController,
-                  keyboardType: const TextInputType.numberWithOptions(
-                    decimal: true,
-                  ),
-                  decoration: InputDecoration(
-                    labelText: 'Monto',
-                    hintText: '0.00',
-                    prefixText: '$_currency ',
-                    border: const OutlineInputBorder(),
-                  ),
-                  validator: (v) {
-                    if (v == null || v.trim().isEmpty) return null;
-                    final parsed =
-                        double.tryParse(v.trim().replaceAll(',', '.'));
-                    if (parsed == null || parsed < 0) {
-                      return 'Ingresá un monto válido';
-                    }
-                    return null;
-                  },
-                ),
-              ],
+              validator: (v) {
+                if (v == null || v.trim().isEmpty) return null;
+                final parsed = double.tryParse(v.trim().replaceAll(',', '.'));
+                if (parsed == null || parsed < 0) {
+                  return 'Ingresá un monto válido';
+                }
+                return null;
+              },
             ),
             const SizedBox(height: 32),
             FilledButton(

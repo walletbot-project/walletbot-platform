@@ -6,11 +6,32 @@ import 'package:provider/provider.dart';
 class AccountsScreen extends StatelessWidget {
   const AccountsScreen({super.key});
 
+  void _openCreate(BuildContext context) {
+    final db = context.read<AppDatabase>();
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => Provider<AppDatabase>.value(
+          value: db,
+          child: const CreateAccountScreen(),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final db = context.read<AppDatabase>();
     return Scaffold(
-      appBar: AppBar(title: const Text('Cuentas')),
+      appBar: AppBar(
+        title: const Text('Cuentas'),
+        actions: [
+          IconButton(
+            tooltip: 'Nueva cuenta',
+            onPressed: () => _openCreate(context),
+            icon: const Icon(Icons.add),
+          ),
+        ],
+      ),
       body: StreamBuilder<List<Account>>(
         stream: db.watchAccounts(),
         builder: (context, snapshot) {
@@ -21,34 +42,12 @@ class AccountsScreen extends StatelessWidget {
             return const Center(child: CircularProgressIndicator());
           }
           if (list.isEmpty) {
-            return const _EmptyBody();
+            return _EmptyBody(onCreateTap: () => _openCreate(context));
           }
           return ListView.builder(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 96),
-            itemCount: list.length + 1,
-            itemBuilder: (context, i) {
-              if (i < list.length) {
-                return _AccountCard(account: list[i]);
-              }
-              return Padding(
-                padding: const EdgeInsets.only(top: 8),
-                child: FilledButton.icon(
-                  onPressed: () {
-                    final db = context.read<AppDatabase>();
-                    Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => Provider<AppDatabase>.value(
-                          value: db,
-                          child: const CreateAccountScreen(),
-                        ),
-                      ),
-                    );
-                  },
-                  icon: const Icon(Icons.add),
-                  label: const Text('Crear cuenta'),
-                ),
-              );
-            },
+            itemCount: list.length,
+            itemBuilder: (context, i) => _AccountCard(account: list[i]),
           );
         },
       ),
@@ -57,7 +56,9 @@ class AccountsScreen extends StatelessWidget {
 }
 
 class _EmptyBody extends StatelessWidget {
-  const _EmptyBody();
+  const _EmptyBody({required this.onCreateTap});
+
+  final VoidCallback onCreateTap;
 
   @override
   Widget build(BuildContext context) {
@@ -86,17 +87,7 @@ class _EmptyBody extends StatelessWidget {
           ),
           const SizedBox(height: 24),
           FilledButton.icon(
-            onPressed: () {
-              final db = context.read<AppDatabase>();
-              Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (_) => Provider<AppDatabase>.value(
-                    value: db,
-                    child: const CreateAccountScreen(),
-                  ),
-                ),
-              );
-            },
+            onPressed: onCreateTap,
             icon: const Icon(Icons.add),
             label: const Text('Crear cuenta'),
           ),
