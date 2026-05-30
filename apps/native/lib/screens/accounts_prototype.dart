@@ -8,7 +8,6 @@ import 'package:m3e_buttons/m3e_buttons.dart';
 class Account {
   const Account({
     required this.name,
-    this.description,
     required this.icon,
     required this.color,
     required this.currency,
@@ -19,7 +18,6 @@ class Account {
   });
 
   final String name;
-  final String? description; // optional free-text note (subtitle + sheet)
   final IconData icon;
   final Color color; // visual accent (backend `color` hex)
   final String currency; // ISO code: USD, ARS, EUR, GBP
@@ -81,7 +79,6 @@ const List<Transaction> _sampleTransactions = [
 const List<Account> _mockAccounts = [
   Account(
     name: 'Cuenta Corriente',
-    description: 'Cuenta principal para gastos del día a día.',
     icon: Icons.account_balance_rounded,
     color: Color(0xFF3B82F6),
     currency: 'USD',
@@ -91,7 +88,6 @@ const List<Account> _mockAccounts = [
   ),
   Account(
     name: 'Ahorros',
-    description: 'Ahorros de largo plazo y fondo de emergencia.',
     icon: Icons.savings_rounded,
     color: Color(0xFF14B8A6),
     currency: 'USD',
@@ -110,7 +106,6 @@ const List<Account> _mockAccounts = [
   ),
   Account(
     name: 'Tarjeta de Crédito',
-    description: 'Resumen y consumos de la tarjeta Visa.',
     icon: Icons.credit_card_rounded,
     color: Color(0xFFEF4444),
     currency: 'USD',
@@ -328,7 +323,9 @@ class AccountDetailsSheet extends StatelessWidget {
           controller: scrollController, // wires drag-to-scroll to the sheet
           padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
           children: [
-            _buildAccountHeader(context),
+            _buildIdentityGroup(context),
+            const SizedBox(height: 12),
+            _buildActions(context),
             const SizedBox(height: 28),
             _buildTransactionsHeader(context),
             const SizedBox(height: 8),
@@ -339,79 +336,45 @@ class AccountDetailsSheet extends StatelessWidget {
     );
   }
 
-  /// Account identity, balance, and management actions as one cohesive M3
-  /// Expressive containment card, color-washed by the account accent so the
-  /// whole block carries the account's color. The header band pairs the accent
-  /// icon tile with the edit and (destructive) delete actions; below, the name
-  /// is prefixed by its editable color swatch and the description; a hairline
-  /// divider then sets off the focal balance with its currency pill.
-  Widget _buildAccountHeader(BuildContext context) {
+  /// Identity + balance as one cohesive M3 Expressive containment group: a
+  /// color-washed identity hero (icon, name, color swatch) joined by the shared
+  /// 2dp seam to the balance hero (focal amount + currency). Large radius lands
+  /// only on the group's four outer corners; the seam is minimal so the two
+  /// cards read as a single rounded block.
+  Widget _buildIdentityGroup(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
     final isNegative = account.balanceCents < 0;
 
-    return Material(
-      color: account.color.withValues(alpha: 0.14),
-      borderRadius: BorderRadius.circular(_kGroupOuterRadius),
-      clipBehavior: Clip.antiAlias,
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Header band: accent icon tile on the left, edit + delete on the
-            // right as compact icon buttons (delete carries the error tone).
-            Row(
+    return Column(
+      children: [
+        // Identity hero — tinted by the account's accent so the whole block
+        // carries the account color. Holds the icon, name, plus a discrete
+        // color swatch as a trailing accent.
+        Material(
+          color: account.color.withValues(alpha: 0.14),
+          borderRadius: const BorderRadius.vertical(
+            top: Radius.circular(_kGroupOuterRadius),
+            bottom: Radius.circular(_kGroupInnerRadius),
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Row(
               children: [
+                // Expressive rounded-square icon tile — shape variety against
+                // the circular avatars used elsewhere on the sheet.
                 Container(
-                  width: 56,
-                  height: 56,
+                  width: 60,
+                  height: 60,
                   decoration: BoxDecoration(
                     color: account.color.withValues(alpha: 0.28),
-                    borderRadius: BorderRadius.circular(18),
+                    borderRadius: BorderRadius.circular(20),
                   ),
                   alignment: Alignment.center,
-                  child: Icon(account.icon, size: 28, color: account.color),
+                  child: Icon(account.icon, size: 30, color: account.color),
                 ),
-                const Spacer(),
-                M3EButton(
-                  onPressed: () {},
-                  style: M3EButtonStyle.tonal,
-                  size: M3EButtonSize.sm,
-                  tooltip: 'Editar',
-                  semanticLabel: 'Editar',
-                  child: const Icon(Icons.edit_outlined, size: 20),
-                ),
-                const SizedBox(width: 8),
-                M3EButton(
-                  onPressed: () {},
-                  size: M3EButtonSize.sm,
-                  tooltip: 'Eliminar',
-                  semanticLabel: 'Eliminar',
-                  decoration: M3EButtonDecoration.styleFrom(
-                    backgroundColor: colors.errorContainer,
-                    foregroundColor: colors.onErrorContainer,
-                  ),
-                  child: const Icon(Icons.delete_outline, size: 20),
-                ),
-              ],
-            ),
-            const SizedBox(height: 18),
-            // Name prefixed by its editable color swatch.
-            Row(
-              children: [
-                Container(
-                  width: 14,
-                  height: 14,
-                  decoration: BoxDecoration(
-                    color: account.color,
-                    shape: BoxShape.circle,
-                    border: Border.all(
-                      color: colors.outlineVariant.withValues(alpha: 0.5),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 10),
+                const SizedBox(width: 16),
                 Expanded(
                   child: Text(
                     account.name,
@@ -422,28 +385,34 @@ class AccountDetailsSheet extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
+                const SizedBox(width: 12),
+                // Discrete color swatch — the editable "color" attribute.
+                Container(
+                  width: 28,
+                  height: 28,
+                  decoration: BoxDecoration(
+                    color: account.color,
+                    borderRadius: BorderRadius.circular(9),
+                    border: Border.all(
+                      color: colors.outlineVariant.withValues(alpha: 0.5),
+                    ),
+                  ),
+                ),
               ],
             ),
-            // Description shown only when present.
-            if (account.description != null) ...[
-              const SizedBox(height: 6),
-              Text(
-                account.description!,
-                style: textTheme.bodyMedium?.copyWith(
-                  color: colors.onSurfaceVariant,
-                ),
-              ),
-            ],
-            const SizedBox(height: 18),
-            Divider(
-              height: 1,
-              thickness: 1,
-              color: colors.outlineVariant.withValues(alpha: 0.4),
-            ),
-            const SizedBox(height: 16),
-            // Focal balance with the currency riding along as a pill.
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.end,
+          ),
+        ),
+        const SizedBox(height: _kGroupSpacing),
+        // Balance hero — the focal number; currency rides along as a pill.
+        GroupedCard(
+          borderRadius: const BorderRadius.vertical(
+            top: Radius.circular(_kGroupInnerRadius),
+            bottom: Radius.circular(_kGroupOuterRadius),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 18),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Expanded(
                   child: Column(
@@ -470,6 +439,7 @@ class AccountDetailsSheet extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: 12),
+                // Currency pill.
                 Container(
                   padding: const EdgeInsets.symmetric(
                     horizontal: 12,
@@ -488,9 +458,49 @@ class AccountDetailsSheet extends StatelessWidget {
                 ),
               ],
             ),
-          ],
+          ),
         ),
-      ),
+      ],
+    );
+  }
+
+  /// Account actions as Material 3 Expressive buttons: a prominent tonal
+  /// "adjust balance" action paired with edit and a destructive delete. Each
+  /// button carries the M3E spring radius-squish on press.
+  Widget _buildActions(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return Row(
+      children: [
+        Expanded(
+          child: M3EFilledButton.tonalIcon(
+            onPressed: () {},
+            size: M3EButtonSize.md,
+            icon: const Icon(Icons.tune_rounded),
+            label: const Text('Ajustar saldo'),
+          ),
+        ),
+        const SizedBox(width: 8),
+        M3EButton(
+          onPressed: () {},
+          style: M3EButtonStyle.tonal,
+          size: M3EButtonSize.md,
+          tooltip: 'Editar',
+          semanticLabel: 'Editar',
+          child: const Icon(Icons.edit_outlined),
+        ),
+        const SizedBox(width: 8),
+        M3EButton(
+          onPressed: () {},
+          size: M3EButtonSize.md,
+          tooltip: 'Eliminar',
+          semanticLabel: 'Eliminar',
+          decoration: M3EButtonDecoration.styleFrom(
+            backgroundColor: colors.errorContainer,
+            foregroundColor: colors.onErrorContainer,
+          ),
+          child: const Icon(Icons.delete_outline),
+        ),
+      ],
     );
   }
 
