@@ -98,6 +98,47 @@ pullear, mergear localmente y reintentar.
 Last-write-wins por `updatedAt` (cliente) y `deletedAt` (tombstones) es la
 regla universal de resolución.
 
+### Resolución de conflictos (decisión actual)
+
+> Esta es la decisión tomada **hasta este punto**. No es necesariamente
+> definitiva: el algoritmo de conflictos puede revisarse más adelante.
+
+Adoptamos **last-write-wins (LWW) a nivel de fila**:
+
+- Ante ediciones concurrentes de la misma entidad desde dos dispositivos,
+  gana **completa** la versión con el `updatedAt` mayor (`deletedAt` para
+  borrados). La versión perdedora se descarta entera.
+- La resolución es **por fila, no por campo**: no hay merge campo a campo.
+- En empate exacto de timestamp, gana el lado local (`>=`), lo que mantiene
+  la operación determinística y evita oscilaciones.
+
+**Por qué LWW.** Es simple, predecible y no requiere estado de conflicto ni
+intervención del usuario. Para un caso de uso personal —donde un mismo
+usuario rara vez edita la misma entidad en dos dispositivos a la vez— es un
+trade-off razonable frente a la complejidad de un merge campo a campo o de
+CRDTs.
+
+**Riesgo asumido: pequeña pérdida de datos.** Si dos dispositivos editan la
+misma fila antes de sincronizar, los cambios del que pierde el LWW se
+pierden silenciosamente. Ejemplo: el dispositivo A cambia el `amount` de un
+movimiento y el dispositivo B cambia su `name`; al sincronizar, solo
+sobrevive el conjunto de cambios de la fila con `updatedAt` mayor, y la otra
+edición desaparece. No hay aviso al usuario ni registro del descarte.
+
+Asumimos este riesgo conscientemente porque:
+
+- El blast radius es chico: afecta una sola fila y solo bajo edición
+  concurrente real, que es poco frecuente en uso personal.
+- No corrompe el modelo: el resultado siempre es un estado válido y
+  consistente (una de las dos versiones completas), nunca una mezcla
+  incoherente.
+- Los borrados siguen la misma regla, así que tampoco hay "resurrección"
+  inconsistente de filas.
+
+Si en el futuro este trade-off resulta insuficiente (p. ej. edición
+multi-dispositivo frecuente), las alternativas a evaluar son merge a nivel
+de campo o estructuras CRDT, ambas con costo de complejidad mayor.
+
 ### Contador global por usuario
 
 Cada usuario tiene un contador monotónico (`syncCounters.value`, `int64`).
@@ -463,9 +504,9 @@ Defensa en capas:
    - que el `id` recibido coincida con el formato esperado
      (`${transactionId}__${tagId}`).
 
-   La tercera validación atrapa clientes desactualizados que aún generen
-   UUIDs random y los rechaza explícitamente con `invalid_join_id`, en vez
-   de aceptar silenciosamente filas duplicadas.
+   La tercera validación rechaza explícitamente con `invalid_join_id`
+   cualquier payload cuyo `id` no respete el formato canónico, en vez de
+   aceptar silenciosamente filas duplicadas.
 
 #### Borrado
 
