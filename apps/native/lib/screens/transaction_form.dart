@@ -36,26 +36,30 @@ class TransactionFormScreen extends StatefulWidget {
 
 class _TransactionFormScreenState extends State<TransactionFormScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _amountController = TextEditingController(text: '400');
-  final _descriptionController = TextEditingController(text: 'Intereses MP');
+  final _amountController = TextEditingController();
+  final _titleController = TextEditingController();
+  final _descriptionController = TextEditingController();
   final _tagController = TextEditingController();
 
   TransactionFormType _type = TransactionFormType.income;
-  _MockAccount _selectedAccount = _mockAccounts.first;
-  _MockCategory? _selectedCategory = _mockCategories.first;
+  _MockAccount? _selectedAccount;
+  _MockCategory? _selectedCategory;
   DateTime _selectedDate = DateTime.now();
   final List<String> _tags = [];
   bool _isSaving = false;
+  bool _isRecurringExpense = false;
 
   @override
   void dispose() {
     _amountController.dispose();
+    _titleController.dispose();
     _descriptionController.dispose();
     _tagController.dispose();
     super.dispose();
   }
 
   Future<void> _pickDate() async {
+    _commitInlineEditing();
     final picked = await showDatePicker(
       context: context,
       initialDate: _selectedDate,
@@ -67,6 +71,7 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
   }
 
   Future<void> _pickAccount() async {
+    _commitInlineEditing();
     final account = await showModalBottomSheet<_MockAccount>(
       context: context,
       showDragHandle: true,
@@ -95,6 +100,7 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
   }
 
   Future<void> _pickCategory() async {
+    _commitInlineEditing();
     final selection = await showModalBottomSheet<_CategorySelection>(
       context: context,
       showDragHandle: true,
@@ -147,9 +153,21 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
     });
   }
 
-  Future<void> _submit() async {
+  void _commitInlineEditing() {
     _addTag(_tagController.text);
+    FocusManager.instance.primaryFocus?.unfocus();
+  }
+
+  Future<void> _submit() async {
+    _commitInlineEditing();
     if (!(_formKey.currentState?.validate() ?? false)) return;
+    final account = _selectedAccount;
+    if (account == null) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Selecciona una cuenta')));
+      return;
+    }
 
     setState(() => _isSaving = true);
     final messenger = ScaffoldMessenger.of(context);
@@ -160,11 +178,11 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
       final amount = _parseAmount(_amountController.text)!;
       final result = TransactionFormResult(
         type: _type,
-        accountName: _selectedAccount.name,
-        accountCurrency: _selectedAccount.currency,
+        accountName: account.name,
+        accountCurrency: account.currency,
         date: _selectedDate,
         amount: amount,
-        title: _emptyToNull(_descriptionController.text) ?? 'Movimiento',
+        title: _titleController.text.trim(),
         description: _emptyToNull(_descriptionController.text),
         categoryName: _selectedCategory?.name,
         tags: List.unmodifiable(_tags),
@@ -186,11 +204,9 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
     final selectedColor = _type == TransactionFormType.income
         ? Colors.greenAccent.shade400
-        : colorScheme.errorContainer;
+        : const Color(0xFFFF3744);
 
     return Scaffold(
       backgroundColor: const Color(0xFFFFF8F8),
@@ -236,15 +252,37 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
                   ),
                   onSelectionChanged: _isSaving
                       ? null
-                      : (selected) => setState(() => _type = selected.first),
+                      : (selected) => _changeType(selected.first),
                 ),
               ),
               const SizedBox(height: 36),
-              _SectionLabel('Cuenta'),
-              const SizedBox(height: 10),
-              _PickerChip(
-                label: _selectedAccount.name,
-                onPressed: _isSaving ? null : _pickAccount,
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _SectionLabel('Cuenta'),
+                        const SizedBox(height: 10),
+                        _PickerChip(
+                          label: _selectedAccount?.name ?? 'Seleccionar',
+                          onPressed: _isSaving ? null : _pickAccount,
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (_type == TransactionFormType.expense) ...[
+                    const SizedBox(width: 16),
+                    _RecurringExpenseControl(
+                      value: _isRecurringExpense,
+                      onChanged: _isSaving
+                          ? null
+                          : (value) =>
+                                setState(() => _isRecurringExpense = value),
+                    ),
+                  ],
+                ],
               ),
               const SizedBox(height: 24),
               _ReadonlyField(
@@ -283,6 +321,26 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
               ),
               const SizedBox(height: 18),
               TextFormField(
+                controller: _titleController,
+                enabled: !_isSaving,
+                textCapitalization: TextCapitalization.sentences,
+                decoration: InputDecoration(
+                  labelText: 'Titulo',
+                  border: const OutlineInputBorder(),
+                  suffixIcon: IconButton(
+                    onPressed: _isSaving ? null : _titleController.clear,
+                    icon: const Icon(Icons.cancel_outlined),
+                  ),
+                ),
+                validator: (value) {
+                  if ((value ?? '').trim().isEmpty) {
+                    return 'Titulo es obligatorio';
+                  }
+                  return null;
+                },
+              ),
+              const SizedBox(height: 18),
+              TextFormField(
                 controller: _descriptionController,
                 enabled: !_isSaving,
                 minLines: 1,
@@ -301,7 +359,7 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
               _SectionLabel('Categoria'),
               const SizedBox(height: 10),
               _PickerChip(
-                label: _selectedCategory?.name ?? 'Sin categoria',
+                label: _selectedCategory?.name ?? 'Seleccionar',
                 onPressed: _isSaving ? null : _pickCategory,
               ),
               const SizedBox(height: 24),
@@ -336,6 +394,8 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
                     for (final tag in _tags)
                       InputChip(
                         label: Text(tag),
+                        backgroundColor: const Color(0xFFFFF4BE),
+                        side: const BorderSide(color: Color(0xFFD7D0B8)),
                         onDeleted: _isSaving
                             ? null
                             : () => setState(() => _tags.remove(tag)),
@@ -383,6 +443,54 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  void _changeType(TransactionFormType type) {
+    _commitInlineEditing();
+    setState(() {
+      _type = type;
+      if (type == TransactionFormType.income) _isRecurringExpense = false;
+    });
+  }
+}
+
+class _RecurringExpenseControl extends StatelessWidget {
+  const _RecurringExpenseControl({
+    required this.value,
+    required this.onChanged,
+  });
+
+  final bool value;
+  final ValueChanged<bool>? onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 132),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Text(
+            'Gasto recurrente',
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              color: Colors.black,
+              fontSize: 15,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 5),
+          Transform.scale(
+            scale: 0.86,
+            child: SizedBox(
+              height: 35,
+              child: Switch(value: value, onChanged: onChanged),
+            ),
+          ),
+        ],
       ),
     );
   }
