@@ -10,6 +10,7 @@ import 'package:app/screens/home.dart';
 import 'package:app/screens/insights.dart';
 import 'package:app/screens/login.dart';
 import 'package:app/screens/voice.dart';
+import 'package:app/sync/sync_engine.dart';
 import 'package:app/voice/gemini_voice_expense_command.dart';
 import 'package:convex_flutter/convex_flutter.dart';
 import 'package:flutter/material.dart';
@@ -62,12 +63,53 @@ class _AuthGate extends StatelessWidget {
   Widget build(BuildContext context) {
     final active = context.watch<AuthController>().activeAccount;
     if (active == null) return const LoginScreen();
-    return Provider<AppDatabase>(
+    return MultiProvider(
       key: ValueKey(active.id),
-      create: (_) => AppDatabase.forUser(active.id),
-      dispose: (_, db) => db.close(),
-      child: const AppMain(),
+      providers: [
+        Provider<AppDatabase>(
+          create: (_) => AppDatabase.forUser(active.id),
+          dispose: (_, db) => db.close(),
+        ),
+        // SyncEngine only attaches for remote accounts. For local accounts
+        // we still create one (so `Provider.of<SyncEngine>` is non-null
+        // throughout the tree) but never call `.start()`, keeping it inert.
+        ChangeNotifierProvider<SyncEngine>(
+          create: (ctx) => SyncEngine(
+            db: ctx.read<AppDatabase>(),
+            client: ConvexClient.instance,
+          ),
+        ),
+      ],
+      child: const _SyncStarter(child: AppMain()),
     );
+  }
+}
+
+/// Kicks the sync engine on first build, once both the database and the
+/// `AuthController` agree that we have a remote account attached.
+class _SyncStarter extends StatefulWidget {
+  const _SyncStarter({required this.child});
+  final Widget child;
+
+  @override
+  State<_SyncStarter> createState() => _SyncStarterState();
+}
+
+class _SyncStarterState extends State<_SyncStarter> {
+  bool _kicked = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final auth = context.watch<AuthController>();
+    final active = auth.activeAccount;
+    if (!_kicked && active != null && active.sessionToken != null) {
+      _kicked = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        unawaited(context.read<SyncEngine>().start());
+      });
+    }
+    return widget.child;
   }
 }
 

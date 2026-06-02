@@ -1,6 +1,7 @@
 import 'package:app/database.dart';
 import 'package:app/components/color_utils.dart';
 import 'package:app/components/insight_count_models.dart';
+import 'package:app/sync/local_writes.dart';
 import 'package:drift/drift.dart' show Value;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -430,7 +431,7 @@ Future<void> _updateTag(
               .into(db.transactionTags)
               .insert(
                 TransactionTagsCompanion.insert(
-                  id: '${DateTime.now().microsecondsSinceEpoch}_${txId}_${ancestor.id}',
+                  id: '${txId}__${ancestor.id}',
                   transactionId: txId,
                   tagId: ancestor.id,
                   createdAt: now,
@@ -512,6 +513,7 @@ Future<void> _deleteTag(
                 dirty: const Value(true),
               ),
             );
+        await writeTombstone(db, 'tags', descendantId);
       }
     } else {
       // Re-parent direct children to the deleted tag's parent so they keep
@@ -543,6 +545,7 @@ Future<void> _deleteTag(
         dirty: const Value(true),
       ),
     );
+    await writeTombstone(db, 'tags', id);
   });
 }
 

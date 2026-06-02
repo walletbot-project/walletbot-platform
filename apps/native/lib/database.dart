@@ -103,7 +103,7 @@ class Transactions extends Table {
       .nullable()(); // cents, for balance adjustments
 
   BoolColumn get archived =>
-      boolean().named('archived').withDefault(const Constant(false))();
+      boolean().named('is_archived').withDefault(const Constant(false))();
   Int64Column get createdAt => int64().named('created_at')();
   Int64Column get updatedAt => int64().named('updated_at')();
 

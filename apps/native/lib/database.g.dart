@@ -1235,13 +1235,13 @@ class $TransactionsTable extends Transactions
   );
   @override
   late final GeneratedColumn<bool> archived = GeneratedColumn<bool>(
-    'archived',
+    'is_archived',
     aliasedName,
     false,
     type: DriftSqlType.bool,
     requiredDuringInsert: false,
     defaultConstraints: GeneratedColumn.constraintIsAlways(
-      'CHECK ("archived" IN (0, 1))',
+      'CHECK ("is_archived" IN (0, 1))',
     ),
     defaultValue: const Constant(false),
   );
@@ -1431,10 +1431,10 @@ class $TransactionsTable extends Transactions
         ),
       );
     }
-    if (data.containsKey('archived')) {
+    if (data.containsKey('is_archived')) {
       context.handle(
         _archivedMeta,
-        archived.isAcceptableOrUnknown(data['archived']!, _archivedMeta),
+        archived.isAcceptableOrUnknown(data['is_archived']!, _archivedMeta),
       );
     }
     if (data.containsKey('created_at')) {
@@ -1530,7 +1530,7 @@ class $TransactionsTable extends Transactions
       ),
       archived: attachedDatabase.typeMapping.read(
         DriftSqlType.bool,
-        data['${effectivePrefix}archived'],
+        data['${effectivePrefix}is_archived'],
       )!,
       createdAt: attachedDatabase.typeMapping.read(
         DriftSqlType.bigInt,
@@ -1624,7 +1624,7 @@ class Transaction extends DataClass implements Insertable<Transaction> {
     if (!nullToAbsent || balanceAfter != null) {
       map['balance_after'] = Variable<BigInt>(balanceAfter);
     }
-    map['archived'] = Variable<bool>(archived);
+    map['is_archived'] = Variable<bool>(archived);
     map['created_at'] = Variable<BigInt>(createdAt);
     map['updated_at'] = Variable<BigInt>(updatedAt);
     map['dirty'] = Variable<bool>(dirty);
@@ -1983,7 +1983,7 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
       if (toCurrency != null) 'to_currency': toCurrency,
       if (exchangeRate != null) 'exchange_rate': exchangeRate,
       if (balanceAfter != null) 'balance_after': balanceAfter,
-      if (archived != null) 'archived': archived,
+      if (archived != null) 'is_archived': archived,
       if (createdAt != null) 'created_at': createdAt,
       if (updatedAt != null) 'updated_at': updatedAt,
       if (dirty != null) 'dirty': dirty,
@@ -2086,7 +2086,7 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
       map['balance_after'] = Variable<BigInt>(balanceAfter.value);
     }
     if (archived.present) {
-      map['archived'] = Variable<bool>(archived.value);
+      map['is_archived'] = Variable<bool>(archived.value);
     }
     if (createdAt.present) {
       map['created_at'] = Variable<BigInt>(createdAt.value);
@@ -3869,7 +3869,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   );
   late final Index transactionsArchived = Index(
     'transactions_archived',
-    'CREATE INDEX transactions_archived ON transactions (archived)',
+    'CREATE INDEX transactions_archived ON transactions (is_archived)',
   );
   late final Index transactionsUpdatedAt = Index(
     'transactions_updated_at',

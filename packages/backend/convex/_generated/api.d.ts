@@ -28,6 +28,8 @@ import type * as schema_tags from "../schema/tags.js";
 import type * as schema_transactionTags from "../schema/transactionTags.js";
 import type * as schema_transactions from "../schema/transactions.js";
 import type * as sync_helpers from "../sync/helpers.js";
+import type * as sync_mutations from "../sync/mutations.js";
+import type * as sync_queries from "../sync/queries.js";
 import type * as tags_mutations from "../tags/mutations.js";
 import type * as tags_queries from "../tags/queries.js";
 import type * as test from "../test.js";
@@ -63,6 +65,8 @@ declare const fullApi: ApiFromModules<{
   "schema/transactionTags": typeof schema_transactionTags;
   "schema/transactions": typeof schema_transactions;
   "sync/helpers": typeof sync_helpers;
+  "sync/mutations": typeof sync_mutations;
+  "sync/queries": typeof sync_queries;
   "tags/mutations": typeof tags_mutations;
   "tags/queries": typeof tags_queries;
   test: typeof test;

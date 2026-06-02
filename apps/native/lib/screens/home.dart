@@ -1,5 +1,6 @@
 import 'package:app/auth/account.dart';
 import 'package:app/auth/auth_controller.dart';
+import 'package:app/sync/sync_status_pill.dart';
 import 'package:convex_flutter/convex_flutter.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -95,6 +96,10 @@ class _HomeScreenState extends State<HomeScreen> {
       appBar: AppBar(
         title: const Text('Home'),
         actions: [
+          const Padding(
+            padding: EdgeInsets.only(right: 4),
+            child: Center(child: SyncStatusPill()),
+          ),
           IconButton(
             onPressed: showUserMenu,
             icon: const Icon(Icons.person_rounded),
