@@ -88,10 +88,8 @@ class _DateCheckIcon extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (dateConfirmed) {
-      print("FECHA CONFIRMADA CTM");
       return Icon(Icons.check_rounded, color: Colors.green.shade600, size: 22);
     }
-    print("FECHA ESTIMADA CARAJO");
     return Icon(Icons.help_outline_rounded, color: Colors.amber.shade700, size: 22);
   }
 }
