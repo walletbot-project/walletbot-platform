@@ -23,9 +23,8 @@ const isoOrNaturalDate = z
     .describe('ISO date or natural language (e.g. "today", "yesterday")')
 const dateConfirmed = z
     .boolean()
-    .optional()
     .describe(
-        'Whether the transaction date is certain. true only when the user clearly stated when it happened (an explicit date, or "today"/"hoy", "yesterday"/"ayer"). false when you inferred or guessed it — including defaulting to today because no date was given. Defaults to true.',
+        'Whether the transaction date is certain. Required on every write. true only when the user clearly stated when it happened (an explicit date, or "today"/"hoy", "yesterday"/"ayer"). false when you inferred or guessed it. When in doubt, prefer false.',
     )
 const tagList = z
     .array(idOrName)

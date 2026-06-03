@@ -492,12 +492,21 @@ class ToolExecutors {
   // ───── Transaction writes ─────
 
   // The agent sets `dateConfirmed` when the date is certain (explicit date,
-  // "today"/"yesterday") and false when it inferred or defaulted it. When the
-  // arg is absent we leave the column at its default (true).
+  // "today"/"yesterday") and false when it inferred or defaulted it.
+  //
+  // Gemini's function-call args don't guarantee a typed JSON boolean: depending
+  // on the model it arrives as a real bool, the string "true"/"false", or a
+  // number (1/0). We coerce all of those here. A truly unparseable value falls
+  // back to false (conservative: treat the date as unconfirmed).
   Value<bool> _dateConfirmedValue(Map<String, dynamic> args) {
     final raw = args['dateConfirmed'];
     if (raw is bool) return Value(raw);
-    print("NO HAY RAW");
+    if (raw is num) return Value(raw != 0);
+    if (raw is String) {
+      final normalized = raw.trim().toLowerCase();
+      if (normalized == 'true') return const Value(true);
+      if (normalized == 'false') return const Value(false);
+    }
     return const Value(false);
   }
 
