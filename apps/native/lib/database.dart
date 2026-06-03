@@ -90,7 +90,8 @@ class Transactions extends Table {
 
   Int64Column get balanceAfter => int64().named('balance_after').nullable()(); // cents, for balance adjustments
 
-  BoolColumn get archived => boolean().named('archived').withDefault(const Constant(false))();
+  BoolColumn get archived =>
+      boolean().named('is_archived').withDefault(const Constant(false))();
   Int64Column get createdAt => int64().named('created_at')();
   Int64Column get updatedAt => int64().named('updated_at')();
 

@@ -3,6 +3,7 @@ import 'dart:math';
 import 'package:drift/drift.dart';
 
 import '../database.dart';
+import '../sync/local_writes.dart' as sync_writes;
 import 'tool_parsing.dart';
 
 // Native tool executors. All operations run against the local Drift database;
@@ -742,7 +743,7 @@ class ToolExecutors {
           .into(db.transactionTags)
           .insert(
             TransactionTagsCompanion.insert(
-              id: _newUuid(),
+              id: '${transactionId}__${tag.id}',
               transactionId: transactionId,
               tagId: tag.id,
               createdAt: now,
@@ -945,7 +946,7 @@ class ToolExecutors {
           .into(db.transactionTags)
           .insert(
             TransactionTagsCompanion.insert(
-              id: _newUuid(),
+              id: '${transactionId}__${tag.id}',
               transactionId: transactionId,
               tagId: tag.id,
               createdAt: now,
@@ -956,30 +957,8 @@ class ToolExecutors {
     }
   }
 
-  Future<void> _writeTombstone(String table, String entityId) async {
-    final now = BigInt.from(DateTime.now().millisecondsSinceEpoch);
-    final existing = await (db.select(
-      db.tombstones,
-    )..where((t) => t.entityTable.equals(table) & t.entityId.equals(entityId))).getSingleOrNull();
-    if (existing != null) {
-      await (db.update(db.tombstones)..where((t) => t.entityTable.equals(table) & t.entityId.equals(entityId))).write(
-        TombstonesCompanion(deletedAt: Value(now), updatedAt: Value(now), dirty: const Value(true)),
-      );
-    } else {
-      await db
-          .into(db.tombstones)
-          .insert(
-            TombstonesCompanion.insert(
-              entityTable: table,
-              entityId: entityId,
-              deletedAt: now,
-              createdAt: now,
-              updatedAt: now,
-              dirty: const Value(true),
-            ),
-          );
-    }
-  }
+  Future<void> _writeTombstone(String table, String entityId) =>
+      sync_writes.writeTombstone(db, table, entityId);
 
   String _newUuid() {
     final rng = Random.secure();

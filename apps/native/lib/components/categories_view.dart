@@ -1,5 +1,6 @@
 import 'package:app/database.dart';
 import 'package:app/components/insight_count_models.dart';
+import 'package:app/sync/local_writes.dart';
 import 'package:drift/drift.dart' show Value;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -184,6 +185,7 @@ Future<void> _createCategory(AppDatabase db, String name) async {
           name: name,
           createdAt: now,
           updatedAt: now,
+          dirty: const Value(true),
         ),
       );
 }
@@ -202,12 +204,15 @@ Future<void> _updateCategory(AppDatabase db, String id, String name) async {
 
 Future<void> _deleteCategory(AppDatabase db, String id) async {
   final now = BigInt.from(DateTime.now().millisecondsSinceEpoch);
-  await (db.update(db.categories)..where((category) => category.id.equals(id)))
-      .write(
-        CategoriesCompanion(
-          archived: const Value(true),
-          updatedAt: Value(now),
-          dirty: const Value(true),
-        ),
-      );
+  await db.transaction(() async {
+    await (db.update(db.categories)..where((category) => category.id.equals(id)))
+        .write(
+          CategoriesCompanion(
+            archived: const Value(true),
+            updatedAt: Value(now),
+            dirty: const Value(true),
+          ),
+        );
+    await writeTombstone(db, 'categories', id);
+  });
 }
