@@ -14,10 +14,7 @@ class ToolExecutors {
 
   final AppDatabase db;
 
-  Future<Map<String, dynamic>> execute(
-    String name,
-    Map<String, dynamic> args,
-  ) async {
+  Future<Map<String, dynamic>> execute(String name, Map<String, dynamic> args) async {
     try {
       switch (name) {
         // Accounts
@@ -95,82 +92,55 @@ class ToolExecutors {
   // ───── Resolvers ─────
 
   Future<Account?> _resolveAccount(String idOrName) async {
-    final byId = await (db.select(
-      db.accounts,
-    )..where((t) => t.id.equals(idOrName))).getSingleOrNull();
+    final byId = await (db.select(db.accounts)..where((t) => t.id.equals(idOrName))).getSingleOrNull();
     if (byId != null) return byId;
 
     final target = normalizeName(idOrName);
-    final candidates = await (db.select(
-      db.accounts,
-    )..where((t) => t.archived.equals(false))).get();
-    final matches = candidates
-        .where((a) => normalizeName(a.name) == target)
-        .toList();
+    final candidates = await (db.select(db.accounts)..where((t) => t.archived.equals(false))).get();
+    final matches = candidates.where((a) => normalizeName(a.name) == target).toList();
     if (matches.length == 1) return matches.first;
     return null;
   }
 
   Future<List<Account>> _resolveAccountCandidates(String idOrName) async {
     final target = normalizeName(idOrName);
-    final candidates = await (db.select(
-      db.accounts,
-    )..where((t) => t.archived.equals(false))).get();
+    final candidates = await (db.select(db.accounts)..where((t) => t.archived.equals(false))).get();
     return candidates.where((a) => normalizeName(a.name) == target).toList();
   }
 
   Future<Category?> _resolveCategory(String idOrName) async {
-    final byId = await (db.select(
-      db.categories,
-    )..where((t) => t.id.equals(idOrName))).getSingleOrNull();
+    final byId = await (db.select(db.categories)..where((t) => t.id.equals(idOrName))).getSingleOrNull();
     if (byId != null) return byId;
 
     final target = normalizeName(idOrName);
-    final candidates = await (db.select(
-      db.categories,
-    )..where((t) => t.archived.equals(false))).get();
-    final matches = candidates
-        .where((c) => normalizeName(c.name) == target)
-        .toList();
+    final candidates = await (db.select(db.categories)..where((t) => t.archived.equals(false))).get();
+    final matches = candidates.where((c) => normalizeName(c.name) == target).toList();
     if (matches.length == 1) return matches.first;
     return null;
   }
 
   Future<List<Category>> _resolveCategoryCandidates(String idOrName) async {
     final target = normalizeName(idOrName);
-    final candidates = await (db.select(
-      db.categories,
-    )..where((t) => t.archived.equals(false))).get();
+    final candidates = await (db.select(db.categories)..where((t) => t.archived.equals(false))).get();
     return candidates.where((c) => normalizeName(c.name) == target).toList();
   }
 
   Future<Tag?> _resolveTag(String idOrName) async {
-    final byId = await (db.select(
-      db.tags,
-    )..where((t) => t.id.equals(idOrName))).getSingleOrNull();
+    final byId = await (db.select(db.tags)..where((t) => t.id.equals(idOrName))).getSingleOrNull();
     if (byId != null) return byId;
 
     final target = normalizeName(idOrName);
-    final candidates = await (db.select(
-      db.tags,
-    )..where((t) => t.archived.equals(false))).get();
-    final matches = candidates
-        .where((t) => normalizeName(t.name) == target)
-        .toList();
+    final candidates = await (db.select(db.tags)..where((t) => t.archived.equals(false))).get();
+    final matches = candidates.where((t) => normalizeName(t.name) == target).toList();
     if (matches.length == 1) return matches.first;
     return null;
   }
 
-  Map<String, dynamic> _ambiguous(
-    String label,
-    List<({String id, String name})> candidates,
-  ) {
+  Map<String, dynamic> _ambiguous(String label, List<({String id, String name})> candidates) {
     return {
       'ok': false,
       'error': '$label is ambiguous',
-      'candidates': candidates
-          .map((c) => {'id': c.id, 'name': c.name})
-          .toList(),
+      'candidates': candidates.map((c) => {'id': c.id, 'name': c.name}).toList(),
     };
   }
 
@@ -186,16 +156,7 @@ class ToolExecutors {
     return {
       'ok': true,
       'accounts': rows
-          .map(
-            (a) => {
-              'id': a.id,
-              'name': a.name,
-              'currency': a.currency,
-              'color': a.color,
-              'icon': a.icon,
-              'isArchived': a.archived,
-            },
-          )
+          .map((a) => {'id': a.id, 'name': a.name, 'currency': a.currency, 'color': a.color, 'icon': a.icon, 'isArchived': a.archived})
           .toList(),
     };
   }
@@ -206,43 +167,24 @@ class ToolExecutors {
     if (acc == null) {
       final cands = await _resolveAccountCandidates(idOrName);
       if (cands.length > 1) {
-        return _ambiguous(
-          'Account',
-          cands.map((c) => (id: c.id, name: c.name)).toList(),
-        );
+        return _ambiguous('Account', cands.map((c) => (id: c.id, name: c.name)).toList());
       }
       return {'ok': false, 'error': 'Account not found'};
     }
     return {
       'ok': true,
-      'account': {
-        'id': acc.id,
-        'name': acc.name,
-        'currency': acc.currency,
-        'color': acc.color,
-        'icon': acc.icon,
-      },
+      'account': {'id': acc.id, 'name': acc.name, 'currency': acc.currency, 'color': acc.color, 'icon': acc.icon},
     };
   }
 
-  Future<Map<String, dynamic>> _getAccountBalance(
-    Map<String, dynamic> args,
-  ) async {
+  Future<Map<String, dynamic>> _getAccountBalance(Map<String, dynamic> args) async {
     final acc = await _resolveAccount(args['idOrName'] as String);
     if (acc == null) return {'ok': false, 'error': 'Account not found'};
     final balance = await _computeAccountBalance(acc.id);
-    return {
-      'ok': true,
-      'accountId': acc.id,
-      'accountName': acc.name,
-      'balance': balance.toDouble() / 100,
-      'currency': acc.currency,
-    };
+    return {'ok': true, 'accountId': acc.id, 'accountName': acc.name, 'balance': balance.toDouble() / 100, 'currency': acc.currency};
   }
 
-  Future<Map<String, dynamic>> _createAccount(
-    Map<String, dynamic> args,
-  ) async {
+  Future<Map<String, dynamic>> _createAccount(Map<String, dynamic> args) async {
     final id = _newUuid();
     final now = BigInt.from(DateTime.now().millisecondsSinceEpoch);
     await db
@@ -263,27 +205,17 @@ class ToolExecutors {
     return {'ok': true, 'id': id};
   }
 
-  Future<Map<String, dynamic>> _updateAccount(
-    Map<String, dynamic> args,
-  ) async {
+  Future<Map<String, dynamic>> _updateAccount(Map<String, dynamic> args) async {
     final acc = await _resolveAccount(args['idOrName'] as String);
     if (acc == null) return {'ok': false, 'error': 'Account not found'};
 
     final now = BigInt.from(DateTime.now().millisecondsSinceEpoch);
     await (db.update(db.accounts)..where((t) => t.id.equals(acc.id))).write(
       AccountsCompanion(
-        name: args.containsKey('name')
-            ? Value(args['name'] as String)
-            : const Value.absent(),
-        description: args.containsKey('description')
-            ? Value(args['description'] as String?)
-            : const Value.absent(),
-        color: args.containsKey('color')
-            ? Value(args['color'] as String?)
-            : const Value.absent(),
-        icon: args.containsKey('icon')
-            ? Value(args['icon'] as String?)
-            : const Value.absent(),
+        name: args.containsKey('name') ? Value(args['name'] as String) : const Value.absent(),
+        description: args.containsKey('description') ? Value(args['description'] as String?) : const Value.absent(),
+        color: args.containsKey('color') ? Value(args['color'] as String?) : const Value.absent(),
+        icon: args.containsKey('icon') ? Value(args['icon'] as String?) : const Value.absent(),
         updatedAt: Value(now),
         dirty: const Value(true),
       ),
@@ -291,19 +223,13 @@ class ToolExecutors {
     return {'ok': true, 'id': acc.id};
   }
 
-  Future<Map<String, dynamic>> _archiveAccount(
-    Map<String, dynamic> args,
-  ) async {
+  Future<Map<String, dynamic>> _archiveAccount(Map<String, dynamic> args) async {
     final acc = await _resolveAccount(args['idOrName'] as String);
     if (acc == null) return {'ok': false, 'error': 'Account not found'};
 
     final now = BigInt.from(DateTime.now().millisecondsSinceEpoch);
     await (db.update(db.accounts)..where((t) => t.id.equals(acc.id))).write(
-      AccountsCompanion(
-        archived: const Value(true),
-        updatedAt: Value(now),
-        dirty: const Value(true),
-      ),
+      AccountsCompanion(archived: const Value(true), updatedAt: Value(now), dirty: const Value(true)),
     );
     await _writeTombstone('accounts', acc.id);
     return {'ok': true, 'id': acc.id};
@@ -311,9 +237,7 @@ class ToolExecutors {
 
   // ───── Category tools ─────
 
-  Future<Map<String, dynamic>> _listCategories(
-    Map<String, dynamic> args,
-  ) async {
+  Future<Map<String, dynamic>> _listCategories(Map<String, dynamic> args) async {
     final includeArchived = args['includeArchived'] == true;
     final query = db.select(db.categories);
     if (!includeArchived) {
@@ -322,45 +246,26 @@ class ToolExecutors {
     final rows = await query.get();
     return {
       'ok': true,
-      'categories': rows
-          .map(
-            (c) => {
-              'id': c.id,
-              'name': c.name,
-              'description': c.description,
-            },
-          )
-          .toList(),
+      'categories': rows.map((c) => {'id': c.id, 'name': c.name, 'description': c.description}).toList(),
     };
   }
 
   Future<Map<String, dynamic>> _getCategory(Map<String, dynamic> args) async {
     final cat = await _resolveCategory(args['idOrName'] as String);
     if (cat == null) {
-      final cands = await _resolveCategoryCandidates(
-        args['idOrName'] as String,
-      );
+      final cands = await _resolveCategoryCandidates(args['idOrName'] as String);
       if (cands.length > 1) {
-        return _ambiguous(
-          'Category',
-          cands.map((c) => (id: c.id, name: c.name)).toList(),
-        );
+        return _ambiguous('Category', cands.map((c) => (id: c.id, name: c.name)).toList());
       }
       return {'ok': false, 'error': 'Category not found'};
     }
     return {
       'ok': true,
-      'category': {
-        'id': cat.id,
-        'name': cat.name,
-        'description': cat.description,
-      },
+      'category': {'id': cat.id, 'name': cat.name, 'description': cat.description},
     };
   }
 
-  Future<Map<String, dynamic>> _createCategory(
-    Map<String, dynamic> args,
-  ) async {
+  Future<Map<String, dynamic>> _createCategory(Map<String, dynamic> args) async {
     final id = _newUuid();
     final now = BigInt.from(DateTime.now().millisecondsSinceEpoch);
     await db
@@ -378,21 +283,15 @@ class ToolExecutors {
     return {'ok': true, 'id': id};
   }
 
-  Future<Map<String, dynamic>> _updateCategory(
-    Map<String, dynamic> args,
-  ) async {
+  Future<Map<String, dynamic>> _updateCategory(Map<String, dynamic> args) async {
     final cat = await _resolveCategory(args['idOrName'] as String);
     if (cat == null) return {'ok': false, 'error': 'Category not found'};
 
     final now = BigInt.from(DateTime.now().millisecondsSinceEpoch);
     await (db.update(db.categories)..where((t) => t.id.equals(cat.id))).write(
       CategoriesCompanion(
-        name: args.containsKey('name')
-            ? Value(args['name'] as String)
-            : const Value.absent(),
-        description: args.containsKey('description')
-            ? Value(args['description'] as String?)
-            : const Value.absent(),
+        name: args.containsKey('name') ? Value(args['name'] as String) : const Value.absent(),
+        description: args.containsKey('description') ? Value(args['description'] as String?) : const Value.absent(),
         updatedAt: Value(now),
         dirty: const Value(true),
       ),
@@ -400,19 +299,13 @@ class ToolExecutors {
     return {'ok': true, 'id': cat.id};
   }
 
-  Future<Map<String, dynamic>> _archiveCategory(
-    Map<String, dynamic> args,
-  ) async {
+  Future<Map<String, dynamic>> _archiveCategory(Map<String, dynamic> args) async {
     final cat = await _resolveCategory(args['idOrName'] as String);
     if (cat == null) return {'ok': false, 'error': 'Category not found'};
 
     final now = BigInt.from(DateTime.now().millisecondsSinceEpoch);
     await (db.update(db.categories)..where((t) => t.id.equals(cat.id))).write(
-      CategoriesCompanion(
-        archived: const Value(true),
-        updatedAt: Value(now),
-        dirty: const Value(true),
-      ),
+      CategoriesCompanion(archived: const Value(true), updatedAt: Value(now), dirty: const Value(true)),
     );
     await _writeTombstone('categories', cat.id);
     return {'ok': true, 'id': cat.id};
@@ -429,16 +322,7 @@ class ToolExecutors {
     final rows = await query.get();
     return {
       'ok': true,
-      'tags': rows
-          .map(
-            (t) => {
-              'id': t.id,
-              'name': t.name,
-              'parentId': t.parentId,
-              'color': t.color,
-            },
-          )
-          .toList(),
+      'tags': rows.map((t) => {'id': t.id, 'name': t.name, 'parentId': t.parentId, 'color': t.color}).toList(),
     };
   }
 
@@ -447,12 +331,7 @@ class ToolExecutors {
     if (tag == null) return {'ok': false, 'error': 'Tag not found'};
     return {
       'ok': true,
-      'tag': {
-        'id': tag.id,
-        'name': tag.name,
-        'parentId': tag.parentId,
-        'color': tag.color,
-      },
+      'tag': {'id': tag.id, 'name': tag.name, 'parentId': tag.parentId, 'color': tag.color},
     };
   }
 
@@ -505,16 +384,10 @@ class ToolExecutors {
     final now = BigInt.from(DateTime.now().millisecondsSinceEpoch);
     await (db.update(db.tags)..where((t) => t.id.equals(tag.id))).write(
       TagsCompanion(
-        name: args.containsKey('name')
-            ? Value(args['name'] as String)
-            : const Value.absent(),
-        description: args.containsKey('description')
-            ? Value(args['description'] as String?)
-            : const Value.absent(),
+        name: args.containsKey('name') ? Value(args['name'] as String) : const Value.absent(),
+        description: args.containsKey('description') ? Value(args['description'] as String?) : const Value.absent(),
         parentId: parentValue,
-        color: args.containsKey('color')
-            ? Value(args['color'] as String?)
-            : const Value.absent(),
+        color: args.containsKey('color') ? Value(args['color'] as String?) : const Value.absent(),
         updatedAt: Value(now),
         dirty: const Value(true),
       ),
@@ -528,11 +401,7 @@ class ToolExecutors {
 
     final now = BigInt.from(DateTime.now().millisecondsSinceEpoch);
     await (db.update(db.tags)..where((t) => t.id.equals(tag.id))).write(
-      TagsCompanion(
-        archived: const Value(true),
-        updatedAt: Value(now),
-        dirty: const Value(true),
-      ),
+      TagsCompanion(archived: const Value(true), updatedAt: Value(now), dirty: const Value(true)),
     );
     await _writeTombstone('tags', tag.id);
     return {'ok': true, 'id': tag.id};
@@ -540,9 +409,7 @@ class ToolExecutors {
 
   // ───── Transaction reads ─────
 
-  Future<Map<String, dynamic>> _listTransactions(
-    Map<String, dynamic> args,
-  ) async {
+  Future<Map<String, dynamic>> _listTransactions(Map<String, dynamic> args) async {
     final limit = (args['limit'] as num?)?.toInt() ?? 50;
 
     String? accountId;
@@ -564,8 +431,7 @@ class ToolExecutors {
       tagId = tag.id;
     }
 
-    final query = db.select(db.transactions)
-      ..where((t) => t.archived.equals(false));
+    final query = db.select(db.transactions)..where((t) => t.archived.equals(false));
     if (args['type'] != null) {
       query.where((t) => t.type.equals(args['type'] as String));
     }
@@ -595,51 +461,45 @@ class ToolExecutors {
 
     if (tagId != null) {
       final tg = tagId;
-      final joins = await (db.select(
-        db.transactionTags,
-      )..where((j) => j.tagId.equals(tg))).get();
+      final joins = await (db.select(db.transactionTags)..where((j) => j.tagId.equals(tg))).get();
       final allowed = joins.map((j) => j.transactionId).toSet();
       items = items.where((t) => allowed.contains(t.id)).toList();
     }
 
-    return {
-      'ok': true,
-      'items': items.map(_serializeTransaction).toList(),
-    };
+    return {'ok': true, 'items': items.map(_serializeTransaction).toList()};
   }
 
-  Future<Map<String, dynamic>> _getTransaction(
-    Map<String, dynamic> args,
-  ) async {
+  Future<Map<String, dynamic>> _getTransaction(Map<String, dynamic> args) async {
     final id = args['id'] as String;
-    final txn = await (db.select(
-      db.transactions,
-    )..where((t) => t.id.equals(id))).getSingleOrNull();
+    final txn = await (db.select(db.transactions)..where((t) => t.id.equals(id))).getSingleOrNull();
     if (txn == null) return {'ok': false, 'error': 'Transaction not found'};
-    final joins = await (db.select(
-      db.transactionTags,
-    )..where((j) => j.transactionId.equals(id))).get();
+    final joins = await (db.select(db.transactionTags)..where((j) => j.transactionId.equals(id))).get();
     final result = _serializeTransaction(txn);
     result['tagIds'] = joins.map((j) => j.tagId).toList();
     return {'ok': true, 'transaction': result};
   }
 
-  Future<Map<String, dynamic>> _getRecentTransactions(
-    Map<String, dynamic> args,
-  ) async {
+  Future<Map<String, dynamic>> _getRecentTransactions(Map<String, dynamic> args) async {
     final limit = (args['limit'] as num?)?.toInt() ?? 10;
     final query = db.select(db.transactions)
       ..where((t) => t.archived.equals(false))
       ..orderBy([(t) => OrderingTerm.desc(t.date)])
       ..limit(limit);
     final items = await query.get();
-    return {
-      'ok': true,
-      'items': items.map(_serializeTransaction).toList(),
-    };
+    return {'ok': true, 'items': items.map(_serializeTransaction).toList()};
   }
 
   // ───── Transaction writes ─────
+
+  // The agent sets `dateConfirmed` when the date is certain (explicit date,
+  // "today"/"yesterday") and false when it inferred or defaulted it. When the
+  // arg is absent we leave the column at its default (true).
+  Value<bool> _dateConfirmedValue(Map<String, dynamic> args) {
+    final raw = args['dateConfirmed'];
+    if (raw is bool) return Value(raw);
+    print("NO HAY RAW");
+    return const Value(false);
+  }
 
   Future<Map<String, dynamic>> _addExpense(Map<String, dynamic> args) async {
     final acc = await _resolveAccount(args['accountIdOrName'] as String);
@@ -652,23 +512,26 @@ class ToolExecutors {
     final date = parseOptionalDate(args['date'] as String?) ?? now;
     final amount = parseAmountToCents(args['amount'] as num);
 
-    await db.into(db.transactions).insert(
-      TransactionsCompanion.insert(
-        id: id,
-        type: 'expense',
-        name: args['name'] as String,
-        description: Value(args['description'] as String?),
-        status: (args['status'] as String?) ?? 'cleared',
-        date: date,
-        accountId: acc.id,
-        categoryId: cat.id,
-        amount: amount,
-        currency: acc.currency,
-        createdAt: now,
-        updatedAt: now,
-        dirty: const Value(true),
-      ),
-    );
+    await db
+        .into(db.transactions)
+        .insert(
+          TransactionsCompanion.insert(
+            id: id,
+            type: 'expense',
+            name: args['name'] as String,
+            description: Value(args['description'] as String?),
+            status: (args['status'] as String?) ?? 'cleared',
+            date: date,
+            accountId: acc.id,
+            categoryId: cat.id,
+            amount: amount,
+            currency: acc.currency,
+            dateConfirmed: _dateConfirmedValue(args),
+            createdAt: now,
+            updatedAt: now,
+            dirty: const Value(true),
+          ),
+        );
     await _attachTags(id, args['tagIdsOrNames']);
     return {'ok': true, 'id': id};
   }
@@ -684,23 +547,26 @@ class ToolExecutors {
     final date = parseOptionalDate(args['date'] as String?) ?? now;
     final amount = parseAmountToCents(args['amount'] as num);
 
-    await db.into(db.transactions).insert(
-      TransactionsCompanion.insert(
-        id: id,
-        type: 'income',
-        name: args['name'] as String,
-        description: Value(args['description'] as String?),
-        status: (args['status'] as String?) ?? 'cleared',
-        date: date,
-        accountId: acc.id,
-        categoryId: cat.id,
-        amount: amount,
-        currency: acc.currency,
-        createdAt: now,
-        updatedAt: now,
-        dirty: const Value(true),
-      ),
-    );
+    await db
+        .into(db.transactions)
+        .insert(
+          TransactionsCompanion.insert(
+            id: id,
+            type: 'income',
+            name: args['name'] as String,
+            description: Value(args['description'] as String?),
+            status: (args['status'] as String?) ?? 'cleared',
+            date: date,
+            accountId: acc.id,
+            categoryId: cat.id,
+            amount: amount,
+            currency: acc.currency,
+            dateConfirmed: _dateConfirmedValue(args),
+            createdAt: now,
+            updatedAt: now,
+            dirty: const Value(true),
+          ),
+        );
     await _attachTags(id, args['tagIdsOrNames']);
     return {'ok': true, 'id': id};
   }
@@ -715,10 +581,7 @@ class ToolExecutors {
       return {'ok': false, 'error': 'Destination account not found'};
     }
     if (from.id == to.id) {
-      return {
-        'ok': false,
-        'error': 'Source and destination accounts must differ',
-      };
+      return {'ok': false, 'error': 'Source and destination accounts must differ'};
     }
     String? categoryId;
     if (args['categoryIdOrName'] != null) {
@@ -732,45 +595,40 @@ class ToolExecutors {
     final date = parseOptionalDate(args['date'] as String?) ?? now;
     final amount = parseAmountToCents(args['amount'] as num);
     final sameCurrency = from.currency == to.currency;
-    final BigInt? toAmount = args['toAmount'] != null
-        ? parseAmountToCents(args['toAmount'] as num)
-        : (sameCurrency ? amount : null);
+    final BigInt? toAmount = args['toAmount'] != null ? parseAmountToCents(args['toAmount'] as num) : (sameCurrency ? amount : null);
     if (toAmount == null) {
-      return {
-        'ok': false,
-        'error':
-            'Cross-currency transfers require toAmount (or exchangeRate to derive it)',
-      };
+      return {'ok': false, 'error': 'Cross-currency transfers require toAmount (or exchangeRate to derive it)'};
     }
 
-    await db.into(db.transactions).insert(
-      TransactionsCompanion.insert(
-        id: id,
-        type: 'transfer',
-        name: args['name'] as String,
-        description: Value(args['description'] as String?),
-        status: 'cleared',
-        date: date,
-        accountId: from.id,
-        categoryId: categoryId ?? '',
-        amount: amount,
-        currency: from.currency,
-        toAccountId: Value(to.id),
-        toAmount: Value(toAmount),
-        toCurrency: Value(to.currency),
-        exchangeRate: Value((args['exchangeRate'] as num?)?.toDouble()),
-        createdAt: now,
-        updatedAt: now,
-        dirty: const Value(true),
-      ),
-    );
+    await db
+        .into(db.transactions)
+        .insert(
+          TransactionsCompanion.insert(
+            id: id,
+            type: 'transfer',
+            name: args['name'] as String,
+            description: Value(args['description'] as String?),
+            status: 'cleared',
+            date: date,
+            accountId: from.id,
+            categoryId: categoryId ?? '',
+            amount: amount,
+            currency: from.currency,
+            toAccountId: Value(to.id),
+            toAmount: Value(toAmount),
+            toCurrency: Value(to.currency),
+            exchangeRate: Value((args['exchangeRate'] as num?)?.toDouble()),
+            dateConfirmed: _dateConfirmedValue(args),
+            createdAt: now,
+            updatedAt: now,
+            dirty: const Value(true),
+          ),
+        );
     await _attachTags(id, args['tagIdsOrNames']);
     return {'ok': true, 'id': id};
   }
 
-  Future<Map<String, dynamic>> _addBalanceAdjustment(
-    Map<String, dynamic> args,
-  ) async {
+  Future<Map<String, dynamic>> _addBalanceAdjustment(Map<String, dynamic> args) async {
     final acc = await _resolveAccount(args['accountIdOrName'] as String);
     if (acc == null) return {'ok': false, 'error': 'Account not found'};
 
@@ -782,34 +640,33 @@ class ToolExecutors {
     final currentBalance = await _computeAccountBalance(acc.id);
     final amount = balanceAfter - currentBalance;
 
-    await db.into(db.transactions).insert(
-      TransactionsCompanion.insert(
-        id: id,
-        type: 'balance_adjustment',
-        name: (args['name'] as String?) ?? 'Ajuste de saldo',
-        description: Value(args['description'] as String?),
-        status: 'cleared',
-        date: date,
-        accountId: acc.id,
-        categoryId: '',
-        amount: amount,
-        currency: acc.currency,
-        balanceAfter: Value(balanceAfter),
-        createdAt: now,
-        updatedAt: now,
-        dirty: const Value(true),
-      ),
-    );
+    await db
+        .into(db.transactions)
+        .insert(
+          TransactionsCompanion.insert(
+            id: id,
+            type: 'balance_adjustment',
+            name: (args['name'] as String?) ?? 'Ajuste de saldo',
+            description: Value(args['description'] as String?),
+            status: 'cleared',
+            date: date,
+            accountId: acc.id,
+            categoryId: '',
+            amount: amount,
+            currency: acc.currency,
+            balanceAfter: Value(balanceAfter),
+            dateConfirmed: _dateConfirmedValue(args),
+            createdAt: now,
+            updatedAt: now,
+            dirty: const Value(true),
+          ),
+        );
     return {'ok': true, 'id': id};
   }
 
-  Future<Map<String, dynamic>> _updateTransaction(
-    Map<String, dynamic> args,
-  ) async {
+  Future<Map<String, dynamic>> _updateTransaction(Map<String, dynamic> args) async {
     final id = args['id'] as String;
-    final txn = await (db.select(
-      db.transactions,
-    )..where((t) => t.id.equals(id))).getSingleOrNull();
+    final txn = await (db.select(db.transactions)..where((t) => t.id.equals(id))).getSingleOrNull();
     if (txn == null) return {'ok': false, 'error': 'Transaction not found'};
 
     String? categoryId;
@@ -822,24 +679,13 @@ class ToolExecutors {
 
     await (db.update(db.transactions)..where((t) => t.id.equals(id))).write(
       TransactionsCompanion(
-        name: args.containsKey('name')
-            ? Value(args['name'] as String)
-            : const Value.absent(),
-        description: args.containsKey('description')
-            ? Value(args['description'] as String?)
-            : const Value.absent(),
-        date: args['date'] != null
-            ? Value(parseNaturalDate(args['date'] as String))
-            : const Value.absent(),
-        amount: args['amount'] != null
-            ? Value(parseAmountToCents(args['amount'] as num))
-            : const Value.absent(),
-        categoryId: categoryId != null
-            ? Value(categoryId)
-            : const Value.absent(),
-        status: args.containsKey('status')
-            ? Value(args['status'] as String)
-            : const Value.absent(),
+        name: args.containsKey('name') ? Value(args['name'] as String) : const Value.absent(),
+        description: args.containsKey('description') ? Value(args['description'] as String?) : const Value.absent(),
+        date: args['date'] != null ? Value(parseNaturalDate(args['date'] as String)) : const Value.absent(),
+        dateConfirmed: _dateConfirmedValue(args),
+        amount: args['amount'] != null ? Value(parseAmountToCents(args['amount'] as num)) : const Value.absent(),
+        categoryId: categoryId != null ? Value(categoryId) : const Value.absent(),
+        status: args.containsKey('status') ? Value(args['status'] as String) : const Value.absent(),
         updatedAt: Value(now),
         dirty: const Value(true),
       ),
@@ -847,41 +693,27 @@ class ToolExecutors {
     return {'ok': true, 'id': id};
   }
 
-  Future<Map<String, dynamic>> _deleteTransaction(
-    Map<String, dynamic> args,
-  ) async {
+  Future<Map<String, dynamic>> _deleteTransaction(Map<String, dynamic> args) async {
     final id = args['id'] as String;
-    final txn = await (db.select(
-      db.transactions,
-    )..where((t) => t.id.equals(id))).getSingleOrNull();
+    final txn = await (db.select(db.transactions)..where((t) => t.id.equals(id))).getSingleOrNull();
     if (txn == null) return {'ok': true, 'id': id};
 
     // Detach joins
-    final joins = await (db.select(
-      db.transactionTags,
-    )..where((j) => j.transactionId.equals(id))).get();
+    final joins = await (db.select(db.transactionTags)..where((j) => j.transactionId.equals(id))).get();
     for (final j in joins) {
-      await (db.delete(
-        db.transactionTags,
-      )..where((t) => t.id.equals(j.id))).go();
+      await (db.delete(db.transactionTags)..where((t) => t.id.equals(j.id))).go();
       await _writeTombstone('transactionTags', j.id);
     }
 
     final now = BigInt.from(DateTime.now().millisecondsSinceEpoch);
     await (db.update(db.transactions)..where((t) => t.id.equals(id))).write(
-      TransactionsCompanion(
-        archived: const Value(true),
-        updatedAt: Value(now),
-        dirty: const Value(true),
-      ),
+      TransactionsCompanion(archived: const Value(true), updatedAt: Value(now), dirty: const Value(true)),
     );
     await _writeTombstone('transactions', id);
     return {'ok': true, 'id': id};
   }
 
-  Future<Map<String, dynamic>> _tagTransaction(
-    Map<String, dynamic> args,
-  ) async {
+  Future<Map<String, dynamic>> _tagTransaction(Map<String, dynamic> args) async {
     final transactionId = args['transactionId'] as String;
     final raw = (args['tagIdsOrNames'] as List).cast<String>();
     final missing = <String>[];
@@ -893,13 +725,9 @@ class ToolExecutors {
         missing.add(item);
         continue;
       }
-      final existing = await (db.select(db.transactionTags)
-            ..where(
-              (j) =>
-                  j.transactionId.equals(transactionId) &
-                  j.tagId.equals(tag.id),
-            ))
-          .getSingleOrNull();
+      final existing = await (db.select(
+        db.transactionTags,
+      )..where((j) => j.transactionId.equals(transactionId) & j.tagId.equals(tag.id))).getSingleOrNull();
       if (existing != null) continue;
       await db
           .into(db.transactionTags)
@@ -918,9 +746,7 @@ class ToolExecutors {
     return {'ok': true, 'added': added, 'missing': missing};
   }
 
-  Future<Map<String, dynamic>> _untagTransaction(
-    Map<String, dynamic> args,
-  ) async {
+  Future<Map<String, dynamic>> _untagTransaction(Map<String, dynamic> args) async {
     final transactionId = args['transactionId'] as String;
     final raw = (args['tagIdsOrNames'] as List).cast<String>();
     final missing = <String>[];
@@ -931,17 +757,11 @@ class ToolExecutors {
         missing.add(item);
         continue;
       }
-      final join = await (db.select(db.transactionTags)
-            ..where(
-              (j) =>
-                  j.transactionId.equals(transactionId) &
-                  j.tagId.equals(tag.id),
-            ))
-          .getSingleOrNull();
-      if (join == null) continue;
-      await (db.delete(
+      final join = await (db.select(
         db.transactionTags,
-      )..where((t) => t.id.equals(join.id))).go();
+      )..where((j) => j.transactionId.equals(transactionId) & j.tagId.equals(tag.id))).getSingleOrNull();
+      if (join == null) continue;
+      await (db.delete(db.transactionTags)..where((t) => t.id.equals(join.id))).go();
       await _writeTombstone('transactionTags', join.id);
       removed += 1;
     }
@@ -950,9 +770,7 @@ class ToolExecutors {
 
   // ───── Summaries ─────
 
-  Future<Map<String, dynamic>> _summarizeByCategory(
-    Map<String, dynamic> args,
-  ) async {
+  Future<Map<String, dynamic>> _summarizeByCategory(Map<String, dynamic> args) async {
     final from = parseNaturalDate(args['dateFrom'] as String);
     final to = parseNaturalDate(args['dateTo'] as String);
     final typeFilter = args['type'] as String?;
@@ -974,28 +792,18 @@ class ToolExecutors {
       totals[t.categoryId] = (totals[t.categoryId] ?? BigInt.zero) + t.amount;
     }
 
-    final cats = await (db.select(
-      db.categories,
-    )..where((c) => c.archived.equals(false))).get();
+    final cats = await (db.select(db.categories)..where((c) => c.archived.equals(false))).get();
     final nameById = {for (final c in cats) c.id: c.name};
 
     return {
       'ok': true,
       'rows': totals.entries
-          .map(
-            (e) => {
-              'categoryId': e.key,
-              'name': nameById[e.key] ?? '(unknown)',
-              'total': e.value.toDouble() / 100,
-            },
-          )
+          .map((e) => {'categoryId': e.key, 'name': nameById[e.key] ?? '(unknown)', 'total': e.value.toDouble() / 100})
           .toList(),
     };
   }
 
-  Future<Map<String, dynamic>> _summarizeByAccount(
-    Map<String, dynamic> args,
-  ) async {
+  Future<Map<String, dynamic>> _summarizeByAccount(Map<String, dynamic> args) async {
     final from = parseNaturalDate(args['dateFrom'] as String);
     final to = parseNaturalDate(args['dateTo'] as String);
 
@@ -1005,22 +813,11 @@ class ToolExecutors {
               ..where((t) => t.date.isBiggerOrEqualValue(from))
               ..where((t) => t.date.isSmallerOrEqualValue(to)))
             .get();
-    final accounts =
-        await (db.select(
-          db.accounts,
-        )..where((a) => a.archived.equals(false))).get();
+    final accounts = await (db.select(db.accounts)..where((a) => a.archived.equals(false))).get();
 
-    final rows = <
-      String,
-      ({String name, String currency, BigInt inSum, BigInt outSum})
-    >{};
+    final rows = <String, ({String name, String currency, BigInt inSum, BigInt outSum})>{};
     for (final a in accounts) {
-      rows[a.id] = (
-        name: a.name,
-        currency: a.currency,
-        inSum: BigInt.zero,
-        outSum: BigInt.zero,
-      );
+      rows[a.id] = (name: a.name, currency: a.currency, inSum: BigInt.zero, outSum: BigInt.zero);
     }
 
     for (final t in items) {
@@ -1041,12 +838,7 @@ class ToolExecutors {
             nextOut += -t.amount;
           }
         }
-        rows[t.accountId] = (
-          name: cur.name,
-          currency: cur.currency,
-          inSum: nextIn,
-          outSum: nextOut,
-        );
+        rows[t.accountId] = (name: cur.name, currency: cur.currency, inSum: nextIn, outSum: nextOut);
       }
       if (t.type == 'transfer' && t.toAccountId != null) {
         final dest = rows[t.toAccountId];
@@ -1071,8 +863,7 @@ class ToolExecutors {
               'currency': e.value.currency,
               'in': e.value.inSum.toDouble() / 100,
               'out': e.value.outSum.toDouble() / 100,
-              'net':
-                  (e.value.inSum - e.value.outSum).toDouble() / 100,
+              'net': (e.value.inSum - e.value.outSum).toDouble() / 100,
             },
           )
           .toList(),
@@ -1094,17 +885,16 @@ class ToolExecutors {
       'toAccountId': t.toAccountId,
       'toAmount': t.toAmount != null ? t.toAmount!.toDouble() / 100 : null,
       'status': t.status,
-      'balanceAfter': t.balanceAfter != null
-          ? t.balanceAfter!.toDouble() / 100
-          : null,
+      'balanceAfter': t.balanceAfter != null ? t.balanceAfter!.toDouble() / 100 : null,
     };
   }
 
   Future<BigInt> _computeAccountBalance(String accountId) async {
-    final own = await (db.select(db.transactions)
-          ..where((t) => t.accountId.equals(accountId))
-          ..where((t) => t.archived.equals(false)))
-        .get();
+    final own =
+        await (db.select(db.transactions)
+              ..where((t) => t.accountId.equals(accountId))
+              ..where((t) => t.archived.equals(false)))
+            .get();
     BigInt sum = BigInt.zero;
     for (final t in own) {
       switch (t.type) {
@@ -1119,11 +909,12 @@ class ToolExecutors {
       }
     }
 
-    final incoming = await (db.select(db.transactions)
-          ..where((t) => t.toAccountId.equals(accountId))
-          ..where((t) => t.type.equals('transfer'))
-          ..where((t) => t.archived.equals(false)))
-        .get();
+    final incoming =
+        await (db.select(db.transactions)
+              ..where((t) => t.toAccountId.equals(accountId))
+              ..where((t) => t.type.equals('transfer'))
+              ..where((t) => t.archived.equals(false)))
+            .get();
     for (final t in incoming) {
       sum += t.toAmount ?? t.amount;
     }
@@ -1137,13 +928,9 @@ class ToolExecutors {
       if (item is! String) continue;
       final tag = await _resolveTag(item);
       if (tag == null) continue;
-      final existing = await (db.select(db.transactionTags)
-            ..where(
-              (j) =>
-                  j.transactionId.equals(transactionId) &
-                  j.tagId.equals(tag.id),
-            ))
-          .getSingleOrNull();
+      final existing = await (db.select(
+        db.transactionTags,
+      )..where((j) => j.transactionId.equals(transactionId) & j.tagId.equals(tag.id))).getSingleOrNull();
       if (existing != null) continue;
       await db
           .into(db.transactionTags)
@@ -1162,23 +949,13 @@ class ToolExecutors {
 
   Future<void> _writeTombstone(String table, String entityId) async {
     final now = BigInt.from(DateTime.now().millisecondsSinceEpoch);
-    final existing = await (db.select(db.tombstones)
-          ..where(
-            (t) => t.entityTable.equals(table) & t.entityId.equals(entityId),
-          ))
-        .getSingleOrNull();
+    final existing = await (db.select(
+      db.tombstones,
+    )..where((t) => t.entityTable.equals(table) & t.entityId.equals(entityId))).getSingleOrNull();
     if (existing != null) {
-      await (db.update(db.tombstones)
-            ..where(
-              (t) => t.entityTable.equals(table) & t.entityId.equals(entityId),
-            ))
-          .write(
-            TombstonesCompanion(
-              deletedAt: Value(now),
-              updatedAt: Value(now),
-              dirty: const Value(true),
-            ),
-          );
+      await (db.update(db.tombstones)..where((t) => t.entityTable.equals(table) & t.entityId.equals(entityId))).write(
+        TombstonesCompanion(deletedAt: Value(now), updatedAt: Value(now), dirty: const Value(true)),
+      );
     } else {
       await db
           .into(db.tombstones)

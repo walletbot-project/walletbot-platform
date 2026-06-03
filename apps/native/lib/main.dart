@@ -5,7 +5,6 @@ import 'package:app/config.dart';
 import 'package:app/database.dart';
 import 'package:app/screens/accounts.dart';
 import 'package:app/screens/activity.dart';
-import 'package:app/screens/create_account.dart';
 import 'package:app/screens/home.dart';
 import 'package:app/screens/insights.dart';
 import 'package:app/screens/login.dart';
@@ -132,8 +131,8 @@ class _AppMainState extends State<AppMain> {
         destinations: [
           NavigationDestination(icon: Icon(Icons.home_rounded), label: "Home"),
           NavigationDestination(
-            icon: Icon(Icons.list_rounded),
-            label: "Activity",
+            icon: Icon(Icons.calendar_view_month_rounded),
+            label: "Actividad",
           ),
           NavigationDestination(
             icon: Icon(Icons.account_balance_rounded),
