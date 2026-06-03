@@ -133,8 +133,10 @@ class _ActivityScreenState extends State<ActivityScreen> {
       query.where((t) => t.id.isInQuery(taggedTxnIds));
     }
 
+    // Order strictly by creation time (newest first), regardless of the
+    // (possibly estimated) transaction date.
     query
-      ..orderBy([(t) => drift.OrderingTerm.desc(t.date), (t) => drift.OrderingTerm.desc(t.createdAt)])
+      ..orderBy([(t) => drift.OrderingTerm.desc(t.createdAt)])
       ..limit(_limit);
     return query.watch();
   }
@@ -157,7 +159,6 @@ class _ActivityScreenState extends State<ActivityScreen> {
   _Aggregates _aggregateMonth(List<Transaction> items) {
     var income = 0;
     var expenses = 0;
-    var adjustments = 0;
     for (final t in items) {
       final amount = t.amount.toInt();
       switch (t.type) {
@@ -169,10 +170,16 @@ class _ActivityScreenState extends State<ActivityScreen> {
           income += (t.toAmount ?? t.amount).toInt();
           expenses += amount;
         case 'balance_adjustment':
-          adjustments += amount;
+          // A balance adjustment carries a signed delta: a positive delta
+          // counts as income, a negative one as an expense.
+          if (amount >= 0) {
+            income += amount;
+          } else {
+            expenses += -amount;
+          }
       }
     }
-    return _Aggregates(incomeCents: income, expensesCents: expenses, balanceCents: income - expenses + adjustments);
+    return _Aggregates(incomeCents: income, expensesCents: expenses, balanceCents: income - expenses);
   }
 
   @override
@@ -264,7 +271,9 @@ class _ActivityScreenState extends State<ActivityScreen> {
 
     DateTime? currentDay;
     for (final t in items) {
-      final dt = DateTime.fromMillisecondsSinceEpoch(t.date.toInt());
+      // Group by creation time so the day headers stay contiguous with the
+      // creation-order sorting above.
+      final dt = DateTime.fromMillisecondsSinceEpoch(t.createdAt.toInt());
       final day = DateTime(dt.year, dt.month, dt.day);
       if (currentDay == null || day != currentDay) {
         entries.add(_HeaderEntry(label: _sectionLabel(day, today)));
