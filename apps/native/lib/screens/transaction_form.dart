@@ -298,6 +298,7 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
               TextFormField(
                 controller: _amountController,
                 enabled: !_isSaving,
+                autovalidateMode: AutovalidateMode.onUserInteraction,
                 keyboardType: const TextInputType.numberWithOptions(
                   decimal: true,
                 ),
@@ -323,6 +324,7 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
               TextFormField(
                 controller: _titleController,
                 enabled: !_isSaving,
+                autovalidateMode: AutovalidateMode.onUserInteraction,
                 textCapitalization: TextCapitalization.sentences,
                 decoration: InputDecoration(
                   labelText: 'Titulo',
