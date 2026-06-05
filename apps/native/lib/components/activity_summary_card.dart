@@ -52,7 +52,7 @@ class ActivitySummaryCard extends StatelessWidget {
           Expanded(
             child: _SummaryColumn(
               label: 'Balance',
-              value: _formatAmount(balanceCents.abs(), currencySymbol),
+              value: _formatAmount(balanceCents, currencySymbol),
               valueColor: scheme.onSurface,
             ),
           ),
