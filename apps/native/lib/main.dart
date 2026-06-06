@@ -127,6 +127,45 @@ class _AppMainState extends State<AppMain> {
 
   int selectedIndex = 0;
 
+  int get _selectedNavigationIndex => switch (selectedIndex) {
+    0 => 0,
+    1 => 1,
+    2 => 3,
+    3 => 4,
+    _ => 0,
+  };
+
+  void _openVoice() {
+    final database = context.read<AppDatabase>();
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => VoiceScreen(
+          commandFactory: GeminiVoiceExpenseCommandFactory(
+            database: database,
+            convexSiteUrl: AppConfig.convexSiteUrl,
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _selectDestination(int value) {
+    if (value == 2) {
+      _openVoice();
+      return;
+    }
+
+    setState(() {
+      selectedIndex = switch (value) {
+        0 => 0,
+        1 => 1,
+        3 => 2,
+        4 => 3,
+        _ => selectedIndex,
+      };
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final needsReauth = context.select<AuthController, bool>(
@@ -149,32 +188,19 @@ class _AppMainState extends State<AppMain> {
           ),
         ],
       ),
-      floatingActionButton: FloatingActionButton(
-        heroTag: 'voiceFab',
-        onPressed: () {
-          final database = context.read<AppDatabase>();
-          Navigator.of(context).push(
-            MaterialPageRoute(
-              builder: (_) => VoiceScreen(
-                commandFactory: GeminiVoiceExpenseCommandFactory(
-                  database: database,
-                  convexSiteUrl: AppConfig.convexSiteUrl,
-                ),
-              ),
-            ),
-          );
-        },
-        tooltip: 'Voice commands',
-        child: const Text('🤖'),
-      ),
       bottomNavigationBar: NavigationBar(
-        selectedIndex: selectedIndex,
-        onDestinationSelected: (value) => setState(() => selectedIndex = value),
-        destinations: [
+        selectedIndex: _selectedNavigationIndex,
+        onDestinationSelected: _selectDestination,
+        destinations: const [
           NavigationDestination(icon: Icon(Icons.home_rounded), label: "Home"),
           NavigationDestination(
             icon: Icon(Icons.list_rounded),
             label: "Activity",
+          ),
+          NavigationDestination(
+            icon: _GastiNavigationIcon(),
+            selectedIcon: _GastiNavigationIcon(),
+            label: "Gasti",
           ),
           NavigationDestination(
             icon: Icon(Icons.account_balance_rounded),
@@ -186,7 +212,24 @@ class _AppMainState extends State<AppMain> {
           ),
         ],
       ),
-      floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
+    );
+  }
+}
+
+class _GastiNavigationIcon extends StatelessWidget {
+  const _GastiNavigationIcon();
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: const BoxDecoration(
+        color: Color(0xFF21C4B6),
+        shape: BoxShape.circle,
+      ),
+      child: SizedBox.square(
+        dimension: 38,
+        child: Icon(Icons.smart_toy_rounded, color: Colors.white, size: 23),
+      ),
     );
   }
 }
