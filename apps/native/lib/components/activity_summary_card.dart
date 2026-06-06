@@ -98,7 +98,8 @@ class _SummaryColumn extends StatelessWidget {
 
 String _formatAmount(int cents, String currencySymbol) {
   final whole = (cents / 100).round();
-  final digits = whole.toString();
+  final sign = whole < 0 ? '-' : '';
+  final digits = whole.abs().toString();
   final buffer = StringBuffer();
   for (var i = 0; i < digits.length; i++) {
     if (i > 0 && (digits.length - i) % 3 == 0) {
@@ -106,5 +107,5 @@ String _formatAmount(int cents, String currencySymbol) {
     }
     buffer.write(digits[i]);
   }
-  return '$currencySymbol$buffer';
+  return '$currencySymbol$sign$buffer';
 }

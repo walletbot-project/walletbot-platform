@@ -1,4 +1,3 @@
-import 'package:app/components/activity_summary_card.dart';
 import 'package:app/components/transaction_filters_bar.dart';
 import 'package:app/components/transaction_row.dart';
 import 'package:app/database.dart';
@@ -28,27 +27,10 @@ class _ActivityScreenState extends State<ActivityScreen> {
   /// (we've reached the end).
   int _lastRenderedCount = 0;
 
-  /// Cached so the summary card doesn't re-subscribe (and flash to zero) on
-  /// every pagination / filter rebuild. Built once per dependency change.
-  late Stream<_Aggregates> _monthlyAggregatesStream;
-
-  /// Last value the aggregates stream produced. Used as fallback so the
-  /// summary card keeps showing real numbers (instead of zeros) during any
-  /// transient gap in the stream — e.g. if the screen is rebuilt after the
-  /// user pops back from another route.
-  _Aggregates? _lastAggregates;
-
   @override
   void initState() {
     super.initState();
     _scrollController.addListener(_onScroll);
-  }
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    final db = context.read<AppDatabase>();
-    _monthlyAggregatesStream = _buildMonthlyAggregatesStream(db);
   }
 
   @override
@@ -139,47 +121,6 @@ class _ActivityScreenState extends State<ActivityScreen> {
       ..orderBy([(t) => drift.OrderingTerm.desc(t.createdAt)])
       ..limit(_limit);
     return query.watch();
-  }
-
-  /// Streams the current month's Ingresos / Gastos / Balance. Independent of
-  /// the row list's filter and search — these totals describe the month, not
-  /// the visible slice. Uses Drift's typed `select().watch()` so writes from
-  /// any other screen (e.g. the voice flow) reactively update the card.
-  Stream<_Aggregates> _buildMonthlyAggregatesStream(AppDatabase db) {
-    final now = DateTime.now();
-    final monthStart = BigInt.from(DateTime(now.year, now.month, 1).millisecondsSinceEpoch);
-    final monthEnd = BigInt.from(DateTime(now.year, now.month + 1, 1).millisecondsSinceEpoch);
-
-    final query = db.select(db.transactions)
-      ..where((t) => t.archived.equals(false) & t.date.isBiggerOrEqualValue(monthStart) & t.date.isSmallerThanValue(monthEnd));
-
-    return query.watch().map(_aggregateMonth);
-  }
-
-  _Aggregates _aggregateMonth(List<Transaction> items) {
-    var income = 0;
-    var expenses = 0;
-    for (final t in items) {
-      final amount = t.amount.toInt();
-      switch (t.type) {
-        case 'income':
-          income += amount;
-        case 'expense':
-          expenses += amount;
-        case 'transfer':
-          income += (t.toAmount ?? t.amount).toInt();
-          expenses += amount;
-        case 'balance_adjustment':
-          // A balance adjustment carries a signed delta: a positive delta
-          // counts as income, a negative one as an expense.
-          if (amount >= 0) {
-            income += amount;
-          } else {
-            expenses += -amount;
-          }
-      }
-    }
-    return _Aggregates(incomeCents: income, expensesCents: expenses, balanceCents: income - expenses);
   }
 
   @override
@@ -323,16 +264,6 @@ class _ActivityScreenState extends State<ActivityScreen> {
     final dt = DateTime.fromMillisecondsSinceEpoch(t.date.toInt());
     return '${_spanishWeekdays[dt.weekday - 1]} (estimado)';
   }
-}
-
-class _Aggregates {
-  const _Aggregates({required this.incomeCents, required this.expensesCents, required this.balanceCents});
-
-  const _Aggregates.zero() : incomeCents = 0, expensesCents = 0, balanceCents = 0;
-
-  final int incomeCents;
-  final int expensesCents;
-  final int balanceCents;
 }
 
 sealed class _ListEntry {
