@@ -221,14 +221,15 @@ class _GastiNavigationIcon extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
     return DecoratedBox(
-      decoration: const BoxDecoration(
-        color: Color(0xFF21C4B6),
+      decoration: BoxDecoration(
+        color: colors.primaryContainer,
         shape: BoxShape.circle,
       ),
-      child: SizedBox.square(
-        dimension: 38,
-        child: Icon(Icons.smart_toy_rounded, color: Colors.white, size: 23),
+      child: const SizedBox.square(
+        dimension: 44,
+        child: Center(child: Text('🤖', style: TextStyle(fontSize: 22))),
       ),
     );
   }
