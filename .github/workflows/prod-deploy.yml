@@ -1,0 +1,47 @@
+name: Deploy Production
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "pnpm"
+          cache-dependency-path: pnpm-lock.yaml
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Deploy backend
+        working-directory: packages/backend
+        env:
+          CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY }}
+        run: npx convex deploy
+
+      - name: Configure production environment
+        run: |
+          {
+            echo "VITE_SITE_URL=https://app.walletbot.live"
+            echo "VITE_CONVEX_URL=${{ vars.VITE_CONVEX_URL }}"
+            echo "VITE_CONVEX_SITE_URL=${{ vars.VITE_CONVEX_SITE_URL }}"
+          } >> "$GITHUB_ENV"
+
+      - name: Build web app
+        working-directory: apps/web
+        run: pnpm run build
+
+      - name: Deploy web app
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy apps/web/dist --project-name=walletbot-platform --branch=main

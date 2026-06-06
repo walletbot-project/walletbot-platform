@@ -1,9 +1,6 @@
-name: Deploy Web & Convex Preview
+name: Deploy Preview
 
 on:
-  push:
-    branches:
-      - main
   pull_request:
     branches:
       - main
@@ -28,23 +25,12 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
-      # Production build (push to main) targets the production Convex deployment.
-      - name: Configure production environment
-        if: github.event_name == 'push'
-        run: |
-          {
-            echo "VITE_SITE_URL=https://app.walletbot.live"
-            echo "VITE_CONVEX_URL=${{ vars.VITE_CONVEX_URL }}"
-            echo "VITE_CONVEX_SITE_URL=${{ vars.VITE_CONVEX_SITE_URL }}"
-          } >> "$GITHUB_ENV"
-
-      # PRs get an isolated, ephemeral Convex preview deployment. Creates/updates
+      # PRs get an isolated, ephemeral backend preview deployment. Creates/updates
       # the preview (named after the branch), captures its .convex.cloud URL, and
       # stages the VITE_* values for the web build (.convex.site is derived from
-      # .convex.cloud). SITE_URL is set LATER, after the Cloudflare deploy reveals
-      # the real preview web origin.
-      - name: Deploy Convex preview
-        if: github.event_name == 'pull_request'
+      # .convex.cloud). SITE_URL is set LATER, after the web deploy reveals the
+      # real preview web origin.
+      - name: Deploy backend preview
         working-directory: packages/backend
         env:
           CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_PREVIEW_DEPLOY_KEY }}
@@ -66,20 +52,19 @@ jobs:
         working-directory: apps/web
         run: pnpm run build
 
-      - name: Deploy to Cloudflare Pages
+      - name: Deploy web preview
         id: deploy
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: pages deploy apps/web/dist --project-name=walletbot-platform --branch=${{ github.head_ref || 'main' }}
+          command: pages deploy apps/web/dist --project-name=walletbot-platform --branch=${{ github.head_ref }}
 
-      # Point the preview backend's SITE_URL at the real Cloudflare branch-alias
-      # origin (now known) so better-auth trustedOrigins / crossDomain accept the
-      # browser's auth requests — otherwise the preview loads but CORS-fails. The
-      # alias is stable per branch and is the URL the PR comment links to.
-      - name: Set Convex preview SITE_URL
-        if: github.event_name == 'pull_request'
+      # Point the preview backend's SITE_URL at the real branch-alias origin (now
+      # known) so better-auth trustedOrigins / crossDomain accept the browser's
+      # auth requests — otherwise the preview loads but CORS-fails. The alias is
+      # stable per branch and is the URL the PR comment links to.
+      - name: Set backend preview SITE_URL
         working-directory: packages/backend
         env:
           CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_PREVIEW_DEPLOY_KEY }}
@@ -89,7 +74,6 @@ jobs:
             --deployment "$CONVEX_PREVIEW_NAME"
 
       - name: Comment preview URL on PR
-        if: github.event_name == 'pull_request'
         uses: actions/github-script@v7
         with:
           script: |
@@ -100,7 +84,7 @@ jobs:
               body: `🚀 Preview deployed to: ${process.env.DEPLOYMENT_URL}\n\n_Use this stable branch-alias URL — per-commit \`<hash>.pages.dev\` URLs are not trusted by the backend and will CORS-fail._`
             })
         env:
-          # The stable branch-alias URL Cloudflare issued (matches the Convex
+          # The stable branch-alias URL the web host issued (matches the backend
           # SITE_URL set above). NOT the per-commit deployment-url, and NOT the
           # unconfigured *.prev.walletbot.live domain.
           DEPLOYMENT_URL: ${{ steps.deploy.outputs.pages-deployment-alias-url }}
