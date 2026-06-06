@@ -87,6 +87,58 @@ accounts.id`) usan el UUID, no el `_id`.
 
 ## Sincronización
 
+### Filosofía
+
+La resolución de conflictos vive **en el cliente**. El servidor solo valida
+legalidad (ownership, FKs, coherencia de moneda) y aplica un *compare-and-swap*
+sobre el contador del usuario antes de aceptar un push. Si el push es
+"fast-forward" (el cliente está al día), pasa; si no, el cliente debe primero
+pullear, mergear localmente y reintentar.
+
+Last-write-wins por `updatedAt` (cliente) y `deletedAt` (tombstones) es la
+regla universal de resolución.
+
+### Resolución de conflictos (decisión actual)
+
+> Esta es la decisión tomada **hasta este punto**. No es necesariamente
+> definitiva: el algoritmo de conflictos puede revisarse más adelante.
+
+Adoptamos **last-write-wins (LWW) a nivel de fila**:
+
+- Ante ediciones concurrentes de la misma entidad desde dos dispositivos,
+  gana **completa** la versión con el `updatedAt` mayor (`deletedAt` para
+  borrados). La versión perdedora se descarta entera.
+- La resolución es **por fila, no por campo**: no hay merge campo a campo.
+- En empate exacto de timestamp, gana el lado local (`>=`), lo que mantiene
+  la operación determinística y evita oscilaciones.
+
+**Por qué LWW.** Es simple, predecible y no requiere estado de conflicto ni
+intervención del usuario. Para un caso de uso personal —donde un mismo
+usuario rara vez edita la misma entidad en dos dispositivos a la vez— es un
+trade-off razonable frente a la complejidad de un merge campo a campo o de
+CRDTs.
+
+**Riesgo asumido: pequeña pérdida de datos.** Si dos dispositivos editan la
+misma fila antes de sincronizar, los cambios del que pierde el LWW se
+pierden silenciosamente. Ejemplo: el dispositivo A cambia el `amount` de un
+movimiento y el dispositivo B cambia su `name`; al sincronizar, solo
+sobrevive el conjunto de cambios de la fila con `updatedAt` mayor, y la otra
+edición desaparece. No hay aviso al usuario ni registro del descarte.
+
+Asumimos este riesgo conscientemente porque:
+
+- El blast radius es chico: afecta una sola fila y solo bajo edición
+  concurrente real, que es poco frecuente en uso personal.
+- No corrompe el modelo: el resultado siempre es un estado válido y
+  consistente (una de las dos versiones completas), nunca una mezcla
+  incoherente.
+- Los borrados siguen la misma regla, así que tampoco hay "resurrección"
+  inconsistente de filas.
+
+Si en el futuro este trade-off resulta insuficiente (p. ej. edición
+multi-dispositivo frecuente), las alternativas a evaluar son merge a nivel
+de campo o estructuras CRDT, ambas con costo de complejidad mayor.
+
 ### Contador global por usuario
 
 Cada usuario tiene un contador monotónico (`syncCounters.value`, `int64`).
@@ -97,45 +149,200 @@ misma transacción:
 2. Estampar el nuevo valor en el campo `seq` de cada fila afectada.
 3. Si la mutación borra una fila, escribir el tombstone con ese mismo `seq`.
 
-`seq` actúa como un timestamp lógico y ordena globalmente todos los cambios de
-un usuario.
+`seq` actúa como un timestamp lógico y ordena globalmente todos los cambios
+de un usuario. **`nextSeq()` se llama una sola vez por mutación**; el valor
+devuelto se reutiliza para todas las filas y tombstones escritos en esa
+mutación.
 
 ### Estado del cliente
 
 El cliente (Drift) mantiene:
 
-- `SyncState.lastServerSeq` — el `seq` más alto que ya pulleó del servidor.
-  Singleton.
-- Por fila local: `version` (contador local que se incrementa en cada edición)
-  y `remoteVersion` (el `version` confirmado por el server). Una fila está
-  *sucia* y necesita push cuando `remoteVersion IS NULL OR version !=
-  remoteVersion`.
+- `sync_state.last_server_seq` — el `seq` más alto pulleado **y aplicado
+  completamente**. Singleton. Se usa con doble propósito:
+  - cursor de pull (`seq > last_server_seq`),
+  - expectativa de CAS para push (el cliente le dice al server "yo creo que
+    tu contador está en X; aceptá mi push solo si es cierto").
+- Por fila local: `dirty` (bool). `true` cuando la fila tiene cambios locales
+  no pusheados. Cada tabla tiene un índice parcial `<table>_needs_sync` con
+  `WHERE dirty = 1` para barrer rápido las filas a empujar.
+- `updatedAt` (int64, ms epoch) — fuente de verdad para last-write-wins. El
+  cliente lo actualiza en cada edición local; el servidor lo respeta tal como
+  llega (no lo regenera).
 
-### Pull (servidor → cliente)
+### Pull (servidor → cliente) — paginado
 
-El cliente envía `lastServerSeq`. El servidor responde, para el usuario
-autenticado:
+El cliente envía `{ since: last_server_seq, limit }`. El servidor responde,
+en una sola query y para el usuario autenticado:
 
-- Filas con `seq > lastServerSeq` en cada tabla sincronizada.
-- Tombstones con `seq > lastServerSeq`.
-- El valor actual del contador para que el cliente lo guarde como
-  `lastServerSeq` en el próximo pull.
+- Hasta `limit` filas con `seq > since`, ordenadas por `(seq, id)`
+  ascendente, recorriendo todas las tablas sincronizadas.
+- Hasta `limit` tombstones con `seq > since`, en el mismo orden.
+- `{ nextCursor, hasMore, currentCounter }`:
+  - `nextCursor` — el `(seq, id)` del último registro devuelto (o `null` si
+    la página vino vacía).
+  - `hasMore` — `true` si hay más registros después de `nextCursor`.
+  - `currentCounter` — `syncCounters.value` al momento de la query.
 
-El cliente aplica upserts por `id` (UUID) y borra las filas listadas en
-tombstones.
+El cliente:
 
-### Push (cliente → servidor)
+1. Aplica las filas y tombstones de la página (ver "Merge local").
+2. Si `hasMore`, vuelve a pullear con el cursor avanzado.
+3. Cuando `hasMore = false`, fija `last_server_seq = currentCounter`. **Solo
+   entonces** el cursor es seguro para usar como CAS en push.
 
-El cliente envía las filas sucias y los tombstones sucios. El servidor, para
-cada uno: incrementa el contador, estampa `seq`, hace upsert (o delete +
-tombstone) por UUID, y devuelve confirmación. El cliente marca las filas
-empujadas como limpias (`remoteVersion = version`).
+> **Importante.** No avanzar `last_server_seq` hasta drenar todas las
+> páginas. Si el cliente se cae a mitad de pull, en el próximo arranque
+> retoma desde el `last_server_seq` ya commiteado y vuelve a paginar.
+
+### Merge local (al aplicar pull)
+
+Para cada **fila remota** con id `X`:
+
+- Si no existe local → insertar; `dirty = false`.
+- Si existe local con `dirty = false` → upsert remoto; `dirty = false`.
+- Si existe local con `dirty = true`:
+  - `local.updatedAt >= remote.updatedAt` → mantener local, sigue `dirty = true`.
+  - `local.updatedAt <  remote.updatedAt` → tomar remoto; `dirty = false`.
+- Si existe **tombstone local** para `X`:
+  - `local_tombstone.deletedAt >= remote.updatedAt` → mantener tombstone
+    (el borrado local es más nuevo, prevalecerá en el próximo push).
+  - `local_tombstone.deletedAt <  remote.updatedAt` → borrar tombstone e
+    insertar la fila remota; `dirty = false`.
+
+Para cada **tombstone remoto** sobre entidad `X`:
+
+- Si existe fila local `X`:
+  - `local.updatedAt >  remote_tombstone.deletedAt` → **mantener** la fila
+    local; pisa al tombstone en el próximo push (el server tendrá que borrar
+    el tombstone y reinsertar la fila).
+  - `local.updatedAt <= remote_tombstone.deletedAt` → borrar fila local;
+    insertar tombstone local con `dirty = false`.
+- Si no existe fila local → insertar tombstone con `dirty = false`.
+
+Para cada **tombstone local con `dirty = true`** que aparece como fila viva
+en el servidor: misma regla por `deletedAt` vs `updatedAt`. Si el server
+gana, descartar tombstone (y tomar la fila remota). Si el cliente gana,
+mantener tombstone, sigue `dirty = true`.
+
+### Recompute de `balance_adjustment` post-pull
+
+Después de drenar el pull, el cliente recorre las transacciones del usuario
+en orden cronológico (`date` ascendente) recomputando saldo por cuenta.
+
+Cada `balance_adjustment` tiene un `balanceAfter` que es la fuente de
+verdad: si `saldo_previo + amount != balanceAfter`, el cliente corrige
+`amount` (= `balanceAfter - saldo_previo`) y marca la fila `dirty = true`
+para que el siguiente push propague el ajuste.
+
+Esto garantiza la invariante "`balanceAfter` siempre matchea" frente a
+inserciones tardías de transacciones desde otro dispositivo.
+
+### Push (cliente → servidor) — particionado y con CAS
+
+Push es una sucesión de chunks. Cada chunk es **una sola mutación de
+Convex** y avanza el contador del usuario en `+1`.
+
+#### Orden de chunks
+
+1. **Chunk de catálogo** (siempre primero, todo en una mutación):
+   - todas las `accounts` con `dirty = true`,
+   - todas las `categories` con `dirty = true`,
+   - todas las `tags` con `dirty = true`,
+   - sus tombstones dirty.
+
+   Estas tablas son chicas y son referenciadas por integridad referencial
+   desde `transactions` / `transactionTags`: deben existir en server antes
+   que las filas que las referencian.
+
+2. **Chunks de movimientos**, transacciones ordenadas por `date`
+   ascendente:
+   - hasta `N` `transactions` dirty por chunk (`N` calibrado debajo de los
+     límites de mutación de Convex),
+   - los `transactionTags` dirty cuyos `transactionId` ya estén en server o
+     vayan en el mismo chunk,
+   - los tombstones de `transactions` y `transactionTags` cuyo `deletedAt`
+     caiga dentro del rango temporal del chunk.
+
+#### Forma del chunk
+
+```json
+{
+  "expectedServerSeq": <last_server_seq>,
+  "upserts": {
+    "accounts":        [...],
+    "categories":      [...],
+    "tags":            [...],
+    "transactions":    [...],
+    "transactionTags": [...]
+  },
+  "tombstones": [
+    { "tableName": "...", "entityId": "...", "deletedAt": <int64> }
+  ]
+}
+```
+
+Servidor:
+
+1. Lee `syncCounters.value` (= `currentCounter`).
+2. Si `currentCounter != expectedServerSeq` → rechaza con
+   `{ error: "cursor_mismatch", currentCounter }`.
+3. Valida cada upsert (ownership por `userId`, existencia de FKs,
+   coherencia de moneda, shape del payload). Si algo es ilegal → rechaza el
+   chunk entero.
+4. Incrementa el contador a `currentCounter + 1` (= `newSeq`).
+5. Por cada upsert:
+   - upsert por `(userId, id)`, estampa `seq = newSeq` y respeta el
+     `updatedAt` del cliente.
+   - **Si existe un tombstone** para esa `(userId, tableName, entityId)`,
+     **lo borra** (el cliente ya decidió localmente, vía la regla
+     `updatedAt > deletedAt`, que la fila gana).
+6. Por cada tombstone:
+   - borra la fila si existe y escribe/actualiza el tombstone con
+     `seq = newSeq`, `deletedAt` del cliente.
+7. Devuelve `{ newSeq }`.
+
+Cliente (al recibir `newSeq`):
+
+1. `last_server_seq = newSeq`.
+2. Por cada fila upserteada en este chunk: si `local.updatedAt ==
+   payload.updatedAt` (no fue re-editada durante el push) → `dirty = false`.
+   Si no → se queda `dirty = true` para el próximo round.
+3. Por cada tombstone pusheado: mismo criterio sobre `deletedAt`.
+
+#### Cursor mismatch
+
+Si un chunk falla con `cursor_mismatch`:
+
+1. El cliente pausa el push.
+2. Hace un pull completo (paginado) hasta drenar.
+3. Re-mergea localmente (incluye el recompute de `balance_adjustment`).
+4. Reanuda el push desde el chunk que falló, con el nuevo
+   `expectedServerSeq` y con las filas que sigan `dirty = true` post-merge.
+
+#### Atomicidad por chunk
+
+Un chunk se commitea entero o se rechaza entero. El push completo a través
+de múltiples chunks **no** es atómico: si el chunk 3 de 5 falla por
+`cursor_mismatch`, los chunks 1 y 2 ya quedaron en server. Eso es OK porque
+las filas ya pusheadas tienen su `seq` y los pulls de otros dispositivos las
+verán; el cliente reanuda desde donde quedó.
 
 ### Borrados
 
-No hay soft delete a nivel UI: cuando el usuario borra una entidad, la fila se
-elimina y se inserta un tombstone con el mismo `seq`. Las consultas normales
-nunca leen filas borradas.
+No hay soft delete a nivel UI. Cuando el usuario borra una entidad:
+
+1. Local: se elimina la fila y se inserta un tombstone con
+   `deletedAt = Date.now()`, `dirty = true`.
+2. En el próximo push, el tombstone viaja en el chunk correspondiente; el
+   server borra la fila (si aún existe) y persiste el tombstone con el
+   `seq` del chunk.
+3. Otros dispositivos, al pullear el tombstone, aplican la regla
+   `local.updatedAt vs deletedAt` para decidir borrar localmente o
+   resurrectar la fila.
+
+Las queries normales nunca leen filas borradas: el delete es físico en
+cliente y server.
 
 ---
 
@@ -156,7 +363,7 @@ currency       string             — moneda fija
 description?   string
 color?         string             — hex
 icon?          string             — de lista predefinida
-isArchived     boolean
+archived       boolean
 createdAt      int64
 updatedAt      int64
 seq            int64
@@ -173,7 +380,7 @@ userId         string
 id             string             — uuid
 name           string
 description?   string
-isArchived     boolean
+archived       boolean
 createdAt      int64
 updatedAt      int64
 seq            int64
@@ -207,7 +414,7 @@ exchangeRate?   number             — float (transferencias con conversión)
 
 balanceAfter?   int64              — centavos (ajustes de balance)
 
-isArchived      boolean
+archived        boolean
 createdAt       int64
 updatedAt       int64
 seq             int64
@@ -234,7 +441,7 @@ name           string
 description?   string
 parentId?      string             — uuid de tag padre (jerarquía opcional)
 color?         string             — hex
-isArchived     boolean
+archived       boolean
 createdAt      int64
 updatedAt      int64
 seq            int64
@@ -246,13 +453,13 @@ seq            int64
 
 ### `transactionTags`
 
-Relación N a N entre movimientos y tags. Tiene su propio `id` (UUID) para que
-el modelo de sync sea uniforme; la unicidad lógica es `(userId,
-transactionId, tagId)`.
+Relación N a N entre movimientos y tags. Tiene su propio `id` para que el
+modelo de sync sea uniforme; la unicidad lógica es
+`(userId, transactionId, tagId)`.
 
 ```text
 userId          string
-id              string             — uuid del join
+id              string             — derivado determinísticamente, ver "Safeguards" abajo
 transactionId   string             — uuid del movimiento
 tagId           string             — uuid del tag
 createdAt       int64
@@ -262,6 +469,59 @@ seq             int64
 
 Índices: `by_user_seq`, `by_user_id`, `by_user_transaction_tag`,
 `by_user_transaction`, `by_user_tag`
+
+#### Safeguards contra joins duplicados
+
+El riesgo: dos dispositivos, sin haberse sincronizado entre sí, agregan el
+mismo `tag` al mismo `transaction`. Si cada uno generara un UUID random
+distinto para su fila de join, el servidor terminaría con dos filas
+representando la misma relación lógica.
+
+Defensa en capas:
+
+1. **`id` determinístico, no random.** El `id` de un `transactionTags` se
+   deriva exclusivamente de sus partes:
+
+   ```
+   id = `${transactionId}__${tagId}`
+   ```
+
+   Dos dispositivos que decidan independientemente agregar el mismo tag al
+   mismo transaction producen **el mismo `id`**. El upsert por `(userId, id)`
+   en el servidor colapsa los dos pushes a una sola fila de manera natural,
+   sin necesidad de lógica de dedup explícita. El cliente debe construir el
+   `id` con esta fórmula en cada inserción local.
+
+2. **Constraint local SQLite.** La tabla `transaction_tags` en Drift declara
+   `uniqueKeys: [{transactionId, tagId}]`. Cualquier intento de insertar un
+   duplicado dentro del mismo dispositivo falla con constraint error antes
+   de tocar el sync. Esto previene bugs de UI (doble click, etc.).
+
+3. **Lookup defensivo en el push del servidor.** Antes de insertar/upsertear
+   un `transactionTags`, el handler de push valida:
+   - que `transactionId` exista y pertenezca al `userId`,
+   - que `tagId` exista y pertenezca al `userId`,
+   - que el `id` recibido coincida con el formato esperado
+     (`${transactionId}__${tagId}`).
+
+   La tercera validación rechaza explícitamente con `invalid_join_id`
+   cualquier payload cuyo `id` no respete el formato canónico, en vez de
+   aceptar silenciosamente filas duplicadas.
+
+#### Borrado
+
+Cuando se borra una `transaction`, el cliente, en la misma operación local:
+
+1. Marca la fila de `transactions` para borrar (tombstone con
+   `entity_table = "transactions"`, `entity_id = transactionId`).
+2. Para cada `transactionTags` con ese `transactionId`, lo borra localmente
+   y emite su propio tombstone (`entity_table = "transactionTags"`,
+   `entity_id = "${transactionId}__${tagId}"`).
+
+El servidor **no** hace cascade automático: si el cliente olvida emitir los
+tombstones de los joins, esas filas quedan huérfanas en server hasta que
+otro dispositivo las limpie. El cliente es responsable de la coherencia
+referencial al borrar.
 
 ---
 
@@ -298,22 +558,22 @@ deletedAt   int64
 
 El cliente espeja el modelo de Convex con dos diferencias estructurales:
 
-1. **No hay `userId`** — el cliente sirve a un único usuario autenticado.
-2. **No tiene `seq` por fila.** En su lugar usa `version` / `remoteVersion`
-   para saber si la fila está sucia, y un `SyncState` singleton para
-   `lastServerSeq` global.
+1. **No hay `userId`** — la base es por usuario autenticado
+   (`AppDatabase.forUser(userId)`).
+2. **No hay `seq` por fila.** En su lugar, cada tabla tiene un boolean
+   `dirty` y el módulo de sync usa el singleton
+   `sync_state.last_server_seq` como cursor global (tanto para pull como
+   para push).
 
 Cada tabla espejo (`accounts`, `categories`, `transactions`, `tags`,
 `transaction_tags`) tiene la misma forma que su contraparte en Convex más:
 
 ```text
-version          int64    — contador local (1 al crear, +1 en cada edición)
-remoteVersion?   int64    — último version confirmado por el server (NULL si nunca se sincronizó)
+dirty   bool   — true si la fila tiene cambios locales no pusheados
 ```
 
-Una fila está sucia (necesita push) cuando
-`remoteVersion IS NULL OR version != remoteVersion`. Cada tabla tiene un
-índice parcial `<table>_needs_sync` con esa condición exacta.
+Cada tabla tiene un índice parcial `<table>_needs_sync` con `WHERE dirty = 1`
+para barrer rápido las filas a empujar.
 
 ### `sync_state`
 
@@ -321,7 +581,7 @@ Singleton (PK fija = `'singleton'`).
 
 ```text
 id               string
-last_server_seq  int64    — el seq más alto que ya pulleamos
+last_server_seq  int64    — el seq más alto pulleado y aplicado completamente
 last_synced_at?  int64
 ```
 
@@ -333,12 +593,11 @@ entity_id        string
 deleted_at       int64
 created_at       int64
 updated_at       int64
-version          int64
-remote_version?  int64
+dirty            bool
 ```
 
-PK: `(entity_table, entity_id)`. Sigue la misma convención de versionado que
-las tablas de entidades para saber qué tombstones quedan por empujar.
+PK: `(entity_table, entity_id)`. Mismo modelo de `dirty` que las entidades
+para saber qué tombstones quedan por empujar.
 
 ---
 
@@ -358,7 +617,7 @@ las tablas de entidades para saber qué tombstones quedan por empujar.
   categoryId: "uuid_cat_cafe",
   amount: 550n,
   currency: "ARS",
-  isArchived: false,
+  archived: false,
   createdAt: 1745712000000n,
   updatedAt: 1745712000000n,
   seq: 42n
@@ -379,7 +638,7 @@ las tablas de entidades para saber qué tombstones quedan por empujar.
   categoryId: "uuid_cat_sueldo",
   amount: 200000n,
   currency: "ARS",
-  isArchived: false,
+  archived: false,
   createdAt: 1746057600000n,
   updatedAt: 1746057600000n,
   seq: 43n
@@ -403,7 +662,7 @@ las tablas de entidades para saber qué tombstones quedan por empujar.
   toAccountId: "uuid_acc_galicia",
   toAmount: 50000n,
   toCurrency: "ARS",
-  isArchived: false,
+  archived: false,
   createdAt: 1745280000000n,
   updatedAt: 1745280000000n,
   seq: 44n
@@ -428,7 +687,7 @@ las tablas de entidades para saber qué tombstones quedan por empujar.
   toAmount: 10000n,
   toCurrency: "USD",
   exchangeRate: 100,
-  isArchived: false,
+  archived: false,
   createdAt: 1744243200000n,
   updatedAt: 1744243200000n,
   seq: 45n
@@ -450,7 +709,7 @@ las tablas de entidades para saber qué tombstones quedan por empujar.
   amount: 20000n,
   currency: "ARS",
   balanceAfter: 20000n,
-  isArchived: false,
+  archived: false,
   createdAt: 1735689600000n,
   updatedAt: 1735689600000n,
   seq: 46n
@@ -466,7 +725,7 @@ las tablas de entidades para saber qué tombstones quedan por empujar.
   userId: "usr_1",
   name: "trabajo",
   color: "#4F46E5",
-  isArchived: false,
+  archived: false,
   createdAt: 1746057600000n,
   updatedAt: 1746057600000n,
   seq: 47n

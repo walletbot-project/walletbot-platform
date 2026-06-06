@@ -103,7 +103,7 @@ class Transactions extends Table {
       .nullable()(); // cents, for balance adjustments
 
   BoolColumn get archived =>
-      boolean().named('archived').withDefault(const Constant(false))();
+      boolean().named('is_archived').withDefault(const Constant(false))();
   Int64Column get createdAt => int64().named('created_at')();
   Int64Column get updatedAt => int64().named('updated_at')();
 
@@ -232,6 +232,58 @@ class AppDatabase extends _$AppDatabase {
         databaseDirectory: getApplicationSupportDirectory,
       ),
     );
+  }
+
+  Stream<List<Account>> watchAccounts() => (select(accounts)
+        ..where((a) => a.archived.equals(false))
+        ..orderBy([(a) => OrderingTerm(expression: a.createdAt)]))
+      .watch();
+
+  Future<void> insertAccount({
+    required String id,
+    required String name,
+    required String currency,
+  }) {
+    final now = BigInt.from(DateTime.now().millisecondsSinceEpoch);
+    return into(accounts).insert(AccountsCompanion.insert(
+      id: id,
+      name: name,
+      currency: currency,
+      createdAt: now,
+      updatedAt: now,
+      dirty: const Value(true),
+    ));
+  }
+
+  Future<void> insertTransaction({
+    required String id,
+    required String type,
+    required String name,
+    required String status,
+    required BigInt date,
+    required String accountId,
+    required String categoryId,
+    required BigInt amount,
+    required String currency,
+    BigInt? balanceAfter,
+  }) {
+    final now = BigInt.from(DateTime.now().millisecondsSinceEpoch);
+    return into(transactions).insert(TransactionsCompanion.insert(
+      id: id,
+      type: type,
+      name: name,
+      status: status,
+      date: date,
+      accountId: accountId,
+      categoryId: categoryId,
+      amount: amount,
+      currency: currency,
+      balanceAfter:
+          balanceAfter != null ? Value(balanceAfter) : const Value.absent(),
+      createdAt: now,
+      updatedAt: now,
+      dirty: const Value(true),
+    ));
   }
 
   static Future<void> deleteForUser(String userId) async {

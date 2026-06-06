@@ -48,6 +48,11 @@ Wallet Bot — app for keeping track of personal expenses
 - After all steps of any task run a CLAUDE.md rules check
 - Always report violations
 
+
+### Feature Parity between mobile and web
+
+- If the user or a linear ticket asks you to implement a feature in mobile or web, asks the user if he also wants to implement that feature in the other platform to maintain feature parity and suggest possible implementations for this.
+
 ## Dev workflow
 
 - `pnpm dev` at root starts both web and convex dev servers in parallel
