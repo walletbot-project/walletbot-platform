@@ -99,6 +99,21 @@ function defaultDestinationAccount(sourceId: string) {
     return accounts.find((account) => account.id !== sourceId)?.id ?? ''
 }
 
+function normalizeAmountInput(value: string) {
+    let hasSeparator = false
+
+    return Array.from(value)
+        .filter((char) => {
+            if (/\d/.test(char)) return true
+            if ((char === ',' || char === '.') && !hasSeparator) {
+                hasSeparator = true
+                return true
+            }
+            return false
+        })
+        .join('')
+}
+
 export function AddManual() {
     const [type, setType] = useState<MovementType>('income')
     const [amount, setAmount] = useState('')
@@ -194,18 +209,20 @@ export function AddManual() {
     }
 
     const updateSourceAmount = (value: string) => {
-        setAmount(value)
+        const normalizedValue = normalizeAmountInput(value)
+        setAmount(normalizedValue)
         setSourceAmountTouched(true)
         if (sameTransferCurrency() && !destinationAmountTouched) {
-            setDestinationAmount(value)
+            setDestinationAmount(normalizedValue)
         }
     }
 
     const updateDestinationAmount = (value: string) => {
-        setDestinationAmount(value)
+        const normalizedValue = normalizeAmountInput(value)
+        setDestinationAmount(normalizedValue)
         setDestinationAmountTouched(true)
         if (sameTransferCurrency() && !sourceAmountTouched) {
-            setAmount(value)
+            setAmount(normalizedValue)
         }
     }
 
@@ -330,7 +347,11 @@ export function AddManual() {
                                     inputMode="decimal"
                                     value={amount}
                                     onChange={(event) =>
-                                        setAmount(event.target.value)
+                                        setAmount(
+                                            normalizeAmountInput(
+                                                event.target.value,
+                                            ),
+                                        )
                                     }
                                     placeholder="0,00"
                                     className={cn(

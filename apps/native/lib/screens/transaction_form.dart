@@ -375,11 +375,12 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
 
     return Scaffold(
       backgroundColor: const Color(0xFFFFF8F8),
+      resizeToAvoidBottomInset: true,
       body: SafeArea(
         child: Form(
           key: _formKey,
           child: ListView(
-            padding: const EdgeInsets.fromLTRB(24, 48, 24, 120),
+            padding: const EdgeInsets.fromLTRB(24, 48, 24, 32),
             children: [
               Text(
                 'Anadir movimiento',
@@ -588,45 +589,45 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
                   ],
                 ),
               ],
+              const SizedBox(height: 32),
+              Row(
+                children: [
+                  Expanded(
+                    child: FilledButton.tonalIcon(
+                      onPressed: _isSaving
+                          ? null
+                          : () => Navigator.pop(context),
+                      icon: const Icon(Icons.close_rounded),
+                      label: const Text('Cancelar'),
+                      style: FilledButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        backgroundColor: const Color(0xFFF0C9CE),
+                        foregroundColor: Colors.black,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 18),
+                  Expanded(
+                    child: FilledButton.icon(
+                      onPressed: _isSaving ? null : _submit,
+                      icon: _isSaving
+                          ? const SizedBox.square(
+                              dimension: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.check_rounded),
+                      label: const Text('Anotar'),
+                      style: FilledButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        backgroundColor: const Color(0xFF21C4B6),
+                        foregroundColor: Colors.white,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ],
           ),
-        ),
-      ),
-      bottomNavigationBar: SafeArea(
-        minimum: const EdgeInsets.fromLTRB(24, 8, 24, 20),
-        child: Row(
-          children: [
-            Expanded(
-              child: FilledButton.tonalIcon(
-                onPressed: _isSaving ? null : () => Navigator.pop(context),
-                icon: const Icon(Icons.close_rounded),
-                label: const Text('Cancelar'),
-                style: FilledButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  backgroundColor: const Color(0xFFF0C9CE),
-                  foregroundColor: Colors.black,
-                ),
-              ),
-            ),
-            const SizedBox(width: 18),
-            Expanded(
-              child: FilledButton.icon(
-                onPressed: _isSaving ? null : _submit,
-                icon: _isSaving
-                    ? const SizedBox.square(
-                        dimension: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.check_rounded),
-                label: const Text('Anotar'),
-                style: FilledButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  backgroundColor: const Color(0xFF21C4B6),
-                  foregroundColor: Colors.white,
-                ),
-              ),
-            ),
-          ],
         ),
       ),
     );
@@ -879,9 +880,9 @@ class _TransferSide extends StatelessWidget {
             isDense: true,
             contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 11),
           ),
-          style: Theme.of(context).textTheme.titleLarge?.copyWith(
+          style: Theme.of(context).textTheme.titleMedium?.copyWith(
             color: Colors.black,
-            fontWeight: FontWeight.w800,
+            fontWeight: FontWeight.w600,
           ),
           onChanged: onAmountChanged,
           validator: (value) {
