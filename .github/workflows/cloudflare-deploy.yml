@@ -1,4 +1,4 @@
-name: Deploy to Cloudflare Pages
+name: Deploy Web & Convex Preview
 
 on:
   push:
@@ -38,38 +38,35 @@ jobs:
             echo "VITE_CONVEX_SITE_URL=${{ vars.VITE_CONVEX_SITE_URL }}"
           } >> "$GITHUB_ENV"
 
-      # PRs get an isolated, ephemeral Convex preview deployment. `convex deploy`
-      # with a preview deploy key creates/updates the deployment named after the
-      # branch; --cmd runs with the new deployment's .convex.cloud URL exposed so we
-      # can capture it and point the web build at it.
+      # PRs get an isolated, ephemeral Convex preview deployment. This single step:
+      #   1. Creates/updates the preview deployment (named after the branch) and
+      #      captures its .convex.cloud URL via --cmd.
+      #   2. Sets the per-branch SITE_URL on that deployment so better-auth's
+      #      trustedOrigins / crossDomain accept the preview web origin.
+      #   3. Stages the VITE_* values for the web build (.convex.site is derived
+      #      from .convex.cloud).
       - name: Deploy Convex preview
         if: github.event_name == 'pull_request'
         working-directory: packages/backend
         env:
           CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_PREVIEW_DEPLOY_KEY }}
         run: |
+          set -euo pipefail
+          SITE="https://${{ github.head_ref }}.prev.walletbot.live"
+
           npx convex deploy \
             --preview-create "${{ github.head_ref }}" \
             --cmd-url-env-var-name CONVEX_URL_OUT \
-            --cmd 'echo "PREVIEW_CONVEX_URL=$CONVEX_URL_OUT" >> "$GITHUB_ENV"'
+            --cmd 'printf "%s" "$CONVEX_URL_OUT" > "$RUNNER_TEMP/convex_url"'
 
-      # Set the per-branch SITE_URL on the freshly created preview deployment
-      # (targeted by name, extracted from the .convex.cloud URL) and stage the
-      # VITE_* values for the web build. The .convex.site URL is derived from the
-      # .convex.cloud URL.
-      - name: Configure Convex preview
-        if: github.event_name == 'pull_request'
-        working-directory: packages/backend
-        env:
-          CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_PREVIEW_DEPLOY_KEY }}
-        run: |
-          SITE="https://${{ github.head_ref }}.prev.walletbot.live"
-          NAME="$(printf '%s' "$PREVIEW_CONVEX_URL" | sed -E 's#https?://([^.]+)\..*#\1#')"
+          URL="$(cat "$RUNNER_TEMP/convex_url")"
+          NAME="$(printf '%s' "$URL" | sed -E 's#https?://([^.]+)\..*#\1#')"
           npx convex env set SITE_URL "$SITE" --deployment "$NAME"
+
           {
             echo "VITE_SITE_URL=$SITE"
-            echo "VITE_CONVEX_URL=$PREVIEW_CONVEX_URL"
-            echo "VITE_CONVEX_SITE_URL=${PREVIEW_CONVEX_URL/.convex.cloud/.convex.site}"
+            echo "VITE_CONVEX_URL=$URL"
+            echo "VITE_CONVEX_SITE_URL=${URL/.convex.cloud/.convex.site}"
           } >> "$GITHUB_ENV"
 
       - name: Build web app
