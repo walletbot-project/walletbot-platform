@@ -692,7 +692,9 @@ class ToolExecutors {
         name: args.containsKey('name') ? Value(args['name'] as String) : const Value.absent(),
         description: args.containsKey('description') ? Value(args['description'] as String?) : const Value.absent(),
         date: args['date'] != null ? Value(parseNaturalDate(args['date'] as String)) : const Value.absent(),
-        dateConfirmed: _dateConfirmedValue(args),
+        dateConfirmed: args.containsKey('dateConfirmed')
+            ? _dateConfirmedValue(args)
+            : const Value.absent(),
         amount: args['amount'] != null ? Value(parseAmountToCents(args['amount'] as num)) : const Value.absent(),
         categoryId: categoryId != null ? Value(categoryId) : const Value.absent(),
         status: args.containsKey('status') ? Value(args['status'] as String) : const Value.absent(),
