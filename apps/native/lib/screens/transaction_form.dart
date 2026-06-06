@@ -1,15 +1,21 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-enum TransactionFormType { income, expense }
+enum TransactionFormType { income, expense, transfer }
+
+enum _TransferAmountField { source, destination }
 
 class TransactionFormResult {
   const TransactionFormResult({
     required this.type,
     required this.accountName,
     required this.accountCurrency,
+    this.destinationAccountName,
+    this.destinationAccountCurrency,
     required this.date,
     required this.amount,
+    this.destinationAmount,
+    this.exchangeRate,
     required this.title,
     required this.description,
     required this.categoryName,
@@ -19,8 +25,12 @@ class TransactionFormResult {
   final TransactionFormType type;
   final String accountName;
   final String accountCurrency;
+  final String? destinationAccountName;
+  final String? destinationAccountCurrency;
   final DateTime date;
   final double amount;
+  final double? destinationAmount;
+  final double? exchangeRate;
   final String title;
   final String? description;
   final String? categoryName;
@@ -37,21 +47,27 @@ class TransactionFormScreen extends StatefulWidget {
 class _TransactionFormScreenState extends State<TransactionFormScreen> {
   final _formKey = GlobalKey<FormState>();
   final _amountController = TextEditingController();
+  final _destinationAmountController = TextEditingController();
   final _titleController = TextEditingController();
   final _descriptionController = TextEditingController();
   final _tagController = TextEditingController();
 
   TransactionFormType _type = TransactionFormType.income;
   _MockAccount? _selectedAccount;
+  _MockAccount? _selectedDestinationAccount;
   _MockCategory? _selectedCategory;
   DateTime _selectedDate = DateTime.now();
   final List<String> _tags = [];
   bool _isSaving = false;
   bool _isRecurringExpense = false;
+  bool _updatingTransferAmounts = false;
+  bool _sourceAmountTouched = false;
+  bool _destinationAmountTouched = false;
 
   @override
   void dispose() {
     _amountController.dispose();
+    _destinationAmountController.dispose();
     _titleController.dispose();
     _descriptionController.dispose();
     _tagController.dispose();
@@ -70,8 +86,11 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
     setState(() => _selectedDate = picked);
   }
 
-  Future<void> _pickAccount() async {
+  Future<void> _pickAccount({bool destination = false}) async {
     _commitInlineEditing();
+    final selectedAccount = destination
+        ? _selectedDestinationAccount
+        : _selectedAccount;
     final account = await showModalBottomSheet<_MockAccount>(
       context: context,
       showDragHandle: true,
@@ -85,7 +104,7 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
                   leading: const Icon(Icons.account_balance_wallet_rounded),
                   title: Text(account.name),
                   subtitle: Text(account.currency),
-                  trailing: account == _selectedAccount
+                  trailing: account == selectedAccount
                       ? const Icon(Icons.check_circle_rounded)
                       : null,
                   onTap: () => Navigator.pop(context, account),
@@ -96,7 +115,14 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
       },
     );
     if (account == null || !mounted) return;
-    setState(() => _selectedAccount = account);
+    setState(() {
+      if (destination) {
+        _selectedDestinationAccount = account;
+      } else {
+        _selectedAccount = account;
+      }
+      _mirrorSameCurrencyTransferAmount(_TransferAmountField.source);
+    });
   }
 
   Future<void> _pickCategory() async {
@@ -168,6 +194,24 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
       ).showSnackBar(const SnackBar(content: Text('Selecciona una cuenta')));
       return;
     }
+    final destinationAccount = _selectedDestinationAccount;
+    if (_type == TransactionFormType.transfer) {
+      if (destinationAccount == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Selecciona una cuenta destino')),
+        );
+        return;
+      }
+      if (destinationAccount.name == account.name &&
+          destinationAccount.currency == account.currency) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Origen y destino deben ser cuentas distintas'),
+          ),
+        );
+        return;
+      }
+    }
 
     setState(() => _isSaving = true);
     final messenger = ScaffoldMessenger.of(context);
@@ -176,13 +220,28 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
     try {
       await Future<void>.delayed(const Duration(milliseconds: 650));
       final amount = _parseAmount(_amountController.text)!;
+      final destinationAmount = _type == TransactionFormType.transfer
+          ? _parseAmount(_destinationAmountController.text)
+          : null;
+      final exchangeRate =
+          _shouldShowExchangeRate &&
+              destinationAmount != null &&
+              destinationAmount > 0
+          ? destinationAmount / amount
+          : null;
       final result = TransactionFormResult(
         type: _type,
         accountName: account.name,
         accountCurrency: account.currency,
+        destinationAccountName: destinationAccount?.name,
+        destinationAccountCurrency: destinationAccount?.currency,
         date: _selectedDate,
         amount: amount,
-        title: _titleController.text.trim(),
+        destinationAmount: destinationAmount,
+        exchangeRate: exchangeRate,
+        title: _type == TransactionFormType.transfer
+            ? 'Transferencia'
+            : _titleController.text.trim(),
         description: _emptyToNull(_descriptionController.text),
         categoryName: _selectedCategory?.name,
         tags: List.unmodifiable(_tags),
@@ -204,9 +263,11 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final selectedColor = _type == TransactionFormType.income
-        ? Colors.greenAccent.shade400
-        : const Color(0xFFFF3744);
+    final selectedColor = switch (_type) {
+      TransactionFormType.income => Colors.greenAccent.shade400,
+      TransactionFormType.expense => const Color(0xFFFF3744),
+      TransactionFormType.transfer => const Color(0xFF6DE7D8),
+    };
 
     return Scaffold(
       backgroundColor: const Color(0xFFFFF8F8),
@@ -236,8 +297,13 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
                       value: TransactionFormType.expense,
                       label: Text('Gasto'),
                     ),
+                    ButtonSegment(
+                      value: TransactionFormType.transfer,
+                      label: Text('Transferencia'),
+                    ),
                   ],
                   selected: {_type},
+                  showSelectedIcon: false,
                   style: ButtonStyle(
                     backgroundColor: WidgetStateProperty.resolveWith((states) {
                       if (states.contains(WidgetState.selected)) {
@@ -256,34 +322,58 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
                 ),
               ),
               const SizedBox(height: 36),
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        _SectionLabel('Cuenta'),
-                        const SizedBox(height: 10),
-                        _PickerChip(
-                          label: _selectedAccount?.name ?? 'Seleccionar',
-                          onPressed: _isSaving ? null : _pickAccount,
-                        ),
-                      ],
+              if (_type == TransactionFormType.transfer)
+                _TransferBlock(
+                  sourceAccount: _selectedAccount,
+                  destinationAccount: _selectedDestinationAccount,
+                  amountController: _amountController,
+                  destinationAmountController: _destinationAmountController,
+                  enabled: !_isSaving,
+                  onPickSource: () => _pickAccount(),
+                  onPickDestination: () => _pickAccount(destination: true),
+                  onSwap: _isSaving ? null : _swapTransferAccounts,
+                  onAmountChanged: (_) {
+                    _sourceAmountTouched = true;
+                    _mirrorSameCurrencyTransferAmount(
+                      _TransferAmountField.source,
+                    );
+                  },
+                  onDestinationAmountChanged: (_) {
+                    _destinationAmountTouched = true;
+                    _mirrorSameCurrencyTransferAmount(
+                      _TransferAmountField.destination,
+                    );
+                  },
+                )
+              else
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _SectionLabel('Cuenta'),
+                          const SizedBox(height: 10),
+                          _PickerChip(
+                            label: _selectedAccount?.name ?? 'Seleccionar',
+                            onPressed: _isSaving ? null : () => _pickAccount(),
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-                  if (_type == TransactionFormType.expense) ...[
-                    const SizedBox(width: 16),
-                    _RecurringExpenseControl(
-                      value: _isRecurringExpense,
-                      onChanged: _isSaving
-                          ? null
-                          : (value) =>
-                                setState(() => _isRecurringExpense = value),
-                    ),
+                    if (_type == TransactionFormType.expense) ...[
+                      const SizedBox(width: 16),
+                      _RecurringExpenseControl(
+                        value: _isRecurringExpense,
+                        onChanged: _isSaving
+                            ? null
+                            : (value) =>
+                                  setState(() => _isRecurringExpense = value),
+                      ),
+                    ],
                   ],
-                ],
-              ),
+                ),
               const SizedBox(height: 24),
               _ReadonlyField(
                 label: 'Fecha',
@@ -294,53 +384,35 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
                     ? null
                     : () => setState(() => _selectedDate = DateTime.now()),
               ),
-              const SizedBox(height: 18),
-              TextFormField(
-                controller: _amountController,
-                enabled: !_isSaving,
-                autovalidateMode: AutovalidateMode.onUserInteraction,
-                keyboardType: const TextInputType.numberWithOptions(
-                  decimal: true,
+              if (_type != TransactionFormType.transfer) ...[
+                const SizedBox(height: 18),
+                _AmountField(
+                  controller: _amountController,
+                  label: 'Monto',
+                  enabled: !_isSaving,
                 ),
-                inputFormatters: [
-                  FilteringTextInputFormatter.allow(RegExp(r'[0-9,.]')),
-                ],
-                decoration: const InputDecoration(
-                  labelText: 'Monto',
-                  border: OutlineInputBorder(),
-                  suffixIcon: Icon(Icons.cancel_outlined),
-                ),
-                validator: (value) {
-                  final text = value?.trim() ?? '';
-                  if (text.isEmpty) return 'Monto es obligatorio';
-                  final amount = _parseAmount(text);
-                  if (amount == null || amount <= 0) {
-                    return 'Monto debe ser mayor a 0';
-                  }
-                  return null;
-                },
-              ),
-              const SizedBox(height: 18),
-              TextFormField(
-                controller: _titleController,
-                enabled: !_isSaving,
-                autovalidateMode: AutovalidateMode.onUserInteraction,
-                textCapitalization: TextCapitalization.sentences,
-                decoration: InputDecoration(
-                  labelText: 'Titulo',
-                  border: const OutlineInputBorder(),
-                  suffixIcon: IconButton(
-                    onPressed: _isSaving ? null : _titleController.clear,
-                    icon: const Icon(Icons.cancel_outlined),
+                const SizedBox(height: 18),
+                TextFormField(
+                  controller: _titleController,
+                  enabled: !_isSaving,
+                  autovalidateMode: AutovalidateMode.onUserInteraction,
+                  textCapitalization: TextCapitalization.sentences,
+                  decoration: InputDecoration(
+                    labelText: 'Titulo',
+                    border: const OutlineInputBorder(),
+                    suffixIcon: IconButton(
+                      onPressed: _isSaving ? null : _titleController.clear,
+                      icon: const Icon(Icons.cancel_outlined),
+                    ),
                   ),
+                  validator: (value) {
+                    if ((value ?? '').trim().isEmpty) {
+                      return 'Titulo es obligatorio';
+                    }
+                    return null;
+                  },
                 ),
-                validator: (value) {
-                  if ((value ?? '').trim().isEmpty) {
-                    return 'Titulo es obligatorio';
-                  }
-                  return null;
-                },
-              ),
+              ],
               const SizedBox(height: 18),
               TextFormField(
                 controller: _descriptionController,
@@ -454,7 +526,68 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
     setState(() {
       _type = type;
       if (type == TransactionFormType.income) _isRecurringExpense = false;
+      if (type == TransactionFormType.transfer) {
+        _isRecurringExpense = false;
+        _selectedCategory ??= _transferCategory;
+        _mirrorSameCurrencyTransferAmount(_TransferAmountField.source);
+      }
     });
+  }
+
+  bool get _shouldShowExchangeRate {
+    final source = _selectedAccount;
+    final destination = _selectedDestinationAccount;
+    if (source == null || destination == null) return true;
+    return source.currency != destination.currency;
+  }
+
+  void _mirrorSameCurrencyTransferAmount(_TransferAmountField changed) {
+    if (_type != TransactionFormType.transfer ||
+        _shouldShowExchangeRate ||
+        _updatingTransferAmounts) {
+      return;
+    }
+    _updatingTransferAmounts = true;
+    try {
+      switch (changed) {
+        case _TransferAmountField.source:
+          if (_destinationAmountTouched) return;
+          _setControllerText(
+            _destinationAmountController,
+            _amountController.text,
+          );
+        case _TransferAmountField.destination:
+          if (_sourceAmountTouched) return;
+          _setControllerText(
+            _amountController,
+            _destinationAmountController.text,
+          );
+      }
+    } finally {
+      _updatingTransferAmounts = false;
+    }
+  }
+
+  void _swapTransferAccounts() {
+    setState(() {
+      final source = _selectedAccount;
+      _selectedAccount = _selectedDestinationAccount;
+      _selectedDestinationAccount = source;
+      final sourceAmount = _amountController.text;
+      _setControllerText(_amountController, _destinationAmountController.text);
+      _setControllerText(_destinationAmountController, sourceAmount);
+      final sourceTouched = _sourceAmountTouched;
+      _sourceAmountTouched = _destinationAmountTouched;
+      _destinationAmountTouched = sourceTouched;
+    });
+  }
+
+  void _setControllerText(TextEditingController controller, String value) {
+    if (controller.text == value) return;
+    controller.value = TextEditingValue(
+      text: value,
+      selection: TextSelection.collapsed(offset: value.length),
+    );
   }
 }
 
@@ -494,6 +627,181 @@ class _RecurringExpenseControl extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _TransferBlock extends StatelessWidget {
+  const _TransferBlock({
+    required this.sourceAccount,
+    required this.destinationAccount,
+    required this.amountController,
+    required this.destinationAmountController,
+    required this.enabled,
+    required this.onPickSource,
+    required this.onPickDestination,
+    required this.onSwap,
+    required this.onAmountChanged,
+    required this.onDestinationAmountChanged,
+  });
+
+  final _MockAccount? sourceAccount;
+  final _MockAccount? destinationAccount;
+  final TextEditingController amountController;
+  final TextEditingController destinationAmountController;
+  final bool enabled;
+  final VoidCallback onPickSource;
+  final VoidCallback onPickDestination;
+  final VoidCallback? onSwap;
+  final ValueChanged<String> onAmountChanged;
+  final ValueChanged<String> onDestinationAmountChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(
+          child: _TransferSide(
+            label: 'Sale',
+            account: sourceAccount,
+            amountController: amountController,
+            enabled: enabled,
+            onPickAccount: onPickSource,
+            onAmountChanged: onAmountChanged,
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(8, 34, 8, 0),
+          child: IconButton.filledTonal(
+            onPressed: onSwap,
+            icon: const Icon(Icons.swap_horiz_rounded),
+            style: IconButton.styleFrom(
+              backgroundColor: const Color(0xFFE7FFFA),
+              foregroundColor: Colors.black,
+            ),
+          ),
+        ),
+        Expanded(
+          child: _TransferSide(
+            label: 'Entra',
+            account: destinationAccount,
+            amountController: destinationAmountController,
+            enabled: enabled,
+            onPickAccount: onPickDestination,
+            onAmountChanged: onDestinationAmountChanged,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _TransferSide extends StatelessWidget {
+  const _TransferSide({
+    required this.label,
+    required this.account,
+    required this.amountController,
+    required this.enabled,
+    required this.onPickAccount,
+    this.onAmountChanged,
+  });
+
+  final String label;
+  final _MockAccount? account;
+  final TextEditingController amountController;
+  final bool enabled;
+  final VoidCallback onPickAccount;
+  final ValueChanged<String>? onAmountChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          label,
+          textAlign: TextAlign.center,
+          style: Theme.of(context).textTheme.labelLarge?.copyWith(
+            color: Colors.black87,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+        const SizedBox(height: 8),
+        TextFormField(
+          controller: amountController,
+          enabled: enabled,
+          textAlign: TextAlign.center,
+          autovalidateMode: AutovalidateMode.onUserInteraction,
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          inputFormatters: [
+            FilteringTextInputFormatter.allow(RegExp(r'[0-9,.]')),
+          ],
+          decoration: const InputDecoration(
+            border: OutlineInputBorder(),
+            isDense: true,
+            contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 11),
+          ),
+          style: Theme.of(context).textTheme.titleLarge?.copyWith(
+            color: Colors.black,
+            fontWeight: FontWeight.w800,
+          ),
+          onChanged: onAmountChanged,
+          validator: (value) {
+            final text = value?.trim() ?? '';
+            if (text.isEmpty) return 'Obligatorio';
+            final amount = _parseAmount(text);
+            if (amount == null || amount <= 0) return 'Mayor a 0';
+            return null;
+          },
+        ),
+        const SizedBox(height: 10),
+        Center(
+          child: _PickerChip(
+            label: account == null
+                ? 'Seleccionar'
+                : '${account!.name} ${account!.currency}',
+            onPressed: enabled ? onPickAccount : null,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _AmountField extends StatelessWidget {
+  const _AmountField({
+    required this.controller,
+    required this.label,
+    required this.enabled,
+  });
+
+  final TextEditingController controller;
+  final String label;
+  final bool enabled;
+
+  @override
+  Widget build(BuildContext context) {
+    return TextFormField(
+      controller: controller,
+      enabled: enabled,
+      autovalidateMode: AutovalidateMode.onUserInteraction,
+      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+      inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9,.]'))],
+      decoration: InputDecoration(
+        labelText: label,
+        border: OutlineInputBorder(),
+        suffixIcon: const Icon(Icons.cancel_outlined),
+      ),
+      validator: (value) {
+        final text = value?.trim() ?? '';
+        if (text.isEmpty) return 'Monto es obligatorio';
+        final amount = _parseAmount(text);
+        if (amount == null || amount <= 0) {
+          return 'Monto debe ser mayor a 0';
+        }
+        return null;
+      },
     );
   }
 }
@@ -614,7 +922,10 @@ const _mockAccounts = [
   _MockAccount(name: 'USD', currency: 'USD'),
 ];
 
+const _transferCategory = _MockCategory('Transferencia');
+
 const _mockCategories = [
+  _transferCategory,
   _MockCategory('Intereses'),
   _MockCategory('Comida'),
   _MockCategory('Transporte'),

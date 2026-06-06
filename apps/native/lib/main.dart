@@ -5,7 +5,6 @@ import 'package:app/config.dart';
 import 'package:app/database.dart';
 import 'package:app/screens/accounts.dart';
 import 'package:app/screens/activity.dart';
-import 'package:app/screens/create_account.dart';
 import 'package:app/screens/home.dart';
 import 'package:app/screens/insights.dart';
 import 'package:app/screens/login.dart';
