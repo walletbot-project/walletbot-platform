@@ -38,13 +38,11 @@ jobs:
             echo "VITE_CONVEX_SITE_URL=${{ vars.VITE_CONVEX_SITE_URL }}"
           } >> "$GITHUB_ENV"
 
-      # PRs get an isolated, ephemeral Convex preview deployment. This single step:
-      #   1. Creates/updates the preview deployment (named after the branch) and
-      #      captures its .convex.cloud URL via --cmd.
-      #   2. Sets the per-branch SITE_URL on that deployment so better-auth's
-      #      trustedOrigins / crossDomain accept the preview web origin.
-      #   3. Stages the VITE_* values for the web build (.convex.site is derived
-      #      from .convex.cloud).
+      # PRs get an isolated, ephemeral Convex preview deployment. Creates/updates
+      # the preview (named after the branch), captures its .convex.cloud URL, and
+      # stages the VITE_* values for the web build (.convex.site is derived from
+      # .convex.cloud). SITE_URL is set LATER, after the Cloudflare deploy reveals
+      # the real preview web origin.
       - name: Deploy Convex preview
         if: github.event_name == 'pull_request'
         working-directory: packages/backend
@@ -52,19 +50,14 @@ jobs:
           CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_PREVIEW_DEPLOY_KEY }}
         run: |
           set -euo pipefail
-          SITE="https://${{ github.head_ref }}.prev.walletbot.live"
-
           npx convex deploy \
             --preview-create "${{ github.head_ref }}" \
             --cmd-url-env-var-name CONVEX_URL_OUT \
             --cmd 'printf "%s" "$CONVEX_URL_OUT" > "$RUNNER_TEMP/convex_url"'
 
           URL="$(cat "$RUNNER_TEMP/convex_url")"
-          NAME="$(printf '%s' "$URL" | sed -E 's#https?://([^.]+)\..*#\1#')"
-          npx convex env set SITE_URL "$SITE" --deployment "$NAME"
-
           {
-            echo "VITE_SITE_URL=$SITE"
+            echo "CONVEX_PREVIEW_NAME=$(printf '%s' "$URL" | sed -E 's#https?://([^.]+)\..*#\1#')"
             echo "VITE_CONVEX_URL=$URL"
             echo "VITE_CONVEX_SITE_URL=${URL/.convex.cloud/.convex.site}"
           } >> "$GITHUB_ENV"
@@ -81,6 +74,20 @@ jobs:
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           command: pages deploy apps/web/dist --project-name=walletbot-platform --branch=${{ github.head_ref || 'main' }}
 
+      # Point the preview backend's SITE_URL at the real Cloudflare branch-alias
+      # origin (now known) so better-auth trustedOrigins / crossDomain accept the
+      # browser's auth requests — otherwise the preview loads but CORS-fails. The
+      # alias is stable per branch and is the URL the PR comment links to.
+      - name: Set Convex preview SITE_URL
+        if: github.event_name == 'pull_request'
+        working-directory: packages/backend
+        env:
+          CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_PREVIEW_DEPLOY_KEY }}
+        run: |
+          set -euo pipefail
+          npx convex env set SITE_URL "${{ steps.deploy.outputs.pages-deployment-alias-url }}" \
+            --deployment "$CONVEX_PREVIEW_NAME"
+
       - name: Comment preview URL on PR
         if: github.event_name == 'pull_request'
         uses: actions/github-script@v7
@@ -90,10 +97,10 @@ jobs:
               issue_number: context.issue.number,
               owner: context.repo.owner,
               repo: context.repo.repo,
-              body: `🚀 Preview deployed to: ${process.env.DEPLOYMENT_URL}`
+              body: `🚀 Preview deployed to: ${process.env.DEPLOYMENT_URL}\n\n_Use this stable branch-alias URL — per-commit \`<hash>.pages.dev\` URLs are not trusted by the backend and will CORS-fail._`
             })
         env:
-          # The branch preview lives at the custom domain (the same value as
-          # VITE_SITE_URL), not the per-commit *.pages.dev deploy URL that
-          # `steps.deploy.outputs.deployment-url` returns.
-          DEPLOYMENT_URL: https://${{ github.head_ref }}.prev.walletbot.live
+          # The stable branch-alias URL Cloudflare issued (matches the Convex
+          # SITE_URL set above). NOT the per-commit deployment-url, and NOT the
+          # unconfigured *.prev.walletbot.live domain.
+          DEPLOYMENT_URL: ${{ steps.deploy.outputs.pages-deployment-alias-url }}
