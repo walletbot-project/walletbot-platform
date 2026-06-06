@@ -931,7 +931,7 @@ class _AmountField extends StatelessWidget {
         labelText: label,
         border: OutlineInputBorder(),
         suffixIcon: IconButton(
-          onPressed: enabled ? controller.clear : null,
+          onPressed: enabled ? () => _setAmountToZero(controller) : null,
           icon: const Icon(Icons.cancel_outlined),
         ),
       ),
@@ -1129,6 +1129,13 @@ const _mockTags = [
 
 double? _parseAmount(String value) {
   return double.tryParse(value.trim().replaceAll(',', '.'));
+}
+
+void _setAmountToZero(TextEditingController controller) {
+  controller.value = const TextEditingValue(
+    text: '0',
+    selection: TextSelection.collapsed(offset: 1),
+  );
 }
 
 String? _emptyToNull(String value) {

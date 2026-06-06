@@ -57,7 +57,6 @@ const typeConfig: Record<
         title: string
         description: string
         amountLabel: string
-        amountColor: string
         selectedColor: string
     }
 > = {
@@ -66,7 +65,6 @@ const typeConfig: Record<
         title: 'Añadir ingreso',
         description: 'Carga manualmente el dinero que entra a una cuenta.',
         amountLabel: 'Monto',
-        amountColor: 'text-[#35D83B]',
         selectedColor: 'bg-[#5EF06A]',
     },
     expense: {
@@ -74,7 +72,6 @@ const typeConfig: Record<
         title: 'Añadir gasto',
         description: 'Carga manualmente el dinero que sale de una cuenta.',
         amountLabel: 'Monto',
-        amountColor: 'text-[#FF3744]',
         selectedColor: 'bg-[#FF3744] text-white',
     },
     transfer: {
@@ -82,7 +79,6 @@ const typeConfig: Record<
         title: 'Añadir transferencia',
         description: 'Mueve dinero entre dos cuentas propias.',
         amountLabel: 'Sale',
-        amountColor: 'text-black',
         selectedColor: 'bg-[#6DE7D8]',
     },
 }
@@ -116,8 +112,8 @@ function normalizeAmountInput(value: string) {
 
 export function AddManual() {
     const [type, setType] = useState<MovementType>('income')
-    const [amount, setAmount] = useState('')
-    const [destinationAmount, setDestinationAmount] = useState('')
+    const [amount, setAmount] = useState('0')
+    const [destinationAmount, setDestinationAmount] = useState('0')
     const [sourceAmountTouched, setSourceAmountTouched] = useState(false)
     const [destinationAmountTouched, setDestinationAmountTouched] =
         useState(false)
@@ -140,8 +136,8 @@ export function AddManual() {
 
     const resetFields = (nextType = type) => {
         const sourceId = accounts[0]?.id ?? ''
-        setAmount('')
-        setDestinationAmount('')
+        setAmount('0')
+        setDestinationAmount('0')
         setSourceAmountTouched(false)
         setDestinationAmountTouched(false)
         setTitle('')
@@ -346,6 +342,12 @@ export function AddManual() {
                                     id="amount"
                                     inputMode="decimal"
                                     value={amount}
+                                    onFocus={() => {
+                                        if (amount === '0') setAmount('')
+                                    }}
+                                    onBlur={() => {
+                                        if (amount.trim() === '') setAmount('0')
+                                    }}
                                     onChange={(event) =>
                                         setAmount(
                                             normalizeAmountInput(
@@ -354,10 +356,7 @@ export function AddManual() {
                                         )
                                     }
                                     placeholder="0,00"
-                                    className={cn(
-                                        'h-16 rounded-xl border-[#D9D0D6] bg-white pr-20 text-center text-4xl font-black shadow-sm',
-                                        config.amountColor,
-                                    )}
+                                    className="h-16 rounded-xl border-[#D9D0D6] bg-white px-20 text-center text-4xl font-normal text-black shadow-sm"
                                     required
                                 />
                                 <span className="absolute top-1/2 right-4 -translate-y-1/2 text-sm font-bold text-muted-foreground">
@@ -565,16 +564,22 @@ function TransferSide({
 }) {
     return (
         <div className="space-y-3">
-            <Label className="block text-center text-base font-black text-black">
+            <Label className="block text-base font-black text-black">
                 {label}
             </Label>
             <div className="relative">
                 <Input
                     inputMode="decimal"
                     value={amount}
+                    onFocus={() => {
+                        if (amount === '0') onAmountChange('')
+                    }}
+                    onBlur={() => {
+                        if (amount.trim() === '') onAmountChange('0')
+                    }}
                     onChange={(event) => onAmountChange(event.target.value)}
                     placeholder="0,00"
-                    className="h-13 rounded-xl border-[#D9D0D6] bg-white pr-14 text-center text-2xl font-black text-black shadow-sm"
+                    className="h-13 rounded-xl border-[#D9D0D6] bg-white px-14 text-center text-2xl font-normal text-black shadow-sm"
                     required
                 />
                 <span className="absolute top-1/2 right-3 -translate-y-1/2 text-xs font-bold text-muted-foreground">
