@@ -21,3 +21,5 @@ Wallet Bot es un gestor de gastos personales diseñado para simplificar la admin
 - `packages/shared/src/tools/definitions.ts` — tool schemas and definitions, shared between frontend and backend
 - `apps/web/src/hooks/use-voice.ts` — main logic for voice agent
 - `apps/web/src/lib/agent-tools/executors.ts` — implementations of tool calls for the agent
+
+DO NOT MERGE THIS BRANCH PLEASE
