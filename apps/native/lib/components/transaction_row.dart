@@ -95,7 +95,7 @@ class _DateCheckIcon extends StatelessWidget {
 }
 
 String _formatSignedAmount(int cents, String currencySymbol) {
-  final sign = cents < 0 ? '-' : '+';
+  final sign = cents < 0 ? '-' : (cents > 0 ? '+' : '');
   final absCents = cents.abs();
   final whole = absCents ~/ 100;
   final fraction = (absCents % 100).toString().padLeft(2, '0');
