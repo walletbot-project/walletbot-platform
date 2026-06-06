@@ -82,7 +82,8 @@ class _ActivityScreenState extends State<ActivityScreen> {
 
     final search = _filters.searchQuery.trim();
     if (search.isNotEmpty) {
-      final pattern = '%${search.toLowerCase()}%';
+      final escaped = search.replaceAll('%', '%%').replaceAll('_', '__');
+      final pattern = '%${escaped.toLowerCase()}%';
       query.where((t) => t.name.lower().like(pattern));
     }
 
