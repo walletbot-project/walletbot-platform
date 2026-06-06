@@ -929,7 +929,10 @@ class _AmountField extends StatelessWidget {
       decoration: InputDecoration(
         labelText: label,
         border: OutlineInputBorder(),
-        suffixIcon: const Icon(Icons.cancel_outlined),
+        suffixIcon: IconButton(
+          onPressed: enabled ? controller.clear : null,
+          icon: const Icon(Icons.cancel_outlined),
+        ),
       ),
       validator: (value) {
         final text = value?.trim() ?? '';
