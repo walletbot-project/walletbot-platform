@@ -93,4 +93,7 @@ jobs:
               body: `🚀 Preview deployed to: ${process.env.DEPLOYMENT_URL}`
             })
         env:
-          DEPLOYMENT_URL: ${{ steps.deploy.outputs.deployment-url }}
+          # The branch preview lives at the custom domain (the same value as
+          # VITE_SITE_URL), not the per-commit *.pages.dev deploy URL that
+          # `steps.deploy.outputs.deployment-url` returns.
+          DEPLOYMENT_URL: https://${{ github.head_ref }}.prev.walletbot.live
