@@ -107,5 +107,5 @@ String _formatAmount(int cents, String currencySymbol) {
     }
     buffer.write(digits[i]);
   }
-  return '$currencySymbol$sign$buffer';
+  return '$sign$currencySymbol$buffer';
 }
