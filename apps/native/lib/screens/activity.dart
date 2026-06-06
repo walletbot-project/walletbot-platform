@@ -187,37 +187,12 @@ class _ActivityScreenState extends State<ActivityScreen> {
     final db = context.watch<AppDatabase>();
 
     return Scaffold(
+      appBar: AppBar(title: const Text('Actividad')),
       body: SafeArea(
         child: CustomScrollView(
           controller: _scrollController,
           slivers: [
-            const SliverToBoxAdapter(
-              child: Padding(
-                padding: EdgeInsets.fromLTRB(16, 16, 16, 16),
-                child: Center(
-                  child: Text('Actividad', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
-                ),
-              ),
-            ),
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: StreamBuilder<_Aggregates>(
-                  stream: _monthlyAggregatesStream,
-                  builder: (context, snapshot) {
-                    final data = snapshot.data;
-                    if (data != null) _lastAggregates = data;
-                    final agg = data ?? _lastAggregates ?? const _Aggregates.zero();
-                    return ActivitySummaryCard(
-                      incomeCents: agg.incomeCents,
-                      expensesCents: agg.expensesCents,
-                      balanceCents: agg.balanceCents,
-                    );
-                  },
-                ),
-              ),
-            ),
-            const SliverToBoxAdapter(child: SizedBox(height: 20)),
+            const SliverToBoxAdapter(child: SizedBox(height: 8)),
             SliverToBoxAdapter(
               child: TransactionFiltersBar(filters: _filters, onChanged: _onFiltersChanged),
             ),
