@@ -1,3 +1,6 @@
+import 'dart:async';
+
+import 'package:app/components/color_utils.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -46,18 +49,19 @@ class TransactionFormScreen extends StatefulWidget {
 
 class _TransactionFormScreenState extends State<TransactionFormScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _amountController = TextEditingController();
-  final _destinationAmountController = TextEditingController();
-  final _titleController = TextEditingController();
-  final _descriptionController = TextEditingController();
-  final _tagController = TextEditingController();
+  TextEditingController _amountController = TextEditingController();
+  TextEditingController _destinationAmountController = TextEditingController();
+  TextEditingController _titleController = TextEditingController();
+  TextEditingController _descriptionController = TextEditingController();
+  TextEditingController _tagController = TextEditingController();
 
   TransactionFormType _type = TransactionFormType.income;
   _MockAccount? _selectedAccount;
   _MockAccount? _selectedDestinationAccount;
   _MockCategory? _selectedCategory;
   DateTime _selectedDate = DateTime.now();
-  final List<String> _tags = [];
+  final List<_FormTag> _knownTags = List.of(_mockTags);
+  final List<_FormTag> _tags = [];
   bool _isSaving = false;
   bool _isRecurringExpense = false;
   bool _updatingTransferAmounts = false;
@@ -75,7 +79,8 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
   }
 
   Future<void> _pickDate() async {
-    _commitInlineEditing();
+    await _commitInlineEditing();
+    if (!mounted) return;
     final picked = await showDatePicker(
       context: context,
       initialDate: _selectedDate,
@@ -87,7 +92,8 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
   }
 
   Future<void> _pickAccount({bool destination = false}) async {
-    _commitInlineEditing();
+    await _commitInlineEditing();
+    if (!mounted) return;
     final selectedAccount = destination
         ? _selectedDestinationAccount
         : _selectedAccount;
@@ -126,7 +132,8 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
   }
 
   Future<void> _pickCategory() async {
-    _commitInlineEditing();
+    await _commitInlineEditing();
+    if (!mounted) return;
     final selection = await showModalBottomSheet<_CategorySelection>(
       context: context,
       showDragHandle: true,
@@ -165,27 +172,124 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
     setState(() => _selectedCategory = selection.category);
   }
 
-  void _addTag(String rawValue) {
+  Future<void> _addTag(String rawValue) async {
     final name = rawValue.trim();
     if (name.isEmpty) return;
-    final exists = _tags.any((tag) => tag.toLowerCase() == name.toLowerCase());
-    if (exists) {
+    final alreadySelected = _tags.any(
+      (tag) => tag.name.toLowerCase() == name.toLowerCase(),
+    );
+    if (alreadySelected) {
       _tagController.clear();
       return;
     }
+
+    final existingTag = _findKnownTag(name);
+    if (existingTag != null) {
+      setState(() {
+        _tags.add(existingTag);
+        _tagController.clear();
+      });
+      return;
+    }
+
+    final color = await _pickNewTagColor(name);
+    if (color == null || !mounted) return;
+    final tag = _FormTag(name: name, color: color);
     setState(() {
-      _tags.add(name);
+      _knownTags.add(tag);
+      _tags.add(tag);
       _tagController.clear();
     });
   }
 
-  void _commitInlineEditing() {
-    _addTag(_tagController.text);
+  Future<void> _commitInlineEditing() async {
+    await _addTag(_tagController.text);
     FocusManager.instance.primaryFocus?.unfocus();
   }
 
+  _FormTag? _findKnownTag(String name) {
+    final normalized = name.toLowerCase();
+    for (final tag in _knownTags) {
+      if (tag.name.toLowerCase() == normalized) return tag;
+    }
+    return null;
+  }
+
+  Future<void> _pickExistingTag() async {
+    await _commitInlineEditing();
+    if (!mounted) return;
+    // TODO: cargar los tags actuales desde almacenamiento local/sync antes de
+    // mostrar esta opcion de etiquetas.
+    final availableTags = _knownTags
+        .where(
+          (tag) => !_tags.any(
+            (selected) => selected.name.toLowerCase() == tag.name.toLowerCase(),
+          ),
+        )
+        .toList();
+    final tag = await showModalBottomSheet<_FormTag>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) {
+        return SafeArea(
+          child: ListView(
+            shrinkWrap: true,
+            children: [
+              if (availableTags.isEmpty)
+                const ListTile(title: Text('No hay etiquetas disponibles')),
+              for (final tag in availableTags)
+                ListTile(
+                  leading: CircleAvatar(
+                    backgroundColor: tag.color,
+                    radius: 12,
+                    child: const SizedBox.shrink(),
+                  ),
+                  title: Text(tag.name),
+                  onTap: () => Navigator.pop(context, tag),
+                ),
+            ],
+          ),
+        );
+      },
+    );
+    if (tag == null || !mounted) return;
+    setState(() => _tags.add(tag));
+  }
+
+  Future<Color?> _pickNewTagColor(String name) {
+    var selectedColor = tagDefaultColor;
+    return showDialog<Color>(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              title: Text('Color de "$name"'),
+              content: _TagColorPicker(
+                selected: selectedColor,
+                onChanged: (color) =>
+                    setDialogState(() => selectedColor = color),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Cancelar'),
+                ),
+                TextButton(
+                  onPressed: () => Navigator.pop(context, selectedColor),
+                  child: const Text('Crear'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
   Future<void> _submit() async {
-    _commitInlineEditing();
+    await _commitInlineEditing();
+    if (!mounted) return;
     if (!(_formKey.currentState?.validate() ?? false)) return;
     final account = _selectedAccount;
     if (account == null) {
@@ -244,7 +348,7 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
             : _titleController.text.trim(),
         description: _emptyToNull(_descriptionController.text),
         categoryName: _selectedCategory?.name,
-        tags: List.unmodifiable(_tags),
+        tags: List.unmodifiable(_tags.map((tag) => tag.name)),
       );
 
       if (!mounted) return;
@@ -324,6 +428,7 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
               const SizedBox(height: 36),
               if (_type == TransactionFormType.transfer)
                 _TransferBlock(
+                  key: ValueKey(_type),
                   sourceAccount: _selectedAccount,
                   destinationAccount: _selectedDestinationAccount,
                   amountController: _amountController,
@@ -387,6 +492,7 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
               if (_type != TransactionFormType.transfer) ...[
                 const SizedBox(height: 18),
                 _AmountField(
+                  key: ValueKey('amount-${_type.name}'),
                   controller: _amountController,
                   label: 'Monto',
                   enabled: !_isSaving,
@@ -445,17 +551,22 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
                 decoration: InputDecoration(
                   labelText: 'Etiquetas',
                   border: const OutlineInputBorder(),
+                  prefixIcon: IconButton(
+                    tooltip: 'Elegir etiqueta existente',
+                    onPressed: _isSaving ? null : _pickExistingTag,
+                    icon: const Icon(Icons.sell_rounded),
+                  ),
                   suffixIcon: IconButton(
                     onPressed: _isSaving
                         ? null
-                        : () => _addTag(_tagController.text),
+                        : () => unawaited(_addTag(_tagController.text)),
                     icon: const Icon(Icons.add_rounded),
                   ),
                 ),
-                onFieldSubmitted: _addTag,
+                onFieldSubmitted: (value) => unawaited(_addTag(value)),
                 onChanged: (value) {
                   if (value.endsWith(',')) {
-                    _addTag(value.substring(0, value.length - 1));
+                    unawaited(_addTag(value.substring(0, value.length - 1)));
                   }
                 },
               ),
@@ -467,9 +578,9 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
                   children: [
                     for (final tag in _tags)
                       InputChip(
-                        label: Text(tag),
-                        backgroundColor: const Color(0xFFFFF4BE),
-                        side: const BorderSide(color: Color(0xFFD7D0B8)),
+                        label: Text(tag.name),
+                        backgroundColor: tag.color,
+                        side: BorderSide(color: tag.color),
                         onDeleted: _isSaving
                             ? null
                             : () => setState(() => _tags.remove(tag)),
@@ -522,15 +633,39 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
   }
 
   void _changeType(TransactionFormType type) {
-    _commitInlineEditing();
+    FocusManager.instance.primaryFocus?.unfocus();
     setState(() {
       _type = type;
-      if (type == TransactionFormType.income) _isRecurringExpense = false;
-      if (type == TransactionFormType.transfer) {
-        _isRecurringExpense = false;
-        _selectedCategory ??= _transferCategory;
-        _mirrorSameCurrencyTransferAmount(_TransferAmountField.source);
-      }
+      _replaceEditableControllers();
+      _selectedCategory = type == TransactionFormType.transfer
+          ? _transferCategory
+          : null;
+      _tags.clear();
+      _isRecurringExpense = false;
+      _sourceAmountTouched = false;
+      _destinationAmountTouched = false;
+    });
+  }
+
+  void _replaceEditableControllers() {
+    final oldAmountController = _amountController;
+    final oldDestinationAmountController = _destinationAmountController;
+    final oldTitleController = _titleController;
+    final oldDescriptionController = _descriptionController;
+    final oldTagController = _tagController;
+
+    _amountController = TextEditingController();
+    _destinationAmountController = TextEditingController();
+    _titleController = TextEditingController();
+    _descriptionController = TextEditingController();
+    _tagController = TextEditingController();
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      oldAmountController.dispose();
+      oldDestinationAmountController.dispose();
+      oldTitleController.dispose();
+      oldDescriptionController.dispose();
+      oldTagController.dispose();
     });
   }
 
@@ -633,6 +768,7 @@ class _RecurringExpenseControl extends StatelessWidget {
 
 class _TransferBlock extends StatelessWidget {
   const _TransferBlock({
+    super.key,
     required this.sourceAccount,
     required this.destinationAccount,
     required this.amountController,
@@ -729,6 +865,7 @@ class _TransferSide extends StatelessWidget {
         ),
         const SizedBox(height: 8),
         TextFormField(
+          key: ValueKey('transfer-$label'),
           controller: amountController,
           enabled: enabled,
           textAlign: TextAlign.center,
@@ -771,6 +908,7 @@ class _TransferSide extends StatelessWidget {
 
 class _AmountField extends StatelessWidget {
   const _AmountField({
+    super.key,
     required this.controller,
     required this.label,
     required this.enabled,
@@ -802,6 +940,45 @@ class _AmountField extends StatelessWidget {
         }
         return null;
       },
+    );
+  }
+}
+
+class _TagColorPicker extends StatelessWidget {
+  const _TagColorPicker({required this.selected, required this.onChanged});
+
+  final Color selected;
+  final ValueChanged<Color> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Wrap(
+      spacing: 12,
+      runSpacing: 12,
+      children: [
+        for (final color in tagColorOptions)
+          InkWell(
+            borderRadius: BorderRadius.circular(24),
+            onTap: () => onChanged(color),
+            child: Container(
+              width: 42,
+              height: 42,
+              decoration: BoxDecoration(
+                color: color,
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: color == selected
+                      ? Theme.of(context).colorScheme.onSurface
+                      : Colors.transparent,
+                  width: 3,
+                ),
+              ),
+              child: color == selected
+                  ? const Icon(Icons.check_rounded, size: 20)
+                  : null,
+            ),
+          ),
+      ],
     );
   }
 }
@@ -908,6 +1085,13 @@ class _MockCategory {
   final String name;
 }
 
+class _FormTag {
+  const _FormTag({required this.name, required this.color});
+
+  final String name;
+  final Color color;
+}
+
 class _CategorySelection {
   const _CategorySelection.category(this.category);
 
@@ -931,6 +1115,12 @@ const _mockCategories = [
   _MockCategory('Transporte'),
   _MockCategory('Entretenimiento'),
   _MockCategory('Otros'),
+];
+
+const _mockTags = [
+  _FormTag(name: 'Ahorro', color: Color(0xFF42A5F5)),
+  _FormTag(name: 'Inversion', color: Color(0xFFFFCA28)),
+  _FormTag(name: 'Viaje', color: Color(0xFFAB47BC)),
 ];
 
 double? _parseAmount(String value) {
