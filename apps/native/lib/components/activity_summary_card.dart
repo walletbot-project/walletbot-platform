@@ -97,15 +97,17 @@ class _SummaryColumn extends StatelessWidget {
 }
 
 String _formatAmount(int cents, String currencySymbol) {
-  final whole = (cents / 100).round();
-  final sign = whole < 0 ? '-' : '';
-  final digits = whole.abs().toString();
+  final sign = cents < 0 ? '-' : '';
+  final absCents = cents.abs();
+  final whole = absCents ~/ 100;
+  final fraction = (absCents % 100).toString().padLeft(2, '0');
+  final digits = whole.toString();
   final buffer = StringBuffer();
   for (var i = 0; i < digits.length; i++) {
     if (i > 0 && (digits.length - i) % 3 == 0) {
-      buffer.write('.');
+      buffer.write(',');
     }
     buffer.write(digits[i]);
   }
-  return '$sign$currencySymbol$buffer';
+  return '$sign$currencySymbol$buffer.$fraction';
 }
