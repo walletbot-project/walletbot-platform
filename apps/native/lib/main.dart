@@ -173,8 +173,8 @@ class _AppMainState extends State<AppMain> {
         destinations: [
           NavigationDestination(icon: Icon(Icons.home_rounded), label: "Home"),
           NavigationDestination(
-            icon: Icon(Icons.list_rounded),
-            label: "Activity",
+            icon: Icon(Icons.calendar_view_month_rounded),
+            label: "Actividad",
           ),
           NavigationDestination(
             icon: Icon(Icons.account_balance_rounded),
