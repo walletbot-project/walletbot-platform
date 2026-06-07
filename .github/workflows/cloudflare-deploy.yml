@@ -28,20 +28,53 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
-      - name: Set environment variables
+      # Production build (push to main) targets the production Convex deployment.
+      - name: Configure production environment
+        if: github.event_name == 'push'
         run: |
-          if [ "${{ github.event_name }}" = "push" ] && [ "${{ github.ref }}" = "refs/heads/main" ]; then
-            echo "VITE_SITE_URL=https://app.walletbot.live" >> $GITHUB_ENV
-          else
-            echo "VITE_SITE_URL=https://${{ github.head_ref }}.prev.walletbot.live" >> $GITHUB_ENV
-          fi
+          {
+            echo "VITE_SITE_URL=https://app.walletbot.live"
+            echo "VITE_CONVEX_URL=${{ vars.VITE_CONVEX_URL }}"
+            echo "VITE_CONVEX_SITE_URL=${{ vars.VITE_CONVEX_SITE_URL }}"
+          } >> "$GITHUB_ENV"
+
+      # PRs get an isolated, ephemeral Convex preview deployment. `convex deploy`
+      # with a preview deploy key creates/updates the deployment named after the
+      # branch; --cmd runs with the new deployment's .convex.cloud URL exposed so we
+      # can capture it and point the web build at it.
+      - name: Deploy Convex preview
+        if: github.event_name == 'pull_request'
+        working-directory: packages/backend
+        env:
+          CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_PREVIEW_DEPLOY_KEY }}
+        run: |
+          npx convex deploy \
+            --preview-create "${{ github.head_ref }}" \
+            --cmd-url-env-var-name CONVEX_URL_OUT \
+            --cmd 'echo "PREVIEW_CONVEX_URL=$CONVEX_URL_OUT" >> "$GITHUB_ENV"'
+
+      # Set the per-branch SITE_URL on the freshly created preview deployment
+      # (targeted by name, extracted from the .convex.cloud URL) and stage the
+      # VITE_* values for the web build. The .convex.site URL is derived from the
+      # .convex.cloud URL.
+      - name: Configure Convex preview
+        if: github.event_name == 'pull_request'
+        working-directory: packages/backend
+        env:
+          CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_PREVIEW_DEPLOY_KEY }}
+        run: |
+          SITE="https://${{ github.head_ref }}.prev.walletbot.live"
+          NAME="$(printf '%s' "$PREVIEW_CONVEX_URL" | sed -E 's#https?://([^.]+)\..*#\1#')"
+          npx convex env set SITE_URL "$SITE" --deployment "$NAME"
+          {
+            echo "VITE_SITE_URL=$SITE"
+            echo "VITE_CONVEX_URL=$PREVIEW_CONVEX_URL"
+            echo "VITE_CONVEX_SITE_URL=${PREVIEW_CONVEX_URL/.convex.cloud/.convex.site}"
+          } >> "$GITHUB_ENV"
 
       - name: Build web app
         working-directory: apps/web
         run: pnpm run build
-        env:
-          VITE_CONVEX_URL: ${{ vars.VITE_CONVEX_URL }}
-          VITE_CONVEX_SITE_URL: ${{ vars.VITE_CONVEX_SITE_URL }}
 
       - name: Deploy to Cloudflare Pages
         id: deploy
