@@ -1175,6 +1175,21 @@ class $TransactionsTable extends Transactions
     type: DriftSqlType.string,
     requiredDuringInsert: true,
   );
+  static const VerificationMeta _dateConfirmedMeta = const VerificationMeta(
+    'dateConfirmed',
+  );
+  @override
+  late final GeneratedColumn<bool> dateConfirmed = GeneratedColumn<bool>(
+    'date_confirmed',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("date_confirmed" IN (0, 1))',
+    ),
+    defaultValue: const Constant(true),
+  );
   static const VerificationMeta _toAccountIdMeta = const VerificationMeta(
     'toAccountId',
   );
@@ -1292,6 +1307,7 @@ class $TransactionsTable extends Transactions
     categoryId,
     amount,
     currency,
+    dateConfirmed,
     toAccountId,
     toAmount,
     toCurrency,
@@ -1391,6 +1407,15 @@ class $TransactionsTable extends Transactions
       );
     } else if (isInserting) {
       context.missing(_currencyMeta);
+    }
+    if (data.containsKey('date_confirmed')) {
+      context.handle(
+        _dateConfirmedMeta,
+        dateConfirmed.isAcceptableOrUnknown(
+          data['date_confirmed']!,
+          _dateConfirmedMeta,
+        ),
+      );
     }
     if (data.containsKey('to_account_id')) {
       context.handle(
@@ -1508,6 +1533,10 @@ class $TransactionsTable extends Transactions
         DriftSqlType.string,
         data['${effectivePrefix}currency'],
       )!,
+      dateConfirmed: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}date_confirmed'],
+      )!,
       toAccountId: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}to_account_id'],
@@ -1564,6 +1593,7 @@ class Transaction extends DataClass implements Insertable<Transaction> {
   final String categoryId;
   final BigInt amount;
   final String currency;
+  final bool dateConfirmed;
   final String? toAccountId;
   final BigInt? toAmount;
   final String? toCurrency;
@@ -1584,6 +1614,7 @@ class Transaction extends DataClass implements Insertable<Transaction> {
     required this.categoryId,
     required this.amount,
     required this.currency,
+    required this.dateConfirmed,
     this.toAccountId,
     this.toAmount,
     this.toCurrency,
@@ -1609,6 +1640,7 @@ class Transaction extends DataClass implements Insertable<Transaction> {
     map['category_id'] = Variable<String>(categoryId);
     map['amount'] = Variable<BigInt>(amount);
     map['currency'] = Variable<String>(currency);
+    map['date_confirmed'] = Variable<bool>(dateConfirmed);
     if (!nullToAbsent || toAccountId != null) {
       map['to_account_id'] = Variable<String>(toAccountId);
     }
@@ -1645,6 +1677,7 @@ class Transaction extends DataClass implements Insertable<Transaction> {
       categoryId: Value(categoryId),
       amount: Value(amount),
       currency: Value(currency),
+      dateConfirmed: Value(dateConfirmed),
       toAccountId: toAccountId == null && nullToAbsent
           ? const Value.absent()
           : Value(toAccountId),
@@ -1683,6 +1716,7 @@ class Transaction extends DataClass implements Insertable<Transaction> {
       categoryId: serializer.fromJson<String>(json['categoryId']),
       amount: serializer.fromJson<BigInt>(json['amount']),
       currency: serializer.fromJson<String>(json['currency']),
+      dateConfirmed: serializer.fromJson<bool>(json['dateConfirmed']),
       toAccountId: serializer.fromJson<String?>(json['toAccountId']),
       toAmount: serializer.fromJson<BigInt?>(json['toAmount']),
       toCurrency: serializer.fromJson<String?>(json['toCurrency']),
@@ -1708,6 +1742,7 @@ class Transaction extends DataClass implements Insertable<Transaction> {
       'categoryId': serializer.toJson<String>(categoryId),
       'amount': serializer.toJson<BigInt>(amount),
       'currency': serializer.toJson<String>(currency),
+      'dateConfirmed': serializer.toJson<bool>(dateConfirmed),
       'toAccountId': serializer.toJson<String?>(toAccountId),
       'toAmount': serializer.toJson<BigInt?>(toAmount),
       'toCurrency': serializer.toJson<String?>(toCurrency),
@@ -1731,6 +1766,7 @@ class Transaction extends DataClass implements Insertable<Transaction> {
     String? categoryId,
     BigInt? amount,
     String? currency,
+    bool? dateConfirmed,
     Value<String?> toAccountId = const Value.absent(),
     Value<BigInt?> toAmount = const Value.absent(),
     Value<String?> toCurrency = const Value.absent(),
@@ -1751,6 +1787,7 @@ class Transaction extends DataClass implements Insertable<Transaction> {
     categoryId: categoryId ?? this.categoryId,
     amount: amount ?? this.amount,
     currency: currency ?? this.currency,
+    dateConfirmed: dateConfirmed ?? this.dateConfirmed,
     toAccountId: toAccountId.present ? toAccountId.value : this.toAccountId,
     toAmount: toAmount.present ? toAmount.value : this.toAmount,
     toCurrency: toCurrency.present ? toCurrency.value : this.toCurrency,
@@ -1777,6 +1814,9 @@ class Transaction extends DataClass implements Insertable<Transaction> {
           : this.categoryId,
       amount: data.amount.present ? data.amount.value : this.amount,
       currency: data.currency.present ? data.currency.value : this.currency,
+      dateConfirmed: data.dateConfirmed.present
+          ? data.dateConfirmed.value
+          : this.dateConfirmed,
       toAccountId: data.toAccountId.present
           ? data.toAccountId.value
           : this.toAccountId,
@@ -1810,6 +1850,7 @@ class Transaction extends DataClass implements Insertable<Transaction> {
           ..write('categoryId: $categoryId, ')
           ..write('amount: $amount, ')
           ..write('currency: $currency, ')
+          ..write('dateConfirmed: $dateConfirmed, ')
           ..write('toAccountId: $toAccountId, ')
           ..write('toAmount: $toAmount, ')
           ..write('toCurrency: $toCurrency, ')
@@ -1835,6 +1876,7 @@ class Transaction extends DataClass implements Insertable<Transaction> {
     categoryId,
     amount,
     currency,
+    dateConfirmed,
     toAccountId,
     toAmount,
     toCurrency,
@@ -1859,6 +1901,7 @@ class Transaction extends DataClass implements Insertable<Transaction> {
           other.categoryId == this.categoryId &&
           other.amount == this.amount &&
           other.currency == this.currency &&
+          other.dateConfirmed == this.dateConfirmed &&
           other.toAccountId == this.toAccountId &&
           other.toAmount == this.toAmount &&
           other.toCurrency == this.toCurrency &&
@@ -1881,6 +1924,7 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
   final Value<String> categoryId;
   final Value<BigInt> amount;
   final Value<String> currency;
+  final Value<bool> dateConfirmed;
   final Value<String?> toAccountId;
   final Value<BigInt?> toAmount;
   final Value<String?> toCurrency;
@@ -1902,6 +1946,7 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
     this.categoryId = const Value.absent(),
     this.amount = const Value.absent(),
     this.currency = const Value.absent(),
+    this.dateConfirmed = const Value.absent(),
     this.toAccountId = const Value.absent(),
     this.toAmount = const Value.absent(),
     this.toCurrency = const Value.absent(),
@@ -1924,6 +1969,7 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
     required String categoryId,
     required BigInt amount,
     required String currency,
+    this.dateConfirmed = const Value.absent(),
     this.toAccountId = const Value.absent(),
     this.toAmount = const Value.absent(),
     this.toCurrency = const Value.absent(),
@@ -1956,6 +2002,7 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
     Expression<String>? categoryId,
     Expression<BigInt>? amount,
     Expression<String>? currency,
+    Expression<bool>? dateConfirmed,
     Expression<String>? toAccountId,
     Expression<BigInt>? toAmount,
     Expression<String>? toCurrency,
@@ -1978,6 +2025,7 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
       if (categoryId != null) 'category_id': categoryId,
       if (amount != null) 'amount': amount,
       if (currency != null) 'currency': currency,
+      if (dateConfirmed != null) 'date_confirmed': dateConfirmed,
       if (toAccountId != null) 'to_account_id': toAccountId,
       if (toAmount != null) 'to_amount': toAmount,
       if (toCurrency != null) 'to_currency': toCurrency,
@@ -2002,6 +2050,7 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
     Value<String>? categoryId,
     Value<BigInt>? amount,
     Value<String>? currency,
+    Value<bool>? dateConfirmed,
     Value<String?>? toAccountId,
     Value<BigInt?>? toAmount,
     Value<String?>? toCurrency,
@@ -2024,6 +2073,7 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
       categoryId: categoryId ?? this.categoryId,
       amount: amount ?? this.amount,
       currency: currency ?? this.currency,
+      dateConfirmed: dateConfirmed ?? this.dateConfirmed,
       toAccountId: toAccountId ?? this.toAccountId,
       toAmount: toAmount ?? this.toAmount,
       toCurrency: toCurrency ?? this.toCurrency,
@@ -2069,6 +2119,9 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
     }
     if (currency.present) {
       map['currency'] = Variable<String>(currency.value);
+    }
+    if (dateConfirmed.present) {
+      map['date_confirmed'] = Variable<bool>(dateConfirmed.value);
     }
     if (toAccountId.present) {
       map['to_account_id'] = Variable<String>(toAccountId.value);
@@ -2116,6 +2169,7 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
           ..write('categoryId: $categoryId, ')
           ..write('amount: $amount, ')
           ..write('currency: $currency, ')
+          ..write('dateConfirmed: $dateConfirmed, ')
           ..write('toAccountId: $toAccountId, ')
           ..write('toAmount: $toAmount, ')
           ..write('toCurrency: $toCurrency, ')
@@ -4511,6 +4565,7 @@ typedef $$TransactionsTableCreateCompanionBuilder =
       required String categoryId,
       required BigInt amount,
       required String currency,
+      Value<bool> dateConfirmed,
       Value<String?> toAccountId,
       Value<BigInt?> toAmount,
       Value<String?> toCurrency,
@@ -4534,6 +4589,7 @@ typedef $$TransactionsTableUpdateCompanionBuilder =
       Value<String> categoryId,
       Value<BigInt> amount,
       Value<String> currency,
+      Value<bool> dateConfirmed,
       Value<String?> toAccountId,
       Value<BigInt?> toAmount,
       Value<String?> toCurrency,
@@ -4602,6 +4658,11 @@ class $$TransactionsTableFilterComposer
 
   ColumnFilters<String> get currency => $composableBuilder(
     column: $table.currency,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get dateConfirmed => $composableBuilder(
+    column: $table.dateConfirmed,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -4710,6 +4771,11 @@ class $$TransactionsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<bool> get dateConfirmed => $composableBuilder(
+    column: $table.dateConfirmed,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get toAccountId => $composableBuilder(
     column: $table.toAccountId,
     builder: (column) => ColumnOrderings(column),
@@ -4799,6 +4865,11 @@ class $$TransactionsTableAnnotationComposer
   GeneratedColumn<String> get currency =>
       $composableBuilder(column: $table.currency, builder: (column) => column);
 
+  GeneratedColumn<bool> get dateConfirmed => $composableBuilder(
+    column: $table.dateConfirmed,
+    builder: (column) => column,
+  );
+
   GeneratedColumn<String> get toAccountId => $composableBuilder(
     column: $table.toAccountId,
     builder: (column) => column,
@@ -4876,6 +4947,7 @@ class $$TransactionsTableTableManager
                 Value<String> categoryId = const Value.absent(),
                 Value<BigInt> amount = const Value.absent(),
                 Value<String> currency = const Value.absent(),
+                Value<bool> dateConfirmed = const Value.absent(),
                 Value<String?> toAccountId = const Value.absent(),
                 Value<BigInt?> toAmount = const Value.absent(),
                 Value<String?> toCurrency = const Value.absent(),
@@ -4897,6 +4969,7 @@ class $$TransactionsTableTableManager
                 categoryId: categoryId,
                 amount: amount,
                 currency: currency,
+                dateConfirmed: dateConfirmed,
                 toAccountId: toAccountId,
                 toAmount: toAmount,
                 toCurrency: toCurrency,
@@ -4920,6 +4993,7 @@ class $$TransactionsTableTableManager
                 required String categoryId,
                 required BigInt amount,
                 required String currency,
+                Value<bool> dateConfirmed = const Value.absent(),
                 Value<String?> toAccountId = const Value.absent(),
                 Value<BigInt?> toAmount = const Value.absent(),
                 Value<String?> toCurrency = const Value.absent(),
@@ -4941,6 +5015,7 @@ class $$TransactionsTableTableManager
                 categoryId: categoryId,
                 amount: amount,
                 currency: currency,
+                dateConfirmed: dateConfirmed,
                 toAccountId: toAccountId,
                 toAmount: toAmount,
                 toCurrency: toCurrency,

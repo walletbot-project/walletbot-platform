@@ -180,6 +180,7 @@ class PullPageMerger {
       description: Value(r['description'] as String?),
       status: Value(r['status'] as String),
       date: Value(_asBigInt(r['date'])),
+      dateConfirmed: Value(r['dateConfirmed'] as bool? ?? true),
       accountId: Value(r['accountId'] as String),
       categoryId: Value(r['categoryId'] as String),
       amount: Value(_asBigInt(r['amount'])),

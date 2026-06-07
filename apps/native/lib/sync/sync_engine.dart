@@ -530,6 +530,7 @@ class SyncEngine extends ChangeNotifier {
         if (row.description != null) 'description': row.description,
         'status': row.status,
         'date': row.date,
+        'dateConfirmed': row.dateConfirmed,
         'accountId': row.accountId,
         'categoryId': row.categoryId,
         'amount': row.amount,
