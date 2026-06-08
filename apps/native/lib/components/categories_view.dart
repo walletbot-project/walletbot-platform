@@ -1,3 +1,4 @@
+import 'package:app/categories/category_writes.dart';
 import 'package:app/database.dart';
 import 'package:app/components/insight_count_models.dart';
 import 'package:app/sync/local_writes.dart';
@@ -140,7 +141,7 @@ class _CategoryDialogState extends State<_CategoryDialog> {
       if (category != null) {
         await _updateCategory(widget.db, category.id, name);
       } else {
-        await _createCategory(widget.db, name);
+        await createLocalCategory(widget.db, name: name);
       }
     }
     navigator.pop(_CategoryDialogAction.saved);
@@ -175,44 +176,31 @@ class _CategoryDialogState extends State<_CategoryDialog> {
   }
 }
 
-Future<void> _createCategory(AppDatabase db, String name) async {
-  final now = BigInt.from(DateTime.now().millisecondsSinceEpoch);
-  await db
-      .into(db.categories)
-      .insert(
-        CategoriesCompanion.insert(
-          id: DateTime.now().microsecondsSinceEpoch.toString(),
-          name: name,
-          createdAt: now,
-          updatedAt: now,
-          dirty: const Value(true),
-        ),
-      );
-}
-
 Future<void> _updateCategory(AppDatabase db, String id, String name) async {
   final now = BigInt.from(DateTime.now().millisecondsSinceEpoch);
-  await (db.update(db.categories)..where((category) => category.id.equals(id)))
-      .write(
-        CategoriesCompanion(
-          name: Value(name),
-          updatedAt: Value(now),
-          dirty: const Value(true),
-        ),
-      );
+  await (db.update(
+    db.categories,
+  )..where((category) => category.id.equals(id))).write(
+    CategoriesCompanion(
+      name: Value(name),
+      updatedAt: Value(now),
+      dirty: const Value(true),
+    ),
+  );
 }
 
 Future<void> _deleteCategory(AppDatabase db, String id) async {
   final now = BigInt.from(DateTime.now().millisecondsSinceEpoch);
   await db.transaction(() async {
-    await (db.update(db.categories)..where((category) => category.id.equals(id)))
-        .write(
-          CategoriesCompanion(
-            archived: const Value(true),
-            updatedAt: Value(now),
-            dirty: const Value(true),
-          ),
-        );
+    await (db.update(
+      db.categories,
+    )..where((category) => category.id.equals(id))).write(
+      CategoriesCompanion(
+        archived: const Value(true),
+        updatedAt: Value(now),
+        dirty: const Value(true),
+      ),
+    );
     await writeTombstone(db, 'categories', id);
   });
 }

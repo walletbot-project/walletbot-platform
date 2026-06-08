@@ -25,6 +25,16 @@ Future<Tag> createLocalTag(
     throw ArgumentError('Tag name is required');
   }
 
+  final normalized = _normalizeName(trimmed);
+  final existing = await (db.select(
+    db.tags,
+  )..where((t) => t.archived.equals(false))).get();
+  for (final tag in existing) {
+    if (_normalizeName(tag.name) == normalized) {
+      throw ArgumentError('Tag with that name already exists');
+    }
+  }
+
   final id = newUuid();
   final now = BigInt.from(DateTime.now().millisecondsSinceEpoch);
   await db

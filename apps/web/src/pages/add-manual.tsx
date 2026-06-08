@@ -26,13 +26,11 @@ type AccountOption = {
     id: string
     name: string
     currency: string
-    isMock?: boolean
 }
 
 type CategoryOption = {
     id: string
     name: string
-    isMock?: boolean
 }
 
 type FormTag = {
@@ -117,6 +115,39 @@ function normalizeIdentity(value: string) {
     return value.trim().toLowerCase()
 }
 
+function mergeAccounts(
+    base: AccountOption[],
+    extra: AccountOption[],
+): AccountOption[] {
+    return Array.from(
+        new Map(
+            [...base, ...extra].map((account) => [account.id, account]),
+        ).values(),
+    )
+}
+
+function mergeCategories(
+    base: CategoryOption[],
+    extra: CategoryOption[],
+): CategoryOption[] {
+    return Array.from(
+        new Map(
+            [...base, ...extra].map((category) => [category.id, category]),
+        ).values(),
+    )
+}
+
+function mergeTags(base: FormTag[], extra: FormTag[]): FormTag[] {
+    return Array.from(
+        new Map(
+            [...base, ...extra].map((tag) => [
+                tag.id ?? normalizeIdentity(tag.name),
+                tag,
+            ]),
+        ).values(),
+    )
+}
+
 export function AddManual() {
     const navigate = useNavigate()
 
@@ -129,34 +160,41 @@ export function AddManual() {
     const createTransfer = useMutation(
         api.transactions.mutations.createTransfer,
     )
+    const createAccount = useMutation(api.accounts.mutations.create)
+    const createCategory = useMutation(api.categories.mutations.create)
     const tagTransaction = useMutation(api.transactions.mutations.tag)
     const createTag = useMutation(api.tags.mutations.create)
 
-    const [mockAccounts, setMockAccounts] = useState<AccountOption[]>([])
-    const [mockCategories, setMockCategories] = useState<CategoryOption[]>([])
+    const [createdAccounts, setCreatedAccounts] = useState<AccountOption[]>([])
+    const [createdCategories, setCreatedCategories] = useState<
+        CategoryOption[]
+    >([])
+    const [createdTags, setCreatedTags] = useState<FormTag[]>([])
     const [isCreateAccountOpen, setIsCreateAccountOpen] = useState(false)
     const [isCreateCategoryOpen, setIsCreateCategoryOpen] = useState(false)
 
-    const accountOptions: AccountOption[] = [
-        ...(accounts ?? []).map((account) => ({
+    const accountOptions = mergeAccounts(
+        (accounts ?? []).map((account) => ({
             id: account.id,
             name: account.name,
             currency: account.currency,
         })),
-        ...mockAccounts,
-    ]
-    const categoryOptions: CategoryOption[] = [
-        ...(categories ?? []).map((category) => ({
+        createdAccounts,
+    )
+    const categoryOptions = mergeCategories(
+        (categories ?? []).map((category) => ({
             id: category.id,
             name: category.name,
         })),
-        ...mockCategories,
-    ]
-    const knownTags = (availableTags ?? []).map((tag) => ({
-        id: tag.id,
-        name: tag.name,
-        color: tag.color ?? TAG_COLOR_OPTIONS[0],
-    }))
+        createdCategories,
+    )
+    const knownTags = mergeTags([
+        ...(availableTags ?? []).map((tag) => ({
+            id: tag.id,
+            name: tag.name,
+            color: tag.color ?? TAG_COLOR_OPTIONS[0],
+        })),
+    ], createdTags)
 
     const [type, setType] = useState<MovementType>('income')
     const [amount, setAmount] = useState('0')
@@ -277,12 +315,29 @@ export function AddManual() {
         setTagInput('')
     }
 
-    const createPendingTag = () => {
+    const createPendingTag = async () => {
         if (!pendingTagName) return
-        addResolvedTag({
+        const existing = knownTags.find(
+            (tag) => tag.name.toLowerCase() === pendingTagName.toLowerCase(),
+        )
+        if (existing) {
+            addResolvedTag(existing)
+            setTagInput('')
+            setPendingTagName(null)
+            return
+        }
+        const createdTag = {
+            id: newId(),
             name: pendingTagName,
             color: pendingTagColor,
+        }
+        await createTag({
+            id: createdTag.id,
+            name: createdTag.name,
+            color: createdTag.color,
         })
+        setCreatedTags((current) => [...current, createdTag])
+        addResolvedTag(createdTag)
         setTagInput('')
         setPendingTagName(null)
     }
@@ -402,19 +457,6 @@ export function AddManual() {
             toast.error('Selecciona una categoria')
             return
         }
-        if (selectedAccount.isMock) {
-            toast.error(
-                'La cuenta creada desde el form todavía no se puede guardar',
-            )
-            return
-        }
-        if (selectedCategory.isMock) {
-            toast.error(
-                'La categoria creada desde el form todavía no se puede guardar',
-            )
-            return
-        }
-
         const parsedAmount = parseFormAmount(amount)
         if (!parsedAmount) {
             toast.error('El monto debe ser mayor a 0')
@@ -529,7 +571,7 @@ export function AddManual() {
         categories === undefined ||
         availableTags === undefined
 
-    const addMockAccount = (name: string, currency: string) => {
+    const addAccount = async (name: string, currency: string) => {
         const normalizedName = normalizeIdentity(name)
         const exists = accountOptions.some(
             (account) =>
@@ -541,17 +583,21 @@ export function AddManual() {
             return false
         }
         const account: AccountOption = {
-            id: `mock:account:${newId()}`,
+            id: newId(),
             name,
             currency,
-            isMock: true,
         }
-        setMockAccounts((current) => [...current, account])
+        await createAccount({
+            id: account.id,
+            name: account.name,
+            currency: account.currency,
+        })
+        setCreatedAccounts((current) => mergeAccounts(current, [account]))
         setAccountId(account.id)
         return true
     }
 
-    const addMockCategory = (name: string) => {
+    const addCategory = async (name: string) => {
         const normalizedName = normalizeIdentity(name)
         const exists = categoryOptions.some(
             (category) => normalizeIdentity(category.name) === normalizedName,
@@ -561,11 +607,14 @@ export function AddManual() {
             return false
         }
         const category: CategoryOption = {
-            id: `mock:category:${newId()}`,
+            id: newId(),
             name,
-            isMock: true,
         }
-        setMockCategories((current) => [...current, category])
+        await createCategory({
+            id: category.id,
+            name: category.name,
+        })
+        setCreatedCategories((current) => mergeCategories(current, [category]))
         setCategoryId(category.id)
         return true
     }
@@ -847,12 +896,12 @@ export function AddManual() {
             <CreateAccountDialog
                 open={isCreateAccountOpen}
                 onOpenChange={setIsCreateAccountOpen}
-                onCreate={addMockAccount}
+                onCreate={addAccount}
             />
             <CreateCategoryDialog
                 open={isCreateCategoryOpen}
                 onOpenChange={setIsCreateCategoryOpen}
-                onCreate={addMockCategory}
+                onCreate={addCategory}
             />
         </div>
     )
@@ -1083,50 +1132,67 @@ function TagColorDialog({
     selectedColor: string
     onSelectedColorChange: (color: string) => void
     onCancel: () => void
-    onCreate: () => void
+    onCreate: () => Promise<void>
 }) {
     return (
         <Dialog
             open={tagName !== null}
             onOpenChange={(open) => !open && onCancel()}
         >
-            <DialogContent>
-                <DialogHeader>
-                    <DialogTitle>Color de "{tagName}"</DialogTitle>
-                </DialogHeader>
-                <div className="flex flex-wrap gap-3 py-2">
-                    {TAG_COLOR_OPTIONS.map((color) => (
-                        <button
-                            key={color}
+            <DialogContent
+                onKeyDownCapture={(event) => {
+                    if (event.key !== 'Enter') return
+                    event.preventDefault()
+                    void onCreate()
+                }}
+            >
+                <form
+                    onSubmit={(event) => {
+                        event.preventDefault()
+                        void onCreate()
+                    }}
+                >
+                    <DialogHeader>
+                        <DialogTitle>Color de "{tagName}"</DialogTitle>
+                    </DialogHeader>
+                    <div className="flex flex-wrap gap-3 py-2">
+                        {TAG_COLOR_OPTIONS.map((color) => (
+                            <button
+                                key={color}
+                                type="button"
+                                aria-label={`Elegir ${color}`}
+                                onClick={() => onSelectedColorChange(color)}
+                                className={cn(
+                                    'flex size-10 items-center justify-center rounded-full border-2',
+                                    color === selectedColor
+                                        ? 'border-black'
+                                        : 'border-transparent',
+                                )}
+                                style={{ backgroundColor: color }}
+                            >
+                                {color === selectedColor ? (
+                                    <Check className="size-5 text-black" />
+                                ) : null}
+                            </button>
+                        ))}
+                    </div>
+                    <DialogFooter>
+                        <Button
                             type="button"
-                            aria-label={`Elegir ${color}`}
-                            onClick={() => onSelectedColorChange(color)}
-                            className={cn(
-                                'flex size-10 items-center justify-center rounded-full border-2',
-                                color === selectedColor
-                                    ? 'border-black'
-                                    : 'border-transparent',
-                            )}
-                            style={{ backgroundColor: color }}
+                            variant="outline"
+                            onClick={onCancel}
                         >
-                            {color === selectedColor ? (
-                                <Check className="size-5 text-black" />
-                            ) : null}
-                        </button>
-                    ))}
-                </div>
-                <DialogFooter>
-                    <Button type="button" variant="outline" onClick={onCancel}>
-                        Cancelar
-                    </Button>
-                    <Button
-                        type="button"
-                        className="bg-[#21C4B6] text-white hover:bg-[#1BAEA2]"
-                        onClick={onCreate}
-                    >
-                        Crear
-                    </Button>
-                </DialogFooter>
+                            Cancelar
+                        </Button>
+                        <Button
+                            type="submit"
+                            className="bg-[#21C4B6] text-white hover:bg-[#1BAEA2]"
+                            autoFocus
+                        >
+                            Crear
+                        </Button>
+                    </DialogFooter>
+                </form>
             </DialogContent>
         </Dialog>
     )
@@ -1213,16 +1279,19 @@ function CreateAccountDialog({
 }: {
     open: boolean
     onOpenChange: (open: boolean) => void
-    onCreate: (name: string, currency: string) => boolean
+    onCreate: (name: string, currency: string) => Promise<boolean>
 }) {
     const [name, setName] = useState('')
     const [currency, setCurrency] =
         useState<(typeof MOCK_CURRENCIES)[number]>('ARS')
+    const [isSubmitting, setIsSubmitting] = useState(false)
 
-    const handleCreate = () => {
+    const handleCreate = async () => {
         const trimmed = name.trim()
         if (!trimmed) return
-        const created = onCreate(trimmed, currency)
+        setIsSubmitting(true)
+        const created = await onCreate(trimmed, currency)
+        setIsSubmitting(false)
         if (!created) return
         setName('')
         setCurrency('ARS')
@@ -1276,10 +1345,15 @@ function CreateAccountDialog({
                         type="button"
                         variant="outline"
                         onClick={() => onOpenChange(false)}
+                        disabled={isSubmitting}
                     >
                         Cancelar
                     </Button>
-                    <Button type="button" onClick={handleCreate}>
+                    <Button
+                        type="button"
+                        onClick={() => void handleCreate()}
+                        disabled={isSubmitting}
+                    >
                         Crear
                     </Button>
                 </DialogFooter>
@@ -1295,14 +1369,17 @@ function CreateCategoryDialog({
 }: {
     open: boolean
     onOpenChange: (open: boolean) => void
-    onCreate: (name: string) => boolean
+    onCreate: (name: string) => Promise<boolean>
 }) {
     const [name, setName] = useState('')
+    const [isSubmitting, setIsSubmitting] = useState(false)
 
-    const handleCreate = () => {
+    const handleCreate = async () => {
         const trimmed = name.trim()
         if (!trimmed) return
-        const created = onCreate(trimmed)
+        setIsSubmitting(true)
+        const created = await onCreate(trimmed)
+        setIsSubmitting(false)
         if (!created) return
         setName('')
         onOpenChange(false)
@@ -1335,10 +1412,15 @@ function CreateCategoryDialog({
                         type="button"
                         variant="outline"
                         onClick={() => onOpenChange(false)}
+                        disabled={isSubmitting}
                     >
                         Cancelar
                     </Button>
-                    <Button type="button" onClick={handleCreate}>
+                    <Button
+                        type="button"
+                        onClick={() => void handleCreate()}
+                        disabled={isSubmitting}
+                    >
                         Crear
                     </Button>
                 </DialogFooter>
