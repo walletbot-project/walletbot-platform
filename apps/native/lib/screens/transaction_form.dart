@@ -32,6 +32,8 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
   AppDatabase? _db;
   List<Account> _accounts = const [];
   List<Category> _categories = const [];
+  final List<Account> _mockAccounts = [];
+  final List<Category> _mockCategories = [];
   List<_FormTag> _knownTags = const [];
   Account? _selectedAccount;
   Account? _selectedDestinationAccount;
@@ -44,6 +46,10 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
   bool _updatingTransferAmounts = false;
   bool _sourceAmountTouched = false;
   bool _destinationAmountTouched = false;
+
+  List<Account> get _accountOptions => [..._accounts, ..._mockAccounts];
+
+  List<Category> get _categoryOptions => [..._categories, ..._mockCategories];
 
   @override
   void didChangeDependencies() {
@@ -97,16 +103,16 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
           .toList();
       _selectedAccount = _resolveSelectedAccount(
         current: _selectedAccount,
-        accounts: accounts,
+        accounts: _accountOptions,
       );
       _selectedDestinationAccount = _resolveDestinationAccount(
         current: _selectedDestinationAccount,
-        accounts: accounts,
+        accounts: _accountOptions,
         source: _selectedAccount,
       );
       _selectedCategory = _resolveSelectedCategory(
         current: _selectedCategory,
-        categories: categories,
+        categories: _categoryOptions,
         type: _type,
       );
       _isLoading = false;
@@ -192,7 +198,16 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
           child: ListView(
             shrinkWrap: true,
             children: [
-              for (final account in _accounts)
+              ListTile(
+                leading: const Icon(Icons.add_circle_outline_rounded),
+                title: const Text('Nueva cuenta'),
+                onTap: () async {
+                  final created = await _createMockAccountDialog();
+                  if (!context.mounted) return;
+                  Navigator.pop(context, created);
+                },
+              ),
+              for (final account in _accountOptions)
                 ListTile(
                   leading: const Icon(Icons.account_balance_wallet_rounded),
                   title: Text(account.name),
@@ -229,7 +244,16 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
           child: ListView(
             shrinkWrap: true,
             children: [
-              for (final category in _categories)
+              ListTile(
+                leading: const Icon(Icons.add_circle_outline_rounded),
+                title: const Text('Nueva categoria'),
+                onTap: () async {
+                  final created = await _createMockCategoryDialog();
+                  if (!context.mounted) return;
+                  Navigator.pop(context, created);
+                },
+              ),
+              for (final category in _categoryOptions)
                 ListTile(
                   leading: const Icon(Icons.label_rounded),
                   title: Text(category.name),
@@ -373,6 +397,16 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
       ).showSnackBar(const SnackBar(content: Text('Selecciona una cuenta')));
       return;
     }
+    if (_isMockAccount(account)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'La cuenta creada desde el formulario aun no se puede guardar',
+          ),
+        ),
+      );
+      return;
+    }
     final category = _selectedCategory;
     if (category == null) {
       ScaffoldMessenger.of(
@@ -380,11 +414,31 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
       ).showSnackBar(const SnackBar(content: Text('Selecciona una categoria')));
       return;
     }
+    if (_isMockCategory(category)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'La categoria creada desde el formulario aun no se puede guardar',
+          ),
+        ),
+      );
+      return;
+    }
     final destinationAccount = _selectedDestinationAccount;
     if (_type == TransactionFormType.transfer) {
       if (destinationAccount == null) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Selecciona una cuenta destino')),
+        );
+        return;
+      }
+      if (_isMockAccount(destinationAccount)) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'La cuenta destino creada desde el formulario aun no se puede guardar',
+            ),
+          ),
         );
         return;
       }
@@ -471,23 +525,6 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
       return const Scaffold(
         backgroundColor: Color(0xFFFFF8F8),
         body: SafeArea(child: Center(child: CircularProgressIndicator())),
-      );
-    }
-    if (_accounts.isEmpty || _categories.isEmpty) {
-      return Scaffold(
-        backgroundColor: const Color(0xFFFFF8F8),
-        appBar: AppBar(),
-        body: const SafeArea(
-          child: Center(
-            child: Padding(
-              padding: EdgeInsets.all(24),
-              child: Text(
-                'Necesitas al menos una cuenta y una categoria para anotar movimientos.',
-                textAlign: TextAlign.center,
-              ),
-            ),
-          ),
-        ),
       );
     }
 
@@ -579,9 +616,28 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
                         children: [
                           _SectionLabel('Cuenta'),
                           const SizedBox(height: 10),
-                          _PickerChip(
-                            label: _selectedAccount?.name ?? 'Seleccionar',
-                            onPressed: _isSaving ? null : () => _pickAccount(),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: _PickerChip(
+                                  label:
+                                      _selectedAccount?.name ?? 'Seleccionar',
+                                  onPressed: _isSaving
+                                      ? null
+                                      : () => _pickAccount(),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              IconButton.outlined(
+                                onPressed: _isSaving
+                                    ? null
+                                    : () => unawaited(
+                                        _createMockAccountFromButton(),
+                                      ),
+                                icon: const Icon(Icons.add_rounded),
+                                tooltip: 'Nueva cuenta',
+                              ),
+                            ],
                           ),
                         ],
                       ),
@@ -655,7 +711,18 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
                 ),
               ),
               const SizedBox(height: 28),
-              _SectionLabel('Categoria'),
+              Row(
+                children: [
+                  const Expanded(child: _SectionLabel('Categoria')),
+                  IconButton.outlined(
+                    onPressed: _isSaving
+                        ? null
+                        : () => unawaited(_createMockCategoryFromButton()),
+                    icon: const Icon(Icons.add_rounded),
+                    tooltip: 'Nueva categoria',
+                  ),
+                ],
+              ),
               const SizedBox(height: 10),
               _PickerChip(
                 label: _selectedCategory?.name ?? 'Seleccionar',
@@ -758,7 +825,7 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
       _replaceEditableControllers();
       _selectedCategory = _resolveSelectedCategory(
         current: null,
-        categories: _categories,
+        categories: _categoryOptions,
         type: type,
       );
       _tags.clear();
@@ -845,7 +912,213 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
       selection: TextSelection.collapsed(offset: value.length),
     );
   }
+
+  bool _isMockAccount(Account account) =>
+      account.id.startsWith('mock:account:');
+
+  bool _isMockCategory(Category category) =>
+      category.id.startsWith('mock:category:');
+
+  Future<Account?> _createMockAccountDialog() async {
+    final controller = TextEditingController();
+    String currency = _mockCurrencyOptions.first;
+    final result = await showDialog<Account>(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              title: const Text('Nueva cuenta'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: controller,
+                    autofocus: true,
+                    textInputAction: TextInputAction.done,
+                    onSubmitted: (_) {
+                      final created = _buildMockAccount(
+                        controller.text.trim(),
+                        currency,
+                      );
+                      if (created != null) Navigator.pop(context, created);
+                    },
+                    decoration: const InputDecoration(labelText: 'Nombre'),
+                  ),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<String>(
+                    initialValue: currency,
+                    decoration: const InputDecoration(labelText: 'Moneda'),
+                    items: _mockCurrencyOptions
+                        .map(
+                          (option) => DropdownMenuItem<String>(
+                            value: option,
+                            child: Text(option),
+                          ),
+                        )
+                        .toList(growable: false),
+                    onChanged: (value) {
+                      if (value == null) return;
+                      setDialogState(() => currency = value);
+                    },
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Cancelar'),
+                ),
+                TextButton(
+                  onPressed: () {
+                    final created = _buildMockAccount(
+                      controller.text.trim(),
+                      currency,
+                    );
+                    if (created != null) Navigator.pop(context, created);
+                  },
+                  child: const Text('Crear'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+    return result;
+  }
+
+  Future<Category?> _createMockCategoryDialog() async {
+    final controller = TextEditingController();
+    final result = await showDialog<Category>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Nueva categoria'),
+          content: TextField(
+            controller: controller,
+            autofocus: true,
+            textInputAction: TextInputAction.done,
+            onSubmitted: (_) {
+              final created = _buildMockCategory(controller.text.trim());
+              if (created != null) Navigator.pop(context, created);
+            },
+            decoration: const InputDecoration(labelText: 'Nombre'),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancelar'),
+            ),
+            TextButton(
+              onPressed: () {
+                final created = _buildMockCategory(controller.text.trim());
+                if (created != null) Navigator.pop(context, created);
+              },
+              child: const Text('Crear'),
+            ),
+          ],
+        );
+      },
+    );
+    return result;
+  }
+
+  Account? _buildMockAccount(String name, String currency) {
+    final trimmed = name.trim();
+    if (trimmed.isEmpty) return null;
+    final normalizedName = _normalizeIdentity(trimmed);
+    final exists = _accountOptions.any(
+      (account) =>
+          _normalizeIdentity(account.name) == normalizedName &&
+          account.currency == currency,
+    );
+    if (exists) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Ya existe una cuenta con ese nombre y moneda'),
+        ),
+      );
+      return null;
+    }
+    final now = BigInt.from(DateTime.now().millisecondsSinceEpoch);
+    final account = Account(
+      id: 'mock:account:$now',
+      name: trimmed,
+      currency: currency,
+      description: null,
+      color: null,
+      icon: null,
+      archived: false,
+      createdAt: now,
+      updatedAt: now,
+      dirty: false,
+    );
+    setState(() {
+      _mockAccounts.add(account);
+      _selectedAccount = account;
+      if (_type == TransactionFormType.transfer &&
+          _selectedDestinationAccount == null) {
+        _selectedDestinationAccount = _resolveDestinationAccount(
+          current: null,
+          accounts: _accountOptions,
+          source: account,
+        );
+      }
+    });
+    return account;
+  }
+
+  Category? _buildMockCategory(String name) {
+    final trimmed = name.trim();
+    if (trimmed.isEmpty) return null;
+    final normalizedName = _normalizeIdentity(trimmed);
+    final exists = _categoryOptions.any(
+      (category) => _normalizeIdentity(category.name) == normalizedName,
+    );
+    if (exists) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Ya existe una categoria con ese nombre')),
+      );
+      return null;
+    }
+    final now = BigInt.from(DateTime.now().millisecondsSinceEpoch);
+    final category = Category(
+      id: 'mock:category:$now',
+      name: trimmed,
+      description: null,
+      archived: false,
+      createdAt: now,
+      updatedAt: now,
+      dirty: false,
+    );
+    setState(() {
+      _mockCategories.add(category);
+      _selectedCategory = category;
+    });
+    return category;
+  }
+
+  Future<void> _createMockAccountFromButton() async {
+    final created = await _createMockAccountDialog();
+    if (created == null || !mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Cuenta agregada al formulario')),
+    );
+  }
+
+  Future<void> _createMockCategoryFromButton() async {
+    final created = await _createMockCategoryDialog();
+    if (created == null || !mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Categoria agregada al formulario')),
+    );
+  }
 }
+
+const _mockCurrencyOptions = ['ARS', 'USD', 'EUR', 'BRL'];
+
+String _normalizeIdentity(String value) => value.trim().toLowerCase();
 
 class _RecurringExpenseControl extends StatelessWidget {
   const _RecurringExpenseControl({

@@ -26,11 +26,13 @@ type AccountOption = {
     id: string
     name: string
     currency: string
+    isMock?: boolean
 }
 
 type CategoryOption = {
     id: string
     name: string
+    isMock?: boolean
 }
 
 type FormTag = {
@@ -76,24 +78,11 @@ function today() {
     return new Date().toISOString().slice(0, 10)
 }
 
-function defaultCategoryId(
-    type: MovementType,
-    categories: CategoryOption[],
-): string {
-    if (categories.length === 0) return ''
-    if (type === 'transfer') {
-        const preferred = categories.find(
-            (category) => category.name.toLowerCase() === 'transferencia',
-        )
-        if (preferred) return preferred.id
-    }
-    return categories[0]?.id ?? ''
-}
-
 function defaultDestinationAccountId(
     sourceId: string,
     accounts: AccountOption[],
 ): string {
+    if (!sourceId) return ''
     return accounts.find((account) => account.id !== sourceId)?.id ?? ''
 }
 
@@ -122,6 +111,12 @@ function newId() {
     return crypto.randomUUID()
 }
 
+const MOCK_CURRENCIES = ['ARS', 'USD', 'EUR', 'BRL'] as const
+
+function normalizeIdentity(value: string) {
+    return value.trim().toLowerCase()
+}
+
 export function AddManual() {
     const navigate = useNavigate()
 
@@ -137,8 +132,26 @@ export function AddManual() {
     const tagTransaction = useMutation(api.transactions.mutations.tag)
     const createTag = useMutation(api.tags.mutations.create)
 
-    const accountOptions = accounts ?? []
-    const categoryOptions = categories ?? []
+    const [mockAccounts, setMockAccounts] = useState<AccountOption[]>([])
+    const [mockCategories, setMockCategories] = useState<CategoryOption[]>([])
+    const [isCreateAccountOpen, setIsCreateAccountOpen] = useState(false)
+    const [isCreateCategoryOpen, setIsCreateCategoryOpen] = useState(false)
+
+    const accountOptions: AccountOption[] = [
+        ...(accounts ?? []).map((account) => ({
+            id: account.id,
+            name: account.name,
+            currency: account.currency,
+        })),
+        ...mockAccounts,
+    ]
+    const categoryOptions: CategoryOption[] = [
+        ...(categories ?? []).map((category) => ({
+            id: category.id,
+            name: category.name,
+        })),
+        ...mockCategories,
+    ]
     const knownTags = (availableTags ?? []).map((tag) => ({
         id: tag.id,
         name: tag.name,
@@ -167,7 +180,6 @@ export function AddManual() {
     const [isSaving, setIsSaving] = useState(false)
 
     useEffect(() => {
-        if (accountOptions.length === 0) return
         setAccountId((current) => {
             if (
                 current &&
@@ -175,12 +187,11 @@ export function AddManual() {
             ) {
                 return current
             }
-            return accountOptions[0]?.id ?? ''
+            return ''
         })
     }, [accountOptions])
 
     useEffect(() => {
-        if (accountOptions.length === 0) return
         setDestinationAccountId((current) => {
             const fallback = defaultDestinationAccountId(
                 accountId,
@@ -198,7 +209,6 @@ export function AddManual() {
     }, [accountId, accountOptions])
 
     useEffect(() => {
-        if (categoryOptions.length === 0) return
         setCategoryId((current) => {
             if (
                 current &&
@@ -206,17 +216,19 @@ export function AddManual() {
             ) {
                 return current
             }
-            return defaultCategoryId(type, categoryOptions)
+            return ''
         })
     }, [categoryOptions, type])
 
     const selectedAccount = accountOptions.find(
         (account) => account.id === accountId,
     )
+    const selectedCategory = categoryOptions.find(
+        (category) => category.id === categoryId,
+    )
     const config = typeConfig[type]
 
-    const resetFields = (nextType = type) => {
-        const sourceId = accountOptions[0]?.id ?? ''
+    const resetFields = () => {
         setAmount('0')
         setDestinationAmount('0')
         setSourceAmountTouched(false)
@@ -224,11 +236,9 @@ export function AddManual() {
         setTitle('')
         setDescription('')
         setDate(today())
-        setAccountId(sourceId)
-        setDestinationAccountId(
-            defaultDestinationAccountId(sourceId, accountOptions),
-        )
-        setCategoryId(defaultCategoryId(nextType, categoryOptions))
+        setAccountId('')
+        setDestinationAccountId('')
+        setCategoryId('')
         setTagInput('')
         setTags([])
         setPendingTagName(null)
@@ -238,7 +248,7 @@ export function AddManual() {
 
     const changeType = (nextType: MovementType) => {
         setType(nextType)
-        resetFields(nextType)
+        resetFields()
     }
 
     const addResolvedTag = (tag: FormTag) => {
@@ -388,8 +398,20 @@ export function AddManual() {
             toast.error('Selecciona una cuenta')
             return
         }
-        if (!categoryId) {
+        if (!selectedCategory) {
             toast.error('Selecciona una categoria')
+            return
+        }
+        if (selectedAccount.isMock) {
+            toast.error(
+                'La cuenta creada desde el form todavía no se puede guardar',
+            )
+            return
+        }
+        if (selectedCategory.isMock) {
+            toast.error(
+                'La categoria creada desde el form todavía no se puede guardar',
+            )
             return
         }
 
@@ -507,21 +529,51 @@ export function AddManual() {
         categories === undefined ||
         availableTags === undefined
 
+    const addMockAccount = (name: string, currency: string) => {
+        const normalizedName = normalizeIdentity(name)
+        const exists = accountOptions.some(
+            (account) =>
+                normalizeIdentity(account.name) === normalizedName &&
+                account.currency === currency,
+        )
+        if (exists) {
+            toast.error('Ya existe una cuenta con ese nombre y moneda')
+            return false
+        }
+        const account: AccountOption = {
+            id: `mock:account:${newId()}`,
+            name,
+            currency,
+            isMock: true,
+        }
+        setMockAccounts((current) => [...current, account])
+        setAccountId(account.id)
+        return true
+    }
+
+    const addMockCategory = (name: string) => {
+        const normalizedName = normalizeIdentity(name)
+        const exists = categoryOptions.some(
+            (category) => normalizeIdentity(category.name) === normalizedName,
+        )
+        if (exists) {
+            toast.error('Ya existe una categoría con ese nombre')
+            return false
+        }
+        const category: CategoryOption = {
+            id: `mock:category:${newId()}`,
+            name,
+            isMock: true,
+        }
+        setMockCategories((current) => [...current, category])
+        setCategoryId(category.id)
+        return true
+    }
+
     if (isLoading) {
         return (
             <div className="flex min-h-full items-center justify-center bg-[#FFF8F8] px-4 py-10">
                 <Loader2 className="size-6 animate-spin text-muted-foreground" />
-            </div>
-        )
-    }
-
-    if (accountOptions.length === 0 || categoryOptions.length === 0) {
-        return (
-            <div className="flex min-h-full items-center justify-center bg-[#FFF8F8] px-4 py-10">
-                <p className="max-w-md text-center text-sm text-muted-foreground">
-                    Necesitas al menos una cuenta y una categoria para anotar
-                    movimientos.
-                </p>
             </div>
         )
     }
@@ -616,7 +668,36 @@ export function AddManual() {
                         </div>
 
                         <div className="grid gap-5 sm:grid-cols-2">
-                            <Field label="Cuenta" htmlFor="account">
+                            <Field
+                                label="Cuenta"
+                                htmlFor="account"
+                                action={
+                                    <div className="flex items-center gap-2">
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            size="sm"
+                                            className="h-8 rounded-full"
+                                            onClick={() => setAccountId('')}
+                                            disabled={!accountId}
+                                        >
+                                            <X className="size-3" />
+                                        </Button>
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            size="sm"
+                                            className="h-8 rounded-full"
+                                            onClick={() =>
+                                                setIsCreateAccountOpen(true)
+                                            }
+                                        >
+                                            <Plus className="size-3" />
+                                            Nueva cuenta
+                                        </Button>
+                                    </div>
+                                }
+                            >
                                 <AccountSelect
                                     id="account"
                                     value={accountId}
@@ -663,7 +744,36 @@ export function AddManual() {
                         />
                     </Field>
 
-                    <Field label="Categoría" htmlFor="category">
+                    <Field
+                        label="Categoría"
+                        htmlFor="category"
+                        action={
+                            <div className="flex items-center gap-2">
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    className="h-8 rounded-full"
+                                    onClick={() => setCategoryId('')}
+                                    disabled={!categoryId}
+                                >
+                                    <X className="size-3" />
+                                </Button>
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    className="h-8 rounded-full"
+                                    onClick={() =>
+                                        setIsCreateCategoryOpen(true)
+                                    }
+                                >
+                                    <Plus className="size-3" />
+                                    Nueva categoría
+                                </Button>
+                            </div>
+                        }
+                    >
                         <select
                             id="category"
                             value={categoryId}
@@ -673,6 +783,7 @@ export function AddManual() {
                             className="h-11 w-full rounded-xl border border-[#D9D0D6] bg-white px-3 text-sm outline-none focus-visible:border-[#21C4B6] focus-visible:ring-3 focus-visible:ring-[#21C4B6]/30"
                             required
                         >
+                            <option value="">Sin seleccionar</option>
                             {categoryOptions.map((item) => (
                                 <option key={item.id} value={item.id}>
                                     {item.name}
@@ -732,6 +843,16 @@ export function AddManual() {
                 onSelectedColorChange={setPendingTagColor}
                 onCancel={() => setPendingTagName(null)}
                 onCreate={createPendingTag}
+            />
+            <CreateAccountDialog
+                open={isCreateAccountOpen}
+                onOpenChange={setIsCreateAccountOpen}
+                onCreate={addMockAccount}
+            />
+            <CreateCategoryDialog
+                open={isCreateCategoryOpen}
+                onOpenChange={setIsCreateCategoryOpen}
+                onCreate={addMockCategory}
             />
         </div>
     )
@@ -1029,6 +1150,7 @@ function AccountSelect({
             onChange={(event) => onChange(event.target.value)}
             className="h-11 w-full rounded-xl border border-[#D9D0D6] bg-white px-3 text-sm outline-none focus-visible:border-[#21C4B6] focus-visible:ring-3 focus-visible:ring-[#21C4B6]/30"
         >
+            <option value="">Sin seleccionar</option>
             {accounts.map((account) => (
                 <option key={account.id} value={account.id}>
                     {account.name} · {account.currency}
@@ -1060,18 +1182,167 @@ function DateInput({
 function Field({
     label,
     htmlFor,
+    action,
     children,
 }: {
     label: string
     htmlFor?: string
+    action?: ReactNode
     children: ReactNode
 }) {
     return (
         <div className="space-y-2">
-            <Label htmlFor={htmlFor} className="text-base font-bold text-black">
-                {label}
-            </Label>
+            <div className="flex items-center justify-between gap-3">
+                <Label
+                    htmlFor={htmlFor}
+                    className="text-base font-bold text-black"
+                >
+                    {label}
+                </Label>
+                {action}
+            </div>
             {children}
         </div>
+    )
+}
+
+function CreateAccountDialog({
+    open,
+    onOpenChange,
+    onCreate,
+}: {
+    open: boolean
+    onOpenChange: (open: boolean) => void
+    onCreate: (name: string, currency: string) => boolean
+}) {
+    const [name, setName] = useState('')
+    const [currency, setCurrency] =
+        useState<(typeof MOCK_CURRENCIES)[number]>('ARS')
+
+    const handleCreate = () => {
+        const trimmed = name.trim()
+        if (!trimmed) return
+        const created = onCreate(trimmed, currency)
+        if (!created) return
+        setName('')
+        setCurrency('ARS')
+        onOpenChange(false)
+        toast.success('Cuenta agregada al formulario')
+    }
+
+    return (
+        <Dialog open={open} onOpenChange={onOpenChange}>
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>Nueva cuenta</DialogTitle>
+                </DialogHeader>
+                <form
+                    className="space-y-4"
+                    onSubmit={(event) => {
+                        event.preventDefault()
+                        handleCreate()
+                    }}
+                >
+                    <Field label="Nombre" htmlFor="mock-account-name">
+                        <Input
+                            id="mock-account-name"
+                            value={name}
+                            onChange={(event) => setName(event.target.value)}
+                            placeholder="Ej: Efectivo, Banco Nación"
+                        />
+                    </Field>
+                    <Field label="Moneda" htmlFor="mock-account-currency">
+                        <select
+                            id="mock-account-currency"
+                            value={currency}
+                            onChange={(event) =>
+                                setCurrency(
+                                    event.target
+                                        .value as (typeof MOCK_CURRENCIES)[number],
+                                )
+                            }
+                            className="h-11 w-full rounded-xl border border-[#D9D0D6] bg-white px-3 text-sm outline-none focus-visible:border-[#21C4B6] focus-visible:ring-3 focus-visible:ring-[#21C4B6]/30"
+                        >
+                            {MOCK_CURRENCIES.map((option) => (
+                                <option key={option} value={option}>
+                                    {option}
+                                </option>
+                            ))}
+                        </select>
+                    </Field>
+                </form>
+                <DialogFooter>
+                    <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => onOpenChange(false)}
+                    >
+                        Cancelar
+                    </Button>
+                    <Button type="button" onClick={handleCreate}>
+                        Crear
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    )
+}
+
+function CreateCategoryDialog({
+    open,
+    onOpenChange,
+    onCreate,
+}: {
+    open: boolean
+    onOpenChange: (open: boolean) => void
+    onCreate: (name: string) => boolean
+}) {
+    const [name, setName] = useState('')
+
+    const handleCreate = () => {
+        const trimmed = name.trim()
+        if (!trimmed) return
+        const created = onCreate(trimmed)
+        if (!created) return
+        setName('')
+        onOpenChange(false)
+        toast.success('Categoría agregada al formulario')
+    }
+
+    return (
+        <Dialog open={open} onOpenChange={onOpenChange}>
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>Nueva categoría</DialogTitle>
+                </DialogHeader>
+                <form
+                    onSubmit={(event) => {
+                        event.preventDefault()
+                        handleCreate()
+                    }}
+                >
+                    <Field label="Nombre" htmlFor="mock-category-name">
+                        <Input
+                            id="mock-category-name"
+                            value={name}
+                            onChange={(event) => setName(event.target.value)}
+                            placeholder="Ej: Comida, Regalo, Freelance"
+                        />
+                    </Field>
+                </form>
+                <DialogFooter>
+                    <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => onOpenChange(false)}
+                    >
+                        Cancelar
+                    </Button>
+                    <Button type="button" onClick={handleCreate}>
+                        Crear
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
     )
 }
