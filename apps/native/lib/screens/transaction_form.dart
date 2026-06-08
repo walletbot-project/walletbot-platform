@@ -1,44 +1,17 @@
 import 'dart:async';
 
 import 'package:app/components/color_utils.dart';
+import 'package:app/database.dart';
+import 'package:app/tags/tag_writes.dart';
+import 'package:app/transactions/manual_transaction_writes.dart';
+import 'package:drift/drift.dart' as drift;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:provider/provider.dart';
 
 enum TransactionFormType { income, expense, transfer }
 
 enum _TransferAmountField { source, destination }
-
-class TransactionFormResult {
-  const TransactionFormResult({
-    required this.type,
-    required this.accountName,
-    required this.accountCurrency,
-    this.destinationAccountName,
-    this.destinationAccountCurrency,
-    required this.date,
-    required this.amount,
-    this.destinationAmount,
-    this.exchangeRate,
-    required this.title,
-    required this.description,
-    required this.categoryName,
-    required this.tags,
-  });
-
-  final TransactionFormType type;
-  final String accountName;
-  final String accountCurrency;
-  final String? destinationAccountName;
-  final String? destinationAccountCurrency;
-  final DateTime date;
-  final double amount;
-  final double? destinationAmount;
-  final double? exchangeRate;
-  final String title;
-  final String? description;
-  final String? categoryName;
-  final List<String> tags;
-}
 
 class TransactionFormScreen extends StatefulWidget {
   const TransactionFormScreen({super.key});
@@ -56,17 +29,30 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
   TextEditingController _tagController = TextEditingController();
 
   TransactionFormType _type = TransactionFormType.income;
-  _MockAccount? _selectedAccount;
-  _MockAccount? _selectedDestinationAccount;
-  _MockCategory? _selectedCategory;
+  AppDatabase? _db;
+  List<Account> _accounts = const [];
+  List<Category> _categories = const [];
+  List<_FormTag> _knownTags = const [];
+  Account? _selectedAccount;
+  Account? _selectedDestinationAccount;
+  Category? _selectedCategory;
   DateTime _selectedDate = DateTime.now();
-  final List<_FormTag> _knownTags = List.of(_mockTags);
   final List<_FormTag> _tags = [];
+  bool _isLoading = true;
   bool _isSaving = false;
   bool _isRecurringExpense = false;
   bool _updatingTransferAmounts = false;
   bool _sourceAmountTouched = false;
   bool _destinationAmountTouched = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final db = context.read<AppDatabase>();
+    if (_db == db) return;
+    _db = db;
+    unawaited(_loadFormData(db));
+  }
 
   @override
   void dispose() {
@@ -76,6 +62,107 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
     _descriptionController.dispose();
     _tagController.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadFormData(AppDatabase db) async {
+    setState(() => _isLoading = true);
+    final accounts =
+        await (db.select(db.accounts)
+              ..where((t) => t.archived.equals(false))
+              ..orderBy([(t) => drift.OrderingTerm(expression: t.createdAt)]))
+            .get();
+    final categories =
+        await (db.select(db.categories)
+              ..where((t) => t.archived.equals(false))
+              ..orderBy([(t) => drift.OrderingTerm(expression: t.createdAt)]))
+            .get();
+    final tags =
+        await (db.select(db.tags)
+              ..where((t) => t.archived.equals(false))
+              ..orderBy([(t) => drift.OrderingTerm(expression: t.createdAt)]))
+            .get();
+
+    if (!mounted) return;
+    setState(() {
+      _accounts = accounts;
+      _categories = categories;
+      _knownTags = tags
+          .map(
+            (tag) => _FormTag(
+              id: tag.id,
+              name: tag.name,
+              color: colorFromHex(tag.color),
+            ),
+          )
+          .toList();
+      _selectedAccount = _resolveSelectedAccount(
+        current: _selectedAccount,
+        accounts: accounts,
+      );
+      _selectedDestinationAccount = _resolveDestinationAccount(
+        current: _selectedDestinationAccount,
+        accounts: accounts,
+        source: _selectedAccount,
+      );
+      _selectedCategory = _resolveSelectedCategory(
+        current: _selectedCategory,
+        categories: categories,
+        type: _type,
+      );
+      _isLoading = false;
+    });
+  }
+
+  Account? _resolveSelectedAccount({
+    required Account? current,
+    required List<Account> accounts,
+  }) {
+    if (accounts.isEmpty) return null;
+    if (current != null) {
+      for (final account in accounts) {
+        if (account.id == current.id) return account;
+      }
+    }
+    return accounts.first;
+  }
+
+  Account? _resolveDestinationAccount({
+    required Account? current,
+    required List<Account> accounts,
+    required Account? source,
+  }) {
+    if (accounts.isEmpty) return null;
+    if (current != null) {
+      for (final account in accounts) {
+        if (account.id == current.id) return account;
+      }
+    }
+    if (source == null) return accounts.first;
+    for (final account in accounts) {
+      if (account.id != source.id) return account;
+    }
+    return source;
+  }
+
+  Category? _resolveSelectedCategory({
+    required Category? current,
+    required List<Category> categories,
+    required TransactionFormType type,
+  }) {
+    if (categories.isEmpty) return null;
+    if (current != null) {
+      for (final category in categories) {
+        if (category.id == current.id) return category;
+      }
+    }
+
+    if (type == TransactionFormType.transfer) {
+      for (final category in categories) {
+        if (category.name.toLowerCase() == 'transferencia') return category;
+      }
+    }
+
+    return categories.first;
   }
 
   Future<void> _pickDate() async {
@@ -97,7 +184,7 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
     final selectedAccount = destination
         ? _selectedDestinationAccount
         : _selectedAccount;
-    final account = await showModalBottomSheet<_MockAccount>(
+    final account = await showModalBottomSheet<Account>(
       context: context,
       showDragHandle: true,
       builder: (context) {
@@ -105,7 +192,7 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
           child: ListView(
             shrinkWrap: true,
             children: [
-              for (final account in _mockAccounts)
+              for (final account in _accounts)
                 ListTile(
                   leading: const Icon(Icons.account_balance_wallet_rounded),
                   title: Text(account.name),
@@ -134,7 +221,7 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
   Future<void> _pickCategory() async {
     await _commitInlineEditing();
     if (!mounted) return;
-    final selection = await showModalBottomSheet<_CategorySelection>(
+    final category = await showModalBottomSheet<Category>(
       context: context,
       showDragHandle: true,
       builder: (context) {
@@ -142,34 +229,22 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
           child: ListView(
             shrinkWrap: true,
             children: [
-              ListTile(
-                leading: const Icon(Icons.block_rounded),
-                title: const Text('Sin categoria'),
-                trailing: _selectedCategory == null
-                    ? const Icon(Icons.check_circle_rounded)
-                    : null,
-                onTap: () =>
-                    Navigator.pop(context, const _CategorySelection.none()),
-              ),
-              for (final category in _mockCategories)
+              for (final category in _categories)
                 ListTile(
                   leading: const Icon(Icons.label_rounded),
                   title: Text(category.name),
                   trailing: category == _selectedCategory
                       ? const Icon(Icons.check_circle_rounded)
                       : null,
-                  onTap: () => Navigator.pop(
-                    context,
-                    _CategorySelection.category(category),
-                  ),
+                  onTap: () => Navigator.pop(context, category),
                 ),
             ],
           ),
         );
       },
     );
-    if (selection == null || !mounted) return;
-    setState(() => _selectedCategory = selection.category);
+    if (category == null || !mounted) return;
+    setState(() => _selectedCategory = category);
   }
 
   Future<void> _addTag(String rawValue) async {
@@ -196,7 +271,7 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
     if (color == null || !mounted) return;
     final tag = _FormTag(name: name, color: color);
     setState(() {
-      _knownTags.add(tag);
+      _knownTags = [..._knownTags, tag];
       _tags.add(tag);
       _tagController.clear();
     });
@@ -218,8 +293,6 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
   Future<void> _pickExistingTag() async {
     await _commitInlineEditing();
     if (!mounted) return;
-    // TODO: cargar los tags actuales desde almacenamiento local/sync antes de
-    // mostrar esta opcion de etiquetas.
     final availableTags = _knownTags
         .where(
           (tag) => !_tags.any(
@@ -291,11 +364,20 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
     await _commitInlineEditing();
     if (!mounted) return;
     if (!(_formKey.currentState?.validate() ?? false)) return;
+    final db = _db;
+    if (db == null) return;
     final account = _selectedAccount;
     if (account == null) {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('Selecciona una cuenta')));
+      return;
+    }
+    final category = _selectedCategory;
+    if (category == null) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Selecciona una categoria')));
       return;
     }
     final destinationAccount = _selectedDestinationAccount;
@@ -322,7 +404,6 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
     final navigator = Navigator.of(context);
 
     try {
-      await Future<void>.delayed(const Duration(milliseconds: 650));
       final amount = _parseAmount(_amountController.text)!;
       final destinationAmount = _type == TransactionFormType.transfer
           ? _parseAmount(_destinationAmountController.text)
@@ -333,29 +414,42 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
               destinationAmount > 0
           ? destinationAmount / amount
           : null;
-      final result = TransactionFormResult(
-        type: _type,
-        accountName: account.name,
-        accountCurrency: account.currency,
-        destinationAccountName: destinationAccount?.name,
-        destinationAccountCurrency: destinationAccount?.currency,
-        date: _selectedDate,
-        amount: amount,
-        destinationAmount: destinationAmount,
-        exchangeRate: exchangeRate,
-        title: _type == TransactionFormType.transfer
-            ? 'Transferencia'
-            : _titleController.text.trim(),
-        description: _emptyToNull(_descriptionController.text),
-        categoryName: _selectedCategory?.name,
-        tags: List.unmodifiable(_tags.map((tag) => tag.name)),
+      await createManualTransaction(
+        db,
+        ManualTransactionInput(
+          kind: switch (_type) {
+            TransactionFormType.income => ManualTransactionKind.income,
+            TransactionFormType.expense => ManualTransactionKind.expense,
+            TransactionFormType.transfer => ManualTransactionKind.transfer,
+          },
+          name: _type == TransactionFormType.transfer
+              ? 'Transferencia'
+              : _titleController.text.trim(),
+          description: _emptyToNull(_descriptionController.text),
+          date: _selectedDate,
+          accountId: account.id,
+          categoryId: category.id,
+          amount: amount,
+          destinationAccountId: destinationAccount?.id,
+          destinationAmount: destinationAmount,
+          exchangeRate: exchangeRate,
+          tags: _tags
+              .map(
+                (tag) => LocalTagDraft(
+                  id: tag.id,
+                  name: tag.name,
+                  colorHex: colorToHex(tag.color),
+                ),
+              )
+              .toList(growable: false),
+        ),
       );
 
       if (!mounted) return;
       messenger.showSnackBar(
         const SnackBar(content: Text('Movimiento anotado')),
       );
-      navigator.pop(result);
+      navigator.pop();
     } catch (error) {
       if (!mounted) return;
       messenger.showSnackBar(
@@ -372,6 +466,30 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
       TransactionFormType.expense => const Color(0xFFFF3744),
       TransactionFormType.transfer => const Color(0xFF6DE7D8),
     };
+
+    if (_isLoading) {
+      return const Scaffold(
+        backgroundColor: Color(0xFFFFF8F8),
+        body: SafeArea(child: Center(child: CircularProgressIndicator())),
+      );
+    }
+    if (_accounts.isEmpty || _categories.isEmpty) {
+      return Scaffold(
+        backgroundColor: const Color(0xFFFFF8F8),
+        appBar: AppBar(),
+        body: const SafeArea(
+          child: Center(
+            child: Padding(
+              padding: EdgeInsets.all(24),
+              child: Text(
+                'Necesitas al menos una cuenta y una categoria para anotar movimientos.',
+                textAlign: TextAlign.center,
+              ),
+            ),
+          ),
+        ),
+      );
+    }
 
     return Scaffold(
       backgroundColor: const Color(0xFFFFF8F8),
@@ -638,9 +756,11 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
     setState(() {
       _type = type;
       _replaceEditableControllers();
-      _selectedCategory = type == TransactionFormType.transfer
-          ? _transferCategory
-          : null;
+      _selectedCategory = _resolveSelectedCategory(
+        current: null,
+        categories: _categories,
+        type: type,
+      );
       _tags.clear();
       _isRecurringExpense = false;
       _sourceAmountTouched = false;
@@ -782,8 +902,8 @@ class _TransferBlock extends StatelessWidget {
     required this.onDestinationAmountChanged,
   });
 
-  final _MockAccount? sourceAccount;
-  final _MockAccount? destinationAccount;
+  final Account? sourceAccount;
+  final Account? destinationAccount;
   final TextEditingController amountController;
   final TextEditingController destinationAmountController;
   final bool enabled;
@@ -845,7 +965,7 @@ class _TransferSide extends StatelessWidget {
   });
 
   final String label;
-  final _MockAccount? account;
+  final Account? account;
   final TextEditingController amountController;
   final bool enabled;
   final VoidCallback onPickAccount;
@@ -1076,56 +1196,13 @@ class _ReadonlyField extends StatelessWidget {
   }
 }
 
-class _MockAccount {
-  const _MockAccount({required this.name, required this.currency});
-
-  final String name;
-  final String currency;
-}
-
-class _MockCategory {
-  const _MockCategory(this.name);
-
-  final String name;
-}
-
 class _FormTag {
-  const _FormTag({required this.name, required this.color});
+  const _FormTag({this.id, required this.name, required this.color});
 
+  final String? id;
   final String name;
   final Color color;
 }
-
-class _CategorySelection {
-  const _CategorySelection.category(this.category);
-
-  const _CategorySelection.none() : category = null;
-
-  final _MockCategory? category;
-}
-
-const _mockAccounts = [
-  _MockAccount(name: 'Mercado Pago', currency: 'ARS'),
-  _MockAccount(name: 'Efectivo', currency: 'ARS'),
-  _MockAccount(name: 'USD', currency: 'USD'),
-];
-
-const _transferCategory = _MockCategory('Transferencia');
-
-const _mockCategories = [
-  _transferCategory,
-  _MockCategory('Intereses'),
-  _MockCategory('Comida'),
-  _MockCategory('Transporte'),
-  _MockCategory('Entretenimiento'),
-  _MockCategory('Otros'),
-];
-
-const _mockTags = [
-  _FormTag(name: 'Ahorro', color: Color(0xFF42A5F5)),
-  _FormTag(name: 'Inversion', color: Color(0xFFFFCA28)),
-  _FormTag(name: 'Viaje', color: Color(0xFFAB47BC)),
-];
 
 double? _parseAmount(String value) {
   return double.tryParse(value.trim().replaceAll(',', '.'));

@@ -1,5 +1,10 @@
-import { Check, Plus, Repeat2, X } from 'lucide-react'
-import { type FormEvent, useState } from 'react'
+import { api } from '@wallet-bot/backend/api'
+import { parseAmountToCents, parseOptionalDate } from '@wallet-bot/shared'
+import { useMutation, useQuery } from 'convex/react'
+import { Check, Loader2, Plus, Repeat2, X } from 'lucide-react'
+import { type FormEvent, type ReactNode, useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { toast } from 'sonner'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
@@ -12,43 +17,27 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
+import { TAG_COLOR_OPTIONS } from '@/lib/tag-colors'
 import { cn } from '@/lib/utils'
 
 type MovementType = 'income' | 'expense' | 'transfer'
 
+type AccountOption = {
+    id: string
+    name: string
+    currency: string
+}
+
+type CategoryOption = {
+    id: string
+    name: string
+}
+
 type FormTag = {
+    id?: string
     name: string
     color: string
 }
-
-const accounts = [
-    { id: 'mercado-pago', name: 'Mercado Pago', currency: 'ARS' },
-    { id: 'efectivo', name: 'Efectivo', currency: 'ARS' },
-    { id: 'usd', name: 'USD', currency: 'USD' },
-]
-
-const categoriesByType: Record<MovementType, string[]> = {
-    income: ['Intereses', 'Salario', 'Reembolso', 'Regalo', 'Otros'],
-    expense: ['Comida', 'Transporte', 'Entretenimiento', 'Servicios', 'Otros'],
-    transfer: ['Transferencia', 'Ahorro', 'Inversión', 'Viaje'],
-}
-
-const knownTags: FormTag[] = [
-    { name: 'Trabajo', color: '#42A5F5' },
-    { name: 'Ahorro', color: '#26A69A' },
-    { name: 'Extra', color: '#FFCA28' },
-    { name: 'Viaje', color: '#AB47BC' },
-]
-
-const tagColorOptions = [
-    '#5EF06A',
-    '#26A69A',
-    '#42A5F5',
-    '#FFCA28',
-    '#FF7043',
-    '#AB47BC',
-    '#78909C',
-]
 
 const typeConfig: Record<
     MovementType,
@@ -87,11 +76,24 @@ function today() {
     return new Date().toISOString().slice(0, 10)
 }
 
-function defaultCategory(type: MovementType) {
-    return categoriesByType[type][0] ?? ''
+function defaultCategoryId(
+    type: MovementType,
+    categories: CategoryOption[],
+): string {
+    if (categories.length === 0) return ''
+    if (type === 'transfer') {
+        const preferred = categories.find(
+            (category) => category.name.toLowerCase() === 'transferencia',
+        )
+        if (preferred) return preferred.id
+    }
+    return categories[0]?.id ?? ''
 }
 
-function defaultDestinationAccount(sourceId: string) {
+function defaultDestinationAccountId(
+    sourceId: string,
+    accounts: AccountOption[],
+): string {
     return accounts.find((account) => account.id !== sourceId)?.id ?? ''
 }
 
@@ -110,7 +112,39 @@ function normalizeAmountInput(value: string) {
         .join('')
 }
 
+function parseFormAmount(value: string): number | null {
+    const parsed = Number(value.trim().replace(',', '.'))
+    if (!Number.isFinite(parsed) || parsed <= 0) return null
+    return parsed
+}
+
+function newId() {
+    return crypto.randomUUID()
+}
+
 export function AddManual() {
+    const navigate = useNavigate()
+
+    const accounts = useQuery(api.accounts.queries.listActive)
+    const categories = useQuery(api.categories.queries.listActive)
+    const availableTags = useQuery(api.tags.queries.listActive)
+
+    const createIncome = useMutation(api.transactions.mutations.createIncome)
+    const createExpense = useMutation(api.transactions.mutations.createExpense)
+    const createTransfer = useMutation(
+        api.transactions.mutations.createTransfer,
+    )
+    const tagTransaction = useMutation(api.transactions.mutations.tag)
+    const createTag = useMutation(api.tags.mutations.create)
+
+    const accountOptions = accounts ?? []
+    const categoryOptions = categories ?? []
+    const knownTags = (availableTags ?? []).map((tag) => ({
+        id: tag.id,
+        name: tag.name,
+        color: tag.color ?? TAG_COLOR_OPTIONS[0],
+    }))
+
     const [type, setType] = useState<MovementType>('income')
     const [amount, setAmount] = useState('0')
     const [destinationAmount, setDestinationAmount] = useState('0')
@@ -120,22 +154,69 @@ export function AddManual() {
     const [title, setTitle] = useState('')
     const [description, setDescription] = useState('')
     const [date, setDate] = useState(today)
-    const [accountId, setAccountId] = useState(accounts[0]?.id ?? '')
-    const [destinationAccountId, setDestinationAccountId] = useState(
-        defaultDestinationAccount(accounts[0]?.id ?? ''),
-    )
-    const [category, setCategory] = useState(defaultCategory('income'))
+    const [accountId, setAccountId] = useState('')
+    const [destinationAccountId, setDestinationAccountId] = useState('')
+    const [categoryId, setCategoryId] = useState('')
     const [tagInput, setTagInput] = useState('')
     const [tags, setTags] = useState<FormTag[]>([])
     const [pendingTagName, setPendingTagName] = useState<string | null>(null)
-    const [pendingTagColor, setPendingTagColor] = useState(tagColorOptions[0])
+    const [pendingTagColor, setPendingTagColor] = useState<string>(
+        TAG_COLOR_OPTIONS[0],
+    )
     const [saved, setSaved] = useState(false)
+    const [isSaving, setIsSaving] = useState(false)
 
-    const selectedAccount = accounts.find((account) => account.id === accountId)
+    useEffect(() => {
+        if (accountOptions.length === 0) return
+        setAccountId((current) => {
+            if (
+                current &&
+                accountOptions.some((account) => account.id === current)
+            ) {
+                return current
+            }
+            return accountOptions[0]?.id ?? ''
+        })
+    }, [accountOptions])
+
+    useEffect(() => {
+        if (accountOptions.length === 0) return
+        setDestinationAccountId((current) => {
+            const fallback = defaultDestinationAccountId(
+                accountId,
+                accountOptions,
+            )
+            if (
+                current &&
+                current !== accountId &&
+                accountOptions.some((account) => account.id === current)
+            ) {
+                return current
+            }
+            return fallback
+        })
+    }, [accountId, accountOptions])
+
+    useEffect(() => {
+        if (categoryOptions.length === 0) return
+        setCategoryId((current) => {
+            if (
+                current &&
+                categoryOptions.some((category) => category.id === current)
+            ) {
+                return current
+            }
+            return defaultCategoryId(type, categoryOptions)
+        })
+    }, [categoryOptions, type])
+
+    const selectedAccount = accountOptions.find(
+        (account) => account.id === accountId,
+    )
     const config = typeConfig[type]
 
     const resetFields = (nextType = type) => {
-        const sourceId = accounts[0]?.id ?? ''
+        const sourceId = accountOptions[0]?.id ?? ''
         setAmount('0')
         setDestinationAmount('0')
         setSourceAmountTouched(false)
@@ -144,34 +225,20 @@ export function AddManual() {
         setDescription('')
         setDate(today())
         setAccountId(sourceId)
-        setDestinationAccountId(defaultDestinationAccount(sourceId))
-        setCategory(defaultCategory(nextType))
+        setDestinationAccountId(
+            defaultDestinationAccountId(sourceId, accountOptions),
+        )
+        setCategoryId(defaultCategoryId(nextType, categoryOptions))
         setTagInput('')
         setTags([])
         setPendingTagName(null)
-        setPendingTagColor(tagColorOptions[0])
+        setPendingTagColor(TAG_COLOR_OPTIONS[0])
         setSaved(false)
     }
 
     const changeType = (nextType: MovementType) => {
         setType(nextType)
         resetFields(nextType)
-    }
-
-    const addTag = (raw: string) => {
-        const name = raw.trim()
-        if (!name) return
-        const existing = knownTags.find(
-            (tag) => tag.name.toLowerCase() === name.toLowerCase(),
-        )
-        if (!existing) {
-            setPendingTagName(name)
-            setPendingTagColor(tagColorOptions[0])
-            return
-        }
-
-        addResolvedTag(existing)
-        setTagInput('')
     }
 
     const addResolvedTag = (tag: FormTag) => {
@@ -184,16 +251,37 @@ export function AddManual() {
         )
     }
 
+    const addTag = (raw: string) => {
+        const name = raw.trim()
+        if (!name) return
+        const existing = knownTags.find(
+            (tag) => tag.name.toLowerCase() === name.toLowerCase(),
+        )
+        if (!existing) {
+            setPendingTagName(name)
+            setPendingTagColor(TAG_COLOR_OPTIONS[0])
+            return
+        }
+
+        addResolvedTag(existing)
+        setTagInput('')
+    }
+
     const createPendingTag = () => {
         if (!pendingTagName) return
-        addResolvedTag({ name: pendingTagName, color: pendingTagColor })
+        addResolvedTag({
+            name: pendingTagName,
+            color: pendingTagColor,
+        })
         setTagInput('')
         setPendingTagName(null)
     }
 
     const sameTransferCurrency = () => {
-        const source = accounts.find((account) => account.id === accountId)
-        const destination = accounts.find(
+        const source = accountOptions.find(
+            (account) => account.id === accountId,
+        )
+        const destination = accountOptions.find(
             (account) => account.id === destinationAccountId,
         )
         return (
@@ -224,8 +312,8 @@ export function AddManual() {
 
     const updateSourceAccount = (value: string) => {
         setAccountId(value)
-        const source = accounts.find((account) => account.id === value)
-        const destination = accounts.find(
+        const source = accountOptions.find((account) => account.id === value)
+        const destination = accountOptions.find(
             (account) => account.id === destinationAccountId,
         )
         if (
@@ -240,8 +328,12 @@ export function AddManual() {
 
     const updateDestinationAccount = (value: string) => {
         setDestinationAccountId(value)
-        const source = accounts.find((account) => account.id === accountId)
-        const destination = accounts.find((account) => account.id === value)
+        const source = accountOptions.find(
+            (account) => account.id === accountId,
+        )
+        const destination = accountOptions.find(
+            (account) => account.id === value,
+        )
         if (
             type === 'transfer' &&
             source?.currency === destination?.currency &&
@@ -272,15 +364,172 @@ export function AddManual() {
         setDestinationAmountTouched(currentSourceTouched)
     }
 
-    const submit = (event: FormEvent<HTMLFormElement>) => {
+    const ensureTag = async (tag: FormTag): Promise<string> => {
+        if (tag.id) return tag.id
+
+        const existing = knownTags.find(
+            (candidate) =>
+                candidate.name.toLowerCase() === tag.name.toLowerCase(),
+        )
+        if (existing?.id) return existing.id
+
+        const id = newId()
+        await createTag({
+            id,
+            name: tag.name,
+            color: tag.color,
+        })
+        return id
+    }
+
+    const submit = async (event: FormEvent<HTMLFormElement>) => {
         event.preventDefault()
-        setSaved(true)
+        if (!selectedAccount) {
+            toast.error('Selecciona una cuenta')
+            return
+        }
+        if (!categoryId) {
+            toast.error('Selecciona una categoria')
+            return
+        }
+
+        const parsedAmount = parseFormAmount(amount)
+        if (!parsedAmount) {
+            toast.error('El monto debe ser mayor a 0')
+            return
+        }
+
+        const trimmedTitle =
+            type === 'transfer' ? 'Transferencia' : title.trim()
+        if (!trimmedTitle) {
+            toast.error('El titulo es obligatorio')
+            return
+        }
+
+        const sourceDate = parseOptionalDate(date)
+        const trimmedDescription = description.trim() || undefined
+
+        if (type === 'transfer') {
+            if (!destinationAccountId) {
+                toast.error('Selecciona una cuenta destino')
+                return
+            }
+            if (destinationAccountId === accountId) {
+                toast.error('Origen y destino deben ser cuentas distintas')
+                return
+            }
+        }
+
+        setIsSaving(true)
+        try {
+            const resolvedTagIds: string[] = []
+            for (const tag of tags) {
+                resolvedTagIds.push(await ensureTag(tag))
+            }
+
+            const transactionId = newId()
+            if (type === 'income') {
+                await createIncome({
+                    id: transactionId,
+                    name: trimmedTitle,
+                    description: trimmedDescription,
+                    amount: parseAmountToCents(parsedAmount),
+                    accountId,
+                    categoryId,
+                    date: sourceDate,
+                    dateConfirmed: true,
+                })
+            } else if (type === 'expense') {
+                await createExpense({
+                    id: transactionId,
+                    name: trimmedTitle,
+                    description: trimmedDescription,
+                    amount: parseAmountToCents(parsedAmount),
+                    accountId,
+                    categoryId,
+                    date: sourceDate,
+                    dateConfirmed: true,
+                })
+            } else {
+                const parsedDestinationAmount =
+                    parseFormAmount(destinationAmount)
+                if (!parsedDestinationAmount) {
+                    toast.error('El monto destino debe ser mayor a 0')
+                    setIsSaving(false)
+                    return
+                }
+                const destinationAccount = accountOptions.find(
+                    (account) => account.id === destinationAccountId,
+                )
+                const exchangeRate =
+                    selectedAccount.currency !== destinationAccount?.currency
+                        ? parsedDestinationAmount / parsedAmount
+                        : undefined
+
+                await createTransfer({
+                    id: transactionId,
+                    name: trimmedTitle,
+                    description: trimmedDescription,
+                    amount: parseAmountToCents(parsedAmount),
+                    accountId,
+                    toAccountId: destinationAccountId,
+                    toAmount: parseAmountToCents(parsedDestinationAmount),
+                    exchangeRate,
+                    categoryId,
+                    date: sourceDate,
+                    dateConfirmed: true,
+                })
+            }
+
+            if (resolvedTagIds.length > 0) {
+                await tagTransaction({
+                    transactionId,
+                    tagIds: resolvedTagIds,
+                })
+            }
+
+            setSaved(true)
+            toast.success('Movimiento anotado')
+            navigate('/activity')
+        } catch (error) {
+            toast.error(
+                error instanceof Error
+                    ? error.message
+                    : 'No se pudo anotar el movimiento',
+            )
+        } finally {
+            setIsSaving(false)
+        }
+    }
+
+    const isLoading =
+        accounts === undefined ||
+        categories === undefined ||
+        availableTags === undefined
+
+    if (isLoading) {
+        return (
+            <div className="flex min-h-full items-center justify-center bg-[#FFF8F8] px-4 py-10">
+                <Loader2 className="size-6 animate-spin text-muted-foreground" />
+            </div>
+        )
+    }
+
+    if (accountOptions.length === 0 || categoryOptions.length === 0) {
+        return (
+            <div className="flex min-h-full items-center justify-center bg-[#FFF8F8] px-4 py-10">
+                <p className="max-w-md text-center text-sm text-muted-foreground">
+                    Necesitas al menos una cuenta y una categoria para anotar
+                    movimientos.
+                </p>
+            </div>
+        )
     }
 
     return (
         <div className="flex min-h-full justify-center bg-[#FFF8F8] px-4 py-10">
             <form
-                onSubmit={submit}
+                onSubmit={(event) => void submit(event)}
                 className="flex w-full max-w-xl flex-col gap-10"
             >
                 <header className="space-y-6 text-center">
@@ -316,6 +565,7 @@ export function AddManual() {
 
                 {type === 'transfer' ? (
                     <TransferAmounts
+                        accounts={accountOptions}
                         sourceAmount={amount}
                         destinationAmount={destinationAmount}
                         sourceAccountId={accountId}
@@ -371,6 +621,7 @@ export function AddManual() {
                                     id="account"
                                     value={accountId}
                                     onChange={setAccountId}
+                                    accounts={accountOptions}
                                 />
                             </Field>
 
@@ -395,7 +646,7 @@ export function AddManual() {
                                       : 'Supermercado, taxi, alquiler'
                             }
                             className="h-11 rounded-xl border-[#D9D0D6] bg-white"
-                            required
+                            required={type !== 'transfer'}
                         />
                     </Field>
 
@@ -415,13 +666,16 @@ export function AddManual() {
                     <Field label="Categoría" htmlFor="category">
                         <select
                             id="category"
-                            value={category}
-                            onChange={(event) => setCategory(event.target.value)}
+                            value={categoryId}
+                            onChange={(event) =>
+                                setCategoryId(event.target.value)
+                            }
                             className="h-11 w-full rounded-xl border border-[#D9D0D6] bg-white px-3 text-sm outline-none focus-visible:border-[#21C4B6] focus-visible:ring-3 focus-visible:ring-[#21C4B6]/30"
+                            required
                         >
-                            {categoriesByType[type].map((item) => (
-                                <option key={item} value={item}>
-                                    {item}
+                            {categoryOptions.map((item) => (
+                                <option key={item.id} value={item.id}>
+                                    {item.name}
                                 </option>
                             ))}
                         </select>
@@ -430,6 +684,7 @@ export function AddManual() {
 
                 <TagsField
                     tags={tags}
+                    availableTags={knownTags}
                     tagInput={tagInput}
                     onTagInputChange={setTagInput}
                     onAddTag={addTag}
@@ -442,7 +697,7 @@ export function AddManual() {
 
                 {saved ? (
                     <div className="rounded-xl border border-[#21C4B6]/30 bg-[#21C4B6]/10 px-4 py-3 text-sm font-medium text-[#11796F]">
-                        Movimiento listo para guardar.
+                        Movimiento guardado.
                     </div>
                 ) : null}
 
@@ -452,6 +707,7 @@ export function AddManual() {
                         variant="outline"
                         className="h-12 flex-1 rounded-xl border-[#F0C9CE] bg-[#F0C9CE] text-black hover:bg-[#E9B9C0]"
                         onClick={() => resetFields()}
+                        disabled={isSaving}
                     >
                         <X className="size-4" />
                         Cancelar
@@ -459,8 +715,13 @@ export function AddManual() {
                     <Button
                         type="submit"
                         className="h-12 flex-1 rounded-xl bg-[#21C4B6] text-white hover:bg-[#1BAEA2]"
+                        disabled={isSaving}
                     >
-                        <Check className="size-4" />
+                        {isSaving ? (
+                            <Loader2 className="size-4 animate-spin" />
+                        ) : (
+                            <Check className="size-4" />
+                        )}
                         Anotar
                     </Button>
                 </footer>
@@ -477,6 +738,7 @@ export function AddManual() {
 }
 
 function TransferAmounts({
+    accounts,
     sourceAmount,
     destinationAmount,
     sourceAccountId,
@@ -489,6 +751,7 @@ function TransferAmounts({
     date,
     onDateChange,
 }: {
+    accounts: AccountOption[]
     sourceAmount: string
     destinationAmount: string
     sourceAccountId: string
@@ -512,6 +775,7 @@ function TransferAmounts({
         <section className="space-y-5">
             <div className="grid items-start gap-4 sm:grid-cols-[1fr_auto_1fr]">
                 <TransferSide
+                    accounts={accounts}
                     label="Sale"
                     amount={sourceAmount}
                     accountId={sourceAccountId}
@@ -531,6 +795,7 @@ function TransferAmounts({
                     </Button>
                 </div>
                 <TransferSide
+                    accounts={accounts}
                     label="Entra"
                     amount={destinationAmount}
                     accountId={destinationAccountId}
@@ -548,6 +813,7 @@ function TransferAmounts({
 }
 
 function TransferSide({
+    accounts,
     label,
     amount,
     accountId,
@@ -555,6 +821,7 @@ function TransferSide({
     onAmountChange,
     onAccountChange,
 }: {
+    accounts: AccountOption[]
     label: string
     amount: string
     accountId: string
@@ -577,7 +844,9 @@ function TransferSide({
                     onBlur={() => {
                         if (amount.trim() === '') onAmountChange('0')
                     }}
-                    onChange={(event) => onAmountChange(event.target.value)}
+                    onChange={(event) =>
+                        onAmountChange(normalizeAmountInput(event.target.value))
+                    }
                     placeholder="0,00"
                     className="h-13 rounded-xl border-[#D9D0D6] bg-white px-14 text-center text-2xl font-normal text-black shadow-sm"
                     required
@@ -586,19 +855,25 @@ function TransferSide({
                     {currency}
                 </span>
             </div>
-            <AccountSelect value={accountId} onChange={onAccountChange} />
+            <AccountSelect
+                value={accountId}
+                onChange={onAccountChange}
+                accounts={accounts}
+            />
         </div>
     )
 }
 
 function TagsField({
     tags,
+    availableTags,
     tagInput,
     onTagInputChange,
     onAddTag,
     onRemoveTag,
 }: {
     tags: FormTag[]
+    availableTags: FormTag[]
     tagInput: string
     onTagInputChange: (value: string) => void
     onAddTag: (value: string) => void
@@ -611,7 +886,9 @@ function TagsField({
                     <Input
                         id="tags"
                         value={tagInput}
-                        onChange={(event) => onTagInputChange(event.target.value)}
+                        onChange={(event) =>
+                            onTagInputChange(event.target.value)
+                        }
                         onKeyDown={(event) => {
                             if (event.key === 'Enter' || event.key === ',') {
                                 event.preventDefault()
@@ -633,9 +910,9 @@ function TagsField({
             </Field>
 
             <div className="flex flex-wrap gap-2">
-                {knownTags.map((tag) => (
+                {availableTags.map((tag) => (
                     <button
-                        key={tag.name}
+                        key={tag.id ?? tag.name}
                         type="button"
                         onClick={() => onAddTag(tag.name)}
                         className="h-8 rounded-full border px-3 text-sm font-medium"
@@ -654,7 +931,7 @@ function TagsField({
                 <div className="flex flex-wrap gap-2">
                     {tags.map((tag) => (
                         <Badge
-                            key={tag.name}
+                            key={tag.id ?? tag.name}
                             variant="secondary"
                             className="h-7 gap-1 rounded-full text-black"
                             style={{ backgroundColor: tag.color }}
@@ -688,13 +965,16 @@ function TagColorDialog({
     onCreate: () => void
 }) {
     return (
-        <Dialog open={tagName !== null} onOpenChange={(open) => !open && onCancel()}>
+        <Dialog
+            open={tagName !== null}
+            onOpenChange={(open) => !open && onCancel()}
+        >
             <DialogContent>
                 <DialogHeader>
                     <DialogTitle>Color de "{tagName}"</DialogTitle>
                 </DialogHeader>
                 <div className="flex flex-wrap gap-3 py-2">
-                    {tagColorOptions.map((color) => (
+                    {TAG_COLOR_OPTIONS.map((color) => (
                         <button
                             key={color}
                             type="button"
@@ -735,10 +1015,12 @@ function AccountSelect({
     id,
     value,
     onChange,
+    accounts,
 }: {
     id?: string
     value: string
     onChange: (value: string) => void
+    accounts: AccountOption[]
 }) {
     return (
         <select
@@ -782,7 +1064,7 @@ function Field({
 }: {
     label: string
     htmlFor?: string
-    children: React.ReactNode
+    children: ReactNode
 }) {
     return (
         <div className="space-y-2">
