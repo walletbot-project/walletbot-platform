@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:app/auth/auth_controller.dart';
 import 'package:app/config.dart';
+import 'package:app/data/data.dart';
 import 'package:app/database.dart';
 import 'package:app/screens/accounts.dart';
 import 'package:app/screens/activity.dart';
@@ -68,6 +69,12 @@ class _AuthGate extends StatelessWidget {
         Provider<AppDatabase>(
           create: (_) => AppDatabase.forUser(active.id),
           dispose: (_, db) => db.close(),
+        ),
+        // The app-facing data layer: all reads/writes from screens and the
+        // voice agent go through this. Scoped to the account subtree so it is
+        // recreated together with the database on account switch.
+        Provider<AppRepositories>(
+          create: (ctx) => AppRepositories(ctx.read<AppDatabase>()),
         ),
         // SyncEngine only attaches for remote accounts. For local accounts
         // we still create one (so `Provider.of<SyncEngine>` is non-null
@@ -152,13 +159,21 @@ class _AppMainState extends State<AppMain> {
       floatingActionButton: FloatingActionButton(
         heroTag: 'voiceFab',
         onPressed: () {
-          final database = context.read<AppDatabase>();
+          // The voice route is pushed on the root navigator, above the
+          // account-scoped providers: capture the active account's data layer
+          // here, and dismiss the route if the account changes while open so
+          // the agent can never write to a closed/foreign database.
+          final repositories = context.read<AppRepositories>();
+          final accountId = context.read<AuthController>().activeAccount?.id;
           Navigator.of(context).push(
             MaterialPageRoute(
-              builder: (_) => VoiceScreen(
-                commandFactory: GeminiVoiceExpenseCommandFactory(
-                  database: database,
-                  convexSiteUrl: AppConfig.convexSiteUrl,
+              builder: (_) => _PopOnAccountSwitch(
+                accountId: accountId,
+                child: VoiceScreen(
+                  commandFactory: GeminiVoiceExpenseCommandFactory(
+                    repositories: repositories,
+                    convexSiteUrl: AppConfig.convexSiteUrl,
+                  ),
                 ),
               ),
             ),
@@ -188,6 +203,29 @@ class _AppMainState extends State<AppMain> {
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
     );
+  }
+}
+
+/// Pops its route as soon as the active account is no longer the one the
+/// route was opened for (switch, sign-out). The child captured account-scoped
+/// objects at push time; once the account changes those are disposed, so the
+/// route must not stay on screen.
+class _PopOnAccountSwitch extends StatelessWidget {
+  const _PopOnAccountSwitch({required this.accountId, required this.child});
+
+  final String? accountId;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final activeId = context.watch<AuthController>().activeAccount?.id;
+    if (activeId != accountId) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!context.mounted) return;
+        Navigator.of(context).pop();
+      });
+    }
+    return child;
   }
 }
 

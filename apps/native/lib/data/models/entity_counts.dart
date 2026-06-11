@@ -1,5 +1,7 @@
-import 'package:app/database.dart';
+import '../../database.dart';
 
+/// Row shapes for the insight count queries (categories/tags with their
+/// transaction counts).
 class CategoryWithCount {
   const CategoryWithCount({
     required this.category,
