@@ -12,11 +12,11 @@ Implementación:
 
 ## Estado actual
 
-- `schemaVersion` actual en código: `1`
-- El schema en código ya incluye columnas nuevas como `transactions.is_archived` y `transactions.date_confirmed`
-- No hay `MigrationStrategy` documentada ni implementada todavía
+- `schemaVersion` actual en código: `3`
+- Hay `MigrationStrategy` implementada para upgrades desde bases viejas
+- La migración actual normaliza columnas `archived -> is_archived` cuando hace falta y agrega `transactions.date_confirmed`
 
-Esto implica que una instalación nueva y una base ya existente pueden divergir.
+Esto busca cerrar la divergencia entre instalaciones nuevas y bases ya existentes.
 
 ## Tablas
 
@@ -157,4 +157,4 @@ Columnas:
 - SQLite usa `snake_case`.
 - `dirty` marca cambios locales pendientes de push.
 - `sync_state` guarda el cursor de pull/CAS del cliente.
-- La próxima migración formal debería documentar el upgrade desde la base `v1` hacia este schema efectivo.
+- La migración formal actual vive en `v1/v2 -> v3`.

@@ -189,9 +189,20 @@ class Tombstones extends Table {
 @DriftDatabase(tables: [Accounts, Categories, Transactions, Tags, TransactionTags, SyncState, Tombstones])
 class AppDatabase extends _$AppDatabase {
   AppDatabase.forUser(String userId) : super(_openConnection(_dbNameFor(userId)));
+  AppDatabase.forTesting(super.executor);
 
   @override
-  int get schemaVersion => 1;
+  int get schemaVersion => 3;
+
+  @override
+  MigrationStrategy get migration => MigrationStrategy(
+    onCreate: (m) async => m.createAll(),
+    onUpgrade: (m, from, to) async {
+      if (from < 3) {
+        await _migrateToV3(m);
+      }
+    },
+  );
 
   static String _dbNameFor(String userId) => 'app_database_$userId';
 
@@ -200,6 +211,38 @@ class AppDatabase extends _$AppDatabase {
       name: name,
       native: const DriftNativeOptions(databaseDirectory: getApplicationSupportDirectory),
     );
+  }
+
+  Future<void> _migrateToV3(Migrator m) async {
+    for (final tableName in const [
+      'accounts',
+      'categories',
+      'transactions',
+      'tags',
+    ]) {
+      await _renameArchivedColumnIfNeeded(tableName);
+    }
+
+    final transactionColumns = await _columnNames('transactions');
+    if (!transactionColumns.contains('date_confirmed')) {
+      await m.addColumn(transactions, transactions.dateConfirmed);
+    }
+  }
+
+  Future<void> _renameArchivedColumnIfNeeded(String tableName) async {
+    final columns = await _columnNames(tableName);
+    if (!columns.contains('archived') || columns.contains('is_archived')) {
+      return;
+    }
+
+    await customStatement(
+      'ALTER TABLE "$tableName" RENAME COLUMN "archived" TO "is_archived"',
+    );
+  }
+
+  Future<Set<String>> _columnNames(String tableName) async {
+    final rows = await customSelect('PRAGMA table_info("$tableName")').get();
+    return rows.map((row) => row.read<String>('name')).toSet();
   }
 
   Stream<List<Account>> watchAccounts() =>
