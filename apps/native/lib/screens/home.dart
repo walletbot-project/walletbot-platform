@@ -1,5 +1,8 @@
+import 'dart:convert';
+
 import 'package:app/auth/account.dart';
 import 'package:app/auth/auth_controller.dart';
+import 'package:app/components/filter_sheet.dart';
 import 'package:app/sync/sync_status_pill.dart';
 import 'package:convex_flutter/convex_flutter.dart';
 import 'package:flutter/material.dart';
@@ -15,6 +18,18 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   String? _testResult;
   bool _testing = false;
+  String? _filterResult;
+
+  Future<void> _openFilters() async {
+    final filter = await showFilterSheet(context);
+    if (!mounted || filter == null) return;
+    const encoder = JsonEncoder.withIndent('  ');
+    setState(() {
+      _filterResult = filter.isEmpty
+          ? 'Empty filter (matches all transactions)'
+          : encoder.convert(filter.toCanonicalJson());
+    });
+  }
 
   Future<void> _runTestQuery() async {
     setState(() {
@@ -134,6 +149,26 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
                 child: SelectableText(
                   _testResult!,
+                  style: const TextStyle(fontFamily: 'monospace'),
+                ),
+              ),
+            ],
+            const SizedBox(height: 16),
+            OutlinedButton.icon(
+              onPressed: _openFilters,
+              icon: const Icon(Icons.filter_list_rounded),
+              label: const Text('Open filters sheet'),
+            ),
+            if (_filterResult != null) ...[
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  border: Border.all(color: Theme.of(context).dividerColor),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: SelectableText(
+                  _filterResult!,
                   style: const TextStyle(fontFamily: 'monospace'),
                 ),
               ),
