@@ -15,6 +15,13 @@
 - Dependencies to install
 - etc. -->
 
+<!-- Schema / migration checklist (delete items that do not apply):
+- If Convex schema changed, update docs/schema/convex-schema.md
+- If SQLite/Drift schema changed, bump schemaVersion and define an explicit migration path
+- If any persisted schema changed, add/update docs/schema/migrations/*
+- If a backfill is required, document it here and in the migration doc
+-->
+
 ## Acceptance Tests
 
 <!-- Step-by-step instructions the reviewer should follow to verify the feature works correctly.

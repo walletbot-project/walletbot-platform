@@ -198,8 +198,16 @@ class AppDatabase extends _$AppDatabase {
   MigrationStrategy get migration => MigrationStrategy(
     onCreate: (m) async => m.createAll(),
     onUpgrade: (m, from, to) async {
-      if (from < 3) {
-        await _migrateToV3(m);
+      switch ((from, to)) {
+        case (1, 3):
+        case (2, 3):
+          await _migrateToV3(m);
+          return;
+        default:
+          throw UnsupportedError(
+            'Unhandled SQLite migration path: v$from -> v$to. '
+            'Define an explicit upgrade path in AppDatabase.migration.',
+          );
       }
     },
   );

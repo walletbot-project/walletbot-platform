@@ -17,6 +17,7 @@ Reglas de mantenimiento:
 - Si cambia `apps/native/lib/database.dart`, actualizar [sqlite-schema.md](./sqlite-schema.md).
 - Si el cambio requiere compatibilidad hacia atrás, agregar una entrada en [migrations/](./migrations/README.md).
 - Si el cambio requiere backfill, documentarlo en la migración correspondiente.
+- Para SQLite/Drift, no dejar saltos de versión implícitos: cada upgrade soportado debe tener un path explícito y los no soportados deben fallar de forma clara.
 
 Estado actual:
 

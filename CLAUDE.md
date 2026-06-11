@@ -45,6 +45,11 @@ Wallet Bot — app for keeping track of personal expenses
 - After implementing a feature, review `docs/riesgos.md` and decide whether
   the feature mitigates an existing risk, changes its probability or impact, or
   introduces a new risk that should be added.
+- If you change any persisted schema, you must update the matching schema docs
+  under `docs/schema/`, define the migration or backfill explicitly, and make
+  sure the PR description calls it out.
+- For Drift/SQLite migrations, never leave version jumps implicit: bump
+  `schemaVersion` and fail explicitly if an upgrade path is missing.
 - After all steps of any task run a CLAUDE.md rules check
 - Always report violations
 
