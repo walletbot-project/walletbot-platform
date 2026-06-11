@@ -1,5 +1,8 @@
 # WalletBot — Modelo de Datos
 
+Ver también:
+- [Schema docs](./schema/README.md)
+
 ## Filosofía central
 
 WalletBot usa un modelo simple y directo:
