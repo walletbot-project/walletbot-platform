@@ -5,6 +5,8 @@ import 'package:drift/drift.dart' as drift;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import 'transaction_form.dart';
+
 class ActivityScreen extends StatefulWidget {
   const ActivityScreen({super.key});
 
@@ -14,7 +16,15 @@ class ActivityScreen extends StatefulWidget {
 
 class _ActivityScreenState extends State<ActivityScreen> {
   static const _pageSize = 50;
-  static const _spanishWeekdays = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
+  static const _spanishWeekdays = [
+    'Lunes',
+    'Martes',
+    'Miércoles',
+    'Jueves',
+    'Viernes',
+    'Sábado',
+    'Domingo',
+  ];
 
   final _scrollController = ScrollController();
 
@@ -26,6 +36,12 @@ class _ActivityScreenState extends State<ActivityScreen> {
   /// can tell whether the current page is full (more might exist) or short
   /// (we've reached the end).
   int _lastRenderedCount = 0;
+
+  Future<void> _openTransactionForm() async {
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute(builder: (_) => const TransactionFormScreen()),
+    );
+  }
 
   @override
   void initState() {
@@ -73,7 +89,8 @@ class _ActivityScreenState extends State<ActivityScreen> {
   }
 
   Stream<List<Transaction>> _watchTransactions(AppDatabase db) {
-    final query = db.select(db.transactions)..where((t) => t.archived.equals(false));
+    final query = db.select(db.transactions)
+      ..where((t) => t.archived.equals(false));
 
     final type = _filterType;
     if (type != null) {
@@ -103,7 +120,11 @@ class _ActivityScreenState extends State<ActivityScreen> {
     }
     if (_filters.dateTo != null) {
       // Inclusive end of day.
-      final endOfDay = DateTime(_filters.dateTo!.year, _filters.dateTo!.month, _filters.dateTo!.day + 1);
+      final endOfDay = DateTime(
+        _filters.dateTo!.year,
+        _filters.dateTo!.month,
+        _filters.dateTo!.day + 1,
+      );
       final ms = BigInt.from(endOfDay.millisecondsSinceEpoch);
       query.where((t) => t.date.isSmallerThanValue(ms));
     }
@@ -129,30 +150,54 @@ class _ActivityScreenState extends State<ActivityScreen> {
     final db = context.watch<AppDatabase>();
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Actividad')),
+      appBar: AppBar(
+        title: const Text('Actividad'),
+        actions: [
+          IconButton(
+            tooltip: 'Anadir movimiento',
+            onPressed: _openTransactionForm,
+            icon: const Icon(Icons.add_rounded),
+          ),
+        ],
+      ),
       body: SafeArea(
         child: CustomScrollView(
           controller: _scrollController,
           slivers: [
             const SliverToBoxAdapter(child: SizedBox(height: 8)),
             SliverToBoxAdapter(
-              child: TransactionFiltersBar(filters: _filters, onChanged: _onFiltersChanged),
+              child: TransactionFiltersBar(
+                filters: _filters,
+                onChanged: _onFiltersChanged,
+              ),
             ),
             const SliverToBoxAdapter(child: SizedBox(height: 16)),
             SliverToBoxAdapter(
-              child: _FilterChips(selected: _filterType, onChanged: _updateFilter),
+              child: _FilterChips(
+                selected: _filterType,
+                onChanged: _updateFilter,
+              ),
             ),
             StreamBuilder<List<Transaction>>(
               stream: _watchTransactions(db),
               builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
-                  return const SliverFillRemaining(hasScrollBody: false, child: Center(child: CircularProgressIndicator()));
+                if (snapshot.connectionState == ConnectionState.waiting &&
+                    !snapshot.hasData) {
+                  return const SliverFillRemaining(
+                    hasScrollBody: false,
+                    child: Center(child: CircularProgressIndicator()),
+                  );
                 }
                 if (snapshot.hasError) {
                   return SliverFillRemaining(
                     hasScrollBody: false,
                     child: Center(
-                      child: Padding(padding: const EdgeInsets.all(32), child: Text('Error al cargar transacciones: ${snapshot.error}')),
+                      child: Padding(
+                        padding: const EdgeInsets.all(32),
+                        child: Text(
+                          'Error al cargar transacciones: ${snapshot.error}',
+                        ),
+                      ),
                     ),
                   );
                 }
@@ -164,7 +209,10 @@ class _ActivityScreenState extends State<ActivityScreen> {
                   return const SliverFillRemaining(
                     hasScrollBody: false,
                     child: Center(
-                      child: Padding(padding: EdgeInsets.all(32), child: Text('No hay transacciones')),
+                      child: Padding(
+                        padding: EdgeInsets.all(32),
+                        child: Text('No hay transacciones'),
+                      ),
                     ),
                   );
                 }
@@ -172,7 +220,11 @@ class _ActivityScreenState extends State<ActivityScreen> {
                 final hasMore = items.length >= _limit;
                 final entries = _buildListEntries(items, hasMore: hasMore);
 
-                return SliverList.builder(itemCount: entries.length, itemBuilder: (context, index) => _buildEntry(context, entries[index]));
+                return SliverList.builder(
+                  itemCount: entries.length,
+                  itemBuilder: (context, index) =>
+                      _buildEntry(context, entries[index]),
+                );
               },
             ),
           ],
@@ -181,7 +233,10 @@ class _ActivityScreenState extends State<ActivityScreen> {
     );
   }
 
-  List<_ListEntry> _buildListEntries(List<Transaction> items, {required bool hasMore}) {
+  List<_ListEntry> _buildListEntries(
+    List<Transaction> items, {
+    required bool hasMore,
+  }) {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
     final entries = <_ListEntry>[];
@@ -212,7 +267,10 @@ class _ActivityScreenState extends State<ActivityScreen> {
       case _HeaderEntry(:final label):
         return Padding(
           padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-          child: Text(label, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+          child: Text(
+            label,
+            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+          ),
         );
       case _TxnEntry(:final transaction):
         return Padding(
