@@ -184,37 +184,15 @@ class _AccountsScreenState extends State<AccountsScreen> {
       body: Column(
         children: [
           Expanded(
-            child: StreamBuilder<List<Account>>(
-              stream: db.watchAccounts(),
-              builder: (context, snapshot) {
-                final loading =
-                    snapshot.connectionState == ConnectionState.waiting;
-                final list = snapshot.data ?? [];
-
-                if (loading) {
-                  return const Center(child: CircularProgressIndicator());
-                }
-                if (list.isEmpty) {
-                  return _EmptyBody(onCreateTap: _navigateToCreateAccount);
-                }
-                return ListView.builder(
-                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 96),
-                  itemCount: list.length,
-                  itemBuilder: (context, i) {
-                    final account = list[i];
-                    return _AccountCard(
-                      account: account,
-                      isManagementMode: _isManagementMode,
-                      isSelected: _selectedIds.contains(account.id),
-                      onEdit: () => _navigateToEditAccount(account),
-                      onDelete: () =>
-                          _requestDelete(account.id, account.name),
-                      onLongPress: () => _enterManagementMode(account.id),
-                      onToggleSelect: () => _toggleSelection(account.id),
-                    );
-                  },
-                );
-              },
+            child: _AccountsList(
+              db: db,
+              isManagementMode: _isManagementMode,
+              selectedIds: _selectedIds,
+              onEdit: _navigateToEditAccount,
+              onDelete: _requestDelete,
+              onLongPress: _enterManagementMode,
+              onToggleSelect: _toggleSelection,
+              onCreateTap: _navigateToCreateAccount,
             ),
           ),
           // Management mode action bar — rendered outside the scroll view
@@ -228,6 +206,81 @@ class _AccountsScreenState extends State<AccountsScreen> {
             ),
         ],
       ),
+    );
+  }
+}
+
+// ── Accounts list ─────────────────────────────────────────────────────────────
+
+// Stateful so the stream is created once in initState and reused across
+// parent rebuilds (e.g. selection toggles). Passing a new stream object to
+// StreamBuilder on each build causes it to briefly reset to waiting state,
+// which flashes the loading indicator.
+class _AccountsList extends StatefulWidget {
+  const _AccountsList({
+    required this.db,
+    required this.isManagementMode,
+    required this.selectedIds,
+    required this.onEdit,
+    required this.onDelete,
+    required this.onLongPress,
+    required this.onToggleSelect,
+    required this.onCreateTap,
+  });
+
+  final AppDatabase db;
+  final bool isManagementMode;
+  final Set<String> selectedIds;
+  final void Function(Account) onEdit;
+  final void Function(String, String) onDelete;
+  final void Function(String) onLongPress;
+  final void Function(String) onToggleSelect;
+  final VoidCallback onCreateTap;
+
+  @override
+  State<_AccountsList> createState() => _AccountsListState();
+}
+
+class _AccountsListState extends State<_AccountsList> {
+  late final Stream<List<Account>> _stream;
+
+  @override
+  void initState() {
+    super.initState();
+    _stream = widget.db.watchAccounts();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<List<Account>>(
+      stream: _stream,
+      builder: (context, snapshot) {
+        final loading = snapshot.connectionState == ConnectionState.waiting;
+        final list = snapshot.data ?? [];
+
+        if (loading) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        if (list.isEmpty) {
+          return _EmptyBody(onCreateTap: widget.onCreateTap);
+        }
+        return ListView.builder(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 96),
+          itemCount: list.length,
+          itemBuilder: (context, i) {
+            final account = list[i];
+            return _AccountCard(
+              account: account,
+              isManagementMode: widget.isManagementMode,
+              isSelected: widget.selectedIds.contains(account.id),
+              onEdit: () => widget.onEdit(account),
+              onDelete: () => widget.onDelete(account.id, account.name),
+              onLongPress: () => widget.onLongPress(account.id),
+              onToggleSelect: () => widget.onToggleSelect(account.id),
+            );
+          },
+        );
+      },
     );
   }
 }
