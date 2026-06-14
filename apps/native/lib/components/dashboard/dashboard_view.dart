@@ -3,15 +3,30 @@ import 'package:app/components/dashboard/breakdown_chart_widget.dart';
 import 'package:app/components/dashboard/dashboard_models.dart';
 import 'package:app/components/dashboard/stat_widget.dart';
 import 'package:app/components/dashboard/transaction_list_widget.dart';
+import 'package:app/database.dart';
 import 'package:flutter/material.dart';
+
+class DashboardViewItem {
+  const DashboardViewItem({required this.row, required this.spec});
+
+  final DashboardWidget row;
+  final DashboardWidgetSpec spec;
+}
 
 /// Renders the dashboard as one flat ordered flow: each widget keeps a position
 /// and width, while this view groups the flow into visual rows. The data model
 /// stays flat; row grouping is only a rendering detail for compact gaps.
 class DashboardView extends StatelessWidget {
-  const DashboardView({super.key, required this.widgets});
+  const DashboardView({
+    super.key,
+    required this.items,
+    this.onTapItem,
+    this.onLongPressItem,
+  });
 
-  final List<DashboardWidgetSpec> widgets;
+  final List<DashboardViewItem> items;
+  final ValueChanged<DashboardViewItem>? onTapItem;
+  final ValueChanged<DashboardViewItem>? onLongPressItem;
   static const _gridUnits = 6;
   static const _gap = 4.0;
 
@@ -38,8 +53,9 @@ class DashboardView extends StatelessWidget {
                       if (itemIndex > 0) const SizedBox(width: _gap),
                       Expanded(
                         flex: rows[rowIndex].items[itemIndex].units,
-                        child: _buildWidget(
-                          rows[rowIndex].items[itemIndex].spec,
+                        child: _buildInteractiveItem(
+                          context,
+                          rows[rowIndex].items[itemIndex].item,
                         ),
                       ),
                     ],
@@ -70,16 +86,16 @@ class DashboardView extends StatelessWidget {
       usedUnits = 0;
     }
 
-    for (final spec in widgets) {
-      final units = _tileUnits(maxWidth, spec.width);
+    for (final item in items) {
+      final units = _tileUnits(maxWidth, item.spec.width);
       if (units == _gridUnits) {
         flush();
-        rows.add(_DashboardRow([_DashboardRowItem(spec, units)]));
+        rows.add(_DashboardRow([_DashboardRowItem(item, units)]));
         continue;
       }
 
       if (usedUnits + units > _gridUnits) flush();
-      current.add(_DashboardRowItem(spec, units));
+      current.add(_DashboardRowItem(item, units));
       usedUnits += units;
       if (usedUnits == _gridUnits) flush();
     }
@@ -96,7 +112,7 @@ class DashboardView extends StatelessWidget {
     if (usedUnits == 4 &&
         items.length == 2 &&
         items.every((item) => item.units == 2)) {
-      return [for (final item in items) _DashboardRowItem(item.spec, 3)];
+      return [for (final item in items) _DashboardRowItem(item.item, 3)];
     }
 
     if (usedUnits != _gridUnits - 1) return items;
@@ -106,7 +122,7 @@ class DashboardView extends StatelessWidget {
 
     return [
       for (var i = 0; i < items.length; i++)
-        i == promotableIndex ? _DashboardRowItem(items[i].spec, 3) : items[i],
+        i == promotableIndex ? _DashboardRowItem(items[i].item, 3) : items[i],
     ];
   }
 
@@ -117,6 +133,21 @@ class DashboardView extends StatelessWidget {
       DashboardWidth.half => maxWidth < 320 ? _gridUnits : 3,
       DashboardWidth.third => maxWidth < 300 ? _gridUnits : 2,
     };
+  }
+
+  Widget _buildInteractiveItem(BuildContext context, DashboardViewItem item) {
+    return Material(
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(8),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTapItem == null ? null : () => onTapItem!(item),
+        onLongPress: onLongPressItem == null
+            ? null
+            : () => onLongPressItem!(item),
+        child: _buildWidget(item.spec),
+      ),
+    );
   }
 
   Widget _buildWidget(DashboardWidgetSpec spec) {
@@ -140,8 +171,8 @@ class _DashboardRow {
 }
 
 class _DashboardRowItem {
-  const _DashboardRowItem(this.spec, this.units);
+  const _DashboardRowItem(this.item, this.units);
 
-  final DashboardWidgetSpec spec;
+  final DashboardViewItem item;
   final int units;
 }

@@ -9,7 +9,14 @@ import 'package:provider/provider.dart';
 import 'transaction_form.dart';
 
 class ActivityScreen extends StatefulWidget {
-  const ActivityScreen({super.key});
+  const ActivityScreen({
+    super.key,
+    this.initialFilter = const TransactionFilter(),
+    this.filterRevision = 0,
+  });
+
+  final TransactionFilter initialFilter;
+  final int filterRevision;
 
   @override
   State<ActivityScreen> createState() => _ActivityScreenState();
@@ -29,7 +36,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
 
   final _scrollController = ScrollController();
 
-  TransactionFilter _filter = const TransactionFilter();
+  late TransactionFilter _filter;
   int _limit = _pageSize;
 
   /// Tracks the size of the most recent rendered slice so the scroll listener
@@ -46,7 +53,16 @@ class _ActivityScreenState extends State<ActivityScreen> {
   @override
   void initState() {
     super.initState();
+    _filter = widget.initialFilter;
     _scrollController.addListener(_onScroll);
+  }
+
+  @override
+  void didUpdateWidget(ActivityScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.filterRevision == oldWidget.filterRevision) return;
+    _filter = widget.initialFilter;
+    _resetPagination();
   }
 
   @override

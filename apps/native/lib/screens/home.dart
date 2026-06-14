@@ -10,7 +10,9 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key});
+  const HomeScreen({super.key, required this.onOpenActivity});
+
+  final ValueChanged<TransactionFilter> onOpenActivity;
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -142,7 +144,10 @@ class _HomeScreenState extends State<HomeScreen> {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          DashboardSection(editing: _editing),
+          DashboardSection(
+            editing: _editing,
+            onOpenFilter: widget.onOpenActivity,
+          ),
           const SizedBox(height: 24),
           Text('Acciones', style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: 12),

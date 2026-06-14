@@ -149,7 +149,7 @@ DashboardWidgetSpec? dashboardSpecFromRow(
     case WidgetType.stat:
       return StatWidgetSpec(
         title: title,
-        filter: _resolveFilter(row.filterId, filtersById),
+        filter: dashboardFilterFromRow(row, filtersById),
         aggregation: _statAggregationFromName(options['aggregation']),
         background: background,
         width: width ?? DashboardWidth.third,
@@ -157,7 +157,7 @@ DashboardWidgetSpec? dashboardSpecFromRow(
     case WidgetType.list:
       return TransactionListWidgetSpec(
         title: title,
-        filter: _resolveFilter(row.filterId, filtersById),
+        filter: dashboardFilterFromRow(row, filtersById),
         limit: (options['limit'] as num?)?.toInt() ?? 5,
         background: background,
         width: width ?? DashboardWidth.full,
@@ -172,7 +172,7 @@ DashboardWidgetSpec? dashboardSpecFromRow(
     case WidgetType.chart:
       return ChartWidgetSpec(
         title: title,
-        filter: _resolveFilter(row.filterId, filtersById),
+        filter: dashboardFilterFromRow(row, filtersById),
         groupBy:
             BreakdownGroupBy.fromWire(options['groupBy'] as String? ?? '') ??
             BreakdownGroupBy.category,
@@ -201,10 +201,13 @@ Map<String, Object?> _decodeOptions(String raw) {
   return decoded is Map<String, Object?> ? decoded : const {};
 }
 
-TransactionFilter _resolveFilter(
-  String? filterId,
+/// Resolves a persisted widget row's saved filter to the transaction filter
+/// used by the dashboard display and edit sheet.
+TransactionFilter dashboardFilterFromRow(
+  DashboardWidget row,
   Map<String, SavedFilter> filtersById,
 ) {
+  final filterId = row.filterId;
   if (filterId == null) return const TransactionFilter();
   final filter = filtersById[filterId];
   if (filter == null) return const TransactionFilter();

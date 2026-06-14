@@ -1,3 +1,4 @@
+import 'package:app/components/dashboard/add_widget_sheet.dart';
 import 'package:app/components/dashboard/dashboard_editor.dart';
 import 'package:app/components/dashboard/dashboard_models.dart';
 import 'package:app/components/dashboard/dashboard_view.dart';
@@ -13,9 +14,10 @@ import 'package:provider/provider.dart';
 /// the reorder/width/delete [DashboardEditor]). Re-emits on any local write or
 /// sync merge to either table.
 class DashboardSection extends StatelessWidget {
-  const DashboardSection({super.key, this.editing = false});
+  const DashboardSection({super.key, this.editing = false, this.onOpenFilter});
 
   final bool editing;
+  final ValueChanged<TransactionFilter>? onOpenFilter;
 
   @override
   Widget build(BuildContext context) {
@@ -66,12 +68,38 @@ class DashboardSection extends StatelessWidget {
           );
         }
 
-        final specs = widgets
-            .map((w) => dashboardSpecFromRow(w, filtersById))
-            .whereType<DashboardWidgetSpec>()
+        final items = widgets
+            .map((w) {
+              final spec = dashboardSpecFromRow(w, filtersById);
+              if (spec == null) return null;
+              return DashboardViewItem(row: w, spec: spec);
+            })
+            .whereType<DashboardViewItem>()
             .toList();
-        return DashboardView(widgets: specs);
+        return DashboardView(
+          items: items,
+          onTapItem: onOpenFilter == null
+              ? null
+              : (item) => onOpenFilter!(_activityFilterFor(item.spec)),
+          onLongPressItem: (item) => showEditWidgetSheet(
+            context,
+            repos,
+            item.row,
+            dashboardFilterFromRow(item.row, filtersById),
+          ),
+        );
       },
     );
+  }
+
+  TransactionFilter _activityFilterFor(DashboardWidgetSpec spec) {
+    return switch (spec) {
+      StatWidgetSpec(:final filter) => filter,
+      TransactionListWidgetSpec(:final filter) => filter,
+      ChartWidgetSpec(:final filter) => filter,
+      BalanceCardWidgetSpec(:final currency) => TransactionFilter(
+        currency: currency.isEmpty ? null : currency,
+      ),
+    };
   }
 }

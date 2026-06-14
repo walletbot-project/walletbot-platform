@@ -75,20 +75,12 @@ class _DashboardEditorState extends State<DashboardEditor> {
   Future<void> _changeWidth(String id, DashboardWidth width) =>
       widget.repos.dashboard.update(id, width: Value(width.wire));
 
-  Future<void> _edit(DashboardWidget row) =>
-      showEditWidgetSheet(context, widget.repos, row, _filterFor(row));
-
-  /// Resolves a widget's saved filter to a [TransactionFilter] for pre-filling
-  /// the edit sheet. Null/missing/unparseable → the empty (match-all) filter.
-  TransactionFilter _filterFor(DashboardWidget row) {
-    final id = row.filterId;
-    if (id == null) return const TransactionFilter();
-    final filter = widget.filtersById[id];
-    if (filter == null) return const TransactionFilter();
-    final decoded = jsonDecode(filter.config);
-    if (decoded is! Map<String, Object?>) return const TransactionFilter();
-    return TransactionFilter.fromCanonicalJson(decoded);
-  }
+  Future<void> _edit(DashboardWidget row) => showEditWidgetSheet(
+    context,
+    widget.repos,
+    row,
+    dashboardFilterFromRow(row, widget.filtersById),
+  );
 
   Future<void> _delete(DashboardWidget row) async {
     final messenger = ScaffoldMessenger.of(context);

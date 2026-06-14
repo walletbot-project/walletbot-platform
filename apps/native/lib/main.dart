@@ -133,6 +133,16 @@ class _AppMainState extends State<AppMain> {
   }
 
   int selectedIndex = 0;
+  TransactionFilter _activityFilter = const TransactionFilter();
+  int _activityFilterRevision = 0;
+
+  void _openActivityWithFilter(TransactionFilter filter) {
+    setState(() {
+      _activityFilter = filter;
+      _activityFilterRevision++;
+      selectedIndex = 1;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -147,8 +157,11 @@ class _AppMainState extends State<AppMain> {
             child: IndexedStack(
               index: selectedIndex,
               children: [
-                HomeScreen(),
-                ActivityScreen(),
+                HomeScreen(onOpenActivity: _openActivityWithFilter),
+                ActivityScreen(
+                  initialFilter: _activityFilter,
+                  filterRevision: _activityFilterRevision,
+                ),
                 AccountsScreen(),
                 InsightsScreen(),
               ],
