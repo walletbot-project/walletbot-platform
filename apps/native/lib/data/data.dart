@@ -13,6 +13,8 @@ export 'queries/account_balance.dart';
 export 'queries/transaction_query.dart' show TxnOrdering;
 export 'repositories/account_repository.dart';
 export 'repositories/category_repository.dart';
+export 'repositories/dashboard_repository.dart';
+export 'repositories/saved_filter_repository.dart';
 export 'repositories/summary_repository.dart';
 export 'repositories/tag_repository.dart';
 export 'repositories/transaction_repository.dart';

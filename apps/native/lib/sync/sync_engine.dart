@@ -99,13 +99,15 @@ class SyncEngine extends ChangeNotifier {
             _db.tags,
             _db.transactions,
             _db.transactionTags,
+            _db.savedFilters,
+            _db.dashboardWidgets,
             _db.tombstones,
           ]),
         )
         .listen((_) {
-      if (_inFlight != null) return;
-      notifyLocalWrite();
-    });
+          if (_inFlight != null) return;
+          notifyLocalWrite();
+        });
 
     _scheduleNow();
   }
@@ -168,14 +170,15 @@ class SyncEngine extends ChangeNotifier {
       }
       _lastSyncedAt = DateTime.now();
       // Persist a heartbeat so the UI can show "Last synced 1 min ago".
-      await (_db.update(_db.syncState)..where((s) => s.id.equals('singleton')))
-          .write(
-            SyncStateCompanion(
-              lastSyncedAt: Value(
-                BigInt.from(DateTime.now().millisecondsSinceEpoch),
-              ),
-            ),
-          );
+      await (_db.update(
+        _db.syncState,
+      )..where((s) => s.id.equals('singleton'))).write(
+        SyncStateCompanion(
+          lastSyncedAt: Value(
+            BigInt.from(DateTime.now().millisecondsSinceEpoch),
+          ),
+        ),
+      );
       _setStatus(SyncStatus.synced, error: null);
     } catch (e, st) {
       debugPrint('sync: runOnce failed: $e\n$st');
@@ -213,8 +216,8 @@ class SyncEngine extends ChangeNotifier {
         throw StateError('sync: malformed pull response: $raw');
       }
       final rows = (decoded['rows'] as List).cast<Map<String, Object?>>();
-      final tombstones =
-          (decoded['tombstones'] as List).cast<Map<String, Object?>>();
+      final tombstones = (decoded['tombstones'] as List)
+          .cast<Map<String, Object?>>();
       final hasMore = decoded['hasMore'] as bool;
       final nextCursor = decoded['nextCursor'];
       final currentCounter = decoded['currentCounter'] as BigInt;
@@ -264,11 +267,8 @@ class SyncEngine extends ChangeNotifier {
   }
 
   Future<void> _writeLastServerSeq(BigInt value) async {
-    await (_db.update(
-      _db.syncState,
-    )..where((s) => s.id.equals('singleton'))).write(
-      SyncStateCompanion(lastServerSeq: Value(value)),
-    );
+    await (_db.update(_db.syncState)..where((s) => s.id.equals('singleton')))
+        .write(SyncStateCompanion(lastServerSeq: Value(value)));
   }
 
   // ─── Recompute ───────────────────────────────────────────────────────────
@@ -301,32 +301,54 @@ class SyncEngine extends ChangeNotifier {
 
     // Catalog first (accounts → categories → tags), then transactions, then
     // joins. Tombstones interleaved by table.
-    final dirtyAccounts = await (_db.select(_db.accounts)
-          ..where((a) => a.dirty.equals(true))
-          ..limit(pushChunkLimit))
-        .get();
+    final dirtyAccounts =
+        await (_db.select(_db.accounts)
+              ..where((a) => a.dirty.equals(true))
+              ..limit(pushChunkLimit))
+            .get();
     chunk.accounts.addAll(dirtyAccounts);
     if (chunk.size >= pushChunkLimit) return chunk;
 
-    final dirtyCategories = await (_db.select(_db.categories)
-          ..where((c) => c.dirty.equals(true))
-          ..limit(pushChunkLimit - chunk.size))
-        .get();
+    final dirtyCategories =
+        await (_db.select(_db.categories)
+              ..where((c) => c.dirty.equals(true))
+              ..limit(pushChunkLimit - chunk.size))
+            .get();
     chunk.categories.addAll(dirtyCategories);
     if (chunk.size >= pushChunkLimit) return chunk;
 
-    final dirtyTags = await (_db.select(_db.tags)
-          ..where((t) => t.dirty.equals(true))
-          ..limit(pushChunkLimit - chunk.size))
-        .get();
+    final dirtyTags =
+        await (_db.select(_db.tags)
+              ..where((t) => t.dirty.equals(true))
+              ..limit(pushChunkLimit - chunk.size))
+            .get();
     chunk.tags.addAll(dirtyTags);
     if (chunk.size >= pushChunkLimit) return chunk;
 
-    final dirtyTxns = await (_db.select(_db.transactions)
-          ..where((t) => t.dirty.equals(true))
-          ..orderBy([(t) => OrderingTerm.asc(t.date)])
-          ..limit(pushChunkLimit - chunk.size))
-        .get();
+    // Dashboard layout: saved filters before widgets (a widget's `filterId`
+    // soft-references a saved filter), mirroring accounts → transactions.
+    final dirtySavedFilters =
+        await (_db.select(_db.savedFilters)
+              ..where((f) => f.dirty.equals(true))
+              ..limit(pushChunkLimit - chunk.size))
+            .get();
+    chunk.savedFilters.addAll(dirtySavedFilters);
+    if (chunk.size >= pushChunkLimit) return chunk;
+
+    final dirtyDashboardWidgets =
+        await (_db.select(_db.dashboardWidgets)
+              ..where((w) => w.dirty.equals(true))
+              ..limit(pushChunkLimit - chunk.size))
+            .get();
+    chunk.dashboardWidgets.addAll(dirtyDashboardWidgets);
+    if (chunk.size >= pushChunkLimit) return chunk;
+
+    final dirtyTxns =
+        await (_db.select(_db.transactions)
+              ..where((t) => t.dirty.equals(true))
+              ..orderBy([(t) => OrderingTerm.asc(t.date)])
+              ..limit(pushChunkLimit - chunk.size))
+            .get();
     chunk.transactions.addAll(dirtyTxns);
     if (chunk.size >= pushChunkLimit) return chunk;
 
@@ -335,19 +357,20 @@ class SyncEngine extends ChangeNotifier {
     // dirty=false) or it goes in this chunk. Otherwise we'd get an FK
     // validation error.
     final pendingTxnIdsInChunk = chunk.transactions.map((t) => t.id).toSet();
-    final dirtyJoinsAll = await (_db.select(_db.transactionTags)
-          ..where((j) => j.dirty.equals(true))
-          ..limit(pushChunkLimit * 2))
-        .get();
+    final dirtyJoinsAll =
+        await (_db.select(_db.transactionTags)
+              ..where((j) => j.dirty.equals(true))
+              ..limit(pushChunkLimit * 2))
+            .get();
     for (final j in dirtyJoinsAll) {
       if (chunk.size >= pushChunkLimit) break;
       if (pendingTxnIdsInChunk.contains(j.transactionId)) {
         chunk.transactionTags.add(j);
         continue;
       }
-      final remoteTxn = await (_db.select(_db.transactions)
-            ..where((t) => t.id.equals(j.transactionId)))
-          .getSingleOrNull();
+      final remoteTxn = await (_db.select(
+        _db.transactions,
+      )..where((t) => t.id.equals(j.transactionId))).getSingleOrNull();
       // Already-on-server: not dirty and not absent.
       if (remoteTxn != null && !remoteTxn.dirty) {
         chunk.transactionTags.add(j);
@@ -356,10 +379,11 @@ class SyncEngine extends ChangeNotifier {
       // transaction is on the server.
     }
 
-    final dirtyTombs = await (_db.select(_db.tombstones)
-          ..where((t) => t.dirty.equals(true))
-          ..limit(pushChunkLimit - chunk.size))
-        .get();
+    final dirtyTombs =
+        await (_db.select(_db.tombstones)
+              ..where((t) => t.dirty.equals(true))
+              ..limit(pushChunkLimit - chunk.size))
+            .get();
     chunk.tombstones.addAll(dirtyTombs);
 
     return chunk;
@@ -378,12 +402,22 @@ class SyncEngine extends ChangeNotifier {
           'categories': chunk.categories.map(_serializeCategory).toList(),
         if (chunk.tags.isNotEmpty)
           'tags': chunk.tags.map(_serializeTag).toList(),
+        if (chunk.savedFilters.isNotEmpty)
+          'savedFilters': chunk.savedFilters
+              .map(_serializeSavedFilter)
+              .toList(),
+        if (chunk.dashboardWidgets.isNotEmpty)
+          'dashboardWidgets': chunk.dashboardWidgets
+              .map(_serializeDashboardWidget)
+              .toList(),
         if (chunk.transactions.isNotEmpty)
-          'transactions':
-              chunk.transactions.map(_serializeTransaction).toList(),
+          'transactions': chunk.transactions
+              .map(_serializeTransaction)
+              .toList(),
         if (chunk.transactionTags.isNotEmpty)
-          'transactionTags':
-              chunk.transactionTags.map(_serializeTransactionTag).toList(),
+          'transactionTags': chunk.transactionTags
+              .map(_serializeTransactionTag)
+              .toList(),
       }),
       if (chunk.tombstones.isNotEmpty)
         'tombstones': prepareArgValue(
@@ -391,10 +425,7 @@ class SyncEngine extends ChangeNotifier {
         ),
     };
 
-    final raw = await _client.mutation(
-      name: 'sync/mutations:push',
-      args: args,
-    );
+    final raw = await _client.mutation(name: 'sync/mutations:push', args: args);
     final decoded = decodeConvexResponse(raw);
     if (decoded is! Map) {
       throw StateError('sync: malformed push response: $raw');
@@ -417,45 +448,67 @@ class SyncEngine extends ChangeNotifier {
       for (final a in chunk.accounts) {
         // Spec §"Si local.updatedAt == payload.updatedAt → dirty=false. Si
         // no → se queda dirty=true". Re-fetch to compare.
-        final cur = await (_db.select(_db.accounts)
-              ..where((row) => row.id.equals(a.id)))
-            .getSingleOrNull();
+        final cur = await (_db.select(
+          _db.accounts,
+        )..where((row) => row.id.equals(a.id))).getSingleOrNull();
         if (cur != null && cur.updatedAt == a.updatedAt) {
           await (_db.update(_db.accounts)..where((row) => row.id.equals(a.id)))
               .write(const AccountsCompanion(dirty: Value(false)));
         }
       }
       for (final c in chunk.categories) {
-        final cur = await (_db.select(_db.categories)
-              ..where((row) => row.id.equals(c.id)))
-            .getSingleOrNull();
+        final cur = await (_db.select(
+          _db.categories,
+        )..where((row) => row.id.equals(c.id))).getSingleOrNull();
         if (cur != null && cur.updatedAt == c.updatedAt) {
-          await (_db.update(_db.categories)..where((row) => row.id.equals(c.id)))
+          await (_db.update(_db.categories)
+                ..where((row) => row.id.equals(c.id)))
               .write(const CategoriesCompanion(dirty: Value(false)));
         }
       }
       for (final tg in chunk.tags) {
-        final cur = await (_db.select(_db.tags)
-              ..where((row) => row.id.equals(tg.id)))
-            .getSingleOrNull();
+        final cur = await (_db.select(
+          _db.tags,
+        )..where((row) => row.id.equals(tg.id))).getSingleOrNull();
         if (cur != null && cur.updatedAt == tg.updatedAt) {
           await (_db.update(_db.tags)..where((row) => row.id.equals(tg.id)))
               .write(const TagsCompanion(dirty: Value(false)));
         }
       }
+      for (final f in chunk.savedFilters) {
+        final cur = await (_db.select(
+          _db.savedFilters,
+        )..where((row) => row.id.equals(f.id))).getSingleOrNull();
+        if (cur != null && cur.updatedAt == f.updatedAt) {
+          await (_db.update(_db.savedFilters)
+                ..where((row) => row.id.equals(f.id)))
+              .write(const SavedFiltersCompanion(dirty: Value(false)));
+        }
+      }
+      for (final w in chunk.dashboardWidgets) {
+        final cur = await (_db.select(
+          _db.dashboardWidgets,
+        )..where((row) => row.id.equals(w.id))).getSingleOrNull();
+        if (cur != null && cur.updatedAt == w.updatedAt) {
+          await (_db.update(_db.dashboardWidgets)
+                ..where((row) => row.id.equals(w.id)))
+              .write(const DashboardWidgetsCompanion(dirty: Value(false)));
+        }
+      }
       for (final t in chunk.transactions) {
-        final cur = await (_db.select(_db.transactions)
-              ..where((row) => row.id.equals(t.id)))
-            .getSingleOrNull();
+        final cur = await (_db.select(
+          _db.transactions,
+        )..where((row) => row.id.equals(t.id))).getSingleOrNull();
         if (cur != null && cur.updatedAt == t.updatedAt) {
-          await (_db.update(_db.transactions)..where((row) => row.id.equals(t.id)))
+          await (_db.update(_db.transactions)
+                ..where((row) => row.id.equals(t.id)))
               .write(const TransactionsCompanion(dirty: Value(false)));
         }
       }
       for (final j in chunk.transactionTags) {
-        final cur = await (_db.select(_db.transactionTags)
-              ..where((row) => row.id.equals(j.id)))
-            .getSingleOrNull();
+        final cur = await (_db.select(
+          _db.transactionTags,
+        )..where((row) => row.id.equals(j.id))).getSingleOrNull();
         if (cur != null && cur.updatedAt == j.updatedAt) {
           await (_db.update(_db.transactionTags)
                 ..where((row) => row.id.equals(j.id)))
@@ -463,20 +516,19 @@ class SyncEngine extends ChangeNotifier {
         }
       }
       for (final t in chunk.tombstones) {
-        final cur = await (_db.select(_db.tombstones)
-              ..where(
-                (row) =>
-                    row.entityTable.equals(t.entityTable) &
-                    row.entityId.equals(t.entityId),
-              ))
-            .getSingleOrNull();
-        if (cur != null && cur.deletedAt == t.deletedAt) {
-          await (_db.update(_db.tombstones)
-                ..where(
+        final cur =
+            await (_db.select(_db.tombstones)..where(
                   (row) =>
                       row.entityTable.equals(t.entityTable) &
                       row.entityId.equals(t.entityId),
                 ))
+                .getSingleOrNull();
+        if (cur != null && cur.deletedAt == t.deletedAt) {
+          await (_db.update(_db.tombstones)..where(
+                (row) =>
+                    row.entityTable.equals(t.entityTable) &
+                    row.entityId.equals(t.entityId),
+              ))
               .write(const TombstonesCompanion(dirty: Value(false)));
         }
       }
@@ -492,72 +544,93 @@ class SyncEngine extends ChangeNotifier {
   // ─── Wire-format serializers ─────────────────────────────────────────────
 
   Map<String, Object?> _serializeAccount(Account row) => {
-        'id': row.id,
-        'name': row.name,
-        'currency': row.currency,
-        if (row.description != null) 'description': row.description,
-        if (row.color != null) 'color': row.color,
-        if (row.icon != null) 'icon': row.icon,
-        'isArchived': row.archived,
-        'createdAt': row.createdAt,
-        'updatedAt': row.updatedAt,
-      };
+    'id': row.id,
+    'name': row.name,
+    'currency': row.currency,
+    if (row.description != null) 'description': row.description,
+    if (row.color != null) 'color': row.color,
+    if (row.icon != null) 'icon': row.icon,
+    'isArchived': row.archived,
+    'createdAt': row.createdAt,
+    'updatedAt': row.updatedAt,
+  };
 
   Map<String, Object?> _serializeCategory(Category row) => {
-        'id': row.id,
-        'name': row.name,
-        if (row.description != null) 'description': row.description,
-        'isArchived': row.archived,
-        'createdAt': row.createdAt,
-        'updatedAt': row.updatedAt,
-      };
+    'id': row.id,
+    'name': row.name,
+    if (row.description != null) 'description': row.description,
+    'isArchived': row.archived,
+    'createdAt': row.createdAt,
+    'updatedAt': row.updatedAt,
+  };
 
   Map<String, Object?> _serializeTag(Tag row) => {
-        'id': row.id,
-        'name': row.name,
-        if (row.description != null) 'description': row.description,
-        if (row.parentId != null) 'parentId': row.parentId,
-        if (row.color != null) 'color': row.color,
-        'isArchived': row.archived,
-        'createdAt': row.createdAt,
-        'updatedAt': row.updatedAt,
-      };
+    'id': row.id,
+    'name': row.name,
+    if (row.description != null) 'description': row.description,
+    if (row.parentId != null) 'parentId': row.parentId,
+    if (row.color != null) 'color': row.color,
+    'isArchived': row.archived,
+    'createdAt': row.createdAt,
+    'updatedAt': row.updatedAt,
+  };
+
+  Map<String, Object?> _serializeSavedFilter(SavedFilter row) => {
+    'id': row.id,
+    'name': row.name,
+    'config': row.config,
+    'isArchived': row.archived,
+    'createdAt': row.createdAt,
+    'updatedAt': row.updatedAt,
+  };
+
+  Map<String, Object?> _serializeDashboardWidget(DashboardWidget row) => {
+    'id': row.id,
+    'type': row.type,
+    if (row.filterId != null) 'filterId': row.filterId,
+    'position': row.position,
+    'width': row.width,
+    'options': row.options,
+    'isArchived': row.archived,
+    'createdAt': row.createdAt,
+    'updatedAt': row.updatedAt,
+  };
 
   Map<String, Object?> _serializeTransaction(Transaction row) => {
-        'id': row.id,
-        'type': row.type,
-        'name': row.name,
-        if (row.description != null) 'description': row.description,
-        'status': row.status,
-        'date': row.date,
-        'dateConfirmed': row.dateConfirmed,
-        'accountId': row.accountId,
-        'categoryId': row.categoryId,
-        'amount': row.amount,
-        'currency': row.currency,
-        if (row.toAccountId != null) 'toAccountId': row.toAccountId,
-        if (row.toAmount != null) 'toAmount': row.toAmount,
-        if (row.toCurrency != null) 'toCurrency': row.toCurrency,
-        if (row.exchangeRate != null) 'exchangeRate': row.exchangeRate,
-        if (row.balanceAfter != null) 'balanceAfter': row.balanceAfter,
-        'isArchived': row.archived,
-        'createdAt': row.createdAt,
-        'updatedAt': row.updatedAt,
-      };
+    'id': row.id,
+    'type': row.type,
+    'name': row.name,
+    if (row.description != null) 'description': row.description,
+    'status': row.status,
+    'date': row.date,
+    'dateConfirmed': row.dateConfirmed,
+    'accountId': row.accountId,
+    'categoryId': row.categoryId,
+    'amount': row.amount,
+    'currency': row.currency,
+    if (row.toAccountId != null) 'toAccountId': row.toAccountId,
+    if (row.toAmount != null) 'toAmount': row.toAmount,
+    if (row.toCurrency != null) 'toCurrency': row.toCurrency,
+    if (row.exchangeRate != null) 'exchangeRate': row.exchangeRate,
+    if (row.balanceAfter != null) 'balanceAfter': row.balanceAfter,
+    'isArchived': row.archived,
+    'createdAt': row.createdAt,
+    'updatedAt': row.updatedAt,
+  };
 
   Map<String, Object?> _serializeTransactionTag(TransactionTag row) => {
-        'id': row.id,
-        'transactionId': row.transactionId,
-        'tagId': row.tagId,
-        'createdAt': row.createdAt,
-        'updatedAt': row.updatedAt,
-      };
+    'id': row.id,
+    'transactionId': row.transactionId,
+    'tagId': row.tagId,
+    'createdAt': row.createdAt,
+    'updatedAt': row.updatedAt,
+  };
 
   Map<String, Object?> _serializeTombstone(Tombstone row) => {
-        'tableName': row.entityTable,
-        'entityId': row.entityId,
-        'deletedAt': row.deletedAt,
-      };
+    'tableName': row.entityTable,
+    'entityId': row.entityId,
+    'deletedAt': row.deletedAt,
+  };
 
   @visibleForTesting
   int get pendingDirtyCorrections => _pendingDirtyCorrections;
@@ -567,6 +640,8 @@ class _Chunk {
   final List<Account> accounts = [];
   final List<Category> categories = [];
   final List<Tag> tags = [];
+  final List<SavedFilter> savedFilters = [];
+  final List<DashboardWidget> dashboardWidgets = [];
   final List<Transaction> transactions = [];
   final List<TransactionTag> transactionTags = [];
   final List<Tombstone> tombstones = [];
@@ -575,6 +650,8 @@ class _Chunk {
       accounts.length +
       categories.length +
       tags.length +
+      savedFilters.length +
+      dashboardWidgets.length +
       transactions.length +
       transactionTags.length +
       tombstones.length;
@@ -584,9 +661,7 @@ class _Chunk {
 
 class _PushResult {
   _PushResult.ok({required this.newSeq}) : cursorMismatch = false;
-  _PushResult.cursorMismatch()
-      : newSeq = null,
-        cursorMismatch = true;
+  _PushResult.cursorMismatch() : newSeq = null, cursorMismatch = true;
   final BigInt? newSeq;
   final bool cursorMismatch;
 }

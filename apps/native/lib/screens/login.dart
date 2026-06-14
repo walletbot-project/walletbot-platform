@@ -36,9 +36,8 @@ class LoginScreen extends StatelessWidget {
                   subtitle: Text(
                     account.type == AccountType.local ? 'Local' : 'Online',
                   ),
-                  onTap: () => context.read<AuthController>().switchTo(
-                    account.id,
-                  ),
+                  onTap: () =>
+                      context.read<AuthController>().switchTo(account.id),
                 ),
               ),
             const Divider(height: 32),

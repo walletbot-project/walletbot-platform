@@ -249,15 +249,22 @@ unchanged — only advanced (disjunctive) filters take the anchor+predicate path
 
 ## Phasing
 
-1. **Foundation** — Drift tables + local aggregation queries + layout/flow renderer with a hard-coded default layout (no editing).
-2. **Widgets** — implement all four renderers against the aggregations.
-3. **Editing** — add / remove / reorder, width control, filter editor + saved-filter management.
-4. *(Later)* wire both tables into `SyncEngine` + web parity.
+1. **Foundation** ✅ — Drift tables + local aggregation queries + layout/flow renderer.
+2. **Widgets** ✅ — Stat, Balance card, Transaction list renderers (Breakdown chart still pending — needs `fl_chart`).
+3. **Editing** ✅ — add / remove / reorder, width control, reusing the simple-mode filter editor.
+4. **Sync** ✅ (native + Convex) — both tables wired into `SyncEngine` and the backend push/pull. **Web parity still pending.**
 
-> **Status:** the simple-mode filter editor already exists
-> (`apps/native/lib/components/filter_sheet.dart`, `showFilterSheet`) and is the
-> shared editor for both the dashboard and the activity screen. Callers pass
-> `hiddenSections` to suppress dimensions they own elsewhere (the activity bar
-> keeps `type` + `text`). Saved-filter management (Phase 3) is still pending.
+> **Status:** the `savedFilters` + `dashboardWidgets` Drift tables persist the
+> layout and sync through the existing `SyncEngine` ↔ Convex `sync/` pipeline
+> (LWW, tombstones, per-user `seq`). The default dashboard auto-seeds once per
+> device with **deterministic ids** (so concurrent fresh-device seeds converge
+> instead of duplicating), guarded by `syncState.dashboardSeeded`. Editing lives
+> in `apps/native/lib/components/dashboard/` (`dashboard_editor.dart`,
+> `add_widget_sheet.dart`) and reuses `showFilterSheet`
+> (`apps/native/lib/components/filter_sheet.dart`).
+>
+> **Still pending:** the Breakdown chart widget (`fl_chart`), the advanced
+> (condition-tree) filter editor, and **web parity** (the web home is still a
+> placeholder — see risk R-004).
 </content>
 </invoke>

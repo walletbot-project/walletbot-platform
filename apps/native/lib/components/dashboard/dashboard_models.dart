@@ -1,9 +1,48 @@
+import 'dart:convert';
+
 import 'package:app/data/data.dart';
+import 'package:app/database.dart';
 
 /// Tile width within the flat dashboard flow (see docs/home-dashboard.md
 /// "Layout: width, not nested rows"). Narrower tiles wrap into rows — three
-/// [third]s make a row, a [full] spans the whole width.
-enum DashboardWidth { full, half, third }
+/// [third]s make a row, a [full] spans the whole width. `wire` is the value
+/// stored in `dashboard_widgets.width`.
+enum DashboardWidth {
+  full('full'),
+  half('half'),
+  third('third');
+
+  const DashboardWidth(this.wire);
+
+  final String wire;
+
+  static DashboardWidth? fromWire(String wire) {
+    for (final w in values) {
+      if (w.wire == wire) return w;
+    }
+    return null;
+  }
+}
+
+/// The persisted widget kinds. `wire` is the value stored in
+/// `dashboard_widgets.type`. The Breakdown chart is intentionally absent until
+/// the `fl_chart` dependency is added.
+enum WidgetType {
+  stat('stat'),
+  list('list'),
+  balance('balance');
+
+  const WidgetType(this.wire);
+
+  final String wire;
+
+  static WidgetType? fromWire(String wire) {
+    for (final t in values) {
+      if (t.wire == wire) return t;
+    }
+    return null;
+  }
+}
 
 /// One configured dashboard tile. v1 ships only the Stat block; the sealed
 /// base lets [DashboardView] switch exhaustively as the remaining widget types
@@ -57,4 +96,78 @@ class BalanceCardWidgetSpec extends DashboardWidgetSpec {
 
   final String title;
   final String currency;
+}
+
+/// Resolves a persisted [DashboardWidget] row (plus the saved filters it may
+/// reference) into a renderable [DashboardWidgetSpec]. Returns null for an
+/// unknown widget type so a forward-compat row written by a newer client is
+/// skipped rather than crashing the dashboard.
+///
+/// A stat/list widget whose `filterId` is null or points at a missing/deleted
+/// filter degrades to the empty (match-all) filter instead of disappearing.
+DashboardWidgetSpec? dashboardSpecFromRow(
+  DashboardWidget row,
+  Map<String, SavedFilter> filtersById,
+) {
+  final type = WidgetType.fromWire(row.type);
+  if (type == null) return null;
+  final width = DashboardWidth.fromWire(row.width);
+  final options = _decodeOptions(row.options);
+  final title = options['title'] as String? ?? '';
+
+  switch (type) {
+    case WidgetType.stat:
+      return StatWidgetSpec(
+        title: title,
+        filter: _resolveFilter(row.filterId, filtersById),
+        aggregation: _statAggregationFromName(options['aggregation']),
+        width: width ?? DashboardWidth.third,
+      );
+    case WidgetType.list:
+      return TransactionListWidgetSpec(
+        title: title,
+        filter: _resolveFilter(row.filterId, filtersById),
+        limit: (options['limit'] as num?)?.toInt() ?? 5,
+        width: width ?? DashboardWidth.full,
+      );
+    case WidgetType.balance:
+      return BalanceCardWidgetSpec(
+        title: title,
+        currency: options['currency'] as String? ?? '',
+        width: width ?? DashboardWidth.half,
+      );
+  }
+}
+
+/// Serializes a widget's display options to the JSON string stored in
+/// `dashboard_widgets.options`. Drops null entries so the stored shape stays
+/// minimal per type.
+String encodeWidgetOptions(Map<String, Object?> options) {
+  options.removeWhere((_, value) => value == null);
+  return jsonEncode(options);
+}
+
+Map<String, Object?> _decodeOptions(String raw) {
+  if (raw.isEmpty) return const {};
+  final decoded = jsonDecode(raw);
+  return decoded is Map<String, Object?> ? decoded : const {};
+}
+
+TransactionFilter _resolveFilter(
+  String? filterId,
+  Map<String, SavedFilter> filtersById,
+) {
+  if (filterId == null) return const TransactionFilter();
+  final filter = filtersById[filterId];
+  if (filter == null) return const TransactionFilter();
+  final decoded = jsonDecode(filter.config);
+  if (decoded is! Map<String, Object?>) return const TransactionFilter();
+  return TransactionFilter.fromCanonicalJson(decoded);
+}
+
+StatAggregation _statAggregationFromName(Object? name) {
+  for (final agg in StatAggregation.values) {
+    if (agg.name == name) return agg;
+  }
+  return StatAggregation.sum;
 }

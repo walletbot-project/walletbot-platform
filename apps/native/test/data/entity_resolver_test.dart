@@ -27,7 +27,10 @@ void main() {
   });
 
   test('resolves by normalized unique name', () async {
-    final id = await repos.accounts.create(name: 'Banco Nación', currency: 'ARS');
+    final id = await repos.accounts.create(
+      name: 'Banco Nación',
+      currency: 'ARS',
+    );
     final result = await repos.resolver.account('  banco nación ');
     expect(result, isA<Resolved<Account>>());
     expect((result as Resolved<Account>).value.id, id);

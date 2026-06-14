@@ -16,19 +16,17 @@ Future<void> writeTombstone(
   String entityId,
 ) async {
   final now = nowMs();
-  final existing = await (db.select(db.tombstones)
-        ..where(
+  final existing =
+      await (db.select(db.tombstones)..where(
+            (t) =>
+                t.entityTable.equals(entityTable) & t.entityId.equals(entityId),
+          ))
+          .getSingleOrNull();
+  if (existing != null) {
+    await (db.update(db.tombstones)..where(
           (t) =>
               t.entityTable.equals(entityTable) & t.entityId.equals(entityId),
         ))
-      .getSingleOrNull();
-  if (existing != null) {
-    await (db.update(db.tombstones)
-          ..where(
-            (t) =>
-                t.entityTable.equals(entityTable) &
-                t.entityId.equals(entityId),
-          ))
         .write(
           TombstonesCompanion(
             deletedAt: Value(now),

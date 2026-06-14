@@ -45,9 +45,7 @@ class TagsView extends StatelessWidget {
                 title: Align(
                   alignment: Alignment.centerLeft,
                   child: Chip(
-                    avatar: const CircleAvatar(
-                      backgroundColor: Colors.white,
-                    ),
+                    avatar: const CircleAvatar(backgroundColor: Colors.white),
                     backgroundColor: color,
                     label: Text(tag.name),
                   ),
@@ -239,24 +237,16 @@ class _TagDialogState extends State<_TagDialog> {
             ],
             if (_isSubtag && parentCandidates.isNotEmpty) ...[
               const SizedBox(height: 12),
-              Text(
-                'Parent tag',
-                style: Theme.of(context).textTheme.labelLarge,
-              ),
+              Text('Parent tag', style: Theme.of(context).textTheme.labelLarge),
               const SizedBox(height: 8),
               DropdownButtonFormField<String>(
                 initialValue: _parentId,
                 isExpanded: true,
-                decoration: const InputDecoration(
-                  border: OutlineInputBorder(),
-                ),
+                decoration: const InputDecoration(border: OutlineInputBorder()),
                 hint: const Text('Select parent tag'),
                 items: parentCandidates
                     .map(
-                      (t) => DropdownMenuItem(
-                        value: t.id,
-                        child: Text(t.name),
-                      ),
+                      (t) => DropdownMenuItem(value: t.id, child: Text(t.name)),
                     )
                     .toList(),
                 onChanged: (v) => setState(() => _parentId = v),

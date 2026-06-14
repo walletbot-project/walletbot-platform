@@ -47,16 +47,18 @@ void main() {
       expect(joins, isEmpty, reason: 'joins are hard-deleted');
 
       final tombs = await (db.select(db.tombstones)).get();
-      final joinTombs =
-          tombs.where((t) => t.entityTable == 'transactionTags').toList();
-      final txnTombs =
-          tombs.where((t) => t.entityTable == 'transactions').toList();
+      final joinTombs = tombs
+          .where((t) => t.entityTable == 'transactionTags')
+          .toList();
+      final txnTombs = tombs
+          .where((t) => t.entityTable == 'transactions')
+          .toList();
       expect(joinTombs, hasLength(2));
       expect(txnTombs, hasLength(1));
-      expect(
-        joinTombs.map((t) => t.entityId).toSet(),
-        {'${id}__$tagA', '${id}__$tagB'},
-      );
+      expect(joinTombs.map((t) => t.entityId).toSet(), {
+        '${id}__$tagA',
+        '${id}__$tagB',
+      });
     });
 
     test('deleting a missing transaction is a no-op', () async {
@@ -66,34 +68,39 @@ void main() {
   });
 
   group('addTags / removeTags', () {
-    test('idempotent attach with deterministic ids; tombstoned detach',
-        () async {
-      final tag = await repos.tags.create(name: 'A');
-      final id = await repos.transactions.addExpense(
-        accountId: cashId,
-        categoryId: foodId,
-        name: 'T',
-        amountCents: BigInt.from(100),
-        currency: 'ARS',
-      );
+    test(
+      'idempotent attach with deterministic ids; tombstoned detach',
+      () async {
+        final tag = await repos.tags.create(name: 'A');
+        final id = await repos.transactions.addExpense(
+          accountId: cashId,
+          categoryId: foodId,
+          name: 'T',
+          amountCents: BigInt.from(100),
+          currency: 'ARS',
+        );
 
-      expect(await repos.transactions.addTags(id, [tag]), 1);
-      expect(await repos.transactions.addTags(id, [tag]), 0,
-          reason: 'second attach is a no-op');
+        expect(await repos.transactions.addTags(id, [tag]), 1);
+        expect(
+          await repos.transactions.addTags(id, [tag]),
+          0,
+          reason: 'second attach is a no-op',
+        );
 
-      expect(await repos.transactions.removeTags(id, [tag]), 1);
-      expect(await repos.transactions.removeTags(id, [tag]), 0);
+        expect(await repos.transactions.removeTags(id, [tag]), 1);
+        expect(await repos.transactions.removeTags(id, [tag]), 0);
 
-      final tomb = await (db.select(db.tombstones)
-            ..where((t) => t.entityTable.equals('transactionTags')))
-          .getSingle();
-      expect(tomb.entityId, '${id}__$tag');
+        final tomb = await (db.select(
+          db.tombstones,
+        )..where((t) => t.entityTable.equals('transactionTags'))).getSingle();
+        expect(tomb.entityId, '${id}__$tag');
 
-      // Re-tag recreates the same join id (untag→retag round-trip semantics).
-      await repos.transactions.addTags(id, [tag]);
-      final join = await (db.select(db.transactionTags)).getSingle();
-      expect(join.id, '${id}__$tag');
-    });
+        // Re-tag recreates the same join id (untag→retag round-trip semantics).
+        await repos.transactions.addTags(id, [tag]);
+        final join = await (db.select(db.transactionTags)).getSingle();
+        expect(join.id, '${id}__$tag');
+      },
+    );
   });
 
   group('filtered reads (shared query builder)', () {
@@ -122,30 +129,36 @@ void main() {
         toCurrency: 'ARS',
       );
 
-      final expenses = await repos.transactions
-          .list(const TransactionFilter(types: {TxnType.expense}));
+      final expenses = await repos.transactions.list(
+        const TransactionFilter(types: {TxnType.expense}),
+      );
       expect(expenses.map((t) => t.name), ['Pizza night']);
 
       // Direction: bank is only the *destination* of the transfer.
-      final bankSource = await repos.transactions.list(TransactionFilter(
-        accountIds: {bankId},
-        accountDirection: AccountDirection.source,
-      ));
+      final bankSource = await repos.transactions.list(
+        TransactionFilter(
+          accountIds: {bankId},
+          accountDirection: AccountDirection.source,
+        ),
+      );
       expect(bankSource, isEmpty);
 
-      final bankDest = await repos.transactions.list(TransactionFilter(
-        accountIds: {bankId},
-        accountDirection: AccountDirection.destination,
-      ));
+      final bankDest = await repos.transactions.list(
+        TransactionFilter(
+          accountIds: {bankId},
+          accountDirection: AccountDirection.destination,
+        ),
+      );
       expect(bankDest.map((t) => t.name), ['To bank']);
 
-      final bankEither = await repos.transactions.list(TransactionFilter(
-        accountIds: {bankId},
-      ));
+      final bankEither = await repos.transactions.list(
+        TransactionFilter(accountIds: {bankId}),
+      );
       expect(bankEither.map((t) => t.name), ['To bank']);
 
-      final search = await repos.transactions
-          .list(const TransactionFilter(search: 'pizza'));
+      final search = await repos.transactions.list(
+        const TransactionFilter(search: 'pizza'),
+      );
       expect(search.map((t) => t.name), ['Pizza night']);
     });
 
@@ -179,32 +192,31 @@ void main() {
       );
 
       // Parent tag without subtags matches nothing (no direct joins).
-      final parentOnly = await repos.transactions
-          .list(TransactionFilter(tagIds: {parent}));
+      final parentOnly = await repos.transactions.list(
+        TransactionFilter(tagIds: {parent}),
+      );
       expect(parentOnly, isEmpty);
 
       // With subtags, the child's transactions match.
       final parentSubtags = await repos.transactions.list(
         TransactionFilter(tagIds: {parent}, includeSubtags: true),
       );
-      expect(
-        parentSubtags.map((t) => t.id).toSet(),
-        {withChild, withBoth},
-      );
+      expect(parentSubtags.map((t) => t.id).toSet(), {withChild, withBoth});
 
       // ALL: must carry a tag from each group.
-      final all = await repos.transactions.list(TransactionFilter(
-        tagIds: {parent, other},
-        tagMatch: TagMatch.all,
-        includeSubtags: true,
-      ));
+      final all = await repos.transactions.list(
+        TransactionFilter(
+          tagIds: {parent, other},
+          tagMatch: TagMatch.all,
+          includeSubtags: true,
+        ),
+      );
       expect(all.map((t) => t.id), [withBoth]);
 
       // ANY: union of groups.
-      final any = await repos.transactions.list(TransactionFilter(
-        tagIds: {parent, other},
-        includeSubtags: true,
-      ));
+      final any = await repos.transactions.list(
+        TransactionFilter(tagIds: {parent, other}, includeSubtags: true),
+      );
       expect(any.map((t) => t.id).toSet(), {withChild, withBoth});
     });
 
@@ -217,7 +229,8 @@ void main() {
         amountCents: BigInt.from(100),
         currency: 'ARS',
         dateMs: BigInt.from(
-            DateTime(2026, 6, 10, 23, 30).millisecondsSinceEpoch),
+          DateTime(2026, 6, 10, 23, 30).millisecondsSinceEpoch,
+        ),
       );
       await repos.transactions.addExpense(
         accountId: cashId,
@@ -225,13 +238,16 @@ void main() {
         name: 'outside',
         amountCents: BigInt.from(100),
         currency: 'ARS',
-        dateMs:
-            BigInt.from(DateTime(2026, 6, 11, 0, 30).millisecondsSinceEpoch),
+        dateMs: BigInt.from(
+          DateTime(2026, 6, 11, 0, 30).millisecondsSinceEpoch,
+        ),
       );
 
-      final rows = await repos.transactions.list(TransactionFilter(
-        dateRange: DateTimeRange(start: base, end: base),
-      ));
+      final rows = await repos.transactions.list(
+        TransactionFilter(
+          dateRange: DateTimeRange(start: base, end: base),
+        ),
+      );
       expect(rows.map((t) => t.name), ['inside-late']);
     });
 

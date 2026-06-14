@@ -22,6 +22,7 @@ import type * as http from "../http.js";
 import type * as live_actions from "../live/actions.js";
 import type * as schema_accounts from "../schema/accounts.js";
 import type * as schema_categories from "../schema/categories.js";
+import type * as schema_dashboard from "../schema/dashboard.js";
 import type * as schema_refreshTokens from "../schema/refreshTokens.js";
 import type * as schema_sync from "../schema/sync.js";
 import type * as schema_tags from "../schema/tags.js";
@@ -59,6 +60,7 @@ declare const fullApi: ApiFromModules<{
   "live/actions": typeof live_actions;
   "schema/accounts": typeof schema_accounts;
   "schema/categories": typeof schema_categories;
+  "schema/dashboard": typeof schema_dashboard;
   "schema/refreshTokens": typeof schema_refreshTokens;
   "schema/sync": typeof schema_sync;
   "schema/tags": typeof schema_tags;

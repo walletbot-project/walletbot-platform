@@ -85,8 +85,8 @@ class _EmptyBody extends StatelessWidget {
             'Creá tu primera cuenta para empezar a registrar tus gastos.',
             textAlign: TextAlign.center,
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
           ),
           const SizedBox(height: 24),
           FilledButton.icon(

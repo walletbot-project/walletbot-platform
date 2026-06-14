@@ -37,30 +37,25 @@ class PullPageMerger {
 
   // ─── Per-table row apply ─────────────────────────────────────────────────
 
-  Future<void> _applyRemoteRow(
-    String tableName,
-    Map<String, Object?> r,
-  ) async {
+  Future<void> _applyRemoteRow(String tableName, Map<String, Object?> r) async {
     final id = r['id'] as String;
     final remoteUpdatedAt = _asBigInt(r['updatedAt']);
 
     // Local-tombstone-vs-remote-row: spec §"Si existe tombstone local para X".
-    final tomb = await (db.select(db.tombstones)
-          ..where(
-            (t) => t.entityTable.equals(tableName) & t.entityId.equals(id),
-          ))
-        .getSingleOrNull();
+    final tomb =
+        await (db.select(db.tombstones)..where(
+              (t) => t.entityTable.equals(tableName) & t.entityId.equals(id),
+            ))
+            .getSingleOrNull();
     if (tomb != null) {
       if (tomb.deletedAt >= remoteUpdatedAt) {
         // Local delete is newer; keep tombstone (it'll push and revoke).
         return;
       }
       // Remote row is newer than local delete — drop tombstone and accept.
-      await (db.delete(db.tombstones)
-            ..where(
-              (t) =>
-                  t.entityTable.equals(tableName) & t.entityId.equals(id),
-            ))
+      await (db.delete(db.tombstones)..where(
+            (t) => t.entityTable.equals(tableName) & t.entityId.equals(id),
+          ))
           .go();
     }
 
@@ -80,6 +75,12 @@ class PullPageMerger {
       case 'transactionTags':
         await _applyTransactionTag(id, remoteUpdatedAt, r);
         break;
+      case 'savedFilters':
+        await _applySavedFilter(id, remoteUpdatedAt, r);
+        break;
+      case 'dashboardWidgets':
+        await _applyDashboardWidget(id, remoteUpdatedAt, r);
+        break;
       default:
         // Unknown table — skip rather than crash. Forward-compat: a future
         // server may sync more tables than this client knows.
@@ -92,9 +93,9 @@ class PullPageMerger {
     BigInt remoteUpdatedAt,
     Map<String, Object?> r,
   ) async {
-    final existing =
-        await (db.select(db.accounts)..where((a) => a.id.equals(id)))
-            .getSingleOrNull();
+    final existing = await (db.select(
+      db.accounts,
+    )..where((a) => a.id.equals(id))).getSingleOrNull();
     if (existing != null && existing.dirty) {
       if (existing.updatedAt >= remoteUpdatedAt) return;
     }
@@ -110,9 +111,7 @@ class PullPageMerger {
       updatedAt: Value(remoteUpdatedAt),
       dirty: const Value(false),
     );
-    await db
-        .into(db.accounts)
-        .insertOnConflictUpdate(companion);
+    await db.into(db.accounts).insertOnConflictUpdate(companion);
   }
 
   Future<void> _applyCategory(
@@ -120,9 +119,9 @@ class PullPageMerger {
     BigInt remoteUpdatedAt,
     Map<String, Object?> r,
   ) async {
-    final existing =
-        await (db.select(db.categories)..where((c) => c.id.equals(id)))
-            .getSingleOrNull();
+    final existing = await (db.select(
+      db.categories,
+    )..where((c) => c.id.equals(id))).getSingleOrNull();
     if (existing != null && existing.dirty) {
       if (existing.updatedAt >= remoteUpdatedAt) return;
     }
@@ -143,8 +142,9 @@ class PullPageMerger {
     BigInt remoteUpdatedAt,
     Map<String, Object?> r,
   ) async {
-    final existing = await (db.select(db.tags)..where((t) => t.id.equals(id)))
-        .getSingleOrNull();
+    final existing = await (db.select(
+      db.tags,
+    )..where((t) => t.id.equals(id))).getSingleOrNull();
     if (existing != null && existing.dirty) {
       if (existing.updatedAt >= remoteUpdatedAt) return;
     }
@@ -218,6 +218,55 @@ class PullPageMerger {
       dirty: const Value(false),
     );
     await db.into(db.transactionTags).insertOnConflictUpdate(companion);
+  }
+
+  Future<void> _applySavedFilter(
+    String id,
+    BigInt remoteUpdatedAt,
+    Map<String, Object?> r,
+  ) async {
+    final existing = await (db.select(
+      db.savedFilters,
+    )..where((f) => f.id.equals(id))).getSingleOrNull();
+    if (existing != null && existing.dirty) {
+      if (existing.updatedAt >= remoteUpdatedAt) return;
+    }
+    final companion = SavedFiltersCompanion(
+      id: Value(id),
+      name: Value(r['name'] as String),
+      config: Value(r['config'] as String),
+      archived: Value(r['isArchived'] as bool? ?? false),
+      createdAt: Value(_asBigInt(r['createdAt'])),
+      updatedAt: Value(remoteUpdatedAt),
+      dirty: const Value(false),
+    );
+    await db.into(db.savedFilters).insertOnConflictUpdate(companion);
+  }
+
+  Future<void> _applyDashboardWidget(
+    String id,
+    BigInt remoteUpdatedAt,
+    Map<String, Object?> r,
+  ) async {
+    final existing = await (db.select(
+      db.dashboardWidgets,
+    )..where((w) => w.id.equals(id))).getSingleOrNull();
+    if (existing != null && existing.dirty) {
+      if (existing.updatedAt >= remoteUpdatedAt) return;
+    }
+    final companion = DashboardWidgetsCompanion(
+      id: Value(id),
+      type: Value(r['type'] as String),
+      filterId: Value(r['filterId'] as String?),
+      position: Value((r['position'] as num).toInt()),
+      width: Value(r['width'] as String),
+      options: Value(r['options'] as String),
+      archived: Value(r['isArchived'] as bool? ?? false),
+      createdAt: Value(_asBigInt(r['createdAt'])),
+      updatedAt: Value(remoteUpdatedAt),
+      dirty: const Value(false),
+    );
+    await db.into(db.dashboardWidgets).insertOnConflictUpdate(companion);
   }
 
   // ─── Tombstone apply ─────────────────────────────────────────────────────
@@ -306,6 +355,34 @@ class PullPageMerger {
           }
         }
         break;
+      case 'savedFilters':
+        final row = await (db.select(
+          db.savedFilters,
+        )..where((f) => f.id.equals(entityId))).getSingleOrNull();
+        if (row != null) {
+          if (row.dirty && row.updatedAt > deletedAt) {
+            keepLocalRow = true;
+          } else {
+            await (db.delete(
+              db.savedFilters,
+            )..where((f) => f.id.equals(entityId))).go();
+          }
+        }
+        break;
+      case 'dashboardWidgets':
+        final row = await (db.select(
+          db.dashboardWidgets,
+        )..where((w) => w.id.equals(entityId))).getSingleOrNull();
+        if (row != null) {
+          if (row.dirty && row.updatedAt > deletedAt) {
+            keepLocalRow = true;
+          } else {
+            await (db.delete(
+              db.dashboardWidgets,
+            )..where((w) => w.id.equals(entityId))).go();
+          }
+        }
+        break;
     }
 
     if (keepLocalRow) {
@@ -318,23 +395,20 @@ class PullPageMerger {
     // Upsert local tombstone with dirty = false. If a local tombstone
     // already exists with a later deletedAt, defend it (it'll push later).
     final now = BigInt.from(DateTime.now().millisecondsSinceEpoch);
-    final existing = await (db.select(db.tombstones)
-          ..where(
-            (t) =>
-                t.entityTable.equals(tableName) &
-                t.entityId.equals(entityId),
-          ))
-        .getSingleOrNull();
+    final existing =
+        await (db.select(db.tombstones)..where(
+              (t) =>
+                  t.entityTable.equals(tableName) & t.entityId.equals(entityId),
+            ))
+            .getSingleOrNull();
     if (existing != null) {
       if (existing.dirty && existing.deletedAt > deletedAt) {
         return;
       }
-      await (db.update(db.tombstones)
-            ..where(
-              (t) =>
-                  t.entityTable.equals(tableName) &
-                  t.entityId.equals(entityId),
-            ))
+      await (db.update(db.tombstones)..where(
+            (t) =>
+                t.entityTable.equals(tableName) & t.entityId.equals(entityId),
+          ))
           .write(
             TombstonesCompanion(
               deletedAt: Value(deletedAt),

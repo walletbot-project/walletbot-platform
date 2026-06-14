@@ -2,9 +2,25 @@ import 'package:flutter/material.dart' show DateTimeRange;
 
 import '../../shared/dates.dart';
 
+/// Common shape for the filter dimension enums: a stored/query `wire` value and
+/// a Spanish UI `label`. Lets [TransactionFilter.fromCanonicalJson] look any of
+/// them up by wire value generically.
+abstract interface class WireLabeled {
+  String get wire;
+  String get label;
+}
+
+/// Finds the enum value whose [WireLabeled.wire] matches [wire], or null.
+T? _enumByWire<T extends WireLabeled>(List<T> values, String wire) {
+  for (final value in values) {
+    if (value.wire == wire) return value;
+  }
+  return null;
+}
+
 /// Transaction type dimension. `wire` matches the value stored in
 /// `transactions.type`; `label` is shown in the UI.
-enum TxnType {
+enum TxnType implements WireLabeled {
   expense('expense', 'Gastos'),
   income('income', 'Ingresos'),
   transfer('transfer', 'Transferencias'),
@@ -12,24 +28,28 @@ enum TxnType {
 
   const TxnType(this.wire, this.label);
 
+  @override
   final String wire;
+  @override
   final String label;
 }
 
 /// Status dimension. Absence (null on the filter) means "any".
-enum TxnStatus {
+enum TxnStatus implements WireLabeled {
   pending('pending', 'Pendiente'),
   cleared('cleared', 'Confirmado');
 
   const TxnStatus(this.wire, this.label);
 
+  @override
   final String wire;
+  @override
   final String label;
 }
 
 /// Relative date presets, resolved at render time so "this month" rolls
 /// forward instead of freezing (see docs/home-dashboard.md).
-enum DatePreset {
+enum DatePreset implements WireLabeled {
   today('today', 'Hoy'),
   thisWeek('this_week', 'Esta semana'),
   thisMonth('this_month', 'Este mes'),
@@ -38,31 +58,37 @@ enum DatePreset {
 
   const DatePreset(this.wire, this.label);
 
+  @override
   final String wire;
+  @override
   final String label;
 }
 
 /// Transfers have a source (`accountId`) and destination (`toAccountId`); the
 /// account filter carries which side to match.
-enum AccountDirection {
+enum AccountDirection implements WireLabeled {
   source('source', 'Origen'),
   destination('destination', 'Destino'),
   either('either', 'Cualquiera');
 
   const AccountDirection(this.wire, this.label);
 
+  @override
   final String wire;
+  @override
   final String label;
 }
 
 /// Whether a transaction must carry *any* of the selected tags or *all* of them.
-enum TagMatch {
+enum TagMatch implements WireLabeled {
   any('any', 'Cualquiera'),
   all('all', 'Todas');
 
   const TagMatch(this.wire, this.label);
 
+  @override
   final String wire;
+  @override
   final String label;
 }
 
@@ -127,6 +153,111 @@ class TransactionFilter {
       amountMinCents == null &&
       amountMaxCents == null &&
       (search == null || search!.trim().isEmpty);
+
+  /// Rebuilds a filter from the canonical `{combinator, children}` tree
+  /// produced by [toCanonicalJson]. Only the simple-mode subset is understood:
+  /// a single top-level `and` of flat conditions. Anything else (nested groups,
+  /// `or`, `not`, unknown fields/operators) is skipped, so an advanced filter
+  /// degrades to the conditions it can represent rather than throwing.
+  factory TransactionFilter.fromCanonicalJson(Map<String, Object?> json) {
+    final children = json['children'];
+    if (json['combinator'] != 'and' || children is! List) {
+      return const TransactionFilter();
+    }
+
+    final types = <TxnType>{};
+    TxnStatus? status;
+    DatePreset? datePreset;
+    DateTimeRange? dateRange;
+    final accountIds = <String>{};
+    var accountDirection = AccountDirection.either;
+    final categoryIds = <String>{};
+    final tagIds = <String>{};
+    var tagMatch = TagMatch.any;
+    var includeSubtags = false;
+    String? currency;
+    int? amountMinCents;
+    int? amountMaxCents;
+    String? search;
+
+    List<String> asStringList(Object? value) =>
+        value is List ? value.whereType<String>().toList() : const [];
+
+    for (final raw in children) {
+      if (raw is! Map) continue;
+      final field = raw['field'];
+      final operator = raw['operator'];
+      final value = raw['value'];
+      switch (field) {
+        case 'type':
+          for (final wire in asStringList(value)) {
+            final t = _enumByWire(TxnType.values, wire);
+            if (t != null) types.add(t);
+          }
+        case 'status':
+          final wire = asStringList(value).firstOrNull;
+          if (wire != null) status = _enumByWire(TxnStatus.values, wire);
+        case 'date':
+          if (operator == 'relative' && value is String) {
+            datePreset = _enumByWire(DatePreset.values, value);
+          } else if (operator == 'between' && value is Map) {
+            final from = value['from'];
+            final to = value['to'];
+            if (from is String && to is String) {
+              final start = DateTime.tryParse(from);
+              final end = DateTime.tryParse(to);
+              if (start != null && end != null) {
+                dateRange = DateTimeRange(start: start, end: end);
+              }
+            }
+          }
+        case 'account':
+          accountIds.addAll(asStringList(value));
+          final dir = raw['direction'];
+          if (dir is String) {
+            accountDirection =
+                _enumByWire(AccountDirection.values, dir) ?? accountDirection;
+          }
+        case 'category':
+          categoryIds.addAll(asStringList(value));
+        case 'tag':
+          tagIds.addAll(asStringList(value));
+          final match = raw['match'];
+          if (match is String) {
+            tagMatch = _enumByWire(TagMatch.values, match) ?? tagMatch;
+          }
+          includeSubtags = raw['includeSubtags'] == true;
+        case 'currency':
+          currency = asStringList(value).firstOrNull;
+        case 'amount':
+          if (value is Map) {
+            final min = value['min'];
+            final max = value['max'];
+            if (min is int) amountMinCents = min;
+            if (max is int) amountMaxCents = max;
+          }
+        case 'text':
+          if (value is String) search = value;
+      }
+    }
+
+    return TransactionFilter(
+      types: types,
+      status: status,
+      datePreset: datePreset,
+      dateRange: dateRange,
+      accountIds: accountIds,
+      accountDirection: accountDirection,
+      categoryIds: categoryIds,
+      tagIds: tagIds,
+      tagMatch: tagMatch,
+      includeSubtags: includeSubtags,
+      currency: currency,
+      amountMinCents: amountMinCents,
+      amountMaxCents: amountMaxCents,
+      search: search,
+    );
+  }
 
   /// Resolves the date dimension to an absolute window at query time.
   /// [dateRange] bounds are day-precision: the end day is inclusive. Weeks

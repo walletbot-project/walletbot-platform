@@ -1,7 +1,9 @@
 import 'package:app/auth/account.dart';
 import 'package:app/auth/auth_controller.dart';
-import 'package:app/components/dashboard/dashboard_view.dart';
+import 'package:app/components/dashboard/add_widget_sheet.dart';
+import 'package:app/components/dashboard/dashboard_section.dart';
 import 'package:app/components/dashboard/default_dashboard.dart';
+import 'package:app/data/data.dart';
 import 'package:app/screens/transaction_form.dart';
 import 'package:app/sync/sync_status_pill.dart';
 import 'package:flutter/material.dart';
@@ -15,6 +17,24 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  @override
+  void initState() {
+    super.initState();
+    _maybeSeedDashboard();
+  }
+
+  /// Seeds the default dashboard once per device (the repository enforces the
+  /// empty-table + one-time guard). Fire-and-forget: the dashboard stream
+  /// updates reactively once the rows land.
+  void _maybeSeedDashboard() {
+    final repos = context.read<AppRepositories>();
+    repos.dashboard
+        .seedDefaultIfEmpty(() => writeDefaultDashboardSeed(repos))
+        .catchError((Object e, StackTrace st) {
+          debugPrint('home: default dashboard seed failed: $e');
+        });
+  }
+
   void showUserMenu() {
     showDialog(
       context: context,
@@ -78,21 +98,46 @@ class _HomeScreenState extends State<HomeScreen> {
     ).push(MaterialPageRoute(builder: (_) => const TransactionFormScreen()));
   }
 
+  bool _editing = false;
+
+  Future<void> _openAddWidget() async {
+    final repos = context.read<AppRepositories>();
+    await showAddWidgetSheet(context, repos);
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Home'),
-        actions: [
-          const Padding(
-            padding: EdgeInsets.only(right: 4),
-            child: Center(child: SyncStatusPill()),
-          ),
-          IconButton(
-            onPressed: showUserMenu,
-            icon: const Icon(Icons.person_rounded),
-          ),
-        ],
+        actions: _editing
+            ? [
+                IconButton(
+                  tooltip: 'Agregar widget',
+                  onPressed: _openAddWidget,
+                  icon: const Icon(Icons.add_rounded),
+                ),
+                IconButton(
+                  tooltip: 'Listo',
+                  onPressed: () => setState(() => _editing = false),
+                  icon: const Icon(Icons.check_rounded),
+                ),
+              ]
+            : [
+                const Padding(
+                  padding: EdgeInsets.only(right: 4),
+                  child: Center(child: SyncStatusPill()),
+                ),
+                IconButton(
+                  tooltip: 'Editar tablero',
+                  onPressed: () => setState(() => _editing = true),
+                  icon: const Icon(Icons.edit_outlined),
+                ),
+                IconButton(
+                  onPressed: showUserMenu,
+                  icon: const Icon(Icons.person_rounded),
+                ),
+              ],
       ),
       body: ListView(
         padding: const EdgeInsets.all(16),
@@ -108,7 +153,7 @@ class _HomeScreenState extends State<HomeScreen> {
           const SizedBox(height: 24),
           Text('Resumen', style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: 12),
-          const DashboardView(widgets: defaultDashboardWidgets),
+          DashboardSection(editing: _editing),
         ],
       ),
     );

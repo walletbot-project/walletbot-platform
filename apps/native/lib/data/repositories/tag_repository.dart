@@ -194,33 +194,34 @@ class TagRepository extends RepositoryBase {
         final allActive = await listActive();
         final descendants = descendantIdsOf(allActive, id);
         for (final descendantId in descendants) {
-          await (db.update(db.tags)..where((t) => t.id.equals(descendantId)))
-              .write(
-                TagsCompanion(
-                  archived: const Value(true),
-                  updatedAt: Value(now),
-                  dirty: const Value(true),
-                ),
-              );
+          await (db.update(
+            db.tags,
+          )..where((t) => t.id.equals(descendantId))).write(
+            TagsCompanion(
+              archived: const Value(true),
+              updatedAt: Value(now),
+              dirty: const Value(true),
+            ),
+          );
           await markDeleted('tags', descendantId);
         }
       } else {
         final deletedTag = await getById(id);
         final grandparentId = deletedTag?.parentId;
 
-        final directChildren = await (db.select(db.tags)
-              ..where((t) => t.parentId.equals(id))
-              ..where((t) => t.archived.equals(false)))
-            .get();
+        final directChildren =
+            await (db.select(db.tags)
+                  ..where((t) => t.parentId.equals(id))
+                  ..where((t) => t.archived.equals(false)))
+                .get();
         for (final child in directChildren) {
-          await (db.update(db.tags)..where((t) => t.id.equals(child.id)))
-              .write(
-                TagsCompanion(
-                  parentId: Value(grandparentId),
-                  updatedAt: Value(now),
-                  dirty: const Value(true),
-                ),
-              );
+          await (db.update(db.tags)..where((t) => t.id.equals(child.id))).write(
+            TagsCompanion(
+              parentId: Value(grandparentId),
+              updatedAt: Value(now),
+              dirty: const Value(true),
+            ),
+          );
         }
       }
 

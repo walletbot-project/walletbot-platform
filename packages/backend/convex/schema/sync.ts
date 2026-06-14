@@ -17,6 +17,8 @@ export const syncedTable = v.union(
     v.literal('transactions'),
     v.literal('tags'),
     v.literal('transactionTags'),
+    v.literal('savedFilters'),
+    v.literal('dashboardWidgets'),
 )
 
 export const tombstones = defineTable({

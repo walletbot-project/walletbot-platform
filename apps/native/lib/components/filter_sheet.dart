@@ -47,11 +47,13 @@ Future<TransactionFilter?> showFilterSheet(
   BuildContext context, {
   TransactionFilter initial = const TransactionFilter(),
   Set<FilterSection> hiddenSections = const {},
+  AppRepositories? repos,
 }) {
   // Read the repositories from the *calling* context: the modal route is
   // pushed by a Navigator that sits above the account-scoped providers, so
-  // the sheet's own context can't reach them.
-  final repos = context.read<AppRepositories>();
+  // the sheet's own context can't reach them. Callers already inside such a
+  // modal (e.g. the add-widget sheet) pass [repos] in directly.
+  final resolvedRepos = repos ?? context.read<AppRepositories>();
   return showModalBottomSheet<TransactionFilter>(
     context: context,
     isScrollControlled: true,
@@ -61,7 +63,7 @@ Future<TransactionFilter?> showFilterSheet(
       borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
     ),
     builder: (_) => FilterSheet(
-      repos: repos,
+      repos: resolvedRepos,
       initial: initial,
       hiddenSections: hiddenSections,
     ),

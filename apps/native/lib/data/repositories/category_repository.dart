@@ -10,9 +10,9 @@ class CategoryRepository extends RepositoryBase {
   CategoryRepository(super.db);
 
   /// Active categories, unsorted (sort at the call site if needed).
-  Stream<List<Category>> watchActive() =>
-      (db.select(db.categories)..where((c) => c.archived.equals(false)))
-          .watch();
+  Stream<List<Category>> watchActive() => (db.select(
+    db.categories,
+  )..where((c) => c.archived.equals(false))).watch();
 
   /// One-shot list, active-only by default.
   Future<List<Category>> listAll({bool includeArchived = false}) {
@@ -27,9 +27,9 @@ class CategoryRepository extends RepositoryBase {
   Future<List<Category>> listActive() => listAll();
 
   /// Exact-id lookup; finds archived categories too. Null when missing.
-  Future<Category?> getById(String id) => (db.select(db.categories)
-        ..where((c) => c.id.equals(id)))
-      .getSingleOrNull();
+  Future<Category?> getById(String id) => (db.select(
+    db.categories,
+  )..where((c) => c.id.equals(id))).getSingleOrNull();
 
   /// Active categories with their transaction counts, name-ordered. The
   /// `readsFrom` set is what keeps the count live when sync merges land —

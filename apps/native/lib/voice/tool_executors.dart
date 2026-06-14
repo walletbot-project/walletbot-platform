@@ -19,7 +19,10 @@ class ToolExecutors {
 
   final AppRepositories repos;
 
-  Future<Map<String, dynamic>> execute(String name, Map<String, dynamic> args) async {
+  Future<Map<String, dynamic>> execute(
+    String name,
+    Map<String, dynamic> args,
+  ) async {
     try {
       switch (name) {
         // Accounts
@@ -101,23 +104,38 @@ class ToolExecutors {
   T? _valueOrNull<T>(ResolveResult<T> result) =>
       result is Resolved<T> ? result.value : null;
 
-  Map<String, dynamic> _ambiguous(String label, List<({String id, String name})> candidates) {
+  Map<String, dynamic> _ambiguous(
+    String label,
+    List<({String id, String name})> candidates,
+  ) {
     return {
       'ok': false,
       'error': '$label is ambiguous',
-      'candidates': candidates.map((c) => {'id': c.id, 'name': c.name}).toList(),
+      'candidates': candidates
+          .map((c) => {'id': c.id, 'name': c.name})
+          .toList(),
     };
   }
 
   // ───── Account tools ─────
 
   Future<Map<String, dynamic>> _listAccounts(Map<String, dynamic> args) async {
-    final rows = await repos.accounts
-        .listAll(includeArchived: args['includeArchived'] == true);
+    final rows = await repos.accounts.listAll(
+      includeArchived: args['includeArchived'] == true,
+    );
     return {
       'ok': true,
       'accounts': rows
-          .map((a) => {'id': a.id, 'name': a.name, 'currency': a.currency, 'color': a.color, 'icon': a.icon, 'isArchived': a.archived})
+          .map(
+            (a) => {
+              'id': a.id,
+              'name': a.name,
+              'currency': a.currency,
+              'color': a.color,
+              'icon': a.icon,
+              'isArchived': a.archived,
+            },
+          )
           .toList(),
     };
   }
@@ -132,16 +150,32 @@ class ToolExecutors {
       case Resolved<Account>(:final value):
         return {
           'ok': true,
-          'account': {'id': value.id, 'name': value.name, 'currency': value.currency, 'color': value.color, 'icon': value.icon},
+          'account': {
+            'id': value.id,
+            'name': value.name,
+            'currency': value.currency,
+            'color': value.color,
+            'icon': value.icon,
+          },
         };
     }
   }
 
-  Future<Map<String, dynamic>> _getAccountBalance(Map<String, dynamic> args) async {
-    final acc = _valueOrNull(await repos.resolver.account(args['idOrName'] as String));
+  Future<Map<String, dynamic>> _getAccountBalance(
+    Map<String, dynamic> args,
+  ) async {
+    final acc = _valueOrNull(
+      await repos.resolver.account(args['idOrName'] as String),
+    );
     if (acc == null) return {'ok': false, 'error': 'Account not found'};
     final balance = await repos.accounts.getBalanceCents(acc.id);
-    return {'ok': true, 'accountId': acc.id, 'accountName': acc.name, 'balance': centsToDouble(balance), 'currency': acc.currency};
+    return {
+      'ok': true,
+      'accountId': acc.id,
+      'accountName': acc.name,
+      'balance': centsToDouble(balance),
+      'currency': acc.currency,
+    };
   }
 
   Future<Map<String, dynamic>> _createAccount(Map<String, dynamic> args) async {
@@ -156,21 +190,35 @@ class ToolExecutors {
   }
 
   Future<Map<String, dynamic>> _updateAccount(Map<String, dynamic> args) async {
-    final acc = _valueOrNull(await repos.resolver.account(args['idOrName'] as String));
+    final acc = _valueOrNull(
+      await repos.resolver.account(args['idOrName'] as String),
+    );
     if (acc == null) return {'ok': false, 'error': 'Account not found'};
 
     await repos.accounts.update(
       acc.id,
-      name: args.containsKey('name') ? Value(args['name'] as String) : const Value.absent(),
-      description: args.containsKey('description') ? Value(args['description'] as String?) : const Value.absent(),
-      color: args.containsKey('color') ? Value(args['color'] as String?) : const Value.absent(),
-      icon: args.containsKey('icon') ? Value(args['icon'] as String?) : const Value.absent(),
+      name: args.containsKey('name')
+          ? Value(args['name'] as String)
+          : const Value.absent(),
+      description: args.containsKey('description')
+          ? Value(args['description'] as String?)
+          : const Value.absent(),
+      color: args.containsKey('color')
+          ? Value(args['color'] as String?)
+          : const Value.absent(),
+      icon: args.containsKey('icon')
+          ? Value(args['icon'] as String?)
+          : const Value.absent(),
     );
     return {'ok': true, 'id': acc.id};
   }
 
-  Future<Map<String, dynamic>> _archiveAccount(Map<String, dynamic> args) async {
-    final acc = _valueOrNull(await repos.resolver.account(args['idOrName'] as String));
+  Future<Map<String, dynamic>> _archiveAccount(
+    Map<String, dynamic> args,
+  ) async {
+    final acc = _valueOrNull(
+      await repos.resolver.account(args['idOrName'] as String),
+    );
     if (acc == null) return {'ok': false, 'error': 'Account not found'};
     await repos.accounts.archive(acc.id);
     return {'ok': true, 'id': acc.id};
@@ -178,12 +226,19 @@ class ToolExecutors {
 
   // ───── Category tools ─────
 
-  Future<Map<String, dynamic>> _listCategories(Map<String, dynamic> args) async {
-    final rows = await repos.categories
-        .listAll(includeArchived: args['includeArchived'] == true);
+  Future<Map<String, dynamic>> _listCategories(
+    Map<String, dynamic> args,
+  ) async {
+    final rows = await repos.categories.listAll(
+      includeArchived: args['includeArchived'] == true,
+    );
     return {
       'ok': true,
-      'categories': rows.map((c) => {'id': c.id, 'name': c.name, 'description': c.description}).toList(),
+      'categories': rows
+          .map(
+            (c) => {'id': c.id, 'name': c.name, 'description': c.description},
+          )
+          .toList(),
     };
   }
 
@@ -197,12 +252,18 @@ class ToolExecutors {
       case Resolved<Category>(:final value):
         return {
           'ok': true,
-          'category': {'id': value.id, 'name': value.name, 'description': value.description},
+          'category': {
+            'id': value.id,
+            'name': value.name,
+            'description': value.description,
+          },
         };
     }
   }
 
-  Future<Map<String, dynamic>> _createCategory(Map<String, dynamic> args) async {
+  Future<Map<String, dynamic>> _createCategory(
+    Map<String, dynamic> args,
+  ) async {
     final id = await repos.categories.create(
       name: args['name'] as String,
       description: args['description'] as String?,
@@ -210,20 +271,32 @@ class ToolExecutors {
     return {'ok': true, 'id': id};
   }
 
-  Future<Map<String, dynamic>> _updateCategory(Map<String, dynamic> args) async {
-    final cat = _valueOrNull(await repos.resolver.category(args['idOrName'] as String));
+  Future<Map<String, dynamic>> _updateCategory(
+    Map<String, dynamic> args,
+  ) async {
+    final cat = _valueOrNull(
+      await repos.resolver.category(args['idOrName'] as String),
+    );
     if (cat == null) return {'ok': false, 'error': 'Category not found'};
 
     await repos.categories.update(
       cat.id,
-      name: args.containsKey('name') ? Value(args['name'] as String) : const Value.absent(),
-      description: args.containsKey('description') ? Value(args['description'] as String?) : const Value.absent(),
+      name: args.containsKey('name')
+          ? Value(args['name'] as String)
+          : const Value.absent(),
+      description: args.containsKey('description')
+          ? Value(args['description'] as String?)
+          : const Value.absent(),
     );
     return {'ok': true, 'id': cat.id};
   }
 
-  Future<Map<String, dynamic>> _archiveCategory(Map<String, dynamic> args) async {
-    final cat = _valueOrNull(await repos.resolver.category(args['idOrName'] as String));
+  Future<Map<String, dynamic>> _archiveCategory(
+    Map<String, dynamic> args,
+  ) async {
+    final cat = _valueOrNull(
+      await repos.resolver.category(args['idOrName'] as String),
+    );
     if (cat == null) return {'ok': false, 'error': 'Category not found'};
     await repos.categories.archive(cat.id);
     return {'ok': true, 'id': cat.id};
@@ -232,27 +305,46 @@ class ToolExecutors {
   // ───── Tag tools ─────
 
   Future<Map<String, dynamic>> _listTags(Map<String, dynamic> args) async {
-    final rows =
-        await repos.tags.listAll(includeArchived: args['includeArchived'] == true);
+    final rows = await repos.tags.listAll(
+      includeArchived: args['includeArchived'] == true,
+    );
     return {
       'ok': true,
-      'tags': rows.map((t) => {'id': t.id, 'name': t.name, 'parentId': t.parentId, 'color': t.color}).toList(),
+      'tags': rows
+          .map(
+            (t) => {
+              'id': t.id,
+              'name': t.name,
+              'parentId': t.parentId,
+              'color': t.color,
+            },
+          )
+          .toList(),
     };
   }
 
   Future<Map<String, dynamic>> _getTag(Map<String, dynamic> args) async {
-    final tag = _valueOrNull(await repos.resolver.tag(args['idOrName'] as String));
+    final tag = _valueOrNull(
+      await repos.resolver.tag(args['idOrName'] as String),
+    );
     if (tag == null) return {'ok': false, 'error': 'Tag not found'};
     return {
       'ok': true,
-      'tag': {'id': tag.id, 'name': tag.name, 'parentId': tag.parentId, 'color': tag.color},
+      'tag': {
+        'id': tag.id,
+        'name': tag.name,
+        'parentId': tag.parentId,
+        'color': tag.color,
+      },
     };
   }
 
   Future<Map<String, dynamic>> _createTag(Map<String, dynamic> args) async {
     String? parentId;
     if (args['parentIdOrName'] != null) {
-      final parent = _valueOrNull(await repos.resolver.tag(args['parentIdOrName'] as String));
+      final parent = _valueOrNull(
+        await repos.resolver.tag(args['parentIdOrName'] as String),
+      );
       if (parent == null) {
         return {'ok': false, 'error': 'Parent tag not found'};
       }
@@ -268,7 +360,9 @@ class ToolExecutors {
   }
 
   Future<Map<String, dynamic>> _updateTag(Map<String, dynamic> args) async {
-    final tag = _valueOrNull(await repos.resolver.tag(args['idOrName'] as String));
+    final tag = _valueOrNull(
+      await repos.resolver.tag(args['idOrName'] as String),
+    );
     if (tag == null) return {'ok': false, 'error': 'Tag not found'};
 
     Value<String?> parentValue = const Value.absent();
@@ -287,16 +381,24 @@ class ToolExecutors {
 
     await repos.tags.update(
       tag.id,
-      name: args.containsKey('name') ? Value(args['name'] as String) : const Value.absent(),
-      description: args.containsKey('description') ? Value(args['description'] as String?) : const Value.absent(),
+      name: args.containsKey('name')
+          ? Value(args['name'] as String)
+          : const Value.absent(),
+      description: args.containsKey('description')
+          ? Value(args['description'] as String?)
+          : const Value.absent(),
       parentId: parentValue,
-      color: args.containsKey('color') ? Value(args['color'] as String?) : const Value.absent(),
+      color: args.containsKey('color')
+          ? Value(args['color'] as String?)
+          : const Value.absent(),
     );
     return {'ok': true, 'id': tag.id};
   }
 
   Future<Map<String, dynamic>> _archiveTag(Map<String, dynamic> args) async {
-    final tag = _valueOrNull(await repos.resolver.tag(args['idOrName'] as String));
+    final tag = _valueOrNull(
+      await repos.resolver.tag(args['idOrName'] as String),
+    );
     if (tag == null) return {'ok': false, 'error': 'Tag not found'};
     await repos.tags.archive(tag.id, mode: TagArchiveMode.reparentChildren);
     return {'ok': true, 'id': tag.id};
@@ -304,24 +406,32 @@ class ToolExecutors {
 
   // ───── Transaction reads ─────
 
-  Future<Map<String, dynamic>> _listTransactions(Map<String, dynamic> args) async {
+  Future<Map<String, dynamic>> _listTransactions(
+    Map<String, dynamic> args,
+  ) async {
     final limit = (args['limit'] as num?)?.toInt() ?? 50;
 
     String? accountId;
     if (args['accountIdOrName'] != null) {
-      final acc = _valueOrNull(await repos.resolver.account(args['accountIdOrName'] as String));
+      final acc = _valueOrNull(
+        await repos.resolver.account(args['accountIdOrName'] as String),
+      );
       if (acc == null) return {'ok': false, 'error': 'Account not found'};
       accountId = acc.id;
     }
     String? categoryId;
     if (args['categoryIdOrName'] != null) {
-      final cat = _valueOrNull(await repos.resolver.category(args['categoryIdOrName'] as String));
+      final cat = _valueOrNull(
+        await repos.resolver.category(args['categoryIdOrName'] as String),
+      );
       if (cat == null) return {'ok': false, 'error': 'Category not found'};
       categoryId = cat.id;
     }
     String? tagId;
     if (args['tagIdOrName'] != null) {
-      final tag = _valueOrNull(await repos.resolver.tag(args['tagIdOrName'] as String));
+      final tag = _valueOrNull(
+        await repos.resolver.tag(args['tagIdOrName'] as String),
+      );
       if (tag == null) return {'ok': false, 'error': 'Tag not found'};
       tagId = tag.id;
     }
@@ -352,14 +462,20 @@ class ToolExecutors {
       ),
       limit: limit,
       ordering: TxnOrdering.dateDesc,
-      exactFromMs: args['dateFrom'] != null ? parseNaturalDate(args['dateFrom'] as String) : null,
-      exactToInclusiveMs: args['dateTo'] != null ? parseNaturalDate(args['dateTo'] as String) : null,
+      exactFromMs: args['dateFrom'] != null
+          ? parseNaturalDate(args['dateFrom'] as String)
+          : null,
+      exactToInclusiveMs: args['dateTo'] != null
+          ? parseNaturalDate(args['dateTo'] as String)
+          : null,
     );
 
     return {'ok': true, 'items': items.map(_serializeTransaction).toList()};
   }
 
-  Future<Map<String, dynamic>> _getTransaction(Map<String, dynamic> args) async {
+  Future<Map<String, dynamic>> _getTransaction(
+    Map<String, dynamic> args,
+  ) async {
     final id = args['id'] as String;
     final txn = await repos.transactions.getById(id);
     if (txn == null) return {'ok': false, 'error': 'Transaction not found'};
@@ -368,7 +484,9 @@ class ToolExecutors {
     return {'ok': true, 'transaction': result};
   }
 
-  Future<Map<String, dynamic>> _getRecentTransactions(Map<String, dynamic> args) async {
+  Future<Map<String, dynamic>> _getRecentTransactions(
+    Map<String, dynamic> args,
+  ) async {
     final limit = (args['limit'] as num?)?.toInt() ?? 10;
     final items = await repos.transactions.list(
       const TransactionFilter(),
@@ -414,9 +532,13 @@ class ToolExecutors {
   }
 
   Future<Map<String, dynamic>> _addExpense(Map<String, dynamic> args) async {
-    final acc = _valueOrNull(await repos.resolver.account(args['accountIdOrName'] as String));
+    final acc = _valueOrNull(
+      await repos.resolver.account(args['accountIdOrName'] as String),
+    );
     if (acc == null) return {'ok': false, 'error': 'Account not found'};
-    final cat = _valueOrNull(await repos.resolver.category(args['categoryIdOrName'] as String));
+    final cat = _valueOrNull(
+      await repos.resolver.category(args['categoryIdOrName'] as String),
+    );
     if (cat == null) return {'ok': false, 'error': 'Category not found'};
 
     final id = await repos.transactions.addExpense(
@@ -435,9 +557,13 @@ class ToolExecutors {
   }
 
   Future<Map<String, dynamic>> _addIncome(Map<String, dynamic> args) async {
-    final acc = _valueOrNull(await repos.resolver.account(args['accountIdOrName'] as String));
+    final acc = _valueOrNull(
+      await repos.resolver.account(args['accountIdOrName'] as String),
+    );
     if (acc == null) return {'ok': false, 'error': 'Account not found'};
-    final cat = _valueOrNull(await repos.resolver.category(args['categoryIdOrName'] as String));
+    final cat = _valueOrNull(
+      await repos.resolver.category(args['categoryIdOrName'] as String),
+    );
     if (cat == null) return {'ok': false, 'error': 'Category not found'};
 
     final id = await repos.transactions.addIncome(
@@ -456,29 +582,44 @@ class ToolExecutors {
   }
 
   Future<Map<String, dynamic>> _addTransfer(Map<String, dynamic> args) async {
-    final from = _valueOrNull(await repos.resolver.account(args['fromAccountIdOrName'] as String));
+    final from = _valueOrNull(
+      await repos.resolver.account(args['fromAccountIdOrName'] as String),
+    );
     if (from == null) {
       return {'ok': false, 'error': 'Source account not found'};
     }
-    final to = _valueOrNull(await repos.resolver.account(args['toAccountIdOrName'] as String));
+    final to = _valueOrNull(
+      await repos.resolver.account(args['toAccountIdOrName'] as String),
+    );
     if (to == null) {
       return {'ok': false, 'error': 'Destination account not found'};
     }
     if (from.id == to.id) {
-      return {'ok': false, 'error': 'Source and destination accounts must differ'};
+      return {
+        'ok': false,
+        'error': 'Source and destination accounts must differ',
+      };
     }
     String? categoryId;
     if (args['categoryIdOrName'] != null) {
-      final cat = _valueOrNull(await repos.resolver.category(args['categoryIdOrName'] as String));
+      final cat = _valueOrNull(
+        await repos.resolver.category(args['categoryIdOrName'] as String),
+      );
       if (cat == null) return {'ok': false, 'error': 'Category not found'};
       categoryId = cat.id;
     }
 
     final amount = parseAmountToCents(args['amount'] as num);
     final sameCurrency = from.currency == to.currency;
-    final BigInt? toAmount = args['toAmount'] != null ? parseAmountToCents(args['toAmount'] as num) : (sameCurrency ? amount : null);
+    final BigInt? toAmount = args['toAmount'] != null
+        ? parseAmountToCents(args['toAmount'] as num)
+        : (sameCurrency ? amount : null);
     if (toAmount == null) {
-      return {'ok': false, 'error': 'Cross-currency transfers require toAmount (or exchangeRate to derive it)'};
+      return {
+        'ok': false,
+        'error':
+            'Cross-currency transfers require toAmount (or exchangeRate to derive it)',
+      };
     }
 
     final id = await repos.transactions.addTransfer(
@@ -499,8 +640,12 @@ class ToolExecutors {
     return {'ok': true, 'id': id};
   }
 
-  Future<Map<String, dynamic>> _addBalanceAdjustment(Map<String, dynamic> args) async {
-    final acc = _valueOrNull(await repos.resolver.account(args['accountIdOrName'] as String));
+  Future<Map<String, dynamic>> _addBalanceAdjustment(
+    Map<String, dynamic> args,
+  ) async {
+    final acc = _valueOrNull(
+      await repos.resolver.account(args['accountIdOrName'] as String),
+    );
     if (acc == null) return {'ok': false, 'error': 'Account not found'};
 
     final id = await repos.transactions.addBalanceAdjustment(
@@ -515,41 +660,59 @@ class ToolExecutors {
     return {'ok': true, 'id': id};
   }
 
-  Future<Map<String, dynamic>> _updateTransaction(Map<String, dynamic> args) async {
+  Future<Map<String, dynamic>> _updateTransaction(
+    Map<String, dynamic> args,
+  ) async {
     final id = args['id'] as String;
     final txn = await repos.transactions.getById(id);
     if (txn == null) return {'ok': false, 'error': 'Transaction not found'};
 
     String? categoryId;
     if (args['categoryIdOrName'] != null) {
-      final cat = _valueOrNull(await repos.resolver.category(args['categoryIdOrName'] as String));
+      final cat = _valueOrNull(
+        await repos.resolver.category(args['categoryIdOrName'] as String),
+      );
       if (cat == null) return {'ok': false, 'error': 'Category not found'};
       categoryId = cat.id;
     }
 
     await repos.transactions.update(
       id,
-      name: args.containsKey('name') ? Value(args['name'] as String) : const Value.absent(),
-      description: args.containsKey('description') ? Value(args['description'] as String?) : const Value.absent(),
-      date: args['date'] != null ? Value(parseNaturalDate(args['date'] as String)) : const Value.absent(),
+      name: args.containsKey('name')
+          ? Value(args['name'] as String)
+          : const Value.absent(),
+      description: args.containsKey('description')
+          ? Value(args['description'] as String?)
+          : const Value.absent(),
+      date: args['date'] != null
+          ? Value(parseNaturalDate(args['date'] as String))
+          : const Value.absent(),
       dateConfirmed: args.containsKey('dateConfirmed')
           ? Value(_dateConfirmedOf(args))
           : const Value.absent(),
-      amount: args['amount'] != null ? Value(parseAmountToCents(args['amount'] as num)) : const Value.absent(),
+      amount: args['amount'] != null
+          ? Value(parseAmountToCents(args['amount'] as num))
+          : const Value.absent(),
       categoryId: categoryId != null ? Value(categoryId) : const Value.absent(),
-      status: args.containsKey('status') ? Value(args['status'] as String) : const Value.absent(),
+      status: args.containsKey('status')
+          ? Value(args['status'] as String)
+          : const Value.absent(),
     );
     return {'ok': true, 'id': id};
   }
 
-  Future<Map<String, dynamic>> _deleteTransaction(Map<String, dynamic> args) async {
+  Future<Map<String, dynamic>> _deleteTransaction(
+    Map<String, dynamic> args,
+  ) async {
     final id = args['id'] as String;
     // Idempotent: deleting a missing transaction still reports ok.
     await repos.transactions.delete(id);
     return {'ok': true, 'id': id};
   }
 
-  Future<Map<String, dynamic>> _tagTransaction(Map<String, dynamic> args) async {
+  Future<Map<String, dynamic>> _tagTransaction(
+    Map<String, dynamic> args,
+  ) async {
     final transactionId = args['transactionId'] as String;
     final raw = (args['tagIdsOrNames'] as List).cast<String>();
     final missing = <String>[];
@@ -566,7 +729,9 @@ class ToolExecutors {
     return {'ok': true, 'added': added, 'missing': missing};
   }
 
-  Future<Map<String, dynamic>> _untagTransaction(Map<String, dynamic> args) async {
+  Future<Map<String, dynamic>> _untagTransaction(
+    Map<String, dynamic> args,
+  ) async {
     final transactionId = args['transactionId'] as String;
     final raw = (args['tagIdsOrNames'] as List).cast<String>();
     final missing = <String>[];
@@ -579,13 +744,18 @@ class ToolExecutors {
         resolved.add(tag.id);
       }
     }
-    final removed = await repos.transactions.removeTags(transactionId, resolved);
+    final removed = await repos.transactions.removeTags(
+      transactionId,
+      resolved,
+    );
     return {'ok': true, 'removed': removed, 'missing': missing};
   }
 
   // ───── Summaries ─────
 
-  Future<Map<String, dynamic>> _summarizeByCategory(Map<String, dynamic> args) async {
+  Future<Map<String, dynamic>> _summarizeByCategory(
+    Map<String, dynamic> args,
+  ) async {
     final rows = await repos.summaries.byCategory(
       fromMs: parseNaturalDate(args['dateFrom'] as String),
       toMs: parseNaturalDate(args['dateTo'] as String),
@@ -595,12 +765,20 @@ class ToolExecutors {
     return {
       'ok': true,
       'rows': rows
-          .map((r) => {'categoryId': r.categoryId, 'name': r.name, 'total': centsToDouble(r.totalCents)})
+          .map(
+            (r) => {
+              'categoryId': r.categoryId,
+              'name': r.name,
+              'total': centsToDouble(r.totalCents),
+            },
+          )
           .toList(),
     };
   }
 
-  Future<Map<String, dynamic>> _summarizeByAccount(Map<String, dynamic> args) async {
+  Future<Map<String, dynamic>> _summarizeByAccount(
+    Map<String, dynamic> args,
+  ) async {
     final rows = await repos.summaries.byAccount(
       fromMs: parseNaturalDate(args['dateFrom'] as String),
       toMs: parseNaturalDate(args['dateTo'] as String),
@@ -637,7 +815,9 @@ class ToolExecutors {
       'toAccountId': t.toAccountId,
       'toAmount': t.toAmount != null ? centsToDouble(t.toAmount!) : null,
       'status': t.status,
-      'balanceAfter': t.balanceAfter != null ? centsToDouble(t.balanceAfter!) : null,
+      'balanceAfter': t.balanceAfter != null
+          ? centsToDouble(t.balanceAfter!)
+          : null,
     };
   }
 }
