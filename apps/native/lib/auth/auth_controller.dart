@@ -59,37 +59,45 @@ class AuthController extends ChangeNotifier {
     }
 
     final body = await _postJson('/auth/google', {'idToken': idToken});
-    final userJson = body['user'] as Map<String, Object?>?;
-    if (userJson == null) {
-      throw StateError('Sign-in response missing user');
-    }
-
-    final account = UserAccount(
-      id: userJson['id'] as String,
-      type: AccountType.remote,
-      name: userJson['name'] as String?,
-      email: userJson['email'] as String?,
-      picture: userJson['image'] as String?,
-      // Wire format kept as `refreshToken` for backward compat with the
-      // backend response.
-      sessionToken: body['refreshToken'] as String,
-    );
-
-    _accounts = [
-      for (final a in _accounts)
-        if (a.id != account.id) a,
-      account,
-    ];
-    _activeId = account.id;
-    await _persist();
-    await _attachAuthForActive();
-    notifyListeners();
-    return account;
+    return _saveRemoteAccountFromAuthResponse(body);
   }
 
-  Future<UserAccount> addLocal({String? name}) async {
+  Future<UserAccount> signInWithEmail({
+    required String email,
+    required String password,
+  }) async {
+    final body = await _postJson('/auth/email/sign-in', {
+      'email': email,
+      'password': password,
+    });
+    return _saveRemoteAccountFromAuthResponse(body);
+  }
+
+  Future<UserAccount> signUpWithEmail({
+    required String name,
+    required String email,
+    required String password,
+  }) async {
+    final body = await _postJson('/auth/email/sign-up', {
+      'name': name,
+      'email': email,
+      'password': password,
+    });
+    return _saveRemoteAccountFromAuthResponse(body);
+  }
+
+  Future<UserAccount> addLocal({required String name}) async {
+    final trimmedName = name.trim();
+    if (trimmedName.isEmpty) {
+      throw ArgumentError.value(name, 'name', 'Local accounts require a name');
+    }
+
     final id = 'local_${DateTime.now().microsecondsSinceEpoch}';
-    final account = UserAccount(id: id, type: AccountType.local, name: name);
+    final account = UserAccount(
+      id: id,
+      type: AccountType.local,
+      name: trimmedName,
+    );
     _accounts = [..._accounts, account];
     _activeId = id;
     await _persist();
@@ -165,6 +173,37 @@ class AuthController extends ChangeNotifier {
   // ---------------------------------------------------------------------------
   // Internals
   // ---------------------------------------------------------------------------
+
+  Future<UserAccount> _saveRemoteAccountFromAuthResponse(
+    Map<String, Object?> body,
+  ) async {
+    final userJson = body['user'] as Map<String, Object?>?;
+    if (userJson == null) {
+      throw StateError('Sign-in response missing user');
+    }
+
+    final account = UserAccount(
+      id: userJson['id'] as String,
+      type: AccountType.remote,
+      name: userJson['name'] as String?,
+      email: userJson['email'] as String?,
+      picture: userJson['image'] as String?,
+      // Wire format kept as `refreshToken` for backward compat with the
+      // backend response.
+      sessionToken: body['refreshToken'] as String,
+    );
+
+    _accounts = [
+      for (final a in _accounts)
+        if (a.id != account.id) a,
+      account,
+    ];
+    _activeId = account.id;
+    await _persist();
+    await _attachAuthForActive();
+    notifyListeners();
+    return account;
+  }
 
   Future<void> _attachAuthForActive() async {
     await _detachAuth();

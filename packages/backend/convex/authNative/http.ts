@@ -1,6 +1,6 @@
 import type { HttpRouter } from 'convex/server'
 import { internal } from '../_generated/api'
-import { httpAction } from '../_generated/server'
+import { type ActionCtx, httpAction } from '../_generated/server'
 import { authComponent, createAuth } from '../auth'
 import {
     generateSessionSecret,
@@ -31,6 +31,60 @@ type GoogleSignInBody = {
     idToken?: string
     accessToken?: string
     nonce?: string
+}
+
+type EmailSignInBody = {
+    email?: string
+    password?: string
+}
+
+type EmailSignUpBody = EmailSignInBody & {
+    name?: string
+}
+
+type NativeAuthUser = {
+    id: string
+    email?: string | null
+    name?: string | null
+    image?: string | null
+}
+
+const issueNativeSession = async (
+    ctx: ActionCtx,
+    req: Request,
+    user: NativeAuthUser,
+): Promise<Response> => {
+    if (typeof user.id !== 'string' || user.id.length === 0) {
+        return jsonError(
+            500,
+            'sign_in_failed',
+            'sign-in user record missing id',
+        )
+    }
+
+    const sessionSecret = generateSessionSecret()
+    const tokenHash = await hashSessionSecret(sessionSecret)
+
+    await ctx.runMutation(internal.authNative.mutations.insertSessionToken, {
+        userId: user.id,
+        tokenHash,
+        createdAt: Date.now(),
+        userAgent: req.headers.get('user-agent') ?? undefined,
+    })
+
+    const access = await mintAccessToken(user.id)
+
+    return jsonResponse({
+        accessToken: access.token,
+        accessTokenExpiresAt: access.expiresAt,
+        refreshToken: sessionSecret,
+        user: {
+            id: user.id,
+            email: user.email ?? null,
+            name: user.name ?? null,
+            image: user.image ?? null,
+        },
+    })
 }
 
 const googleSignIn = httpAction(async (ctx, req) => {
@@ -70,38 +124,75 @@ const googleSignIn = httpAction(async (ctx, req) => {
     if (!('user' in result) || !result.user) {
         return jsonError(500, 'sign_in_failed', 'sign-in did not return a user')
     }
-    const user = result.user
-    if (typeof user.id !== 'string') {
-        return jsonError(
-            500,
-            'sign_in_failed',
-            'sign-in user record missing id',
-        )
+
+    return issueNativeSession(ctx, req, result.user)
+})
+
+const getEmailAndPassword = (
+    body: EmailSignInBody | null,
+): { email: string; password: string } | Response => {
+    if (
+        !body ||
+        typeof body.email !== 'string' ||
+        body.email.trim().length === 0 ||
+        typeof body.password !== 'string' ||
+        body.password.length === 0
+    ) {
+        return jsonError(400, 'bad_request', 'missing email or password')
     }
 
-    const sessionSecret = generateSessionSecret()
-    const tokenHash = await hashSessionSecret(sessionSecret)
+    return { email: body.email.trim().toLowerCase(), password: body.password }
+}
 
-    await ctx.runMutation(internal.authNative.mutations.insertSessionToken, {
-        userId: user.id,
-        tokenHash,
-        createdAt: Date.now(),
-        userAgent: req.headers.get('user-agent') ?? undefined,
-    })
+const emailSignIn = httpAction(async (ctx, req) => {
+    const parsed = getEmailAndPassword(
+        await parseJsonBody<EmailSignInBody>(req),
+    )
+    if (parsed instanceof Response) return parsed
 
-    const access = await mintAccessToken(user.id)
+    const { auth, headers } = await authComponent.getAuth(createAuth, ctx)
 
-    return jsonResponse({
-        accessToken: access.token,
-        accessTokenExpiresAt: access.expiresAt,
-        refreshToken: sessionSecret,
-        user: {
-            id: user.id,
-            email: user.email ?? null,
-            name: user.name ?? null,
-            image: user.image ?? null,
-        },
-    })
+    try {
+        const result = await auth.api.signInEmail({
+            body: {
+                email: parsed.email,
+                password: parsed.password,
+            },
+            headers,
+        })
+        return issueNativeSession(ctx, req, result.user)
+    } catch (err) {
+        const message = err instanceof Error ? err.message : String(err)
+        return jsonError(401, 'sign_in_failed', message)
+    }
+})
+
+const emailSignUp = httpAction(async (ctx, req) => {
+    const body = await parseJsonBody<EmailSignUpBody>(req)
+    const parsed = getEmailAndPassword(body)
+    if (parsed instanceof Response) return parsed
+
+    const name =
+        typeof body?.name === 'string' && body.name.trim().length > 0
+            ? body.name.trim()
+            : parsed.email
+
+    const { auth, headers } = await authComponent.getAuth(createAuth, ctx)
+
+    try {
+        const result = await auth.api.signUpEmail({
+            body: {
+                name,
+                email: parsed.email,
+                password: parsed.password,
+            },
+            headers,
+        })
+        return issueNativeSession(ctx, req, result.user)
+    } catch (err) {
+        const message = err instanceof Error ? err.message : String(err)
+        return jsonError(400, 'sign_up_failed', message)
+    }
 })
 
 type RefreshBody = {
@@ -183,6 +274,16 @@ const jwksHandler = httpAction(async () => {
 
 export const registerAuthNativeRoutes = (http: HttpRouter): void => {
     http.route({ path: '/auth/google', method: 'POST', handler: googleSignIn })
+    http.route({
+        path: '/auth/email/sign-in',
+        method: 'POST',
+        handler: emailSignIn,
+    })
+    http.route({
+        path: '/auth/email/sign-up',
+        method: 'POST',
+        handler: emailSignUp,
+    })
     http.route({
         path: '/auth/refresh',
         method: 'POST',

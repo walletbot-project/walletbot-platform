@@ -1,70 +1,1040 @@
+import 'dart:math' as math;
+
 import 'package:app/auth/account.dart';
 import 'package:app/auth/auth_controller.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:provider/provider.dart';
 
-class LoginScreen extends StatelessWidget {
+enum _EmailAuthMode { signIn, signUp }
+
+enum _LoginPath { remote, local }
+
+class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
 
   @override
+  State<LoginScreen> createState() => _LoginScreenState();
+}
+
+class _LoginScreenState extends State<LoginScreen> {
+  final _remoteFormKey = GlobalKey<FormState>();
+  final _localFormKey = GlobalKey<FormState>();
+  final _remoteNameController = TextEditingController();
+  final _emailController = TextEditingController();
+  final _passwordController = TextEditingController();
+  final _localNameController = TextEditingController();
+
+  _LoginPath _path = _LoginPath.remote;
+  _EmailAuthMode _emailMode = _EmailAuthMode.signIn;
+  bool _submitting = false;
+
+  @override
+  void dispose() {
+    _remoteNameController.dispose();
+    _emailController.dispose();
+    _passwordController.dispose();
+    _localNameController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submitRemote() async {
+    if (!_remoteFormKey.currentState!.validate()) return;
+
+    setState(() => _submitting = true);
+    final messenger = ScaffoldMessenger.of(context);
+    final auth = context.read<AuthController>();
+    final email = _emailController.text.trim();
+    final password = _passwordController.text;
+
+    try {
+      if (_emailMode == _EmailAuthMode.signIn) {
+        await auth.signInWithEmail(email: email, password: password);
+      } else {
+        await auth.signUpWithEmail(
+          name: _remoteNameController.text.trim(),
+          email: email,
+          password: password,
+        );
+      }
+    } catch (e) {
+      messenger.showSnackBar(
+        SnackBar(content: Text('No se pudo ${_emailMode.actionLabel}: $e')),
+      );
+    } finally {
+      if (mounted) setState(() => _submitting = false);
+    }
+  }
+
+  Future<void> _submitLocal() async {
+    if (!_localFormKey.currentState!.validate()) return;
+
+    setState(() => _submitting = true);
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      await context.read<AuthController>().addLocal(
+        name: _localNameController.text.trim(),
+      );
+    } catch (e) {
+      messenger.showSnackBar(
+        SnackBar(content: Text('No se pudo continuar sin cuenta: $e')),
+      );
+    } finally {
+      if (mounted) setState(() => _submitting = false);
+    }
+  }
+
+  Future<void> _signInWithGoogle() async {
+    setState(() => _submitting = true);
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      await context.read<AuthController>().signInWithGoogle();
+    } catch (e) {
+      messenger.showSnackBar(
+        SnackBar(content: Text('No se pudo iniciar sesión con Google: $e')),
+      );
+    } finally {
+      if (mounted) setState(() => _submitting = false);
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final auth = context.watch<AuthController>();
-    final accounts = auth.accounts;
+    final accounts = context.watch<AuthController>().accounts;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Welcome')),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
+      body: Stack(
         children: [
-          if (accounts.isNotEmpty) ...[
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 8),
-              child: Text(
-                'Continue as',
-                style: TextStyle(fontWeight: FontWeight.w600),
-              ),
-            ),
-            for (final account in accounts)
-              Card(
-                child: ListTile(
-                  leading: Icon(
-                    account.type == AccountType.local
-                        ? Icons.person_outline
-                        : Icons.cloud_outlined,
-                  ),
-                  title: Text(account.name ?? account.email ?? 'Local account'),
-                  subtitle: Text(
-                    account.type == AccountType.local ? 'Local' : 'Online',
-                  ),
-                  onTap: () => context.read<AuthController>().switchTo(
-                    account.id,
+          const Positioned.fill(child: _LoginBackdrop()),
+          SafeArea(
+            child: ListView(
+              padding: const EdgeInsets.fromLTRB(20, 18, 20, 28),
+              children: [
+                Align(
+                  alignment: Alignment.topCenter,
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 480),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        _HeroHeader(hasAccounts: accounts.isNotEmpty),
+                        const SizedBox(height: 22),
+                        _PathPicker(
+                          selected: _path,
+                          enabled: !_submitting,
+                          onChanged: (path) => setState(() => _path = path),
+                        ),
+                        const SizedBox(height: 14),
+                        _AuthPathSwitcher(
+                          path: _path,
+                          remote: _RemoteLoginPanel(
+                            mode: _emailMode,
+                            submitting: _submitting,
+                            formKey: _remoteFormKey,
+                            nameController: _remoteNameController,
+                            emailController: _emailController,
+                            passwordController: _passwordController,
+                            onModeChanged: (mode) =>
+                                setState(() => _emailMode = mode),
+                            onSubmit: _submitRemote,
+                            onGoogle: _signInWithGoogle,
+                          ),
+                          local: _LocalLoginPanel(
+                            submitting: _submitting,
+                            formKey: _localFormKey,
+                            nameController: _localNameController,
+                            onSubmit: _submitLocal,
+                          ),
+                        ),
+                        if (accounts.isNotEmpty) ...[
+                          const SizedBox(height: 24),
+                          _SavedAccounts(accounts: accounts),
+                        ],
+                      ],
+                    ),
                   ),
                 ),
-              ),
-            const Divider(height: 32),
-          ],
-          FilledButton.icon(
-            onPressed: () => context.read<AuthController>().addLocal(),
-            icon: const Icon(Icons.person_add_alt_1),
-            label: const Text('Continue without account'),
-          ),
-          const SizedBox(height: 12),
-          OutlinedButton.icon(
-            onPressed: () async {
-              final messenger = ScaffoldMessenger.of(context);
-              try {
-                await context.read<AuthController>().signInWithGoogle();
-              } catch (e) {
-                messenger.showSnackBar(
-                  SnackBar(content: Text('Sign-in failed: $e')),
-                );
-              }
-            },
-            icon: const Icon(Icons.login),
-            label: const Text('Sign in with Google'),
+              ],
+            ),
           ),
         ],
       ),
     );
+  }
+}
+
+class _LoginBackdrop extends StatelessWidget {
+  const _LoginBackdrop();
+
+  @override
+  Widget build(BuildContext context) {
+    return CustomPaint(
+      painter: _LoginBackdropPainter(Theme.of(context).colorScheme),
+    );
+  }
+}
+
+class _LoginBackdropPainter extends CustomPainter {
+  const _LoginBackdropPainter(this.colors);
+
+  final ColorScheme colors;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final base = Paint()..color = colors.surface;
+    canvas.drawRect(Offset.zero & size, base);
+
+    final gridPaint = Paint()
+      ..color = colors.outlineVariant.withValues(alpha: 0.2)
+      ..strokeWidth = 1;
+    const step = 34.0;
+    for (var x = 0.0; x < size.width; x += step) {
+      canvas.drawLine(Offset(x, 0), Offset(x, size.height), gridPaint);
+    }
+    for (var y = 0.0; y < size.height; y += step) {
+      canvas.drawLine(Offset(0, y), Offset(size.width, y), gridPaint);
+    }
+
+    final accentA = Paint()
+      ..shader =
+          RadialGradient(
+            colors: [
+              colors.tertiaryContainer.withValues(alpha: 0.72),
+              colors.tertiaryContainer.withValues(alpha: 0),
+            ],
+          ).createShader(
+            Rect.fromCircle(
+              center: Offset(size.width * 0.12, size.height * 0.14),
+              radius: size.shortestSide * 0.46,
+            ),
+          );
+    canvas.drawCircle(
+      Offset(size.width * 0.12, size.height * 0.14),
+      size.shortestSide * 0.46,
+      accentA,
+    );
+
+    final accentB = Paint()
+      ..shader =
+          RadialGradient(
+            colors: [
+              colors.secondaryContainer.withValues(alpha: 0.64),
+              colors.secondaryContainer.withValues(alpha: 0),
+            ],
+          ).createShader(
+            Rect.fromCircle(
+              center: Offset(size.width * 0.92, size.height * 0.76),
+              radius: size.shortestSide * 0.5,
+            ),
+          );
+    canvas.drawCircle(
+      Offset(size.width * 0.92, size.height * 0.76),
+      size.shortestSide * 0.5,
+      accentB,
+    );
+
+    final ribbon = Paint()
+      ..color = colors.primary.withValues(alpha: 0.12)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 18;
+    final path = Path()
+      ..moveTo(-40, size.height * 0.68)
+      ..quadraticBezierTo(
+        size.width * 0.32,
+        size.height * 0.53,
+        size.width * 0.66,
+        size.height * 0.64,
+      )
+      ..quadraticBezierTo(
+        size.width * 0.86,
+        size.height * 0.71,
+        size.width + 40,
+        size.height * 0.56,
+      );
+    canvas.drawPath(path, ribbon);
+  }
+
+  @override
+  bool shouldRepaint(covariant _LoginBackdropPainter oldDelegate) {
+    return oldDelegate.colors != colors;
+  }
+}
+
+class _HeroHeader extends StatelessWidget {
+  const _HeroHeader({required this.hasAccounts});
+
+  final bool hasAccounts;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Container(
+              width: 56,
+              height: 56,
+              decoration: BoxDecoration(
+                color: colors.primary,
+                borderRadius: BorderRadius.circular(18),
+                boxShadow: [
+                  BoxShadow(
+                    color: colors.primary.withValues(alpha: 0.26),
+                    blurRadius: 22,
+                    offset: const Offset(0, 12),
+                  ),
+                ],
+              ),
+              child: Icon(
+                Icons.account_balance_wallet_rounded,
+                color: colors.onPrimary,
+              ),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Wallet Bot',
+                    style: theme.textTheme.headlineMedium?.copyWith(
+                      fontWeight: FontWeight.w900,
+                      height: 0.96,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    hasAccounts
+                        ? 'Seguí donde lo dejaste.'
+                        : 'Empezá con sincronización o sin cuenta.',
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: colors.onSurfaceVariant,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _PathPicker extends StatelessWidget {
+  const _PathPicker({
+    required this.selected,
+    required this.enabled,
+    required this.onChanged,
+  });
+
+  final _LoginPath selected;
+  final bool enabled;
+  final ValueChanged<_LoginPath> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: colors.surfaceContainerHighest.withValues(alpha: 0.78),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: colors.outlineVariant),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(5),
+        child: Row(
+          children: [
+            Expanded(
+              child: _PathSegment(
+                icon: Icons.cloud_done_rounded,
+                label: 'Con cuenta',
+                selected: selected == _LoginPath.remote,
+                enabled: enabled,
+                onTap: () => onChanged(_LoginPath.remote),
+              ),
+            ),
+            Expanded(
+              child: _PathSegment(
+                icon: Icons.phone_iphone_rounded,
+                label: 'Sin cuenta',
+                selected: selected == _LoginPath.local,
+                enabled: enabled,
+                onTap: () => onChanged(_LoginPath.local),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _PathSegment extends StatelessWidget {
+  const _PathSegment({
+    required this.icon,
+    required this.label,
+    required this.selected,
+    required this.enabled,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final bool selected;
+  final bool enabled;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 180),
+      height: 48,
+      decoration: BoxDecoration(
+        color: selected ? colors.surface : Colors.transparent,
+        borderRadius: BorderRadius.circular(15),
+        boxShadow: selected
+            ? [
+                BoxShadow(
+                  color: colors.shadow.withValues(alpha: 0.08),
+                  blurRadius: 12,
+                  offset: const Offset(0, 6),
+                ),
+              ]
+            : null,
+      ),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(15),
+        onTap: enabled ? onTap : null,
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              icon,
+              size: 20,
+              color: selected ? colors.primary : colors.onSurfaceVariant,
+            ),
+            const SizedBox(width: 8),
+            Flexible(
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.labelLarge?.copyWith(
+                  color: selected ? colors.onSurface : colors.onSurfaceVariant,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _AuthPathSwitcher extends StatelessWidget {
+  const _AuthPathSwitcher({
+    required this.path,
+    required this.remote,
+    required this.local,
+  });
+
+  final _LoginPath path;
+  final Widget remote;
+  final Widget local;
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedSize(
+      duration: const Duration(milliseconds: 180),
+      curve: Curves.easeOutCubic,
+      alignment: Alignment.topCenter,
+      child: KeyedSubtree(
+        key: ValueKey(path),
+        child: path == _LoginPath.remote ? remote : local,
+      ),
+    );
+  }
+}
+
+class _RemoteLoginPanel extends StatelessWidget {
+  const _RemoteLoginPanel({
+    required this.mode,
+    required this.submitting,
+    required this.formKey,
+    required this.nameController,
+    required this.emailController,
+    required this.passwordController,
+    required this.onModeChanged,
+    required this.onSubmit,
+    required this.onGoogle,
+  });
+
+  final _EmailAuthMode mode;
+  final bool submitting;
+  final GlobalKey<FormState> formKey;
+  final TextEditingController nameController;
+  final TextEditingController emailController;
+  final TextEditingController passwordController;
+  final ValueChanged<_EmailAuthMode> onModeChanged;
+  final VoidCallback onSubmit;
+  final VoidCallback onGoogle;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+
+    return _Panel(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _PanelTitle(
+            icon: Icons.sync_rounded,
+            title: 'Con cuenta',
+            subtitle: 'Usá correo o Google para sincronizar tus gastos.',
+          ),
+          const SizedBox(height: 18),
+          Form(
+            key: formKey,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 180),
+                  child: mode == _EmailAuthMode.signUp
+                      ? Padding(
+                          key: const ValueKey('remote-name'),
+                          padding: const EdgeInsets.only(bottom: 12),
+                          child: _LoginTextField(
+                            controller: nameController,
+                            enabled: !submitting,
+                            label: 'Nombre',
+                            icon: Icons.badge_outlined,
+                            textInputAction: TextInputAction.next,
+                            autofillHints: const [AutofillHints.name],
+                            validator: (value) {
+                              if ((value ?? '').trim().isEmpty) {
+                                return 'Ingresá tu nombre';
+                              }
+                              return null;
+                            },
+                          ),
+                        )
+                      : const SizedBox.shrink(key: ValueKey('no-remote-name')),
+                ),
+                _LoginTextField(
+                  controller: emailController,
+                  enabled: !submitting,
+                  label: 'Correo',
+                  icon: Icons.alternate_email_rounded,
+                  keyboardType: TextInputType.emailAddress,
+                  textInputAction: TextInputAction.next,
+                  autofillHints: const [AutofillHints.email],
+                  validator: (value) {
+                    final email = value?.trim() ?? '';
+                    if (email.isEmpty) return 'Ingresá tu correo';
+                    if (!email.contains('@')) return 'Ingresá un correo válido';
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 12),
+                _LoginTextField(
+                  controller: passwordController,
+                  enabled: !submitting,
+                  label: 'Contraseña',
+                  icon: Icons.lock_outline_rounded,
+                  obscureText: true,
+                  textInputAction: TextInputAction.done,
+                  autofillHints: [
+                    mode == _EmailAuthMode.signIn
+                        ? AutofillHints.password
+                        : AutofillHints.newPassword,
+                  ],
+                  onSubmitted: (_) => onSubmit(),
+                  validator: (value) {
+                    final password = value ?? '';
+                    if (password.isEmpty) return 'Ingresá tu contraseña';
+                    if (password.length < 8) return 'Usá al menos 8 caracteres';
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 16),
+                _PrimaryActionButton(
+                  submitting: submitting,
+                  label: mode.primaryButtonLabel,
+                  onPressed: onSubmit,
+                ),
+                const SizedBox(height: 10),
+                Center(
+                  child: _EmailModeToggleButton(
+                    mode: mode,
+                    enabled: !submitting,
+                    onChanged: onModeChanged,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 18),
+          Row(
+            children: [
+              Expanded(child: Divider(color: colors.outlineVariant)),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                child: Text(
+                  'o',
+                  style: theme.textTheme.labelMedium?.copyWith(
+                    color: colors.onSurfaceVariant,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              Expanded(child: Divider(color: colors.outlineVariant)),
+            ],
+          ),
+          const SizedBox(height: 18),
+          SizedBox(
+            height: 54,
+            child: OutlinedButton.icon(
+              onPressed: submitting ? null : onGoogle,
+              style: OutlinedButton.styleFrom(
+                backgroundColor: colors.surface,
+                side: BorderSide(color: colors.outlineVariant),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
+              ),
+              icon: SvgPicture.asset(
+                'assets/google.svg',
+                width: 20,
+                height: 20,
+              ),
+              label: const Text('Continuar con Google'),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _LocalLoginPanel extends StatelessWidget {
+  const _LocalLoginPanel({
+    required this.submitting,
+    required this.formKey,
+    required this.nameController,
+    required this.onSubmit,
+  });
+
+  final bool submitting;
+  final GlobalKey<FormState> formKey;
+  final TextEditingController nameController;
+  final VoidCallback onSubmit;
+
+  @override
+  Widget build(BuildContext context) {
+    return _Panel(
+      child: Form(
+        key: formKey,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const _PanelTitle(
+              icon: Icons.phone_iphone_rounded,
+              title: 'Sin cuenta',
+              subtitle:
+                  'Agregá un nombre antes de abrir este espacio del dispositivo.',
+            ),
+            const SizedBox(height: 18),
+            _LoginTextField(
+              controller: nameController,
+              enabled: !submitting,
+              label: 'Nombre',
+              icon: Icons.drive_file_rename_outline_rounded,
+              textInputAction: TextInputAction.done,
+              autofillHints: const [AutofillHints.name],
+              onSubmitted: (_) => onSubmit(),
+              validator: (value) {
+                if ((value ?? '').trim().isEmpty) {
+                  return 'Ingresá un nombre';
+                }
+                return null;
+              },
+            ),
+            const SizedBox(height: 16),
+            _PrimaryActionButton(
+              submitting: submitting,
+              label: 'Continuar sin cuenta',
+              onPressed: onSubmit,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _Panel extends StatelessWidget {
+  const _Panel({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: colors.surface.withValues(alpha: 0.92),
+        borderRadius: BorderRadius.circular(26),
+        border: Border.all(color: colors.outlineVariant.withValues(alpha: 0.8)),
+        boxShadow: [
+          BoxShadow(
+            color: colors.shadow.withValues(alpha: 0.1),
+            blurRadius: 30,
+            offset: const Offset(0, 18),
+          ),
+        ],
+      ),
+      child: Padding(padding: const EdgeInsets.all(18), child: child),
+    );
+  }
+}
+
+class _PanelTitle extends StatelessWidget {
+  const _PanelTitle({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+  });
+
+  final IconData icon;
+  final String title;
+  final String subtitle;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+
+    return Row(
+      children: [
+        Container(
+          width: 42,
+          height: 42,
+          decoration: BoxDecoration(
+            color: colors.primaryContainer,
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: Icon(icon, color: colors.onPrimaryContainer, size: 22),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: theme.textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                subtitle,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: colors.onSurfaceVariant,
+                  fontWeight: FontWeight.w600,
+                  height: 1.2,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _EmailModeToggleButton extends StatelessWidget {
+  const _EmailModeToggleButton({
+    required this.mode,
+    required this.enabled,
+    required this.onChanged,
+  });
+
+  final _EmailAuthMode mode;
+  final bool enabled;
+  final ValueChanged<_EmailAuthMode> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final targetMode = mode == _EmailAuthMode.signIn
+        ? _EmailAuthMode.signUp
+        : _EmailAuthMode.signIn;
+    final label = mode == _EmailAuthMode.signIn
+        ? '¿Necesitás una cuenta? Registrate'
+        : '¿Ya tenés cuenta? Iniciá sesión';
+
+    return TextButton(
+      onPressed: enabled ? () => onChanged(targetMode) : null,
+      style: TextButton.styleFrom(
+        minimumSize: const Size(0, 40),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ),
+      child: Text(label),
+    );
+  }
+}
+
+class _LoginTextField extends StatelessWidget {
+  const _LoginTextField({
+    required this.controller,
+    required this.enabled,
+    required this.label,
+    required this.icon,
+    this.keyboardType,
+    this.textInputAction,
+    this.autofillHints,
+    this.obscureText = false,
+    this.onSubmitted,
+    this.validator,
+  });
+
+  final TextEditingController controller;
+  final bool enabled;
+  final String label;
+  final IconData icon;
+  final TextInputType? keyboardType;
+  final TextInputAction? textInputAction;
+  final Iterable<String>? autofillHints;
+  final bool obscureText;
+  final ValueChanged<String>? onSubmitted;
+  final FormFieldValidator<String>? validator;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+
+    return TextFormField(
+      controller: controller,
+      enabled: enabled,
+      keyboardType: keyboardType,
+      textInputAction: textInputAction,
+      autofillHints: autofillHints,
+      obscureText: obscureText,
+      onFieldSubmitted: onSubmitted,
+      validator: validator,
+      decoration: InputDecoration(
+        labelText: label,
+        prefixIcon: Icon(icon),
+        filled: true,
+        fillColor: colors.surfaceContainerHighest.withValues(alpha: 0.66),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: BorderSide.none,
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: BorderSide(color: colors.outlineVariant),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: BorderSide(color: colors.primary, width: 1.4),
+        ),
+        errorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: BorderSide(color: colors.error),
+        ),
+        focusedErrorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: BorderSide(color: colors.error, width: 1.4),
+        ),
+      ),
+    );
+  }
+}
+
+class _PrimaryActionButton extends StatelessWidget {
+  const _PrimaryActionButton({
+    required this.submitting,
+    required this.label,
+    required this.onPressed,
+  });
+
+  final bool submitting;
+  final String label;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 54,
+      child: FilledButton(
+        onPressed: submitting ? null : onPressed,
+        style: FilledButton.styleFrom(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+        ),
+        child: submitting
+            ? const SizedBox.square(
+                dimension: 20,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+            : Text(label),
+      ),
+    );
+  }
+}
+
+class _SavedAccounts extends StatelessWidget {
+  const _SavedAccounts({required this.accounts});
+
+  final List<UserAccount> accounts;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Billeteras guardadas',
+          style: theme.textTheme.titleSmall?.copyWith(
+            color: colors.onSurfaceVariant,
+            fontWeight: FontWeight.w900,
+          ),
+        ),
+        for (final account in accounts) ...[
+          _SavedAccountTile(account: account),
+          const SizedBox(height: 8),
+        ],
+      ],
+    );
+  }
+}
+
+class _SavedAccountTile extends StatelessWidget {
+  const _SavedAccountTile({required this.account});
+
+  final UserAccount account;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+    final title = account.name ?? account.email ?? 'Espacio sin nombre';
+    final subtitle = account.type == AccountType.local
+        ? 'Sin cuenta'
+        : account.email ?? 'Con cuenta';
+
+    return Material(
+      color: colors.surface.withValues(alpha: 0.88),
+      borderRadius: BorderRadius.circular(18),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(18),
+        onTap: () => context.read<AuthController>().switchTo(account.id),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          child: Row(
+            children: [
+              _AccountMark(account: account),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      subtitle,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: colors.onSurfaceVariant,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Transform.rotate(
+                angle: math.pi * -0.08,
+                child: Icon(
+                  Icons.arrow_forward_rounded,
+                  color: colors.onSurfaceVariant,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _AccountMark extends StatelessWidget {
+  const _AccountMark({required this.account});
+
+  final UserAccount account;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final isLocal = account.type == AccountType.local;
+
+    return CircleAvatar(
+      radius: 22,
+      backgroundColor: isLocal
+          ? colors.secondaryContainer
+          : colors.tertiaryContainer,
+      foregroundColor: isLocal
+          ? colors.onSecondaryContainer
+          : colors.onTertiaryContainer,
+      backgroundImage: account.picture == null
+          ? null
+          : NetworkImage(account.picture!),
+      child: account.picture == null
+          ? Icon(isLocal ? Icons.phone_iphone_rounded : Icons.cloud_rounded)
+          : null,
+    );
+  }
+}
+
+extension on _EmailAuthMode {
+  String get primaryButtonLabel {
+    return switch (this) {
+      _EmailAuthMode.signIn => 'Iniciar sesión',
+      _EmailAuthMode.signUp => 'Registrarme',
+    };
+  }
+
+  String get actionLabel {
+    return switch (this) {
+      _EmailAuthMode.signIn => 'iniciar sesión',
+      _EmailAuthMode.signUp => 'crear la cuenta',
+    };
   }
 }
