@@ -18,60 +18,72 @@ class TransactionListWidget extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final repos = context.read<AppRepositories>();
+
+    return StreamBuilder<List<Transaction>>(
+      stream: repos.transactions.watch(spec.filter, limit: spec.limit),
+      builder: (context, snapshot) {
+        final items = snapshot.data ?? const <Transaction>[];
+        return DashboardCell(
+          title: spec.title,
+          icon: Icons.receipt_long_outlined,
+          minHeight: 160,
+          backgroundColor: spec.background.resolve(
+            snapshot.hasData ? items.length.toDouble() : null,
+          ),
+          child: _TransactionListContent(snapshot: snapshot, items: items),
+        );
+      },
+    );
+  }
+}
+
+class _TransactionListContent extends StatelessWidget {
+  const _TransactionListContent({required this.snapshot, required this.items});
+
+  final AsyncSnapshot<List<Transaction>> snapshot;
+  final List<Transaction> items;
+
+  @override
+  Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    if (snapshot.hasError) {
+      return Text(
+        'No se pudieron cargar los movimientos.',
+        style: theme.textTheme.bodySmall?.copyWith(
+          color: theme.colorScheme.error,
+        ),
+      );
+    }
+    if (snapshot.connectionState == ConnectionState.waiting &&
+        !snapshot.hasData) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: 16),
+        child: Center(child: CircularProgressIndicator()),
+      );
+    }
 
-    return DashboardCell(
-      title: spec.title,
-      icon: Icons.receipt_long_outlined,
-      minHeight: 160,
-      child: StreamBuilder<List<Transaction>>(
-        stream: repos.transactions.watch(spec.filter, limit: spec.limit),
-        builder: (context, snapshot) {
-          if (snapshot.hasError) {
-            return Text(
-              'No se pudieron cargar los movimientos.',
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.error,
-              ),
-            );
-          }
-          if (snapshot.connectionState == ConnectionState.waiting &&
-              !snapshot.hasData) {
-            return const Padding(
-              padding: EdgeInsets.symmetric(vertical: 16),
-              child: Center(child: CircularProgressIndicator()),
-            );
-          }
+    if (items.isEmpty) {
+      return Text(
+        'No hay movimientos todavía.',
+        style: theme.textTheme.bodyMedium?.copyWith(
+          color: theme.colorScheme.onSurfaceVariant,
+        ),
+      );
+    }
 
-          final items = snapshot.data ?? const <Transaction>[];
-          if (items.isEmpty) {
-            return Text(
-              'No hay movimientos todavía.',
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
-            );
-          }
-
-          return Column(
-            children: [
-              for (var i = 0; i < items.length; i++) ...[
-                if (i > 0)
-                  Divider(height: 1, color: theme.colorScheme.outlineVariant),
-                TransactionRow(
-                  title: items[i].name,
-                  amountCents: signedDisplayCents(
-                    items[i].type,
-                    items[i].amount,
-                  ),
-                  dateCheck: items[i].dateConfirmed,
-                  contained: false,
-                ),
-              ],
-            ],
-          );
-        },
-      ),
+    return Column(
+      children: [
+        for (var i = 0; i < items.length; i++) ...[
+          if (i > 0)
+            Divider(height: 1, color: theme.colorScheme.outlineVariant),
+          TransactionRow(
+            title: items[i].name,
+            amountCents: signedDisplayCents(items[i].type, items[i].amount),
+            dateCheck: items[i].dateConfirmed,
+            contained: false,
+          ),
+        ],
+      ],
     );
   }
 }

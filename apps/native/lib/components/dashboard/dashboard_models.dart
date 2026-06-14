@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:app/components/dashboard/dashboard_background.dart';
 import 'package:app/data/data.dart';
 import 'package:app/database.dart';
 
@@ -50,9 +51,13 @@ enum WidgetType {
 /// (balance card, transaction list, breakdown chart) are added — each new
 /// variant forces a compile error at the switch until it is rendered.
 sealed class DashboardWidgetSpec {
-  const DashboardWidgetSpec({required this.width});
+  const DashboardWidgetSpec({
+    required this.width,
+    this.background = DashboardBackgroundStyle.none,
+  });
 
   final DashboardWidth width;
+  final DashboardBackgroundStyle background;
 }
 
 /// A Stat block: one number reduced from the transactions matching [filter]
@@ -62,6 +67,7 @@ class StatWidgetSpec extends DashboardWidgetSpec {
     required this.title,
     required this.filter,
     required this.aggregation,
+    super.background,
     super.width = DashboardWidth.third,
   });
 
@@ -77,6 +83,7 @@ class TransactionListWidgetSpec extends DashboardWidgetSpec {
     required this.title,
     required this.filter,
     this.limit = 5,
+    super.background,
     super.width = DashboardWidth.full,
   });
 
@@ -92,6 +99,7 @@ class BalanceCardWidgetSpec extends DashboardWidgetSpec {
   const BalanceCardWidgetSpec({
     required this.title,
     required this.currency,
+    super.background,
     super.width = DashboardWidth.half,
   });
 
@@ -109,6 +117,7 @@ class ChartWidgetSpec extends DashboardWidgetSpec {
     required this.filter,
     required this.groupBy,
     required this.chartKind,
+    super.background,
     super.width = DashboardWidth.full,
   });
 
@@ -134,6 +143,7 @@ DashboardWidgetSpec? dashboardSpecFromRow(
   final width = DashboardWidth.fromWire(row.width);
   final options = _decodeOptions(row.options);
   final title = options['title'] as String? ?? '';
+  final background = DashboardBackgroundStyle.fromJson(options['background']);
 
   switch (type) {
     case WidgetType.stat:
@@ -141,6 +151,7 @@ DashboardWidgetSpec? dashboardSpecFromRow(
         title: title,
         filter: _resolveFilter(row.filterId, filtersById),
         aggregation: _statAggregationFromName(options['aggregation']),
+        background: background,
         width: width ?? DashboardWidth.third,
       );
     case WidgetType.list:
@@ -148,12 +159,14 @@ DashboardWidgetSpec? dashboardSpecFromRow(
         title: title,
         filter: _resolveFilter(row.filterId, filtersById),
         limit: (options['limit'] as num?)?.toInt() ?? 5,
+        background: background,
         width: width ?? DashboardWidth.full,
       );
     case WidgetType.balance:
       return BalanceCardWidgetSpec(
         title: title,
         currency: options['currency'] as String? ?? '',
+        background: background,
         width: width ?? DashboardWidth.half,
       );
     case WidgetType.chart:
@@ -168,6 +181,7 @@ DashboardWidgetSpec? dashboardSpecFromRow(
               options['chartKind'] as String? ?? '',
             ) ??
             BreakdownChartKind.pie,
+        background: background,
         width: width ?? DashboardWidth.full,
       );
   }

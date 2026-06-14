@@ -169,6 +169,27 @@ additive, not a rewrite.
 - **`savedFilters`** — `id`, `name`, `config` (JSON of the Filter fields above) + sync columns.
 - **`dashboardWidgets`** — `id`, `type`, `filterId` (→ savedFilters, nullable for balance-by-account), `position`, `width`, `options` (JSON: title, aggregation, groupBy, limit, chartKind, comparePrevPeriod) + sync columns.
 
+Widget `options.background` is optional and applies to every widget type:
+
+```jsonc
+// Fixed background
+{ "mode": "fixed", "fixedColor": "#C8F2D8" }
+
+// Value-based background. Thresholds use displayed units:
+// money widgets use amount units (not cents), lists use row count,
+// charts use the total of visible slices.
+{
+  "mode": "value",
+  "value": {
+    "low": 0,
+    "high": 10000,
+    "lowColor": "#FFCBCB",
+    "betweenColor": "#FFE588",
+    "highColor": "#C8F2D8"
+  }
+}
+```
+
 ---
 
 ## Data sourcing (offline-first)

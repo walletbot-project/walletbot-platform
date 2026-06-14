@@ -9,6 +9,7 @@ class DashboardCell extends StatelessWidget {
     required this.child,
     this.icon,
     this.trailing,
+    this.backgroundColor,
     this.padding = const EdgeInsets.all(16),
     this.minHeight = 120,
     this.bodySpacing = 12,
@@ -18,6 +19,7 @@ class DashboardCell extends StatelessWidget {
   final Widget child;
   final IconData? icon;
   final Widget? trailing;
+  final Color? backgroundColor;
   final EdgeInsetsGeometry padding;
   final double minHeight;
   final double bodySpacing;
@@ -27,10 +29,12 @@ class DashboardCell extends StatelessWidget {
     final theme = Theme.of(context);
     final colors = theme.colorScheme;
     final resolvedTitle = title.isEmpty ? 'Widget' : title;
-    final cellColor = Color.alphaBlend(
-      colors.primary.withValues(alpha: 0.04),
-      colors.surface,
-    );
+    final cellColor =
+        backgroundColor ??
+        Color.alphaBlend(
+          colors.primary.withValues(alpha: 0.04),
+          colors.surface,
+        );
 
     return DecoratedBox(
       decoration: BoxDecoration(color: cellColor),

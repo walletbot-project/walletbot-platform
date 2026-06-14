@@ -15,41 +15,24 @@ class StatWidget extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final repos = context.read<AppRepositories>();
-    final theme = Theme.of(context);
 
-    return DashboardCell(
-      title: spec.title,
-      icon: _iconFor(spec.aggregation),
-      minHeight: 128,
-      child: StreamBuilder<StatValue>(
-        stream: repos.summaries.watchStat(spec.filter, spec.aggregation),
-        builder: (context, snapshot) {
-          if (snapshot.hasError) {
-            return Text(
-              'Error',
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.error,
-              ),
-            );
-          }
-          final value = snapshot.data;
-          final text = value == null
-              ? '—'
-              : _formatValue(value, spec.filter.currency);
-          return FittedBox(
-            fit: BoxFit.scaleDown,
-            alignment: Alignment.centerLeft,
-            child: Text(
-              text,
-              style: theme.textTheme.titleLarge?.copyWith(
-                fontWeight: FontWeight.w800,
-                color: theme.colorScheme.onSurface,
-              ),
-              maxLines: 1,
-            ),
-          );
-        },
-      ),
+    return StreamBuilder<StatValue>(
+      stream: repos.summaries.watchStat(spec.filter, spec.aggregation),
+      builder: (context, snapshot) {
+        final value = snapshot.data;
+        return DashboardCell(
+          title: spec.title,
+          icon: _iconFor(spec.aggregation),
+          minHeight: 128,
+          backgroundColor: spec.background.resolve(_styleValue(value)),
+          child: _StatValueText(
+            snapshot: snapshot,
+            text: value == null
+                ? '—'
+                : _formatValue(value, spec.filter.currency),
+          ),
+        );
+      },
     );
   }
 
@@ -73,5 +56,45 @@ class StatWidget extends StatelessWidget {
         : '';
     final amount = formatCentsUnsigned(cents.abs().toInt());
     return currency == null ? '$sign$amount' : '$sign$currency $amount';
+  }
+
+  double? _styleValue(StatValue? value) {
+    if (value == null) return null;
+    if (value.aggregation == StatAggregation.count) {
+      return value.count.toDouble();
+    }
+    return value.amountCents.toDouble() / 100;
+  }
+}
+
+class _StatValueText extends StatelessWidget {
+  const _StatValueText({required this.snapshot, required this.text});
+
+  final AsyncSnapshot<StatValue> snapshot;
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    if (snapshot.hasError) {
+      return Text(
+        'Error',
+        style: theme.textTheme.bodySmall?.copyWith(
+          color: theme.colorScheme.error,
+        ),
+      );
+    }
+    return FittedBox(
+      fit: BoxFit.scaleDown,
+      alignment: Alignment.centerLeft,
+      child: Text(
+        text,
+        style: theme.textTheme.titleLarge?.copyWith(
+          fontWeight: FontWeight.w800,
+          color: theme.colorScheme.onSurface,
+        ),
+        maxLines: 1,
+      ),
+    );
   }
 }

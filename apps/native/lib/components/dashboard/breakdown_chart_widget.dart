@@ -35,52 +35,31 @@ class BreakdownChartWidget extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final repos = context.read<AppRepositories>();
-    final theme = Theme.of(context);
 
-    return DashboardCell(
-      title: spec.title,
-      icon: _iconFor(spec.chartKind),
-      minHeight: 280,
-      child: StreamBuilder<List<BreakdownSlice>>(
-        stream: repos.summaries.watchBreakdown(spec.filter, spec.groupBy),
-        builder: (context, snapshot) {
-          if (snapshot.hasError) {
-            return Text(
-              'No se pudo cargar el gráfico.',
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.error,
-              ),
-            );
-          }
-          if (snapshot.connectionState == ConnectionState.waiting &&
-              !snapshot.hasData) {
-            return const Padding(
-              padding: EdgeInsets.symmetric(vertical: 24),
-              child: Center(child: CircularProgressIndicator()),
-            );
-          }
-
-          // Zero-magnitude buckets carry no visual weight; drop them so an
-          // all-zero result reads as "empty" rather than a blank chart.
-          final slices = (snapshot.data ?? const <BreakdownSlice>[])
-              .where((s) => s.totalCents > BigInt.zero)
-              .toList();
-          if (slices.isEmpty) {
-            return Text(
-              'No hay datos para mostrar todavía.',
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
-            );
-          }
-
-          return switch (spec.chartKind) {
-            BreakdownChartKind.pie => _pie(context, slices),
-            BreakdownChartKind.bar => _bar(context, slices),
-            BreakdownChartKind.line => _line(context, slices),
-          };
-        },
-      ),
+    return StreamBuilder<List<BreakdownSlice>>(
+      stream: repos.summaries.watchBreakdown(spec.filter, spec.groupBy),
+      builder: (context, snapshot) {
+        final slices = (snapshot.data ?? const <BreakdownSlice>[])
+            .where((s) => s.totalCents > BigInt.zero)
+            .toList();
+        final total = slices.fold(BigInt.zero, (sum, s) => sum + s.totalCents);
+        return DashboardCell(
+          title: spec.title,
+          icon: _iconFor(spec.chartKind),
+          minHeight: 280,
+          backgroundColor: spec.background.resolve(
+            snapshot.hasData ? total.toDouble() / 100 : null,
+          ),
+          child: _ChartContent(
+            snapshot: snapshot,
+            slices: slices,
+            chartKind: spec.chartKind,
+            pie: _pie,
+            bar: _bar,
+            line: _line,
+          ),
+        );
+      },
     );
   }
 
@@ -280,5 +259,57 @@ class BreakdownChartWidget extends StatelessWidget {
     final formatted = formatCentsUnsigned(cents.abs().toInt());
     final currency = spec.filter.currency;
     return currency == null ? formatted : '$currency $formatted';
+  }
+}
+
+class _ChartContent extends StatelessWidget {
+  const _ChartContent({
+    required this.snapshot,
+    required this.slices,
+    required this.chartKind,
+    required this.pie,
+    required this.bar,
+    required this.line,
+  });
+
+  final AsyncSnapshot<List<BreakdownSlice>> snapshot;
+  final List<BreakdownSlice> slices;
+  final BreakdownChartKind chartKind;
+  final Widget Function(BuildContext, List<BreakdownSlice>) pie;
+  final Widget Function(BuildContext, List<BreakdownSlice>) bar;
+  final Widget Function(BuildContext, List<BreakdownSlice>) line;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    if (snapshot.hasError) {
+      return Text(
+        'No se pudo cargar el gráfico.',
+        style: theme.textTheme.bodySmall?.copyWith(
+          color: theme.colorScheme.error,
+        ),
+      );
+    }
+    if (snapshot.connectionState == ConnectionState.waiting &&
+        !snapshot.hasData) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: 24),
+        child: Center(child: CircularProgressIndicator()),
+      );
+    }
+    if (slices.isEmpty) {
+      return Text(
+        'No hay datos para mostrar todavía.',
+        style: theme.textTheme.bodyMedium?.copyWith(
+          color: theme.colorScheme.onSurfaceVariant,
+        ),
+      );
+    }
+
+    return switch (chartKind) {
+      BreakdownChartKind.pie => pie(context, slices),
+      BreakdownChartKind.bar => bar(context, slices),
+      BreakdownChartKind.line => line(context, slices),
+    };
   }
 }

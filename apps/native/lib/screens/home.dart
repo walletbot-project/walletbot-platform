@@ -142,6 +142,10 @@ class _HomeScreenState extends State<HomeScreen> {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
+          DashboardSection(editing: _editing),
+          const SizedBox(height: 24),
+          Text('Acciones', style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(height: 12),
           Align(
             alignment: Alignment.centerLeft,
             child: _HomeActionCard(
@@ -150,10 +154,6 @@ class _HomeScreenState extends State<HomeScreen> {
               onTap: _openManualAdd,
             ),
           ),
-          const SizedBox(height: 24),
-          Text('Resumen', style: Theme.of(context).textTheme.titleMedium),
-          const SizedBox(height: 12),
-          DashboardSection(editing: _editing),
         ],
       ),
     );

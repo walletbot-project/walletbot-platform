@@ -16,48 +16,63 @@ class BalanceCardWidget extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final repos = context.read<AppRepositories>();
-    final theme = Theme.of(context);
 
-    return DashboardCell(
-      title: spec.title,
-      icon: Icons.account_balance_wallet_outlined,
-      minHeight: 128,
-      trailing: _CurrencyPill(currency: spec.currency),
-      child: StreamBuilder<BigInt>(
-        stream: repos.accounts.watchBalanceForCurrency(spec.currency),
-        builder: (context, snapshot) {
-          if (snapshot.hasError) {
-            return Text(
-              'Error',
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.error,
-              ),
-            );
-          }
-          final cents = snapshot.data;
-          final text = cents == null
-              ? '—'
-              : _formatBalance(cents, spec.currency);
-          return FittedBox(
-            fit: BoxFit.scaleDown,
-            alignment: Alignment.centerLeft,
-            child: Text(
-              text,
-              style: theme.textTheme.headlineSmall?.copyWith(
-                fontWeight: FontWeight.w800,
-                color: theme.colorScheme.onSurface,
-              ),
-              maxLines: 1,
-            ),
-          );
-        },
-      ),
+    return StreamBuilder<BigInt>(
+      stream: repos.accounts.watchBalanceForCurrency(spec.currency),
+      builder: (context, snapshot) {
+        final cents = snapshot.data;
+        return DashboardCell(
+          title: spec.title,
+          icon: Icons.account_balance_wallet_outlined,
+          minHeight: 128,
+          trailing: _CurrencyPill(currency: spec.currency),
+          backgroundColor: spec.background.resolve(
+            cents == null ? null : cents.toDouble() / 100,
+          ),
+          child: _BalanceValueText(
+            snapshot: snapshot,
+            text: cents == null ? '—' : _formatBalance(cents, spec.currency),
+          ),
+        );
+      },
     );
   }
 
   String _formatBalance(BigInt cents, String currency) {
     final sign = cents < BigInt.zero ? '-' : '';
     return '$sign$currency ${formatCentsUnsigned(cents.abs().toInt())}';
+  }
+}
+
+class _BalanceValueText extends StatelessWidget {
+  const _BalanceValueText({required this.snapshot, required this.text});
+
+  final AsyncSnapshot<BigInt> snapshot;
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    if (snapshot.hasError) {
+      return Text(
+        'Error',
+        style: theme.textTheme.bodySmall?.copyWith(
+          color: theme.colorScheme.error,
+        ),
+      );
+    }
+    return FittedBox(
+      fit: BoxFit.scaleDown,
+      alignment: Alignment.centerLeft,
+      child: Text(
+        text,
+        style: theme.textTheme.headlineSmall?.copyWith(
+          fontWeight: FontWeight.w800,
+          color: theme.colorScheme.onSurface,
+        ),
+        maxLines: 1,
+      ),
+    );
   }
 }
 

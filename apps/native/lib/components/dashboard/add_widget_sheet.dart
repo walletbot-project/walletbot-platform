@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:app/components/dashboard/dashboard_background.dart';
 import 'package:app/components/dashboard/dashboard_models.dart';
 import 'package:app/components/filter_sheet.dart';
 import 'package:app/data/data.dart';
@@ -105,10 +106,17 @@ class _WidgetSheetState extends State<_WidgetSheet> {
   late WidgetType _type;
   late final TextEditingController _titleController;
   late final TextEditingController _limitController;
+  late final TextEditingController _backgroundLowController;
+  late final TextEditingController _backgroundHighController;
   late StatAggregation _aggregation;
   late BreakdownGroupBy _groupBy;
   late BreakdownChartKind _chartKind;
   late TransactionFilter _filter;
+  late DashboardBackgroundMode _backgroundMode;
+  late Color _fixedBackgroundColor;
+  late Color _lowBackgroundColor;
+  late Color _betweenBackgroundColor;
+  late Color _highBackgroundColor;
   String? _currency;
   List<String> _currencies = const [];
   var _saving = false;
@@ -141,6 +149,21 @@ class _WidgetSheetState extends State<_WidgetSheet> {
         BreakdownChartKind.pie;
     _filter = widget.initialFilter;
     _currency = options['currency'] as String?;
+    final background = DashboardBackgroundStyle.fromJson(options['background']);
+    final valueBackground =
+        background.value ?? DashboardValueBackground.defaults;
+    _backgroundMode = background.mode;
+    _fixedBackgroundColor =
+        background.fixedColor ?? dashboardBackgroundPalette.first;
+    _lowBackgroundColor = valueBackground.lowColor;
+    _betweenBackgroundColor = valueBackground.betweenColor;
+    _highBackgroundColor = valueBackground.highColor;
+    _backgroundLowController = TextEditingController(
+      text: _formatNumber(valueBackground.low),
+    );
+    _backgroundHighController = TextEditingController(
+      text: _formatNumber(valueBackground.high),
+    );
 
     // Rebuild as the title is typed so the confirm button enables/disables.
     _titleController.addListener(_onFieldsChanged);
@@ -164,6 +187,8 @@ class _WidgetSheetState extends State<_WidgetSheet> {
     _titleController.removeListener(_onFieldsChanged);
     _titleController.dispose();
     _limitController.dispose();
+    _backgroundLowController.dispose();
+    _backgroundHighController.dispose();
     super.dispose();
   }
 
@@ -179,6 +204,14 @@ class _WidgetSheetState extends State<_WidgetSheet> {
     }
     return StatAggregation.sum;
   }
+
+  static String _formatNumber(double value) {
+    if (value == value.roundToDouble()) return value.toInt().toString();
+    return value.toString();
+  }
+
+  static double _parseNumber(String raw, double fallback) =>
+      double.tryParse(raw.trim().replaceAll(',', '.')) ?? fallback;
 
   Future<void> _loadCurrencies() async {
     final accounts = await widget.repos.accounts.listActive();
@@ -221,19 +254,23 @@ class _WidgetSheetState extends State<_WidgetSheet> {
 
     setState(() => _saving = true);
     try {
-      final options = switch (_type) {
-        WidgetType.stat => {'title': title, 'aggregation': _aggregation.name},
-        WidgetType.list => {
-          'title': title,
-          'limit': int.tryParse(_limitController.text.trim()) ?? 5,
-        },
-        WidgetType.balance => {'title': title, 'currency': _currency},
-        WidgetType.chart => {
-          'title': title,
-          'groupBy': _groupBy.wire,
-          'chartKind': _chartKind.wire,
+      final options = <String, Object?>{
+        ...switch (_type) {
+          WidgetType.stat => {'title': title, 'aggregation': _aggregation.name},
+          WidgetType.list => {
+            'title': title,
+            'limit': int.tryParse(_limitController.text.trim()) ?? 5,
+          },
+          WidgetType.balance => {'title': title, 'currency': _currency},
+          WidgetType.chart => {
+            'title': title,
+            'groupBy': _groupBy.wire,
+            'chartKind': _chartKind.wire,
+          },
         },
       };
+      final background = _backgroundFromFields().toJson();
+      if (background != null) options['background'] = background;
 
       final existing = widget.existing;
       if (existing == null) {
@@ -251,6 +288,21 @@ class _WidgetSheetState extends State<_WidgetSheet> {
         SnackBar(content: Text('No se pudo guardar el widget: $error')),
       );
     }
+  }
+
+  DashboardBackgroundStyle _backgroundFromFields() {
+    final defaults = DashboardValueBackground.defaults;
+    return DashboardBackgroundStyle(
+      mode: _backgroundMode,
+      fixedColor: _fixedBackgroundColor,
+      value: DashboardValueBackground(
+        low: _parseNumber(_backgroundLowController.text, defaults.low),
+        high: _parseNumber(_backgroundHighController.text, defaults.high),
+        lowColor: _lowBackgroundColor,
+        betweenColor: _betweenBackgroundColor,
+        highColor: _highBackgroundColor,
+      ),
+    );
   }
 
   Future<void> _create(String title, Map<String, Object?> options) async {
@@ -358,7 +410,9 @@ class _WidgetSheetState extends State<_WidgetSheet> {
 
               ..._typeSpecificFields(theme),
 
-              const SizedBox(height: 8),
+              _backgroundFields(theme),
+
+              const SizedBox(height: 16),
               Row(
                 children: [
                   Expanded(
@@ -388,6 +442,106 @@ class _WidgetSheetState extends State<_WidgetSheet> {
           ),
         ),
       ),
+    );
+  }
+
+  Widget _backgroundFields(ThemeData theme) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Fondo', style: theme.textTheme.titleSmall),
+        const SizedBox(height: 8),
+        SegmentedButton<DashboardBackgroundMode>(
+          showSelectedIcon: false,
+          style: const ButtonStyle(visualDensity: VisualDensity.compact),
+          segments: const [
+            ButtonSegment(
+              value: DashboardBackgroundMode.none,
+              label: Text('Base'),
+            ),
+            ButtonSegment(
+              value: DashboardBackgroundMode.fixed,
+              label: Text('Fijo'),
+            ),
+            ButtonSegment(
+              value: DashboardBackgroundMode.value,
+              label: Text('Valor'),
+            ),
+          ],
+          selected: {_backgroundMode},
+          onSelectionChanged: (s) => setState(() => _backgroundMode = s.first),
+        ),
+        if (_backgroundMode == DashboardBackgroundMode.fixed) ...[
+          const SizedBox(height: 12),
+          _ColorSwatches(
+            selected: _fixedBackgroundColor,
+            onSelected: (color) => setState(() {
+              _fixedBackgroundColor = color;
+            }),
+          ),
+        ],
+        if (_backgroundMode == DashboardBackgroundMode.value) ...[
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _backgroundLowController,
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                    signed: true,
+                  ),
+                  decoration: const InputDecoration(
+                    labelText: 'Bajo',
+                    border: OutlineInputBorder(),
+                    isDense: true,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: TextField(
+                  controller: _backgroundHighController,
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                    signed: true,
+                  ),
+                  decoration: const InputDecoration(
+                    labelText: 'Alto',
+                    border: OutlineInputBorder(),
+                    isDense: true,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          _ValueColorRow(
+            label: 'Menor que bajo',
+            selected: _lowBackgroundColor,
+            onSelected: (color) => setState(() {
+              _lowBackgroundColor = color;
+            }),
+          ),
+          const SizedBox(height: 10),
+          _ValueColorRow(
+            label: 'Entre bajo y alto',
+            selected: _betweenBackgroundColor,
+            onSelected: (color) => setState(() {
+              _betweenBackgroundColor = color;
+            }),
+          ),
+          const SizedBox(height: 10),
+          _ValueColorRow(
+            label: 'Mayor que alto',
+            selected: _highBackgroundColor,
+            onSelected: (color) => setState(() {
+              _highBackgroundColor = color;
+            }),
+          ),
+        ],
+        const SizedBox(height: 16),
+      ],
     );
   }
 
@@ -490,6 +644,81 @@ class _WidgetSheetState extends State<_WidgetSheet> {
       configured: _filterConfigured,
       onConfigure: _configureFilter,
       onClear: () => setState(() => _filter = const TransactionFilter()),
+    );
+  }
+}
+
+class _ValueColorRow extends StatelessWidget {
+  const _ValueColorRow({
+    required this.label,
+    required this.selected,
+    required this.onSelected,
+  });
+
+  final String label;
+  final Color selected;
+  final ValueChanged<Color> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        const SizedBox(height: 6),
+        _ColorSwatches(selected: selected, onSelected: onSelected),
+      ],
+    );
+  }
+}
+
+class _ColorSwatches extends StatelessWidget {
+  const _ColorSwatches({required this.selected, required this.onSelected});
+
+  final Color selected;
+  final ValueChanged<Color> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: [
+        for (final color in dashboardBackgroundPalette)
+          Tooltip(
+            message: 'Color',
+            child: InkResponse(
+              radius: 20,
+              onTap: () => onSelected(color),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 140),
+                width: 30,
+                height: 30,
+                decoration: BoxDecoration(
+                  color: color,
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: color == selected
+                        ? colors.primary
+                        : colors.outlineVariant,
+                    width: color == selected ? 2.4 : 1,
+                  ),
+                ),
+                child: color == selected
+                    ? Icon(Icons.check_rounded, size: 16, color: colors.primary)
+                    : null,
+              ),
+            ),
+          ),
+      ],
     );
   }
 }
