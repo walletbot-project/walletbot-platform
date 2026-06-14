@@ -7,6 +7,21 @@ import 'package:provider/provider.dart' show ReadContext;
 // query); re-exported here so existing imports keep working.
 export 'package:app/data/models/transaction_filter.dart';
 
+/// Dimensions the sheet can render. Callers may hide the ones they own
+/// elsewhere — the activity screen, for example, keeps [FilterSection.type]
+/// and [FilterSection.text] in its own bar, so it hides them here.
+enum FilterSection {
+  type,
+  status,
+  date,
+  accounts,
+  categories,
+  tags,
+  currency,
+  amount,
+  text,
+}
+
 /// Options loaded from local Drift for the selectable dimensions.
 class _FilterOptions {
   const _FilterOptions({
@@ -23,10 +38,15 @@ class _FilterOptions {
 }
 
 /// Opens the filter editor as a draggable bottom sheet. Resolves to the edited
-/// [TransactionFilter] when the user taps "Apply", or `null` if dismissed.
+/// [TransactionFilter] when the user taps "Aplicar", or `null` if dismissed.
+///
+/// Pass [hiddenSections] to suppress dimensions the caller edits elsewhere
+/// (e.g. the activity bar owns type + text). Hidden sections keep their
+/// incoming values on both apply and "Limpiar".
 Future<TransactionFilter?> showFilterSheet(
   BuildContext context, {
   TransactionFilter initial = const TransactionFilter(),
+  Set<FilterSection> hiddenSections = const {},
 }) {
   // Read the repositories from the *calling* context: the modal route is
   // pushed by a Navigator that sits above the account-scoped providers, so
@@ -35,8 +55,16 @@ Future<TransactionFilter?> showFilterSheet(
   return showModalBottomSheet<TransactionFilter>(
     context: context,
     isScrollControlled: true,
-    showDragHandle: true,
-    builder: (_) => FilterSheet(repos: repos, initial: initial),
+    useSafeArea: true,
+    backgroundColor: Theme.of(context).colorScheme.surface,
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+    ),
+    builder: (_) => FilterSheet(
+      repos: repos,
+      initial: initial,
+      hiddenSections: hiddenSections,
+    ),
   );
 }
 
@@ -47,10 +75,12 @@ class FilterSheet extends StatefulWidget {
     super.key,
     required this.repos,
     this.initial = const TransactionFilter(),
+    this.hiddenSections = const {},
   });
 
   final AppRepositories repos;
   final TransactionFilter initial;
+  final Set<FilterSection> hiddenSections;
 
   @override
   State<FilterSheet> createState() => _FilterSheetState();
@@ -148,22 +178,36 @@ class _FilterSheetState extends State<FilterSheet> {
     return (parsed * 100).round();
   }
 
+  bool _shows(FilterSection section) =>
+      !widget.hiddenSections.contains(section);
+
+  /// Clears only the dimensions this sheet actually renders — hidden sections
+  /// (owned by the caller, e.g. the activity bar's type chips and search) keep
+  /// their incoming values.
   void _reset() {
     setState(() {
-      _types = {};
-      _status = null;
-      _datePreset = null;
-      _dateRange = null;
-      _accountIds = {};
-      _accountDirection = AccountDirection.either;
-      _categoryIds = {};
-      _tagIds = {};
-      _tagMatch = TagMatch.any;
-      _includeSubtags = false;
-      _currency = null;
-      _amountMinController.clear();
-      _amountMaxController.clear();
-      _searchController.clear();
+      if (_shows(FilterSection.type)) _types = {};
+      if (_shows(FilterSection.status)) _status = null;
+      if (_shows(FilterSection.date)) {
+        _datePreset = null;
+        _dateRange = null;
+      }
+      if (_shows(FilterSection.accounts)) {
+        _accountIds = {};
+        _accountDirection = AccountDirection.either;
+      }
+      if (_shows(FilterSection.categories)) _categoryIds = {};
+      if (_shows(FilterSection.tags)) {
+        _tagIds = {};
+        _tagMatch = TagMatch.any;
+        _includeSubtags = false;
+      }
+      if (_shows(FilterSection.currency)) _currency = null;
+      if (_shows(FilterSection.amount)) {
+        _amountMinController.clear();
+        _amountMaxController.clear();
+      }
+      if (_shows(FilterSection.text)) _searchController.clear();
     });
   }
 
@@ -218,7 +262,11 @@ class _FilterSheetState extends State<FilterSheet> {
       builder: (context, scrollController) {
         return Column(
           children: [
-            _Header(onReset: _reset),
+            _Header(
+              onReset: _reset,
+              onClose: () => Navigator.of(context).pop(),
+            ),
+            const Divider(height: 1),
             Expanded(
               child: FutureBuilder<_FilterOptions>(
                 future: _optionsFuture,
@@ -231,7 +279,7 @@ class _FilterSheetState extends State<FilterSheet> {
                       child: Padding(
                         padding: const EdgeInsets.all(24),
                         child: Text(
-                          'Could not load filter options.\n${snapshot.error}',
+                          'No se pudieron cargar las opciones de filtro.\n${snapshot.error}',
                           textAlign: TextAlign.center,
                         ),
                       ),
@@ -246,9 +294,22 @@ class _FilterSheetState extends State<FilterSheet> {
               top: false,
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-                child: FilledButton(
-                  onPressed: _apply,
-                  child: const Text('Apply filters'),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: () => Navigator.of(context).pop(),
+                        child: const Text('Cancelar'),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: FilledButton(
+                        onPressed: _apply,
+                        child: const Text('Aplicar'),
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),
@@ -269,273 +330,289 @@ class _FilterSheetState extends State<FilterSheet> {
       controller: scrollController,
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
       children: [
-        _Section(
-          title: 'Type',
-          child: Wrap(
-            spacing: 8,
-            runSpacing: 4,
-            children: [
-              for (final type in TxnType.values)
-                FilterChip(
-                  label: Text(type.label),
-                  selected: _types.contains(type),
-                  onSelected: (selected) => setState(() {
-                    if (selected) {
-                      _types.add(type);
-                    } else {
-                      _types.remove(type);
-                    }
-                  }),
-                ),
-            ],
-          ),
-        ),
-        _Section(
-          title: 'Status',
-          child: Wrap(
-            spacing: 8,
-            children: [
-              ChoiceChip(
-                label: const Text('Any'),
-                selected: _status == null,
-                onSelected: (_) => setState(() => _status = null),
-              ),
-              for (final status in TxnStatus.values)
-                ChoiceChip(
-                  label: Text(status.label),
-                  selected: _status == status,
-                  onSelected: (_) => setState(() => _status = status),
-                ),
-            ],
-          ),
-        ),
-        _Section(
-          title: 'Date',
-          child: Wrap(
-            spacing: 8,
-            runSpacing: 4,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            children: [
-              for (final preset in DatePreset.values)
-                ChoiceChip(
-                  label: Text(preset.label),
-                  selected: _dateRange == null && _datePreset == preset,
-                  onSelected: (_) => setState(() {
-                    _dateRange = null;
-                    _datePreset = _datePreset == preset ? null : preset;
-                  }),
-                ),
-              if (_dateRange != null)
-                InputChip(
-                  avatar: const Icon(Icons.event, size: 18),
-                  label: Text(_formatRange(_dateRange!)),
-                  onDeleted: () => setState(() => _dateRange = null),
-                )
-              else
-                ActionChip(
-                  avatar: const Icon(Icons.date_range, size: 18),
-                  label: const Text('Custom range'),
-                  onPressed: _pickDateRange,
-                ),
-            ],
-          ),
-        ),
-        _Section(
-          title: 'Accounts',
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              if (options.accounts.isEmpty)
-                const _EmptyHint('No accounts yet.')
-              else
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 4,
-                  children: [
-                    for (final account in options.accounts)
-                      FilterChip(
-                        label: Text(account.name),
-                        selected: _accountIds.contains(account.id),
-                        onSelected: (selected) => setState(() {
-                          if (selected) {
-                            _accountIds.add(account.id);
-                          } else {
-                            _accountIds.remove(account.id);
-                          }
-                        }),
-                      ),
-                  ],
-                ),
-              if (_accountIds.isNotEmpty) ...[
-                const SizedBox(height: 12),
-                _SubLabel('Direction (for transfers)'),
-                const SizedBox(height: 4),
-                SegmentedButton<AccountDirection>(
-                  showSelectedIcon: false,
-                  segments: [
-                    for (final dir in AccountDirection.values)
-                      ButtonSegment(value: dir, label: Text(dir.label)),
-                  ],
-                  selected: {_accountDirection},
-                  onSelectionChanged: (selection) =>
-                      setState(() => _accountDirection = selection.first),
-                ),
+        SizedBox(height: 16),
+        if (_shows(FilterSection.type))
+          _Section(
+            title: 'Tipo',
+            child: Wrap(
+              spacing: 8,
+              runSpacing: 4,
+              children: [
+                for (final type in TxnType.values)
+                  FilterChip(
+                    label: Text(type.label),
+                    selected: _types.contains(type),
+                    onSelected: (selected) => setState(() {
+                      if (selected) {
+                        _types.add(type);
+                      } else {
+                        _types.remove(type);
+                      }
+                    }),
+                  ),
               ],
-            ],
-          ),
-        ),
-        _Section(
-          title: 'Categories',
-          child: options.categories.isEmpty
-              ? const _EmptyHint('No categories yet.')
-              : Wrap(
-                  spacing: 8,
-                  runSpacing: 4,
-                  children: [
-                    for (final category in options.categories)
-                      FilterChip(
-                        label: Text(category.name),
-                        selected: _categoryIds.contains(category.id),
-                        onSelected: (selected) => setState(() {
-                          if (selected) {
-                            _categoryIds.add(category.id);
-                          } else {
-                            _categoryIds.remove(category.id);
-                          }
-                        }),
-                      ),
-                  ],
-                ),
-        ),
-        _Section(
-          title: 'Tags',
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              if (options.tags.isEmpty)
-                const _EmptyHint('No tags yet.')
-              else
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 4,
-                  children: [
-                    for (final tag in options.tags)
-                      FilterChip(
-                        label: Text(tag.name),
-                        selected: _tagIds.contains(tag.id),
-                        onSelected: (selected) => setState(() {
-                          if (selected) {
-                            _tagIds.add(tag.id);
-                          } else {
-                            _tagIds.remove(tag.id);
-                          }
-                        }),
-                      ),
-                  ],
-                ),
-              if (_tagIds.isNotEmpty) ...[
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    _SubLabel('Match'),
-                    const SizedBox(width: 12),
-                    SegmentedButton<TagMatch>(
-                      showSelectedIcon: false,
-                      segments: [
-                        for (final match in TagMatch.values)
-                          ButtonSegment(value: match, label: Text(match.label)),
-                      ],
-                      selected: {_tagMatch},
-                      onSelectionChanged: (selection) =>
-                          setState(() => _tagMatch = selection.first),
-                    ),
-                  ],
-                ),
-                SwitchListTile(
-                  contentPadding: EdgeInsets.zero,
-                  title: const Text('Include subtags'),
-                  value: _includeSubtags,
-                  onChanged: (value) => setState(() => _includeSubtags = value),
-                ),
-              ],
-            ],
-          ),
-        ),
-        _Section(
-          title: 'Currency',
-          child: options.currencies.isEmpty
-              ? const _EmptyHint('No currencies yet.')
-              : Wrap(
-                  spacing: 8,
-                  runSpacing: 4,
-                  children: [
-                    for (final currency in options.currencies)
-                      ChoiceChip(
-                        label: Text(currency),
-                        selected: _currency == currency,
-                        onSelected: (selected) => setState(() {
-                          _currency = selected ? currency : null;
-                        }),
-                      ),
-                  ],
-                ),
-        ),
-        _Section(
-          title: 'Amount',
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              if (!hasCurrency)
-                const _EmptyHint('Select a currency to filter by amount.')
-              else
-                Row(
-                  children: [
-                    Expanded(
-                      child: TextField(
-                        controller: _amountMinController,
-                        keyboardType: const TextInputType.numberWithOptions(
-                          decimal: true,
-                        ),
-                        decoration: InputDecoration(
-                          labelText: 'Min',
-                          prefixText: '$_currency ',
-                          border: const OutlineInputBorder(),
-                          isDense: true,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: TextField(
-                        controller: _amountMaxController,
-                        keyboardType: const TextInputType.numberWithOptions(
-                          decimal: true,
-                        ),
-                        decoration: InputDecoration(
-                          labelText: 'Max',
-                          prefixText: '$_currency ',
-                          border: const OutlineInputBorder(),
-                          isDense: true,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-            ],
-          ),
-        ),
-        _Section(
-          title: 'Text',
-          child: TextField(
-            controller: _searchController,
-            decoration: const InputDecoration(
-              hintText: 'Search name or description…',
-              prefixIcon: Icon(Icons.search),
-              border: OutlineInputBorder(),
-              isDense: true,
             ),
           ),
-        ),
+        if (_shows(FilterSection.status))
+          _Section(
+            title: 'Estado',
+            child: Wrap(
+              spacing: 8,
+              children: [
+                ChoiceChip(
+                  label: const Text('Cualquiera'),
+                  selected: _status == null,
+                  onSelected: (_) => setState(() => _status = null),
+                ),
+                for (final status in TxnStatus.values)
+                  ChoiceChip(
+                    label: Text(status.label),
+                    selected: _status == status,
+                    onSelected: (_) => setState(() => _status = status),
+                  ),
+              ],
+            ),
+          ),
+        if (_shows(FilterSection.date))
+          _Section(
+            title: 'Fecha',
+            child: Wrap(
+              spacing: 8,
+              runSpacing: 4,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                for (final preset in DatePreset.values)
+                  ChoiceChip(
+                    label: Text(preset.label),
+                    selected: _dateRange == null && _datePreset == preset,
+                    onSelected: (_) => setState(() {
+                      _dateRange = null;
+                      _datePreset = _datePreset == preset ? null : preset;
+                    }),
+                  ),
+                if (_dateRange != null)
+                  InputChip(
+                    avatar: const Icon(Icons.event, size: 18),
+                    label: Text(_formatRange(_dateRange!)),
+                    onDeleted: () => setState(() => _dateRange = null),
+                  )
+                else
+                  ActionChip(
+                    avatar: const Icon(Icons.date_range, size: 18),
+                    label: const Text('Rango personalizado'),
+                    onPressed: _pickDateRange,
+                  ),
+              ],
+            ),
+          ),
+        if (_shows(FilterSection.accounts))
+          _Section(
+            title: 'Cuentas',
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (options.accounts.isEmpty)
+                  const _EmptyHint('No hay cuentas todavía.')
+                else
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 4,
+                    children: [
+                      for (final account in options.accounts)
+                        FilterChip(
+                          label: Text(account.name),
+                          selected: _accountIds.contains(account.id),
+                          onSelected: (selected) => setState(() {
+                            if (selected) {
+                              _accountIds.add(account.id);
+                            } else {
+                              _accountIds.remove(account.id);
+                            }
+                          }),
+                        ),
+                    ],
+                  ),
+                if (_accountIds.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  _SubLabel('Dirección (para transferencias)'),
+                  const SizedBox(height: 4),
+                  SegmentedButton<AccountDirection>(
+                    showSelectedIcon: false,
+                    segments: [
+                      for (final dir in AccountDirection.values)
+                        ButtonSegment(value: dir, label: Text(dir.label)),
+                    ],
+                    selected: {_accountDirection},
+                    onSelectionChanged: (selection) =>
+                        setState(() => _accountDirection = selection.first),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        if (_shows(FilterSection.categories))
+          _Section(
+            title: 'Categorías',
+            child: options.categories.isEmpty
+                ? const _EmptyHint('No hay categorías todavía.')
+                : Wrap(
+                    spacing: 8,
+                    runSpacing: 4,
+                    children: [
+                      for (final category in options.categories)
+                        FilterChip(
+                          label: Text(category.name),
+                          selected: _categoryIds.contains(category.id),
+                          onSelected: (selected) => setState(() {
+                            if (selected) {
+                              _categoryIds.add(category.id);
+                            } else {
+                              _categoryIds.remove(category.id);
+                            }
+                          }),
+                        ),
+                    ],
+                  ),
+          ),
+        if (_shows(FilterSection.tags))
+          _Section(
+            title: 'Tags',
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (options.tags.isEmpty)
+                  const _EmptyHint('No hay tags todavía.')
+                else
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 4,
+                    children: [
+                      for (final tag in options.tags)
+                        FilterChip(
+                          label: Text(tag.name),
+                          selected: _tagIds.contains(tag.id),
+                          onSelected: (selected) => setState(() {
+                            if (selected) {
+                              _tagIds.add(tag.id);
+                            } else {
+                              _tagIds.remove(tag.id);
+                            }
+                          }),
+                        ),
+                    ],
+                  ),
+                if (_tagIds.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      _SubLabel('Coincidencia'),
+                      const SizedBox(width: 12),
+                      SegmentedButton<TagMatch>(
+                        showSelectedIcon: false,
+                        segments: [
+                          for (final match in TagMatch.values)
+                            ButtonSegment(
+                              value: match,
+                              label: Text(match.label),
+                            ),
+                        ],
+                        selected: {_tagMatch},
+                        onSelectionChanged: (selection) =>
+                            setState(() => _tagMatch = selection.first),
+                      ),
+                    ],
+                  ),
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('Incluir subetiquetas'),
+                    value: _includeSubtags,
+                    onChanged: (value) =>
+                        setState(() => _includeSubtags = value),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        if (_shows(FilterSection.currency))
+          _Section(
+            title: 'Moneda',
+            child: options.currencies.isEmpty
+                ? const _EmptyHint('No hay monedas todavía.')
+                : Wrap(
+                    spacing: 8,
+                    runSpacing: 4,
+                    children: [
+                      for (final currency in options.currencies)
+                        ChoiceChip(
+                          label: Text(currency),
+                          selected: _currency == currency,
+                          onSelected: (selected) => setState(() {
+                            _currency = selected ? currency : null;
+                          }),
+                        ),
+                    ],
+                  ),
+          ),
+        if (_shows(FilterSection.amount))
+          _Section(
+            title: 'Monto',
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (!hasCurrency)
+                  const _EmptyHint(
+                    'Seleccioná una moneda para filtrar por monto.',
+                  )
+                else
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: _amountMinController,
+                          keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true,
+                          ),
+                          decoration: InputDecoration(
+                            labelText: 'Mín',
+                            prefixText: '$_currency ',
+                            border: const OutlineInputBorder(),
+                            isDense: true,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: TextField(
+                          controller: _amountMaxController,
+                          keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true,
+                          ),
+                          decoration: InputDecoration(
+                            labelText: 'Máx',
+                            prefixText: '$_currency ',
+                            border: const OutlineInputBorder(),
+                            isDense: true,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+              ],
+            ),
+          ),
+        if (_shows(FilterSection.text))
+          _Section(
+            title: 'Texto',
+            child: TextField(
+              controller: _searchController,
+              decoration: const InputDecoration(
+                hintText: 'Buscar nombre o descripción…',
+                prefixIcon: Icon(Icons.search),
+                border: OutlineInputBorder(),
+                isDense: true,
+              ),
+            ),
+          ),
       ],
     );
   }
@@ -548,19 +625,28 @@ class _FilterSheetState extends State<FilterSheet> {
 }
 
 class _Header extends StatelessWidget {
-  const _Header({required this.onReset});
+  const _Header({required this.onReset, required this.onClose});
 
   final VoidCallback onReset;
+  final VoidCallback onClose;
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 0, 8, 8),
+      padding: const EdgeInsets.fromLTRB(16, 12, 8, 8),
       child: Row(
         children: [
-          Text('Filters', style: Theme.of(context).textTheme.titleLarge),
-          const Spacer(),
-          TextButton(onPressed: onReset, child: const Text('Reset')),
+          Expanded(
+            child: Text(
+              'Filtros',
+              style: theme.textTheme.titleLarge?.copyWith(
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+          TextButton(onPressed: onReset, child: const Text('Limpiar')),
+          IconButton(icon: const Icon(Icons.close_rounded), onPressed: onClose),
         ],
       ),
     );

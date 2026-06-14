@@ -5,10 +5,10 @@ import '../../shared/dates.dart';
 /// Transaction type dimension. `wire` matches the value stored in
 /// `transactions.type`; `label` is shown in the UI.
 enum TxnType {
-  expense('expense', 'Expense'),
-  income('income', 'Income'),
-  transfer('transfer', 'Transfer'),
-  balanceAdjustment('balance_adjustment', 'Adjustment');
+  expense('expense', 'Gastos'),
+  income('income', 'Ingresos'),
+  transfer('transfer', 'Transferencias'),
+  balanceAdjustment('balance_adjustment', 'Ajustes');
 
   const TxnType(this.wire, this.label);
 
@@ -18,8 +18,8 @@ enum TxnType {
 
 /// Status dimension. Absence (null on the filter) means "any".
 enum TxnStatus {
-  pending('pending', 'Pending'),
-  cleared('cleared', 'Cleared');
+  pending('pending', 'Pendiente'),
+  cleared('cleared', 'Confirmado');
 
   const TxnStatus(this.wire, this.label);
 
@@ -30,11 +30,11 @@ enum TxnStatus {
 /// Relative date presets, resolved at render time so "this month" rolls
 /// forward instead of freezing (see docs/home-dashboard.md).
 enum DatePreset {
-  today('today', 'Today'),
-  thisWeek('this_week', 'This week'),
-  thisMonth('this_month', 'This month'),
-  lastMonth('last_month', 'Last month'),
-  thisYear('this_year', 'This year');
+  today('today', 'Hoy'),
+  thisWeek('this_week', 'Esta semana'),
+  thisMonth('this_month', 'Este mes'),
+  lastMonth('last_month', 'Mes pasado'),
+  thisYear('this_year', 'Este año');
 
   const DatePreset(this.wire, this.label);
 
@@ -45,9 +45,9 @@ enum DatePreset {
 /// Transfers have a source (`accountId`) and destination (`toAccountId`); the
 /// account filter carries which side to match.
 enum AccountDirection {
-  source('source', 'Source'),
-  destination('destination', 'Destination'),
-  either('either', 'Either');
+  source('source', 'Origen'),
+  destination('destination', 'Destino'),
+  either('either', 'Cualquiera');
 
   const AccountDirection(this.wire, this.label);
 
@@ -57,8 +57,8 @@ enum AccountDirection {
 
 /// Whether a transaction must carry *any* of the selected tags or *all* of them.
 enum TagMatch {
-  any('any', 'Any'),
-  all('all', 'All');
+  any('any', 'Cualquiera'),
+  all('all', 'Todas');
 
   const TagMatch(this.wire, this.label);
 

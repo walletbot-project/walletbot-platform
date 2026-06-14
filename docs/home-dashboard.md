@@ -253,5 +253,11 @@ unchanged — only advanced (disjunctive) filters take the anchor+predicate path
 2. **Widgets** — implement all four renderers against the aggregations.
 3. **Editing** — add / remove / reorder, width control, filter editor + saved-filter management.
 4. *(Later)* wire both tables into `SyncEngine` + web parity.
+
+> **Status:** the simple-mode filter editor already exists
+> (`apps/native/lib/components/filter_sheet.dart`, `showFilterSheet`) and is the
+> shared editor for both the dashboard and the activity screen. Callers pass
+> `hiddenSections` to suppress dimensions they own elsewhere (the activity bar
+> keeps `type` + `text`). Saved-filter management (Phase 3) is still pending.
 </content>
 </invoke>
