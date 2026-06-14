@@ -96,6 +96,147 @@ enum TagMatch implements WireLabeled {
 /// Either bound may be null (open-ended).
 typedef DateWindow = ({BigInt? fromMs, BigInt? toExclusiveMs});
 
+/// A node in the canonical condition tree stored in `saved_filters.config`.
+sealed class FilterNode {
+  const FilterNode();
+
+  Map<String, Object?> toJson();
+
+  bool get isEmpty => false;
+
+  bool get containsSubtagExpansion => false;
+}
+
+/// A boolean group in the canonical filter tree.
+class FilterGroup extends FilterNode {
+  const FilterGroup({
+    this.combinator = 'and',
+    this.not = false,
+    this.children = const [],
+  });
+
+  final String combinator;
+  final bool not;
+  final List<FilterNode> children;
+
+  factory FilterGroup.fromJson(Map<String, Object?> json) {
+    final rawChildren = json['children'];
+    return FilterGroup(
+      combinator: json['combinator'] == 'or' ? 'or' : 'and',
+      not: json['not'] == true,
+      children: rawChildren is List
+          ? [
+              for (final child in rawChildren)
+                if (child is Map) filterNodeFromJson(child),
+            ]
+          : const [],
+    );
+  }
+
+  @override
+  Map<String, Object?> toJson() => {
+    'combinator': combinator == 'or' ? 'or' : 'and',
+    if (not) 'not': true,
+    'children': children.map((child) => child.toJson()).toList(),
+  };
+
+  @override
+  bool get isEmpty => children.isEmpty;
+
+  @override
+  bool get containsSubtagExpansion =>
+      children.any((child) => child.containsSubtagExpansion);
+
+  FilterGroup copyWith({
+    String? combinator,
+    bool? not,
+    List<FilterNode>? children,
+  }) {
+    return FilterGroup(
+      combinator: combinator ?? this.combinator,
+      not: not ?? this.not,
+      children: children ?? this.children,
+    );
+  }
+}
+
+/// A leaf condition in the canonical filter tree.
+class FilterCondition extends FilterNode {
+  const FilterCondition({
+    required this.field,
+    required this.operator,
+    required this.value,
+    this.direction = AccountDirection.either,
+    this.match = TagMatch.any,
+    this.includeSubtags = false,
+  });
+
+  final String field;
+  final String operator;
+  final Object? value;
+  final AccountDirection direction;
+  final TagMatch match;
+  final bool includeSubtags;
+
+  factory FilterCondition.fromJson(Map<String, Object?> json) {
+    final direction = json['direction'];
+    final match = json['match'];
+    return FilterCondition(
+      field: json['field'] is String ? json['field'] as String : 'type',
+      operator: json['operator'] is String ? json['operator'] as String : 'in',
+      value: json['value'],
+      direction: direction is String
+          ? _enumByWire(AccountDirection.values, direction) ??
+                AccountDirection.either
+          : AccountDirection.either,
+      match: match is String
+          ? _enumByWire(TagMatch.values, match) ?? TagMatch.any
+          : TagMatch.any,
+      includeSubtags: json['includeSubtags'] == true,
+    );
+  }
+
+  @override
+  Map<String, Object?> toJson() => {
+    'field': field,
+    'operator': operator,
+    'value': value,
+    if (field == 'account') 'direction': direction.wire,
+    if (field == 'tag') ...{
+      'match': match.wire,
+      'includeSubtags': includeSubtags,
+    },
+  };
+
+  @override
+  bool get containsSubtagExpansion => field == 'tag' && includeSubtags;
+
+  FilterCondition copyWith({
+    String? field,
+    String? operator,
+    Object? value,
+    AccountDirection? direction,
+    TagMatch? match,
+    bool? includeSubtags,
+  }) {
+    return FilterCondition(
+      field: field ?? this.field,
+      operator: operator ?? this.operator,
+      value: value ?? this.value,
+      direction: direction ?? this.direction,
+      match: match ?? this.match,
+      includeSubtags: includeSubtags ?? this.includeSubtags,
+    );
+  }
+}
+
+FilterNode filterNodeFromJson(Map<dynamic, dynamic> json) {
+  final typed = Map<String, Object?>.from(json);
+  return typed.containsKey('children')
+      ? FilterGroup.fromJson(typed)
+      : FilterCondition.fromJson(typed);
+}
+
 /// The simple-mode view over the canonical condition tree described in
 /// docs/home-dashboard.md. Every field is optional; an empty filter matches
 /// all transactions. [toCanonicalJson] serializes to the stored tree shape.
@@ -115,6 +256,7 @@ class TransactionFilter {
     this.amountMinCents,
     this.amountMaxCents,
     this.search,
+    this.advancedRoot,
   });
 
   final Set<TxnType> types;
@@ -141,28 +283,44 @@ class TransactionFilter {
 
   final String? search;
 
-  bool get isEmpty =>
-      types.isEmpty &&
-      status == null &&
-      datePreset == null &&
-      dateRange == null &&
-      accountIds.isEmpty &&
-      categoryIds.isEmpty &&
-      tagIds.isEmpty &&
-      currency == null &&
-      amountMinCents == null &&
-      amountMaxCents == null &&
-      (search == null || search!.trim().isEmpty);
+  /// Non-null when the filter is using advanced tree semantics that cannot be
+  /// faithfully represented by the flat simple-mode fields.
+  final FilterGroup? advancedRoot;
+
+  factory TransactionFilter.advanced(FilterGroup root) {
+    if (_isSimplyRepresentable(root)) {
+      return TransactionFilter.fromCanonicalJson(root.toJson());
+    }
+    return TransactionFilter(advancedRoot: root);
+  }
+
+  bool get isEmpty {
+    final advanced = advancedRoot;
+    if (advanced != null) return advanced.isEmpty;
+    return types.isEmpty &&
+        status == null &&
+        datePreset == null &&
+        dateRange == null &&
+        accountIds.isEmpty &&
+        categoryIds.isEmpty &&
+        tagIds.isEmpty &&
+        currency == null &&
+        amountMinCents == null &&
+        amountMaxCents == null &&
+        (search == null || search!.trim().isEmpty);
+  }
+
+  bool get isAdvanced => advancedRoot != null;
+
+  FilterGroup get rootGroup => advancedRoot ?? _simpleRootGroup(this);
 
   /// Rebuilds a filter from the canonical `{combinator, children}` tree
-  /// produced by [toCanonicalJson]. Only the simple-mode subset is understood:
-  /// a single top-level `and` of flat conditions. Anything else (nested groups,
-  /// `or`, `not`, unknown fields/operators) is skipped, so an advanced filter
-  /// degrades to the conditions it can represent rather than throwing.
+  /// produced by [toCanonicalJson]. Simply representable trees become flat
+  /// filters; nested/OR/NOT trees are preserved as [advancedRoot].
   factory TransactionFilter.fromCanonicalJson(Map<String, Object?> json) {
-    final children = json['children'];
-    if (json['combinator'] != 'and' || children is! List) {
-      return const TransactionFilter();
+    final root = FilterGroup.fromJson(json);
+    if (!_isSimplyRepresentable(root)) {
+      return TransactionFilter.advanced(root);
     }
 
     final types = <TxnType>{};
@@ -183,11 +341,11 @@ class TransactionFilter {
     List<String> asStringList(Object? value) =>
         value is List ? value.whereType<String>().toList() : const [];
 
-    for (final raw in children) {
-      if (raw is! Map) continue;
-      final field = raw['field'];
-      final operator = raw['operator'];
-      final value = raw['value'];
+    for (final child in root.children) {
+      if (child is! FilterCondition) continue;
+      final field = child.field;
+      final operator = child.operator;
+      final value = child.value;
       switch (field) {
         case 'type':
           for (final wire in asStringList(value)) {
@@ -213,20 +371,13 @@ class TransactionFilter {
           }
         case 'account':
           accountIds.addAll(asStringList(value));
-          final dir = raw['direction'];
-          if (dir is String) {
-            accountDirection =
-                _enumByWire(AccountDirection.values, dir) ?? accountDirection;
-          }
+          accountDirection = child.direction;
         case 'category':
           categoryIds.addAll(asStringList(value));
         case 'tag':
           tagIds.addAll(asStringList(value));
-          final match = raw['match'];
-          if (match is String) {
-            tagMatch = _enumByWire(TagMatch.values, match) ?? tagMatch;
-          }
-          includeSubtags = raw['includeSubtags'] == true;
+          tagMatch = child.match;
+          includeSubtags = child.includeSubtags;
         case 'currency':
           currency = asStringList(value).firstOrNull;
         case 'amount':
@@ -345,95 +496,134 @@ class TransactionFilter {
           ? null
           : (amountMaxCents ?? this.amountMaxCents),
       search: search ?? this.search,
+      advancedRoot: advancedRoot,
     );
   }
 
   /// Serializes to the canonical `{combinator, children}` tree from the design
   /// doc. The simple editor only ever produces a single top-level `and`.
   Map<String, Object?> toCanonicalJson() {
-    final children = <Map<String, Object?>>[];
+    final advanced = advancedRoot;
+    if (advanced != null) return advanced.toJson();
 
-    if (types.isNotEmpty) {
-      children.add({
-        'field': 'type',
-        'operator': 'in',
-        'value': types.map((t) => t.wire).toList(),
-      });
-    }
-
-    if (status != null) {
-      children.add({
-        'field': 'status',
-        'operator': 'in',
-        'value': [status!.wire],
-      });
-    }
-
-    if (dateRange != null) {
-      children.add({
-        'field': 'date',
-        'operator': 'between',
-        'value': {
-          'from': dateRange!.start.toIso8601String(),
-          'to': dateRange!.end.toIso8601String(),
-        },
-      });
-    } else if (datePreset != null) {
-      children.add({
-        'field': 'date',
-        'operator': 'relative',
-        'value': datePreset!.wire,
-      });
-    }
-
-    if (accountIds.isNotEmpty) {
-      children.add({
-        'field': 'account',
-        'operator': 'in',
-        'value': accountIds.toList(),
-        'direction': accountDirection.wire,
-      });
-    }
-
-    if (categoryIds.isNotEmpty) {
-      children.add({
-        'field': 'category',
-        'operator': 'in',
-        'value': categoryIds.toList(),
-      });
-    }
-
-    if (tagIds.isNotEmpty) {
-      children.add({
-        'field': 'tag',
-        'operator': 'in',
-        'value': tagIds.toList(),
-        'match': tagMatch.wire,
-        'includeSubtags': includeSubtags,
-      });
-    }
-
-    if (currency != null) {
-      children.add({
-        'field': 'currency',
-        'operator': 'in',
-        'value': [currency],
-      });
-
-      if (amountMinCents != null || amountMaxCents != null) {
-        children.add({
-          'field': 'amount',
-          'operator': 'between',
-          'value': {'min': amountMinCents, 'max': amountMaxCents},
-        });
-      }
-    }
-
-    final trimmed = search?.trim();
-    if (trimmed != null && trimmed.isNotEmpty) {
-      children.add({'field': 'text', 'operator': 'contains', 'value': trimmed});
-    }
-
-    return {'combinator': 'and', 'children': children};
+    return _simpleRootGroup(this).toJson();
   }
+}
+
+FilterGroup _simpleRootGroup(TransactionFilter filter) {
+  final children = <Map<String, Object?>>[];
+
+  if (filter.types.isNotEmpty) {
+    children.add({
+      'field': 'type',
+      'operator': 'in',
+      'value': filter.types.map((t) => t.wire).toList(),
+    });
+  }
+
+  if (filter.status != null) {
+    children.add({
+      'field': 'status',
+      'operator': 'in',
+      'value': [filter.status!.wire],
+    });
+  }
+
+  if (filter.dateRange != null) {
+    children.add({
+      'field': 'date',
+      'operator': 'between',
+      'value': {
+        'from': filter.dateRange!.start.toIso8601String(),
+        'to': filter.dateRange!.end.toIso8601String(),
+      },
+    });
+  } else if (filter.datePreset != null) {
+    children.add({
+      'field': 'date',
+      'operator': 'relative',
+      'value': filter.datePreset!.wire,
+    });
+  }
+
+  if (filter.accountIds.isNotEmpty) {
+    children.add({
+      'field': 'account',
+      'operator': 'in',
+      'value': filter.accountIds.toList(),
+      'direction': filter.accountDirection.wire,
+    });
+  }
+
+  if (filter.categoryIds.isNotEmpty) {
+    children.add({
+      'field': 'category',
+      'operator': 'in',
+      'value': filter.categoryIds.toList(),
+    });
+  }
+
+  if (filter.tagIds.isNotEmpty) {
+    children.add({
+      'field': 'tag',
+      'operator': 'in',
+      'value': filter.tagIds.toList(),
+      'match': filter.tagMatch.wire,
+      'includeSubtags': filter.includeSubtags,
+    });
+  }
+
+  if (filter.currency != null) {
+    children.add({
+      'field': 'currency',
+      'operator': 'in',
+      'value': [filter.currency],
+    });
+
+    if (filter.amountMinCents != null || filter.amountMaxCents != null) {
+      children.add({
+        'field': 'amount',
+        'operator': 'between',
+        'value': {'min': filter.amountMinCents, 'max': filter.amountMaxCents},
+      });
+    }
+  }
+
+  final trimmed = filter.search?.trim();
+  if (trimmed != null && trimmed.isNotEmpty) {
+    children.add({'field': 'text', 'operator': 'contains', 'value': trimmed});
+  }
+
+  return FilterGroup(
+    children: children.map((child) => FilterCondition.fromJson(child)).toList(),
+  );
+}
+
+bool _isSimplyRepresentable(FilterGroup root) {
+  if (root.combinator != 'and' || root.not) return false;
+  final seen = <String>{};
+  for (final child in root.children) {
+    if (child is! FilterCondition) return false;
+    if (!seen.add(child.field)) return false;
+    switch (child.field) {
+      case 'type':
+      case 'status':
+      case 'account':
+      case 'category':
+      case 'tag':
+      case 'currency':
+        if (child.operator != 'in') return false;
+      case 'date':
+        if (child.operator != 'relative' && child.operator != 'between') {
+          return false;
+        }
+      case 'amount':
+        if (child.operator != 'between') return false;
+      case 'text':
+        if (child.operator != 'contains') return false;
+      default:
+        return false;
+    }
+  }
+  return true;
 }

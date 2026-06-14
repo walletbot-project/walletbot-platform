@@ -37,10 +37,11 @@ class TransactionRepository extends RepositoryBase {
     BigInt? exactToInclusiveMs,
   }) async {
     List<Set<String>> groups;
-    if (filter.tagIds.isEmpty || !filter.includeSubtags) {
+    List<Tag> tags = const [];
+    if (!filter.rootGroup.containsSubtagExpansion) {
       groups = expandTagGroups(filter, const []);
     } else {
-      final tags = await (db.select(
+      tags = await (db.select(
         db.tags,
       )..where((t) => t.archived.equals(false))).get();
       groups = expandTagGroups(filter, tags);
@@ -49,6 +50,7 @@ class TransactionRepository extends RepositoryBase {
       db,
       filter,
       tagGroups: groups,
+      activeTags: tags,
       limit: limit,
       ordering: ordering,
       exactFromMs: exactFromMs,

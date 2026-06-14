@@ -62,7 +62,7 @@ void main() {
     expect(restored.dateRange?.end, DateTime(2026, 1, 31));
   });
 
-  test('non-simple tree (or / nested group) degrades to empty', () {
+  test('non-simple tree (or / nested group) is preserved as advanced', () {
     final restored = TransactionFilter.fromCanonicalJson({
       'combinator': 'or',
       'children': [
@@ -73,6 +73,28 @@ void main() {
         },
       ],
     });
-    expect(restored.isEmpty, isTrue);
+    expect(restored.isAdvanced, isTrue);
+    expect(restored.toCanonicalJson(), {
+      'combinator': 'or',
+      'children': [
+        {
+          'field': 'type',
+          'operator': 'in',
+          'value': ['expense'],
+        },
+      ],
+    });
+  });
+
+  test('simple-looking advanced tree normalizes back to simple mode', () {
+    final restored = TransactionFilter.advanced(
+      const FilterGroup(
+        children: [
+          FilterCondition(field: 'type', operator: 'in', value: ['expense']),
+        ],
+      ),
+    );
+    expect(restored.isAdvanced, isFalse);
+    expect(restored.types, {TxnType.expense});
   });
 }

@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:drift/drift.dart';
+import 'package:flutter/material.dart' show DateTimeRange;
 
 import '../../database.dart';
 import '../models/summaries.dart';
@@ -62,6 +63,7 @@ SimpleSelectStatement<$TransactionsTable, Transaction> buildTransactionQuery(
   AppDatabase db,
   TransactionFilter filter, {
   required List<Set<String>> tagGroups,
+  List<Tag> activeTags = const [],
   int? limit,
   TxnOrdering ordering = TxnOrdering.createdAtDesc,
   DateTime? now,
@@ -71,6 +73,51 @@ SimpleSelectStatement<$TransactionsTable, Transaction> buildTransactionQuery(
   final query = db.select(db.transactions)
     ..where((t) => t.archived.equals(false));
 
+  final advancedRoot = filter.advancedRoot;
+  if (advancedRoot != null) {
+    query.where(
+      (t) => _compileFilterNode(
+        db,
+        t,
+        advancedRoot,
+        activeTags: activeTags,
+        now: now,
+      ),
+    );
+  } else {
+    _applySimpleFilter(db, query, filter, tagGroups: tagGroups, now: now);
+  }
+
+  // Exact-millisecond bounds (both inclusive), used by the agent tools whose
+  // dates are precise timestamps rather than day ranges.
+  if (exactFromMs != null) {
+    final from = exactFromMs;
+    query.where((t) => t.date.isBiggerOrEqualValue(from));
+  }
+  if (exactToInclusiveMs != null) {
+    final to = exactToInclusiveMs;
+    query.where((t) => t.date.isSmallerOrEqualValue(to));
+  }
+
+  switch (ordering) {
+    case TxnOrdering.createdAtDesc:
+      query.orderBy([(t) => OrderingTerm.desc(t.createdAt)]);
+    case TxnOrdering.dateDesc:
+      query.orderBy([(t) => OrderingTerm.desc(t.date)]);
+  }
+  if (limit != null) {
+    query.limit(limit);
+  }
+  return query;
+}
+
+void _applySimpleFilter(
+  AppDatabase db,
+  SimpleSelectStatement<$TransactionsTable, Transaction> query,
+  TransactionFilter filter, {
+  required List<Set<String>> tagGroups,
+  DateTime? now,
+}) {
   if (filter.types.isNotEmpty) {
     final wires = filter.types.map((t) => t.wire).toList();
     query.where((t) => t.type.isIn(wires));
@@ -102,17 +149,6 @@ SimpleSelectStatement<$TransactionsTable, Transaction> buildTransactionQuery(
       case AccountDirection.either:
         query.where((t) => t.accountId.isIn(ids) | t.toAccountId.isIn(ids));
     }
-  }
-
-  // Exact-millisecond bounds (both inclusive), used by the agent tools whose
-  // dates are precise timestamps rather than day ranges.
-  if (exactFromMs != null) {
-    final from = exactFromMs;
-    query.where((t) => t.date.isBiggerOrEqualValue(from));
-  }
-  if (exactToInclusiveMs != null) {
-    final to = exactToInclusiveMs;
-    query.where((t) => t.date.isSmallerOrEqualValue(to));
   }
 
   final window = filter.resolveDateWindow(now: now);
@@ -157,17 +193,200 @@ SimpleSelectStatement<$TransactionsTable, Transaction> buildTransactionQuery(
       query.where((t) => t.amount.isSmallerOrEqualValue(BigInt.from(maxCents)));
     }
   }
+}
 
-  switch (ordering) {
-    case TxnOrdering.createdAtDesc:
-      query.orderBy([(t) => OrderingTerm.desc(t.createdAt)]);
-    case TxnOrdering.dateDesc:
-      query.orderBy([(t) => OrderingTerm.desc(t.date)]);
+Expression<bool> _compileFilterNode(
+  AppDatabase db,
+  $TransactionsTable t,
+  FilterNode node, {
+  required List<Tag> activeTags,
+  DateTime? now,
+}) {
+  switch (node) {
+    case FilterCondition():
+      return _compileCondition(db, t, node, activeTags: activeTags, now: now);
+    case FilterGroup():
+      Expression<bool> expression = const Constant(true);
+      if (node.children.isNotEmpty) {
+        final compiled = [
+          for (final child in node.children)
+            _compileFilterNode(db, t, child, activeTags: activeTags, now: now),
+        ];
+        expression = compiled.first;
+        for (final next in compiled.skip(1)) {
+          expression = node.combinator == 'or'
+              ? expression | next
+              : expression & next;
+        }
+      }
+      return node.not ? expression.not() : expression;
   }
-  if (limit != null) {
-    query.limit(limit);
+}
+
+Expression<bool> _compileCondition(
+  AppDatabase db,
+  $TransactionsTable t,
+  FilterCondition condition, {
+  required List<Tag> activeTags,
+  DateTime? now,
+}) {
+  final value = condition.value;
+  switch (condition.field) {
+    case 'type':
+      return _stringSet(t.type, condition.operator, _asStringList(value));
+    case 'status':
+      return _stringSet(t.status, condition.operator, _asStringList(value));
+    case 'category':
+      return _stringSet(t.categoryId, condition.operator, _asStringList(value));
+    case 'currency':
+      return _stringSet(t.currency, condition.operator, _asStringList(value));
+    case 'account':
+      return _accountCondition(t, condition);
+    case 'tag':
+      return _tagCondition(db, t, condition, activeTags);
+    case 'date':
+      return _dateCondition(t, condition, now: now);
+    case 'amount':
+      return _amountCondition(t, condition);
+    case 'text':
+      if (value is! String || value.trim().isEmpty) {
+        return const Constant(true);
+      }
+      final escaped = value.trim().replaceAll('%', '%%').replaceAll('_', '__');
+      final pattern = '%${escaped.toLowerCase()}%';
+      final expression = t.name.lower().like(pattern);
+      return condition.operator == 'not contains'
+          ? expression.not()
+          : expression;
+    default:
+      return const Constant(true);
   }
-  return query;
+}
+
+Expression<bool> _stringSet(
+  Expression<String> column,
+  String operator,
+  List<String> values,
+) {
+  if (values.isEmpty) return const Constant(true);
+  return operator == 'not in' ? column.isNotIn(values) : column.isIn(values);
+}
+
+Expression<bool> _accountCondition(
+  $TransactionsTable t,
+  FilterCondition condition,
+) {
+  final ids = _asStringList(condition.value);
+  if (ids.isEmpty) return const Constant(true);
+  Expression<bool> expression;
+  switch (condition.direction) {
+    case AccountDirection.source:
+      expression = t.accountId.isIn(ids);
+    case AccountDirection.destination:
+      expression = t.toAccountId.isIn(ids);
+    case AccountDirection.either:
+      expression = t.accountId.isIn(ids) | t.toAccountId.isIn(ids);
+  }
+  return condition.operator == 'not in' ? expression.not() : expression;
+}
+
+Expression<bool> _tagCondition(
+  AppDatabase db,
+  $TransactionsTable t,
+  FilterCondition condition,
+  List<Tag> activeTags,
+) {
+  final ids = _asStringList(condition.value);
+  if (ids.isEmpty) return const Constant(true);
+  final filter = TransactionFilter(
+    tagIds: ids.toSet(),
+    tagMatch: condition.match,
+    includeSubtags: condition.includeSubtags,
+  );
+  final tagGroups = expandTagGroups(filter, activeTags);
+  final effectiveGroups =
+      condition.match == TagMatch.any && tagGroups.isNotEmpty
+      ? [tagGroups.expand((g) => g).toSet()]
+      : tagGroups;
+  Expression<bool> expression = const Constant(true);
+  for (final group in effectiveGroups) {
+    final taggedTxnIds = db.selectOnly(db.transactionTags)
+      ..addColumns([db.transactionTags.transactionId])
+      ..where(db.transactionTags.tagId.isIn(group.toList()));
+    expression = expression & t.id.isInQuery(taggedTxnIds);
+  }
+  return condition.operator == 'not in' ? expression.not() : expression;
+}
+
+Expression<bool> _dateCondition(
+  $TransactionsTable t,
+  FilterCondition condition, {
+  DateTime? now,
+}) {
+  DateWindow? window;
+  final value = condition.value;
+  if (condition.operator == 'relative' && value is String) {
+    final preset = _enumByWire(DatePreset.values, value);
+    if (preset != null) {
+      window = TransactionFilter(
+        datePreset: preset,
+      ).resolveDateWindow(now: now);
+    }
+  } else if (condition.operator == 'between' && value is Map) {
+    final from = value['from'];
+    final to = value['to'];
+    if (from is String && to is String) {
+      final start = DateTime.tryParse(from);
+      final end = DateTime.tryParse(to);
+      if (start != null && end != null) {
+        window = TransactionFilter(
+          dateRange: DateTimeRange(start: start, end: end),
+        ).resolveDateWindow(now: now);
+      }
+    }
+  }
+  if (window == null) return const Constant(true);
+  Expression<bool> expression = const Constant(true);
+  final fromMs = window.fromMs;
+  if (fromMs != null) {
+    expression = expression & t.date.isBiggerOrEqualValue(fromMs);
+  }
+  final toExclusiveMs = window.toExclusiveMs;
+  if (toExclusiveMs != null) {
+    expression = expression & t.date.isSmallerThanValue(toExclusiveMs);
+  }
+  return expression;
+}
+
+Expression<bool> _amountCondition(
+  $TransactionsTable t,
+  FilterCondition condition,
+) {
+  final value = condition.value;
+  if (value is! Map) return const Constant(true);
+  Expression<bool> expression = const Constant(true);
+  final min = value['min'];
+  final max = value['max'];
+  if ((condition.operator == 'between' || condition.operator == '>=') &&
+      min is int) {
+    expression = expression & t.amount.isBiggerOrEqualValue(BigInt.from(min));
+  }
+  if ((condition.operator == 'between' || condition.operator == '<=') &&
+      max is int) {
+    expression = expression & t.amount.isSmallerOrEqualValue(BigInt.from(max));
+  }
+  return expression;
+}
+
+T? _enumByWire<T extends WireLabeled>(List<T> values, String wire) {
+  for (final value in values) {
+    if (value.wire == wire) return value;
+  }
+  return null;
+}
+
+List<String> _asStringList(Object? value) {
+  return value is List ? value.whereType<String>().toList() : const [];
 }
 
 /// THE canonical reactive filtered-transaction stream — reactive to local
@@ -183,7 +402,7 @@ Stream<List<Transaction>> watchFilteredTransactions(
   TxnOrdering ordering = TxnOrdering.createdAtDesc,
   DateTime? now,
 }) {
-  if (filter.tagIds.isEmpty || !filter.includeSubtags) {
+  if (!filter.rootGroup.containsSubtagExpansion) {
     final groups = expandTagGroups(filter, const []);
     return buildTransactionQuery(
       db,
@@ -197,14 +416,15 @@ Stream<List<Transaction>> watchFilteredTransactions(
   final tagsStream = (db.select(
     db.tags,
   )..where((t) => t.archived.equals(false))).watch();
-  final groupsStream = tagsStream
-      .map((tags) => expandTagGroups(filter, tags))
-      .distinct(_tagGroupsEqual);
-  return _switchMap(groupsStream, (groups) {
+  final tagPayloadStream = tagsStream
+      .map((tags) => (tags: tags, groups: expandTagGroups(filter, tags)))
+      .distinct((a, b) => _tagGroupsEqual(a.groups, b.groups));
+  return _switchMap(tagPayloadStream, (payload) {
     return buildTransactionQuery(
       db,
       filter,
-      tagGroups: groups,
+      tagGroups: payload.groups,
+      activeTags: payload.tags,
       limit: limit,
       ordering: ordering,
       now: now,

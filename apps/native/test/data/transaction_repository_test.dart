@@ -251,6 +251,86 @@ void main() {
       expect(rows.map((t) => t.name), ['inside-late']);
     });
 
+    test('advanced tree supports nested OR and NOT groups', () async {
+      final transportId = await repos.categories.create(name: 'Transport');
+      final pizza = await repos.transactions.addExpense(
+        accountId: cashId,
+        categoryId: foodId,
+        name: 'Pizza night',
+        amountCents: BigInt.from(2000),
+        currency: 'ARS',
+      );
+      await repos.transactions.addIncome(
+        accountId: cashId,
+        categoryId: foodId,
+        name: 'Salary',
+        amountCents: BigInt.from(100000),
+        currency: 'ARS',
+      );
+      final bus = await repos.transactions.addExpense(
+        accountId: cashId,
+        categoryId: transportId,
+        name: 'Bus',
+        amountCents: BigInt.from(500),
+        currency: 'ARS',
+      );
+
+      final nestedOr = await repos.transactions.list(
+        TransactionFilter.advanced(
+          FilterGroup(
+            children: [
+              const FilterCondition(
+                field: 'type',
+                operator: 'in',
+                value: ['expense'],
+              ),
+              FilterGroup(
+                combinator: 'or',
+                children: [
+                  FilterCondition(
+                    field: 'category',
+                    operator: 'in',
+                    value: [foodId],
+                  ),
+                  const FilterCondition(
+                    field: 'text',
+                    operator: 'contains',
+                    value: 'bus',
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      );
+      expect(nestedOr.map((t) => t.id).toSet(), {pizza, bus});
+
+      final notBus = await repos.transactions.list(
+        TransactionFilter.advanced(
+          const FilterGroup(
+            children: [
+              FilterCondition(
+                field: 'type',
+                operator: 'in',
+                value: ['expense'],
+              ),
+              FilterGroup(
+                not: true,
+                children: [
+                  FilterCondition(
+                    field: 'text',
+                    operator: 'contains',
+                    value: 'bus',
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      );
+      expect(notBus.map((t) => t.id), [pizza]);
+    });
+
     test('watch with includeSubtags reacts to tag tree changes', () async {
       final parent = await repos.tags.create(name: 'Parent');
       final child = await repos.tags.create(name: 'Child'); // top-level so far

@@ -37,6 +37,8 @@ class _FilterOptions {
   final List<String> currencies;
 }
 
+enum _FilterEditorMode { simple, advanced }
+
 /// Opens the filter editor as a draggable bottom sheet. Resolves to the edited
 /// [TransactionFilter] when the user taps "Aplicar", or `null` if dismissed.
 ///
@@ -90,6 +92,8 @@ class FilterSheet extends StatefulWidget {
 
 class _FilterSheetState extends State<FilterSheet> {
   late Future<_FilterOptions> _optionsFuture;
+  late _FilterEditorMode _mode;
+  late FilterGroup _advancedRoot;
 
   late Set<TxnType> _types;
   late TxnStatus? _status;
@@ -111,6 +115,10 @@ class _FilterSheetState extends State<FilterSheet> {
   void initState() {
     super.initState();
     final f = widget.initial;
+    _mode = f.isAdvanced
+        ? _FilterEditorMode.advanced
+        : _FilterEditorMode.simple;
+    _advancedRoot = f.rootGroup;
     _types = {...f.types};
     _status = f.status;
     _datePreset = f.datePreset;
@@ -183,6 +191,8 @@ class _FilterSheetState extends State<FilterSheet> {
   bool _shows(FilterSection section) =>
       !widget.hiddenSections.contains(section);
 
+  bool get _canUseAdvanced => widget.hiddenSections.isEmpty;
+
   /// Clears only the dimensions this sheet actually renders — hidden sections
   /// (owned by the caller, e.g. the activity bar's type chips and search) keep
   /// their incoming values.
@@ -210,12 +220,15 @@ class _FilterSheetState extends State<FilterSheet> {
         _amountMaxController.clear();
       }
       if (_shows(FilterSection.text)) _searchController.clear();
+      if (_mode == _FilterEditorMode.advanced) {
+        _advancedRoot = const FilterGroup();
+      }
     });
   }
 
-  void _apply() {
+  TransactionFilter _simpleFilter() {
     final hasCurrency = _currency != null;
-    final filter = TransactionFilter(
+    return TransactionFilter(
       types: _types,
       status: _status,
       datePreset: _dateRange == null ? _datePreset : null,
@@ -235,7 +248,24 @@ class _FilterSheetState extends State<FilterSheet> {
           : null,
       search: _searchController.text,
     );
+  }
+
+  void _apply() {
+    final filter = _mode == _FilterEditorMode.advanced
+        ? TransactionFilter.advanced(_advancedRoot)
+        : _simpleFilter();
     Navigator.of(context).pop(filter);
+  }
+
+  void _toggleEditorMode() {
+    setState(() {
+      if (_mode == _FilterEditorMode.simple) {
+        _advancedRoot = _simpleFilter().rootGroup;
+        _mode = _FilterEditorMode.advanced;
+      } else {
+        _mode = _FilterEditorMode.simple;
+      }
+    });
   }
 
   Future<void> _pickDateRange() async {
@@ -273,6 +303,9 @@ class _FilterSheetState extends State<FilterSheet> {
               _Header(
                 onReset: _reset,
                 onClose: () => Navigator.of(context).pop(),
+                canToggleMode: _canUseAdvanced,
+                mode: _mode,
+                onToggleMode: _toggleEditorMode,
               ),
               const Divider(height: 1),
               Expanded(
@@ -294,6 +327,9 @@ class _FilterSheetState extends State<FilterSheet> {
                       );
                     }
                     final options = snapshot.data!;
+                    if (_mode == _FilterEditorMode.advanced) {
+                      return _buildAdvancedForm(scrollController, options);
+                    }
                     return _buildForm(context, scrollController, options);
                   },
                 ),
@@ -334,6 +370,23 @@ class _FilterSheetState extends State<FilterSheet> {
     _FilterOptions options,
   ) {
     final hasCurrency = _currency != null;
+    if (TransactionFilter.advanced(_advancedRoot).isAdvanced &&
+        _canUseAdvanced) {
+      return ListView(
+        controller: scrollController,
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+        children: [
+          _AdvancedOnlyMessage(
+            onEditAdvanced: () =>
+                setState(() => _mode = _FilterEditorMode.advanced),
+            onReplaceSimple: () => setState(() {
+              _advancedRoot = const FilterGroup();
+              _mode = _FilterEditorMode.simple;
+            }),
+          ),
+        ],
+      );
+    }
 
     return ListView(
       controller: scrollController,
@@ -631,13 +684,40 @@ class _FilterSheetState extends State<FilterSheet> {
         '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
     return '${fmt(range.start)} → ${fmt(range.end)}';
   }
+
+  Widget _buildAdvancedForm(
+    ScrollController scrollController,
+    _FilterOptions options,
+  ) {
+    return ListView(
+      controller: scrollController,
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+      children: [
+        _GroupEditor(
+          group: _advancedRoot,
+          options: options,
+          depth: 0,
+          onChanged: (group) => setState(() => _advancedRoot = group),
+        ),
+      ],
+    );
+  }
 }
 
 class _Header extends StatelessWidget {
-  const _Header({required this.onReset, required this.onClose});
+  const _Header({
+    required this.onReset,
+    required this.onClose,
+    required this.canToggleMode,
+    required this.mode,
+    required this.onToggleMode,
+  });
 
   final VoidCallback onReset;
   final VoidCallback onClose;
+  final bool canToggleMode;
+  final _FilterEditorMode mode;
+  final VoidCallback onToggleMode;
 
   @override
   Widget build(BuildContext context) {
@@ -654,7 +734,36 @@ class _Header extends StatelessWidget {
               ),
             ),
           ),
-          TextButton(onPressed: onReset, child: const Text('Limpiar')),
+          if (canToggleMode)
+            SegmentedButton<_FilterEditorMode>(
+              showSelectedIcon: false,
+              style: ButtonStyle(
+                visualDensity: VisualDensity.compact,
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                padding: const WidgetStatePropertyAll(
+                  EdgeInsets.symmetric(horizontal: 10),
+                ),
+              ),
+              segments: const [
+                ButtonSegment(
+                  value: _FilterEditorMode.simple,
+                  label: Text('Simple'),
+                ),
+                ButtonSegment(
+                  value: _FilterEditorMode.advanced,
+                  label: Text('Avanzado'),
+                ),
+              ],
+              selected: {mode},
+              onSelectionChanged: (selection) {
+                if (selection.first != mode) onToggleMode();
+              },
+            ),
+          IconButton(
+            tooltip: 'Limpiar',
+            icon: const Icon(Icons.restart_alt_rounded),
+            onPressed: onReset,
+          ),
           IconButton(icon: const Icon(Icons.close_rounded), onPressed: onClose),
         ],
       ),
@@ -714,4 +823,697 @@ class _EmptyHint extends StatelessWidget {
       ),
     );
   }
+}
+
+class _AdvancedOnlyMessage extends StatelessWidget {
+  const _AdvancedOnlyMessage({
+    required this.onEditAdvanced,
+    required this.onReplaceSimple,
+  });
+
+  final VoidCallback onEditAdvanced;
+  final VoidCallback onReplaceSimple;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: scheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Este filtro usa reglas avanzadas.',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'La vista simple no puede editar OR, NOT o grupos anidados sin cambiar el significado del filtro.',
+              style: Theme.of(
+                context,
+              ).textTheme.bodyMedium?.copyWith(color: scheme.onSurfaceVariant),
+            ),
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                FilledButton(
+                  onPressed: onEditAdvanced,
+                  child: const Text('Editar avanzado'),
+                ),
+                TextButton(
+                  onPressed: onReplaceSimple,
+                  child: const Text('Crear filtro simple'),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _GroupEditor extends StatelessWidget {
+  const _GroupEditor({
+    required this.group,
+    required this.options,
+    required this.depth,
+    required this.onChanged,
+    this.onRemove,
+  });
+
+  static const int maxDepth = 2;
+
+  final FilterGroup group;
+  final _FilterOptions options;
+  final int depth;
+  final ValueChanged<FilterGroup> onChanged;
+  final VoidCallback? onRemove;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: depth == 0 ? scheme.surface : scheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: scheme.outlineVariant),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                SegmentedButton<String>(
+                  showSelectedIcon: false,
+                  segments: const [
+                    ButtonSegment(value: 'and', label: Text('AND')),
+                    ButtonSegment(value: 'or', label: Text('OR')),
+                  ],
+                  selected: {group.combinator == 'or' ? 'or' : 'and'},
+                  onSelectionChanged: (selection) =>
+                      onChanged(group.copyWith(combinator: selection.first)),
+                ),
+                const SizedBox(width: 8),
+                FilterChip(
+                  label: const Text('NOT'),
+                  selected: group.not,
+                  onSelected: (value) => onChanged(group.copyWith(not: value)),
+                ),
+                const Spacer(),
+                if (onRemove != null)
+                  IconButton(
+                    tooltip: 'Eliminar grupo',
+                    icon: const Icon(Icons.delete_outline),
+                    onPressed: onRemove,
+                  ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            if (group.children.isEmpty)
+              const Padding(
+                padding: EdgeInsets.only(bottom: 8),
+                child: _EmptyHint('Agregá una condición para empezar.'),
+              )
+            else
+              for (var i = 0; i < group.children.length; i++) ...[
+                _buildChild(i),
+                if (i != group.children.length - 1) const SizedBox(height: 8),
+              ],
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                OutlinedButton.icon(
+                  onPressed: () => _addChild(_defaultCondition('type')),
+                  icon: const Icon(Icons.add),
+                  label: const Text('Condición'),
+                ),
+                if (depth < maxDepth)
+                  OutlinedButton.icon(
+                    onPressed: () => _addChild(const FilterGroup()),
+                    icon: const Icon(Icons.account_tree_outlined),
+                    label: const Text('Grupo'),
+                  ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildChild(int index) {
+    final child = group.children[index];
+    void replace(FilterNode node) {
+      final next = [...group.children]..[index] = node;
+      onChanged(group.copyWith(children: next));
+    }
+
+    void remove() {
+      final next = [...group.children]..removeAt(index);
+      onChanged(group.copyWith(children: next));
+    }
+
+    return switch (child) {
+      FilterCondition() => _ConditionEditor(
+        condition: child,
+        options: options,
+        onChanged: replace,
+        onRemove: remove,
+      ),
+      FilterGroup() => _GroupEditor(
+        group: child,
+        options: options,
+        depth: depth + 1,
+        onChanged: replace,
+        onRemove: remove,
+      ),
+    };
+  }
+
+  void _addChild(FilterNode child) {
+    onChanged(group.copyWith(children: [...group.children, child]));
+  }
+}
+
+class _ConditionEditor extends StatelessWidget {
+  const _ConditionEditor({
+    required this.condition,
+    required this.options,
+    required this.onChanged,
+    required this.onRemove,
+  });
+
+  final FilterCondition condition;
+  final _FilterOptions options;
+  final ValueChanged<FilterNode> onChanged;
+  final VoidCallback onRemove;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final operators = _operatorsFor(condition.field);
+    final operator = operators.contains(condition.operator)
+        ? condition.operator
+        : operators.first;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: scheme.surface,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: DropdownButtonFormField<String>(
+                    initialValue: _fieldLabels.containsKey(condition.field)
+                        ? condition.field
+                        : 'type',
+                    decoration: const InputDecoration(
+                      labelText: 'Campo',
+                      isDense: true,
+                      border: OutlineInputBorder(),
+                    ),
+                    items: [
+                      for (final entry in _fieldLabels.entries)
+                        DropdownMenuItem(
+                          value: entry.key,
+                          child: Text(entry.value),
+                        ),
+                    ],
+                    onChanged: (field) {
+                      if (field == null) return;
+                      onChanged(_defaultCondition(field));
+                    },
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: DropdownButtonFormField<String>(
+                    initialValue: operator,
+                    decoration: const InputDecoration(
+                      labelText: 'Operador',
+                      isDense: true,
+                      border: OutlineInputBorder(),
+                    ),
+                    items: [
+                      for (final op in operators)
+                        DropdownMenuItem(
+                          value: op,
+                          child: Text(_operatorLabel(op)),
+                        ),
+                    ],
+                    onChanged: (op) {
+                      if (op == null) return;
+                      onChanged(condition.copyWith(operator: op));
+                    },
+                  ),
+                ),
+                IconButton(
+                  tooltip: 'Eliminar condición',
+                  icon: const Icon(Icons.delete_outline),
+                  onPressed: onRemove,
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            _valueEditor(context, condition.copyWith(operator: operator)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _valueEditor(BuildContext context, FilterCondition current) {
+    switch (current.field) {
+      case 'type':
+        return _enumChips(
+          values: TxnType.values,
+          selected: _asStringSet(current.value),
+          onChanged: (ids) => onChanged(current.copyWith(value: ids.toList())),
+        );
+      case 'status':
+        return _enumChips(
+          values: TxnStatus.values,
+          selected: _asStringSet(current.value),
+          onChanged: (ids) => onChanged(current.copyWith(value: ids.toList())),
+        );
+      case 'account':
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _entityChips(
+              items: [for (final a in options.accounts) (a.id, a.name)],
+              selected: _asStringSet(current.value),
+              emptyText: 'No hay cuentas todavía.',
+              onChanged: (ids) =>
+                  onChanged(current.copyWith(value: ids.toList())),
+            ),
+            const SizedBox(height: 12),
+            _SubLabel('Dirección'),
+            const SizedBox(height: 4),
+            SegmentedButton<AccountDirection>(
+              showSelectedIcon: false,
+              segments: [
+                for (final dir in AccountDirection.values)
+                  ButtonSegment(value: dir, label: Text(dir.label)),
+              ],
+              selected: {current.direction},
+              onSelectionChanged: (selection) =>
+                  onChanged(current.copyWith(direction: selection.first)),
+            ),
+          ],
+        );
+      case 'category':
+        return _entityChips(
+          items: [for (final c in options.categories) (c.id, c.name)],
+          selected: _asStringSet(current.value),
+          emptyText: 'No hay categorías todavía.',
+          onChanged: (ids) => onChanged(current.copyWith(value: ids.toList())),
+        );
+      case 'tag':
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _entityChips(
+              items: [for (final t in options.tags) (t.id, t.name)],
+              selected: _asStringSet(current.value),
+              emptyText: 'No hay tags todavía.',
+              onChanged: (ids) =>
+                  onChanged(current.copyWith(value: ids.toList())),
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                _SubLabel('Coincidencia'),
+                const SizedBox(width: 12),
+                SegmentedButton<TagMatch>(
+                  showSelectedIcon: false,
+                  segments: [
+                    for (final match in TagMatch.values)
+                      ButtonSegment(value: match, label: Text(match.label)),
+                  ],
+                  selected: {current.match},
+                  onSelectionChanged: (selection) =>
+                      onChanged(current.copyWith(match: selection.first)),
+                ),
+              ],
+            ),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Incluir subetiquetas'),
+              value: current.includeSubtags,
+              onChanged: (value) =>
+                  onChanged(current.copyWith(includeSubtags: value)),
+            ),
+          ],
+        );
+      case 'currency':
+        return _entityChips(
+          items: [for (final c in options.currencies) (c, c)],
+          selected: _asStringSet(current.value),
+          emptyText: 'No hay monedas todavía.',
+          single: true,
+          onChanged: (ids) => onChanged(current.copyWith(value: ids.toList())),
+        );
+      case 'date':
+        return _dateValueEditor(context, current);
+      case 'amount':
+        return _amountValueEditor(current);
+      case 'text':
+        return TextFormField(
+          key: ValueKey('text-${current.value}'),
+          initialValue: current.value is String ? current.value as String : '',
+          decoration: const InputDecoration(
+            hintText: 'Buscar nombre o descripción…',
+            border: OutlineInputBorder(),
+            isDense: true,
+          ),
+          onChanged: (value) => onChanged(current.copyWith(value: value)),
+        );
+      default:
+        return const _EmptyHint('Campo no soportado.');
+    }
+  }
+
+  Widget _dateValueEditor(BuildContext context, FilterCondition current) {
+    if (current.operator == 'relative') {
+      final selected = current.value is String ? current.value as String : null;
+      return Wrap(
+        spacing: 8,
+        runSpacing: 4,
+        children: [
+          for (final preset in DatePreset.values)
+            ChoiceChip(
+              label: Text(preset.label),
+              selected: selected == preset.wire,
+              onSelected: (_) =>
+                  onChanged(current.copyWith(value: preset.wire)),
+            ),
+        ],
+      );
+    }
+    final range = _rangeFromValue(current.value);
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: [
+        if (range != null)
+          InputChip(
+            avatar: const Icon(Icons.event, size: 18),
+            label: Text(_formatAdvancedRange(range)),
+            onDeleted: () => onChanged(_defaultCondition('date')),
+          ),
+        ActionChip(
+          avatar: const Icon(Icons.date_range, size: 18),
+          label: const Text('Elegir rango'),
+          onPressed: () async {
+            final now = DateTime.now();
+            final picked = await showDateRangePicker(
+              context: context,
+              firstDate: DateTime(now.year - 10),
+              lastDate: DateTime(now.year + 1, 12, 31),
+              initialDateRange: range,
+            );
+            if (picked == null) return;
+            onChanged(
+              current.copyWith(
+                value: {
+                  'from': picked.start.toIso8601String(),
+                  'to': picked.end.toIso8601String(),
+                },
+              ),
+            );
+          },
+        ),
+      ],
+    );
+  }
+
+  Widget _amountValueEditor(FilterCondition current) {
+    final values = _amountMap(current.value);
+    final minText = _advancedCentsToText(values.min);
+    final maxText = _advancedCentsToText(values.max);
+
+    Widget field(String label, String initial, ValueChanged<int?> onChanged) {
+      return TextFormField(
+        key: ValueKey('$label-$initial-${current.operator}'),
+        initialValue: initial,
+        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+        decoration: InputDecoration(
+          labelText: label,
+          border: const OutlineInputBorder(),
+          isDense: true,
+        ),
+        onChanged: (value) => onChanged(_advancedTextToCents(value)),
+      );
+    }
+
+    if (current.operator == '>=') {
+      return field('Mín', minText, (min) {
+        onChanged(current.copyWith(value: {'min': min, 'max': null}));
+      });
+    }
+    if (current.operator == '<=') {
+      return field('Máx', maxText, (max) {
+        onChanged(current.copyWith(value: {'min': null, 'max': max}));
+      });
+    }
+    return Row(
+      children: [
+        Expanded(
+          child: field('Mín', minText, (min) {
+            onChanged(current.copyWith(value: {'min': min, 'max': values.max}));
+          }),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: field('Máx', maxText, (max) {
+            onChanged(current.copyWith(value: {'min': values.min, 'max': max}));
+          }),
+        ),
+      ],
+    );
+  }
+
+  Widget _enumChips<T extends WireLabeled>({
+    required List<T> values,
+    required Set<String> selected,
+    required ValueChanged<Set<String>> onChanged,
+  }) {
+    return Wrap(
+      spacing: 8,
+      runSpacing: 4,
+      children: [
+        for (final item in values)
+          FilterChip(
+            label: Text(item.label),
+            selected: selected.contains(item.wire),
+            onSelected: (_) => onChanged(_toggle(selected, item.wire)),
+          ),
+      ],
+    );
+  }
+
+  Widget _entityChips({
+    required List<(String, String)> items,
+    required Set<String> selected,
+    required String emptyText,
+    required ValueChanged<Set<String>> onChanged,
+    bool single = false,
+  }) {
+    if (items.isEmpty) return _EmptyHint(emptyText);
+    return Wrap(
+      spacing: 8,
+      runSpacing: 4,
+      children: [
+        for (final item in items)
+          FilterChip(
+            label: Text(item.$2),
+            selected: selected.contains(item.$1),
+            onSelected: (value) {
+              if (single) {
+                onChanged(value ? {item.$1} : const {});
+                return;
+              }
+              onChanged(_toggle(selected, item.$1));
+            },
+          ),
+      ],
+    );
+  }
+}
+
+const _fieldLabels = <String, String>{
+  'type': 'Tipo',
+  'status': 'Estado',
+  'date': 'Fecha',
+  'account': 'Cuenta',
+  'category': 'Categoría',
+  'tag': 'Tag',
+  'currency': 'Moneda',
+  'amount': 'Monto',
+  'text': 'Texto',
+};
+
+FilterCondition _defaultCondition(String field) {
+  switch (field) {
+    case 'type':
+      return const FilterCondition(
+        field: 'type',
+        operator: 'in',
+        value: ['expense'],
+      );
+    case 'status':
+      return const FilterCondition(
+        field: 'status',
+        operator: 'in',
+        value: ['cleared'],
+      );
+    case 'date':
+      return const FilterCondition(
+        field: 'date',
+        operator: 'relative',
+        value: 'this_month',
+      );
+    case 'account':
+      return const FilterCondition(field: 'account', operator: 'in', value: []);
+    case 'category':
+      return const FilterCondition(
+        field: 'category',
+        operator: 'in',
+        value: [],
+      );
+    case 'tag':
+      return const FilterCondition(field: 'tag', operator: 'in', value: []);
+    case 'currency':
+      return const FilterCondition(
+        field: 'currency',
+        operator: 'in',
+        value: [],
+      );
+    case 'amount':
+      return const FilterCondition(
+        field: 'amount',
+        operator: 'between',
+        value: {'min': null, 'max': null},
+      );
+    case 'text':
+      return const FilterCondition(
+        field: 'text',
+        operator: 'contains',
+        value: '',
+      );
+    default:
+      return const FilterCondition(field: 'type', operator: 'in', value: []);
+  }
+}
+
+List<String> _operatorsFor(String field) {
+  switch (field) {
+    case 'date':
+      return const ['relative', 'between'];
+    case 'amount':
+      return const ['between', '>=', '<='];
+    case 'text':
+      return const ['contains', 'not contains'];
+    case 'type':
+    case 'status':
+    case 'account':
+    case 'category':
+    case 'tag':
+    case 'currency':
+      return const ['in', 'not in'];
+    default:
+      return const ['in'];
+  }
+}
+
+String _operatorLabel(String operator) {
+  switch (operator) {
+    case 'in':
+      return 'incluye';
+    case 'not in':
+      return 'excluye';
+    case 'relative':
+      return 'relativa';
+    case 'between':
+      return 'entre';
+    case '>=':
+      return 'mayor o igual';
+    case '<=':
+      return 'menor o igual';
+    case 'contains':
+      return 'contiene';
+    case 'not contains':
+      return 'no contiene';
+    default:
+      return operator;
+  }
+}
+
+Set<String> _asStringSet(Object? value) {
+  return value is List ? value.whereType<String>().toSet() : const {};
+}
+
+Set<String> _toggle(Set<String> values, String value) {
+  final next = {...values};
+  if (!next.add(value)) next.remove(value);
+  return next;
+}
+
+DateTimeRange? _rangeFromValue(Object? value) {
+  if (value is! Map) return null;
+  final from = value['from'];
+  final to = value['to'];
+  if (from is! String || to is! String) return null;
+  final start = DateTime.tryParse(from);
+  final end = DateTime.tryParse(to);
+  if (start == null || end == null) return null;
+  return DateTimeRange(start: start, end: end);
+}
+
+({int? min, int? max}) _amountMap(Object? value) {
+  if (value is! Map) return (min: null, max: null);
+  final min = value['min'];
+  final max = value['max'];
+  return (min: min is int ? min : null, max: max is int ? max : null);
+}
+
+String _advancedCentsToText(int? cents) {
+  if (cents == null) return '';
+  final value = cents / 100;
+  return value == value.roundToDouble()
+      ? value.toStringAsFixed(0)
+      : value.toStringAsFixed(2);
+}
+
+int? _advancedTextToCents(String raw) {
+  final trimmed = raw.trim().replaceAll(',', '.');
+  if (trimmed.isEmpty) return null;
+  final parsed = double.tryParse(trimmed);
+  if (parsed == null) return null;
+  return (parsed * 100).round();
+}
+
+String _formatAdvancedRange(DateTimeRange range) {
+  String fmt(DateTime d) =>
+      '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+  return '${fmt(range.start)} → ${fmt(range.end)}';
 }
