@@ -1,7 +1,6 @@
-import 'package:app/database.dart';
+import 'package:app/data/data.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:uuid/uuid.dart';
 
 // (ISO code, Spanish name) — sorted alphabetically by code
 const _currencies = [
@@ -115,30 +114,11 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
 
     setState(() => _saving = true);
     try {
-      final db = context.read<AppDatabase>();
-      final accountId = const Uuid().v4();
-      await db.transaction(() async {
-        await db.insertAccount(
-          id: accountId,
-          name: _nameController.text.trim(),
-          currency: _currency,
-        );
-        if (initialAmountCents != null) {
-          final now = BigInt.from(DateTime.now().millisecondsSinceEpoch);
-          await db.insertTransaction(
-            id: const Uuid().v4(),
-            type: 'balance_adjustment',
-            name: 'Balance inicial',
-            status: 'cleared',
-            date: now,
-            accountId: accountId,
-            categoryId: '',
-            amount: initialAmountCents,
+      await context.read<AppRepositories>().accounts.create(
+            name: _nameController.text.trim(),
             currency: _currency,
-            balanceAfter: initialAmountCents,
+            initialBalanceCents: initialAmountCents,
           );
-        }
-      });
       if (mounted) Navigator.of(context).pop();
     } catch (e, st) {
       debugPrint('Error creating account: $e\n$st');

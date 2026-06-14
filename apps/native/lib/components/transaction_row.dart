@@ -1,3 +1,4 @@
+import 'package:app/shared/money.dart';
 import 'package:flutter/material.dart';
 
 class TransactionRow extends StatelessWidget {
@@ -96,16 +97,5 @@ class _DateCheckIcon extends StatelessWidget {
 
 String _formatSignedAmount(int cents, String currencySymbol) {
   final sign = cents < 0 ? '-' : (cents > 0 ? '+' : '');
-  final absCents = cents.abs();
-  final whole = absCents ~/ 100;
-  final fraction = (absCents % 100).toString().padLeft(2, '0');
-  final digits = whole.toString();
-  final buffer = StringBuffer();
-  for (var i = 0; i < digits.length; i++) {
-    if (i > 0 && (digits.length - i) % 3 == 0) {
-      buffer.write(',');
-    }
-    buffer.write(digits[i]);
-  }
-  return '$sign $currencySymbol $buffer.$fraction';
+  return '$sign $currencySymbol ${formatCentsUnsigned(cents.abs())}';
 }

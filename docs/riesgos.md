@@ -1,6 +1,6 @@
 # Registro de riesgos
 
-Actualizado: 2026-05-18
+Actualizado: 2026-06-11
 
 Este documento mantiene los riesgos actuales del proyecto en un formato liviano.
 La idea es revisarlo al cierre de cada iteración o cuando una decisión técnica
@@ -28,3 +28,4 @@ cambie la probabilidad, el impacto o la mitigación de un riesgo.
 | 5 | R-003 | Cambios en APIs externas de voz, IA, Better Auth o Convex rompen flujos principales. | Dependencias externas | Media | Medio | Encapsular integraciones detrás de helpers propios, fijar versiones compatibles, documentar variables requeridas y mantener un flujo manual de smoke test para login, voz y persistencia. |
 | 6 | R-002 | Se exponen datos financieros personales por errores de autorización, logging o configuración de entorno. | Seguridad / Privacidad | Baja | Crítico | Requiere más análisis específico de privacidad y seguridad; mientras tanto, derivar siempre el usuario desde la sesión server-side y evitar logs con datos financieros sensibles. |
 | 7 | R-004 | La app web y la app nativa divergen en experiencia de usuario. | UX | Media | Bajo | Definir criterios compartidos para los flujos principales y revisar paridad visual y funcional en cada feature que toque movimientos, cuentas o categorías. |
+| 8 | R-008 | Un write path nuevo en la app nativa escribe a la base local sin respetar el contrato de sync (`dirty`/`updatedAt`/tombstones) y los cambios no sincronizan o se pierden por LWW. | Técnico / Sync | Baja | Alto | Mantener todas las escrituras detrás de `lib/data/` (refactor 2026-06-11): repositorios con contrato único, tests unitarios del contrato (`test/data/`), CI de analyze+test para la app nativa y gate de revisión "ningún `db.into/update/delete` fuera de `lib/data/` y `lib/sync/`". |

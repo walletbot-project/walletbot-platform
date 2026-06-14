@@ -5,7 +5,7 @@ import 'dart:typed_data';
 import 'package:http/http.dart' as http;
 import 'package:web_socket_channel/web_socket_channel.dart';
 
-import '../database.dart';
+import '../data/data.dart';
 import 'pcm_audio_player.dart';
 import 'tool_executors.dart';
 import 'voice_event.dart';
@@ -13,20 +13,20 @@ import 'voice_expense_command.dart';
 
 class GeminiVoiceExpenseCommandFactory implements VoiceExpenseCommandFactory {
   GeminiVoiceExpenseCommandFactory({
-    required this.database,
+    required this.repositories,
     this.apiKey = const String.fromEnvironment('GEMINI_API_KEY'),
     this.liveToken = const String.fromEnvironment('GEMINI_LIVE_TOKEN'),
     this.convexSiteUrl = const String.fromEnvironment('CONVEX_SITE_URL'),
   });
 
-  final AppDatabase database;
+  final AppRepositories repositories;
   final String apiKey;
   final String liveToken;
   final String convexSiteUrl;
 
   @override
   VoiceExpenseCommand create() => GeminiVoiceExpenseCommand(
-    database: database,
+    repositories: repositories,
     apiKey: apiKey,
     liveToken: liveToken,
     convexSiteUrl: convexSiteUrl,
@@ -35,16 +35,16 @@ class GeminiVoiceExpenseCommandFactory implements VoiceExpenseCommandFactory {
 
 class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
   GeminiVoiceExpenseCommand({
-    required this.database,
+    required this.repositories,
     required this.apiKey,
     required this.liveToken,
     required this.convexSiteUrl,
-  }) : _executors = ToolExecutors(database);
+  }) : _executors = ToolExecutors(repositories);
 
   static const _model = 'gemini-3.1-flash-live-preview';
   static const _voiceName = 'Kore';
 
-  final AppDatabase database;
+  final AppRepositories repositories;
   final String apiKey;
   final String liveToken;
   final String convexSiteUrl;
