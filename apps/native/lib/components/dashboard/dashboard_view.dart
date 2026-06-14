@@ -7,74 +7,52 @@ import 'package:flutter/material.dart';
 
 /// Renders the dashboard as one flat ordered flow: each widget keeps a position
 /// and width, while this view groups the flow into visual rows. The data model
-/// stays flat; row grouping is only a rendering detail for clean borders.
+/// stays flat; row grouping is only a rendering detail for compact gaps.
 class DashboardView extends StatelessWidget {
   const DashboardView({super.key, required this.widgets});
 
   final List<DashboardWidgetSpec> widgets;
   static const _gridUnits = 6;
+  static const _gap = 4.0;
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colors = theme.colorScheme;
-    final boardColor = Color.alphaBlend(
-      colors.primary.withValues(alpha: 0.04),
-      colors.surface,
-    );
-    const radius = BorderRadius.all(Radius.circular(18));
-
     return LayoutBuilder(
       builder: (context, constraints) {
         final maxWidth = constraints.maxWidth;
         final rows = _buildRows(maxWidth);
-        return DecoratedBox(
-          decoration: BoxDecoration(
-            color: boardColor,
-            borderRadius: radius,
-            border: Border.all(color: colors.outlineVariant),
-          ),
-          child: ClipRRect(
-            borderRadius: radius,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                for (var rowIndex = 0; rowIndex < rows.length; rowIndex++) ...[
-                  if (rowIndex > 0)
-                    Divider(height: 1, color: colors.outlineVariant),
-                  IntrinsicHeight(
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        for (
-                          var itemIndex = 0;
-                          itemIndex < rows[rowIndex].items.length;
-                          itemIndex++
-                        ) ...[
-                          if (itemIndex > 0)
-                            ColoredBox(
-                              color: colors.outlineVariant,
-                              child: const SizedBox(width: 1),
-                            ),
-                          Expanded(
-                            flex: rows[rowIndex].items[itemIndex].units,
-                            child: _buildWidget(
-                              rows[rowIndex].items[itemIndex].spec,
-                            ),
-                          ),
-                        ],
-                        if (rows[rowIndex].remainingUnits > 0)
-                          Expanded(
-                            flex: rows[rowIndex].remainingUnits,
-                            child: const SizedBox.shrink(),
-                          ),
-                      ],
-                    ),
-                  ),
-                ],
-              ],
-            ),
-          ),
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            for (var rowIndex = 0; rowIndex < rows.length; rowIndex++) ...[
+              if (rowIndex > 0) const SizedBox(height: _gap),
+              IntrinsicHeight(
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    for (
+                      var itemIndex = 0;
+                      itemIndex < rows[rowIndex].items.length;
+                      itemIndex++
+                    ) ...[
+                      if (itemIndex > 0) const SizedBox(width: _gap),
+                      Expanded(
+                        flex: rows[rowIndex].items[itemIndex].units,
+                        child: _buildWidget(
+                          rows[rowIndex].items[itemIndex].spec,
+                        ),
+                      ),
+                    ],
+                    if (rows[rowIndex].remainingUnits > 0)
+                      Expanded(
+                        flex: rows[rowIndex].remainingUnits,
+                        child: const SizedBox.shrink(),
+                      ),
+                  ],
+                ),
+              ),
+            ],
+          ],
         );
       },
     );

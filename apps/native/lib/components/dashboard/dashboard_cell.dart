@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
-/// Shared visual shell for dashboard widgets. The parent dashboard owns the
-/// row/column borders; cells only provide content and a subtle surface tint.
+/// Shared visual shell for dashboard widgets. Cells read like compact Material
+/// list/grid items: small radius and subtle surface tint.
 class DashboardCell extends StatelessWidget {
   const DashboardCell({
     super.key,
@@ -37,7 +37,10 @@ class DashboardCell extends StatelessWidget {
         );
 
     return DecoratedBox(
-      decoration: BoxDecoration(color: cellColor),
+      decoration: BoxDecoration(
+        color: cellColor,
+        borderRadius: BorderRadius.circular(8),
+      ),
       child: ConstrainedBox(
         constraints: BoxConstraints(minHeight: minHeight),
         child: Padding(
