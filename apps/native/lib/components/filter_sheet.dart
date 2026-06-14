@@ -262,60 +262,67 @@ class _FilterSheetState extends State<FilterSheet> {
       maxChildSize: 0.95,
       expand: false,
       builder: (context, scrollController) {
-        return Column(
-          children: [
-            _Header(
-              onReset: _reset,
-              onClose: () => Navigator.of(context).pop(),
-            ),
-            const Divider(height: 1),
-            Expanded(
-              child: FutureBuilder<_FilterOptions>(
-                future: _optionsFuture,
-                builder: (context, snapshot) {
-                  if (snapshot.connectionState == ConnectionState.waiting) {
-                    return const Center(child: CircularProgressIndicator());
-                  }
-                  if (snapshot.hasError) {
-                    return Center(
-                      child: Padding(
-                        padding: const EdgeInsets.all(24),
-                        child: Text(
-                          'No se pudieron cargar las opciones de filtro.\n${snapshot.error}',
-                          textAlign: TextAlign.center,
-                        ),
-                      ),
-                    );
-                  }
-                  final options = snapshot.data!;
-                  return _buildForm(context, scrollController, options);
-                },
+        return Padding(
+          // Lift the whole sheet above the software keyboard so the action bar
+          // and the lower form fields don't get hidden behind it.
+          padding: EdgeInsets.only(
+            bottom: MediaQuery.viewInsetsOf(context).bottom,
+          ),
+          child: Column(
+            children: [
+              _Header(
+                onReset: _reset,
+                onClose: () => Navigator.of(context).pop(),
               ),
-            ),
-            SafeArea(
-              top: false,
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: OutlinedButton(
-                        onPressed: () => Navigator.of(context).pop(),
-                        child: const Text('Cancelar'),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: FilledButton(
-                        onPressed: _apply,
-                        child: const Text('Aplicar'),
-                      ),
-                    ),
-                  ],
+              const Divider(height: 1),
+              Expanded(
+                child: FutureBuilder<_FilterOptions>(
+                  future: _optionsFuture,
+                  builder: (context, snapshot) {
+                    if (snapshot.connectionState == ConnectionState.waiting) {
+                      return const Center(child: CircularProgressIndicator());
+                    }
+                    if (snapshot.hasError) {
+                      return Center(
+                        child: Padding(
+                          padding: const EdgeInsets.all(24),
+                          child: Text(
+                            'No se pudieron cargar las opciones de filtro.\n${snapshot.error}',
+                            textAlign: TextAlign.center,
+                          ),
+                        ),
+                      );
+                    }
+                    final options = snapshot.data!;
+                    return _buildForm(context, scrollController, options);
+                  },
                 ),
               ),
-            ),
-          ],
+              SafeArea(
+                top: false,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: () => Navigator.of(context).pop(),
+                          child: const Text('Cancelar'),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: FilledButton(
+                          onPressed: _apply,
+                          child: const Text('Aplicar'),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
         );
       },
     );
