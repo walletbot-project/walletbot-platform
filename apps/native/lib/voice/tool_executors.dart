@@ -1,3 +1,6 @@
+import 'dart:convert';
+
+import 'package:app/components/dashboard/dashboard_models.dart';
 import 'package:drift/drift.dart' show Value;
 
 import '../data/data.dart';
@@ -89,6 +92,26 @@ class ToolExecutors {
           return await _summarizeByCategory(args);
         case 'summarizeByAccount':
           return await _summarizeByAccount(args);
+        // Saved filters
+        case 'listSavedFilters':
+          return await _listSavedFilters(args);
+        case 'createSavedFilter':
+          return await _createSavedFilter(args);
+        case 'updateSavedFilter':
+          return await _updateSavedFilter(args);
+        case 'archiveSavedFilter':
+          return await _archiveSavedFilter(args);
+        // Home dashboard widgets
+        case 'listDashboardWidgets':
+          return await _listDashboardWidgets(args);
+        case 'createDashboardWidget':
+          return await _createDashboardWidget(args);
+        case 'updateDashboardWidget':
+          return await _updateDashboardWidget(args);
+        case 'reorderDashboardWidgets':
+          return await _reorderDashboardWidgets(args);
+        case 'archiveDashboardWidget':
+          return await _archiveDashboardWidget(args);
         default:
           return {'ok': false, 'error': 'Unknown tool: $name'};
       }
@@ -800,7 +823,402 @@ class ToolExecutors {
     };
   }
 
+  // ───── Saved filter tools ─────
+
+  Future<Map<String, dynamic>> _listSavedFilters(
+    Map<String, dynamic> args,
+  ) async {
+    final filters = await repos.savedFilters.listActive();
+    return {'ok': true, 'filters': filters.map(_serializeSavedFilter).toList()};
+  }
+
+  Future<Map<String, dynamic>> _createSavedFilter(
+    Map<String, dynamic> args,
+  ) async {
+    final name = (args['name'] as String).trim();
+    if (name.isEmpty) return {'ok': false, 'error': 'Filter name is required'};
+    final config = _canonicalFilterConfig(args['filterConfigJson'] as String);
+    final id = await repos.savedFilters.create(name: name, config: config);
+    return {'ok': true, 'id': id};
+  }
+
+  Future<Map<String, dynamic>> _updateSavedFilter(
+    Map<String, dynamic> args,
+  ) async {
+    final id = args['id'] as String;
+    final existing = await repos.savedFilters.getById(id);
+    if (existing == null || existing.archived) {
+      return {'ok': false, 'error': 'Saved filter not found'};
+    }
+    final name = args.containsKey('name')
+        ? Value((args['name'] as String).trim())
+        : const Value<String>.absent();
+    final config = args.containsKey('filterConfigJson')
+        ? Value(_canonicalFilterConfig(args['filterConfigJson'] as String))
+        : const Value<String>.absent();
+    await repos.savedFilters.update(id, name: name, config: config);
+    return {'ok': true, 'id': id};
+  }
+
+  Future<Map<String, dynamic>> _archiveSavedFilter(
+    Map<String, dynamic> args,
+  ) async {
+    final id = args['id'] as String;
+    await repos.savedFilters.archive(id);
+    return {'ok': true, 'id': id};
+  }
+
+  // ───── Dashboard widget tools ─────
+
+  Future<Map<String, dynamic>> _listDashboardWidgets(
+    Map<String, dynamic> args,
+  ) async {
+    final widgets = await repos.dashboard.listActive();
+    final filters = {
+      for (final filter in await repos.savedFilters.listActive())
+        filter.id: filter,
+    };
+    return {
+      'ok': true,
+      'widgets': widgets
+          .map((widget) => _serializeDashboardWidget(widget, filters))
+          .toList(),
+    };
+  }
+
+  Future<Map<String, dynamic>> _createDashboardWidget(
+    Map<String, dynamic> args,
+  ) async {
+    final type = _widgetType(args['type']);
+    if (type == null) return {'ok': false, 'error': 'Invalid widget type'};
+    final title = (args['title'] as String).trim();
+    if (title.isEmpty) {
+      return {'ok': false, 'error': 'Widget title is required'};
+    }
+
+    final optionsResult = _widgetOptionsFor(type, title, args);
+    if (optionsResult.error != null) {
+      return {'ok': false, 'error': optionsResult.error};
+    }
+
+    final position = (await repos.dashboard.listActive()).length;
+    final filterId = await _createFilterForWidget(type, title, args);
+    final width = _dashboardWidth(args['width']) ?? _defaultWidthFor(type);
+    final id = await repos.dashboard.create(
+      type: type.wire,
+      filterId: filterId,
+      position: position,
+      width: width.wire,
+      options: encodeWidgetOptions(optionsResult.options),
+    );
+    return {'ok': true, 'id': id, 'filterId': filterId};
+  }
+
+  Future<Map<String, dynamic>> _updateDashboardWidget(
+    Map<String, dynamic> args,
+  ) async {
+    final id = args['id'] as String;
+    final existing = await repos.dashboard.getById(id);
+    if (existing == null || existing.archived) {
+      return {'ok': false, 'error': 'Dashboard widget not found'};
+    }
+
+    final currentType = _widgetType(existing.type);
+    final nextType = args.containsKey('type')
+        ? _widgetType(args['type'])
+        : currentType;
+    if (nextType == null) return {'ok': false, 'error': 'Invalid widget type'};
+
+    final currentOptions = _decodeJsonMap(existing.options);
+    final title = args.containsKey('title')
+        ? (args['title'] as String).trim()
+        : (currentOptions['title'] as String? ?? '').trim();
+    if (title.isEmpty) {
+      return {'ok': false, 'error': 'Widget title is required'};
+    }
+
+    final optionsResult = _widgetOptionsFor(
+      nextType,
+      title,
+      args,
+      existingOptions: currentOptions,
+    );
+    if (optionsResult.error != null) {
+      return {'ok': false, 'error': optionsResult.error};
+    }
+
+    final filterId = await _filterIdForWidgetUpdate(
+      existing,
+      nextType,
+      title,
+      args,
+    );
+    final width = _dashboardWidth(args['width']);
+    await repos.dashboard.update(
+      id,
+      type: args.containsKey('type')
+          ? Value(nextType.wire)
+          : const Value.absent(),
+      filterId: Value(filterId),
+      width: width != null ? Value(width.wire) : const Value.absent(),
+      options: Value(encodeWidgetOptions(optionsResult.options)),
+    );
+    return {'ok': true, 'id': id, 'filterId': filterId};
+  }
+
+  Future<Map<String, dynamic>> _reorderDashboardWidgets(
+    Map<String, dynamic> args,
+  ) async {
+    final rawIds = args['ids'];
+    if (rawIds is! List) {
+      return {'ok': false, 'error': 'ids must be a list'};
+    }
+    final ids = rawIds.whereType<String>().toList();
+    if (ids.length != rawIds.length) {
+      return {'ok': false, 'error': 'ids must only contain strings'};
+    }
+    await repos.dashboard.reorder(ids);
+    return {'ok': true, 'ids': ids};
+  }
+
+  Future<Map<String, dynamic>> _archiveDashboardWidget(
+    Map<String, dynamic> args,
+  ) async {
+    final id = args['id'] as String;
+    await repos.dashboard.archive(id);
+    return {'ok': true, 'id': id};
+  }
+
   // ───── Internal helpers ─────
+
+  Map<String, dynamic> _serializeSavedFilter(SavedFilter filter) {
+    return {
+      'id': filter.id,
+      'name': filter.name,
+      'filterConfigJson': filter.config,
+      'filterConfig': _decodeJson(filter.config),
+    };
+  }
+
+  Map<String, dynamic> _serializeDashboardWidget(
+    DashboardWidget widget,
+    Map<String, SavedFilter> filtersById,
+  ) {
+    final filter = widget.filterId == null
+        ? null
+        : filtersById[widget.filterId];
+    return {
+      'id': widget.id,
+      'type': widget.type,
+      'filterId': widget.filterId,
+      'position': widget.position,
+      'width': widget.width,
+      'options': _decodeJson(widget.options),
+      'filterConfigJson': filter?.config,
+      'filterConfig': filter == null ? null : _decodeJson(filter.config),
+    };
+  }
+
+  String _canonicalFilterConfig(String raw) {
+    final decoded = jsonDecode(raw);
+    if (decoded is! Map) {
+      throw const FormatException('Filter config must be a JSON object');
+    }
+    final filter = TransactionFilter.fromCanonicalJson(
+      Map<String, Object?>.from(decoded),
+    );
+    return jsonEncode(filter.toCanonicalJson());
+  }
+
+  bool _isEmptyFilterConfig(String config) {
+    final decoded = jsonDecode(config);
+    if (decoded is! Map) return true;
+    return TransactionFilter.fromCanonicalJson(
+      Map<String, Object?>.from(decoded),
+    ).isEmpty;
+  }
+
+  Object? _decodeJson(String raw) {
+    if (raw.isEmpty) return null;
+    try {
+      return jsonDecode(raw);
+    } catch (_) {
+      return raw;
+    }
+  }
+
+  Map<String, Object?> _decodeJsonMap(String raw) {
+    final decoded = _decodeJson(raw);
+    return decoded is Map ? Map<String, Object?>.from(decoded) : {};
+  }
+
+  WidgetType? _widgetType(Object? raw) {
+    if (raw is! String) return null;
+    return WidgetType.fromWire(raw);
+  }
+
+  DashboardWidth? _dashboardWidth(Object? raw) {
+    if (raw is! String) return null;
+    return DashboardWidth.fromWire(raw);
+  }
+
+  DashboardWidth _defaultWidthFor(WidgetType type) => switch (type) {
+    WidgetType.stat => DashboardWidth.third,
+    WidgetType.list => DashboardWidth.full,
+    WidgetType.balance => DashboardWidth.half,
+    WidgetType.chart => DashboardWidth.full,
+  };
+
+  ({Map<String, Object?> options, String? error}) _widgetOptionsFor(
+    WidgetType type,
+    String title,
+    Map<String, dynamic> args, {
+    Map<String, Object?> existingOptions = const {},
+  }) {
+    final options = <String, Object?>{};
+    switch (type) {
+      case WidgetType.stat:
+        options['title'] = title;
+        options['aggregation'] =
+            _statAggregation(args['aggregation']) ??
+            _statAggregation(existingOptions['aggregation']) ??
+            StatAggregation.sum.name;
+      case WidgetType.list:
+        options['title'] = title;
+        options['limit'] =
+            _positiveInt(args['limit']) ??
+            _positiveInt(existingOptions['limit']) ??
+            5;
+      case WidgetType.balance:
+        final currency =
+            args['currency'] as String? ??
+            existingOptions['currency'] as String?;
+        if (currency == null || currency.trim().isEmpty) {
+          return (options: const {}, error: 'Balance widgets require currency');
+        }
+        options['title'] = title;
+        options['currency'] = currency.trim().toUpperCase();
+      case WidgetType.chart:
+        options['title'] = title;
+        options['groupBy'] =
+            _breakdownGroupBy(args['groupBy']) ??
+            _breakdownGroupBy(existingOptions['groupBy']) ??
+            BreakdownGroupBy.category.wire;
+        options['chartKind'] =
+            _breakdownChartKind(args['chartKind']) ??
+            _breakdownChartKind(existingOptions['chartKind']) ??
+            BreakdownChartKind.pie.wire;
+    }
+
+    final background = args.containsKey('background')
+        ? _backgroundFromArgs(args['background'])
+        : existingOptions['background'];
+    if (background != null) options['background'] = background;
+    return (options: options, error: null);
+  }
+
+  String? _statAggregation(Object? raw) {
+    if (raw is! String) return null;
+    for (final value in StatAggregation.values) {
+      if (value.name == raw) return value.name;
+    }
+    return null;
+  }
+
+  String? _breakdownGroupBy(Object? raw) {
+    if (raw is! String) return null;
+    return BreakdownGroupBy.fromWire(raw)?.wire;
+  }
+
+  String? _breakdownChartKind(Object? raw) {
+    if (raw is! String) return null;
+    return BreakdownChartKind.fromWire(raw)?.wire;
+  }
+
+  int? _positiveInt(Object? raw) {
+    final value = raw is num ? raw.toInt() : null;
+    return value != null && value > 0 ? value : null;
+  }
+
+  Object? _backgroundFromArgs(Object? raw) {
+    if (raw is! Map) return null;
+    final mode = raw['mode'];
+    if (mode == 'none') return null;
+    if (mode == 'fixed') {
+      return {
+        'mode': 'fixed',
+        'fixedColor': _hex(raw['fixedColor']) ?? '#C8F2D8',
+      };
+    }
+    if (mode == 'value') {
+      final nested = raw['value'];
+      final source = nested is Map ? nested : raw;
+      return {
+        'mode': 'value',
+        'value': {
+          'low': _double(source['low']) ?? 0,
+          'high': _double(source['high']) ?? 10000,
+          'lowColor': _hex(source['lowColor']) ?? '#FFCBCB',
+          'betweenColor': _hex(source['betweenColor']) ?? '#FFE588',
+          'highColor': _hex(source['highColor']) ?? '#C8F2D8',
+        },
+      };
+    }
+    return null;
+  }
+
+  String? _hex(Object? raw) {
+    if (raw is! String || raw.trim().isEmpty) return null;
+    final trimmed = raw.trim();
+    return trimmed.startsWith('#') ? trimmed : '#$trimmed';
+  }
+
+  double? _double(Object? raw) {
+    if (raw is num) return raw.toDouble();
+    if (raw is String) return double.tryParse(raw.replaceAll(',', '.'));
+    return null;
+  }
+
+  Future<String?> _createFilterForWidget(
+    WidgetType type,
+    String title,
+    Map<String, dynamic> args,
+  ) async {
+    if (type == WidgetType.balance || !args.containsKey('filterConfigJson')) {
+      return null;
+    }
+    final config = _canonicalFilterConfig(args['filterConfigJson'] as String);
+    if (_isEmptyFilterConfig(config)) return null;
+    return repos.savedFilters.create(name: title, config: config);
+  }
+
+  Future<String?> _filterIdForWidgetUpdate(
+    DashboardWidget existing,
+    WidgetType type,
+    String title,
+    Map<String, dynamic> args,
+  ) async {
+    if (type == WidgetType.balance) return null;
+
+    if (args.containsKey('filterConfigJson')) {
+      final config = _canonicalFilterConfig(args['filterConfigJson'] as String);
+      if (_isEmptyFilterConfig(config)) return null;
+      if (existing.filterId != null) {
+        await repos.savedFilters.update(
+          existing.filterId!,
+          name: Value(title),
+          config: Value(config),
+        );
+        return existing.filterId;
+      }
+      return repos.savedFilters.create(name: title, config: config);
+    }
+
+    if (existing.filterId != null && args.containsKey('title')) {
+      await repos.savedFilters.update(existing.filterId!, name: Value(title));
+    }
+    return existing.filterId;
+  }
 
   Map<String, dynamic> _serializeTransaction(Transaction t) {
     return {

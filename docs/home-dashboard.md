@@ -276,7 +276,7 @@ unchanged — only advanced (disjunctive) filters take the anchor+predicate path
 
 1. **Foundation** ✅ — Drift tables + local aggregation queries + layout/flow renderer.
 2. **Widgets** ✅ — Stat, Balance card, Transaction list, and Breakdown chart (pie / bar / line, group-by category / account / month) renderers.
-3. **Editing** ✅ — add / remove / reorder, width control, reusing the simple-mode filter editor.
+3. **Editing** ✅ — add / remove / reorder, width control, background options, and simple/advanced filter editing.
 4. **Sync** ✅ (native + Convex) — both tables wired into `SyncEngine` and the backend push/pull. **Web parity still pending.**
 
 > **Status:** the `savedFilters` + `dashboardWidgets` Drift tables persist the
@@ -294,7 +294,11 @@ unchanged — only advanced (disjunctive) filters take the anchor+predicate path
 > `chartKind` live in the widget's `options` JSON, so it syncs through the
 > existing `dashboardWidgets` table with no schema change.
 >
-> **Still pending:** the advanced (condition-tree) filter editor, and **web
-> parity** (the web home is still a placeholder — see risk R-004).
+> **Agent access:** native voice tools can list/create/update/archive saved
+> filters and dashboard widgets, using the same canonical filter JSON and
+> widget option JSON as the UI.
+>
+> **Still pending:** **web parity** (the web home is still a placeholder — see
+> risk R-004).
 </content>
 </invoke>

@@ -19,6 +19,14 @@ function newId(): string {
     return crypto.randomUUID()
 }
 
+function nativeDashboardOnly() {
+    return {
+        ok: false,
+        error: 'native_only',
+        message: 'Home dashboard filters and widgets are only implemented in the native app right now.',
+    }
+}
+
 export const toolExecutors = {
     // ───── Accounts ─────
     listAccounts: defineTool(toolSchemas.listAccounts, async (ctx, args) => {
@@ -550,6 +558,39 @@ export const toolExecutors = {
                 })),
             }
         },
+    ),
+
+    // ───── Native home dashboard ─────
+    listSavedFilters: defineTool(toolSchemas.listSavedFilters, async () =>
+        nativeDashboardOnly(),
+    ),
+    createSavedFilter: defineTool(toolSchemas.createSavedFilter, async () =>
+        nativeDashboardOnly(),
+    ),
+    updateSavedFilter: defineTool(toolSchemas.updateSavedFilter, async () =>
+        nativeDashboardOnly(),
+    ),
+    archiveSavedFilter: defineTool(toolSchemas.archiveSavedFilter, async () =>
+        nativeDashboardOnly(),
+    ),
+    listDashboardWidgets: defineTool(toolSchemas.listDashboardWidgets, async () =>
+        nativeDashboardOnly(),
+    ),
+    createDashboardWidget: defineTool(
+        toolSchemas.createDashboardWidget,
+        async () => nativeDashboardOnly(),
+    ),
+    updateDashboardWidget: defineTool(
+        toolSchemas.updateDashboardWidget,
+        async () => nativeDashboardOnly(),
+    ),
+    reorderDashboardWidgets: defineTool(
+        toolSchemas.reorderDashboardWidgets,
+        async () => nativeDashboardOnly(),
+    ),
+    archiveDashboardWidget: defineTool(
+        toolSchemas.archiveDashboardWidget,
+        async () => nativeDashboardOnly(),
     ),
 } satisfies Record<ToolName, ToolExecutor>
 
