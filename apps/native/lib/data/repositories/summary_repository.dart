@@ -1,6 +1,8 @@
 import 'package:drift/drift.dart';
 
 import '../models/summaries.dart';
+import '../models/transaction_filter.dart';
+import '../queries/transaction_query.dart';
 import 'repository_base.dart';
 
 /// Aggregations over transactions (per-category totals, per-account flows).
@@ -9,6 +11,24 @@ import 'repository_base.dart';
 /// same logic.
 class SummaryRepository extends RepositoryBase {
   SummaryRepository(super.db);
+
+  /// Reactive Stat-block aggregation: streams a single [StatValue] over the
+  /// transactions matching [filter], recomputing on any local write, agent
+  /// write, or sync merge. Delegates to the canonical filtered-rows stream so
+  /// the Stat number can never drift from the equivalent transaction list.
+  ///
+  /// For [StatAggregation.sum] / [StatAggregation.net] the filter should carry
+  /// a `currency` scope (numeric widgets are single-currency by design — see
+  /// docs/home-dashboard.md); [StatAggregation.count] is currency-agnostic.
+  Stream<StatValue> watchStat(
+    TransactionFilter filter,
+    StatAggregation aggregation, {
+    DateTime? now,
+  }) => watchFilteredTransactions(
+    db,
+    filter,
+    now: now,
+  ).map((rows) => aggregateStat(rows, aggregation));
 
   /// Per-category totals over a date window. Transfers are excluded; only
   /// active categories resolve a name (`(unknown)` otherwise).
@@ -34,9 +54,9 @@ class SummaryRepository extends RepositoryBase {
       totals[t.categoryId] = (totals[t.categoryId] ?? BigInt.zero) + t.amount;
     }
 
-    final cats = await (db.select(db.categories)
-          ..where((c) => c.archived.equals(false)))
-        .get();
+    final cats = await (db.select(
+      db.categories,
+    )..where((c) => c.archived.equals(false))).get();
     final nameById = {for (final c in cats) c.id: c.name};
 
     return [
@@ -56,16 +76,21 @@ class SummaryRepository extends RepositoryBase {
     required BigInt fromMs,
     required BigInt toMs,
   }) async {
-    final items = await (db.select(db.transactions)
-          ..where((t) => t.archived.equals(false))
-          ..where((t) => t.date.isBiggerOrEqualValue(fromMs))
-          ..where((t) => t.date.isSmallerOrEqualValue(toMs)))
-        .get();
-    final accounts = await (db.select(db.accounts)
-          ..where((a) => a.archived.equals(false)))
-        .get();
+    final items =
+        await (db.select(db.transactions)
+              ..where((t) => t.archived.equals(false))
+              ..where((t) => t.date.isBiggerOrEqualValue(fromMs))
+              ..where((t) => t.date.isSmallerOrEqualValue(toMs)))
+            .get();
+    final accounts = await (db.select(
+      db.accounts,
+    )..where((a) => a.archived.equals(false))).get();
 
-    final rows = <String, ({String name, String currency, BigInt inSum, BigInt outSum})>{};
+    final rows =
+        <
+          String,
+          ({String name, String currency, BigInt inSum, BigInt outSum})
+        >{};
     for (final a in accounts) {
       rows[a.id] = (
         name: a.name,

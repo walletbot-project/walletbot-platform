@@ -2,6 +2,7 @@ import 'package:app/components/transaction_filters_bar.dart';
 import 'package:app/components/transaction_row.dart';
 import 'package:app/data/data.dart';
 import 'package:app/database.dart';
+import 'package:app/shared/money.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -221,7 +222,10 @@ class _ActivityScreenState extends State<ActivityScreen> {
           padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
           child: TransactionRow(
             title: transaction.name,
-            amountCents: _signedAmountCents(transaction),
+            amountCents: signedDisplayCents(
+              transaction.type,
+              transaction.amount,
+            ),
             dateCheck: transaction.dateConfirmed,
             description: _descriptionFor(transaction),
           ),
@@ -243,23 +247,6 @@ class _ActivityScreenState extends State<ActivityScreen> {
     if (diff > 1 && diff < 7) return _spanishWeekdays[day.weekday - 1];
     return '${day.day.toString().padLeft(2, '0')}/'
         '${day.month.toString().padLeft(2, '0')}/${day.year}';
-  }
-
-  /// Signed cents to pass to [TransactionRow]: positive renders green, negative
-  /// renders in the default text color.
-  int _signedAmountCents(Transaction t) {
-    final amount = t.amount.toInt();
-    switch (t.type) {
-      case 'expense':
-        return -amount.abs();
-      case 'income':
-      case 'transfer':
-        return amount.abs();
-      case 'balance_adjustment':
-        return amount;
-      default:
-        return amount;
-    }
   }
 
   String? _descriptionFor(Transaction t) {

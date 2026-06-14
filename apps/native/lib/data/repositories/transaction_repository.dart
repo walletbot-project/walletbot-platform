@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:drift/drift.dart';
 
 import '../../database.dart';
@@ -25,32 +23,7 @@ class TransactionRepository extends RepositoryBase {
     TransactionFilter filter, {
     int? limit,
     TxnOrdering ordering = TxnOrdering.createdAtDesc,
-  }) {
-    if (filter.tagIds.isEmpty || !filter.includeSubtags) {
-      final groups = expandTagGroups(filter, const []);
-      return buildTransactionQuery(
-        db,
-        filter,
-        tagGroups: groups,
-        limit: limit,
-        ordering: ordering,
-      ).watch();
-    }
-    final tagsStream =
-        (db.select(db.tags)..where((t) => t.archived.equals(false))).watch();
-    final groupsStream = tagsStream
-        .map((tags) => expandTagGroups(filter, tags))
-        .distinct(_tagGroupsEqual);
-    return _switchMap(groupsStream, (groups) {
-      return buildTransactionQuery(
-        db,
-        filter,
-        tagGroups: groups,
-        limit: limit,
-        ordering: ordering,
-      ).watch();
-    });
-  }
+  }) => watchFilteredTransactions(db, filter, limit: limit, ordering: ordering);
 
   /// One-shot variant of [watch], used by the agent tools.
   /// [exactFromMs]/[exactToInclusiveMs] add precise inclusive timestamp
@@ -67,9 +40,9 @@ class TransactionRepository extends RepositoryBase {
     if (filter.tagIds.isEmpty || !filter.includeSubtags) {
       groups = expandTagGroups(filter, const []);
     } else {
-      final tags = await (db.select(db.tags)
-            ..where((t) => t.archived.equals(false)))
-          .get();
+      final tags = await (db.select(
+        db.tags,
+      )..where((t) => t.archived.equals(false))).get();
       groups = expandTagGroups(filter, tags);
     }
     return buildTransactionQuery(
@@ -84,15 +57,15 @@ class TransactionRepository extends RepositoryBase {
   }
 
   /// Exact-id lookup; finds archived transactions too. Null when missing.
-  Future<Transaction?> getById(String id) => (db.select(db.transactions)
-        ..where((t) => t.id.equals(id)))
-      .getSingleOrNull();
+  Future<Transaction?> getById(String id) => (db.select(
+    db.transactions,
+  )..where((t) => t.id.equals(id))).getSingleOrNull();
 
   /// Ids of the tags currently attached to a transaction.
   Future<List<String>> tagIdsOf(String transactionId) async {
-    final joins = await (db.select(db.transactionTags)
-          ..where((j) => j.transactionId.equals(transactionId)))
-        .get();
+    final joins = await (db.select(
+      db.transactionTags,
+    )..where((j) => j.transactionId.equals(transactionId))).get();
     return joins.map((j) => j.tagId).toList();
   }
 
@@ -112,20 +85,19 @@ class TransactionRepository extends RepositoryBase {
     BigInt? dateMs,
     bool dateConfirmed = true,
     List<String> tagIds = const [],
-  }) =>
-      _addSimple(
-        type: 'expense',
-        accountId: accountId,
-        categoryId: categoryId,
-        name: name,
-        amountCents: amountCents,
-        currency: currency,
-        description: description,
-        status: status,
-        dateMs: dateMs,
-        dateConfirmed: dateConfirmed,
-        tagIds: tagIds,
-      );
+  }) => _addSimple(
+    type: 'expense',
+    accountId: accountId,
+    categoryId: categoryId,
+    name: name,
+    amountCents: amountCents,
+    currency: currency,
+    description: description,
+    status: status,
+    dateMs: dateMs,
+    dateConfirmed: dateConfirmed,
+    tagIds: tagIds,
+  );
 
   /// Creates an income. Same shape and semantics as [addExpense].
   Future<String> addIncome({
@@ -139,20 +111,19 @@ class TransactionRepository extends RepositoryBase {
     BigInt? dateMs,
     bool dateConfirmed = true,
     List<String> tagIds = const [],
-  }) =>
-      _addSimple(
-        type: 'income',
-        accountId: accountId,
-        categoryId: categoryId,
-        name: name,
-        amountCents: amountCents,
-        currency: currency,
-        description: description,
-        status: status,
-        dateMs: dateMs,
-        dateConfirmed: dateConfirmed,
-        tagIds: tagIds,
-      );
+  }) => _addSimple(
+    type: 'income',
+    accountId: accountId,
+    categoryId: categoryId,
+    name: name,
+    amountCents: amountCents,
+    currency: currency,
+    description: description,
+    status: status,
+    dateMs: dateMs,
+    dateConfirmed: dateConfirmed,
+    tagIds: tagIds,
+  );
 
   Future<String> _addSimple({
     required String type,
@@ -334,12 +305,13 @@ class TransactionRepository extends RepositoryBase {
 
     final now = currentMs;
     await db.transaction(() async {
-      final joins = await (db.select(db.transactionTags)
-            ..where((j) => j.transactionId.equals(id)))
-          .get();
+      final joins = await (db.select(
+        db.transactionTags,
+      )..where((j) => j.transactionId.equals(id))).get();
       for (final j in joins) {
-        await (db.delete(db.transactionTags)..where((t) => t.id.equals(j.id)))
-            .go();
+        await (db.delete(
+          db.transactionTags,
+        )..where((t) => t.id.equals(j.id))).go();
         await markDeleted('transactionTags', j.id);
       }
 
@@ -371,17 +343,17 @@ class TransactionRepository extends RepositoryBase {
     var removed = 0;
     await db.transaction(() async {
       for (final tagId in tagIds) {
-        final join = await (db.select(db.transactionTags)
-              ..where(
-                (j) =>
-                    j.transactionId.equals(transactionId) &
-                    j.tagId.equals(tagId),
-              ))
-            .getSingleOrNull();
+        final join =
+            await (db.select(db.transactionTags)..where(
+                  (j) =>
+                      j.transactionId.equals(transactionId) &
+                      j.tagId.equals(tagId),
+                ))
+                .getSingleOrNull();
         if (join == null) continue;
-        await (db.delete(db.transactionTags)
-              ..where((t) => t.id.equals(join.id)))
-            .go();
+        await (db.delete(
+          db.transactionTags,
+        )..where((t) => t.id.equals(join.id))).go();
         await markDeleted('transactionTags', join.id);
         removed += 1;
       }
@@ -399,13 +371,13 @@ class TransactionRepository extends RepositoryBase {
   ) async {
     var added = 0;
     for (final tagId in tagIds) {
-      final existing = await (db.select(db.transactionTags)
-            ..where(
-              (j) =>
-                  j.transactionId.equals(transactionId) &
-                  j.tagId.equals(tagId),
-            ))
-          .getSingleOrNull();
+      final existing =
+          await (db.select(db.transactionTags)..where(
+                (j) =>
+                    j.transactionId.equals(transactionId) &
+                    j.tagId.equals(tagId),
+              ))
+              .getSingleOrNull();
       if (existing != null) continue;
       await db
           .into(db.transactionTags)
@@ -423,45 +395,4 @@ class TransactionRepository extends RepositoryBase {
     }
     return added;
   }
-}
-
-bool _tagGroupsEqual(List<Set<String>> a, List<Set<String>> b) {
-  if (a.length != b.length) return false;
-  for (var i = 0; i < a.length; i++) {
-    if (a[i].length != b[i].length || !a[i].containsAll(b[i])) return false;
-  }
-  return true;
-}
-
-/// Minimal switchMap: each outer event cancels the previous inner
-/// subscription before subscribing to the new inner stream.
-Stream<T> _switchMap<S, T>(
-  Stream<S> source,
-  Stream<T> Function(S value) mapper,
-) {
-  late StreamController<T> controller;
-  StreamSubscription<S>? outer;
-  StreamSubscription<T>? inner;
-  controller = StreamController<T>(
-    onListen: () {
-      outer = source.listen(
-        (value) {
-          inner?.cancel();
-          inner = mapper(value).listen(
-            controller.add,
-            onError: controller.addError,
-          );
-        },
-        onError: controller.addError,
-        // Drift watch streams only complete when the database closes; at that
-        // point the inner stream is closing too.
-        onDone: () => controller.close(),
-      );
-    },
-    onCancel: () async {
-      await inner?.cancel();
-      await outer?.cancel();
-    },
-  );
-  return controller.stream;
 }

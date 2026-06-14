@@ -1,11 +1,9 @@
-import 'dart:convert';
-
 import 'package:app/auth/account.dart';
 import 'package:app/auth/auth_controller.dart';
-import 'package:app/components/filter_sheet.dart';
+import 'package:app/components/dashboard/dashboard_view.dart';
+import 'package:app/components/dashboard/default_dashboard.dart';
 import 'package:app/screens/transaction_form.dart';
 import 'package:app/sync/sync_status_pill.dart';
-import 'package:convex_flutter/convex_flutter.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -17,38 +15,6 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  String? _testResult;
-  bool _testing = false;
-  String? _filterResult;
-
-  Future<void> _openFilters() async {
-    final filter = await showFilterSheet(context);
-    if (!mounted || filter == null) return;
-    const encoder = JsonEncoder.withIndent('  ');
-    setState(() {
-      _filterResult = filter.isEmpty
-          ? 'Empty filter (matches all transactions)'
-          : encoder.convert(filter.toCanonicalJson());
-    });
-  }
-
-  Future<void> _runTestQuery() async {
-    setState(() {
-      _testing = true;
-      _testResult = null;
-    });
-    try {
-      final result = await ConvexClient.instance.query('test:hello', {});
-      if (!mounted) return;
-      setState(() => _testResult = result);
-    } catch (e) {
-      if (!mounted) return;
-      setState(() => _testResult = 'ERROR: $e');
-    } finally {
-      if (mounted) setState(() => _testing = false);
-    }
-  }
-
   void showUserMenu() {
     showDialog(
       context: context,
@@ -128,66 +94,22 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ],
       ),
-      body: Padding(
+      body: ListView(
         padding: const EdgeInsets.all(16),
-        child: ListView(
-          children: [
-            Align(
-              alignment: Alignment.centerLeft,
-              child: _HomeActionCard(
-                label: 'Agregar a mano',
-                icon: Icons.add_rounded,
-                onTap: _openManualAdd,
-              ),
+        children: [
+          Align(
+            alignment: Alignment.centerLeft,
+            child: _HomeActionCard(
+              label: 'Agregar a mano',
+              icon: Icons.add_rounded,
+              onTap: _openManualAdd,
             ),
-            const SizedBox(height: 16),
-            FilledButton.icon(
-              onPressed: _testing ? null : _runTestQuery,
-              icon: _testing
-                  ? const SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.cloud_sync_rounded),
-              label: const Text('Test Convex query (test:hello)'),
-            ),
-            if (_testResult != null) ...[
-              const SizedBox(height: 12),
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  border: Border.all(color: Theme.of(context).dividerColor),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: SelectableText(
-                  _testResult!,
-                  style: const TextStyle(fontFamily: 'monospace'),
-                ),
-              ),
-            ],
-            const SizedBox(height: 16),
-            OutlinedButton.icon(
-              onPressed: _openFilters,
-              icon: const Icon(Icons.filter_list_rounded),
-              label: const Text('Open filters sheet'),
-            ),
-            if (_filterResult != null) ...[
-              const SizedBox(height: 12),
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  border: Border.all(color: Theme.of(context).dividerColor),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: SelectableText(
-                  _filterResult!,
-                  style: const TextStyle(fontFamily: 'monospace'),
-                ),
-              ),
-            ],
-          ],
-        ),
+          ),
+          const SizedBox(height: 24),
+          Text('Resumen', style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(height: 12),
+          const DashboardView(widgets: defaultDashboardWidgets),
+        ],
       ),
     );
   }

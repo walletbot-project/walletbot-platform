@@ -31,3 +31,28 @@ class AccountFlow {
 
   BigInt get netCents => inCents - outCents;
 }
+
+/// How a Stat-block widget reduces its filtered transactions to one number.
+///
+/// - [sum] — gross total of the matched amounts (e.g. "spent this month" when
+///   the filter is `type=expense`).
+/// - [net] — signed cash flow: income `+`, expense `-`, balance adjustments by
+///   their stored sign; transfers are excluded (they move money between the
+///   user's own accounts, not in/out of net worth — mirrors
+///   `SummaryRepository.byCategory`).
+/// - [count] — number of matched transactions (currency-agnostic).
+enum StatAggregation { sum, net, count }
+
+/// Result of a Stat-block aggregation. [amountCents] is meaningful for
+/// [StatAggregation.sum] / [StatAggregation.net]; [count] is always populated.
+class StatValue {
+  const StatValue({
+    required this.aggregation,
+    required this.amountCents,
+    required this.count,
+  });
+
+  final StatAggregation aggregation;
+  final BigInt amountCents;
+  final int count;
+}

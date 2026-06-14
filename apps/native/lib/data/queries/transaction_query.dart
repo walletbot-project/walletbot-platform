@@ -1,6 +1,9 @@
+import 'dart:async';
+
 import 'package:drift/drift.dart';
 
 import '../../database.dart';
+import '../models/summaries.dart';
 import '../models/transaction_filter.dart';
 
 /// Result ordering for transaction lists. The activity screen orders strictly
@@ -20,7 +23,9 @@ List<Set<String>> expandTagGroups(
 ) {
   if (filter.tagIds.isEmpty) return const [];
   if (!filter.includeSubtags) {
-    return [for (final id in filter.tagIds) {id}];
+    return [
+      for (final id in filter.tagIds) {id},
+    ];
   }
   final childrenByParent = <String, List<String>>{};
   for (final tag in activeTags) {
@@ -124,7 +129,8 @@ SimpleSelectStatement<$TransactionsTable, Transaction> buildTransactionQuery(
 
   // One membership subquery per group: `any` produces a single group (union),
   // `all` produces one group per selected tag, ANDed together.
-  final effectiveGroups = filter.tagMatch == TagMatch.any && tagGroups.isNotEmpty
+  final effectiveGroups =
+      filter.tagMatch == TagMatch.any && tagGroups.isNotEmpty
       ? [tagGroups.expand((g) => g).toSet()]
       : tagGroups;
   for (final group in effectiveGroups) {
@@ -162,4 +168,132 @@ SimpleSelectStatement<$TransactionsTable, Transaction> buildTransactionQuery(
     query.limit(limit);
   }
   return query;
+}
+
+/// THE canonical reactive filtered-transaction stream — reactive to local
+/// writes, agent writes, and sync merges. When the filter uses
+/// `includeSubtags`, the tag expansion re-resolves when the tag tree changes
+/// (so adding a child tag updates open lists/widgets). Both
+/// `TransactionRepository.watch` and `SummaryRepository.watchStat` delegate
+/// here so filter semantics can never diverge between a list and its summary.
+Stream<List<Transaction>> watchFilteredTransactions(
+  AppDatabase db,
+  TransactionFilter filter, {
+  int? limit,
+  TxnOrdering ordering = TxnOrdering.createdAtDesc,
+  DateTime? now,
+}) {
+  if (filter.tagIds.isEmpty || !filter.includeSubtags) {
+    final groups = expandTagGroups(filter, const []);
+    return buildTransactionQuery(
+      db,
+      filter,
+      tagGroups: groups,
+      limit: limit,
+      ordering: ordering,
+      now: now,
+    ).watch();
+  }
+  final tagsStream = (db.select(
+    db.tags,
+  )..where((t) => t.archived.equals(false))).watch();
+  final groupsStream = tagsStream
+      .map((tags) => expandTagGroups(filter, tags))
+      .distinct(_tagGroupsEqual);
+  return _switchMap(groupsStream, (groups) {
+    return buildTransactionQuery(
+      db,
+      filter,
+      tagGroups: groups,
+      limit: limit,
+      ordering: ordering,
+      now: now,
+    ).watch();
+  });
+}
+
+/// Reduces a set of already-filtered transactions to a single Stat value. Pure
+/// and synchronous so the sign logic has one home and is unit-testable;
+/// [watchFilteredTransactions] feeds it the reactive rows.
+StatValue aggregateStat(List<Transaction> rows, StatAggregation aggregation) {
+  switch (aggregation) {
+    case StatAggregation.count:
+      return StatValue(
+        aggregation: aggregation,
+        amountCents: BigInt.zero,
+        count: rows.length,
+      );
+    case StatAggregation.sum:
+      var total = BigInt.zero;
+      for (final t in rows) {
+        total += t.amount.abs();
+      }
+      return StatValue(
+        aggregation: aggregation,
+        amountCents: total,
+        count: rows.length,
+      );
+    case StatAggregation.net:
+      var total = BigInt.zero;
+      for (final t in rows) {
+        switch (t.type) {
+          case 'income':
+            total += t.amount;
+          case 'expense':
+            total -= t.amount;
+          // Already signed by the balance-adjustment write path.
+          case 'balance_adjustment':
+            total += t.amount;
+          // Transfers move money between the user's own accounts — excluded
+          // from net cash flow (mirrors SummaryRepository.byCategory).
+          case 'transfer':
+            break;
+        }
+      }
+      return StatValue(
+        aggregation: aggregation,
+        amountCents: total,
+        count: rows.length,
+      );
+  }
+}
+
+bool _tagGroupsEqual(List<Set<String>> a, List<Set<String>> b) {
+  if (a.length != b.length) return false;
+  for (var i = 0; i < a.length; i++) {
+    if (a[i].length != b[i].length || !a[i].containsAll(b[i])) return false;
+  }
+  return true;
+}
+
+/// Minimal switchMap: each outer event cancels the previous inner
+/// subscription before subscribing to the new inner stream.
+Stream<T> _switchMap<S, T>(
+  Stream<S> source,
+  Stream<T> Function(S value) mapper,
+) {
+  late StreamController<T> controller;
+  StreamSubscription<S>? outer;
+  StreamSubscription<T>? inner;
+  controller = StreamController<T>(
+    onListen: () {
+      outer = source.listen(
+        (value) {
+          inner?.cancel();
+          inner = mapper(
+            value,
+          ).listen(controller.add, onError: controller.addError);
+        },
+        onError: controller.addError,
+        // Drift watch streams only complete when the database closes; at that
+        // point the inner stream is closing too.
+        onDone: () => controller.close(),
+      );
+    },
+    onCancel: () async {
+      await inner?.cancel();
+      await outer?.cancel();
+    },
+  );
+  return controller.stream;
 }
