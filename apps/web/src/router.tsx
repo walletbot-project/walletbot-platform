@@ -65,6 +65,13 @@ export const router = createBrowserRouter([
                                     })),
                             },
                             {
+                                path: '/add/manual',
+                                lazy: () =>
+                                    import('@/pages/add-manual').then((m) => ({
+                                        Component: m.AddManual,
+                                    })),
+                            },
+                            {
                                 path: '*',
                                 lazy: () =>
                                     import('@/pages/not-found').then((m) => ({
