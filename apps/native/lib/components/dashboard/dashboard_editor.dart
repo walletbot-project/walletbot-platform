@@ -227,15 +227,19 @@ class _EditTile extends StatelessWidget {
                     segments: const [
                       ButtonSegment(
                         value: DashboardWidth.full,
-                        label: Text('Ancho'),
+                        label: Text('1/1'),
+                      ),
+                      ButtonSegment(
+                        value: DashboardWidth.twoThirds,
+                        label: Text('2/3'),
                       ),
                       ButtonSegment(
                         value: DashboardWidth.half,
-                        label: Text('Medio'),
+                        label: Text('1/2'),
                       ),
                       ButtonSegment(
                         value: DashboardWidth.third,
-                        label: Text('Tercio'),
+                        label: Text('1/3'),
                       ),
                     ],
                     selected: {width},

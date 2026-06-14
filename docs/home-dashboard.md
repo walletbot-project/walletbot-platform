@@ -138,13 +138,16 @@ the default UX — the advanced editor is hidden until summoned.
 ## Layout: width, not nested rows
 
 The dashboard is **one flat ordered list**. Each widget has a `position` and a
-`width` (`full` / `half` / `third`). Narrower widgets flow and wrap into rows —
-a "row of stat blocks" is just three `third`-width stats in sequence.
+`width` (`full` / `two_thirds` / `half` / `third`). Narrower widgets flow and
+wrap into rows — a "row of stat blocks" is just three `third`-width stats in
+sequence.
 
 ```
 ┌─────────────────────────────┐  full   — Balance card
 ├──────────┬──────────┬───────┤
 │ third    │ third    │ third │  three stats → one row
+├──────────────────┬──────────┤
+│ two-thirds       │ third    │  asymmetric feature row
 ├──────────┴──────────┴───────┤
 │ full-width breakdown chart  │
 ├─────────────────────────────┤

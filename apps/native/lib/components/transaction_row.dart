@@ -10,6 +10,7 @@ class TransactionRow extends StatelessWidget {
     this.description,
     this.currencySymbol = '\$',
     this.onTap,
+    this.contained = true,
   });
 
   final String title;
@@ -25,6 +26,7 @@ class TransactionRow extends StatelessWidget {
   final String? description;
   final String currencySymbol;
   final VoidCallback? onTap;
+  final bool contained;
 
   @override
   Widget build(BuildContext context) {
@@ -34,6 +36,68 @@ class TransactionRow extends StatelessWidget {
         ? Colors.green.shade600
         : theme.colorScheme.onSurface;
 
+    final content = Padding(
+      padding: EdgeInsets.symmetric(
+        horizontal: contained ? 16 : 0,
+        vertical: contained ? 14 : 11,
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          _DateCheckIcon(dateConfirmed: dateCheck),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w500,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                if (description != null && description!.isNotEmpty) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    description!,
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
+          Text(
+            _formatSignedAmount(amountCents, currencySymbol),
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+              color: amountColor,
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (!contained) {
+      return Material(
+        type: MaterialType.transparency,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(8),
+          child: content,
+        ),
+      );
+    }
+
     return Material(
       color: theme.colorScheme.surface,
       elevation: 1,
@@ -41,53 +105,7 @@ class TransactionRow extends StatelessWidget {
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(12),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              _DateCheckIcon(dateConfirmed: dateCheck),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w500,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    if (description != null && description!.isNotEmpty) ...[
-                      const SizedBox(height: 2),
-                      Text(
-                        description!,
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: theme.colorScheme.onSurfaceVariant,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-              const SizedBox(width: 12),
-              Text(
-                _formatSignedAmount(amountCents, currencySymbol),
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                  color: amountColor,
-                ),
-              ),
-            ],
-          ),
-        ),
+        child: content,
       ),
     );
   }

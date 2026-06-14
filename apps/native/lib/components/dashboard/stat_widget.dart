@@ -1,3 +1,4 @@
+import 'package:app/components/dashboard/dashboard_cell.dart';
 import 'package:app/components/dashboard/dashboard_models.dart';
 import 'package:app/data/data.dart';
 import 'package:app/shared/money.dart';
@@ -16,59 +17,48 @@ class StatWidget extends StatelessWidget {
     final repos = context.read<AppRepositories>();
     final theme = Theme.of(context);
 
-    return Card(
-      margin: EdgeInsets.zero,
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              spec.title,
-              style: theme.textTheme.labelMedium?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
+    return DashboardCell(
+      title: spec.title,
+      icon: _iconFor(spec.aggregation),
+      minHeight: 128,
+      child: StreamBuilder<StatValue>(
+        stream: repos.summaries.watchStat(spec.filter, spec.aggregation),
+        builder: (context, snapshot) {
+          if (snapshot.hasError) {
+            return Text(
+              'Error',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.error,
+              ),
+            );
+          }
+          final value = snapshot.data;
+          final text = value == null
+              ? '—'
+              : _formatValue(value, spec.filter.currency);
+          return FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(
+              text,
+              style: theme.textTheme.titleLarge?.copyWith(
+                fontWeight: FontWeight.w800,
+                color: theme.colorScheme.onSurface,
               ),
               maxLines: 1,
-              overflow: TextOverflow.ellipsis,
             ),
-            const SizedBox(height: 8),
-            StreamBuilder<StatValue>(
-              stream: repos.summaries.watchStat(spec.filter, spec.aggregation),
-              builder: (context, snapshot) {
-                if (snapshot.hasError) {
-                  return Text(
-                    'Error',
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.error,
-                    ),
-                  );
-                }
-                final value = snapshot.data;
-                final text = value == null
-                    ? '—'
-                    : _formatValue(value, spec.filter.currency);
-                // Scale long amounts down to the tile width instead of
-                // truncating them — a third-width tile can't fit "ARS
-                // 1,234.56" at full title size.
-                return FittedBox(
-                  fit: BoxFit.scaleDown,
-                  alignment: Alignment.centerLeft,
-                  child: Text(
-                    text,
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w700,
-                      color: theme.colorScheme.onSurface,
-                    ),
-                    maxLines: 1,
-                  ),
-                );
-              },
-            ),
-          ],
-        ),
+          );
+        },
       ),
     );
+  }
+
+  IconData _iconFor(StatAggregation aggregation) {
+    return switch (aggregation) {
+      StatAggregation.count => Icons.format_list_numbered_rounded,
+      StatAggregation.net => Icons.swap_vert_rounded,
+      StatAggregation.sum => Icons.calculate_outlined,
+    };
   }
 
   /// Counts render as a bare integer; monetary aggregations prefix the currency

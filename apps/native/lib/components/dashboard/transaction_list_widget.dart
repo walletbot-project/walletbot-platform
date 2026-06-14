@@ -1,3 +1,4 @@
+import 'package:app/components/dashboard/dashboard_cell.dart';
 import 'package:app/components/dashboard/dashboard_models.dart';
 import 'package:app/components/transaction_row.dart';
 import 'package:app/data/data.dart';
@@ -19,69 +20,57 @@ class TransactionListWidget extends StatelessWidget {
     final repos = context.read<AppRepositories>();
     final theme = Theme.of(context);
 
-    return Card(
-      margin: EdgeInsets.zero,
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              spec.title,
-              style: theme.textTheme.titleSmall?.copyWith(
-                fontWeight: FontWeight.w700,
+    return DashboardCell(
+      title: spec.title,
+      icon: Icons.receipt_long_outlined,
+      minHeight: 160,
+      child: StreamBuilder<List<Transaction>>(
+        stream: repos.transactions.watch(spec.filter, limit: spec.limit),
+        builder: (context, snapshot) {
+          if (snapshot.hasError) {
+            return Text(
+              'No se pudieron cargar los movimientos.',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.error,
               ),
-            ),
-            const SizedBox(height: 12),
-            StreamBuilder<List<Transaction>>(
-              stream: repos.transactions.watch(spec.filter, limit: spec.limit),
-              builder: (context, snapshot) {
-                if (snapshot.hasError) {
-                  return Text(
-                    'No se pudieron cargar los movimientos.',
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.error,
-                    ),
-                  );
-                }
-                if (snapshot.connectionState == ConnectionState.waiting &&
-                    !snapshot.hasData) {
-                  return const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 16),
-                    child: Center(child: CircularProgressIndicator()),
-                  );
-                }
+            );
+          }
+          if (snapshot.connectionState == ConnectionState.waiting &&
+              !snapshot.hasData) {
+            return const Padding(
+              padding: EdgeInsets.symmetric(vertical: 16),
+              child: Center(child: CircularProgressIndicator()),
+            );
+          }
 
-                final items = snapshot.data ?? const <Transaction>[];
-                if (items.isEmpty) {
-                  return Text(
-                    'No hay movimientos todavía.',
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant,
-                    ),
-                  );
-                }
+          final items = snapshot.data ?? const <Transaction>[];
+          if (items.isEmpty) {
+            return Text(
+              'No hay movimientos todavía.',
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            );
+          }
 
-                return Column(
-                  children: [
-                    for (var i = 0; i < items.length; i++) ...[
-                      if (i > 0) const SizedBox(height: 8),
-                      TransactionRow(
-                        title: items[i].name,
-                        amountCents: signedDisplayCents(
-                          items[i].type,
-                          items[i].amount,
-                        ),
-                        dateCheck: items[i].dateConfirmed,
-                      ),
-                    ],
-                  ],
-                );
-              },
-            ),
-          ],
-        ),
+          return Column(
+            children: [
+              for (var i = 0; i < items.length; i++) ...[
+                if (i > 0)
+                  Divider(height: 1, color: theme.colorScheme.outlineVariant),
+                TransactionRow(
+                  title: items[i].name,
+                  amountCents: signedDisplayCents(
+                    items[i].type,
+                    items[i].amount,
+                  ),
+                  dateCheck: items[i].dateConfirmed,
+                  contained: false,
+                ),
+              ],
+            ],
+          );
+        },
       ),
     );
   }

@@ -5,10 +5,11 @@ import 'package:app/database.dart';
 
 /// Tile width within the flat dashboard flow (see docs/home-dashboard.md
 /// "Layout: width, not nested rows"). Narrower tiles wrap into rows — three
-/// [third]s make a row, a [full] spans the whole width. `wire` is the value
-/// stored in `dashboard_widgets.width`.
+/// [third]s make a row, [twoThirds] pairs with [third], and [full] spans the
+/// whole width. `wire` is the value stored in `dashboard_widgets.width`.
 enum DashboardWidth {
   full('full'),
+  twoThirds('two_thirds'),
   half('half'),
   third('third');
 

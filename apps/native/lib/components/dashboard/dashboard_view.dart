@@ -5,47 +5,140 @@ import 'package:app/components/dashboard/stat_widget.dart';
 import 'package:app/components/dashboard/transaction_list_widget.dart';
 import 'package:flutter/material.dart';
 
-/// Renders the dashboard as one flat ordered flow: each widget is sized by its
-/// [DashboardWidth] and laid out with a [Wrap], so narrower tiles flow and wrap
-/// into rows (docs/home-dashboard.md "Layout: width, not nested rows"). Keeping
-/// it a flat list — rather than nested row containers — is what keeps future
-/// reorder and sync simple.
+/// Renders the dashboard as one flat ordered flow: each widget keeps a position
+/// and width, while this view groups the flow into visual rows. The data model
+/// stays flat; row grouping is only a rendering detail for clean borders.
 class DashboardView extends StatelessWidget {
-  const DashboardView({super.key, required this.widgets, this.spacing = 12});
+  const DashboardView({super.key, required this.widgets});
 
   final List<DashboardWidgetSpec> widgets;
-  final double spacing;
+  static const _gridUnits = 6;
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+    final boardColor = Color.alphaBlend(
+      colors.primary.withValues(alpha: 0.04),
+      colors.surface,
+    );
+    const radius = BorderRadius.all(Radius.circular(18));
+
     return LayoutBuilder(
       builder: (context, constraints) {
         final maxWidth = constraints.maxWidth;
-        return Wrap(
-          spacing: spacing,
-          runSpacing: spacing,
-          children: [
-            for (final spec in widgets)
-              SizedBox(
-                width: _tileWidth(maxWidth, spec.width),
-                child: _buildWidget(spec),
-              ),
-          ],
+        final rows = _buildRows(maxWidth);
+        return DecoratedBox(
+          decoration: BoxDecoration(
+            color: boardColor,
+            borderRadius: radius,
+            border: Border.all(color: colors.outlineVariant),
+          ),
+          child: ClipRRect(
+            borderRadius: radius,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                for (var rowIndex = 0; rowIndex < rows.length; rowIndex++) ...[
+                  if (rowIndex > 0)
+                    Divider(height: 1, color: colors.outlineVariant),
+                  IntrinsicHeight(
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        for (
+                          var itemIndex = 0;
+                          itemIndex < rows[rowIndex].items.length;
+                          itemIndex++
+                        ) ...[
+                          if (itemIndex > 0)
+                            ColoredBox(
+                              color: colors.outlineVariant,
+                              child: const SizedBox(width: 1),
+                            ),
+                          Expanded(
+                            flex: rows[rowIndex].items[itemIndex].units,
+                            child: _buildWidget(
+                              rows[rowIndex].items[itemIndex].spec,
+                            ),
+                          ),
+                        ],
+                        if (rows[rowIndex].remainingUnits > 0)
+                          Expanded(
+                            flex: rows[rowIndex].remainingUnits,
+                            child: const SizedBox.shrink(),
+                          ),
+                      ],
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
         );
       },
     );
   }
 
-  /// Width that lets `n` equal tiles plus their `n-1` gaps total exactly
-  /// [maxWidth]: full → whole row, half → 2 per row, third → 3 per row.
-  double _tileWidth(double maxWidth, DashboardWidth width) {
-    final columns = switch (width) {
-      DashboardWidth.full => 1,
-      DashboardWidth.half => 2,
-      DashboardWidth.third => 3,
+  List<_DashboardRow> _buildRows(double maxWidth) {
+    final rows = <_DashboardRow>[];
+    var current = <_DashboardRowItem>[];
+    var usedUnits = 0;
+
+    void flush() {
+      if (current.isEmpty) return;
+      rows.add(_DashboardRow(_normalizedRowItems(current, usedUnits)));
+      current = <_DashboardRowItem>[];
+      usedUnits = 0;
+    }
+
+    for (final spec in widgets) {
+      final units = _tileUnits(maxWidth, spec.width);
+      if (units == _gridUnits) {
+        flush();
+        rows.add(_DashboardRow([_DashboardRowItem(spec, units)]));
+        continue;
+      }
+
+      if (usedUnits + units > _gridUnits) flush();
+      current.add(_DashboardRowItem(spec, units));
+      usedUnits += units;
+      if (usedUnits == _gridUnits) flush();
+    }
+    flush();
+    return rows;
+  }
+
+  /// Avoids awkward incomplete rows like half + third or third + third. The
+  /// stored width remains unchanged; this is only a visual promotion.
+  List<_DashboardRowItem> _normalizedRowItems(
+    List<_DashboardRowItem> items,
+    int usedUnits,
+  ) {
+    if (usedUnits == 4 &&
+        items.length == 2 &&
+        items.every((item) => item.units == 2)) {
+      return [for (final item in items) _DashboardRowItem(item.spec, 3)];
+    }
+
+    if (usedUnits != _gridUnits - 1) return items;
+
+    final promotableIndex = items.indexWhere((item) => item.units == 2);
+    if (promotableIndex == -1) return items;
+
+    return [
+      for (var i = 0; i < items.length; i++)
+        i == promotableIndex ? _DashboardRowItem(items[i].spec, 3) : items[i],
+    ];
+  }
+
+  int _tileUnits(double maxWidth, DashboardWidth width) {
+    return switch (width) {
+      DashboardWidth.full => _gridUnits,
+      DashboardWidth.twoThirds => maxWidth < 360 ? _gridUnits : 4,
+      DashboardWidth.half => maxWidth < 320 ? _gridUnits : 3,
+      DashboardWidth.third => maxWidth < 300 ? _gridUnits : 2,
     };
-    if (columns == 1) return maxWidth;
-    return (maxWidth - spacing * (columns - 1)) / columns;
   }
 
   Widget _buildWidget(DashboardWidgetSpec spec) {
@@ -56,4 +149,21 @@ class DashboardView extends StatelessWidget {
       ChartWidgetSpec() => BreakdownChartWidget(spec: spec),
     };
   }
+}
+
+class _DashboardRow {
+  const _DashboardRow(this.items);
+
+  final List<_DashboardRowItem> items;
+
+  int get remainingUnits =>
+      DashboardView._gridUnits -
+      items.fold<int>(0, (sum, item) => sum + item.units);
+}
+
+class _DashboardRowItem {
+  const _DashboardRowItem(this.spec, this.units);
+
+  final DashboardWidgetSpec spec;
+  final int units;
 }

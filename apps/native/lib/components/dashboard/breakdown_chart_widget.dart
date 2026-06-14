@@ -1,4 +1,5 @@
 import 'package:app/components/color_utils.dart';
+import 'package:app/components/dashboard/dashboard_cell.dart';
 import 'package:app/components/dashboard/dashboard_models.dart';
 import 'package:app/data/data.dart';
 import 'package:app/shared/money.dart';
@@ -36,65 +37,59 @@ class BreakdownChartWidget extends StatelessWidget {
     final repos = context.read<AppRepositories>();
     final theme = Theme.of(context);
 
-    return Card(
-      margin: EdgeInsets.zero,
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              spec.title,
-              style: theme.textTheme.titleSmall?.copyWith(
-                fontWeight: FontWeight.w700,
+    return DashboardCell(
+      title: spec.title,
+      icon: _iconFor(spec.chartKind),
+      minHeight: 280,
+      child: StreamBuilder<List<BreakdownSlice>>(
+        stream: repos.summaries.watchBreakdown(spec.filter, spec.groupBy),
+        builder: (context, snapshot) {
+          if (snapshot.hasError) {
+            return Text(
+              'No se pudo cargar el gráfico.',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.error,
               ),
-            ),
-            const SizedBox(height: 12),
-            StreamBuilder<List<BreakdownSlice>>(
-              stream: repos.summaries.watchBreakdown(spec.filter, spec.groupBy),
-              builder: (context, snapshot) {
-                if (snapshot.hasError) {
-                  return Text(
-                    'No se pudo cargar el gráfico.',
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.error,
-                    ),
-                  );
-                }
-                if (snapshot.connectionState == ConnectionState.waiting &&
-                    !snapshot.hasData) {
-                  return const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 24),
-                    child: Center(child: CircularProgressIndicator()),
-                  );
-                }
+            );
+          }
+          if (snapshot.connectionState == ConnectionState.waiting &&
+              !snapshot.hasData) {
+            return const Padding(
+              padding: EdgeInsets.symmetric(vertical: 24),
+              child: Center(child: CircularProgressIndicator()),
+            );
+          }
 
-                // Zero-magnitude buckets carry no visual weight; drop them so an
-                // all-zero result reads as "empty" rather than a blank chart.
-                final slices = (snapshot.data ?? const <BreakdownSlice>[])
-                    .where((s) => s.totalCents > BigInt.zero)
-                    .toList();
-                if (slices.isEmpty) {
-                  return Text(
-                    'No hay datos para mostrar todavía.',
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant,
-                    ),
-                  );
-                }
+          // Zero-magnitude buckets carry no visual weight; drop them so an
+          // all-zero result reads as "empty" rather than a blank chart.
+          final slices = (snapshot.data ?? const <BreakdownSlice>[])
+              .where((s) => s.totalCents > BigInt.zero)
+              .toList();
+          if (slices.isEmpty) {
+            return Text(
+              'No hay datos para mostrar todavía.',
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            );
+          }
 
-                return switch (spec.chartKind) {
-                  BreakdownChartKind.pie => _pie(context, slices),
-                  BreakdownChartKind.bar => _bar(context, slices),
-                  BreakdownChartKind.line => _line(context, slices),
-                };
-              },
-            ),
-          ],
-        ),
+          return switch (spec.chartKind) {
+            BreakdownChartKind.pie => _pie(context, slices),
+            BreakdownChartKind.bar => _bar(context, slices),
+            BreakdownChartKind.line => _line(context, slices),
+          };
+        },
       ),
     );
+  }
+
+  IconData _iconFor(BreakdownChartKind chartKind) {
+    return switch (chartKind) {
+      BreakdownChartKind.pie => Icons.donut_large_rounded,
+      BreakdownChartKind.bar => Icons.bar_chart_rounded,
+      BreakdownChartKind.line => Icons.show_chart_rounded,
+    };
   }
 
   // ---- Pie ----------------------------------------------------------------
