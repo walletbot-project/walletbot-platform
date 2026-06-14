@@ -1,3 +1,5 @@
+import 'package:drift/drift.dart';
+
 import '../database.dart';
 import '../shared/text.dart';
 
@@ -20,15 +22,19 @@ class Ambiguous<T> extends ResolveResult<T> {
   final List<({String id, String name})> candidates;
 }
 
-/// Id-or-fuzzy-name resolution used by the agent tools (UI navigates by id
-/// and never needs this). Semantics — preserved exactly from the original
-/// tool executors:
+/// Id-or-name resolution used by the agent tools (UI navigates by id and
+/// never needs this):
 ///
 ///  1. exact id match first (archived rows included);
-///  2. otherwise a normalized (trim + lowercase) exact name match against
-///     *active* rows — resolved only when the match is unique;
+///  2. otherwise a normalized exact name match against *active* rows, done
+///     in SQL (`LOWER(TRIM(name)) = target`) so we never load a whole table
+///     into memory — resolved only when the match is unique;
 ///  3. multiple name matches → [Ambiguous] with the candidates;
 ///  4. nothing → [NotFound].
+///
+/// Note: the name match uses SQLite's `LOWER` (ASCII-only) and `TRIM` (spaces
+/// only), so mixed-case non-ASCII names (e.g. "CAFÉ" vs "café") may not match.
+/// Acceptable here — the agent can fall back to the list tools.
 class EntityResolver {
   EntityResolver(this.db);
 
@@ -40,10 +46,11 @@ class EntityResolver {
         .getSingleOrNull();
     if (byId != null) return Resolved(byId);
 
-    final candidates = await (db.select(db.accounts)
-          ..where((t) => t.archived.equals(false)))
+    final matches = await (db.select(db.accounts)
+          ..where((t) => t.archived.equals(false))
+          ..where((t) => t.name.trim().lower().equals(normalizeName(idOrName))))
         .get();
-    return _byName(idOrName, candidates, (a) => a.id, (a) => a.name);
+    return _result(matches, (a) => a.id, (a) => a.name);
   }
 
   Future<ResolveResult<Category>> category(String idOrName) async {
@@ -52,10 +59,11 @@ class EntityResolver {
         .getSingleOrNull();
     if (byId != null) return Resolved(byId);
 
-    final candidates = await (db.select(db.categories)
-          ..where((t) => t.archived.equals(false)))
+    final matches = await (db.select(db.categories)
+          ..where((t) => t.archived.equals(false))
+          ..where((t) => t.name.trim().lower().equals(normalizeName(idOrName))))
         .get();
-    return _byName(idOrName, candidates, (c) => c.id, (c) => c.name);
+    return _result(matches, (c) => c.id, (c) => c.name);
   }
 
   Future<ResolveResult<Tag>> tag(String idOrName) async {
@@ -64,21 +72,18 @@ class EntityResolver {
         .getSingleOrNull();
     if (byId != null) return Resolved(byId);
 
-    final candidates = await (db.select(db.tags)
-          ..where((t) => t.archived.equals(false)))
+    final matches = await (db.select(db.tags)
+          ..where((t) => t.archived.equals(false))
+          ..where((t) => t.name.trim().lower().equals(normalizeName(idOrName))))
         .get();
-    return _byName(idOrName, candidates, (t) => t.id, (t) => t.name);
+    return _result(matches, (t) => t.id, (t) => t.name);
   }
 
-  ResolveResult<T> _byName<T>(
-    String idOrName,
-    List<T> candidates,
+  ResolveResult<T> _result<T>(
+    List<T> matches,
     String Function(T) idOf,
     String Function(T) nameOf,
   ) {
-    final target = normalizeName(idOrName);
-    final matches =
-        candidates.where((c) => normalizeName(nameOf(c)) == target).toList();
     if (matches.length == 1) return Resolved(matches.first);
     if (matches.length > 1) {
       return Ambiguous(

@@ -266,29 +266,34 @@ class TransactionRepository extends RepositoryBase {
   }) async {
     final id = newUuid();
     final now = currentMs;
-    final currentBalance = await computeAccountBalance(db, accountId);
-    final amount = balanceAfterCents - currentBalance;
-    await db
-        .into(db.transactions)
-        .insert(
-          TransactionsCompanion.insert(
-            id: id,
-            type: 'balance_adjustment',
-            name: name,
-            description: Value(description),
-            status: 'cleared',
-            date: dateMs ?? now,
-            accountId: accountId,
-            categoryId: '',
-            amount: amount,
-            currency: currency,
-            balanceAfter: Value(balanceAfterCents),
-            dateConfirmed: Value(dateConfirmed),
-            createdAt: now,
-            updatedAt: now,
-            dirty: const Value(true),
-          ),
-        );
+    // Read-then-write in one SQL transaction so a concurrent write can't slip
+    // in between the balance read and the insert and make the stored delta
+    // inconsistent with the balance it was computed against.
+    await db.transaction(() async {
+      final currentBalance = await computeAccountBalance(db, accountId);
+      final amount = balanceAfterCents - currentBalance;
+      await db
+          .into(db.transactions)
+          .insert(
+            TransactionsCompanion.insert(
+              id: id,
+              type: 'balance_adjustment',
+              name: name,
+              description: Value(description),
+              status: 'cleared',
+              date: dateMs ?? now,
+              accountId: accountId,
+              categoryId: '',
+              amount: amount,
+              currency: currency,
+              balanceAfter: Value(balanceAfterCents),
+              dateConfirmed: Value(dateConfirmed),
+              createdAt: now,
+              updatedAt: now,
+              dirty: const Value(true),
+            ),
+          );
+    });
     return id;
   }
 

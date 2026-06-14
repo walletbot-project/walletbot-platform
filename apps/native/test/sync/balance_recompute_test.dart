@@ -1,5 +1,6 @@
 import 'dart:math';
 
+import 'package:app/data/queries/account_balance.dart';
 import 'package:app/database.dart';
 import 'package:app/sync/sync_recompute.dart';
 import 'package:drift/drift.dart';
@@ -7,43 +8,11 @@ import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 // Characterization tests for the balance semantics shared between the
-// account-balance formula (tool_executors._computeAccountBalance, moving to
-// lib/data in the refactor) and the chronological replay in
+// account-balance formula (lib/data/queries/account_balance.dart
+// `computeAccountBalance`) and the chronological replay in
 // BalanceAdjustmentRecomputer. Plan invariant #7: the two must stay
 // arithmetically identical, otherwise sync keeps "correcting" fresh
 // balance adjustments and amounts visibly jump.
-
-/// The unordered-sum balance formula, copied verbatim in behavior from
-/// tool_executors.dart `_computeAccountBalance` (lines 904-934).
-Future<BigInt> computeAccountBalance(AppDatabase db, String accountId) async {
-  final own = await (db.select(db.transactions)
-        ..where((t) => t.accountId.equals(accountId))
-        ..where((t) => t.archived.equals(false)))
-      .get();
-  BigInt sum = BigInt.zero;
-  for (final t in own) {
-    switch (t.type) {
-      case 'expense':
-      case 'transfer':
-        sum -= t.amount;
-        break;
-      case 'income':
-      case 'balance_adjustment':
-        sum += t.amount;
-        break;
-    }
-  }
-
-  final incoming = await (db.select(db.transactions)
-        ..where((t) => t.toAccountId.equals(accountId))
-        ..where((t) => t.type.equals('transfer'))
-        ..where((t) => t.archived.equals(false)))
-      .get();
-  for (final t in incoming) {
-    sum += t.toAmount ?? t.amount;
-  }
-  return sum;
-}
 
 void main() {
   late AppDatabase db;
