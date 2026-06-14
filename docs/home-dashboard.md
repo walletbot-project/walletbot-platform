@@ -240,9 +240,10 @@ unchanged — only advanced (disjunctive) filters take the anchor+predicate path
 
 ---
 
-## Dependencies to add
+## Dependencies
 
-- `fl_chart` — breakdown chart (none installed today).
+- `fl_chart` (`^1.2.0`) — breakdown chart (pie / bar / line). Installed; usage
+  isolated in `apps/native/lib/components/dashboard/breakdown_chart_widget.dart`.
 - `ReorderableListView` — built-in, no dep needed.
 
 ---
@@ -250,7 +251,7 @@ unchanged — only advanced (disjunctive) filters take the anchor+predicate path
 ## Phasing
 
 1. **Foundation** ✅ — Drift tables + local aggregation queries + layout/flow renderer.
-2. **Widgets** ✅ — Stat, Balance card, Transaction list renderers (Breakdown chart still pending — needs `fl_chart`).
+2. **Widgets** ✅ — Stat, Balance card, Transaction list, and Breakdown chart (pie / bar / line, group-by category / account / month) renderers.
 3. **Editing** ✅ — add / remove / reorder, width control, reusing the simple-mode filter editor.
 4. **Sync** ✅ (native + Convex) — both tables wired into `SyncEngine` and the backend push/pull. **Web parity still pending.**
 
@@ -263,8 +264,13 @@ unchanged — only advanced (disjunctive) filters take the anchor+predicate path
 > `add_widget_sheet.dart`) and reuses `showFilterSheet`
 > (`apps/native/lib/components/filter_sheet.dart`).
 >
-> **Still pending:** the Breakdown chart widget (`fl_chart`), the advanced
-> (condition-tree) filter editor, and **web parity** (the web home is still a
-> placeholder — see risk R-004).
+> The Breakdown chart widget (`fl_chart`, pie / bar / line, group-by category /
+> account / month) is implemented in `breakdown_chart_widget.dart`, reading the
+> reactive `SummaryRepository.watchBreakdown` aggregation. Its `groupBy` +
+> `chartKind` live in the widget's `options` JSON, so it syncs through the
+> existing `dashboardWidgets` table with no schema change.
+>
+> **Still pending:** the advanced (condition-tree) filter editor, and **web
+> parity** (the web home is still a placeholder — see risk R-004).
 </content>
 </invoke>

@@ -1,4 +1,5 @@
 import 'package:app/components/dashboard/balance_card_widget.dart';
+import 'package:app/components/dashboard/breakdown_chart_widget.dart';
 import 'package:app/components/dashboard/dashboard_models.dart';
 import 'package:app/components/dashboard/stat_widget.dart';
 import 'package:app/components/dashboard/transaction_list_widget.dart';
@@ -52,6 +53,7 @@ class DashboardView extends StatelessWidget {
       StatWidgetSpec() => StatWidget(spec: spec),
       TransactionListWidgetSpec() => TransactionListWidget(spec: spec),
       BalanceCardWidgetSpec() => BalanceCardWidget(spec: spec),
+      ChartWidgetSpec() => BreakdownChartWidget(spec: spec),
     };
   }
 }

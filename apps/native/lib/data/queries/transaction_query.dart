@@ -258,6 +258,101 @@ StatValue aggregateStat(List<Transaction> rows, StatAggregation aggregation) {
   }
 }
 
+/// Spanish three-letter month abbreviations for [BreakdownGroupBy.month]
+/// labels, indexed by month-1. Kept local so the breakdown needs no
+/// `intl`/locale dependency.
+const _esMonthsShort = [
+  'ene',
+  'feb',
+  'mar',
+  'abr',
+  'may',
+  'jun',
+  'jul',
+  'ago',
+  'sep',
+  'oct',
+  'nov',
+  'dic',
+];
+
+/// Groups already-filtered transactions into labeled buckets for a Breakdown
+/// chart, summing **absolute** amounts (magnitude of activity) per group. Pure
+/// and synchronous so the grouping logic has one home and is unit-testable;
+/// [SummaryRepository.watchBreakdown] feeds it the reactive rows plus the
+/// name/color labels.
+///
+/// - [BreakdownGroupBy.category] — keyed by `categoryId`, skipping transfers (a
+///   transfer has no meaningful spending category — mirrors `byCategory`).
+/// - [BreakdownGroupBy.account] — keyed by the source `accountId`.
+/// - [BreakdownGroupBy.month] — keyed by the transaction's local `YYYY-MM`.
+///
+/// [labels] maps a group key → its `(label, colorHex)` and is used only for
+/// category/account (month labels are derived from the date). A key missing
+/// from [labels] falls back to a generic placeholder. Buckets are returned
+/// sorted: month chronologically; category/account by descending magnitude
+/// (ties broken by label) so the largest slice leads.
+List<BreakdownSlice> aggregateBreakdown(
+  List<Transaction> rows,
+  BreakdownGroupBy groupBy, {
+  Map<String, ({String label, String? colorHex})> labels = const {},
+}) {
+  final totals = <String, BigInt>{};
+  for (final t in rows) {
+    String key;
+    switch (groupBy) {
+      case BreakdownGroupBy.category:
+        if (t.type == 'transfer') continue;
+        key = t.categoryId;
+      case BreakdownGroupBy.account:
+        key = t.accountId;
+      case BreakdownGroupBy.month:
+        final d = DateTime.fromMillisecondsSinceEpoch(t.date.toInt());
+        key =
+            '${d.year.toString().padLeft(4, '0')}-'
+            '${d.month.toString().padLeft(2, '0')}';
+    }
+    totals[key] = (totals[key] ?? BigInt.zero) + t.amount.abs();
+  }
+
+  String labelFor(String key) {
+    switch (groupBy) {
+      case BreakdownGroupBy.category:
+        return labels[key]?.label ?? '(sin categoría)';
+      case BreakdownGroupBy.account:
+        return labels[key]?.label ?? '(sin cuenta)';
+      case BreakdownGroupBy.month:
+        final parts = key.split('-');
+        final year = int.tryParse(parts.first) ?? 0;
+        final month = parts.length > 1 ? int.tryParse(parts[1]) ?? 0 : 0;
+        if (month < 1 || month > 12) return key;
+        return '${_esMonthsShort[month - 1]} $year';
+    }
+  }
+
+  final slices = [
+    for (final e in totals.entries)
+      BreakdownSlice(
+        key: e.key,
+        label: labelFor(e.key),
+        totalCents: e.value,
+        colorHex: labels[e.key]?.colorHex,
+      ),
+  ];
+
+  switch (groupBy) {
+    case BreakdownGroupBy.month:
+      slices.sort((a, b) => a.key.compareTo(b.key));
+    case BreakdownGroupBy.category:
+    case BreakdownGroupBy.account:
+      slices.sort((a, b) {
+        final byTotal = b.totalCents.compareTo(a.totalCents);
+        return byTotal != 0 ? byTotal : a.label.compareTo(b.label);
+      });
+  }
+  return slices;
+}
+
 bool _tagGroupsEqual(List<Set<String>> a, List<Set<String>> b) {
   if (a.length != b.length) return false;
   for (var i = 0; i < a.length; i++) {

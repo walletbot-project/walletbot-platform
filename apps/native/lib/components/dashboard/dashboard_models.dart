@@ -25,12 +25,12 @@ enum DashboardWidth {
 }
 
 /// The persisted widget kinds. `wire` is the value stored in
-/// `dashboard_widgets.type`. The Breakdown chart is intentionally absent until
-/// the `fl_chart` dependency is added.
+/// `dashboard_widgets.type`.
 enum WidgetType {
   stat('stat'),
   list('list'),
-  balance('balance');
+  balance('balance'),
+  chart('chart');
 
   const WidgetType(this.wire);
 
@@ -98,6 +98,25 @@ class BalanceCardWidgetSpec extends DashboardWidgetSpec {
   final String currency;
 }
 
+/// A Breakdown chart: the transactions matching [filter] bucketed by [groupBy]
+/// and drawn as [chartKind] (pie / bar / line). For a meaningful single-number
+/// scale the [filter] should carry a currency scope, like the Stat block.
+/// Backed by `SummaryRepository.watchBreakdown`.
+class ChartWidgetSpec extends DashboardWidgetSpec {
+  const ChartWidgetSpec({
+    required this.title,
+    required this.filter,
+    required this.groupBy,
+    required this.chartKind,
+    super.width = DashboardWidth.full,
+  });
+
+  final String title;
+  final TransactionFilter filter;
+  final BreakdownGroupBy groupBy;
+  final BreakdownChartKind chartKind;
+}
+
 /// Resolves a persisted [DashboardWidget] row (plus the saved filters it may
 /// reference) into a renderable [DashboardWidgetSpec]. Returns null for an
 /// unknown widget type so a forward-compat row written by a newer client is
@@ -135,6 +154,20 @@ DashboardWidgetSpec? dashboardSpecFromRow(
         title: title,
         currency: options['currency'] as String? ?? '',
         width: width ?? DashboardWidth.half,
+      );
+    case WidgetType.chart:
+      return ChartWidgetSpec(
+        title: title,
+        filter: _resolveFilter(row.filterId, filtersById),
+        groupBy:
+            BreakdownGroupBy.fromWire(options['groupBy'] as String? ?? '') ??
+            BreakdownGroupBy.category,
+        chartKind:
+            BreakdownChartKind.fromWire(
+              options['chartKind'] as String? ?? '',
+            ) ??
+            BreakdownChartKind.pie,
+        width: width ?? DashboardWidth.full,
       );
   }
 }

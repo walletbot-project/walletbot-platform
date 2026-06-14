@@ -1,7 +1,9 @@
 import 'package:drift/drift.dart';
 
+import '../../database.dart';
 import '../models/summaries.dart';
 import '../models/transaction_filter.dart';
+import '../queries/stream_utils.dart';
 import '../queries/transaction_query.dart';
 import 'repository_base.dart';
 
@@ -29,6 +31,56 @@ class SummaryRepository extends RepositoryBase {
     filter,
     now: now,
   ).map((rows) => aggregateStat(rows, aggregation));
+
+  /// Reactive Breakdown-chart aggregation: streams the labeled buckets for the
+  /// transactions matching [filter], grouped by [groupBy], recomputing on any
+  /// local write, agent write, or sync merge. Delegates to the canonical
+  /// filtered-rows stream (so a chart can never drift from the equivalent list)
+  /// and, for category/account grouping, joins the live entity table so a
+  /// renamed/recolored category updates the chart's labels reactively.
+  Stream<List<BreakdownSlice>> watchBreakdown(
+    TransactionFilter filter,
+    BreakdownGroupBy groupBy, {
+    DateTime? now,
+  }) {
+    final rows = watchFilteredTransactions(db, filter, now: now);
+    switch (groupBy) {
+      case BreakdownGroupBy.month:
+        return rows.map((r) => aggregateBreakdown(r, groupBy));
+      case BreakdownGroupBy.category:
+        final categories = (db.select(
+          db.categories,
+        )..where((c) => c.archived.equals(false))).watch();
+        return combineLatest2(
+          rows,
+          categories,
+          // Categories carry no color column, so slices fall back to the
+          // chart's palette; only the label is resolved here.
+          (List<Transaction> r, List<Category> cats) => aggregateBreakdown(
+            r,
+            groupBy,
+            labels: <String, ({String label, String? colorHex})>{
+              for (final c in cats) c.id: (label: c.name, colorHex: null),
+            },
+          ),
+        );
+      case BreakdownGroupBy.account:
+        final accounts = (db.select(
+          db.accounts,
+        )..where((a) => a.archived.equals(false))).watch();
+        return combineLatest2(
+          rows,
+          accounts,
+          (List<Transaction> r, List<Account> accs) => aggregateBreakdown(
+            r,
+            groupBy,
+            labels: {
+              for (final a in accs) a.id: (label: a.name, colorHex: a.color),
+            },
+          ),
+        );
+    }
+  }
 
   /// Per-category totals over a date window. Transfers are excluded; only
   /// active categories resolve a name (`(unknown)` otherwise).

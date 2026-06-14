@@ -157,6 +157,7 @@ class _DashboardEditorState extends State<DashboardEditor> {
       WidgetType.stat => 'Valor',
       WidgetType.list => 'Lista',
       WidgetType.balance => 'Saldo',
+      WidgetType.chart => 'Gráfico',
       null => 'Widget',
     };
   }

@@ -64,12 +64,26 @@ const _typeLabels = {
   WidgetType.stat: 'Valor',
   WidgetType.list: 'Lista',
   WidgetType.balance: 'Saldo',
+  WidgetType.chart: 'Gráfico',
 };
 
 const _defaultWidthFor = {
   WidgetType.stat: DashboardWidth.third,
   WidgetType.list: DashboardWidth.full,
   WidgetType.balance: DashboardWidth.half,
+  WidgetType.chart: DashboardWidth.full,
+};
+
+const _groupByLabels = {
+  BreakdownGroupBy.category: 'Categoría',
+  BreakdownGroupBy.account: 'Cuenta',
+  BreakdownGroupBy.month: 'Mes',
+};
+
+const _chartKindLabels = {
+  BreakdownChartKind.pie: 'Torta',
+  BreakdownChartKind.bar: 'Barras',
+  BreakdownChartKind.line: 'Línea',
 };
 
 class _WidgetSheet extends StatefulWidget {
@@ -92,6 +106,8 @@ class _WidgetSheetState extends State<_WidgetSheet> {
   late final TextEditingController _titleController;
   late final TextEditingController _limitController;
   late StatAggregation _aggregation;
+  late BreakdownGroupBy _groupBy;
+  late BreakdownChartKind _chartKind;
   late TransactionFilter _filter;
   String? _currency;
   List<String> _currencies = const [];
@@ -117,6 +133,12 @@ class _WidgetSheetState extends State<_WidgetSheet> {
       text: ((options['limit'] as num?)?.toInt() ?? 5).toString(),
     );
     _aggregation = _aggregationFromName(options['aggregation']);
+    _groupBy =
+        BreakdownGroupBy.fromWire(options['groupBy'] as String? ?? '') ??
+        BreakdownGroupBy.category;
+    _chartKind =
+        BreakdownChartKind.fromWire(options['chartKind'] as String? ?? '') ??
+        BreakdownChartKind.pie;
     _filter = widget.initialFilter;
     _currency = options['currency'] as String?;
 
@@ -206,6 +228,11 @@ class _WidgetSheetState extends State<_WidgetSheet> {
           'limit': int.tryParse(_limitController.text.trim()) ?? 5,
         },
         WidgetType.balance => {'title': title, 'currency': _currency},
+        WidgetType.chart => {
+          'title': title,
+          'groupBy': _groupBy.wire,
+          'chartKind': _chartKind.wire,
+        },
       };
 
       final existing = widget.existing;
@@ -394,6 +421,38 @@ class _WidgetSheetState extends State<_WidgetSheet> {
               border: OutlineInputBorder(),
               isDense: true,
             ),
+          ),
+          const SizedBox(height: 16),
+          _filterButton(),
+        ];
+      case WidgetType.chart:
+        return [
+          Text('Agrupar por', style: theme.textTheme.titleSmall),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            children: [
+              for (final groupBy in BreakdownGroupBy.values)
+                ChoiceChip(
+                  label: Text(_groupByLabels[groupBy]!),
+                  selected: _groupBy == groupBy,
+                  onSelected: (_) => setState(() => _groupBy = groupBy),
+                ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Text('Tipo de gráfico', style: theme.textTheme.titleSmall),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            children: [
+              for (final kind in BreakdownChartKind.values)
+                ChoiceChip(
+                  label: Text(_chartKindLabels[kind]!),
+                  selected: _chartKind == kind,
+                  onSelected: (_) => setState(() => _chartKind = kind),
+                ),
+            ],
           ),
           const SizedBox(height: 16),
           _filterButton(),
