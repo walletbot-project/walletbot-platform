@@ -1,8 +1,6 @@
-import 'package:app/accounts/account_writes.dart';
-import 'package:app/database.dart';
+import 'package:app/data/data.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:uuid/uuid.dart';
 
 // (ISO code, Spanish name) — sorted alphabetically by code
 const _currencies = [
@@ -116,30 +114,11 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
 
     setState(() => _saving = true);
     try {
-      final db = context.read<AppDatabase>();
-      late final Account createdAccount;
-      await db.transaction(() async {
-        createdAccount = await createLocalAccount(
-          db,
-          name: _nameController.text.trim(),
-          currency: _currency,
-        );
-        if (initialAmountCents != null) {
-          final now = BigInt.from(DateTime.now().millisecondsSinceEpoch);
-          await db.insertTransaction(
-            id: const Uuid().v4(),
-            type: 'balance_adjustment',
-            name: 'Balance inicial',
-            status: 'cleared',
-            date: now,
-            accountId: createdAccount.id,
-            categoryId: '',
-            amount: initialAmountCents,
+      await context.read<AppRepositories>().accounts.create(
+            name: _nameController.text.trim(),
             currency: _currency,
-            balanceAfter: initialAmountCents,
+            initialBalanceCents: initialAmountCents,
           );
-        }
-      });
       if (mounted) Navigator.of(context).pop();
     } catch (e, st) {
       debugPrint('Error creating account: $e\n$st');
@@ -262,10 +241,8 @@ class _CurrencyPickerState extends State<_CurrencyPicker> {
     if (_query.isEmpty) return _currencies;
     final q = _query.toLowerCase();
     return _currencies
-        .where(
-          (c) =>
-              c.$1.toLowerCase().contains(q) || c.$2.toLowerCase().contains(q),
-        )
+        .where((c) =>
+            c.$1.toLowerCase().contains(q) || c.$2.toLowerCase().contains(q))
         .toList();
   }
 
@@ -303,8 +280,8 @@ class _CurrencyPickerState extends State<_CurrencyPicker> {
               Text(
                 'Más usadas',
                 style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
               ),
               const SizedBox(height: 8),
               Wrap(

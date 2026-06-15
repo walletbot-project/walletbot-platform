@@ -1,5 +1,6 @@
 import '../database.dart';
 import '../utils/random_ids.dart';
+import 'package:drift/drift.dart';
 
 String _normalizeAccountName(String value) => value.trim().toLowerCase();
 
@@ -25,6 +26,16 @@ Future<Account> createLocalAccount(
   }
 
   final id = newUuid();
-  await db.insertAccount(id: id, name: trimmedName, currency: currency);
+  final now = BigInt.from(DateTime.now().millisecondsSinceEpoch);
+  await db.into(db.accounts).insert(
+    AccountsCompanion.insert(
+      id: id,
+      name: trimmedName,
+      currency: currency,
+      createdAt: now,
+      updatedAt: now,
+      dirty: const Value(true),
+    ),
+  );
   return (db.select(db.accounts)..where((t) => t.id.equals(id))).getSingle();
 }

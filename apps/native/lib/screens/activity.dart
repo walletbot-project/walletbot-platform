@@ -1,7 +1,7 @@
 import 'package:app/components/transaction_filters_bar.dart';
 import 'package:app/components/transaction_row.dart';
+import 'package:app/data/data.dart';
 import 'package:app/database.dart';
-import 'package:drift/drift.dart' as drift;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:app/screens/transaction_form.dart';
@@ -27,8 +27,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
 
   final _scrollController = ScrollController();
 
-  TransactionFilters _filters = const TransactionFilters();
-  String? _filterType;
+  TransactionFilter _filter = const TransactionFilter();
   int _limit = _pageSize;
 
   /// Tracks the size of the most recent rendered slice so the scroll listener
@@ -73,80 +72,23 @@ class _ActivityScreenState extends State<ActivityScreen> {
     }
   }
 
-  void _updateFilter(String? value) {
+  void _updateTypeChip(TxnType? value) {
     setState(() {
-      _filterType = value;
+      _filter = _filter.copyWith(types: value == null ? const {} : {value});
       _resetPagination();
     });
   }
 
-  void _onFiltersChanged(TransactionFilters next) {
+  void _onFiltersChanged(TransactionFilter next) {
     setState(() {
-      _filters = next;
+      _filter = next;
       _resetPagination();
     });
-  }
-
-  Stream<List<Transaction>> _watchTransactions(AppDatabase db) {
-    final query = db.select(db.transactions)
-      ..where((t) => t.archived.equals(false));
-
-    final type = _filterType;
-    if (type != null) {
-      query.where((t) => t.type.equals(type));
-    }
-
-    final search = _filters.searchQuery.trim();
-    if (search.isNotEmpty) {
-      final escaped = search.replaceAll('%', '%%').replaceAll('_', '__');
-      final pattern = '%${escaped.toLowerCase()}%';
-      query.where((t) => t.name.lower().like(pattern));
-    }
-
-    if (_filters.categoryIds.isNotEmpty) {
-      final ids = _filters.categoryIds.toList();
-      query.where((t) => t.categoryId.isIn(ids));
-    }
-
-    if (_filters.accountIds.isNotEmpty) {
-      final ids = _filters.accountIds.toList();
-      query.where((t) => t.accountId.isIn(ids));
-    }
-
-    if (_filters.dateFrom != null) {
-      final ms = BigInt.from(_filters.dateFrom!.millisecondsSinceEpoch);
-      query.where((t) => t.date.isBiggerOrEqualValue(ms));
-    }
-    if (_filters.dateTo != null) {
-      // Inclusive end of day.
-      final endOfDay = DateTime(
-        _filters.dateTo!.year,
-        _filters.dateTo!.month,
-        _filters.dateTo!.day + 1,
-      );
-      final ms = BigInt.from(endOfDay.millisecondsSinceEpoch);
-      query.where((t) => t.date.isSmallerThanValue(ms));
-    }
-
-    if (_filters.tagIds.isNotEmpty) {
-      final tagIds = _filters.tagIds.toList();
-      final taggedTxnIds = db.selectOnly(db.transactionTags)
-        ..addColumns([db.transactionTags.transactionId])
-        ..where(db.transactionTags.tagId.isIn(tagIds));
-      query.where((t) => t.id.isInQuery(taggedTxnIds));
-    }
-
-    // Order strictly by creation time (newest first), regardless of the
-    // (possibly estimated) transaction date.
-    query
-      ..orderBy([(t) => drift.OrderingTerm.desc(t.createdAt)])
-      ..limit(_limit);
-    return query.watch();
   }
 
   @override
   Widget build(BuildContext context) {
-    final db = context.watch<AppDatabase>();
+    final repos = context.read<AppRepositories>();
 
     return Scaffold(
       appBar: AppBar(
@@ -166,19 +108,21 @@ class _ActivityScreenState extends State<ActivityScreen> {
             const SliverToBoxAdapter(child: SizedBox(height: 8)),
             SliverToBoxAdapter(
               child: TransactionFiltersBar(
-                filters: _filters,
+                filter: _filter,
                 onChanged: _onFiltersChanged,
               ),
             ),
             const SliverToBoxAdapter(child: SizedBox(height: 16)),
             SliverToBoxAdapter(
               child: _FilterChips(
-                selected: _filterType,
-                onChanged: _updateFilter,
+                selected: _filter.types.length == 1
+                    ? _filter.types.single
+                    : null,
+                onChanged: _updateTypeChip,
               ),
             ),
             StreamBuilder<List<Transaction>>(
-              stream: _watchTransactions(db),
+              stream: repos.transactions.watch(_filter, limit: _limit),
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting &&
                     !snapshot.hasData) {
@@ -349,17 +293,17 @@ class _BottomSpaceEntry extends _ListEntry {
 class _FilterChips extends StatelessWidget {
   const _FilterChips({required this.selected, required this.onChanged});
 
-  final String? selected;
-  final ValueChanged<String?> onChanged;
+  final TxnType? selected;
+  final ValueChanged<TxnType?> onChanged;
 
   @override
   Widget build(BuildContext context) {
-    const options = <({String? value, String label})>[
+    const options = <({TxnType? value, String label})>[
       (value: null, label: 'Todos'),
-      (value: 'income', label: 'Ingresos'),
-      (value: 'expense', label: 'Gastos'),
-      (value: 'transfer', label: 'Transferencias'),
-      (value: 'balance_adjustment', label: 'Ajustes'),
+      (value: TxnType.income, label: 'Ingresos'),
+      (value: TxnType.expense, label: 'Gastos'),
+      (value: TxnType.transfer, label: 'Transferencias'),
+      (value: TxnType.balanceAdjustment, label: 'Ajustes'),
     ];
 
     return SizedBox(

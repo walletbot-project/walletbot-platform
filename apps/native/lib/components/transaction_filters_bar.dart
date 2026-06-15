@@ -1,73 +1,33 @@
+import 'package:app/data/data.dart';
 import 'package:app/database.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-/// Immutable filter state used by the activity list. The bar widget below is
-/// purely controlled — it never owns this state, so callers can persist or
-/// share it freely.
-class TransactionFilters {
-  const TransactionFilters({
-    this.searchQuery = '',
-    this.categoryIds = const {},
-    this.accountIds = const {},
-    this.tagIds = const {},
-    this.dateFrom,
-    this.dateTo,
-  });
-
-  final String searchQuery;
-  final Set<String> categoryIds;
-  final Set<String> accountIds;
-  final Set<String> tagIds;
-  final DateTime? dateFrom;
-  final DateTime? dateTo;
-
-  bool get hasAdvancedFilters =>
-      categoryIds.isNotEmpty ||
-      accountIds.isNotEmpty ||
-      tagIds.isNotEmpty ||
-      dateFrom != null ||
-      dateTo != null;
-
-  int get advancedFilterCount {
-    var count = 0;
-    if (categoryIds.isNotEmpty) count++;
-    if (accountIds.isNotEmpty) count++;
-    if (tagIds.isNotEmpty) count++;
-    if (dateFrom != null || dateTo != null) count++;
-    return count;
-  }
-
-  /// `dateFrom`/`dateTo` use nullable thunks so callers can distinguish
-  /// "keep existing" from "set to null".
-  TransactionFilters copyWith({
-    String? searchQuery,
-    Set<String>? categoryIds,
-    Set<String>? accountIds,
-    Set<String>? tagIds,
-    DateTime? Function()? dateFrom,
-    DateTime? Function()? dateTo,
-  }) {
-    return TransactionFilters(
-      searchQuery: searchQuery ?? this.searchQuery,
-      categoryIds: categoryIds ?? this.categoryIds,
-      accountIds: accountIds ?? this.accountIds,
-      tagIds: tagIds ?? this.tagIds,
-      dateFrom: dateFrom != null ? dateFrom() : this.dateFrom,
-      dateTo: dateTo != null ? dateTo() : this.dateTo,
-    );
-  }
+/// Number of advanced-filter chip groups shown by the bar (search and type
+/// chips live elsewhere in the activity screen).
+int _advancedFilterCount(TransactionFilter f) {
+  var count = 0;
+  if (f.categoryIds.isNotEmpty) count++;
+  if (f.accountIds.isNotEmpty) count++;
+  if (f.tagIds.isNotEmpty) count++;
+  if (f.dateRange != null || f.datePreset != null) count++;
+  return count;
 }
 
+bool _hasAdvancedFilters(TransactionFilter f) => _advancedFilterCount(f) > 0;
+
+/// Search bar + advanced-filter sheet over the unified [TransactionFilter].
+/// Purely controlled — it never owns the filter state, so callers can persist
+/// or share it freely.
 class TransactionFiltersBar extends StatefulWidget {
   const TransactionFiltersBar({
     super.key,
-    required this.filters,
+    required this.filter,
     required this.onChanged,
   });
 
-  final TransactionFilters filters;
-  final ValueChanged<TransactionFilters> onChanged;
+  final TransactionFilter filter;
+  final ValueChanged<TransactionFilter> onChanged;
 
   @override
   State<TransactionFiltersBar> createState() => _TransactionFiltersBarState();
@@ -79,7 +39,7 @@ class _TransactionFiltersBarState extends State<TransactionFiltersBar> {
   @override
   void initState() {
     super.initState();
-    _searchController = TextEditingController(text: widget.filters.searchQuery);
+    _searchController = TextEditingController(text: widget.filter.search ?? '');
   }
 
   @override
@@ -88,8 +48,9 @@ class _TransactionFiltersBarState extends State<TransactionFiltersBar> {
     // Only resync the field if the parent reset it from the outside —
     // comparing against the controller's current text avoids cursor jumps
     // when the user is typing.
-    if (widget.filters.searchQuery != _searchController.text) {
-      _searchController.text = widget.filters.searchQuery;
+    final search = widget.filter.search ?? '';
+    if (search != _searchController.text) {
+      _searchController.text = search;
     }
   }
 
@@ -100,11 +61,11 @@ class _TransactionFiltersBarState extends State<TransactionFiltersBar> {
   }
 
   Future<void> _openSheet() async {
-    // The sheet is pushed as a new route, which sits below the Provider<AppDatabase>
-    // in the inherited-widget tree. Capture the db here (where it's visible) and
-    // hand it down explicitly to the sheet.
-    final db = context.read<AppDatabase>();
-    final result = await showModalBottomSheet<TransactionFilters>(
+    // The sheet is pushed as a new route, which sits below the account-scoped
+    // providers in the inherited-widget tree. Capture the repositories here
+    // (where they're visible) and hand them down explicitly.
+    final repos = context.read<AppRepositories>();
+    final result = await showModalBottomSheet<TransactionFilter>(
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
@@ -112,7 +73,7 @@ class _TransactionFiltersBarState extends State<TransactionFiltersBar> {
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      builder: (_) => _FiltersSheet(initial: widget.filters, db: db),
+      builder: (_) => _FiltersSheet(initial: widget.filter, repos: repos),
     );
     if (result != null) widget.onChanged(result);
   }
@@ -132,7 +93,7 @@ class _TransactionFiltersBarState extends State<TransactionFiltersBar> {
                 child: TextField(
                   controller: _searchController,
                   onChanged: (value) => widget.onChanged(
-                    widget.filters.copyWith(searchQuery: value),
+                    widget.filter.copyWith(search: value),
                   ),
                   decoration: InputDecoration(
                     hintText: 'Buscar',
@@ -160,17 +121,17 @@ class _TransactionFiltersBarState extends State<TransactionFiltersBar> {
               ),
               const SizedBox(width: 8),
               _FilterButton(
-                count: widget.filters.advancedFilterCount,
+                count: _advancedFilterCount(widget.filter),
                 onTap: _openSheet,
               ),
             ],
           ),
         ),
-        if (widget.filters.hasAdvancedFilters)
+        if (_hasAdvancedFilters(widget.filter))
           Padding(
             padding: const EdgeInsets.only(top: 10),
             child: _ActiveFilterChips(
-              filters: widget.filters,
+              filter: widget.filter,
               onChanged: widget.onChanged,
             ),
           ),
@@ -224,71 +185,62 @@ class _FilterButton extends StatelessWidget {
 }
 
 class _ActiveFilterChips extends StatelessWidget {
-  const _ActiveFilterChips({required this.filters, required this.onChanged});
+  const _ActiveFilterChips({required this.filter, required this.onChanged});
 
-  final TransactionFilters filters;
-  final ValueChanged<TransactionFilters> onChanged;
+  final TransactionFilter filter;
+  final ValueChanged<TransactionFilter> onChanged;
 
   @override
   Widget build(BuildContext context) {
-    final db = context.watch<AppDatabase>();
+    final repos = context.read<AppRepositories>();
     final chips = <Widget>[];
 
-    if (filters.dateFrom != null || filters.dateTo != null) {
+    final range = filter.dateRange;
+    if (range != null) {
       chips.add(
         InputChip(
-          label: Text(_formatDateRange(filters.dateFrom, filters.dateTo)),
-          onDeleted: () => onChanged(
-            filters.copyWith(dateFrom: () => null, dateTo: () => null),
-          ),
+          label: Text(_formatDateRange(range.start, range.end)),
+          onDeleted: () => onChanged(filter.copyWith(clearDateRange: true)),
+        ),
+      );
+    } else if (filter.datePreset != null) {
+      chips.add(
+        InputChip(
+          label: Text(filter.datePreset!.label),
+          onDeleted: () => onChanged(filter.copyWith(clearDatePreset: true)),
         ),
       );
     }
 
-    if (filters.accountIds.isNotEmpty) {
-      final ids = filters.accountIds.toList();
+    if (filter.accountIds.isNotEmpty) {
       chips.add(
         _NamedFilterChip(
-          stream:
-              (db.select(db.accounts)
-                    ..where((a) => a.archived.equals(false))
-                    ..where((a) => a.id.isIn(ids)))
-                  .watch()
-                  .map((rows) => rows.map((r) => r.name).toList()),
+          stream: _namesOf(repos.accounts.watchActive(), filter.accountIds,
+              (Account a) => a.id, (Account a) => a.name),
           fallback: 'cuentas',
-          onDeleted: () => onChanged(filters.copyWith(accountIds: const {})),
+          onDeleted: () => onChanged(filter.copyWith(accountIds: const {})),
         ),
       );
     }
 
-    if (filters.categoryIds.isNotEmpty) {
-      final ids = filters.categoryIds.toList();
+    if (filter.categoryIds.isNotEmpty) {
       chips.add(
         _NamedFilterChip(
-          stream:
-              (db.select(db.categories)
-                    ..where((c) => c.archived.equals(false))
-                    ..where((c) => c.id.isIn(ids)))
-                  .watch()
-                  .map((rows) => rows.map((r) => r.name).toList()),
+          stream: _namesOf(repos.categories.watchActive(), filter.categoryIds,
+              (Category c) => c.id, (Category c) => c.name),
           fallback: 'categorías',
-          onDeleted: () => onChanged(filters.copyWith(categoryIds: const {})),
+          onDeleted: () => onChanged(filter.copyWith(categoryIds: const {})),
         ),
       );
     }
 
-    if (filters.tagIds.isNotEmpty) {
-      final ids = filters.tagIds.toList();
+    if (filter.tagIds.isNotEmpty) {
       chips.add(
         _NamedFilterChip(
-          stream:
-              (db.select(db.tags)
-                    ..where((t) => t.archived.equals(false))
-                    ..where((t) => t.id.isIn(ids)))
-                  .watch()
-                  .map((rows) => rows.map((r) => r.name).toList()),
+          stream: _namesOf(repos.tags.watchActive(), filter.tagIds,
+              (Tag t) => t.id, (Tag t) => t.name),
           fallback: 'tags',
-          onDeleted: () => onChanged(filters.copyWith(tagIds: const {})),
+          onDeleted: () => onChanged(filter.copyWith(tagIds: const {})),
         ),
       );
     }
@@ -304,6 +256,18 @@ class _ActiveFilterChips extends StatelessWidget {
           ],
         ],
       ),
+    );
+  }
+
+  Stream<List<String>> _namesOf<T>(
+    Stream<List<T>> source,
+    Set<String> ids,
+    String Function(T) idOf,
+    String Function(T) nameOf,
+  ) {
+    return source.map(
+      (rows) =>
+          rows.where((r) => ids.contains(idOf(r))).map(nameOf).toList(),
     );
   }
 }
@@ -337,17 +301,17 @@ class _NamedFilterChip extends StatelessWidget {
 }
 
 class _FiltersSheet extends StatefulWidget {
-  const _FiltersSheet({required this.initial, required this.db});
+  const _FiltersSheet({required this.initial, required this.repos});
 
-  final TransactionFilters initial;
-  final AppDatabase db;
+  final TransactionFilter initial;
+  final AppRepositories repos;
 
   @override
   State<_FiltersSheet> createState() => _FiltersSheetState();
 }
 
 class _FiltersSheetState extends State<_FiltersSheet> {
-  late TransactionFilters _draft;
+  late TransactionFilter _draft;
 
   @override
   void initState() {
@@ -357,21 +321,15 @@ class _FiltersSheetState extends State<_FiltersSheet> {
 
   Future<void> _pickDateRange() async {
     final now = DateTime.now();
-    final initial = (_draft.dateFrom != null && _draft.dateTo != null)
-        ? DateTimeRange(start: _draft.dateFrom!, end: _draft.dateTo!)
-        : null;
     final picked = await showDateRangePicker(
       context: context,
       firstDate: DateTime(2020),
       lastDate: DateTime(now.year + 5),
-      initialDateRange: initial,
+      initialDateRange: _draft.dateRange,
     );
     if (picked == null) return;
     setState(() {
-      _draft = _draft.copyWith(
-        dateFrom: () => picked.start,
-        dateTo: () => picked.end,
-      );
+      _draft = _draft.copyWith(dateRange: picked, clearDatePreset: true);
     });
   }
 
@@ -400,8 +358,15 @@ class _FiltersSheetState extends State<_FiltersSheet> {
                     ),
                   ),
                   TextButton(
-                    onPressed: () =>
-                        setState(() => _draft = const TransactionFilters()),
+                    onPressed: () => setState(
+                      () => _draft = TransactionFilter(
+                        // The sheet only edits the advanced dimensions; keep
+                        // the ones owned by the activity screen.
+                        types: _draft.types,
+                        status: _draft.status,
+                        search: _draft.search,
+                      ),
+                    ),
                     child: const Text('Limpiar'),
                   ),
                   IconButton(
@@ -420,26 +385,20 @@ class _FiltersSheetState extends State<_FiltersSheet> {
                   const _SectionTitle('Rango de fechas'),
                   const SizedBox(height: 8),
                   _DateRangeRow(
-                    from: _draft.dateFrom,
-                    to: _draft.dateTo,
+                    range: _draft.dateRange,
                     onPick: _pickDateRange,
-                    onClear: (_draft.dateFrom == null && _draft.dateTo == null)
+                    onClear: _draft.dateRange == null
                         ? null
                         : () => setState(
-                            () => _draft = _draft.copyWith(
-                              dateFrom: () => null,
-                              dateTo: () => null,
-                            ),
+                            () => _draft =
+                                _draft.copyWith(clearDateRange: true),
                           ),
                   ),
                   const SizedBox(height: 24),
                   const _SectionTitle('Cuentas'),
                   const SizedBox(height: 8),
                   _PickerSection<Account>(
-                    stream:
-                        (widget.db.select(widget.db.accounts)
-                              ..where((a) => a.archived.equals(false)))
-                            .watch(),
+                    stream: widget.repos.accounts.watchActive(),
                     selectedIds: _draft.accountIds,
                     idOf: (a) => a.id,
                     labelOf: (a) => a.name,
@@ -452,10 +411,7 @@ class _FiltersSheetState extends State<_FiltersSheet> {
                   const _SectionTitle('Categorías'),
                   const SizedBox(height: 8),
                   _PickerSection<Category>(
-                    stream:
-                        (widget.db.select(widget.db.categories)
-                              ..where((c) => c.archived.equals(false)))
-                            .watch(),
+                    stream: widget.repos.categories.watchActive(),
                     selectedIds: _draft.categoryIds,
                     idOf: (c) => c.id,
                     labelOf: (c) => c.name,
@@ -468,10 +424,7 @@ class _FiltersSheetState extends State<_FiltersSheet> {
                   const _SectionTitle('Tags'),
                   const SizedBox(height: 8),
                   _PickerSection<Tag>(
-                    stream:
-                        (widget.db.select(widget.db.tags)
-                              ..where((t) => t.archived.equals(false)))
-                            .watch(),
+                    stream: widget.repos.tags.watchActive(),
                     selectedIds: _draft.tagIds,
                     idOf: (t) => t.id,
                     labelOf: (t) => t.name,
@@ -527,22 +480,20 @@ class _SectionTitle extends StatelessWidget {
 
 class _DateRangeRow extends StatelessWidget {
   const _DateRangeRow({
-    required this.from,
-    required this.to,
+    required this.range,
     required this.onPick,
     required this.onClear,
   });
 
-  final DateTime? from;
-  final DateTime? to;
+  final DateTimeRange? range;
   final VoidCallback onPick;
   final VoidCallback? onClear;
 
   @override
   Widget build(BuildContext context) {
-    final label = (from == null && to == null)
+    final label = range == null
         ? 'Seleccionar rango'
-        : _formatDateRange(from, to);
+        : _formatDateRange(range!.start, range!.end);
     return Row(
       children: [
         Expanded(
@@ -623,11 +574,8 @@ class _PickerSection<T> extends StatelessWidget {
   }
 }
 
-String _formatDateRange(DateTime? from, DateTime? to) {
+String _formatDateRange(DateTime from, DateTime to) {
   String fmt(DateTime d) =>
       '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year}';
-  if (from != null && to != null) return '${fmt(from)} – ${fmt(to)}';
-  if (from != null) return 'Desde ${fmt(from)}';
-  if (to != null) return 'Hasta ${fmt(to)}';
-  return '';
+  return '${fmt(from)} – ${fmt(to)}';
 }

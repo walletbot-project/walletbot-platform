@@ -1,7 +1,6 @@
-import 'package:app/database.dart';
 import 'package:app/components/color_utils.dart';
-import 'package:app/components/insight_count_models.dart';
-import 'package:app/sync/local_writes.dart';
+import 'package:app/data/data.dart';
+import 'package:app/database.dart';
 import 'package:drift/drift.dart' show Value;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -11,10 +10,10 @@ class TagsView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final db = context.watch<AppDatabase>();
+    final tags = context.read<AppRepositories>().tags;
 
     return StreamBuilder<List<TagWithCount>>(
-      stream: _watchTagsWithCounts(db),
+      stream: tags.watchWithCounts(),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());
@@ -39,7 +38,7 @@ class TagsView extends StatelessWidget {
               child: ListTile(
                 onLongPress: () => _editTagDialog(
                   context,
-                  db,
+                  tags,
                   tag,
                   data.map((t) => t.tag).toList(),
                 ),
@@ -99,94 +98,23 @@ List<_TagTreeEntry> _buildTagTree(List<TagWithCount> rows) {
   return result;
 }
 
-Stream<List<TagWithCount>> _watchTagsWithCounts(AppDatabase db) {
-  final query = db.customSelect(
-    '''
-        SELECT tg.id, tg.name, tg.description, tg.parent_id, tg.color,
-               tg.is_archived, tg.created_at, tg.updated_at, tg.dirty,
-               COUNT(tt.id) AS transaction_count
-        FROM tags tg
-        LEFT JOIN transaction_tags tt ON tt.tag_id = tg.id
-        WHERE tg.is_archived = 0
-        GROUP BY tg.id, tg.name, tg.description, tg.parent_id, tg.color,
-                 tg.is_archived, tg.created_at, tg.updated_at, tg.dirty
-        ORDER BY tg.name COLLATE NOCASE
-      ''',
-    readsFrom: {db.tags, db.transactionTags},
-  );
-
-  return query.watch().map((rows) {
-    return rows.map((row) {
-      return TagWithCount(
-        tag: Tag(
-          id: row.read<String>('id'),
-          name: row.read<String>('name'),
-          description: row.readNullable<String>('description'),
-          parentId: row.readNullable<String>('parent_id'),
-          color: row.readNullable<String>('color'),
-          archived: row.read<bool>('is_archived'),
-          createdAt: row.read<BigInt>('created_at'),
-          updatedAt: row.read<BigInt>('updated_at'),
-          dirty: row.read<bool>('dirty'),
-        ),
-        transactionCount: row.read<int>('transaction_count'),
-      );
-    }).toList();
-  });
-}
-
-Future<List<Tag>> _loadActiveTags(AppDatabase db) async {
-  return (db.select(db.tags)..where((t) => t.archived.equals(false))).get();
-}
-
-List<Tag> _ancestorChain(List<Tag> all, String? startParentId) {
-  final byId = {for (final t in all) t.id: t};
-  final chain = <Tag>[];
-  final seen = <String>{};
-  var cursor = startParentId;
-  while (cursor != null) {
-    if (seen.contains(cursor)) break;
-    seen.add(cursor);
-    final next = byId[cursor];
-    if (next == null) break;
-    chain.add(next);
-    cursor = next.parentId;
-  }
-  return chain;
-}
-
-Set<String> _descendantIds(List<Tag> all, String rootId) {
-  final result = <String>{};
-  final queue = <String>[rootId];
-  while (queue.isNotEmpty) {
-    final id = queue.removeAt(0);
-    for (final t in all) {
-      if (t.parentId == id && !result.contains(t.id)) {
-        result.add(t.id);
-        queue.add(t.id);
-      }
-    }
-  }
-  return result;
-}
-
-Future<void> showAddTagDialog(BuildContext context, AppDatabase db) async {
-  final parentCandidates = await _loadActiveTags(db);
+Future<void> showAddTagDialog(BuildContext context, TagRepository tags) async {
+  final parentCandidates = await tags.listActive();
   if (!context.mounted) return;
   await showDialog<_TagDialogAction>(
     context: context,
     builder: (context) =>
-        _TagDialog(db: db, parentCandidates: parentCandidates),
+        _TagDialog(tags: tags, parentCandidates: parentCandidates),
   );
 }
 
 Future<void> _editTagDialog(
   BuildContext context,
-  AppDatabase db,
+  TagRepository tags,
   Tag tag,
   List<Tag> allActive,
 ) async {
-  final descendants = _descendantIds(allActive, tag.id);
+  final descendants = descendantIdsOf(allActive, tag.id);
   final parentCandidates = allActive
       .where((t) => t.id != tag.id && !descendants.contains(t.id))
       .toList();
@@ -194,13 +122,13 @@ Future<void> _editTagDialog(
   final action = await showDialog<_TagDialogAction>(
     context: context,
     builder: (context) =>
-        _TagDialog(db: db, parentCandidates: parentCandidates, tag: tag),
+        _TagDialog(tags: tags, parentCandidates: parentCandidates, tag: tag),
   );
 
   if (action == _TagDialogAction.delete) {
     if (!context.mounted) return;
     final children = allActive.where((t) => t.parentId == tag.id).toList();
-    await _confirmAndDeleteTag(context, db, tag, children);
+    await _confirmAndDeleteTag(context, tags, tag, children);
   }
 }
 
@@ -211,12 +139,12 @@ enum _TagDialogAction { saved, delete }
 // TextEditingController.
 class _TagDialog extends StatefulWidget {
   const _TagDialog({
-    required this.db,
+    required this.tags,
     required this.parentCandidates,
     this.tag,
   });
 
-  final AppDatabase db;
+  final TagRepository tags;
   final List<Tag> parentCandidates;
   final Tag? tag;
 
@@ -255,18 +183,16 @@ class _TagDialogState extends State<_TagDialog> {
     final navigator = Navigator.of(context);
     final tag = widget.tag;
     if (tag != null) {
-      await _updateTag(
-        widget.db,
-        tag: tag,
-        name: name,
-        color: _selectedColor,
-        newParentId: _isSubtag ? _parentId : null,
+      await widget.tags.update(
+        tag.id,
+        name: Value(name),
+        color: Value(colorToHex(_selectedColor)),
+        parentId: Value(_isSubtag ? _parentId : null),
       );
     } else {
-      await _createTag(
-        widget.db,
+      await widget.tags.create(
         name: name,
-        color: _selectedColor,
+        color: colorToHex(_selectedColor),
         parentId: _isSubtag ? _parentId : null,
       );
     }
@@ -358,101 +284,14 @@ class _TagDialogState extends State<_TagDialog> {
   }
 }
 
-Future<void> _createTag(
-  AppDatabase db, {
-  required String name,
-  required Color color,
-  required String? parentId,
-}) async {
-  final now = BigInt.from(DateTime.now().millisecondsSinceEpoch);
-  await db
-      .into(db.tags)
-      .insert(
-        TagsCompanion.insert(
-          id: DateTime.now().microsecondsSinceEpoch.toString(),
-          name: name,
-          color: Value(colorToHex(color)),
-          parentId: Value(parentId),
-          createdAt: now,
-          updatedAt: now,
-          dirty: const Value(true),
-        ),
-      );
-}
-
-Future<void> _updateTag(
-  AppDatabase db, {
-  required Tag tag,
-  required String name,
-  required Color color,
-  required String? newParentId,
-}) async {
-  final now = BigInt.from(DateTime.now().millisecondsSinceEpoch);
-  final previousParentId = tag.parentId;
-
-  await db.transaction(() async {
-    await (db.update(db.tags)..where((t) => t.id.equals(tag.id))).write(
-      TagsCompanion(
-        name: Value(name),
-        color: Value(colorToHex(color)),
-        parentId: Value(newParentId),
-        updatedAt: Value(now),
-        dirty: const Value(true),
-      ),
-    );
-
-    if (newParentId != null && newParentId != previousParentId) {
-      // Every transaction tagged with this tag (or any of its descendants)
-      // must also carry every ancestor in the new chain.
-      final allActive = await _loadActiveTags(db);
-      final ancestors = _ancestorChain(allActive, newParentId);
-      final descendants = _descendantIds(allActive, tag.id);
-      final affectedTagIds = <String>{tag.id, ...descendants};
-
-      final transactionIds = <String>{};
-      for (final tagId in affectedTagIds) {
-        final joins = await (db.select(
-          db.transactionTags,
-        )..where((tt) => tt.tagId.equals(tagId))).get();
-        for (final j in joins) {
-          transactionIds.add(j.transactionId);
-        }
-      }
-
-      for (final txId in transactionIds) {
-        for (final ancestor in ancestors) {
-          final existing =
-              await (db.select(db.transactionTags)
-                    ..where((tt) => tt.transactionId.equals(txId))
-                    ..where((tt) => tt.tagId.equals(ancestor.id)))
-                  .getSingleOrNull();
-          if (existing != null) continue;
-          await db
-              .into(db.transactionTags)
-              .insert(
-                TransactionTagsCompanion.insert(
-                  id: '${txId}__${ancestor.id}',
-                  transactionId: txId,
-                  tagId: ancestor.id,
-                  createdAt: now,
-                  updatedAt: now,
-                  dirty: const Value(true),
-                ),
-              );
-        }
-      }
-    }
-  });
-}
-
 Future<void> _confirmAndDeleteTag(
   BuildContext context,
-  AppDatabase db,
+  TagRepository tags,
   Tag tag,
   List<Tag> children,
 ) async {
   if (children.isEmpty) {
-    await _deleteTag(db, tag.id, cascade: false);
+    await tags.archive(tag.id, mode: TagArchiveMode.reparentChildren);
     return;
   }
 
@@ -491,62 +330,12 @@ Future<void> _confirmAndDeleteTag(
   );
 
   if (result == null || result == _CascadeChoice.cancel) return;
-  await _deleteTag(db, tag.id, cascade: result == _CascadeChoice.cascade);
-}
-
-Future<void> _deleteTag(
-  AppDatabase db,
-  String id, {
-  required bool cascade,
-}) async {
-  final now = BigInt.from(DateTime.now().millisecondsSinceEpoch);
-  await db.transaction(() async {
-    if (cascade) {
-      final allActive = await _loadActiveTags(db);
-      final descendants = _descendantIds(allActive, id);
-      for (final descendantId in descendants) {
-        await (db.update(db.tags)..where((t) => t.id.equals(descendantId)))
-            .write(
-              TagsCompanion(
-                archived: const Value(true),
-                updatedAt: Value(now),
-                dirty: const Value(true),
-              ),
-            );
-        await writeTombstone(db, 'tags', descendantId);
-      }
-    } else {
-      // Re-parent direct children to the deleted tag's parent so they keep
-      // their place in the tree (becoming top-level when there is no parent).
-      final deletedTag = await (db.select(
-        db.tags,
-      )..where((t) => t.id.equals(id))).getSingleOrNull();
-      final grandparentId = deletedTag?.parentId;
-
-      final directChildren = await (db.select(db.tags)
-            ..where((t) => t.parentId.equals(id))
-            ..where((t) => t.archived.equals(false)))
-          .get();
-      for (final child in directChildren) {
-        await (db.update(db.tags)..where((t) => t.id.equals(child.id))).write(
-          TagsCompanion(
-            parentId: Value(grandparentId),
-            updatedAt: Value(now),
-            dirty: const Value(true),
-          ),
-        );
-      }
-    }
-
-    await (db.update(db.tags)..where((t) => t.id.equals(id))).write(
-      TagsCompanion(
-        archived: const Value(true),
-        updatedAt: Value(now),
-        dirty: const Value(true),
-      ),
-    );
-    await writeTombstone(db, 'tags', id);
-  });
+  await tags.archive(
+    tag.id,
+    mode: result == _CascadeChoice.cascade
+        ? TagArchiveMode.cascade
+        : TagArchiveMode.reparentChildren,
+  );
 }
 
 enum _CascadeChoice { cancel, keep, cascade }

@@ -1,6 +1,5 @@
 import 'package:app/auth/account.dart';
 import 'package:app/auth/auth_controller.dart';
-import 'package:app/database.dart';
 import 'package:app/screens/transaction_form.dart';
 import 'package:app/sync/sync_status_pill.dart';
 import 'package:flutter/material.dart';
@@ -72,15 +71,9 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _openManualAdd() async {
-    final db = context.read<AppDatabase>();
-    await Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => Provider<AppDatabase>.value(
-          value: db,
-          child: const TransactionFormScreen(),
-        ),
-      ),
-    );
+    await Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => const TransactionFormScreen()));
   }
 
   @override

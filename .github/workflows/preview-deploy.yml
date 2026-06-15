@@ -1,0 +1,105 @@
+name: Deploy Preview
+
+on:
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      deployments: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "pnpm"
+          cache-dependency-path: pnpm-lock.yaml
+
+      - run: pnpm install --frozen-lockfile
+
+      # github.head_ref is attacker-controlled (anyone can open a PR from a branch
+      # whose name contains shell metacharacters). Sanitize it once to a safe token
+      # — [A-Za-z0-9._-] only — so it can't inject into the shell steps or the
+      # wrangler command below. For normal branch names this is a no-op, so the
+      # Convex preview identifier (and thus its persisted data) is unchanged.
+      - name: Resolve branch name
+        id: branch
+        env:
+          HEAD_REF: ${{ github.head_ref }}
+        run: |
+          set -euo pipefail
+          safe="$(printf '%s' "$HEAD_REF" | tr -c 'A-Za-z0-9._-' '-')"
+          echo "name=$safe" >> "$GITHUB_OUTPUT"
+
+      # PRs get an isolated, ephemeral backend preview deployment. Creates/updates
+      # the preview (named after the branch), captures its .convex.cloud URL, and
+      # stages the VITE_* values for the web build (.convex.site is derived from
+      # .convex.cloud). SITE_URL is set LATER, after the web deploy reveals the
+      # real preview web origin.
+      - name: Deploy backend preview
+        working-directory: packages/backend
+        env:
+          CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_PREVIEW_DEPLOY_KEY }}
+          BRANCH_NAME: ${{ steps.branch.outputs.name }}
+        run: |
+          set -euo pipefail
+          npx convex deploy \
+            --preview-create "$BRANCH_NAME" \
+            --cmd-url-env-var-name CONVEX_URL_OUT \
+            --cmd 'printf "%s" "$CONVEX_URL_OUT" > "$RUNNER_TEMP/convex_url"'
+
+          URL="$(cat "$RUNNER_TEMP/convex_url")"
+          {
+            echo "CONVEX_PREVIEW_NAME=$(printf '%s' "$URL" | sed -E 's#https?://([^.]+)\..*#\1#')"
+            echo "VITE_CONVEX_URL=$URL"
+            echo "VITE_CONVEX_SITE_URL=${URL/.convex.cloud/.convex.site}"
+          } >> "$GITHUB_ENV"
+
+      - name: Build web app
+        working-directory: apps/web
+        run: pnpm run build
+
+      - name: Deploy web preview
+        id: deploy
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy apps/web/dist --project-name=walletbot-platform --branch=${{ steps.branch.outputs.name }}
+
+      # Point the preview backend's SITE_URL at the real branch-alias origin (now
+      # known) so better-auth trustedOrigins / crossDomain accept the browser's
+      # auth requests — otherwise the preview loads but CORS-fails. The alias is
+      # stable per branch and is the URL the PR comment links to.
+      - name: Set backend preview SITE_URL
+        working-directory: packages/backend
+        env:
+          CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_PREVIEW_DEPLOY_KEY }}
+        run: |
+          set -euo pipefail
+          npx convex env set SITE_URL "${{ steps.deploy.outputs.pages-deployment-alias-url }}" \
+            --deployment "$CONVEX_PREVIEW_NAME"
+
+      - name: Comment preview URL on PR
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `🚀 Preview deployed to: ${process.env.DEPLOYMENT_URL}\n\n_Use this stable branch-alias URL — per-commit \`<hash>.pages.dev\` URLs are not trusted by the backend and will CORS-fail._`
+            })
+        env:
+          # The stable branch-alias URL the web host issued (matches the backend
+          # SITE_URL set above). NOT the per-commit deployment-url, and NOT the
+          # unconfigured *.prev.walletbot.live domain.
+          DEPLOYMENT_URL: ${{ steps.deploy.outputs.pages-deployment-alias-url }}

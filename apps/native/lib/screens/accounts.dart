@@ -1,3 +1,4 @@
+import 'package:app/data/data.dart';
 import 'package:app/database.dart';
 import 'package:app/screens/create_account.dart';
 import 'package:flutter/material.dart';
@@ -7,11 +8,13 @@ class AccountsScreen extends StatelessWidget {
   const AccountsScreen({super.key});
 
   void _openCreate(BuildContext context) {
-    final db = context.read<AppDatabase>();
+    // Pushed routes sit above the account-scoped providers; re-provide them
+    // so the new route keeps using the active account's data layer.
+    final repos = context.read<AppRepositories>();
     Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) => Provider<AppDatabase>.value(
-          value: db,
+        builder: (_) => Provider<AppRepositories>.value(
+          value: repos,
           child: const CreateAccountScreen(),
         ),
       ),
@@ -20,7 +23,7 @@ class AccountsScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final db = context.read<AppDatabase>();
+    final repos = context.read<AppRepositories>();
     return Scaffold(
       appBar: AppBar(
         title: const Text('Cuentas'),
@@ -33,7 +36,7 @@ class AccountsScreen extends StatelessWidget {
         ],
       ),
       body: StreamBuilder<List<Account>>(
-        stream: db.watchAccounts(),
+        stream: repos.accounts.watchActive(),
         builder: (context, snapshot) {
           final loading = snapshot.connectionState == ConnectionState.waiting;
           final list = snapshot.data ?? [];

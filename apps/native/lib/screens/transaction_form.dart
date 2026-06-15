@@ -1,12 +1,8 @@
 import 'dart:async';
 
-import 'package:app/accounts/account_writes.dart';
-import 'package:app/categories/category_writes.dart';
 import 'package:app/components/color_utils.dart';
+import 'package:app/data/data.dart';
 import 'package:app/database.dart';
-import 'package:app/tags/tag_writes.dart';
-import 'package:app/transactions/manual_transaction_writes.dart';
-import 'package:drift/drift.dart' as drift;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -31,7 +27,7 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
   TextEditingController _tagController = TextEditingController();
 
   TransactionFormType _type = TransactionFormType.income;
-  AppDatabase? _db;
+  AppRepositories? _repos;
   List<Account> _accounts = const [];
   List<Category> _categories = const [];
   List<_FormTag> _knownTags = const [];
@@ -50,10 +46,10 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    final db = context.read<AppDatabase>();
-    if (_db == db) return;
-    _db = db;
-    unawaited(_loadFormData(db));
+    final repos = context.read<AppRepositories>();
+    if (_repos == repos) return;
+    _repos = repos;
+    unawaited(_loadFormData(repos));
   }
 
   @override
@@ -66,23 +62,19 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
     super.dispose();
   }
 
-  Future<void> _loadFormData(AppDatabase db) async {
+  Future<void> _loadFormData(AppRepositories repos) async {
     setState(() => _isLoading = true);
-    final accounts =
-        await (db.select(db.accounts)
-              ..where((t) => t.archived.equals(false))
-              ..orderBy([(t) => drift.OrderingTerm(expression: t.createdAt)]))
-            .get();
-    final categories =
-        await (db.select(db.categories)
-              ..where((t) => t.archived.equals(false))
-              ..orderBy([(t) => drift.OrderingTerm(expression: t.createdAt)]))
-            .get();
-    final tags =
-        await (db.select(db.tags)
-              ..where((t) => t.archived.equals(false))
-              ..orderBy([(t) => drift.OrderingTerm(expression: t.createdAt)]))
-            .get();
+    final results = await Future.wait([
+      repos.accounts.listActive(),
+      repos.categories.listActive(),
+      repos.tags.listActive(),
+    ]);
+    final accounts = List<Account>.from(results[0] as List<Account>)
+      ..sort((a, b) => a.createdAt.compareTo(b.createdAt));
+    final categories = List<Category>.from(results[1] as List<Category>)
+      ..sort((a, b) => a.createdAt.compareTo(b.createdAt));
+    final tags = List<Tag>.from(results[2] as List<Tag>)
+      ..sort((a, b) => a.createdAt.compareTo(b.createdAt));
 
     if (!mounted) return;
     setState(() {
@@ -289,16 +281,15 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
 
     final color = await _pickNewTagColor(name);
     if (color == null || !mounted) return;
-    final db = _db;
-    if (db == null) return;
+    final repos = _repos;
+    if (repos == null) return;
     try {
-      final created = await createLocalTag(
-        db,
+      final id = await repos.tags.create(
         name: name,
-        colorHex: colorToHex(color),
+        color: colorToHex(color),
       );
       if (!mounted) return;
-      final tag = _FormTag(id: created.id, name: created.name, color: color);
+      final tag = _FormTag(id: id, name: name, color: color);
       setState(() {
         _knownTags = [..._knownTags, tag];
         _tags.add(tag);
@@ -417,8 +408,8 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
     await _commitInlineEditing();
     if (!mounted) return;
     if (!(_formKey.currentState?.validate() ?? false)) return;
-    final db = _db;
-    if (db == null) return;
+    final repos = _repos;
+    if (repos == null) return;
     final account = _selectedAccount;
     if (account == null) {
       ScaffoldMessenger.of(
@@ -457,46 +448,63 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
     final navigator = Navigator.of(context);
 
     try {
-      final amount = _parseAmount(_amountController.text)!;
-      final destinationAmount = _type == TransactionFormType.transfer
+      final amountValue = _parseAmount(_amountController.text)!;
+      final amount = _amountToCents(amountValue);
+      final destinationAmountValue = _type == TransactionFormType.transfer
           ? _parseAmount(_destinationAmountController.text)
           : null;
       final exchangeRate =
           _shouldShowExchangeRate &&
-              destinationAmount != null &&
-              destinationAmount > 0
-          ? destinationAmount / amount
+              destinationAmountValue != null &&
+              destinationAmountValue > 0
+          ? destinationAmountValue / amountValue
           : null;
-      await createManualTransaction(
-        db,
-        ManualTransactionInput(
-          kind: switch (_type) {
-            TransactionFormType.income => ManualTransactionKind.income,
-            TransactionFormType.expense => ManualTransactionKind.expense,
-            TransactionFormType.transfer => ManualTransactionKind.transfer,
-          },
-          name: _type == TransactionFormType.transfer
-              ? 'Transferencia'
-              : _titleController.text.trim(),
-          description: _emptyToNull(_descriptionController.text),
-          date: _selectedDate,
-          accountId: account.id,
-          categoryId: category.id,
-          amount: amount,
-          destinationAccountId: destinationAccount?.id,
-          destinationAmount: destinationAmount,
-          exchangeRate: exchangeRate,
-          tags: _tags
-              .map(
-                (tag) => LocalTagDraft(
-                  id: tag.id,
-                  name: tag.name,
-                  colorHex: colorToHex(tag.color),
-                ),
-              )
-              .toList(growable: false),
-        ),
-      );
+      final dateMs = BigInt.from(_selectedDate.millisecondsSinceEpoch);
+      final tagIds = _tags
+          .map((tag) => tag.id)
+          .whereType<String>()
+          .toList(growable: false);
+      switch (_type) {
+        case TransactionFormType.income:
+          await repos.transactions.addIncome(
+            accountId: account.id,
+            categoryId: category.id,
+            name: _titleController.text.trim(),
+            amountCents: amount,
+            currency: account.currency,
+            description: _emptyToNull(_descriptionController.text),
+            dateMs: dateMs,
+            tagIds: tagIds,
+          );
+        case TransactionFormType.expense:
+          await repos.transactions.addExpense(
+            accountId: account.id,
+            categoryId: category.id,
+            name: _titleController.text.trim(),
+            amountCents: amount,
+            currency: account.currency,
+            description: _emptyToNull(_descriptionController.text),
+            dateMs: dateMs,
+            tagIds: tagIds,
+          );
+        case TransactionFormType.transfer:
+          await repos.transactions.addTransfer(
+            fromAccountId: account.id,
+            toAccountId: destinationAccount!.id,
+            name: 'Transferencia',
+            amountCents: amount,
+            currency: account.currency,
+            toAmountCents: _amountToCents(
+              destinationAmountValue ?? amountValue,
+            ),
+            toCurrency: destinationAccount.currency,
+            exchangeRate: exchangeRate,
+            categoryId: category.id,
+            description: _emptyToNull(_descriptionController.text),
+            dateMs: dateMs,
+            tagIds: tagIds,
+          );
+      }
 
       if (!mounted) return;
       messenger.showSnackBar(
@@ -1056,17 +1064,17 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
   }
 
   Future<Account?> _createRealAccount(String name, String currency) async {
-    final db = _db;
-    if (db == null) return null;
+    final repos = _repos;
+    if (repos == null) return null;
     try {
-      final account = await createLocalAccount(
-        db,
+      final accountId = await repos.accounts.create(
         name: name,
         currency: currency,
       );
-      if (!mounted) return account;
-      await _loadFormData(db);
-      if (!mounted) return account;
+      await _loadFormData(repos);
+      if (!mounted) return null;
+      final account = _accounts.where((item) => item.id == accountId).firstOrNull;
+      if (account == null) return null;
       setState(() {
         _selectedAccount = account;
         if (_type == TransactionFormType.transfer &&
@@ -1089,13 +1097,16 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
   }
 
   Future<Category?> _createRealCategory(String name) async {
-    final db = _db;
-    if (db == null) return null;
+    final repos = _repos;
+    if (repos == null) return null;
     try {
-      final category = await createLocalCategory(db, name: name);
-      if (!mounted) return category;
-      await _loadFormData(db);
-      if (!mounted) return category;
+      final categoryId = await repos.categories.create(name: name);
+      await _loadFormData(repos);
+      if (!mounted) return null;
+      final category = _categories
+          .where((item) => item.id == categoryId)
+          .firstOrNull;
+      if (category == null) return null;
       setState(() => _selectedCategory = category);
       return category;
     } catch (error) {
@@ -1485,6 +1496,10 @@ class _FormTag {
 
 double? _parseAmount(String value) {
   return double.tryParse(value.trim().replaceAll(',', '.'));
+}
+
+BigInt _amountToCents(double amount) {
+  return BigInt.from((amount * 100).round());
 }
 
 void _setAmountToZero(TextEditingController controller) {
