@@ -146,6 +146,7 @@ class _HomeScreenState extends State<HomeScreen> {
         children: [
           DashboardSection(
             editing: _editing,
+            onStartEditing: () => setState(() => _editing = true),
             onOpenFilter: widget.onOpenActivity,
           ),
           const SizedBox(height: 24),
