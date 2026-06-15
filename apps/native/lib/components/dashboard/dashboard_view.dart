@@ -65,6 +65,9 @@ class DashboardView extends StatelessWidget {
                     ) ...[
                       if (itemIndex > 0) const SizedBox(width: _gap),
                       Expanded(
+                        key: ValueKey(
+                          rows[rowIndex].items[itemIndex].item.row.id,
+                        ),
                         flex: rows[rowIndex].items[itemIndex].units,
                         child: _buildInteractiveItem(
                           context,
@@ -179,13 +182,17 @@ class DashboardView extends StatelessWidget {
       ),
     );
 
-    if (!editing || onMoveItem == null) return child;
+    final canReorder = editing && onMoveItem != null;
 
     final dragTarget = DragTarget<String>(
-      onWillAcceptWithDetails: (details) => details.data != item.row.id,
-      onAcceptWithDetails: (details) => onMoveItem!(details.data, item.row.id),
+      onWillAcceptWithDetails: canReorder
+          ? (details) => details.data != item.row.id
+          : null,
+      onAcceptWithDetails: canReorder
+          ? (details) => onMoveItem!(details.data, item.row.id)
+          : null,
       builder: (context, candidateData, rejectedData) {
-        final hovering = candidateData.isNotEmpty;
+        final hovering = canReorder && candidateData.isNotEmpty;
         return DecoratedBox(
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(8),
@@ -208,6 +215,7 @@ class DashboardView extends StatelessWidget {
 
     return LongPressDraggable<String>(
       data: item.row.id,
+      maxSimultaneousDrags: canReorder ? null : 0,
       dragAnchorStrategy: pointerDragAnchorStrategy,
       feedback: SizedBox(
         width: estimatedWidth.clamp(120, MediaQuery.sizeOf(context).width - 32),
@@ -218,7 +226,7 @@ class DashboardView extends StatelessWidget {
           child: _DashboardEditableFrame(
             selected: true,
             width: item.spec.width,
-            child: _buildWidget(item.spec),
+            child: _DashboardDragPreview(spec: item.spec),
           ),
         ),
       ),
@@ -234,6 +242,62 @@ class DashboardView extends StatelessWidget {
       BalanceCardWidgetSpec() => BalanceCardWidget(spec: spec),
       ChartWidgetSpec() => BreakdownChartWidget(spec: spec),
     };
+  }
+}
+
+class _DashboardDragPreview extends StatelessWidget {
+  const _DashboardDragPreview({required this.spec});
+
+  final DashboardWidgetSpec spec;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final title = switch (spec) {
+      StatWidgetSpec(:final title) ||
+      TransactionListWidgetSpec(:final title) ||
+      BalanceCardWidgetSpec(:final title) ||
+      ChartWidgetSpec(:final title) => title.isEmpty ? 'Widget' : title,
+    };
+    final icon = switch (spec) {
+      StatWidgetSpec() => Icons.calculate_outlined,
+      TransactionListWidgetSpec() => Icons.receipt_long_outlined,
+      BalanceCardWidgetSpec() => Icons.account_balance_wallet_outlined,
+      ChartWidgetSpec() => Icons.donut_large_rounded,
+    };
+
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: Color.alphaBlend(
+          colors.primary.withValues(alpha: 0.06),
+          colors.surface,
+        ),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minHeight: 128),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            children: [
+              Icon(icon, color: colors.primary),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w800,
+                    color: colors.onSurface,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }
 
