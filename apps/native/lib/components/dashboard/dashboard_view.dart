@@ -69,6 +69,9 @@ class DashboardView extends StatelessWidget {
                         child: _buildInteractiveItem(
                           context,
                           rows[rowIndex].items[itemIndex].item,
+                          maxWidth *
+                              rows[rowIndex].items[itemIndex].units /
+                              _gridUnits,
                         ),
                       ),
                     ],
@@ -148,7 +151,11 @@ class DashboardView extends StatelessWidget {
     };
   }
 
-  Widget _buildInteractiveItem(BuildContext context, DashboardViewItem item) {
+  Widget _buildInteractiveItem(
+    BuildContext context,
+    DashboardViewItem item,
+    double estimatedWidth,
+  ) {
     final selected = editing && selectedItemId == item.row.id;
     final child = _DashboardEditableFrame(
       selected: selected,
@@ -199,12 +206,21 @@ class DashboardView extends StatelessWidget {
       },
     );
 
-    return _DashboardDraggableItem(
-      id: item.row.id,
-      feedback: _DashboardEditableFrame(
-        selected: true,
-        width: item.spec.width,
-        child: _buildWidget(item.spec),
+    return LongPressDraggable<String>(
+      data: item.row.id,
+      dragAnchorStrategy: pointerDragAnchorStrategy,
+      feedback: SizedBox(
+        width: estimatedWidth.clamp(120, MediaQuery.sizeOf(context).width - 32),
+        child: Material(
+          color: Colors.transparent,
+          elevation: 10,
+          borderRadius: BorderRadius.circular(8),
+          child: _DashboardEditableFrame(
+            selected: true,
+            width: item.spec.width,
+            child: _buildWidget(item.spec),
+          ),
+        ),
       ),
       childWhenDragging: Opacity(opacity: 0.35, child: dragTarget),
       child: dragTarget,
@@ -218,68 +234,6 @@ class DashboardView extends StatelessWidget {
       BalanceCardWidgetSpec() => BalanceCardWidget(spec: spec),
       ChartWidgetSpec() => BreakdownChartWidget(spec: spec),
     };
-  }
-}
-
-class _DashboardDraggableItem extends StatefulWidget {
-  const _DashboardDraggableItem({
-    required this.id,
-    required this.feedback,
-    required this.childWhenDragging,
-    required this.child,
-  });
-
-  final String id;
-  final Widget feedback;
-  final Widget childWhenDragging;
-  final Widget child;
-
-  @override
-  State<_DashboardDraggableItem> createState() =>
-      _DashboardDraggableItemState();
-}
-
-class _DashboardDraggableItemState extends State<_DashboardDraggableItem> {
-  final _key = GlobalKey();
-  double? _width;
-
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _measure());
-  }
-
-  @override
-  void didUpdateWidget(_DashboardDraggableItem oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    WidgetsBinding.instance.addPostFrameCallback((_) => _measure());
-  }
-
-  void _measure() {
-    if (!mounted) return;
-    final width = _key.currentContext?.size?.width;
-    if (width == null || width == _width) return;
-    setState(() => _width = width);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final feedbackWidth = _width ?? MediaQuery.sizeOf(context).width - 32;
-    return LongPressDraggable<String>(
-      data: widget.id,
-      dragAnchorStrategy: pointerDragAnchorStrategy,
-      feedback: SizedBox(
-        width: feedbackWidth,
-        child: Material(
-          color: Colors.transparent,
-          elevation: 10,
-          borderRadius: BorderRadius.circular(8),
-          child: widget.feedback,
-        ),
-      ),
-      childWhenDragging: widget.childWhenDragging,
-      child: KeyedSubtree(key: _key, child: widget.child),
-    );
   }
 }
 

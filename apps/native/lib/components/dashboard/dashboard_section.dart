@@ -33,23 +33,6 @@ class _DashboardSectionState extends State<DashboardSection> {
   final _pendingDeletes = <String>{};
   final _pendingWidths = <String, DashboardWidth>{};
   String? _selectedId;
-  AppRepositories? _repos;
-  Stream<(List<DashboardWidget>, List<SavedFilter>)>? _dashboardStream;
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    final repos = context.read<AppRepositories>();
-    if (identical(_repos, repos)) return;
-
-    _repos = repos;
-    _dashboardStream = combineLatest2(
-      repos.dashboard.watchWidgets(),
-      repos.savedFilters.watchActive(),
-      (List<DashboardWidget> widgets, List<SavedFilter> filters) =>
-          (widgets, filters),
-    );
-  }
 
   @override
   void didUpdateWidget(DashboardSection oldWidget) {
@@ -61,10 +44,16 @@ class _DashboardSectionState extends State<DashboardSection> {
 
   @override
   Widget build(BuildContext context) {
-    final repos = _repos ?? context.read<AppRepositories>();
+    final repos = context.read<AppRepositories>();
+    final stream = combineLatest2(
+      repos.dashboard.watchWidgets(),
+      repos.savedFilters.watchActive(),
+      (List<DashboardWidget> widgets, List<SavedFilter> filters) =>
+          (widgets, filters),
+    );
 
     return StreamBuilder<(List<DashboardWidget>, List<SavedFilter>)>(
-      stream: _dashboardStream,
+      stream: stream,
       builder: (context, snapshot) {
         final theme = Theme.of(context);
         if (snapshot.hasError) {
