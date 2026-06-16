@@ -1,20 +1,16 @@
 import { api } from '@wallet-bot/backend/api'
-import { usePaginatedQuery, useQuery } from 'convex/react'
+import { usePaginatedQuery } from 'convex/react'
 import { Loader2 } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Skeleton } from '@/components/ui/skeleton'
-import { ActivitySummaryCard } from './activity-summary-card'
 import { FilterChips } from './filter-chips'
 import {
-    type ActivityTransaction,
-    aggregateMonth,
     buildListEntries,
     dateFromMs,
     dateToMs,
     EMPTY_FILTERS,
     estimatedDescription,
     matchesFilters,
-    monthRange,
     signedAmountCents,
     type TransactionFilters,
     type TransactionType,
@@ -69,26 +65,6 @@ export function Activity() {
         [filtered, nowMs],
     )
 
-    // Monthly summary: independent of the list filters — it always describes the
-    // current month. Bounded single page (a personal month rarely exceeds it).
-    const month = useMemo(() => monthRange(now), [now])
-    const monthPage = useQuery(api.transactions.queries.listPaginated, {
-        paginationOpts: { numItems: AUTO_LOAD_CAP, cursor: null },
-        dateFrom: month.from,
-        dateTo: month.to,
-    })
-    const aggregates = useMemo(
-        () =>
-            monthPage
-                ? aggregateMonth(
-                      monthPage.page.filter(
-                          (t: ActivityTransaction) => !t.isArchived,
-                      ),
-                  )
-                : undefined,
-        [monthPage],
-    )
-
     // Keep the list filled when client-side filters reduce the loaded page.
     useEffect(() => {
         if (
@@ -117,7 +93,6 @@ export function Activity() {
     return (
         <div className="flex flex-1 flex-col">
             <div className="mx-auto flex w-full max-w-2xl flex-1 flex-col gap-4 p-4">
-                <ActivitySummaryCard aggregates={aggregates} />
                 <TransactionFiltersBar
                     filters={filters}
                     onChange={setFilters}
