@@ -79,7 +79,9 @@ SimpleSelectStatement<$TransactionsTable, Transaction> buildTransactionQuery(
   if (search.isNotEmpty) {
     final escaped = search.replaceAll('%', '%%').replaceAll('_', '__');
     final pattern = '%${escaped.toLowerCase()}%';
-    query.where((t) => t.name.lower().like(pattern));
+    query.where(
+      (t) => t.name.lower().like(pattern) | t.description.lower().like(pattern),
+    );
   }
 
   if (filter.categoryIds.isNotEmpty) {
