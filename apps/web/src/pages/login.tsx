@@ -116,6 +116,7 @@ export function Login() {
                                     id="name"
                                     name="name"
                                     autoComplete="name"
+                                    placeholder="Your name"
                                     className="pl-8"
                                     disabled={loading !== null}
                                 />
@@ -132,6 +133,7 @@ export function Login() {
                                 name="email"
                                 type="email"
                                 autoComplete="email"
+                                placeholder="you@example.com"
                                 className="pl-8"
                                 required
                                 disabled={loading !== null}
@@ -151,6 +153,11 @@ export function Login() {
                                     mode === 'sign-in'
                                         ? 'current-password'
                                         : 'new-password'
+                                }
+                                placeholder={
+                                    mode === 'sign-in'
+                                        ? 'Your password'
+                                        : 'At least 8 characters'
                                 }
                                 className="pl-8"
                                 minLength={8}
