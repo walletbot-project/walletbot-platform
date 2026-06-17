@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:app/auth/auth_controller.dart';
+import 'package:app/auth/pop_on_account_switch.dart';
 import 'package:app/config.dart';
 import 'package:app/data/data.dart';
 import 'package:app/database.dart';
@@ -167,7 +168,7 @@ class _AppMainState extends State<AppMain> {
           final accountId = context.read<AuthController>().activeAccount?.id;
           Navigator.of(context).push(
             MaterialPageRoute(
-              builder: (_) => _PopOnAccountSwitch(
+              builder: (_) => PopOnAccountSwitch(
                 accountId: accountId,
                 child: VoiceScreen(
                   commandFactory: GeminiVoiceExpenseCommandFactory(
@@ -203,29 +204,6 @@ class _AppMainState extends State<AppMain> {
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
     );
-  }
-}
-
-/// Pops its route as soon as the active account is no longer the one the
-/// route was opened for (switch, sign-out). The child captured account-scoped
-/// objects at push time; once the account changes those are disposed, so the
-/// route must not stay on screen.
-class _PopOnAccountSwitch extends StatelessWidget {
-  const _PopOnAccountSwitch({required this.accountId, required this.child});
-
-  final String? accountId;
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    final activeId = context.watch<AuthController>().activeAccount?.id;
-    if (activeId != accountId) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!context.mounted) return;
-        Navigator.of(context).pop();
-      });
-    }
-    return child;
   }
 }
 

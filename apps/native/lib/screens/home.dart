@@ -1,5 +1,7 @@
 import 'package:app/auth/account.dart';
 import 'package:app/auth/auth_controller.dart';
+import 'package:app/auth/pop_on_account_switch.dart';
+import 'package:app/screens/login.dart';
 import 'package:app/screens/transaction_form.dart';
 import 'package:app/sync/sync_status_pill.dart';
 import 'package:flutter/material.dart';
@@ -13,53 +15,70 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  void showUserMenu() {
-    showDialog(
+  void _showAccountSwitcher() {
+    showDialog<void>(
       context: context,
       useSafeArea: false,
-      builder: (context) {
-        final auth = context.watch<AuthController>();
+      builder: (dialogContext) {
+        final auth = dialogContext.watch<AuthController>();
         return Dialog.fullscreen(
           child: Scaffold(
             appBar: AppBar(
-              title: const Text('Accounts'),
+              title: const Text('Tus cuentas'),
               leading: IconButton(
                 icon: const Icon(Icons.close),
-                onPressed: () => Navigator.pop(context),
+                onPressed: () => Navigator.pop(dialogContext),
               ),
             ),
             body: ListView(
               children: [
                 for (final account in auth.accounts)
                   ListTile(
-                    leading: Icon(
-                      account.type == AccountType.local
-                          ? Icons.person_outline
-                          : Icons.cloud_outlined,
-                    ),
-                    title: Text(
-                      account.name ?? account.email ?? 'Local account',
-                    ),
+                    leading: _AccountAvatar(account: account),
+                    title: Text(account.name ?? account.email ?? 'Sin nombre'),
                     subtitle: Text(
-                      account.type == AccountType.local ? 'Local' : 'Online',
+                      account.type == AccountType.local
+                          ? 'Sin cuenta'
+                          : account.email ?? 'Con cuenta',
                     ),
-                    trailing: account.id == auth.activeId
-                        ? const Icon(Icons.check_circle)
-                        : null,
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (account.id == auth.activeId)
+                          const Padding(
+                            padding: EdgeInsets.only(right: 4),
+                            child: Icon(Icons.check_circle),
+                          ),
+                        IconButton(
+                          icon: const Icon(Icons.delete_outline_rounded),
+                          tooltip: 'Quitar cuenta',
+                          onPressed: () =>
+                              _confirmRemoveAccount(dialogContext, account),
+                        ),
+                      ],
+                    ),
                     onTap: () async {
                       if (account.id != auth.activeId) {
                         await auth.switchTo(account.id);
                       }
-                      if (context.mounted) Navigator.pop(context);
+                      if (dialogContext.mounted) Navigator.pop(dialogContext);
                     },
                   ),
                 const Divider(),
                 ListTile(
-                  leading: const Icon(Icons.logout_rounded),
-                  title: const Text('Sign out'),
-                  onTap: () async {
-                    Navigator.pop(context);
-                    await auth.signOut();
+                  leading: const Icon(Icons.person_add_alt_1_rounded),
+                  title: const Text('Agregar cuenta'),
+                  onTap: () {
+                    final previousId = auth.activeId;
+                    Navigator.pop(dialogContext);
+                    Navigator.of(context, rootNavigator: true).push(
+                      MaterialPageRoute<void>(
+                        builder: (_) => PopOnAccountSwitch(
+                          accountId: previousId,
+                          child: const LoginScreen(canDismiss: true),
+                        ),
+                      ),
+                    );
                   },
                 ),
               ],
@@ -68,6 +87,57 @@ class _HomeScreenState extends State<HomeScreen> {
         );
       },
     );
+  }
+
+  Future<void> _confirmRemoveAccount(
+    BuildContext dialogContext,
+    UserAccount account,
+  ) async {
+    final auth = dialogContext.read<AuthController>();
+    final label = account.name ?? account.email ?? 'esta cuenta';
+    final confirmed = await showDialog<bool>(
+      context: dialogContext,
+      builder: (confirmContext) => AlertDialog(
+        title: const Text('Quitar cuenta'),
+        content: Text(
+          'Se eliminarán los datos de "$label" de este dispositivo. '
+          'Esta acción no se puede deshacer.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(confirmContext, false),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(confirmContext, true),
+            child: const Text('Quitar'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    final wasActive = account.id == auth.activeId;
+    try {
+      if (account.type == AccountType.local) {
+        await auth.deleteLocal(account.id);
+      } else {
+        await auth.signOutRemote(account.id);
+      }
+    } catch (e) {
+      if (dialogContext.mounted) {
+        ScaffoldMessenger.of(dialogContext).showSnackBar(
+          SnackBar(content: Text('No se pudo quitar la cuenta: $e')),
+        );
+      }
+      return;
+    }
+
+    // Removing the active account drops us back to the login screen; close the
+    // switcher so it is not left floating above it.
+    if (wasActive && dialogContext.mounted) {
+      Navigator.pop(dialogContext);
+    }
   }
 
   Future<void> _openManualAdd() async {
@@ -87,7 +157,7 @@ class _HomeScreenState extends State<HomeScreen> {
             child: Center(child: SyncStatusPill()),
           ),
           IconButton(
-            onPressed: showUserMenu,
+            onPressed: _showAccountSwitcher,
             icon: const Icon(Icons.person_rounded),
           ),
         ],
@@ -168,6 +238,33 @@ class _HomeActionCard extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _AccountAvatar extends StatelessWidget {
+  const _AccountAvatar({required this.account});
+
+  final UserAccount account;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final isLocal = account.type == AccountType.local;
+    final picture = account.picture;
+
+    return CircleAvatar(
+      radius: 20,
+      backgroundColor: isLocal
+          ? colors.secondaryContainer
+          : colors.tertiaryContainer,
+      foregroundColor: isLocal
+          ? colors.onSecondaryContainer
+          : colors.onTertiaryContainer,
+      backgroundImage: picture == null ? null : NetworkImage(picture),
+      child: picture == null
+          ? Icon(isLocal ? Icons.person_outline : Icons.cloud_outlined)
+          : null,
     );
   }
 }

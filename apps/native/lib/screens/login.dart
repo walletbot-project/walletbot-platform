@@ -1,6 +1,3 @@
-import 'dart:math' as math;
-
-import 'package:app/auth/account.dart';
 import 'package:app/auth/auth_controller.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
@@ -11,7 +8,13 @@ enum _EmailAuthMode { signIn, signUp }
 enum _LoginPath { remote, local }
 
 class LoginScreen extends StatefulWidget {
-  const LoginScreen({super.key});
+  const LoginScreen({super.key, this.canDismiss = false});
+
+  /// When true the screen was surfaced on top of an active account (via the
+  /// account switcher's "add account" action), so it shows a close button that
+  /// returns to the current account. When false it is the app root shown at
+  /// first launch and offers no way out but signing in.
+  final bool canDismiss;
 
   @override
   State<LoginScreen> createState() => _LoginScreenState();
@@ -100,8 +103,6 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final accounts = context.watch<AuthController>().accounts;
-
     return Scaffold(
       body: Stack(
         children: [
@@ -117,7 +118,18 @@ class _LoginScreenState extends State<LoginScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        _HeroHeader(hasAccounts: accounts.isNotEmpty),
+                        if (widget.canDismiss)
+                          Align(
+                            alignment: Alignment.centerLeft,
+                            child: IconButton(
+                              tooltip: 'Cerrar',
+                              onPressed: _submitting
+                                  ? null
+                                  : () => Navigator.of(context).pop(),
+                              icon: const Icon(Icons.close_rounded),
+                            ),
+                          ),
+                        const _HeroHeader(),
                         const SizedBox(height: 22),
                         _PathPicker(
                           selected: _path,
@@ -146,10 +158,6 @@ class _LoginScreenState extends State<LoginScreen> {
                             onSubmit: _submitLocal,
                           ),
                         ),
-                        if (accounts.isNotEmpty) ...[
-                          const SizedBox(height: 24),
-                          _SavedAccounts(accounts: accounts),
-                        ],
                       ],
                     ),
                   ),
@@ -261,9 +269,7 @@ class _LoginBackdropPainter extends CustomPainter {
 }
 
 class _HeroHeader extends StatelessWidget {
-  const _HeroHeader({required this.hasAccounts});
-
-  final bool hasAccounts;
+  const _HeroHeader();
 
   @override
   Widget build(BuildContext context) {
@@ -308,9 +314,7 @@ class _HeroHeader extends StatelessWidget {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    hasAccounts
-                        ? 'Seguí donde lo dejaste.'
-                        : 'Empezá con sincronización o sin cuenta.',
+                    'Empezá con sincronización o sin cuenta.',
                     style: theme.textTheme.bodyMedium?.copyWith(
                       color: colors.onSurfaceVariant,
                       fontWeight: FontWeight.w600,
@@ -896,129 +900,6 @@ class _PrimaryActionButton extends StatelessWidget {
               )
             : Text(label),
       ),
-    );
-  }
-}
-
-class _SavedAccounts extends StatelessWidget {
-  const _SavedAccounts({required this.accounts});
-
-  final List<UserAccount> accounts;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colors = theme.colorScheme;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Billeteras guardadas',
-          style: theme.textTheme.titleSmall?.copyWith(
-            color: colors.onSurfaceVariant,
-            fontWeight: FontWeight.w900,
-          ),
-        ),
-        for (final account in accounts) ...[
-          _SavedAccountTile(account: account),
-          const SizedBox(height: 8),
-        ],
-      ],
-    );
-  }
-}
-
-class _SavedAccountTile extends StatelessWidget {
-  const _SavedAccountTile({required this.account});
-
-  final UserAccount account;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colors = theme.colorScheme;
-    final title = account.name ?? account.email ?? 'Espacio sin nombre';
-    final subtitle = account.type == AccountType.local
-        ? 'Sin cuenta'
-        : account.email ?? 'Con cuenta';
-
-    return Material(
-      color: colors.surface.withValues(alpha: 0.88),
-      borderRadius: BorderRadius.circular(18),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(18),
-        onTap: () => context.read<AuthController>().switchTo(account.id),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-          child: Row(
-            children: [
-              _AccountMark(account: account),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.titleSmall?.copyWith(
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      subtitle,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: colors.onSurfaceVariant,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Transform.rotate(
-                angle: math.pi * -0.08,
-                child: Icon(
-                  Icons.arrow_forward_rounded,
-                  color: colors.onSurfaceVariant,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _AccountMark extends StatelessWidget {
-  const _AccountMark({required this.account});
-
-  final UserAccount account;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    final isLocal = account.type == AccountType.local;
-
-    return CircleAvatar(
-      radius: 22,
-      backgroundColor: isLocal
-          ? colors.secondaryContainer
-          : colors.tertiaryContainer,
-      foregroundColor: isLocal
-          ? colors.onSecondaryContainer
-          : colors.onTertiaryContainer,
-      backgroundImage: account.picture == null
-          ? null
-          : NetworkImage(account.picture!),
-      child: account.picture == null
-          ? Icon(isLocal ? Icons.phone_iphone_rounded : Icons.cloud_rounded)
-          : null,
     );
   }
 }
