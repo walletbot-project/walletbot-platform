@@ -49,6 +49,7 @@ Future<TransactionFilter?> showFilterSheet(
   BuildContext context, {
   TransactionFilter initial = const TransactionFilter(),
   Set<FilterSection> hiddenSections = const {},
+  bool? allowAdvanced,
   AppRepositories? repos,
 }) {
   // Read the repositories from the *calling* context: the modal route is
@@ -68,6 +69,7 @@ Future<TransactionFilter?> showFilterSheet(
       repos: resolvedRepos,
       initial: initial,
       hiddenSections: hiddenSections,
+      allowAdvanced: allowAdvanced,
     ),
   );
 }
@@ -80,11 +82,17 @@ class FilterSheet extends StatefulWidget {
     required this.repos,
     this.initial = const TransactionFilter(),
     this.hiddenSections = const {},
+    this.allowAdvanced,
   });
 
   final AppRepositories repos;
   final TransactionFilter initial;
   final Set<FilterSection> hiddenSections;
+
+  /// Whether the advanced editor toggle is offered. Defaults to "only when no
+  /// sections are hidden", since the advanced tree ignores [hiddenSections] and
+  /// can edit dimensions the caller owns elsewhere. Pass `true` to force it on.
+  final bool? allowAdvanced;
 
   @override
   State<FilterSheet> createState() => _FilterSheetState();
@@ -191,7 +199,8 @@ class _FilterSheetState extends State<FilterSheet> {
   bool _shows(FilterSection section) =>
       !widget.hiddenSections.contains(section);
 
-  bool get _canUseAdvanced => widget.hiddenSections.isEmpty;
+  bool get _canUseAdvanced =>
+      widget.allowAdvanced ?? widget.hiddenSections.isEmpty;
 
   /// Clears only the dimensions this sheet actually renders — hidden sections
   /// (owned by the caller, e.g. the activity bar's type chips and search) keep
@@ -264,6 +273,31 @@ class _FilterSheetState extends State<FilterSheet> {
         _mode = _FilterEditorMode.advanced;
       } else {
         _mode = _FilterEditorMode.simple;
+      }
+    });
+  }
+
+  /// Toggles a tag selection. Deselecting a tag also drops every descendant
+  /// from the selection so a hidden subtag (whose parent is no longer selected)
+  /// can't linger in the filter.
+  void _toggleTag(String id, bool selected, List<Tag> tags) {
+    setState(() {
+      if (selected) {
+        _tagIds.add(id);
+        return;
+      }
+      final childrenByParent = <String, List<String>>{};
+      for (final tag in tags) {
+        final parentId = tag.parentId;
+        if (parentId != null) {
+          childrenByParent.putIfAbsent(parentId, () => []).add(tag.id);
+        }
+      }
+      final queue = <String>[id];
+      while (queue.isNotEmpty) {
+        final next = queue.removeAt(0);
+        _tagIds.remove(next);
+        queue.addAll(childrenByParent[next] ?? const <String>[]);
       }
     });
   }
@@ -415,26 +449,6 @@ class _FilterSheetState extends State<FilterSheet> {
               ],
             ),
           ),
-        if (_shows(FilterSection.status))
-          _Section(
-            title: 'Estado',
-            child: Wrap(
-              spacing: 8,
-              children: [
-                ChoiceChip(
-                  label: const Text('Cualquiera'),
-                  selected: _status == null,
-                  onSelected: (_) => setState(() => _status = null),
-                ),
-                for (final status in TxnStatus.values)
-                  ChoiceChip(
-                    label: Text(status.label),
-                    selected: _status == status,
-                    onSelected: (_) => setState(() => _status = status),
-                  ),
-              ],
-            ),
-          ),
         if (_shows(FilterSection.date))
           _Section(
             title: 'Fecha',
@@ -476,10 +490,8 @@ class _FilterSheetState extends State<FilterSheet> {
                 if (options.accounts.isEmpty)
                   const _EmptyHint('No hay cuentas todavía.')
                 else
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 4,
-                    children: [
+                  _ExpandableChips(
+                    chips: [
                       for (final account in options.accounts)
                         FilterChip(
                           label: Text(account.name),
@@ -517,10 +529,8 @@ class _FilterSheetState extends State<FilterSheet> {
             title: 'Categorías',
             child: options.categories.isEmpty
                 ? const _EmptyHint('No hay categorías todavía.')
-                : Wrap(
-                    spacing: 8,
-                    runSpacing: 4,
-                    children: [
+                : _ExpandableChips(
+                    chips: [
                       for (final category in options.categories)
                         FilterChip(
                           label: Text(category.name),
@@ -536,62 +546,24 @@ class _FilterSheetState extends State<FilterSheet> {
                     ],
                   ),
           ),
-        if (_shows(FilterSection.tags))
+        if (_shows(FilterSection.tags)) ..._buildTagSections(options),
+        if (_shows(FilterSection.status))
           _Section(
-            title: 'Tags',
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+            title: 'Estado',
+            child: Wrap(
+              spacing: 8,
               children: [
-                if (options.tags.isEmpty)
-                  const _EmptyHint('No hay tags todavía.')
-                else
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 4,
-                    children: [
-                      for (final tag in options.tags)
-                        FilterChip(
-                          label: Text(tag.name),
-                          selected: _tagIds.contains(tag.id),
-                          onSelected: (selected) => setState(() {
-                            if (selected) {
-                              _tagIds.add(tag.id);
-                            } else {
-                              _tagIds.remove(tag.id);
-                            }
-                          }),
-                        ),
-                    ],
+                ChoiceChip(
+                  label: const Text('Cualquiera'),
+                  selected: _status == null,
+                  onSelected: (_) => setState(() => _status = null),
+                ),
+                for (final status in TxnStatus.values)
+                  ChoiceChip(
+                    label: Text(status.label),
+                    selected: _status == status,
+                    onSelected: (_) => setState(() => _status = status),
                   ),
-                if (_tagIds.isNotEmpty) ...[
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      _SubLabel('Coincidencia'),
-                      const SizedBox(width: 12),
-                      SegmentedButton<TagMatch>(
-                        showSelectedIcon: false,
-                        segments: [
-                          for (final match in TagMatch.values)
-                            ButtonSegment(
-                              value: match,
-                              label: Text(match.label),
-                            ),
-                        ],
-                        selected: {_tagMatch},
-                        onSelectionChanged: (selection) =>
-                            setState(() => _tagMatch = selection.first),
-                      ),
-                    ],
-                  ),
-                  SwitchListTile(
-                    contentPadding: EdgeInsets.zero,
-                    title: const Text('Incluir subetiquetas'),
-                    value: _includeSubtags,
-                    onChanged: (value) =>
-                        setState(() => _includeSubtags = value),
-                  ),
-                ],
               ],
             ),
           ),
@@ -677,6 +649,41 @@ class _FilterSheetState extends State<FilterSheet> {
           ),
       ],
     );
+  }
+
+  /// Tags split into a top-level section plus a contextual "Subetiquetas"
+  /// section that only lists the children of the currently selected tags.
+  List<Widget> _buildTagSections(_FilterOptions options) {
+    final topLevel = [
+      for (final tag in options.tags)
+        if (tag.parentId == null) tag,
+    ];
+    final subtags = [
+      for (final tag in options.tags)
+        if (tag.parentId != null && _tagIds.contains(tag.parentId)) tag,
+    ];
+
+    Widget chip(Tag tag) => FilterChip(
+      label: Text(tag.name),
+      selected: _tagIds.contains(tag.id),
+      onSelected: (selected) => _toggleTag(tag.id, selected, options.tags),
+    );
+
+    return [
+      _Section(
+        title: 'Tags',
+        child: topLevel.isEmpty
+            ? const _EmptyHint('No hay tags todavía.')
+            : _ExpandableChips(chips: [for (final tag in topLevel) chip(tag)]),
+      ),
+      if (subtags.isNotEmpty)
+        _Section(
+          title: 'Subetiquetas',
+          child: _ExpandableChips(
+            chips: [for (final tag in subtags) chip(tag)],
+          ),
+        ),
+    ];
   }
 
   String _formatRange(DateTimeRange range) {
@@ -767,6 +774,58 @@ class _Header extends StatelessWidget {
           IconButton(icon: const Icon(Icons.close_rounded), onPressed: onClose),
         ],
       ),
+    );
+  }
+}
+
+/// Above this many chips, a selectable section collapses behind a "Ver más"
+/// button so long account/tag/category lists don't dominate the sheet.
+const int _chipCollapseThreshold = 12;
+
+/// A [Wrap] of [chips] that collapses to [threshold] items behind a "Ver más"
+/// toggle when the list is longer. Keeps its own expand/collapse state.
+class _ExpandableChips extends StatefulWidget {
+  const _ExpandableChips({required this.chips});
+
+  final List<Widget> chips;
+
+  @override
+  State<_ExpandableChips> createState() => _ExpandableChipsState();
+}
+
+class _ExpandableChipsState extends State<_ExpandableChips> {
+  bool _expanded = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final chips = widget.chips;
+    final collapses = chips.length > _chipCollapseThreshold;
+    final visible = collapses && !_expanded
+        ? chips.sublist(0, _chipCollapseThreshold)
+        : chips;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Wrap(spacing: 8, runSpacing: 4, children: visible),
+        if (collapses)
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton(
+              style: TextButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                minimumSize: const Size(0, 32),
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                visualDensity: VisualDensity.compact,
+              ),
+              onPressed: () => setState(() => _expanded = !_expanded),
+              child: Text(
+                _expanded
+                    ? 'Ver menos'
+                    : 'Ver más (${chips.length - _chipCollapseThreshold})',
+              ),
+            ),
+          ),
+      ],
     );
   }
 }

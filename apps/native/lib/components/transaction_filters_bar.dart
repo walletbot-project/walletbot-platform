@@ -63,12 +63,13 @@ class _TransactionFiltersBarState extends State<TransactionFiltersBar> {
 
   Future<void> _openSheet() async {
     // The unified filter sheet owns every dimension; the activity bar keeps
-    // type (chip row) and text (search field), so those sections are hidden
-    // here to avoid duplicate controls.
+    // text (search field), so that section is hidden here to avoid a duplicate
+    // control.
     final result = await showFilterSheet(
       context,
       initial: widget.filter,
-      hiddenSections: const {FilterSection.type, FilterSection.text},
+      hiddenSections: const {FilterSection.text},
+      allowAdvanced: true,
     );
     if (result != null) widget.onChanged(result);
   }
