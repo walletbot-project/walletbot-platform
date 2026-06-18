@@ -75,6 +75,12 @@ class DashboardView extends StatelessWidget {
                           maxWidth *
                               rows[rowIndex].items[itemIndex].units /
                               _gridUnits,
+                          // Anchor the floating menu to the side the tile sits
+                          // on so a natural-width menu never runs off-screen.
+                          menuAlignRight: _alignMenuRight(
+                            rows[rowIndex],
+                            itemIndex,
+                          ),
                         ),
                       ),
                     ],
@@ -154,20 +160,39 @@ class DashboardView extends StatelessWidget {
     };
   }
 
+  /// Whether the item at [itemIndex] sits on the right half of its row. The
+  /// floating menu anchors to that side so its natural width grows toward the
+  /// center of the screen instead of running off the edge.
+  bool _alignMenuRight(_DashboardRow row, int itemIndex) {
+    var leading = 0;
+    for (var i = 0; i < itemIndex; i++) {
+      leading += row.items[i].units;
+    }
+    final center = leading + row.items[itemIndex].units / 2;
+    return center > _gridUnits / 2;
+  }
+
   Widget _buildInteractiveItem(
     BuildContext context,
     DashboardViewItem item,
-    double estimatedWidth,
-  ) {
+    double estimatedWidth, {
+    required bool menuAlignRight,
+  }) {
     final selected = editing && selectedItemId == item.row.id;
+    final hasMenu =
+        onWidthChanged != null || onEditItem != null || onDeleteItem != null;
+    final menu = hasMenu
+        ? _DashboardFloatingMenu(
+            width: item.spec.width,
+            onWidthChanged: onWidthChanged == null
+                ? null
+                : (width) => onWidthChanged!(item, width),
+            onEdit: onEditItem == null ? null : () => onEditItem!(item),
+            onDelete: onDeleteItem == null ? null : () => onDeleteItem!(item),
+          )
+        : null;
     final child = _DashboardEditableFrame(
       selected: selected,
-      width: item.spec.width,
-      onWidthChanged: onWidthChanged == null
-          ? null
-          : (width) => onWidthChanged!(item, width),
-      onEdit: onEditItem == null ? null : () => onEditItem!(item),
-      onDelete: onDeleteItem == null ? null : () => onDeleteItem!(item),
       child: Material(
         color: Colors.transparent,
         borderRadius: BorderRadius.circular(8),
@@ -213,25 +238,32 @@ class DashboardView extends StatelessWidget {
       },
     );
 
-    return LongPressDraggable<String>(
-      data: item.row.id,
-      maxSimultaneousDrags: canReorder ? null : 0,
-      dragAnchorStrategy: pointerDragAnchorStrategy,
-      feedback: SizedBox(
-        width: estimatedWidth.clamp(120, MediaQuery.sizeOf(context).width - 32),
-        child: Material(
-          color: Colors.transparent,
-          elevation: 10,
-          borderRadius: BorderRadius.circular(8),
-          child: _DashboardEditableFrame(
-            selected: true,
-            width: item.spec.width,
-            child: _DashboardDragPreview(spec: item.spec),
+    return _FloatingMenuAnchor(
+      show: selected,
+      alignRight: menuAlignRight,
+      menu: menu,
+      child: LongPressDraggable<String>(
+        data: item.row.id,
+        maxSimultaneousDrags: canReorder ? null : 0,
+        dragAnchorStrategy: pointerDragAnchorStrategy,
+        feedback: SizedBox(
+          width: estimatedWidth.clamp(
+            120,
+            MediaQuery.sizeOf(context).width - 32,
+          ),
+          child: Material(
+            color: Colors.transparent,
+            elevation: 10,
+            borderRadius: BorderRadius.circular(8),
+            child: _DashboardEditableFrame(
+              selected: true,
+              child: _DashboardDragPreview(spec: item.spec),
+            ),
           ),
         ),
+        childWhenDragging: Opacity(opacity: 0.35, child: dragTarget),
+        child: dragTarget,
       ),
-      childWhenDragging: Opacity(opacity: 0.35, child: dragTarget),
-      child: dragTarget,
     );
   }
 
@@ -242,6 +274,90 @@ class DashboardView extends StatelessWidget {
       BalanceCardWidgetSpec() => BalanceCardWidget(spec: spec),
       ChartWidgetSpec() => BreakdownChartWidget(spec: spec),
     };
+  }
+}
+
+/// Anchors a floating [menu] just below [child] using the app overlay, so the
+/// menu paints above every sibling/next-row widget and never shifts the
+/// dashboard layout. [CompositedTransformFollower] keeps it pinned to the tile
+/// as the home list scrolls. The menu keeps its natural width (it is not
+/// clamped to the tile), and anchors to the tile's left or right edge per
+/// [alignRight] so it grows toward the screen center instead of off the edge.
+class _FloatingMenuAnchor extends StatefulWidget {
+  const _FloatingMenuAnchor({
+    required this.show,
+    required this.alignRight,
+    required this.menu,
+    required this.child,
+  });
+
+  final bool show;
+  final bool alignRight;
+  final Widget? menu;
+  final Widget child;
+
+  @override
+  State<_FloatingMenuAnchor> createState() => _FloatingMenuAnchorState();
+}
+
+class _FloatingMenuAnchorState extends State<_FloatingMenuAnchor> {
+  static const _gap = 6.0;
+
+  final LayerLink _link = LayerLink();
+  final OverlayPortalController _controller = OverlayPortalController();
+
+  bool get _shouldShow => widget.show && widget.menu != null;
+
+  @override
+  void initState() {
+    super.initState();
+    _syncOverlay();
+  }
+
+  @override
+  void didUpdateWidget(_FloatingMenuAnchor oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _syncOverlay();
+  }
+
+  /// Toggle the portal after the current frame: [OverlayPortalController.show]
+  /// mutates the element tree, which is illegal during build/didUpdateWidget.
+  void _syncOverlay() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (_shouldShow && !_controller.isShowing) {
+        _controller.show();
+      } else if (!_shouldShow && _controller.isShowing) {
+        _controller.hide();
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final alignRight = widget.alignRight;
+    return OverlayPortal(
+      controller: _controller,
+      overlayChildBuilder: (context) {
+        final menu = widget.menu;
+        if (menu == null) return const SizedBox.shrink();
+        final anchor = alignRight ? Alignment.topRight : Alignment.topLeft;
+        return CompositedTransformFollower(
+          link: _link,
+          showWhenUnlinked: false,
+          targetAnchor: alignRight
+              ? Alignment.bottomRight
+              : Alignment.bottomLeft,
+          followerAnchor: anchor,
+          offset: const Offset(0, _gap),
+          // The follower child fills the overlay; aligning the menu to the
+          // matching corner places it exactly at the tile's bottom edge while
+          // letting it size to its own content.
+          child: Align(alignment: anchor, child: menu),
+        );
+      },
+      child: CompositedTransformTarget(link: _link, child: widget.child),
+    );
   }
 }
 
@@ -302,21 +418,10 @@ class _DashboardDragPreview extends StatelessWidget {
 }
 
 class _DashboardEditableFrame extends StatelessWidget {
-  const _DashboardEditableFrame({
-    required this.selected,
-    required this.width,
-    required this.child,
-    this.onWidthChanged,
-    this.onEdit,
-    this.onDelete,
-  });
+  const _DashboardEditableFrame({required this.selected, required this.child});
 
   final bool selected;
-  final DashboardWidth width;
   final Widget child;
-  final ValueChanged<DashboardWidth>? onWidthChanged;
-  final VoidCallback? onEdit;
-  final VoidCallback? onDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -334,19 +439,6 @@ class _DashboardEditableFrame extends StatelessWidget {
                   borderRadius: BorderRadius.circular(8),
                 ),
               ),
-            ),
-          ),
-        if (selected &&
-            (onWidthChanged != null || onEdit != null || onDelete != null))
-          Positioned(
-            left: 8,
-            right: 8,
-            bottom: 8,
-            child: _DashboardFloatingMenu(
-              width: width,
-              onWidthChanged: onWidthChanged,
-              onEdit: onEdit,
-              onDelete: onDelete,
             ),
           ),
       ],
@@ -377,8 +469,7 @@ class _DashboardFloatingMenu extends StatelessWidget {
       borderRadius: BorderRadius.circular(8),
       child: SizedBox(
         height: 44,
-        child: SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
+        child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 6),
           child: Row(
             mainAxisSize: MainAxisSize.min,
