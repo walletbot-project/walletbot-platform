@@ -1,4 +1,7 @@
+import 'package:app/components/category_list_tile.dart';
+import 'package:app/components/grouped_card.dart';
 import 'package:app/screens/accounts_prototype.dart';
+import 'package:app/shared/money.dart';
 import 'package:flutter/material.dart';
 import 'package:m3e_buttons/m3e_buttons.dart';
 
@@ -98,19 +101,6 @@ const List<Category> _mockCategories = [
   ),
 ];
 
-// M3 expressive grouped-list shape tokens — mirror the accounts prototype.
-const double _kGroupOuterRadius = 24; // first/last ends of a group
-const double _kGroupInnerRadius = 4; // corners between adjacent cards
-const double _kGroupSpacing = 2; // small separation between cards
-
-/// Corner shape for the card at [index] within a group of [count].
-BorderRadius _groupedRadius(int index, int count) => BorderRadius.vertical(
-  top: Radius.circular(index == 0 ? _kGroupOuterRadius : _kGroupInnerRadius),
-  bottom: Radius.circular(
-    index == count - 1 ? _kGroupOuterRadius : _kGroupInnerRadius,
-  ),
-);
-
 class CategoriesPage extends StatefulWidget {
   const CategoriesPage({super.key});
 
@@ -134,13 +124,16 @@ class _CategoriesPageState extends State<CategoriesPage> {
       body: ListView.separated(
         padding: const EdgeInsets.only(left: 16, right: 16, bottom: 12),
         itemCount: _mockCategories.length,
-        separatorBuilder: (_, _) => const SizedBox(height: _kGroupSpacing),
+        separatorBuilder: (_, _) => const SizedBox(height: kGroupSpacing),
         itemBuilder: (context, index) {
           final category = _mockCategories[index];
-          return GroupedCard(
-            borderRadius: _groupedRadius(index, _mockCategories.length),
+          return CategoryListTile(
+            name: category.name,
+            icon: category.icon,
+            color: category.color,
+            usageCount: category.usageCount,
+            borderRadius: groupedRadius(index, _mockCategories.length),
             onTap: () => _openCategorySheet(category),
-            child: _CategoryTileContent(category: category),
           );
         },
       ),
@@ -154,60 +147,6 @@ class _CategoriesPageState extends State<CategoriesPage> {
       isScrollControlled: true,
       showDragHandle: true,
       builder: (_) => CategoryDetailsSheet(category: category),
-    );
-  }
-}
-
-/// Reusable category row content (accent icon, name + usage, total amount).
-/// Mirrors the account tile layout from the accounts prototype.
-class _CategoryTileContent extends StatelessWidget {
-  const _CategoryTileContent({required this.category});
-
-  final Category category;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    final textTheme = Theme.of(context).textTheme;
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-      child: Row(
-        children: [
-          Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              color: category.color.withValues(alpha: 0.18),
-              shape: BoxShape.circle,
-            ),
-            alignment: Alignment.center,
-            child: Icon(category.icon, size: 22, color: category.color),
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  category.name,
-                  style: textTheme.bodyLarge,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                Text(
-                  '${category.usageCount} movimientos',
-                  style: textTheme.bodySmall?.copyWith(
-                    color: colors.onSurfaceVariant,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 12),
-          Icon(Icons.chevron_right_rounded, color: colors.onSurfaceVariant),
-        ],
-      ),
     );
   }
 }
@@ -256,8 +195,8 @@ class CategoryDetailsSheet extends StatelessWidget {
         Material(
           color: category.color.withValues(alpha: 0.14),
           borderRadius: const BorderRadius.vertical(
-            top: Radius.circular(_kGroupOuterRadius),
-            bottom: Radius.circular(_kGroupInnerRadius),
+            top: Radius.circular(kGroupOuterRadius),
+            bottom: Radius.circular(kGroupInnerRadius),
           ),
           clipBehavior: Clip.antiAlias,
           child: Padding(
@@ -305,12 +244,12 @@ class CategoryDetailsSheet extends StatelessWidget {
             ),
           ),
         ),
-        const SizedBox(height: _kGroupSpacing),
+        const SizedBox(height: kGroupSpacing),
         // Usage hero — total accumulated and movement count.
         GroupedCard(
           borderRadius: const BorderRadius.vertical(
-            top: Radius.circular(_kGroupInnerRadius),
-            bottom: Radius.circular(_kGroupOuterRadius),
+            top: Radius.circular(kGroupInnerRadius),
+            bottom: Radius.circular(kGroupOuterRadius),
           ),
           child: Padding(
             padding: const EdgeInsets.fromLTRB(20, 16, 20, 18),
@@ -405,9 +344,9 @@ class CategoryDetailsSheet extends StatelessWidget {
     return Column(
       children: [
         for (var i = 0; i < txs.length; i++) ...[
-          if (i > 0) const SizedBox(height: _kGroupSpacing),
+          if (i > 0) const SizedBox(height: kGroupSpacing),
           GroupedCard(
-            borderRadius: _groupedRadius(i, txs.length),
+            borderRadius: groupedRadius(i, txs.length),
             onTap: () {},
             child: _MovementTile(tx: txs[i], currency: category.currency),
           ),

@@ -1,5 +1,7 @@
+import 'package:app/components/account_list_tile.dart';
+import 'package:app/components/grouped_card.dart';
+import 'package:app/shared/money.dart';
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 import 'package:m3e_buttons/m3e_buttons.dart';
 
 /// Mock account model shaped after the real backend fields:
@@ -133,62 +135,6 @@ const List<Account> _mockAccounts = [
   ),
 ];
 
-/// Prefix for an ISO currency: symbol for EUR/GBP, ISO code otherwise (USD, ARS).
-String _currencyPrefix(String code) => switch (code) {
-  'EUR' => '€',
-  'GBP' => '£',
-  _ => '$code ',
-};
-
-/// Formats cents as currency in es-AR style ('.' thousands, ',' decimals).
-String formatMoney(int cents, String currency, {int decimalDigits = 2}) {
-  return NumberFormat.currency(
-    locale: 'es_AR',
-    symbol: _currencyPrefix(currency),
-    decimalDigits: decimalDigits,
-  ).format(cents / 100);
-}
-
-// M3 expressive grouped-list shape tokens (shared by every card list).
-const double _kGroupOuterRadius = 24; // first/last ends of a group
-const double _kGroupInnerRadius = 4; // corners between adjacent cards
-const double _kGroupSpacing = 2; // small separation between cards
-
-/// Corner shape for the card at [index] within a group of [count]: large radius
-/// on the outer ends of the group, minimal radius on the inner seams.
-BorderRadius _groupedRadius(int index, int count) => BorderRadius.vertical(
-  top: Radius.circular(index == 0 ? _kGroupOuterRadius : _kGroupInnerRadius),
-  bottom: Radius.circular(
-    index == count - 1 ? _kGroupOuterRadius : _kGroupInnerRadius,
-  ),
-);
-
-/// A single card within an M3 expressive grouped list: card surface, injected
-/// corner shape, optional tap ripple. Reused by every card list on this screen.
-class GroupedCard extends StatelessWidget {
-  const GroupedCard({
-    super.key,
-    required this.borderRadius,
-    required this.child,
-    this.onTap,
-  });
-
-  final BorderRadius borderRadius;
-  final Widget child;
-  final VoidCallback? onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    return Material(
-      color: colors.surfaceContainerHigh,
-      borderRadius: borderRadius,
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(onTap: onTap, child: child),
-    );
-  }
-}
-
 class AccountsPage extends StatefulWidget {
   const AccountsPage({super.key});
 
@@ -212,12 +158,16 @@ class _AccountsPageState extends State<AccountsPage> {
       body: ListView.separated(
         padding: const EdgeInsets.only(left: 16, right: 16, bottom: 12),
         itemCount: _mockAccounts.length,
-        separatorBuilder: (_, _) => const SizedBox(height: _kGroupSpacing),
+        separatorBuilder: (_, _) => const SizedBox(height: kGroupSpacing),
         itemBuilder: (context, index) {
           final account = _mockAccounts[index];
-          return CardLikeListTile(
-            account: account,
-            borderRadius: _groupedRadius(index, _mockAccounts.length),
+          return AccountListTile(
+            name: account.name,
+            icon: account.icon,
+            color: account.color,
+            balanceCents: account.balanceCents,
+            currency: account.currency,
+            borderRadius: groupedRadius(index, _mockAccounts.length),
             onTap: () => _openAccountSheet(account),
           );
         },
@@ -232,73 +182,6 @@ class _AccountsPageState extends State<AccountsPage> {
       isScrollControlled: true, // let the sheet grow taller than half-screen
       showDragHandle: true,
       builder: (_) => AccountDetailsSheet(account: account),
-    );
-  }
-}
-
-/// A single account rendered as a Material 3 expressive card-like list tile.
-/// Reusable: the shape and tap behavior are injected by the caller.
-class CardLikeListTile extends StatelessWidget {
-  const CardLikeListTile({
-    super.key,
-    required this.account,
-    required this.borderRadius,
-    this.onTap,
-  });
-
-  final Account account;
-  final BorderRadius borderRadius;
-  final VoidCallback? onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    final textTheme = Theme.of(context).textTheme;
-    final isNegative = account.balanceCents < 0;
-
-    return GroupedCard(
-      borderRadius: borderRadius,
-      onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-        child: Row(
-          children: [
-            // Leading icon tinted with the account's accent color.
-            Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(
-                color: account.color.withValues(alpha: 0.18),
-                shape: BoxShape.circle,
-              ),
-              alignment: Alignment.center,
-              child: Icon(account.icon, size: 22, color: account.color),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    account.name,
-                    style: textTheme.bodyLarge,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 16),
-            // Balance: signed, with currency; negative balances use error color.
-            Text(
-              formatMoney(account.balanceCents, account.currency),
-              style: textTheme.titleMedium?.copyWith(
-                color: isNegative ? colors.error : null,
-              ),
-            ),
-          ],
-        ),
-      ),
     );
   }
 }
@@ -354,8 +237,8 @@ class AccountDetailsSheet extends StatelessWidget {
         Material(
           color: account.color.withValues(alpha: 0.14),
           borderRadius: const BorderRadius.vertical(
-            top: Radius.circular(_kGroupOuterRadius),
-            bottom: Radius.circular(_kGroupInnerRadius),
+            top: Radius.circular(kGroupOuterRadius),
+            bottom: Radius.circular(kGroupInnerRadius),
           ),
           clipBehavior: Clip.antiAlias,
           child: Padding(
@@ -402,12 +285,12 @@ class AccountDetailsSheet extends StatelessWidget {
             ),
           ),
         ),
-        const SizedBox(height: _kGroupSpacing),
+        const SizedBox(height: kGroupSpacing),
         // Balance hero — the focal number; currency rides along as a pill.
         GroupedCard(
           borderRadius: const BorderRadius.vertical(
-            top: Radius.circular(_kGroupInnerRadius),
-            bottom: Radius.circular(_kGroupOuterRadius),
+            top: Radius.circular(kGroupInnerRadius),
+            bottom: Radius.circular(kGroupOuterRadius),
           ),
           child: Padding(
             padding: const EdgeInsets.fromLTRB(20, 16, 20, 18),
@@ -524,9 +407,9 @@ class AccountDetailsSheet extends StatelessWidget {
     return Column(
       children: [
         for (var i = 0; i < txs.length; i++) ...[
-          if (i > 0) const SizedBox(height: _kGroupSpacing),
+          if (i > 0) const SizedBox(height: kGroupSpacing),
           GroupedCard(
-            borderRadius: _groupedRadius(i, txs.length),
+            borderRadius: groupedRadius(i, txs.length),
             onTap: () {},
             child: _TransactionTile(tx: txs[i], currency: account.currency),
           ),
