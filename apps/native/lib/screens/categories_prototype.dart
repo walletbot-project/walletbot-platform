@@ -1,5 +1,9 @@
+import 'package:app/components/category_icons.dart';
 import 'package:app/components/category_list_tile.dart';
+import 'package:app/components/color_picker.dart';
 import 'package:app/components/grouped_card.dart';
+import 'package:app/components/icon_picker.dart';
+import 'package:app/components/transaction_row.dart';
 import 'package:app/screens/accounts_prototype.dart';
 import 'package:app/shared/money.dart';
 import 'package:flutter/material.dart';
@@ -152,10 +156,48 @@ class _CategoriesPageState extends State<CategoriesPage> {
 }
 
 /// Draggable, scrollable modal sheet showing a category's details.
-class CategoryDetailsSheet extends StatelessWidget {
+class CategoryDetailsSheet extends StatefulWidget {
   const CategoryDetailsSheet({super.key, required this.category});
 
   final Category category;
+
+  @override
+  State<CategoryDetailsSheet> createState() => _CategoryDetailsSheetState();
+}
+
+class _CategoryDetailsSheetState extends State<CategoryDetailsSheet> {
+  // Locally editable values — the controls mutate these. The mock list behind
+  // the sheet is const, so edits live for the sheet's lifetime.
+  late Color _color = widget.category.color;
+  late IconData _icon = widget.category.icon;
+  late final TextEditingController _nameController = TextEditingController(
+    text: widget.category.name,
+  );
+
+  // Edit mode is toggled by the pencil action: only then do the name field and
+  // color swatch appear and the icon tile become tappable.
+  bool _editing = false;
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _editColor() async {
+    final picked = await showColorPickerDialog(context, selected: _color);
+    if (picked != null) setState(() => _color = picked);
+  }
+
+  Future<void> _editIcon() async {
+    final picked = await showIconPickerDialog(
+      context,
+      selected: _icon,
+      options: categoryIconOptions,
+      accent: _color,
+    );
+    if (picked != null) setState(() => _icon = picked);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -182,10 +224,33 @@ class CategoryDetailsSheet extends StatelessWidget {
     );
   }
 
+  /// The category name: an inline text field while editing, plain text otherwise.
+  Widget _buildName(TextTheme textTheme) {
+    final style = textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w600);
+    if (_editing) {
+      return TextField(
+        controller: _nameController,
+        style: style,
+        textCapitalization: TextCapitalization.sentences,
+        decoration: const InputDecoration(
+          isDense: true,
+          labelText: 'Nombre',
+          border: OutlineInputBorder(),
+        ),
+        onChanged: (_) => setState(() {}),
+      );
+    }
+    return Text(
+      _nameController.text,
+      style: style,
+      maxLines: 2,
+      overflow: TextOverflow.ellipsis,
+    );
+  }
+
   /// Identity + usage as one cohesive M3 Expressive containment group: a
-  /// color-washed identity hero (icon, name, optional description) joined by
-  /// the 2dp seam to the usage hero (total + count). Categories have no color
-  /// attribute, so there is no trailing color swatch.
+  /// color-washed identity hero (icon, name, optional description, color swatch)
+  /// joined by the 2dp seam to the usage hero (total + count).
   Widget _buildIdentityGroup(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
@@ -193,7 +258,7 @@ class CategoryDetailsSheet extends StatelessWidget {
     return Column(
       children: [
         Material(
-          color: category.color.withValues(alpha: 0.14),
+          color: _color.withValues(alpha: 0.14),
           borderRadius: const BorderRadius.vertical(
             top: Radius.circular(kGroupOuterRadius),
             bottom: Radius.circular(kGroupInnerRadius),
@@ -203,33 +268,32 @@ class CategoryDetailsSheet extends StatelessWidget {
             padding: const EdgeInsets.all(20),
             child: Row(
               children: [
-                Container(
-                  width: 60,
-                  height: 60,
-                  decoration: BoxDecoration(
-                    color: category.color.withValues(alpha: 0.28),
-                    borderRadius: BorderRadius.circular(20),
+                // Expressive rounded-square icon tile — tappable only while
+                // editing, to change the icon.
+                InkWell(
+                  onTap: _editing ? _editIcon : null,
+                  borderRadius: BorderRadius.circular(20),
+                  child: Container(
+                    width: 60,
+                    height: 60,
+                    decoration: BoxDecoration(
+                      color: _color.withValues(alpha: 0.28),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    alignment: Alignment.center,
+                    child: Icon(_icon, size: 30, color: _color),
                   ),
-                  alignment: Alignment.center,
-                  child: Icon(category.icon, size: 30, color: category.color),
                 ),
                 const SizedBox(width: 16),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        category.name,
-                        style: textTheme.titleLarge?.copyWith(
-                          fontWeight: FontWeight.w600,
-                        ),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      if (category.description != null) ...[
+                      _buildName(textTheme),
+                      if (widget.category.description != null) ...[
                         const SizedBox(height: 4),
                         Text(
-                          category.description!,
+                          widget.category.description!,
                           style: textTheme.bodyMedium?.copyWith(
                             color: colors.onSurfaceVariant,
                           ),
@@ -240,6 +304,26 @@ class CategoryDetailsSheet extends StatelessWidget {
                     ],
                   ),
                 ),
+                // Discrete color swatch — only shown while editing; tap to
+                // change the category color.
+                if (_editing) ...[
+                  const SizedBox(width: 12),
+                  InkWell(
+                    onTap: _editColor,
+                    borderRadius: BorderRadius.circular(9),
+                    child: Container(
+                      width: 28,
+                      height: 28,
+                      decoration: BoxDecoration(
+                        color: _color,
+                        borderRadius: BorderRadius.circular(9),
+                        border: Border.all(
+                          color: colors.outlineVariant.withValues(alpha: 0.5),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
               ],
             ),
           ),
@@ -269,7 +353,7 @@ class CategoryDetailsSheet extends StatelessWidget {
                       ),
                       const SizedBox(height: 6),
                       Text(
-                        '${category.usageCount}',
+                        '${widget.category.usageCount}',
                         style: textTheme.displaySmall?.copyWith(
                           fontWeight: FontWeight.w600,
                         ),
@@ -287,27 +371,18 @@ class CategoryDetailsSheet extends StatelessWidget {
     );
   }
 
-  /// Category actions as Material 3 Expressive buttons: edit, archive, delete.
+  /// Category actions as Material 3 Expressive buttons: edit, delete.
   Widget _buildActions(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
     return Row(
       children: [
         Expanded(
           child: M3EFilledButton.tonalIcon(
-            onPressed: () {},
+            onPressed: () => setState(() => _editing = !_editing),
             size: M3EButtonSize.md,
-            icon: const Icon(Icons.edit_outlined),
-            label: const Text('Editar'),
+            icon: Icon(_editing ? Icons.check_rounded : Icons.edit_outlined),
+            label: Text(_editing ? 'Listo' : 'Editar'),
           ),
-        ),
-        const SizedBox(width: 8),
-        M3EButton(
-          onPressed: () {},
-          style: M3EButtonStyle.tonal,
-          size: M3EButtonSize.md,
-          tooltip: 'Archivar',
-          semanticLabel: 'Archivar',
-          child: const Icon(Icons.archive_outlined),
         ),
         const SizedBox(width: 8),
         M3EButton(
@@ -338,75 +413,25 @@ class CategoryDetailsSheet extends StatelessWidget {
     );
   }
 
-  /// Recent movements in this category — same grouped-card style.
+  /// Recent movements, rendered with the shared [TransactionRow] used by the
+  /// activity view. The date label rides along as the row's description.
   Widget _buildTransactions(BuildContext context) {
-    final txs = category.transactions;
+    final txs = widget.category.transactions;
+    final symbol = currencyPrefix(widget.category.currency).trim();
     return Column(
       children: [
         for (var i = 0; i < txs.length; i++) ...[
-          if (i > 0) const SizedBox(height: kGroupSpacing),
-          GroupedCard(
-            borderRadius: groupedRadius(i, txs.length),
+          if (i > 0) const SizedBox(height: 10),
+          TransactionRow(
+            title: txs[i].title,
+            amountCents: txs[i].amountCents,
+            dateCheck: true,
+            description: txs[i].date,
+            currencySymbol: symbol,
             onTap: () {},
-            child: _MovementTile(tx: txs[i], currency: category.currency),
           ),
         ],
       ],
-    );
-  }
-}
-
-/// Reusable movement row content (icon, title + date, signed amount).
-/// Mirrors the transaction tile from the accounts prototype.
-class _MovementTile extends StatelessWidget {
-  const _MovementTile({required this.tx, required this.currency});
-
-  final Transaction tx;
-  final String currency;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    final textTheme = Theme.of(context).textTheme;
-    final isExpense = tx.amountCents < 0;
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      child: Row(
-        children: [
-          Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              color: colors.surfaceContainerHighest,
-              shape: BoxShape.circle,
-            ),
-            alignment: Alignment.center,
-            child: Icon(tx.icon, size: 20, color: colors.onSurfaceVariant),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(tx.title, style: textTheme.bodyLarge),
-                Text(
-                  tx.date,
-                  style: textTheme.bodySmall?.copyWith(
-                    color: colors.onSurfaceVariant,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 12),
-          Text(
-            formatMoney(tx.amountCents, currency),
-            style: textTheme.titleSmall?.copyWith(
-              color: isExpense ? colors.error : null,
-            ),
-          ),
-        ],
-      ),
     );
   }
 }

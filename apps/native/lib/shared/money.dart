@@ -5,7 +5,7 @@ library;
 import 'package:intl/intl.dart';
 
 /// Prefix for an ISO currency: symbol for EUR/GBP, ISO code otherwise (USD, ARS).
-String _currencyPrefix(String code) => switch (code) {
+String currencyPrefix(String code) => switch (code) {
   'EUR' => '€',
   'GBP' => '£',
   _ => '$code ',
@@ -15,7 +15,7 @@ String _currencyPrefix(String code) => switch (code) {
 String formatMoney(int cents, String currency, {int decimalDigits = 2}) {
   return NumberFormat.currency(
     locale: 'es_AR',
-    symbol: _currencyPrefix(currency),
+    symbol: currencyPrefix(currency),
     decimalDigits: decimalDigits,
   ).format(cents / 100);
 }

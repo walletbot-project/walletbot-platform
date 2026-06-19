@@ -1,5 +1,9 @@
+import 'package:app/components/account_icons.dart';
 import 'package:app/components/account_list_tile.dart';
+import 'package:app/components/color_picker.dart';
 import 'package:app/components/grouped_card.dart';
+import 'package:app/components/icon_picker.dart';
+import 'package:app/components/transaction_row.dart';
 import 'package:app/shared/money.dart';
 import 'package:flutter/material.dart';
 import 'package:m3e_buttons/m3e_buttons.dart';
@@ -187,10 +191,92 @@ class _AccountsPageState extends State<AccountsPage> {
 }
 
 /// Draggable, scrollable modal sheet showing an account's details.
-class AccountDetailsSheet extends StatelessWidget {
+class AccountDetailsSheet extends StatefulWidget {
   const AccountDetailsSheet({super.key, required this.account});
 
   final Account account;
+
+  @override
+  State<AccountDetailsSheet> createState() => _AccountDetailsSheetState();
+}
+
+class _AccountDetailsSheetState extends State<AccountDetailsSheet> {
+  // Locally editable values — the controls mutate these. The mock list behind
+  // the sheet is const, so edits live for the sheet's lifetime.
+  late Color _color = widget.account.color;
+  late IconData _icon = widget.account.icon;
+  late int _balanceCents = widget.account.balanceCents;
+  late final TextEditingController _nameController = TextEditingController(
+    text: widget.account.name,
+  );
+
+  // Edit mode is toggled by the pencil action: only then do the name field and
+  // color swatch appear and the icon tile become tappable.
+  bool _editing = false;
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _editColor() async {
+    final picked = await showColorPickerDialog(context, selected: _color);
+    if (picked != null) setState(() => _color = picked);
+  }
+
+  Future<void> _editIcon() async {
+    final picked = await showIconPickerDialog(
+      context,
+      selected: _icon,
+      options: accountIconOptions,
+      accent: _color,
+    );
+    if (picked != null) setState(() => _icon = picked);
+  }
+
+  Future<void> _adjustBalance() async {
+    // TextFormField with initialValue owns and disposes its own controller —
+    // a manually-disposed local controller crashes when the dialog closes.
+    var text = (_balanceCents / 100).toStringAsFixed(2);
+    final picked = await showDialog<int>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('Ajustar saldo'),
+          content: TextFormField(
+            initialValue: text,
+            autofocus: true,
+            keyboardType: const TextInputType.numberWithOptions(
+              decimal: true,
+              signed: true,
+            ),
+            decoration: InputDecoration(
+              prefixText: '${widget.account.currency} ',
+              border: const OutlineInputBorder(),
+            ),
+            onChanged: (value) => text = value,
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Cancelar'),
+            ),
+            TextButton(
+              onPressed: () {
+                final value = double.tryParse(text.replaceAll(',', '.'));
+                Navigator.of(
+                  dialogContext,
+                ).pop(value == null ? null : (value * 100).round());
+              },
+              child: const Text('Guardar'),
+            ),
+          ],
+        );
+      },
+    );
+    if (picked != null) setState(() => _balanceCents = picked);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -219,6 +305,30 @@ class AccountDetailsSheet extends StatelessWidget {
     );
   }
 
+  /// The account name: an inline text field while editing, plain text otherwise.
+  Widget _buildName(TextTheme textTheme) {
+    final style = textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w600);
+    if (_editing) {
+      return TextField(
+        controller: _nameController,
+        style: style,
+        textCapitalization: TextCapitalization.sentences,
+        decoration: const InputDecoration(
+          isDense: true,
+          labelText: 'Nombre',
+          border: OutlineInputBorder(),
+        ),
+        onChanged: (_) => setState(() {}),
+      );
+    }
+    return Text(
+      _nameController.text,
+      style: style,
+      maxLines: 2,
+      overflow: TextOverflow.ellipsis,
+    );
+  }
+
   /// Identity + balance as one cohesive M3 Expressive containment group: a
   /// color-washed identity hero (icon, name, color swatch) joined by the shared
   /// 2dp seam to the balance hero (focal amount + currency). Large radius lands
@@ -227,7 +337,7 @@ class AccountDetailsSheet extends StatelessWidget {
   Widget _buildIdentityGroup(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
-    final isNegative = account.balanceCents < 0;
+    final isNegative = _balanceCents < 0;
 
     return Column(
       children: [
@@ -235,7 +345,7 @@ class AccountDetailsSheet extends StatelessWidget {
         // carries the account color. Holds the icon, name, plus a discrete
         // color swatch as a trailing accent.
         Material(
-          color: account.color.withValues(alpha: 0.14),
+          color: _color.withValues(alpha: 0.14),
           borderRadius: const BorderRadius.vertical(
             top: Radius.circular(kGroupOuterRadius),
             bottom: Radius.circular(kGroupInnerRadius),
@@ -245,42 +355,44 @@ class AccountDetailsSheet extends StatelessWidget {
             padding: const EdgeInsets.all(20),
             child: Row(
               children: [
-                // Expressive rounded-square icon tile — shape variety against
-                // the circular avatars used elsewhere on the sheet.
-                Container(
-                  width: 60,
-                  height: 60,
-                  decoration: BoxDecoration(
-                    color: account.color.withValues(alpha: 0.28),
-                    borderRadius: BorderRadius.circular(20),
+                // Expressive rounded-square icon tile — tappable only while
+                // editing, to change the icon.
+                InkWell(
+                  onTap: _editing ? _editIcon : null,
+                  borderRadius: BorderRadius.circular(20),
+                  child: Container(
+                    width: 60,
+                    height: 60,
+                    decoration: BoxDecoration(
+                      color: _color.withValues(alpha: 0.28),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    alignment: Alignment.center,
+                    child: Icon(_icon, size: 30, color: _color),
                   ),
-                  alignment: Alignment.center,
-                  child: Icon(account.icon, size: 30, color: account.color),
                 ),
                 const SizedBox(width: 16),
-                Expanded(
-                  child: Text(
-                    account.name,
-                    style: textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.w600,
-                    ),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                // Discrete color swatch — the editable "color" attribute.
-                Container(
-                  width: 28,
-                  height: 28,
-                  decoration: BoxDecoration(
-                    color: account.color,
+                Expanded(child: _buildName(textTheme)),
+                // Discrete color swatch — only shown while editing; tap to
+                // change the account color.
+                if (_editing) ...[
+                  const SizedBox(width: 12),
+                  InkWell(
+                    onTap: _editColor,
                     borderRadius: BorderRadius.circular(9),
-                    border: Border.all(
-                      color: colors.outlineVariant.withValues(alpha: 0.5),
+                    child: Container(
+                      width: 28,
+                      height: 28,
+                      decoration: BoxDecoration(
+                        color: _color,
+                        borderRadius: BorderRadius.circular(9),
+                        border: Border.all(
+                          color: colors.outlineVariant.withValues(alpha: 0.5),
+                        ),
+                      ),
                     ),
                   ),
-                ),
+                ],
               ],
             ),
           ),
@@ -310,7 +422,7 @@ class AccountDetailsSheet extends StatelessWidget {
                       ),
                       const SizedBox(height: 6),
                       Text(
-                        formatMoney(account.balanceCents, account.currency),
+                        formatMoney(_balanceCents, widget.account.currency),
                         style: textTheme.displaySmall?.copyWith(
                           fontWeight: FontWeight.w600,
                           color: isNegative ? colors.error : null,
@@ -333,7 +445,7 @@ class AccountDetailsSheet extends StatelessWidget {
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: Text(
-                    account.currency,
+                    widget.account.currency,
                     style: textTheme.labelLarge?.copyWith(
                       color: colors.onSurfaceVariant,
                     ),
@@ -356,7 +468,7 @@ class AccountDetailsSheet extends StatelessWidget {
       children: [
         Expanded(
           child: M3EFilledButton.tonalIcon(
-            onPressed: () {},
+            onPressed: _adjustBalance,
             size: M3EButtonSize.md,
             icon: const Icon(Icons.tune_rounded),
             label: const Text('Ajustar saldo'),
@@ -364,12 +476,12 @@ class AccountDetailsSheet extends StatelessWidget {
         ),
         const SizedBox(width: 8),
         M3EButton(
-          onPressed: () {},
-          style: M3EButtonStyle.tonal,
+          onPressed: () => setState(() => _editing = !_editing),
+          style: _editing ? M3EButtonStyle.filled : M3EButtonStyle.tonal,
           size: M3EButtonSize.md,
-          tooltip: 'Editar',
-          semanticLabel: 'Editar',
-          child: const Icon(Icons.edit_outlined),
+          tooltip: _editing ? 'Listo' : 'Editar',
+          semanticLabel: _editing ? 'Listo' : 'Editar',
+          child: Icon(_editing ? Icons.check_rounded : Icons.edit_outlined),
         ),
         const SizedBox(width: 8),
         M3EButton(
@@ -400,77 +512,25 @@ class AccountDetailsSheet extends StatelessWidget {
     );
   }
 
-  /// Transactions as an M3 expressive grouped-card list (same style as the
-  /// accounts list: large outer corners, minimal inner seams, 2dp gaps).
+  /// Recent transactions, rendered with the shared [TransactionRow] used by the
+  /// activity view. The date label rides along as the row's description.
   Widget _buildTransactions(BuildContext context) {
-    final txs = account.transactions;
+    final txs = widget.account.transactions;
+    final symbol = currencyPrefix(widget.account.currency).trim();
     return Column(
       children: [
         for (var i = 0; i < txs.length; i++) ...[
-          if (i > 0) const SizedBox(height: kGroupSpacing),
-          GroupedCard(
-            borderRadius: groupedRadius(i, txs.length),
+          if (i > 0) const SizedBox(height: 10),
+          TransactionRow(
+            title: txs[i].title,
+            amountCents: txs[i].amountCents,
+            dateCheck: true,
+            description: txs[i].date,
+            currencySymbol: symbol,
             onTap: () {},
-            child: _TransactionTile(tx: txs[i], currency: account.currency),
           ),
         ],
       ],
-    );
-  }
-}
-
-/// Reusable transaction row content (icon, title + date, signed amount).
-/// Designed to sit inside a [GroupedCard], matching the account tile layout.
-class _TransactionTile extends StatelessWidget {
-  const _TransactionTile({required this.tx, required this.currency});
-
-  final Transaction tx;
-  final String currency;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    final textTheme = Theme.of(context).textTheme;
-    final isExpense = tx.amountCents < 0;
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      child: Row(
-        children: [
-          Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              color: colors.surfaceContainerHighest,
-              shape: BoxShape.circle,
-            ),
-            alignment: Alignment.center,
-            child: Icon(tx.icon, size: 20, color: colors.onSurfaceVariant),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(tx.title, style: textTheme.bodyLarge),
-                Text(
-                  tx.date,
-                  style: textTheme.bodySmall?.copyWith(
-                    color: colors.onSurfaceVariant,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 12),
-          // Signed amount; expenses use the error color.
-          Text(
-            formatMoney(tx.amountCents, currency),
-            style: textTheme.titleSmall?.copyWith(
-              color: isExpense ? colors.error : null,
-            ),
-          ),
-        ],
-      ),
     );
   }
 }
