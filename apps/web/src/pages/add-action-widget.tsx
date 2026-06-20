@@ -25,7 +25,6 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Textarea } from '@/components/ui/textarea'
 import type { ChatMessage } from '@/hooks/use-voice'
 import { cn } from '@/lib/utils'
-import { formatAmount } from '@/pages/activity/helpers'
 
 type ActionResultMessage = Extract<ChatMessage, { kind: 'action-result' }>
 
@@ -85,7 +84,7 @@ function TransactionActionWidget({ entityId }: { entityId: string }) {
             : undefined
 
     const { Icon, iconCls, label } = txnTypeConfig(txn.type)
-    const amountStr = `${formatAmount(Number(txn.amount))} ${txn.currency}`
+    const amountStr = `${centsToDecimalStr(txn.amount)} ${txn.currency}`
     const dateStr = epochToDDMMYYYY(txn.date)
 
     const locationStr =
@@ -159,7 +158,6 @@ function TxnEditContent({
             name: name.trim() || undefined,
             amount: showAmount ? decimalStrToCents(amount) : undefined,
             date: dateStrToEpoch(date),
-            dateConfirmed: true,
             categoryId: showCategory ? categoryId || undefined : undefined,
             description: description.trim() || undefined,
             status: showStatus ? status : undefined,
