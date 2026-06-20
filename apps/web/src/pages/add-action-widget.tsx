@@ -631,7 +631,7 @@ function centsToDecimalStr(cents: bigint): string {
 }
 
 function decimalStrToCents(str: string): bigint {
-    const n = parseFloat(str)
+    const n = parseFloat(str.replace(',', '.'))
     if (!Number.isFinite(n)) return 0n
     return BigInt(Math.round(n * 100))
 }
