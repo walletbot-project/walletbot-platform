@@ -1,6 +1,6 @@
 import 'package:app/components/categories_view.dart';
 import 'package:app/components/tags_view.dart';
-import 'package:app/data/data.dart';
+import 'package:app/database.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -32,11 +32,11 @@ class _InsightsScreenState extends State<InsightsScreen>
   }
 
   Future<void> _handleAdd() async {
-    final repos = context.read<AppRepositories>();
+    final db = context.read<AppDatabase>();
     if (_tabController.index == 0) {
-      await showAddCategoryDialog(context, repos.categories);
+      await showAddCategoryDialog(context, db);
     } else {
-      await showAddTagDialog(context, repos.tags);
+      await showAddTagDialog(context, db);
     }
   }
 

@@ -21,11 +21,6 @@ const optionalIdOrName = idOrName.optional()
 const isoOrNaturalDate = z
     .string()
     .describe('ISO date or natural language (e.g. "today", "yesterday")')
-const dateConfirmed = z
-    .boolean()
-    .describe(
-        'Whether the transaction date is certain. Required on every write. true only when the user clearly stated when it happened (an explicit date, or "today"/"hoy", "yesterday"/"ayer"). false when you inferred or guessed it. When in doubt, prefer false.',
-    )
 const tagList = z
     .array(idOrName)
     .describe(
@@ -139,7 +134,6 @@ export const toolSchemas = {
         categoryIdOrName: idOrName,
         name: z.string().describe('Short label (e.g. "Starbucks")'),
         date: isoOrNaturalDate.optional(),
-        dateConfirmed,
         description: z.string().optional(),
         tagIdsOrNames: tagList.optional(),
         status: transactionStatus.optional(),
@@ -150,7 +144,6 @@ export const toolSchemas = {
         categoryIdOrName: idOrName,
         name: z.string(),
         date: isoOrNaturalDate.optional(),
-        dateConfirmed,
         description: z.string().optional(),
         tagIdsOrNames: tagList.optional(),
         status: transactionStatus.optional(),
@@ -169,7 +162,6 @@ export const toolSchemas = {
         name: z.string(),
         categoryIdOrName: optionalIdOrName,
         date: isoOrNaturalDate.optional(),
-        dateConfirmed,
         description: z.string().optional(),
         tagIdsOrNames: tagList.optional(),
     }),
@@ -182,7 +174,6 @@ export const toolSchemas = {
             ),
         name: z.string().optional(),
         date: isoOrNaturalDate.optional(),
-        dateConfirmed,
         description: z.string().optional(),
     }),
     updateTransaction: z.object({
@@ -190,7 +181,6 @@ export const toolSchemas = {
         name: z.string().optional(),
         description: z.string().optional(),
         date: isoOrNaturalDate.optional(),
-        dateConfirmed,
         amount: z.number().optional(),
         categoryIdOrName: optionalIdOrName,
         status: transactionStatus.optional(),

@@ -1,6 +1,5 @@
 import {
     BarChart3,
-    Bot,
     Home,
     Landmark,
     List,
@@ -36,6 +35,7 @@ import {
     SidebarTrigger,
 } from '@/components/ui/sidebar'
 import { useAuth, useUser } from '@/hooks/use-auth'
+import { cn } from '@/lib/utils'
 
 const NAV_ITEMS = [
     { to: '/', label: 'Home', icon: Home, end: true },
@@ -57,11 +57,7 @@ export function RootLayout() {
         NAV_ITEMS.find((item) =>
             pathMatches(location.pathname, item.to, item.end),
         )?.label ??
-        (location.pathname.startsWith('/add/manual')
-            ? 'Añadir manualmente'
-            : location.pathname.startsWith('/add')
-              ? 'Añadir con Gasti'
-              : 'Wallet Bot')
+        (location.pathname.startsWith('/add') ? 'Add' : 'Wallet Bot')
 
     const initials = (user.name || user.email)
         .split(' ')
@@ -130,30 +126,19 @@ export function RootLayout() {
                             <SidebarMenu>
                                 <SidebarMenuItem>
                                     <SidebarMenuButton
-                                        tooltip="Añadir con Gasti"
+                                        tooltip="Add"
                                         isActive={pathMatches(
                                             location.pathname,
                                             '/add',
-                                            true,
+                                            false,
+                                        )}
+                                        className={cn(
+                                            'bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground data-[active=true]:bg-primary data-[active=true]:text-primary-foreground',
                                         )}
                                         render={<NavLink to="/add" />}
                                     >
-                                        <Bot className="size-4" />
-                                        <span>Añadir con Gasti</span>
-                                    </SidebarMenuButton>
-                                </SidebarMenuItem>
-                                <SidebarMenuItem>
-                                    <SidebarMenuButton
-                                        tooltip="Añadir manualmente"
-                                        isActive={pathMatches(
-                                            location.pathname,
-                                            '/add/manual',
-                                            false,
-                                        )}
-                                        render={<NavLink to="/add/manual" />}
-                                    >
                                         <Plus className="size-4" />
-                                        <span>Añadir manualmente</span>
+                                        <span>Add</span>
                                     </SidebarMenuButton>
                                 </SidebarMenuItem>
                             </SidebarMenu>

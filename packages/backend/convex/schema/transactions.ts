@@ -33,7 +33,6 @@ export const transactions = defineTable({
     createdAt: v.int64(),
     updatedAt: v.int64(),
     seq: v.int64(),
-    dateConfirmed: v.boolean(),
 })
     .index('by_user_seq', ['userId', 'seq'])
     .index('by_user_id', ['userId', 'id'])
