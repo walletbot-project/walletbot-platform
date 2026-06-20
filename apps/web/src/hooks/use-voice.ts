@@ -63,6 +63,21 @@ export type ToolStatus = 'pending' | 'completed' | 'cancelled'
 
 export type SystemLevel = 'info' | 'success' | 'error'
 
+export const EDITABLE_TOOL_NAMES = [
+    'addExpense',
+    'addIncome',
+    'addTransfer',
+    'addBalanceAdjustment',
+    'createAccount',
+    'createCategory',
+] as const
+
+export type EditableToolName = (typeof EDITABLE_TOOL_NAMES)[number]
+
+function isEditableTool(name: string): name is EditableToolName {
+    return (EDITABLE_TOOL_NAMES as readonly string[]).includes(name)
+}
+
 export type ChatMessage =
     | {
           kind: 'user'
@@ -95,6 +110,14 @@ export type ChatMessage =
           at: Date
           message: string
           level: SystemLevel
+      }
+    | {
+          kind: 'action-result'
+          id: string
+          at: Date
+          toolName: EditableToolName
+          entityId: string
+          toolArgs: Record<string, unknown>
       }
 
 // Hook
@@ -286,15 +309,38 @@ export function useVoice(opts: UseVoiceOpts) {
 
     const completeToolCall = useCallback(
         (callId: string, result: Record<string, unknown>) => {
-            setMessages((prev) =>
-                prev.map((m) =>
+            setMessages((prev) => {
+                const toolMsg = prev.find(
+                    (m): m is Extract<ChatMessage, { kind: 'tool' }> =>
+                        m.kind === 'tool' && m.callId === callId,
+                )
+                const updated = prev.map((m) =>
                     m.kind === 'tool' && m.callId === callId
-                        ? { ...m, result, status: 'completed' }
+                        ? { ...m, result, status: 'completed' as const }
                         : m,
-                ),
-            )
+                )
+                if (
+                    toolMsg &&
+                    isEditableTool(toolMsg.name) &&
+                    result.ok === true &&
+                    typeof result.id === 'string'
+                ) {
+                    return [
+                        ...updated,
+                        {
+                            kind: 'action-result' as const,
+                            id: nextId(),
+                            at: new Date(),
+                            toolName: toolMsg.name,
+                            entityId: result.id,
+                            toolArgs: toolMsg.args,
+                        },
+                    ]
+                }
+                return updated
+            })
         },
-        [],
+        [nextId],
     )
 
     const cancelToolCalls = useCallback((callIds: string[]) => {
