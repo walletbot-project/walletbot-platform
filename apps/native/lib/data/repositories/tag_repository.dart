@@ -66,7 +66,7 @@ class TagRepository extends RepositoryBase {
             name: row.read<String>('name'),
             description: row.readNullable<String>('description'),
             parentId: row.readNullable<String>('parent_id'),
-            color: row.readNullable<String>('color'),
+            color: row.read<String>('color'),
             archived: row.read<bool>('is_archived'),
             createdAt: row.read<BigInt>('created_at'),
             updatedAt: row.read<BigInt>('updated_at'),
@@ -141,7 +141,7 @@ class TagRepository extends RepositoryBase {
             name: name,
             description: Value(description),
             parentId: Value(parentId),
-            color: Value(color),
+            color: Value.absentIfNull(color),
             createdAt: now,
             updatedAt: now,
             dirty: const Value(true),
@@ -160,7 +160,7 @@ class TagRepository extends RepositoryBase {
     String id, {
     Value<String> name = const Value.absent(),
     Value<String?> description = const Value.absent(),
-    Value<String?> color = const Value.absent(),
+    Value<String> color = const Value.absent(),
     Value<String?> parentId = const Value.absent(),
   }) async {
     final now = currentMs;

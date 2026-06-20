@@ -57,8 +57,8 @@ class CategoryRepository extends RepositoryBase {
             id: row.read<String>('id'),
             name: row.read<String>('name'),
             description: row.readNullable<String>('description'),
-            color: row.readNullable<String>('color'),
-            icon: row.readNullable<String>('icon'),
+            color: row.read<String>('color'),
+            icon: row.read<String>('icon'),
             archived: row.read<bool>('is_archived'),
             createdAt: row.read<BigInt>('created_at'),
             updatedAt: row.read<BigInt>('updated_at'),
@@ -119,8 +119,8 @@ class CategoryRepository extends RepositoryBase {
             id: id,
             name: name,
             description: Value(description),
-            color: Value(color),
-            icon: Value(icon),
+            color: Value.absentIfNull(color),
+            icon: Value.absentIfNull(icon),
             createdAt: now,
             updatedAt: now,
             dirty: const Value(true),
@@ -135,8 +135,8 @@ class CategoryRepository extends RepositoryBase {
     String id, {
     Value<String> name = const Value.absent(),
     Value<String?> description = const Value.absent(),
-    Value<String?> color = const Value.absent(),
-    Value<String?> icon = const Value.absent(),
+    Value<String> color = const Value.absent(),
+    Value<String> icon = const Value.absent(),
   }) async {
     await (db.update(db.categories)..where((c) => c.id.equals(id))).write(
       CategoriesCompanion(

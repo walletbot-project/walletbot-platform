@@ -53,18 +53,20 @@ class $AccountsTable extends Accounts with TableInfo<$AccountsTable, Account> {
   late final GeneratedColumn<String> color = GeneratedColumn<String>(
     'color',
     aliasedName,
-    true,
+    false,
     type: DriftSqlType.string,
     requiredDuringInsert: false,
+    defaultValue: const Constant(kDefaultAccountColor),
   );
   static const VerificationMeta _iconMeta = const VerificationMeta('icon');
   @override
   late final GeneratedColumn<String> icon = GeneratedColumn<String>(
     'icon',
     aliasedName,
-    true,
+    false,
     type: DriftSqlType.string,
     requiredDuringInsert: false,
+    defaultValue: const Constant(kDefaultAccountIcon),
   );
   static const VerificationMeta _archivedMeta = const VerificationMeta(
     'archived',
@@ -239,11 +241,11 @@ class $AccountsTable extends Accounts with TableInfo<$AccountsTable, Account> {
       color: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}color'],
-      ),
+      )!,
       icon: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}icon'],
-      ),
+      )!,
       archived: attachedDatabase.typeMapping.read(
         DriftSqlType.bool,
         data['${effectivePrefix}is_archived'],
@@ -274,8 +276,8 @@ class Account extends DataClass implements Insertable<Account> {
   final String name;
   final String currency;
   final String? description;
-  final String? color;
-  final String? icon;
+  final String color;
+  final String icon;
   final bool archived;
   final BigInt createdAt;
   final BigInt updatedAt;
@@ -285,8 +287,8 @@ class Account extends DataClass implements Insertable<Account> {
     required this.name,
     required this.currency,
     this.description,
-    this.color,
-    this.icon,
+    required this.color,
+    required this.icon,
     required this.archived,
     required this.createdAt,
     required this.updatedAt,
@@ -301,12 +303,8 @@ class Account extends DataClass implements Insertable<Account> {
     if (!nullToAbsent || description != null) {
       map['description'] = Variable<String>(description);
     }
-    if (!nullToAbsent || color != null) {
-      map['color'] = Variable<String>(color);
-    }
-    if (!nullToAbsent || icon != null) {
-      map['icon'] = Variable<String>(icon);
-    }
+    map['color'] = Variable<String>(color);
+    map['icon'] = Variable<String>(icon);
     map['is_archived'] = Variable<bool>(archived);
     map['created_at'] = Variable<BigInt>(createdAt);
     map['updated_at'] = Variable<BigInt>(updatedAt);
@@ -322,10 +320,8 @@ class Account extends DataClass implements Insertable<Account> {
       description: description == null && nullToAbsent
           ? const Value.absent()
           : Value(description),
-      color: color == null && nullToAbsent
-          ? const Value.absent()
-          : Value(color),
-      icon: icon == null && nullToAbsent ? const Value.absent() : Value(icon),
+      color: Value(color),
+      icon: Value(icon),
       archived: Value(archived),
       createdAt: Value(createdAt),
       updatedAt: Value(updatedAt),
@@ -343,8 +339,8 @@ class Account extends DataClass implements Insertable<Account> {
       name: serializer.fromJson<String>(json['name']),
       currency: serializer.fromJson<String>(json['currency']),
       description: serializer.fromJson<String?>(json['description']),
-      color: serializer.fromJson<String?>(json['color']),
-      icon: serializer.fromJson<String?>(json['icon']),
+      color: serializer.fromJson<String>(json['color']),
+      icon: serializer.fromJson<String>(json['icon']),
       archived: serializer.fromJson<bool>(json['archived']),
       createdAt: serializer.fromJson<BigInt>(json['createdAt']),
       updatedAt: serializer.fromJson<BigInt>(json['updatedAt']),
@@ -359,8 +355,8 @@ class Account extends DataClass implements Insertable<Account> {
       'name': serializer.toJson<String>(name),
       'currency': serializer.toJson<String>(currency),
       'description': serializer.toJson<String?>(description),
-      'color': serializer.toJson<String?>(color),
-      'icon': serializer.toJson<String?>(icon),
+      'color': serializer.toJson<String>(color),
+      'icon': serializer.toJson<String>(icon),
       'archived': serializer.toJson<bool>(archived),
       'createdAt': serializer.toJson<BigInt>(createdAt),
       'updatedAt': serializer.toJson<BigInt>(updatedAt),
@@ -373,8 +369,8 @@ class Account extends DataClass implements Insertable<Account> {
     String? name,
     String? currency,
     Value<String?> description = const Value.absent(),
-    Value<String?> color = const Value.absent(),
-    Value<String?> icon = const Value.absent(),
+    String? color,
+    String? icon,
     bool? archived,
     BigInt? createdAt,
     BigInt? updatedAt,
@@ -384,8 +380,8 @@ class Account extends DataClass implements Insertable<Account> {
     name: name ?? this.name,
     currency: currency ?? this.currency,
     description: description.present ? description.value : this.description,
-    color: color.present ? color.value : this.color,
-    icon: icon.present ? icon.value : this.icon,
+    color: color ?? this.color,
+    icon: icon ?? this.icon,
     archived: archived ?? this.archived,
     createdAt: createdAt ?? this.createdAt,
     updatedAt: updatedAt ?? this.updatedAt,
@@ -459,8 +455,8 @@ class AccountsCompanion extends UpdateCompanion<Account> {
   final Value<String> name;
   final Value<String> currency;
   final Value<String?> description;
-  final Value<String?> color;
-  final Value<String?> icon;
+  final Value<String> color;
+  final Value<String> icon;
   final Value<bool> archived;
   final Value<BigInt> createdAt;
   final Value<BigInt> updatedAt;
@@ -529,8 +525,8 @@ class AccountsCompanion extends UpdateCompanion<Account> {
     Value<String>? name,
     Value<String>? currency,
     Value<String?>? description,
-    Value<String?>? color,
-    Value<String?>? icon,
+    Value<String>? color,
+    Value<String>? icon,
     Value<bool>? archived,
     Value<BigInt>? createdAt,
     Value<BigInt>? updatedAt,
@@ -650,18 +646,20 @@ class $CategoriesTable extends Categories
   late final GeneratedColumn<String> color = GeneratedColumn<String>(
     'color',
     aliasedName,
-    true,
+    false,
     type: DriftSqlType.string,
     requiredDuringInsert: false,
+    defaultValue: const Constant(kDefaultCategoryColor),
   );
   static const VerificationMeta _iconMeta = const VerificationMeta('icon');
   @override
   late final GeneratedColumn<String> icon = GeneratedColumn<String>(
     'icon',
     aliasedName,
-    true,
+    false,
     type: DriftSqlType.string,
     requiredDuringInsert: false,
+    defaultValue: const Constant(kDefaultCategoryIcon),
   );
   static const VerificationMeta _archivedMeta = const VerificationMeta(
     'archived',
@@ -823,11 +821,11 @@ class $CategoriesTable extends Categories
       color: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}color'],
-      ),
+      )!,
       icon: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}icon'],
-      ),
+      )!,
       archived: attachedDatabase.typeMapping.read(
         DriftSqlType.bool,
         data['${effectivePrefix}is_archived'],
@@ -857,8 +855,8 @@ class Category extends DataClass implements Insertable<Category> {
   final String id;
   final String name;
   final String? description;
-  final String? color;
-  final String? icon;
+  final String color;
+  final String icon;
   final bool archived;
   final BigInt createdAt;
   final BigInt updatedAt;
@@ -867,8 +865,8 @@ class Category extends DataClass implements Insertable<Category> {
     required this.id,
     required this.name,
     this.description,
-    this.color,
-    this.icon,
+    required this.color,
+    required this.icon,
     required this.archived,
     required this.createdAt,
     required this.updatedAt,
@@ -882,12 +880,8 @@ class Category extends DataClass implements Insertable<Category> {
     if (!nullToAbsent || description != null) {
       map['description'] = Variable<String>(description);
     }
-    if (!nullToAbsent || color != null) {
-      map['color'] = Variable<String>(color);
-    }
-    if (!nullToAbsent || icon != null) {
-      map['icon'] = Variable<String>(icon);
-    }
+    map['color'] = Variable<String>(color);
+    map['icon'] = Variable<String>(icon);
     map['is_archived'] = Variable<bool>(archived);
     map['created_at'] = Variable<BigInt>(createdAt);
     map['updated_at'] = Variable<BigInt>(updatedAt);
@@ -902,10 +896,8 @@ class Category extends DataClass implements Insertable<Category> {
       description: description == null && nullToAbsent
           ? const Value.absent()
           : Value(description),
-      color: color == null && nullToAbsent
-          ? const Value.absent()
-          : Value(color),
-      icon: icon == null && nullToAbsent ? const Value.absent() : Value(icon),
+      color: Value(color),
+      icon: Value(icon),
       archived: Value(archived),
       createdAt: Value(createdAt),
       updatedAt: Value(updatedAt),
@@ -922,8 +914,8 @@ class Category extends DataClass implements Insertable<Category> {
       id: serializer.fromJson<String>(json['id']),
       name: serializer.fromJson<String>(json['name']),
       description: serializer.fromJson<String?>(json['description']),
-      color: serializer.fromJson<String?>(json['color']),
-      icon: serializer.fromJson<String?>(json['icon']),
+      color: serializer.fromJson<String>(json['color']),
+      icon: serializer.fromJson<String>(json['icon']),
       archived: serializer.fromJson<bool>(json['archived']),
       createdAt: serializer.fromJson<BigInt>(json['createdAt']),
       updatedAt: serializer.fromJson<BigInt>(json['updatedAt']),
@@ -937,8 +929,8 @@ class Category extends DataClass implements Insertable<Category> {
       'id': serializer.toJson<String>(id),
       'name': serializer.toJson<String>(name),
       'description': serializer.toJson<String?>(description),
-      'color': serializer.toJson<String?>(color),
-      'icon': serializer.toJson<String?>(icon),
+      'color': serializer.toJson<String>(color),
+      'icon': serializer.toJson<String>(icon),
       'archived': serializer.toJson<bool>(archived),
       'createdAt': serializer.toJson<BigInt>(createdAt),
       'updatedAt': serializer.toJson<BigInt>(updatedAt),
@@ -950,8 +942,8 @@ class Category extends DataClass implements Insertable<Category> {
     String? id,
     String? name,
     Value<String?> description = const Value.absent(),
-    Value<String?> color = const Value.absent(),
-    Value<String?> icon = const Value.absent(),
+    String? color,
+    String? icon,
     bool? archived,
     BigInt? createdAt,
     BigInt? updatedAt,
@@ -960,8 +952,8 @@ class Category extends DataClass implements Insertable<Category> {
     id: id ?? this.id,
     name: name ?? this.name,
     description: description.present ? description.value : this.description,
-    color: color.present ? color.value : this.color,
-    icon: icon.present ? icon.value : this.icon,
+    color: color ?? this.color,
+    icon: icon ?? this.icon,
     archived: archived ?? this.archived,
     createdAt: createdAt ?? this.createdAt,
     updatedAt: updatedAt ?? this.updatedAt,
@@ -1030,8 +1022,8 @@ class CategoriesCompanion extends UpdateCompanion<Category> {
   final Value<String> id;
   final Value<String> name;
   final Value<String?> description;
-  final Value<String?> color;
-  final Value<String?> icon;
+  final Value<String> color;
+  final Value<String> icon;
   final Value<bool> archived;
   final Value<BigInt> createdAt;
   final Value<BigInt> updatedAt;
@@ -1094,8 +1086,8 @@ class CategoriesCompanion extends UpdateCompanion<Category> {
     Value<String>? id,
     Value<String>? name,
     Value<String?>? description,
-    Value<String?>? color,
-    Value<String?>? icon,
+    Value<String>? color,
+    Value<String>? icon,
     Value<bool>? archived,
     Value<BigInt>? createdAt,
     Value<BigInt>? updatedAt,
@@ -2334,9 +2326,10 @@ class $TagsTable extends Tags with TableInfo<$TagsTable, Tag> {
   late final GeneratedColumn<String> color = GeneratedColumn<String>(
     'color',
     aliasedName,
-    true,
+    false,
     type: DriftSqlType.string,
     requiredDuringInsert: false,
+    defaultValue: const Constant(kDefaultTagColor),
   );
   static const VerificationMeta _archivedMeta = const VerificationMeta(
     'archived',
@@ -2502,7 +2495,7 @@ class $TagsTable extends Tags with TableInfo<$TagsTable, Tag> {
       color: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}color'],
-      ),
+      )!,
       archived: attachedDatabase.typeMapping.read(
         DriftSqlType.bool,
         data['${effectivePrefix}is_archived'],
@@ -2533,7 +2526,7 @@ class Tag extends DataClass implements Insertable<Tag> {
   final String name;
   final String? description;
   final String? parentId;
-  final String? color;
+  final String color;
   final bool archived;
   final BigInt createdAt;
   final BigInt updatedAt;
@@ -2543,7 +2536,7 @@ class Tag extends DataClass implements Insertable<Tag> {
     required this.name,
     this.description,
     this.parentId,
-    this.color,
+    required this.color,
     required this.archived,
     required this.createdAt,
     required this.updatedAt,
@@ -2560,9 +2553,7 @@ class Tag extends DataClass implements Insertable<Tag> {
     if (!nullToAbsent || parentId != null) {
       map['parent_id'] = Variable<String>(parentId);
     }
-    if (!nullToAbsent || color != null) {
-      map['color'] = Variable<String>(color);
-    }
+    map['color'] = Variable<String>(color);
     map['is_archived'] = Variable<bool>(archived);
     map['created_at'] = Variable<BigInt>(createdAt);
     map['updated_at'] = Variable<BigInt>(updatedAt);
@@ -2580,9 +2571,7 @@ class Tag extends DataClass implements Insertable<Tag> {
       parentId: parentId == null && nullToAbsent
           ? const Value.absent()
           : Value(parentId),
-      color: color == null && nullToAbsent
-          ? const Value.absent()
-          : Value(color),
+      color: Value(color),
       archived: Value(archived),
       createdAt: Value(createdAt),
       updatedAt: Value(updatedAt),
@@ -2600,7 +2589,7 @@ class Tag extends DataClass implements Insertable<Tag> {
       name: serializer.fromJson<String>(json['name']),
       description: serializer.fromJson<String?>(json['description']),
       parentId: serializer.fromJson<String?>(json['parentId']),
-      color: serializer.fromJson<String?>(json['color']),
+      color: serializer.fromJson<String>(json['color']),
       archived: serializer.fromJson<bool>(json['archived']),
       createdAt: serializer.fromJson<BigInt>(json['createdAt']),
       updatedAt: serializer.fromJson<BigInt>(json['updatedAt']),
@@ -2615,7 +2604,7 @@ class Tag extends DataClass implements Insertable<Tag> {
       'name': serializer.toJson<String>(name),
       'description': serializer.toJson<String?>(description),
       'parentId': serializer.toJson<String?>(parentId),
-      'color': serializer.toJson<String?>(color),
+      'color': serializer.toJson<String>(color),
       'archived': serializer.toJson<bool>(archived),
       'createdAt': serializer.toJson<BigInt>(createdAt),
       'updatedAt': serializer.toJson<BigInt>(updatedAt),
@@ -2628,7 +2617,7 @@ class Tag extends DataClass implements Insertable<Tag> {
     String? name,
     Value<String?> description = const Value.absent(),
     Value<String?> parentId = const Value.absent(),
-    Value<String?> color = const Value.absent(),
+    String? color,
     bool? archived,
     BigInt? createdAt,
     BigInt? updatedAt,
@@ -2638,7 +2627,7 @@ class Tag extends DataClass implements Insertable<Tag> {
     name: name ?? this.name,
     description: description.present ? description.value : this.description,
     parentId: parentId.present ? parentId.value : this.parentId,
-    color: color.present ? color.value : this.color,
+    color: color ?? this.color,
     archived: archived ?? this.archived,
     createdAt: createdAt ?? this.createdAt,
     updatedAt: updatedAt ?? this.updatedAt,
@@ -2708,7 +2697,7 @@ class TagsCompanion extends UpdateCompanion<Tag> {
   final Value<String> name;
   final Value<String?> description;
   final Value<String?> parentId;
-  final Value<String?> color;
+  final Value<String> color;
   final Value<bool> archived;
   final Value<BigInt> createdAt;
   final Value<BigInt> updatedAt;
@@ -2772,7 +2761,7 @@ class TagsCompanion extends UpdateCompanion<Tag> {
     Value<String>? name,
     Value<String?>? description,
     Value<String?>? parentId,
-    Value<String?>? color,
+    Value<String>? color,
     Value<bool>? archived,
     Value<BigInt>? createdAt,
     Value<BigInt>? updatedAt,
@@ -4133,8 +4122,8 @@ typedef $$AccountsTableCreateCompanionBuilder =
       required String name,
       required String currency,
       Value<String?> description,
-      Value<String?> color,
-      Value<String?> icon,
+      Value<String> color,
+      Value<String> icon,
       Value<bool> archived,
       required BigInt createdAt,
       required BigInt updatedAt,
@@ -4147,8 +4136,8 @@ typedef $$AccountsTableUpdateCompanionBuilder =
       Value<String> name,
       Value<String> currency,
       Value<String?> description,
-      Value<String?> color,
-      Value<String?> icon,
+      Value<String> color,
+      Value<String> icon,
       Value<bool> archived,
       Value<BigInt> createdAt,
       Value<BigInt> updatedAt,
@@ -4350,8 +4339,8 @@ class $$AccountsTableTableManager
                 Value<String> name = const Value.absent(),
                 Value<String> currency = const Value.absent(),
                 Value<String?> description = const Value.absent(),
-                Value<String?> color = const Value.absent(),
-                Value<String?> icon = const Value.absent(),
+                Value<String> color = const Value.absent(),
+                Value<String> icon = const Value.absent(),
                 Value<bool> archived = const Value.absent(),
                 Value<BigInt> createdAt = const Value.absent(),
                 Value<BigInt> updatedAt = const Value.absent(),
@@ -4376,8 +4365,8 @@ class $$AccountsTableTableManager
                 required String name,
                 required String currency,
                 Value<String?> description = const Value.absent(),
-                Value<String?> color = const Value.absent(),
-                Value<String?> icon = const Value.absent(),
+                Value<String> color = const Value.absent(),
+                Value<String> icon = const Value.absent(),
                 Value<bool> archived = const Value.absent(),
                 required BigInt createdAt,
                 required BigInt updatedAt,
@@ -4423,8 +4412,8 @@ typedef $$CategoriesTableCreateCompanionBuilder =
       required String id,
       required String name,
       Value<String?> description,
-      Value<String?> color,
-      Value<String?> icon,
+      Value<String> color,
+      Value<String> icon,
       Value<bool> archived,
       required BigInt createdAt,
       required BigInt updatedAt,
@@ -4436,8 +4425,8 @@ typedef $$CategoriesTableUpdateCompanionBuilder =
       Value<String> id,
       Value<String> name,
       Value<String?> description,
-      Value<String?> color,
-      Value<String?> icon,
+      Value<String> color,
+      Value<String> icon,
       Value<bool> archived,
       Value<BigInt> createdAt,
       Value<BigInt> updatedAt,
@@ -4625,8 +4614,8 @@ class $$CategoriesTableTableManager
                 Value<String> id = const Value.absent(),
                 Value<String> name = const Value.absent(),
                 Value<String?> description = const Value.absent(),
-                Value<String?> color = const Value.absent(),
-                Value<String?> icon = const Value.absent(),
+                Value<String> color = const Value.absent(),
+                Value<String> icon = const Value.absent(),
                 Value<bool> archived = const Value.absent(),
                 Value<BigInt> createdAt = const Value.absent(),
                 Value<BigInt> updatedAt = const Value.absent(),
@@ -4649,8 +4638,8 @@ class $$CategoriesTableTableManager
                 required String id,
                 required String name,
                 Value<String?> description = const Value.absent(),
-                Value<String?> color = const Value.absent(),
-                Value<String?> icon = const Value.absent(),
+                Value<String> color = const Value.absent(),
+                Value<String> icon = const Value.absent(),
                 Value<bool> archived = const Value.absent(),
                 required BigInt createdAt,
                 required BigInt updatedAt,
@@ -5195,7 +5184,7 @@ typedef $$TagsTableCreateCompanionBuilder =
       required String name,
       Value<String?> description,
       Value<String?> parentId,
-      Value<String?> color,
+      Value<String> color,
       Value<bool> archived,
       required BigInt createdAt,
       required BigInt updatedAt,
@@ -5208,7 +5197,7 @@ typedef $$TagsTableUpdateCompanionBuilder =
       Value<String> name,
       Value<String?> description,
       Value<String?> parentId,
-      Value<String?> color,
+      Value<String> color,
       Value<bool> archived,
       Value<BigInt> createdAt,
       Value<BigInt> updatedAt,
@@ -5395,7 +5384,7 @@ class $$TagsTableTableManager
                 Value<String> name = const Value.absent(),
                 Value<String?> description = const Value.absent(),
                 Value<String?> parentId = const Value.absent(),
-                Value<String?> color = const Value.absent(),
+                Value<String> color = const Value.absent(),
                 Value<bool> archived = const Value.absent(),
                 Value<BigInt> createdAt = const Value.absent(),
                 Value<BigInt> updatedAt = const Value.absent(),
@@ -5419,7 +5408,7 @@ class $$TagsTableTableManager
                 required String name,
                 Value<String?> description = const Value.absent(),
                 Value<String?> parentId = const Value.absent(),
-                Value<String?> color = const Value.absent(),
+                Value<String> color = const Value.absent(),
                 Value<bool> archived = const Value.absent(),
                 required BigInt createdAt,
                 required BigInt updatedAt,

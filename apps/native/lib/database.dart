@@ -7,6 +7,17 @@ import 'package:path_provider/path_provider.dart';
 
 part 'database.g.dart';
 
+// Accent defaults. Business rule: every account/category/tag always has a
+// color (and accounts/categories an icon). These are the DB-level fallbacks
+// applied when a writer omits them; they MIRROR the UI constants in
+// components/color_utils.dart and components/{account,category}_icons.dart —
+// keep them in sync. Color is a hex string; icon is a stable icon-name.
+const String kDefaultAccountColor = '#3B82F6';
+const String kDefaultAccountIcon = 'wallet';
+const String kDefaultCategoryColor = '#6366F1';
+const String kDefaultCategoryIcon = 'category';
+const String kDefaultTagColor = '#69F0AE';
+
 @TableIndex(name: 'accounts_archived', columns: {#archived})
 @TableIndex(name: 'accounts_updated_at', columns: {#updatedAt})
 @TableIndex.sql('''
@@ -18,8 +29,11 @@ class Accounts extends Table {
   TextColumn get name => text().named('name')();
   TextColumn get currency => text().named('currency')();
   TextColumn get description => text().named('description').nullable()();
-  TextColumn get color => text().named('color').nullable()(); // hex color code
-  TextColumn get icon => text().named('icon').nullable()(); // from defined list
+  // Always defined (business rule): non-null with a DB default.
+  TextColumn get color =>
+      text().named('color').withDefault(const Constant(kDefaultAccountColor))();
+  TextColumn get icon =>
+      text().named('icon').withDefault(const Constant(kDefaultAccountIcon))();
 
   BoolColumn get archived =>
       boolean().named('is_archived').withDefault(const Constant(false))();
@@ -44,8 +58,12 @@ class Categories extends Table {
   TextColumn get id => text().named('id')();
   TextColumn get name => text().named('name')();
   TextColumn get description => text().named('description').nullable()();
-  TextColumn get color => text().named('color').nullable()(); // hex color code
-  TextColumn get icon => text().named('icon').nullable()(); // from defined list
+  // Always defined (business rule): non-null with a DB default.
+  TextColumn get color => text()
+      .named('color')
+      .withDefault(const Constant(kDefaultCategoryColor))();
+  TextColumn get icon =>
+      text().named('icon').withDefault(const Constant(kDefaultCategoryIcon))();
 
   BoolColumn get archived =>
       boolean().named('is_archived').withDefault(const Constant(false))();
@@ -134,7 +152,9 @@ class Tags extends Table {
   TextColumn get name => text().named('name')();
   TextColumn get description => text().named('description').nullable()();
   TextColumn get parentId => text().named('parent_id').nullable()();
-  TextColumn get color => text().named('color').nullable()(); // hex color code
+  // Always defined (business rule): non-null with a DB default.
+  TextColumn get color =>
+      text().named('color').withDefault(const Constant(kDefaultTagColor))();
 
   BoolColumn get archived =>
       boolean().named('is_archived').withDefault(const Constant(false))();
@@ -232,18 +252,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.executor);
 
   @override
-  int get schemaVersion => 2;
-
-  @override
-  MigrationStrategy get migration => MigrationStrategy(
-    onUpgrade: (m, from, to) async {
-      // v2: categories gained accent color + icon (nullable, additive).
-      if (from < 2) {
-        await m.addColumn(categories, categories.color);
-        await m.addColumn(categories, categories.icon);
-      }
-    },
-  );
+  int get schemaVersion => 1;
 
   static String _dbNameFor(String userId) => 'app_database_$userId';
 
