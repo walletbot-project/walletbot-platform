@@ -311,6 +311,7 @@ export const toolExecutors = {
             accountId: accR.entity.id,
             categoryId: catR.entity.id,
             date: parseOptionalDate(args.date),
+            dateConfirmed: args.dateConfirmed,
             status: args.status,
         })
         await attachTags(ctx, id, args.tagIdsOrNames)
@@ -331,6 +332,7 @@ export const toolExecutors = {
             accountId: accR.entity.id,
             categoryId: catR.entity.id,
             date: parseOptionalDate(args.date),
+            dateConfirmed: args.dateConfirmed,
             status: args.status,
         })
         await attachTags(ctx, id, args.tagIdsOrNames)
@@ -364,6 +366,7 @@ export const toolExecutors = {
             exchangeRate: args.exchangeRate,
             categoryId,
             date: parseOptionalDate(args.date),
+            dateConfirmed: args.dateConfirmed,
         })
         await attachTags(ctx, id, args.tagIdsOrNames)
         return { ok: true, id }
@@ -383,6 +386,7 @@ export const toolExecutors = {
                     name: args.name,
                     description: args.description,
                     date: parseOptionalDate(args.date),
+                    dateConfirmed: args.dateConfirmed,
                 },
             )
             return { ok: true, id }
@@ -402,6 +406,7 @@ export const toolExecutors = {
                 name: args.name,
                 description: args.description,
                 date: parseOptionalDate(args.date),
+                dateConfirmed: args.dateConfirmed,
                 amount:
                     args.amount !== undefined
                         ? parseAmountToCents(args.amount)
