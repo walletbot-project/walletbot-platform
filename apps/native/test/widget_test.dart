@@ -10,7 +10,11 @@ void main() {
     FlutterSecureStorage.setMockInitialValues({});
 
     final auth = AuthController();
-    await auth.load();
+    // Note: production startup runs ConvexClient.initialize() before
+    // auth.load(), and load() touches ConvexClient unconditionally
+    // (_detachAuth -> setAuth). The native client can't be initialized in
+    // widget tests, so we render with a freshly constructed (empty)
+    // controller, which is equivalent to load() with empty storage.
 
     await tester.pumpWidget(MyApp(auth: auth));
     await tester.pump();

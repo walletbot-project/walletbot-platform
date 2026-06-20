@@ -87,6 +87,7 @@ export const createExpense = mutation({
         accountId: v.string(),
         categoryId: v.string(),
         date: v.optional(v.int64()),
+        dateConfirmed: v.boolean(),
         status: v.optional(v.union(v.literal('pending'), v.literal('cleared'))),
     },
     handler: async (ctx, args) => {
@@ -109,6 +110,7 @@ export const createExpense = mutation({
             description: args.description,
             status: args.status ?? 'cleared',
             date: args.date ?? now,
+            dateConfirmed: args.dateConfirmed,
             accountId: args.accountId,
             categoryId: args.categoryId,
             amount: args.amount,
@@ -132,6 +134,7 @@ export const createIncome = mutation({
         accountId: v.string(),
         categoryId: v.string(),
         date: v.optional(v.int64()),
+        dateConfirmed: v.boolean(),
         status: v.optional(v.union(v.literal('pending'), v.literal('cleared'))),
     },
     handler: async (ctx, args) => {
@@ -154,6 +157,7 @@ export const createIncome = mutation({
             description: args.description,
             status: args.status ?? 'cleared',
             date: args.date ?? now,
+            dateConfirmed: args.dateConfirmed,
             accountId: args.accountId,
             categoryId: args.categoryId,
             amount: args.amount,
@@ -180,6 +184,7 @@ export const createTransfer = mutation({
         exchangeRate: v.optional(v.number()),
         categoryId: v.optional(v.string()),
         date: v.optional(v.int64()),
+        dateConfirmed: v.boolean(),
         status: v.optional(v.union(v.literal('pending'), v.literal('cleared'))),
     },
     handler: async (ctx, args) => {
@@ -225,6 +230,7 @@ export const createTransfer = mutation({
             description: args.description,
             status: args.status ?? 'cleared',
             date: args.date ?? now,
+            dateConfirmed: args.dateConfirmed,
             accountId: args.accountId,
             categoryId,
             amount: args.amount,
@@ -251,6 +257,7 @@ export const createBalanceAdjustment = mutation({
         name: v.optional(v.string()),
         description: v.optional(v.string()),
         date: v.optional(v.int64()),
+        dateConfirmed: v.boolean(),
     },
     handler: async (ctx, args) => {
         const userId = await requireAuth(ctx)
@@ -281,6 +288,7 @@ export const createBalanceAdjustment = mutation({
             description: args.description,
             status: 'cleared',
             date: args.date ?? now,
+            dateConfirmed: args.dateConfirmed,
             accountId: args.accountId,
             categoryId: '',
             amount,
@@ -304,6 +312,7 @@ export const update = mutation({
         name: v.optional(v.string()),
         description: v.optional(v.string()),
         date: v.optional(v.int64()),
+        dateConfirmed: v.optional(v.boolean()),
         amount: v.optional(v.int64()),
         categoryId: v.optional(v.string()),
         status: v.optional(v.union(v.literal('pending'), v.literal('cleared'))),
@@ -325,6 +334,7 @@ export const update = mutation({
             name?: string
             description?: string
             date?: bigint
+            dateConfirmed?: boolean
             amount?: bigint
             categoryId?: string
             status?: 'pending' | 'cleared'
@@ -332,6 +342,8 @@ export const update = mutation({
         if (args.name !== undefined) patch.name = args.name
         if (args.description !== undefined) patch.description = args.description
         if (args.date !== undefined) patch.date = args.date
+        if (args.dateConfirmed !== undefined)
+            patch.dateConfirmed = args.dateConfirmed
         if (args.amount !== undefined) patch.amount = args.amount
         if (args.categoryId !== undefined) patch.categoryId = args.categoryId
         if (args.status !== undefined) patch.status = args.status

@@ -1,3 +1,4 @@
+import 'package:app/data/data.dart';
 import 'package:app/database.dart';
 import 'package:app/screens/create_account.dart';
 import 'package:app/screens/edit-account.dart';
@@ -42,7 +43,7 @@ class _AccountsScreenState extends State<AccountsScreen> {
     if (confirmed != true || !mounted) return;
 
     try {
-      await context.read<AppDatabase>().archiveAccount(id);
+      await context.read<AppRepositories>().accounts.archive(id);
     } catch (e, st) {
       debugPrint('Error archiving account: $e\n$st');
       if (mounted) {
@@ -116,8 +117,8 @@ class _AccountsScreenState extends State<AccountsScreen> {
     _exitManagementMode();
 
     try {
-      final db = context.read<AppDatabase>();
-      await Future.wait(ids.map(db.archiveAccount));
+      final repos = context.read<AppRepositories>();
+      await Future.wait(ids.map(repos.accounts.archive));
     } catch (e, st) {
       debugPrint('Error archiving accounts: $e\n$st');
       if (mounted) {
@@ -131,11 +132,11 @@ class _AccountsScreenState extends State<AccountsScreen> {
   // ── Navigation ──────────────────────────────────────────────────────────────
 
   void _navigateToCreateAccount() {
-    final db = context.read<AppDatabase>();
+    final repos = context.read<AppRepositories>();
     Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) => Provider<AppDatabase>.value(
-          value: db,
+        builder: (_) => Provider<AppRepositories>.value(
+          value: repos,
           child: const CreateAccountScreen(),
         ),
       ),
@@ -158,7 +159,7 @@ class _AccountsScreenState extends State<AccountsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final db = context.read<AppDatabase>();
+    final repos = context.read<AppRepositories>();
     final selCount = _selectedIds.length;
 
     return Scaffold(
@@ -185,7 +186,7 @@ class _AccountsScreenState extends State<AccountsScreen> {
         children: [
           Expanded(
             child: _AccountsList(
-              db: db,
+              repos: repos,
               isManagementMode: _isManagementMode,
               selectedIds: _selectedIds,
               onEdit: _navigateToEditAccount,
@@ -218,7 +219,7 @@ class _AccountsScreenState extends State<AccountsScreen> {
 // which flashes the loading indicator.
 class _AccountsList extends StatefulWidget {
   const _AccountsList({
-    required this.db,
+    required this.repos,
     required this.isManagementMode,
     required this.selectedIds,
     required this.onEdit,
@@ -228,7 +229,7 @@ class _AccountsList extends StatefulWidget {
     required this.onCreateTap,
   });
 
-  final AppDatabase db;
+  final AppRepositories repos;
   final bool isManagementMode;
   final Set<String> selectedIds;
   final void Function(Account) onEdit;
@@ -247,7 +248,7 @@ class _AccountsListState extends State<_AccountsList> {
   @override
   void initState() {
     super.initState();
-    _stream = widget.db.watchAccounts();
+    _stream = widget.repos.accounts.watchActive();
   }
 
   @override
