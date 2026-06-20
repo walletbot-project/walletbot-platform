@@ -2,15 +2,14 @@ import 'dart:async';
 
 import 'package:app/auth/auth_controller.dart';
 import 'package:app/config.dart';
-import 'package:app/data/data.dart';
 import 'package:app/database.dart';
 import 'package:app/screens/accounts.dart';
 import 'package:app/screens/activity.dart';
+import 'package:app/screens/create_account.dart';
 import 'package:app/screens/home.dart';
 import 'package:app/screens/insights.dart';
 import 'package:app/screens/login.dart';
 import 'package:app/screens/voice.dart';
-import 'package:app/sync/sync_engine.dart';
 import 'package:app/voice/gemini_voice_expense_command.dart';
 import 'package:convex_flutter/convex_flutter.dart';
 import 'package:flutter/material.dart';
@@ -63,59 +62,12 @@ class _AuthGate extends StatelessWidget {
   Widget build(BuildContext context) {
     final active = context.watch<AuthController>().activeAccount;
     if (active == null) return const LoginScreen();
-    return MultiProvider(
+    return Provider<AppDatabase>(
       key: ValueKey(active.id),
-      providers: [
-        Provider<AppDatabase>(
-          create: (_) => AppDatabase.forUser(active.id),
-          dispose: (_, db) => db.close(),
-        ),
-        // The app-facing data layer: all reads/writes from screens and the
-        // voice agent go through this. Scoped to the account subtree so it is
-        // recreated together with the database on account switch.
-        Provider<AppRepositories>(
-          create: (ctx) => AppRepositories(ctx.read<AppDatabase>()),
-        ),
-        // SyncEngine only attaches for remote accounts. For local accounts
-        // we still create one (so `Provider.of<SyncEngine>` is non-null
-        // throughout the tree) but never call `.start()`, keeping it inert.
-        ChangeNotifierProvider<SyncEngine>(
-          create: (ctx) => SyncEngine(
-            db: ctx.read<AppDatabase>(),
-            client: ConvexClient.instance,
-          ),
-        ),
-      ],
-      child: const _SyncStarter(child: AppMain()),
+      create: (_) => AppDatabase.forUser(active.id),
+      dispose: (_, db) => db.close(),
+      child: const AppMain(),
     );
-  }
-}
-
-/// Kicks the sync engine on first build, once both the database and the
-/// `AuthController` agree that we have a remote account attached.
-class _SyncStarter extends StatefulWidget {
-  const _SyncStarter({required this.child});
-  final Widget child;
-
-  @override
-  State<_SyncStarter> createState() => _SyncStarterState();
-}
-
-class _SyncStarterState extends State<_SyncStarter> {
-  bool _kicked = false;
-
-  @override
-  Widget build(BuildContext context) {
-    final auth = context.watch<AuthController>();
-    final active = auth.activeAccount;
-    if (!_kicked && active != null && active.sessionToken != null) {
-      _kicked = true;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
-        unawaited(context.read<SyncEngine>().start());
-      });
-    }
-    return widget.child;
   }
 }
 
@@ -159,21 +111,13 @@ class _AppMainState extends State<AppMain> {
       floatingActionButton: FloatingActionButton(
         heroTag: 'voiceFab',
         onPressed: () {
-          // The voice route is pushed on the root navigator, above the
-          // account-scoped providers: capture the active account's data layer
-          // here, and dismiss the route if the account changes while open so
-          // the agent can never write to a closed/foreign database.
-          final repositories = context.read<AppRepositories>();
-          final accountId = context.read<AuthController>().activeAccount?.id;
+          final database = context.read<AppDatabase>();
           Navigator.of(context).push(
             MaterialPageRoute(
-              builder: (_) => _PopOnAccountSwitch(
-                accountId: accountId,
-                child: VoiceScreen(
-                  commandFactory: GeminiVoiceExpenseCommandFactory(
-                    repositories: repositories,
-                    convexSiteUrl: AppConfig.convexSiteUrl,
-                  ),
+              builder: (_) => VoiceScreen(
+                commandFactory: GeminiVoiceExpenseCommandFactory(
+                  database: database,
+                  convexSiteUrl: AppConfig.convexSiteUrl,
                 ),
               ),
             ),
@@ -188,8 +132,8 @@ class _AppMainState extends State<AppMain> {
         destinations: [
           NavigationDestination(icon: Icon(Icons.home_rounded), label: "Home"),
           NavigationDestination(
-            icon: Icon(Icons.calendar_view_month_rounded),
-            label: "Actividad",
+            icon: Icon(Icons.list_rounded),
+            label: "Activity",
           ),
           NavigationDestination(
             icon: Icon(Icons.account_balance_rounded),
@@ -203,29 +147,6 @@ class _AppMainState extends State<AppMain> {
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
     );
-  }
-}
-
-/// Pops its route as soon as the active account is no longer the one the
-/// route was opened for (switch, sign-out). The child captured account-scoped
-/// objects at push time; once the account changes those are disposed, so the
-/// route must not stay on screen.
-class _PopOnAccountSwitch extends StatelessWidget {
-  const _PopOnAccountSwitch({required this.accountId, required this.child});
-
-  final String? accountId;
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    final activeId = context.watch<AuthController>().activeAccount?.id;
-    if (activeId != accountId) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!context.mounted) return;
-        Navigator.of(context).pop();
-      });
-    }
-    return child;
   }
 }
 

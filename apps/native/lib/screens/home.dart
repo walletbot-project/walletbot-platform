@@ -1,7 +1,6 @@
 import 'package:app/auth/account.dart';
 import 'package:app/auth/auth_controller.dart';
-import 'package:app/screens/transaction_form.dart';
-import 'package:app/sync/sync_status_pill.dart';
+import 'package:convex_flutter/convex_flutter.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -13,6 +12,26 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  String? _testResult;
+  bool _testing = false;
+
+  Future<void> _runTestQuery() async {
+    setState(() {
+      _testing = true;
+      _testResult = null;
+    });
+    try {
+      final result = await ConvexClient.instance.query('test:hello', {});
+      if (!mounted) return;
+      setState(() => _testResult = result);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _testResult = 'ERROR: $e');
+    } finally {
+      if (mounted) setState(() => _testing = false);
+    }
+  }
+
   void showUserMenu() {
     showDialog(
       context: context,
@@ -70,22 +89,12 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Future<void> _openManualAdd() async {
-    await Navigator.of(
-      context,
-    ).push(MaterialPageRoute(builder: (_) => const TransactionFormScreen()));
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Home'),
         actions: [
-          const Padding(
-            padding: EdgeInsets.only(right: 4),
-            child: Center(child: SyncStatusPill()),
-          ),
           IconButton(
             onPressed: showUserMenu,
             icon: const Icon(Icons.person_rounded),
@@ -94,78 +103,37 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
       body: Padding(
         padding: const EdgeInsets.all(16),
-        child: ListView(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Align(
-              alignment: Alignment.centerLeft,
-              child: _HomeActionCard(
-                label: 'Agregar a mano',
-                icon: Icons.add_rounded,
-                onTap: _openManualAdd,
+            const Text('Home Screen'),
+            const SizedBox(height: 16),
+            FilledButton.icon(
+              onPressed: _testing ? null : _runTestQuery,
+              icon: _testing
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.cloud_sync_rounded),
+              label: const Text('Test Convex query (test:hello)'),
+            ),
+            if (_testResult != null) ...[
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  border: Border.all(color: Theme.of(context).dividerColor),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: SelectableText(
+                  _testResult!,
+                  style: const TextStyle(fontFamily: 'monospace'),
+                ),
               ),
-            ),
+            ],
           ],
-        ),
-      ),
-    );
-  }
-}
-
-class _HomeActionCard extends StatelessWidget {
-  const _HomeActionCard({
-    required this.label,
-    required this.icon,
-    required this.onTap,
-  });
-
-  final String label;
-  final IconData icon;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox.square(
-      dimension: 112,
-      child: Material(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(14),
-          child: Container(
-            decoration: BoxDecoration(
-              border: Border.all(color: const Color(0xFFD3CCD8), width: 1.4),
-              borderRadius: BorderRadius.circular(14),
-            ),
-            padding: const EdgeInsets.all(10),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Container(
-                  width: 44,
-                  height: 44,
-                  decoration: const BoxDecoration(
-                    color: Color(0xFF21C4B6),
-                    shape: BoxShape.circle,
-                  ),
-                  child: Icon(icon, color: Colors.white, size: 30),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  label,
-                  textAlign: TextAlign.center,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                    color: Colors.black,
-                    fontWeight: FontWeight.w900,
-                    fontSize: 13,
-                    height: 1,
-                  ),
-                ),
-              ],
-            ),
-          ),
         ),
       ),
     );

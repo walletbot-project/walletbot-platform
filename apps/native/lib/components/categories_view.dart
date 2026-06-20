@@ -1,5 +1,5 @@
-import 'package:app/data/data.dart';
 import 'package:app/database.dart';
+import 'package:app/components/insight_count_models.dart';
 import 'package:drift/drift.dart' show Value;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -9,10 +9,10 @@ class CategoriesView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final categories = context.read<AppRepositories>().categories;
+    final db = context.watch<AppDatabase>();
 
     return StreamBuilder<List<CategoryWithCount>>(
-      stream: categories.watchWithCounts(),
+      stream: _watchCategoriesWithCounts(db),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());
@@ -32,7 +32,7 @@ class CategoriesView extends StatelessWidget {
               title: GestureDetector(
                 behavior: HitTestBehavior.opaque,
                 onLongPress: () =>
-                    _editCategoryDialog(context, categories, category.category),
+                    _editCategoryDialog(context, db, category.category),
                 child: Text(category.category.name),
               ),
               trailing: Text('${category.transactionCount}'),
@@ -44,29 +44,58 @@ class CategoriesView extends StatelessWidget {
   }
 }
 
-Future<void> showAddCategoryDialog(
-  BuildContext context,
-  CategoryRepository categories,
-) {
+Stream<List<CategoryWithCount>> _watchCategoriesWithCounts(AppDatabase db) {
+  final query = db.customSelect(
+    '''
+        SELECT c.id, c.name, c.description, c.is_archived, c.created_at,
+               c.updated_at, c.dirty, COUNT(t.id) AS transaction_count
+        FROM categories c
+        LEFT JOIN transactions t ON t.category_id = c.id
+        WHERE c.is_archived = 0
+        GROUP BY c.id, c.name, c.description, c.is_archived, c.created_at,
+                 c.updated_at, c.dirty
+        ORDER BY c.name COLLATE NOCASE
+      ''',
+    readsFrom: {db.categories, db.transactions},
+  );
+
+  return query.watch().map((rows) {
+    return rows.map((row) {
+      return CategoryWithCount(
+        category: Category(
+          id: row.read<String>('id'),
+          name: row.read<String>('name'),
+          description: row.readNullable<String>('description'),
+          archived: row.read<bool>('is_archived'),
+          createdAt: row.read<BigInt>('created_at'),
+          updatedAt: row.read<BigInt>('updated_at'),
+          dirty: row.read<bool>('dirty'),
+        ),
+        transactionCount: row.read<int>('transaction_count'),
+      );
+    }).toList();
+  });
+}
+
+Future<void> showAddCategoryDialog(BuildContext context, AppDatabase db) {
   return showDialog<_CategoryDialogAction>(
     context: context,
-    builder: (context) => _CategoryDialog(categories: categories),
+    builder: (context) => _CategoryDialog(db: db),
   );
 }
 
 Future<void> _editCategoryDialog(
   BuildContext context,
-  CategoryRepository categories,
+  AppDatabase db,
   Category category,
 ) async {
   final action = await showDialog<_CategoryDialogAction>(
     context: context,
-    builder: (context) =>
-        _CategoryDialog(categories: categories, category: category),
+    builder: (context) => _CategoryDialog(db: db, category: category),
   );
 
   if (action == _CategoryDialogAction.delete) {
-    await categories.archive(category.id);
+    await _deleteCategory(db, category.id);
   }
 }
 
@@ -76,9 +105,9 @@ enum _CategoryDialogAction { saved, delete }
 // and is disposed from State.dispose(), per the Flutter docs for
 // TextEditingController.
 class _CategoryDialog extends StatefulWidget {
-  const _CategoryDialog({required this.categories, this.category});
+  const _CategoryDialog({required this.db, this.category});
 
-  final CategoryRepository categories;
+  final AppDatabase db;
   final Category? category;
 
   @override
@@ -108,9 +137,9 @@ class _CategoryDialogState extends State<_CategoryDialog> {
     if (name.isNotEmpty) {
       final category = widget.category;
       if (category != null) {
-        await widget.categories.update(category.id, name: Value(name));
+        await _updateCategory(widget.db, category.id, name);
       } else {
-        await widget.categories.create(name: name);
+        await _createCategory(widget.db, name);
       }
     }
     navigator.pop(_CategoryDialogAction.saved);
@@ -143,4 +172,42 @@ class _CategoryDialogState extends State<_CategoryDialog> {
       ],
     );
   }
+}
+
+Future<void> _createCategory(AppDatabase db, String name) async {
+  final now = BigInt.from(DateTime.now().millisecondsSinceEpoch);
+  await db
+      .into(db.categories)
+      .insert(
+        CategoriesCompanion.insert(
+          id: DateTime.now().microsecondsSinceEpoch.toString(),
+          name: name,
+          createdAt: now,
+          updatedAt: now,
+        ),
+      );
+}
+
+Future<void> _updateCategory(AppDatabase db, String id, String name) async {
+  final now = BigInt.from(DateTime.now().millisecondsSinceEpoch);
+  await (db.update(db.categories)..where((category) => category.id.equals(id)))
+      .write(
+        CategoriesCompanion(
+          name: Value(name),
+          updatedAt: Value(now),
+          dirty: const Value(true),
+        ),
+      );
+}
+
+Future<void> _deleteCategory(AppDatabase db, String id) async {
+  final now = BigInt.from(DateTime.now().millisecondsSinceEpoch);
+  await (db.update(db.categories)..where((category) => category.id.equals(id)))
+      .write(
+        CategoriesCompanion(
+          archived: const Value(true),
+          updatedAt: Value(now),
+          dirty: const Value(true),
+        ),
+      );
 }

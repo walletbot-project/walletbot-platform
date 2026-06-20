@@ -32,14 +32,13 @@ Wait for the answer. Do not skip this step — the Screenshots / Demo section mu
 
 ### 3. Draft the PR body
 
-Write the entire PR body in **Spanish**.
-
 Fill every section of `.github/PULL_REQUEST_TEMPLATE.md` as follows:
 
 #### Description
-- Concisely state **what** changed — a few short bullet points is enough.
-- Do not explain motivation, context, or reasoning. Just describe the changes.
-- If the branch name contains a Linear ticket ID, mention it (e.g. "Parte de WAL-123").
+- Summarize **what** changed in a few bullet points.
+- Explain **why** — motivation, context, product/technical reason. This is the most important part. Do not just restate what the code does.
+- If the branch name contains a Linear ticket ID, mention it (e.g. "Part of WAL-123").
+- Call out any non-obvious decisions, trade-offs, or things the reviewer should pay attention to.
 
 #### Screenshots / Demo
 - If the user provided screenshots/recordings: embed them.

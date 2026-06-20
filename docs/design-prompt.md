@@ -149,10 +149,10 @@ The app is offline-first with eventual consistency:
 
 ### Entities (technical schema, abridged)
 
-- `accounts` — id, name, currency, color?, icon?, description?, archived
-- `categories` — id, name, description?, archived
-- `transactions` — id, type, name, description?, status, date, accountId, amount, currency, categoryId, optional transfer fields (toAccountId, toAmount, toCurrency, exchangeRate), optional balance_adjustment field (balanceAfter), archived
-- `tags` — id, name, description?, parentId?, color?, archived
+- `accounts` — id, name, currency, color?, icon?, description?, isArchived
+- `categories` — id, name, description?, isArchived
+- `transactions` — id, type, name, description?, status, date, accountId, amount, currency, categoryId, optional transfer fields (toAccountId, toAmount, toCurrency, exchangeRate), optional balance_adjustment field (balanceAfter), isArchived
+- `tags` — id, name, description?, parentId?, color?, isArchived
 - `transactionTags` — N–N join (transactionId, tagId)
 
 Full schema is in [data-model.md](./data-model.md) if you want exact field names and indices — but **do not surface technical names to the user**. The user sees "Movement," not "transaction"; "Movement type," not "type enum."

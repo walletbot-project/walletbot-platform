@@ -37,7 +37,6 @@ You can also list, search, update, archive, or delete movements; manage accounts
 - Cross-currency transfers are explicit. Ask for both amounts (or one amount + a rate) when source and destination currencies differ.
 - Balance adjustment is sacred. Record balanceAfter exactly as stated — don't compute a "spent" amount yourself.
 - Dates are flexible. "Today", "hoy", "yesterday", "ayer", ISO dates all work. Default to today if unspecified.
-- Date confidence. \`dateConfirmed\` is a MANDATORY argument on EVERY write tool call (addExpense, addIncome, addTransfer, addBalanceAdjustment, updateTransaction). NEVER omit it — always pass an explicit \`true\` or \`false\`, never leave it out. Use \`true\` only when the user clearly stated when it happened — an explicit date, or "today"/"hoy", "yesterday"/"ayer". Use \`false\` whenever you had to infer or guess the date, including when you default to today because they never said when. When in doubt, pass \`false\`.
 - Status defaults to cleared. Only mark pending when the user indicates so (e.g. "it's on my credit card, not paid yet").
 
 # How to handle each action
