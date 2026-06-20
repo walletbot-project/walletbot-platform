@@ -78,6 +78,46 @@ class TagRepository extends RepositoryBase {
     });
   }
 
+  /// Live total spent (expenses only) on transactions carrying [tagId] within
+  /// `[fromMs, toExclusiveMs)`, grouped by transaction currency. Computed with
+  /// a SQL `SUM` aggregate over the tag join (not by loading rows), and
+  /// re-emits when transactions or joins change. Only the exact tag is counted
+  /// (descendants are not rolled up).
+  Stream<Map<String, BigInt>> watchSpendByCurrency(
+    String tagId, {
+    required BigInt fromMs,
+    required BigInt toExclusiveMs,
+  }) {
+    final currency = db.transactions.currency;
+    final total = db.transactions.amount.sum();
+    final query =
+        db.selectOnly(db.transactions).join([
+            innerJoin(
+              db.transactionTags,
+              db.transactionTags.transactionId.equalsExp(db.transactions.id),
+            ),
+          ])
+          ..addColumns([currency, total])
+          ..where(
+            db.transactionTags.tagId.equals(tagId) &
+                db.transactions.archived.equals(false) &
+                db.transactions.type.equals('expense') &
+                db.transactions.date.isBiggerOrEqualValue(fromMs) &
+                db.transactions.date.isSmallerThanValue(toExclusiveMs),
+          )
+          ..groupBy([currency]);
+
+    return query.watch().map((rows) {
+      final result = <String, BigInt>{};
+      for (final row in rows) {
+        final cur = row.read(currency);
+        final sum = row.read(total);
+        if (cur != null && sum != null) result[cur] = sum;
+      }
+      return result;
+    });
+  }
+
   /// IDs of every active descendant of [tagId] (children, grandchildren, …).
   Future<Set<String>> descendantIds(String tagId) async {
     final all = await listActive();
@@ -194,33 +234,34 @@ class TagRepository extends RepositoryBase {
         final allActive = await listActive();
         final descendants = descendantIdsOf(allActive, id);
         for (final descendantId in descendants) {
-          await (db.update(db.tags)..where((t) => t.id.equals(descendantId)))
-              .write(
-                TagsCompanion(
-                  archived: const Value(true),
-                  updatedAt: Value(now),
-                  dirty: const Value(true),
-                ),
-              );
+          await (db.update(
+            db.tags,
+          )..where((t) => t.id.equals(descendantId))).write(
+            TagsCompanion(
+              archived: const Value(true),
+              updatedAt: Value(now),
+              dirty: const Value(true),
+            ),
+          );
           await markDeleted('tags', descendantId);
         }
       } else {
         final deletedTag = await getById(id);
         final grandparentId = deletedTag?.parentId;
 
-        final directChildren = await (db.select(db.tags)
-              ..where((t) => t.parentId.equals(id))
-              ..where((t) => t.archived.equals(false)))
-            .get();
+        final directChildren =
+            await (db.select(db.tags)
+                  ..where((t) => t.parentId.equals(id))
+                  ..where((t) => t.archived.equals(false)))
+                .get();
         for (final child in directChildren) {
-          await (db.update(db.tags)..where((t) => t.id.equals(child.id)))
-              .write(
-                TagsCompanion(
-                  parentId: Value(grandparentId),
-                  updatedAt: Value(now),
-                  dirty: const Value(true),
-                ),
-              );
+          await (db.update(db.tags)..where((t) => t.id.equals(child.id))).write(
+            TagsCompanion(
+              parentId: Value(grandparentId),
+              updatedAt: Value(now),
+              dirty: const Value(true),
+            ),
+          );
         }
       }
 
