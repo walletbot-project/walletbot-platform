@@ -50,7 +50,6 @@ export const update = mutation({
     args: {
         id: v.string(),
         name: v.optional(v.string()),
-        currency: v.optional(v.string()),
         description: v.optional(v.string()),
         color: v.optional(v.string()),
         icon: v.optional(v.string()),
@@ -70,13 +69,11 @@ export const update = mutation({
 
         const patch: {
             name?: string
-            currency?: string
             description?: string
             color?: string
             icon?: string
         } = {}
         if (args.name !== undefined) patch.name = args.name
-        if (args.currency !== undefined) patch.currency = args.currency
         if (args.description !== undefined) patch.description = args.description
         if (args.color !== undefined) patch.color = args.color
         if (args.icon !== undefined) patch.icon = args.icon
