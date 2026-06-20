@@ -1,292 +1,122 @@
+import 'package:app/components/account_icons.dart';
+import 'package:app/components/account_list_tile.dart';
+import 'package:app/components/color_picker.dart';
+import 'package:app/components/color_utils.dart';
+import 'package:app/components/grouped_card.dart';
+import 'package:app/components/icon_picker.dart';
+import 'package:app/components/transaction_row.dart';
 import 'package:app/data/data.dart';
 import 'package:app/database.dart';
 import 'package:app/screens/create_account.dart';
-import 'package:app/screens/edit-account.dart';
+import 'package:app/shared/app_navigation.dart';
+import 'package:app/shared/money.dart';
+import 'package:drift/drift.dart' show Value;
 import 'package:flutter/material.dart';
+import 'package:m3e_buttons/m3e_buttons.dart';
 import 'package:provider/provider.dart';
 
-class AccountsScreen extends StatefulWidget {
+/// Short Spanish month labels for the compact transaction dates shown in the
+/// account sheet (e.g. `27 may`).
+const _shortMonths = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+
+class AccountsScreen extends StatelessWidget {
   const AccountsScreen({super.key});
 
-  @override
-  State<AccountsScreen> createState() => _AccountsScreenState();
-}
-
-class _AccountsScreenState extends State<AccountsScreen> {
-  bool _isManagementMode = false;
-  final Set<String> _selectedIds = {};
-
-  // ── Delete (single) ─────────────────────────────────────────────────────────
-
-  Future<void> _requestDelete(String id, String name) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('¿Eliminar cuenta?'),
-        content: Text('Se eliminará "$name" de forma permanente.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('Cancelar'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(ctx).pop(true),
-            style: FilledButton.styleFrom(
-              backgroundColor: Theme.of(ctx).colorScheme.error,
-              foregroundColor: Theme.of(ctx).colorScheme.onError,
-            ),
-            child: const Text('Eliminar'),
-          ),
-        ],
-      ),
-    );
-    if (confirmed != true || !mounted) return;
-
-    try {
-      await context.read<AppRepositories>().accounts.archive(id);
-    } catch (e, st) {
-      debugPrint('Error archiving account: $e\n$st');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Error al eliminar la cuenta')),
-        );
-      }
-    }
-  }
-
-  // ── Management mode (multi-select) ──────────────────────────────────────────
-
-  void _enterManagementMode(String id) {
-    setState(() {
-      _isManagementMode = true;
-      _selectedIds.add(id);
-    });
-  }
-
-  void _exitManagementMode() {
-    setState(() {
-      _isManagementMode = false;
-      _selectedIds.clear();
-    });
-  }
-
-  void _toggleSelection(String id) {
-    setState(() {
-      if (_selectedIds.contains(id)) {
-        _selectedIds.remove(id);
-      } else {
-        _selectedIds.add(id);
-      }
-    });
-  }
-
-  Future<void> _deleteSelected() async {
-    final count = _selectedIds.length;
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(
-          count == 1 ? '¿Eliminar 1 cuenta?' : '¿Eliminar $count cuentas?',
-        ),
-        content: Text(
-          count == 1
-              ? 'Se eliminará 1 cuenta de forma permanente.'
-              : 'Se eliminarán $count cuentas de forma permanente.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('Cancelar'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(ctx).pop(true),
-            style: FilledButton.styleFrom(
-              backgroundColor: Theme.of(ctx).colorScheme.error,
-              foregroundColor: Theme.of(ctx).colorScheme.onError,
-            ),
-            child: Text(count == 1 ? 'Eliminar' : 'Eliminar $count'),
-          ),
-        ],
-      ),
-    );
-    if (confirmed != true || !mounted) return;
-
-    // Snapshot IDs and exit management mode before async work so the UI
-    // updates immediately and the user can keep interacting.
-    final ids = Set<String>.from(_selectedIds);
-    _exitManagementMode();
-
-    try {
-      final repos = context.read<AppRepositories>();
-      await Future.wait(ids.map(repos.accounts.archive));
-    } catch (e, st) {
-      debugPrint('Error archiving accounts: $e\n$st');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Error al eliminar las cuentas')),
-        );
-      }
-    }
-  }
-
-  // ── Navigation ──────────────────────────────────────────────────────────────
-
-  void _navigateToCreateAccount() {
+  void _openCreate(BuildContext context) {
+    // Pushed routes sit above the account-scoped providers; re-provide them
+    // so the new route keeps using the active account's data layer.
     final repos = context.read<AppRepositories>();
     Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) => Provider<AppRepositories>.value(
-          value: repos,
-          child: const CreateAccountScreen(),
-        ),
+        builder: (_) => Provider<AppRepositories>.value(value: repos, child: const CreateAccountScreen()),
       ),
     );
   }
 
-  void _navigateToEditAccount(Account account) {
-    final db = context.read<AppDatabase>();
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => Provider<AppDatabase>.value(
-          value: db,
-          child: EditAccountScreen(account: account),
-        ),
-      ),
+  /// Opens the account details as a draggable, scrollable modal sheet. The
+  /// sheet is a pushed route below the account-scoped providers, so the data
+  /// layer and navigation controller are captured here and handed down.
+  void _openAccountSheet(BuildContext context, Account account) {
+    final repos = context.read<AppRepositories>();
+    final nav = context.read<AppNavigation>();
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true, // let the sheet grow taller than half-screen
+      showDragHandle: true,
+      builder: (_) => AccountDetailsSheet(account: account, repos: repos, nav: nav),
     );
   }
-
-  // ── Build ────────────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
     final repos = context.read<AppRepositories>();
-    final selCount = _selectedIds.length;
-
     return Scaffold(
       appBar: AppBar(
-        title: _isManagementMode
-            ? Text(
-                selCount == 0
-                    ? 'Seleccionando'
-                    : selCount == 1
-                        ? '1 cuenta'
-                        : '$selCount cuentas',
-              )
-            : const Text('Cuentas'),
-        actions: [
-          if (!_isManagementMode)
-            IconButton(
-              tooltip: 'Nueva cuenta',
-              onPressed: _navigateToCreateAccount,
-              icon: const Icon(Icons.add),
-            ),
-        ],
+        title: const Text('Cuentas'),
+        actions: [IconButton(tooltip: 'Nueva cuenta', onPressed: () => _openCreate(context), icon: const Icon(Icons.add))],
       ),
-      body: Column(
-        children: [
-          Expanded(
-            child: _AccountsList(
-              repos: repos,
-              isManagementMode: _isManagementMode,
-              selectedIds: _selectedIds,
-              onEdit: _navigateToEditAccount,
-              onDelete: _requestDelete,
-              onLongPress: _enterManagementMode,
-              onToggleSelect: _toggleSelection,
-              onCreateTap: _navigateToCreateAccount,
-            ),
-          ),
-          // Management mode action bar — rendered outside the scroll view
-          // so it always sits above the NavigationBar and the Android system
-          // navigation area regardless of scroll position.
-          if (_isManagementMode)
-            _ManagementBar(
-              selectedCount: selCount,
-              onCancel: _exitManagementMode,
-              onDelete: selCount > 0 ? _deleteSelected : null,
-            ),
-        ],
+      body: StreamBuilder<List<Account>>(
+        stream: repos.accounts.watchActive(),
+        builder: (context, snapshot) {
+          if (snapshot.hasError) {
+            return _ErrorBody(error: snapshot.error.toString());
+          }
+          if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          final accounts = snapshot.data ?? const <Account>[];
+          if (accounts.isEmpty) {
+            return _EmptyBody(onCreateTap: () => _openCreate(context));
+          }
+          return ListView.separated(
+            padding: const EdgeInsets.only(left: 16, right: 16, bottom: 96),
+            itemCount: accounts.length,
+            separatorBuilder: (_, _) => const SizedBox(height: kGroupSpacing),
+            itemBuilder: (context, index) {
+              final account = accounts[index];
+              return _AccountTile(
+                account: account,
+                borderRadius: groupedRadius(index, accounts.length),
+                onTap: () => _openAccountSheet(context, account),
+              );
+            },
+          );
+        },
       ),
     );
   }
 }
 
-// ── Accounts list ─────────────────────────────────────────────────────────────
+/// One account in the list: the shared [AccountListTile] fed the account's
+/// accent (color + icon resolved from their stored string form) and its live
+/// balance.
+class _AccountTile extends StatelessWidget {
+  const _AccountTile({required this.account, required this.borderRadius, required this.onTap});
 
-// Stateful so the stream is created once in initState and reused across
-// parent rebuilds (e.g. selection toggles). Passing a new stream object to
-// StreamBuilder on each build causes it to briefly reset to waiting state,
-// which flashes the loading indicator.
-class _AccountsList extends StatefulWidget {
-  const _AccountsList({
-    required this.repos,
-    required this.isManagementMode,
-    required this.selectedIds,
-    required this.onEdit,
-    required this.onDelete,
-    required this.onLongPress,
-    required this.onToggleSelect,
-    required this.onCreateTap,
-  });
-
-  final AppRepositories repos;
-  final bool isManagementMode;
-  final Set<String> selectedIds;
-  final void Function(Account) onEdit;
-  final void Function(String, String) onDelete;
-  final void Function(String) onLongPress;
-  final void Function(String) onToggleSelect;
-  final VoidCallback onCreateTap;
-
-  @override
-  State<_AccountsList> createState() => _AccountsListState();
-}
-
-class _AccountsListState extends State<_AccountsList> {
-  late final Stream<List<Account>> _stream;
-
-  @override
-  void initState() {
-    super.initState();
-    _stream = widget.repos.accounts.watchActive();
-  }
+  final Account account;
+  final BorderRadius borderRadius;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    return StreamBuilder<List<Account>>(
-      stream: _stream,
+    final repos = context.read<AppRepositories>();
+    return StreamBuilder<BigInt>(
+      stream: repos.accounts.watchBalanceCents(account.id),
       builder: (context, snapshot) {
-        final loading = snapshot.connectionState == ConnectionState.waiting;
-        final list = snapshot.data ?? [];
-
-        if (loading) {
-          return const Center(child: CircularProgressIndicator());
-        }
-        if (list.isEmpty) {
-          return _EmptyBody(onCreateTap: widget.onCreateTap);
-        }
-        return ListView.builder(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 96),
-          itemCount: list.length,
-          itemBuilder: (context, i) {
-            final account = list[i];
-            return _AccountCard(
-              account: account,
-              isManagementMode: widget.isManagementMode,
-              isSelected: widget.selectedIds.contains(account.id),
-              onEdit: () => widget.onEdit(account),
-              onDelete: () => widget.onDelete(account.id, account.name),
-              onLongPress: () => widget.onLongPress(account.id),
-              onToggleSelect: () => widget.onToggleSelect(account.id),
-            );
-          },
+        final balance = snapshot.data ?? BigInt.zero;
+        return AccountListTile(
+          name: account.name,
+          icon: accountIconFromName(account.icon),
+          color: colorFromHex(account.color, fallback: accountDefaultColor),
+          balanceCents: balance.toInt(),
+          currency: account.currency,
+          borderRadius: borderRadius,
+          onTap: onTap,
         );
       },
     );
   }
 }
-
-// ── Empty state ──────────────────────────────────────────────────────────────
 
 class _EmptyBody extends StatelessWidget {
   const _EmptyBody({required this.onCreateTap});
@@ -300,29 +130,44 @@ class _EmptyBody extends StatelessWidget {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(
-            Icons.account_balance_wallet_outlined,
-            size: 64,
-            color: Theme.of(context).colorScheme.outline,
-          ),
+          Icon(Icons.account_balance_wallet_outlined, size: 64, color: Theme.of(context).colorScheme.outline),
           const SizedBox(height: 16),
-          Text(
-            'No tenés cuentas aún',
-            style: Theme.of(context).textTheme.titleMedium,
-          ),
+          Text('No tenés cuentas aún', style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: 8),
           Text(
             'Creá tu primera cuenta para empezar a registrar tus gastos.',
             textAlign: TextAlign.center,
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
           ),
           const SizedBox(height: 24),
-          FilledButton.icon(
-            onPressed: onCreateTap,
-            icon: const Icon(Icons.add),
-            label: const Text('Crear cuenta'),
+          FilledButton.icon(onPressed: onCreateTap, icon: const Icon(Icons.add), label: const Text('Crear cuenta')),
+        ],
+      ),
+    );
+  }
+}
+
+class _ErrorBody extends StatelessWidget {
+  const _ErrorBody({required this.error});
+
+  final String error;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.all(32),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.error_outline_rounded, size: 64, color: colors.error),
+          const SizedBox(height: 16),
+          Text('No se pudieron cargar las cuentas', style: Theme.of(context).textTheme.titleMedium, textAlign: TextAlign.center),
+          const SizedBox(height: 8),
+          Text(
+            error,
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(color: colors.onSurfaceVariant),
           ),
         ],
       ),
@@ -330,137 +175,436 @@ class _EmptyBody extends StatelessWidget {
   }
 }
 
-// ── Management mode bottom bar ───────────────────────────────────────────────
+/// Draggable, scrollable modal sheet showing an account's details. Edits to the
+/// name, color and icon are committed on leaving edit mode; balance changes are
+/// committed immediately as a balance adjustment.
+class AccountDetailsSheet extends StatefulWidget {
+  const AccountDetailsSheet({super.key, required this.account, required this.repos, required this.nav});
 
-class _ManagementBar extends StatelessWidget {
-  const _ManagementBar({
-    required this.selectedCount,
-    required this.onCancel,
-    required this.onDelete,
-  });
+  final Account account;
+  final AppRepositories repos;
+  final AppNavigation nav;
 
-  final int selectedCount;
-  final VoidCallback onCancel;
-  // Null when nothing is selected — disables the delete button.
-  final VoidCallback? onDelete;
+  @override
+  State<AccountDetailsSheet> createState() => _AccountDetailsSheetState();
+}
+
+class _AccountDetailsSheetState extends State<AccountDetailsSheet> {
+  // Locally editable identity values — the controls mutate these and they are
+  // persisted on leaving edit mode.
+  late Color _color = colorFromHex(widget.account.color, fallback: accountDefaultColor);
+  late IconData _icon = accountIconFromName(widget.account.icon);
+  late final TextEditingController _nameController = TextEditingController(text: widget.account.name);
+
+  bool _editing = false;
+  bool _saving = false;
+
+  String get _accountId => widget.account.id;
+  String get _currency => widget.account.currency;
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _editColor() async {
+    final picked = await showColorPickerDialog(context, selected: _color, options: colorOptions);
+    if (picked != null) setState(() => _color = picked);
+  }
+
+  Future<void> _editIcon() async {
+    final picked = await showIconPickerDialog(context, selected: _icon, options: accountIconOptions, accent: _color);
+    if (picked != null) setState(() => _icon = picked);
+  }
+
+  /// Toggles edit mode. Entering just reveals the editors; leaving validates
+  /// and persists name/color/icon.
+  Future<void> _toggleEditing() async {
+    if (!_editing) {
+      setState(() => _editing = true);
+      return;
+    }
+    await _saveIdentity();
+  }
+
+  Future<void> _saveIdentity() async {
+    final name = _nameController.text.trim();
+    if (name.isEmpty) {
+      _showSnack('El nombre no puede estar vacío');
+      return;
+    }
+
+    setState(() => _saving = true);
+    try {
+      await widget.repos.accounts.update(
+        _accountId,
+        name: Value(name),
+        color: Value(colorToHex(_color)),
+        icon: Value(accountIconName(_icon)),
+      );
+      if (!mounted) return;
+      setState(() => _editing = false);
+    } catch (e, st) {
+      debugPrint('Error updating account: $e\n$st');
+      _showSnack('No se pudo guardar la cuenta');
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  Future<void> _adjustBalance() async {
+    final current = await widget.repos.accounts.getBalanceCents(_accountId);
+    if (!mounted) return;
+
+    var text = (current.toInt() / 100).toStringAsFixed(2);
+    final target = await showDialog<int>(
+      context: context,
+      builder: (dialogContext) {
+        // TextFormField with initialValue owns and disposes its own controller —
+        // a manually-disposed local controller crashes when the dialog closes.
+        return AlertDialog(
+          title: const Text('Ajustar saldo'),
+          content: TextFormField(
+            initialValue: text,
+            autofocus: true,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true, signed: true),
+            decoration: InputDecoration(prefixText: '$_currency ', border: const OutlineInputBorder()),
+            onChanged: (value) => text = value,
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.of(dialogContext).pop(), child: const Text('Cancelar')),
+            TextButton(
+              onPressed: () {
+                final value = double.tryParse(text.replaceAll(',', '.'));
+                Navigator.of(dialogContext).pop(value == null ? null : (value * 100).round());
+              },
+              child: const Text('Guardar'),
+            ),
+          ],
+        );
+      },
+    );
+    if (target == null || !mounted) return;
+
+    setState(() => _saving = true);
+    try {
+      await widget.repos.transactions.addBalanceAdjustment(
+        accountId: _accountId,
+        balanceAfterCents: BigInt.from(target),
+        currency: _currency,
+      );
+    } catch (e, st) {
+      debugPrint('Error adjusting balance: $e\n$st');
+      _showSnack('No se pudo ajustar el saldo');
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  Future<void> _confirmDelete() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        final colors = Theme.of(dialogContext).colorScheme;
+        return AlertDialog(
+          title: const Text('Eliminar cuenta'),
+          content: Text(
+            '¿Seguro que querés eliminar "${_nameController.text.trim()}"? '
+            'Dejará de aparecer en tus cuentas.',
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.of(dialogContext).pop(false), child: const Text('Cancelar')),
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              style: TextButton.styleFrom(foregroundColor: colors.error),
+              child: const Text('Eliminar'),
+            ),
+          ],
+        );
+      },
+    );
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _saving = true);
+    try {
+      await widget.repos.accounts.archive(_accountId);
+      if (!mounted) return;
+      Navigator.of(context).pop(); // close the details sheet
+    } catch (e, st) {
+      debugPrint('Error archiving account: $e\n$st');
+      if (mounted) setState(() => _saving = false);
+      _showSnack('No se pudo eliminar la cuenta');
+    }
+  }
+
+  void _openAllTransactions() {
+    Navigator.of(context).pop(); // close the sheet before switching tabs
+    widget.nav.openActivityForAccount(_accountId);
+  }
+
+  void _showSnack(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+  }
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final label = selectedCount == 0
-        ? 'Eliminar'
-        : selectedCount == 1
-            ? 'Eliminar 1'
-            : 'Eliminar $selectedCount';
-
-    // SafeArea(top: false) ensures the bar clears the Android system
-    // navigation bar (gesture strip or 3-button bar) without adding
-    // redundant top padding.
-    return SafeArea(
-      top: false,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-        child: Row(
+    // DraggableScrollableSheet lets the user drag the sheet between sizes while
+    // its content scrolls; isScrollControlled on the modal enables the tall sizes.
+    return DraggableScrollableSheet(
+      expand: false,
+      initialChildSize: 0.6,
+      minChildSize: 0.3,
+      maxChildSize: 0.95,
+      builder: (context, scrollController) {
+        return ListView(
+          controller: scrollController, // wires drag-to-scroll to the sheet
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
           children: [
-            Expanded(
-              child: OutlinedButton(
-                onPressed: onCancel,
-                child: const Text('Cancelar'),
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: FilledButton(
-                onPressed: onDelete,
-                style: FilledButton.styleFrom(
-                  backgroundColor: colorScheme.error,
-                  foregroundColor: colorScheme.onError,
-                ),
-                child: Text(label),
-              ),
-            ),
+            _buildIdentityGroup(context),
+            const SizedBox(height: 12),
+            _buildActions(context),
+            const SizedBox(height: 28),
+            _buildTransactionsHeader(context),
+            const SizedBox(height: 8),
+            _buildTransactions(context),
           ],
+        );
+      },
+    );
+  }
+
+  /// The account name: an inline text field while editing, plain text otherwise.
+  Widget _buildName(TextTheme textTheme) {
+    final style = textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w600);
+    if (_editing) {
+      return TextField(
+        controller: _nameController,
+        style: style,
+        textCapitalization: TextCapitalization.sentences,
+        decoration: const InputDecoration(isDense: true, labelText: 'Nombre', border: OutlineInputBorder()),
+        onChanged: (_) => setState(() {}),
+      );
+    }
+    return Text(_nameController.text, style: style, maxLines: 2, overflow: TextOverflow.ellipsis);
+  }
+
+  /// Identity + balance as one cohesive M3 Expressive containment group: a
+  /// color-washed identity hero (icon, name, color swatch) joined by the shared
+  /// 2dp seam to the balance hero (focal amount + currency).
+  Widget _buildIdentityGroup(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+
+    return Column(
+      children: [
+        // Identity hero — tinted by the account's accent so the whole block
+        // carries the account color. Holds the icon, name, plus a discrete
+        // color swatch as a trailing accent.
+        Material(
+          color: _color.withValues(alpha: 0.14),
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(kGroupOuterRadius), bottom: Radius.circular(kGroupInnerRadius)),
+          clipBehavior: Clip.antiAlias,
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Row(
+              children: [
+                // Expressive rounded-square icon tile — tappable only while
+                // editing, to change the icon.
+                InkWell(
+                  onTap: _editing ? _editIcon : null,
+                  borderRadius: BorderRadius.circular(20),
+                  child: Container(
+                    width: 60,
+                    height: 60,
+                    decoration: BoxDecoration(color: _color.withValues(alpha: 0.28), borderRadius: BorderRadius.circular(20)),
+                    alignment: Alignment.center,
+                    child: Icon(_icon, size: 30, color: _color),
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(child: _buildName(textTheme)),
+                // Discrete color swatch — only shown while editing; tap to
+                // change the account color.
+                if (_editing) ...[
+                  const SizedBox(width: 12),
+                  InkWell(
+                    onTap: _editColor,
+                    borderRadius: BorderRadius.circular(9),
+                    child: Container(
+                      width: 28,
+                      height: 28,
+                      decoration: BoxDecoration(
+                        color: _color,
+                        borderRadius: BorderRadius.circular(9),
+                        border: Border.all(color: colors.outlineVariant.withValues(alpha: 0.5)),
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
         ),
-      ),
+        const SizedBox(height: kGroupSpacing),
+        // Balance hero — the focal number; currency rides along as a pill. The
+        // amount is live: it re-emits as balance adjustments and synced
+        // transactions land.
+        GroupedCard(
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(kGroupInnerRadius), bottom: Radius.circular(kGroupOuterRadius)),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 18),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('SALDO', style: textTheme.labelMedium?.copyWith(color: colors.onSurfaceVariant, letterSpacing: 0.8)),
+                      const SizedBox(height: 6),
+                      StreamBuilder<BigInt>(
+                        stream: widget.repos.accounts.watchBalanceCents(_accountId),
+                        builder: (context, snapshot) {
+                          final cents = (snapshot.data ?? BigInt.zero).toInt();
+                          return Text(
+                            formatMoney(cents, _currency),
+                            style: textTheme.displaySmall?.copyWith(fontWeight: FontWeight.w600, color: cents < 0 ? colors.error : null),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          );
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 12),
+                // Currency pill.
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(color: colors.surfaceContainerHighest, borderRadius: BorderRadius.circular(10)),
+                  child: Text(_currency, style: textTheme.labelLarge?.copyWith(color: colors.onSurfaceVariant)),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// Account actions as Material 3 Expressive buttons: a prominent tonal
+  /// "adjust balance" action paired with edit and a destructive delete.
+  Widget _buildActions(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return Row(
+      children: [
+        Expanded(
+          child: M3EFilledButton.tonalIcon(
+            onPressed: _saving ? null : _adjustBalance,
+            size: M3EButtonSize.md,
+            icon: const Icon(Icons.tune_rounded),
+            label: const Text('Ajustar saldo'),
+          ),
+        ),
+        const SizedBox(width: 8),
+        M3EButton(
+          onPressed: _saving ? null : _toggleEditing,
+          style: _editing ? M3EButtonStyle.filled : M3EButtonStyle.tonal,
+          size: M3EButtonSize.md,
+          tooltip: _editing ? 'Listo' : 'Editar',
+          semanticLabel: _editing ? 'Listo' : 'Editar',
+          child: Icon(_editing ? Icons.check_rounded : Icons.edit_outlined),
+        ),
+        const SizedBox(width: 8),
+        M3EButton(
+          onPressed: _saving ? null : _confirmDelete,
+          size: M3EButtonSize.md,
+          tooltip: 'Eliminar',
+          semanticLabel: 'Eliminar',
+          decoration: M3EButtonDecoration.styleFrom(backgroundColor: colors.errorContainer, foregroundColor: colors.onErrorContainer),
+          child: const Icon(Icons.delete_outline),
+        ),
+      ],
+    );
+  }
+
+  /// "Last transactions" section header with a "view all" action that opens the
+  /// Activity tab filtered to this account.
+  Widget _buildTransactionsHeader(BuildContext context) {
+    final textTheme = Theme.of(context).textTheme;
+    return Row(
+      children: [
+        Expanded(child: Text('Últimas transacciones', style: textTheme.titleMedium)),
+        TextButton(onPressed: _openAllTransactions, child: const Text('Ver todas')),
+      ],
+    );
+  }
+
+  /// The five most recent transactions for this account, rendered with the
+  /// shared [TransactionRow]. Handles loading, error and empty states.
+  Widget _buildTransactions(BuildContext context) {
+    final symbol = currencyPrefix(_currency).trim();
+    return StreamBuilder<List<Transaction>>(
+      stream: widget.repos.transactions.watch(TransactionFilter(accountIds: {_accountId}), limit: 5),
+      builder: (context, snapshot) {
+        if (snapshot.hasError) {
+          return Padding(
+            padding: const EdgeInsets.symmetric(vertical: 16),
+            child: Text('No se pudieron cargar las transacciones', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)),
+          );
+        }
+        if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
+          return const Padding(
+            padding: EdgeInsets.symmetric(vertical: 24),
+            child: Center(child: CircularProgressIndicator()),
+          );
+        }
+        final txs = snapshot.data ?? const <Transaction>[];
+        if (txs.isEmpty) {
+          return Padding(
+            padding: const EdgeInsets.symmetric(vertical: 16),
+            child: Text('Sin transacciones todavía', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)),
+          );
+        }
+        return Column(
+          children: [
+            for (var i = 0; i < txs.length; i++) ...[
+              if (i > 0) const SizedBox(height: 10),
+              TransactionRow(
+                title: txs[i].name,
+                amountCents: _signedAmountCents(txs[i]),
+                dateCheck: txs[i].dateConfirmed,
+                description: _shortDate(txs[i].date),
+                currencySymbol: symbol,
+                onTap: () {},
+              ),
+            ],
+          ],
+        );
+      },
     );
   }
 }
 
-// ── Account tile ─────────────────────────────────────────────────────────────
-
-class _AccountCard extends StatelessWidget {
-  const _AccountCard({
-    required this.account,
-    required this.isManagementMode,
-    required this.isSelected,
-    required this.onEdit,
-    required this.onDelete,
-    required this.onLongPress,
-    required this.onToggleSelect,
-  });
-
-  final Account account;
-  final bool isManagementMode;
-  final bool isSelected;
-  final VoidCallback onEdit;
-  final VoidCallback onDelete;
-  final VoidCallback onLongPress;
-  final VoidCallback onToggleSelect;
-
-  @override
-  Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-
-    ButtonStyle compactIcon() => IconButton.styleFrom(
-          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-          padding: const EdgeInsets.symmetric(horizontal: 4),
-        );
-
-    final Widget leading = isManagementMode
-        ? Checkbox(
-            value: isSelected,
-            onChanged: (_) => onToggleSelect(),
-          )
-        : CircleAvatar(
-            backgroundColor: colorScheme.primaryContainer,
-            child: Icon(
-              Icons.account_balance_wallet_rounded,
-              color: colorScheme.onPrimaryContainer,
-            ),
-          );
-
-    final Widget trailing = isManagementMode
-        ? Chip(label: Text(account.currency))
-        : Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Chip(label: Text(account.currency)),
-              IconButton(
-                icon: const Icon(Icons.edit_outlined),
-                iconSize: 20,
-                style: compactIcon(),
-                onPressed: onEdit,
-                tooltip: 'Editar',
-              ),
-              IconButton(
-                icon: Icon(Icons.delete_outline, color: colorScheme.error),
-                iconSize: 20,
-                style: compactIcon(),
-                onPressed: onDelete,
-                tooltip: 'Eliminar',
-              ),
-            ],
-          );
-
-    return Card(
-      margin: const EdgeInsets.only(bottom: 8),
-      child: ListTile(
-        leading: leading,
-        title: Text(account.name),
-        trailing: trailing,
-        onTap: isManagementMode ? onToggleSelect : null,
-        onLongPress: isManagementMode ? null : onLongPress,
-      ),
-    );
+/// Signed cents for [TransactionRow]: positive renders green, negative renders
+/// in the default text color. Mirrors the activity screen's convention.
+int _signedAmountCents(Transaction t) {
+  final amount = t.amount.toInt();
+  switch (t.type) {
+    case 'expense':
+      return -amount.abs();
+    case 'income':
+    case 'transfer':
+      return amount.abs();
+    default: // balance_adjustment keeps its stored sign
+      return amount;
   }
+}
+
+/// Compact `day month` label, e.g. `27 may`.
+String _shortDate(BigInt dateMs) {
+  final dt = DateTime.fromMillisecondsSinceEpoch(dateMs.toInt());
+  return '${dt.day} ${_shortMonths[dt.month - 1]}';
 }

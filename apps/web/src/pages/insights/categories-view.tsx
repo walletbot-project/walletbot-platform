@@ -1,19 +1,21 @@
 import { api } from '@wallet-bot/backend/api'
 import { useMutation, useQuery } from 'convex/react'
-import { Pencil } from 'lucide-react'
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { toast } from 'sonner'
-import { Button } from '@/components/ui/button'
+import { CategoryIcon } from '@/components/category-icon'
 import { Skeleton } from '@/components/ui/skeleton'
+import { CATEGORY_DEFAULT_COLOR, normalizeColor } from '@/lib/entity-colors'
+import {
+    CategoryDetailsSheet,
+    type CategorySummary,
+} from '@/pages/insights/category-details-sheet'
 import {
     CategoryDialog,
     type CategoryFormValue,
 } from '@/pages/insights/category-dialog'
 
-type CategoryRow = {
-    id: string
-    name: string
-    transactionCount: number
+function newId() {
+    return `${Date.now()}${Math.random().toString(36).slice(2, 8)}`
 }
 
 type CategoriesViewProps = {
@@ -27,43 +29,40 @@ export function CategoriesView({
 }: CategoriesViewProps) {
     const categories = useQuery(api.categories.queries.listActiveWithCounts)
     const createCategory = useMutation(api.categories.mutations.create)
-    const updateCategory = useMutation(api.categories.mutations.update)
-    const archiveCategory = useMutation(api.categories.mutations.archive)
 
-    const [editing, setEditing] = useState<CategoryRow | null>(null)
+    const [selectedId, setSelectedId] = useState<string | null>(null)
+
+    // Derive the open category from the live query so edits saved in the sheet
+    // are reflected immediately (a stored snapshot would go stale on save).
+    const selected: CategorySummary | null = useMemo(() => {
+        if (selectedId === null || categories === undefined) return null
+        const category = categories.find((c) => c.id === selectedId)
+        return category
+            ? {
+                  id: category.id,
+                  name: category.name,
+                  icon: category.icon,
+                  color: category.color,
+                  description: category.description,
+              }
+            : null
+    }, [categories, selectedId])
 
     const handleCreate = async (value: CategoryFormValue) => {
-        const id = `${Date.now()}${Math.random().toString(36).slice(2, 8)}`
-        const promise = createCategory({ id, name: value.name })
+        const promise = createCategory({
+            id: newId(),
+            name: value.name,
+            description: value.description || undefined,
+            color: value.color,
+            icon: value.icon,
+        })
         toast.promise(promise, {
-            loading: 'Creating category…',
-            success: 'Category created',
-            error: 'Failed to create category',
+            loading: 'Creando categoría…',
+            success: 'Categoría creada',
+            error: 'No se pudo crear la categoría',
         })
         await promise
         onCreatingChange(false)
-    }
-
-    const handleUpdate = async (id: string, value: CategoryFormValue) => {
-        const promise = updateCategory({ id, name: value.name })
-        toast.promise(promise, {
-            loading: 'Saving category…',
-            success: 'Category saved',
-            error: 'Failed to save category',
-        })
-        await promise
-        setEditing(null)
-    }
-
-    const handleDelete = async (id: string) => {
-        const promise = archiveCategory({ id })
-        toast.promise(promise, {
-            loading: 'Deleting category…',
-            success: 'Category deleted',
-            error: 'Failed to delete category',
-        })
-        await promise
-        setEditing(null)
     }
 
     return (
@@ -73,34 +72,46 @@ export function CategoriesView({
                     <CategoriesSkeleton />
                 ) : categories.length === 0 ? (
                     <p className="py-12 text-center text-sm text-muted-foreground">
-                        No categories yet.
+                        No tenés categorías aún.
                     </p>
                 ) : (
-                    <ul className="divide-y rounded-md border bg-card">
-                        {categories.map((category) => (
-                            <li
-                                key={category.id}
-                                className="flex items-center justify-between gap-3 px-4 py-3 text-sm"
-                            >
-                                <span className="font-medium">
-                                    {category.name}
-                                </span>
-                                <div className="flex items-center gap-3">
-                                    <span className="text-sm tabular-nums text-muted-foreground">
-                                        {category.transactionCount}
-                                    </span>
-                                    <Button
+                    <ul className="divide-y overflow-hidden rounded-md border bg-card">
+                        {categories.map((category) => {
+                            const accent = normalizeColor(
+                                category.color,
+                                CATEGORY_DEFAULT_COLOR,
+                            )
+                            return (
+                                <li key={category.id}>
+                                    <button
                                         type="button"
-                                        variant="ghost"
-                                        size="icon-sm"
-                                        onClick={() => setEditing(category)}
-                                        aria-label={`Edit ${category.name}`}
+                                        onClick={() =>
+                                            setSelectedId(category.id)
+                                        }
+                                        className="flex w-full items-center gap-4 px-4 py-3 text-left transition-colors hover:bg-accent/50"
                                     >
-                                        <Pencil />
-                                    </Button>
-                                </div>
-                            </li>
-                        ))}
+                                        <span
+                                            className="flex size-10 shrink-0 items-center justify-center rounded-full"
+                                            style={{
+                                                backgroundColor: `${accent}2E`,
+                                            }}
+                                        >
+                                            <CategoryIcon
+                                                name={category.icon}
+                                                className="size-5"
+                                                color={accent}
+                                            />
+                                        </span>
+                                        <span className="min-w-0 flex-1 truncate text-sm font-medium">
+                                            {category.name}
+                                        </span>
+                                        <span className="shrink-0 text-sm tabular-nums text-muted-foreground">
+                                            {category.transactionCount}
+                                        </span>
+                                    </button>
+                                </li>
+                            )
+                        })}
                     </ul>
                 )}
             </div>
@@ -108,25 +119,15 @@ export function CategoriesView({
             <CategoryDialog
                 open={creating}
                 onOpenChange={onCreatingChange}
-                title="New Category"
-                submitLabel="Create"
                 onSubmit={handleCreate}
             />
 
-            <CategoryDialog
-                open={editing !== null}
+            <CategoryDetailsSheet
+                category={selected}
+                open={selectedId !== null}
                 onOpenChange={(open) => {
-                    if (!open) setEditing(null)
+                    if (!open) setSelectedId(null)
                 }}
-                title="Edit Category"
-                submitLabel="Save"
-                initialValue={editing ? { name: editing.name } : undefined}
-                onSubmit={(value) =>
-                    editing
-                        ? handleUpdate(editing.id, value)
-                        : Promise.resolve()
-                }
-                onDelete={editing ? () => handleDelete(editing.id) : undefined}
             />
         </div>
     )
@@ -136,7 +137,7 @@ function CategoriesSkeleton() {
     return (
         <div className="space-y-2">
             {Array.from({ length: 5 }).map((_, i) => (
-                <Skeleton key={i} className="h-12 w-full" />
+                <Skeleton key={i} className="h-14 w-full" />
             ))}
         </div>
     )
