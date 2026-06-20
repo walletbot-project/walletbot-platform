@@ -2,6 +2,7 @@ import { api } from '@wallet-bot/backend/api'
 import { usePaginatedQuery } from 'convex/react'
 import { Loader2 } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { useLocation } from 'react-router-dom'
 import { Skeleton } from '@/components/ui/skeleton'
 import { FilterChips } from './filter-chips'
 import {
@@ -26,7 +27,16 @@ const AUTO_LOAD_CAP = 1_000
 const PAGE_SIZE = 50
 
 export function Activity() {
-    const [filters, setFilters] = useState<TransactionFilters>(EMPTY_FILTERS)
+    // A details sheet can deep-link here with a pre-applied entity filter,
+    // passed via the router location state (see the account/category/tag sheets).
+    const location = useLocation()
+    const [filters, setFilters] = useState<TransactionFilters>(() => {
+        const seed = location.state as Partial<TransactionFilters> | null
+        if (seed?.accountIds || seed?.categoryIds || seed?.tagIds) {
+            return { ...EMPTY_FILTERS, ...seed }
+        }
+        return EMPTY_FILTERS
+    })
     const [type, setType] = useState<TransactionType | null>(null)
 
     // The backend narrows by a single account/category plus the date range

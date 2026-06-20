@@ -1,17 +1,15 @@
-// Mirrors the native app's tag palette (Material Design accents).
-export const TAG_DEFAULT_COLOR = '#69F0AE'
-
-export const TAG_COLOR_OPTIONS = [
+// Tag color helpers. The palette is now unified across all entities — see
+// entity-colors.ts. These re-exports keep the existing tag call sites working.
+import {
+    COLOR_OPTIONS,
+    normalizeColor,
     TAG_DEFAULT_COLOR,
-    '#26A69A',
-    '#42A5F5',
-    '#FFCA28',
-    '#FF7043',
-    '#AB47BC',
-    '#78909C',
-] as const
+} from './entity-colors'
+
+export { TAG_DEFAULT_COLOR }
+
+export const TAG_COLOR_OPTIONS = COLOR_OPTIONS
 
 export function normalizeTagColor(color: string | null | undefined): string {
-    if (!color) return TAG_DEFAULT_COLOR
-    return color.toUpperCase()
+    return normalizeColor(color, TAG_DEFAULT_COLOR)
 }
