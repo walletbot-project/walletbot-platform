@@ -18,6 +18,12 @@ export const COLOR_OPTIONS = [
     '#8B5CF6',
     '#10B981',
     '#EC4899',
+    '#06B6D4',
+    '#84CC16',
+    '#F43F5E',
+    '#0EA5E9',
+    '#D946EF',
+    '#F97316',
 ] as const
 
 export const ACCOUNT_DEFAULT_COLOR = '#3B82F6'

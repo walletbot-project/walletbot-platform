@@ -80,7 +80,7 @@ class CategoriesView extends StatelessWidget {
         }
 
         return ListView.separated(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 96),
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
           itemCount: data.length,
           separatorBuilder: (_, _) => const SizedBox(height: kGroupSpacing),
           itemBuilder: (context, index) {

@@ -27,6 +27,12 @@ const colorOptions = <Color>[
   Color(0xFF8B5CF6),
   Color(0xFF10B981),
   Color(0xFFEC4899),
+  Color(0xFF06B6D4),
+  Color(0xFF84CC16),
+  Color(0xFFF43F5E),
+  Color(0xFF0EA5E9),
+  Color(0xFFD946EF),
+  Color(0xFFF97316),
 ];
 
 String colorToHex(Color color) {
