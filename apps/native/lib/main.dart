@@ -110,7 +110,10 @@ class _SyncStarterState extends State<_SyncStarter> {
   Widget build(BuildContext context) {
     final auth = context.watch<AuthController>();
     final active = auth.activeAccount;
-    if (!_kicked && active != null && active.sessionToken != null) {
+    if (!_kicked &&
+        active != null &&
+        active.sessionToken != null &&
+        auth.convexAuthenticated) {
       _kicked = true;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;

@@ -36,8 +36,16 @@ class _ActivityScreenState extends State<ActivityScreen> {
   int _lastRenderedCount = 0;
 
   Future<void> _openTransactionForm() async {
+    // Pushed routes sit above the account-scoped providers; re-provide them
+    // so the new route keeps using the active account's data layer.
+    final repos = context.read<AppRepositories>();
     await Navigator.of(context).push<void>(
-      MaterialPageRoute(builder: (_) => const TransactionFormScreen()),
+      MaterialPageRoute(
+        builder: (_) => Provider<AppRepositories>.value(
+          value: repos,
+          child: const TransactionFormScreen(),
+        ),
+      ),
     );
   }
 
