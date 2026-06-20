@@ -1,11 +1,55 @@
+import 'package:app/components/category_icons.dart';
+import 'package:app/components/category_list_tile.dart';
+import 'package:app/components/color_picker.dart';
+import 'package:app/components/color_utils.dart';
+import 'package:app/components/grouped_card.dart';
+import 'package:app/components/icon_picker.dart';
+import 'package:app/components/transaction_row.dart';
 import 'package:app/data/data.dart';
 import 'package:app/database.dart';
+import 'package:app/shared/app_navigation.dart';
+import 'package:app/shared/money.dart';
 import 'package:drift/drift.dart' show Value;
 import 'package:flutter/material.dart';
+import 'package:m3e_buttons/m3e_buttons.dart';
 import 'package:provider/provider.dart';
+
+/// Short Spanish month labels for the compact movement dates in the sheet.
+const _shortMonths = [
+  'ene',
+  'feb',
+  'mar',
+  'abr',
+  'may',
+  'jun',
+  'jul',
+  'ago',
+  'sep',
+  'oct',
+  'nov',
+  'dic',
+];
 
 class CategoriesView extends StatelessWidget {
   const CategoriesView({super.key});
+
+  /// Opens the category details as a draggable, scrollable modal sheet. The
+  /// sheet is a pushed route below the account-scoped providers, so the data
+  /// layer and navigation controller are captured here and handed down.
+  void _openCategorySheet(BuildContext context, CategoryWithCount entry) {
+    final repos = context.read<AppRepositories>();
+    final nav = context.read<AppNavigation>();
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (_) => CategoryDetailsSheet(
+        category: entry.category,
+        repos: repos,
+        nav: nav,
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -14,28 +58,44 @@ class CategoriesView extends StatelessWidget {
     return StreamBuilder<List<CategoryWithCount>>(
       stream: categories.watchWithCounts(),
       builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
+        if (snapshot.hasError) {
+          return _CategoriesMessage(
+            icon: Icons.error_outline_rounded,
+            title: 'No se pudieron cargar las categorías',
+            detail: snapshot.error.toString(),
+          );
+        }
+        if (snapshot.connectionState == ConnectionState.waiting &&
+            !snapshot.hasData) {
           return const Center(child: CircularProgressIndicator());
         }
 
-        final data = snapshot.data ?? [];
+        final data = snapshot.data ?? const <CategoryWithCount>[];
         if (data.isEmpty) {
-          return const Center(child: Text('No categories yet.'));
+          return const _CategoriesMessage(
+            icon: Icons.category_outlined,
+            title: 'No tenés categorías aún',
+            detail: 'Creá una categoría para organizar tus movimientos.',
+          );
         }
 
-        return ListView.builder(
+        return ListView.separated(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 96),
           itemCount: data.length,
+          separatorBuilder: (_, _) => const SizedBox(height: kGroupSpacing),
           itemBuilder: (context, index) {
-            final category = data[index];
-
-            return ListTile(
-              title: GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onLongPress: () =>
-                    _editCategoryDialog(context, categories, category.category),
-                child: Text(category.category.name),
+            final entry = data[index];
+            final category = entry.category;
+            return CategoryListTile(
+              name: category.name,
+              icon: categoryIconFromName(category.icon),
+              color: colorFromHex(
+                category.color,
+                fallback: categoryDefaultColor,
               ),
-              trailing: Text('${category.transactionCount}'),
+              usageCount: entry.transactionCount,
+              borderRadius: groupedRadius(index, data.length),
+              onTap: () => _openCategorySheet(context, entry),
             );
           },
         );
@@ -44,57 +104,78 @@ class CategoriesView extends StatelessWidget {
   }
 }
 
-Future<void> showAddCategoryDialog(
-  BuildContext context,
-  CategoryRepository categories,
-) {
-  return showDialog<_CategoryDialogAction>(
-    context: context,
-    builder: (context) => _CategoryDialog(categories: categories),
-  );
-}
+class _CategoriesMessage extends StatelessWidget {
+  const _CategoriesMessage({
+    required this.icon,
+    required this.title,
+    required this.detail,
+  });
 
-Future<void> _editCategoryDialog(
-  BuildContext context,
-  CategoryRepository categories,
-  Category category,
-) async {
-  final action = await showDialog<_CategoryDialogAction>(
-    context: context,
-    builder: (context) =>
-        _CategoryDialog(categories: categories, category: category),
-  );
+  final IconData icon;
+  final String title;
+  final String detail;
 
-  if (action == _CategoryDialogAction.delete) {
-    await categories.archive(category.id);
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.all(32),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(icon, size: 64, color: colors.outline),
+          const SizedBox(height: 16),
+          Text(
+            title,
+            style: Theme.of(context).textTheme.titleMedium,
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 8),
+          Text(
+            detail,
+            textAlign: TextAlign.center,
+            style: Theme.of(
+              context,
+            ).textTheme.bodyMedium?.copyWith(color: colors.onSurfaceVariant),
+          ),
+        ],
+      ),
+    );
   }
 }
 
-enum _CategoryDialogAction { saved, delete }
+/// Draggable, scrollable modal sheet showing a category's details. Edits to the
+/// name, color and icon are committed on leaving edit mode.
+class CategoryDetailsSheet extends StatefulWidget {
+  const CategoryDetailsSheet({
+    super.key,
+    required this.category,
+    required this.repos,
+    required this.nav,
+  });
 
-// Owns the name controller so it lives exactly as long as the dialog widget
-// and is disposed from State.dispose(), per the Flutter docs for
-// TextEditingController.
-class _CategoryDialog extends StatefulWidget {
-  const _CategoryDialog({required this.categories, this.category});
-
-  final CategoryRepository categories;
-  final Category? category;
+  final Category category;
+  final AppRepositories repos;
+  final AppNavigation nav;
 
   @override
-  State<_CategoryDialog> createState() => _CategoryDialogState();
+  State<CategoryDetailsSheet> createState() => _CategoryDetailsSheetState();
 }
 
-class _CategoryDialogState extends State<_CategoryDialog> {
-  late final TextEditingController _nameController;
+class _CategoryDetailsSheetState extends State<CategoryDetailsSheet> {
+  late Color _color = colorFromHex(
+    widget.category.color,
+    fallback: categoryDefaultColor,
+  );
+  late IconData _icon = categoryIconFromName(widget.category.icon);
+  late final TextEditingController _nameController = TextEditingController(
+    text: widget.category.name,
+  );
 
-  bool get _isEditing => widget.category != null;
+  bool _editing = false;
+  bool _saving = false;
 
-  @override
-  void initState() {
-    super.initState();
-    _nameController = TextEditingController(text: widget.category?.name ?? '');
-  }
+  String get _categoryId => widget.category.id;
 
   @override
   void dispose() {
@@ -102,45 +183,439 @@ class _CategoryDialogState extends State<_CategoryDialog> {
     super.dispose();
   }
 
-  Future<void> _submit() async {
-    final name = _nameController.text.trim();
-    final navigator = Navigator.of(context);
-    if (name.isNotEmpty) {
-      final category = widget.category;
-      if (category != null) {
-        await widget.categories.update(category.id, name: Value(name));
-      } else {
-        await widget.categories.create(name: name);
-      }
+  Future<void> _editColor() async {
+    final picked = await showColorPickerDialog(
+      context,
+      selected: _color,
+      options: colorOptions,
+    );
+    if (picked != null) setState(() => _color = picked);
+  }
+
+  Future<void> _editIcon() async {
+    final picked = await showIconPickerDialog(
+      context,
+      selected: _icon,
+      options: categoryIconOptions,
+      accent: _color,
+    );
+    if (picked != null) setState(() => _icon = picked);
+  }
+
+  /// Toggles edit mode. Entering reveals the editors; leaving validates and
+  /// persists name/color/icon.
+  Future<void> _toggleEditing() async {
+    if (!_editing) {
+      setState(() => _editing = true);
+      return;
     }
-    navigator.pop(_CategoryDialogAction.saved);
+    final name = _nameController.text.trim();
+    if (name.isEmpty) return;
+
+    setState(() => _saving = true);
+    try {
+      await widget.repos.categories.update(
+        _categoryId,
+        name: Value(name),
+        color: Value(colorToHex(_color)),
+        icon: Value(categoryIconName(_icon)),
+      );
+      if (!mounted) return;
+      setState(() => _editing = false);
+    } catch (e, st) {
+      debugPrint('Error updating category: $e\n$st');
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  Future<void> _confirmDelete() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        final colors = Theme.of(dialogContext).colorScheme;
+        return AlertDialog(
+          title: const Text('Eliminar categoría'),
+          content: Text(
+            '¿Seguro que querés eliminar "${_nameController.text.trim()}"? '
+            'Dejará de aparecer en tus categorías.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('Cancelar'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              style: TextButton.styleFrom(foregroundColor: colors.error),
+              child: const Text('Eliminar'),
+            ),
+          ],
+        );
+      },
+    );
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _saving = true);
+    try {
+      await widget.repos.categories.archive(_categoryId);
+      if (!mounted) return;
+      Navigator.of(context).pop(); // close the details sheet
+    } catch (e, st) {
+      debugPrint('Error archiving category: $e\n$st');
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  void _openAllTransactions() {
+    Navigator.of(context).pop(); // close the sheet before switching tabs
+    widget.nav.openActivityForCategory(_categoryId);
   }
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
-      title: Text(_isEditing ? 'Edit Category' : 'New Category'),
-      content: TextField(
+    return DraggableScrollableSheet(
+      expand: false,
+      initialChildSize: 0.6,
+      minChildSize: 0.3,
+      maxChildSize: 0.95,
+      builder: (context, scrollController) {
+        return ListView(
+          controller: scrollController,
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+          children: [
+            _buildIdentityGroup(context),
+            const SizedBox(height: 12),
+            _buildActions(context),
+            const SizedBox(height: 28),
+            _buildTransactionsHeader(context),
+            const SizedBox(height: 8),
+            _buildTransactions(context),
+          ],
+        );
+      },
+    );
+  }
+
+  /// The category name: an inline text field while editing, plain text otherwise.
+  Widget _buildName(TextTheme textTheme) {
+    final style = textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w600);
+    if (_editing) {
+      return TextField(
         controller: _nameController,
-        decoration: const InputDecoration(labelText: 'Name'),
-        autofocus: true,
-      ),
-      actions: [
-        if (_isEditing)
-          TextButton(
-            onPressed: () =>
-                Navigator.pop(context, _CategoryDialogAction.delete),
-            child: const Text('Delete'),
-          ),
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text('Cancel'),
+        style: style,
+        textCapitalization: TextCapitalization.sentences,
+        decoration: const InputDecoration(
+          isDense: true,
+          labelText: 'Nombre',
+          border: OutlineInputBorder(),
         ),
-        TextButton(
-          onPressed: _submit,
-          child: Text(_isEditing ? 'Save' : 'Create'),
+        onChanged: (_) => setState(() {}),
+      );
+    }
+    return Text(
+      _nameController.text,
+      style: style,
+      maxLines: 2,
+      overflow: TextOverflow.ellipsis,
+    );
+  }
+
+  /// Identity + usage as one cohesive M3 Expressive containment group: a
+  /// color-washed identity hero (icon, name, optional description, color swatch)
+  /// joined by the 2dp seam to the usage hero (movement count).
+  Widget _buildIdentityGroup(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+    final description = widget.category.description;
+
+    return Column(
+      children: [
+        Material(
+          color: _color.withValues(alpha: 0.14),
+          borderRadius: const BorderRadius.vertical(
+            top: Radius.circular(kGroupOuterRadius),
+            bottom: Radius.circular(kGroupInnerRadius),
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Row(
+              children: [
+                // Expressive rounded-square icon tile — tappable only while
+                // editing, to change the icon.
+                InkWell(
+                  onTap: _editing ? _editIcon : null,
+                  borderRadius: BorderRadius.circular(20),
+                  child: Container(
+                    width: 60,
+                    height: 60,
+                    decoration: BoxDecoration(
+                      color: _color.withValues(alpha: 0.28),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    alignment: Alignment.center,
+                    child: Icon(_icon, size: 30, color: _color),
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _buildName(textTheme),
+                      if (description != null && description.isNotEmpty) ...[
+                        const SizedBox(height: 4),
+                        Text(
+                          description,
+                          style: textTheme.bodyMedium?.copyWith(
+                            color: colors.onSurfaceVariant,
+                          ),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                // Discrete color swatch — only shown while editing; tap to
+                // change the category color.
+                if (_editing) ...[
+                  const SizedBox(width: 12),
+                  InkWell(
+                    onTap: _editColor,
+                    borderRadius: BorderRadius.circular(9),
+                    child: Container(
+                      width: 28,
+                      height: 28,
+                      decoration: BoxDecoration(
+                        color: _color,
+                        borderRadius: BorderRadius.circular(9),
+                        border: Border.all(
+                          color: colors.outlineVariant.withValues(alpha: 0.5),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: kGroupSpacing),
+        // Spend hero — total spent this month. A Row with an Expanded child
+        // makes the card fill the full width (a bare Column would shrink to
+        // its text).
+        GroupedCard(
+          borderRadius: const BorderRadius.vertical(
+            top: Radius.circular(kGroupInnerRadius),
+            bottom: Radius.circular(kGroupOuterRadius),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 18),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'GASTADO ESTE MES',
+                        style: textTheme.labelMedium?.copyWith(
+                          color: colors.onSurfaceVariant,
+                          letterSpacing: 0.8,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      _buildMonthlySpend(textTheme),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
       ],
     );
   }
+
+  /// The amount spent in this category during the current month. Sums expense
+  /// rows by currency; when the category mixes currencies the dominant one is
+  /// shown big with a small note for the rest.
+  Widget _buildMonthlySpend(TextTheme textTheme) {
+    final window = const TransactionFilter(
+      datePreset: DatePreset.thisMonth,
+    ).resolveDateWindow()!;
+
+    return StreamBuilder<Map<String, BigInt>>(
+      stream: widget.repos.categories.watchSpendByCurrency(
+        _categoryId,
+        fromMs: window.fromMs!,
+        toExclusiveMs: window.toExclusiveMs!,
+      ),
+      builder: (context, snapshot) {
+        final spend = snapshot.data ?? const <String, BigInt>{};
+        final bigStyle = textTheme.displaySmall?.copyWith(
+          fontWeight: FontWeight.w600,
+        );
+
+        if (spend.isEmpty) {
+          return Text(
+            'Sin gastos este mes',
+            style: textTheme.titleMedium?.copyWith(
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+          );
+        }
+
+        // Pick the currency with the largest total to headline the figure.
+        final entries = spend.entries.toList()
+          ..sort((a, b) => b.value.compareTo(a.value));
+        final top = entries.first;
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              formatMoney(top.value.toInt(), top.key),
+              style: bigStyle,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+            if (entries.length > 1)
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Text(
+                  '+ ${entries.length - 1} ${entries.length - 1 == 1 ? 'otra moneda' : 'otras monedas'}',
+                  style: textTheme.bodySmall?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ),
+          ],
+        );
+      },
+    );
+  }
+
+  /// Category actions as Material 3 Expressive buttons: edit and a destructive
+  /// delete.
+  Widget _buildActions(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return Row(
+      children: [
+        Expanded(
+          child: M3EFilledButton.tonalIcon(
+            onPressed: _saving ? null : _toggleEditing,
+            size: M3EButtonSize.md,
+            icon: Icon(_editing ? Icons.check_rounded : Icons.edit_outlined),
+            label: Text(_editing ? 'Listo' : 'Editar'),
+          ),
+        ),
+        const SizedBox(width: 8),
+        M3EButton(
+          onPressed: _saving ? null : _confirmDelete,
+          size: M3EButtonSize.md,
+          tooltip: 'Eliminar',
+          semanticLabel: 'Eliminar',
+          decoration: M3EButtonDecoration.styleFrom(
+            backgroundColor: colors.errorContainer,
+            foregroundColor: colors.onErrorContainer,
+          ),
+          child: const Icon(Icons.delete_outline),
+        ),
+      ],
+    );
+  }
+
+  /// "Last movements" section header with a "view all" action that opens the
+  /// Activity tab filtered to this category.
+  Widget _buildTransactionsHeader(BuildContext context) {
+    final textTheme = Theme.of(context).textTheme;
+    return Row(
+      children: [
+        Expanded(
+          child: Text('Últimos movimientos', style: textTheme.titleMedium),
+        ),
+        TextButton(
+          onPressed: _openAllTransactions,
+          child: const Text('Ver todos'),
+        ),
+      ],
+    );
+  }
+
+  /// The five most recent movements in this category, rendered with the shared
+  /// [TransactionRow]. Handles loading, error and empty states.
+  Widget _buildTransactions(BuildContext context) {
+    return StreamBuilder<List<Transaction>>(
+      stream: widget.repos.transactions.watch(
+        TransactionFilter(categoryIds: {_categoryId}),
+        limit: 5,
+      ),
+      builder: (context, snapshot) {
+        if (snapshot.hasError) {
+          return _hintText(context, 'No se pudieron cargar los movimientos');
+        }
+        if (snapshot.connectionState == ConnectionState.waiting &&
+            !snapshot.hasData) {
+          return const Padding(
+            padding: EdgeInsets.symmetric(vertical: 24),
+            child: Center(child: CircularProgressIndicator()),
+          );
+        }
+        final txs = snapshot.data ?? const <Transaction>[];
+        if (txs.isEmpty) {
+          return _hintText(context, 'Sin movimientos todavía');
+        }
+        return Column(
+          children: [
+            for (var i = 0; i < txs.length; i++) ...[
+              if (i > 0) const SizedBox(height: 10),
+              TransactionRow(
+                title: txs[i].name,
+                amountCents: _signedAmountCents(txs[i]),
+                dateCheck: txs[i].dateConfirmed,
+                description: _shortDate(txs[i].date),
+                currencySymbol: currencyPrefix(txs[i].currency).trim(),
+                onTap: () {},
+              ),
+            ],
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _hintText(BuildContext context, String message) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 16),
+      child: Text(
+        message,
+        style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
+      ),
+    );
+  }
+}
+
+/// Signed cents for [TransactionRow]: positive renders green, negative renders
+/// in the default text color. Mirrors the activity screen's convention.
+int _signedAmountCents(Transaction t) {
+  final amount = t.amount.toInt();
+  switch (t.type) {
+    case 'expense':
+      return -amount.abs();
+    case 'income':
+    case 'transfer':
+      return amount.abs();
+    default: // balance_adjustment keeps its stored sign
+      return amount;
+  }
+}
+
+/// Compact `day month` label, e.g. `27 may`.
+String _shortDate(BigInt dateMs) {
+  final dt = DateTime.fromMillisecondsSinceEpoch(dateMs.toInt());
+  return '${dt.day} ${_shortMonths[dt.month - 1]}';
 }

@@ -6,6 +6,9 @@ const Color tagDefaultColor = Colors.greenAccent;
 /// Accent used by accounts that have no stored color.
 const Color accountDefaultColor = Color(0xFF3B82F6);
 
+/// Accent used by categories that have no stored color.
+const Color categoryDefaultColor = Color(0xFF6366F1);
+
 /// Single swatch palette shared by every accent picker (tags, accounts, …).
 /// Holds every color the app offers.
 const colorOptions = <Color>[

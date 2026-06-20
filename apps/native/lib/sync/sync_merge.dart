@@ -130,6 +130,8 @@ class PullPageMerger {
       id: Value(id),
       name: Value(r['name'] as String),
       description: Value(r['description'] as String?),
+      color: Value(r['color'] as String?),
+      icon: Value(r['icon'] as String?),
       archived: Value(r['isArchived'] as bool? ?? false),
       createdAt: Value(_asBigInt(r['createdAt'])),
       updatedAt: Value(remoteUpdatedAt),

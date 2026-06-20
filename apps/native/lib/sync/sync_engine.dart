@@ -507,6 +507,8 @@ class SyncEngine extends ChangeNotifier {
         'id': row.id,
         'name': row.name,
         if (row.description != null) 'description': row.description,
+        if (row.color != null) 'color': row.color,
+        if (row.icon != null) 'icon': row.icon,
         'isArchived': row.archived,
         'createdAt': row.createdAt,
         'updatedAt': row.updatedAt,

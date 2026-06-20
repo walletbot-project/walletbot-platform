@@ -8,6 +8,8 @@ export const create = mutation({
         id: v.string(),
         name: v.string(),
         description: v.optional(v.string()),
+        color: v.optional(v.string()),
+        icon: v.optional(v.string()),
     },
     handler: async (ctx, args) => {
         const userId = await requireAuth(ctx)
@@ -30,6 +32,8 @@ export const create = mutation({
             id: args.id,
             name: args.name,
             description: args.description,
+            color: args.color,
+            icon: args.icon,
             isArchived: false,
             createdAt: now,
             updatedAt: now,
@@ -45,6 +49,8 @@ export const update = mutation({
         id: v.string(),
         name: v.optional(v.string()),
         description: v.optional(v.string()),
+        color: v.optional(v.string()),
+        icon: v.optional(v.string()),
     },
     handler: async (ctx, args) => {
         const userId = await requireAuth(ctx)
@@ -59,9 +65,16 @@ export const update = mutation({
         const seq = await nextSeq(ctx, userId)
         const now = BigInt(Date.now())
 
-        const patch: { name?: string; description?: string } = {}
+        const patch: {
+            name?: string
+            description?: string
+            color?: string
+            icon?: string
+        } = {}
         if (args.name !== undefined) patch.name = args.name
         if (args.description !== undefined) patch.description = args.description
+        if (args.color !== undefined) patch.color = args.color
+        if (args.icon !== undefined) patch.icon = args.icon
 
         await ctx.db.patch(row._id, {
             ...patch,

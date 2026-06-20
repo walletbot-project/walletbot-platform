@@ -34,6 +34,14 @@ class AppNavigation extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Switches to the Activity tab, staging a filter that shows only the given
+  /// category's transactions.
+  void openActivityForCategory(String categoryId) {
+    _pendingActivityFilter = TransactionFilter(categoryIds: {categoryId});
+    _index = activityTab;
+    notifyListeners();
+  }
+
   /// Returns and clears the filter staged for the Activity tab, if any.
   TransactionFilter? takePendingActivityFilter() {
     final filter = _pendingActivityFilter;
