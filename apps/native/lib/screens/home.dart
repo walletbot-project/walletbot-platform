@@ -2,9 +2,6 @@ import 'package:app/auth/account.dart';
 import 'package:app/auth/auth_controller.dart';
 import 'package:app/screens/transaction_form.dart';
 import 'package:app/sync/sync_status_pill.dart';
-import 'package:app/screens/accounts_prototype.dart';
-import 'package:app/screens/categories_prototype.dart';
-import 'package:app/screens/tags_prototype.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -26,16 +23,29 @@ class _HomeScreenState extends State<HomeScreen> {
           child: Scaffold(
             appBar: AppBar(
               title: const Text('Accounts'),
-              leading: IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(context)),
+              leading: IconButton(
+                icon: const Icon(Icons.close),
+                onPressed: () => Navigator.pop(context),
+              ),
             ),
             body: ListView(
               children: [
                 for (final account in auth.accounts)
                   ListTile(
-                    leading: Icon(account.type == AccountType.local ? Icons.person_outline : Icons.cloud_outlined),
-                    title: Text(account.name ?? account.email ?? 'Local account'),
-                    subtitle: Text(account.type == AccountType.local ? 'Local' : 'Online'),
-                    trailing: account.id == auth.activeId ? const Icon(Icons.check_circle) : null,
+                    leading: Icon(
+                      account.type == AccountType.local
+                          ? Icons.person_outline
+                          : Icons.cloud_outlined,
+                    ),
+                    title: Text(
+                      account.name ?? account.email ?? 'Local account',
+                    ),
+                    subtitle: Text(
+                      account.type == AccountType.local ? 'Local' : 'Online',
+                    ),
+                    trailing: account.id == auth.activeId
+                        ? const Icon(Icons.check_circle)
+                        : null,
                     onTap: () async {
                       if (account.id != auth.activeId) {
                         await auth.switchTo(account.id);
@@ -61,7 +71,9 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _openManualAdd() async {
-    await Navigator.of(context).push(MaterialPageRoute(builder: (_) => const TransactionFormScreen()));
+    await Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => const TransactionFormScreen()));
   }
 
   @override
@@ -74,24 +86,9 @@ class _HomeScreenState extends State<HomeScreen> {
             padding: EdgeInsets.only(right: 4),
             child: Center(child: SyncStatusPill()),
           ),
-          IconButton(onPressed: showUserMenu, icon: const Icon(Icons.person_rounded)),
           IconButton(
-            onPressed: () {
-              Navigator.push(context, MaterialPageRoute(builder: (_) => const AccountsPage()));
-            },
-            icon: const Icon(Icons.account_balance_wallet_outlined),
-          ),
-          IconButton(
-            onPressed: () {
-              Navigator.push(context, MaterialPageRoute(builder: (_) => const CategoriesPage()));
-            },
-            icon: const Icon(Icons.category_outlined),
-          ),
-          IconButton(
-            onPressed: () {
-              Navigator.push(context, MaterialPageRoute(builder: (_) => const TagsPage()));
-            },
-            icon: const Icon(Icons.sell_outlined),
+            onPressed: showUserMenu,
+            icon: const Icon(Icons.person_rounded),
           ),
         ],
       ),
@@ -101,7 +98,11 @@ class _HomeScreenState extends State<HomeScreen> {
           children: [
             Align(
               alignment: Alignment.centerLeft,
-              child: _HomeActionCard(label: 'Agregar a mano', icon: Icons.add_rounded, onTap: _openManualAdd),
+              child: _HomeActionCard(
+                label: 'Agregar a mano',
+                icon: Icons.add_rounded,
+                onTap: _openManualAdd,
+              ),
             ),
           ],
         ),
@@ -111,7 +112,11 @@ class _HomeScreenState extends State<HomeScreen> {
 }
 
 class _HomeActionCard extends StatelessWidget {
-  const _HomeActionCard({required this.label, required this.icon, required this.onTap});
+  const _HomeActionCard({
+    required this.label,
+    required this.icon,
+    required this.onTap,
+  });
 
   final String label;
   final IconData icon;
@@ -139,7 +144,10 @@ class _HomeActionCard extends StatelessWidget {
                 Container(
                   width: 44,
                   height: 44,
-                  decoration: const BoxDecoration(color: Color(0xFF21C4B6), shape: BoxShape.circle),
+                  decoration: const BoxDecoration(
+                    color: Color(0xFF21C4B6),
+                    shape: BoxShape.circle,
+                  ),
                   child: Icon(icon, color: Colors.white, size: 30),
                 ),
                 const SizedBox(height: 8),
@@ -148,9 +156,12 @@ class _HomeActionCard extends StatelessWidget {
                   textAlign: TextAlign.center,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
-                  style: Theme.of(
-                    context,
-                  ).textTheme.labelLarge?.copyWith(color: Colors.black, fontWeight: FontWeight.w900, fontSize: 13, height: 1),
+                  style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                    color: Colors.black,
+                    fontWeight: FontWeight.w900,
+                    fontSize: 13,
+                    height: 1,
+                  ),
                 ),
               ],
             ),
