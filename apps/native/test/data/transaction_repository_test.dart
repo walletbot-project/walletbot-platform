@@ -144,9 +144,22 @@ void main() {
       ));
       expect(bankEither.map((t) => t.name), ['To bank']);
 
-      final search = await repos.transactions
-          .list(const TransactionFilter(search: 'pizza'));
-      expect(search.map((t) => t.name), ['Pizza night']);
+      final titleSearch = await repos.transactions
+          .list(const TransactionFilter(search: 'pizza night'));
+      expect(titleSearch.map((t) => t.name), ['Pizza night']);
+
+      await repos.transactions.addExpense(
+        accountId: cashId,
+        categoryId: foodId,
+        name: 'Groceries',
+        description: 'Pizza ingredients',
+        amountCents: BigInt.from(800),
+        currency: 'ARS',
+      );
+
+      final descriptionSearch = await repos.transactions
+          .list(const TransactionFilter(search: 'ingredients'));
+      expect(descriptionSearch.map((t) => t.name), ['Groceries']);
     });
 
     test('tag match any/all and includeSubtags', () async {
