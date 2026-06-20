@@ -9,7 +9,7 @@ class ColorPicker extends StatelessWidget {
     super.key,
     required this.selected,
     required this.onChanged,
-    this.options = tagColorOptions,
+    this.options = colorOptions,
   });
 
   final Color selected;
@@ -54,7 +54,7 @@ class ColorPicker extends StatelessWidget {
 Future<Color?> showColorPickerDialog(
   BuildContext context, {
   required Color selected,
-  List<Color> options = tagColorOptions,
+  List<Color> options = colorOptions,
 }) {
   return showDialog<Color>(
     context: context,
