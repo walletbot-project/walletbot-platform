@@ -161,8 +161,9 @@ void main() {
       );
       expect(search.map((t) => t.name), ['Pizza night']);
 
-      final titleSearch = await repos.transactions
-          .list(const TransactionFilter(search: 'pizza night'));
+      final titleSearch = await repos.transactions.list(
+        const TransactionFilter(search: 'pizza night'),
+      );
       expect(titleSearch.map((t) => t.name), ['Pizza night']);
 
       await repos.transactions.addExpense(
@@ -174,8 +175,9 @@ void main() {
         currency: 'ARS',
       );
 
-      final descriptionSearch = await repos.transactions
-          .list(const TransactionFilter(search: 'ingredients'));
+      final descriptionSearch = await repos.transactions.list(
+        const TransactionFilter(search: 'ingredients'),
+      );
       expect(descriptionSearch.map((t) => t.name), ['Groceries']);
     });
 
