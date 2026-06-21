@@ -2,6 +2,24 @@
 /// Amounts are stored as int64 cents (BigInt) in the database.
 library;
 
+import 'package:intl/intl.dart';
+
+/// Prefix for an ISO currency: symbol for EUR/GBP, ISO code otherwise (USD, ARS).
+String currencyPrefix(String code) => switch (code) {
+  'EUR' => '€',
+  'GBP' => '£',
+  _ => '$code ',
+};
+
+/// Formats signed cents as currency in es-AR style ('.' thousands, ',' decimals).
+String formatMoney(int cents, String currency, {int decimalDigits = 2}) {
+  return NumberFormat.currency(
+    locale: 'es_AR',
+    symbol: currencyPrefix(currency),
+    decimalDigits: decimalDigits,
+  ).format(cents / 100);
+}
+
 /// Converts a decimal user-facing amount to int64 cents as BigInt.
 /// `12.5` → `1250`, `-3.07` → `-307`. Throws on NaN / infinity.
 BigInt parseAmountToCents(num amount) {

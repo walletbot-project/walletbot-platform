@@ -69,8 +69,8 @@ class AccountRepository extends RepositoryBase {
               name: name,
               currency: currency,
               description: Value(description),
-              color: Value(color),
-              icon: Value(icon),
+              color: Value.absentIfNull(color),
+              icon: Value.absentIfNull(icon),
               createdAt: now,
               updatedAt: now,
               dirty: const Value(true),
@@ -109,8 +109,8 @@ class AccountRepository extends RepositoryBase {
     String id, {
     Value<String> name = const Value.absent(),
     Value<String?> description = const Value.absent(),
-    Value<String?> color = const Value.absent(),
-    Value<String?> icon = const Value.absent(),
+    Value<String> color = const Value.absent(),
+    Value<String> icon = const Value.absent(),
   }) async {
     await (db.update(db.accounts)..where((a) => a.id.equals(id))).write(
       AccountsCompanion(

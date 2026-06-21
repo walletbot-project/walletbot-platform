@@ -66,7 +66,7 @@ class TagRepository extends RepositoryBase {
             name: row.read<String>('name'),
             description: row.readNullable<String>('description'),
             parentId: row.readNullable<String>('parent_id'),
-            color: row.readNullable<String>('color'),
+            color: row.read<String>('color'),
             archived: row.read<bool>('is_archived'),
             createdAt: row.read<BigInt>('created_at'),
             updatedAt: row.read<BigInt>('updated_at'),
@@ -75,6 +75,46 @@ class TagRepository extends RepositoryBase {
           transactionCount: row.read<int>('transaction_count'),
         );
       }).toList();
+    });
+  }
+
+  /// Live total spent (expenses only) on transactions carrying [tagId] within
+  /// `[fromMs, toExclusiveMs)`, grouped by transaction currency. Computed with
+  /// a SQL `SUM` aggregate over the tag join (not by loading rows), and
+  /// re-emits when transactions or joins change. Only the exact tag is counted
+  /// (descendants are not rolled up).
+  Stream<Map<String, BigInt>> watchSpendByCurrency(
+    String tagId, {
+    required BigInt fromMs,
+    required BigInt toExclusiveMs,
+  }) {
+    final currency = db.transactions.currency;
+    final total = db.transactions.amount.sum();
+    final query =
+        db.selectOnly(db.transactions).join([
+            innerJoin(
+              db.transactionTags,
+              db.transactionTags.transactionId.equalsExp(db.transactions.id),
+            ),
+          ])
+          ..addColumns([currency, total])
+          ..where(
+            db.transactionTags.tagId.equals(tagId) &
+                db.transactions.archived.equals(false) &
+                db.transactions.type.equals('expense') &
+                db.transactions.date.isBiggerOrEqualValue(fromMs) &
+                db.transactions.date.isSmallerThanValue(toExclusiveMs),
+          )
+          ..groupBy([currency]);
+
+    return query.watch().map((rows) {
+      final result = <String, BigInt>{};
+      for (final row in rows) {
+        final cur = row.read(currency);
+        final sum = row.read(total);
+        if (cur != null && sum != null) result[cur] = sum;
+      }
+      return result;
     });
   }
 
@@ -101,7 +141,7 @@ class TagRepository extends RepositoryBase {
             name: name,
             description: Value(description),
             parentId: Value(parentId),
-            color: Value(color),
+            color: Value.absentIfNull(color),
             createdAt: now,
             updatedAt: now,
             dirty: const Value(true),
@@ -120,7 +160,7 @@ class TagRepository extends RepositoryBase {
     String id, {
     Value<String> name = const Value.absent(),
     Value<String?> description = const Value.absent(),
-    Value<String?> color = const Value.absent(),
+    Value<String> color = const Value.absent(),
     Value<String?> parentId = const Value.absent(),
   }) async {
     final now = currentMs;

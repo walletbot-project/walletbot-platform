@@ -960,7 +960,7 @@ class _TagColorPicker extends StatelessWidget {
       spacing: 12,
       runSpacing: 12,
       children: [
-        for (final color in tagColorOptions)
+        for (final color in colorOptions)
           InkWell(
             borderRadius: BorderRadius.circular(24),
             onTap: () => onChanged(color),

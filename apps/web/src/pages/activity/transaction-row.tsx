@@ -9,6 +9,8 @@ type TransactionRowProps = {
     /** `true` → confirmed date (green check); `false` → estimated (amber help). */
     dateConfirmed: boolean
     description?: string | null
+    /** Currency symbol shown before the amount. Defaults to `$`. */
+    currencySymbol?: string
 }
 
 export function TransactionRow({
@@ -16,6 +18,7 @@ export function TransactionRow({
     amountCents,
     dateConfirmed,
     description,
+    currencySymbol = '$',
 }: TransactionRowProps) {
     const isPositive = amountCents > 0
     return (
@@ -39,7 +42,7 @@ export function TransactionRow({
                         : 'text-foreground',
                 )}
             >
-                {formatSignedAmount(amountCents)}
+                {formatSignedAmount(amountCents, currencySymbol)}
             </span>
         </div>
     )

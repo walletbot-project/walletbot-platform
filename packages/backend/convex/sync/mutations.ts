@@ -11,8 +11,8 @@ const accountUpsert = v.object({
     name: v.string(),
     currency: v.string(),
     description: v.optional(v.string()),
-    color: v.optional(v.string()),
-    icon: v.optional(v.string()),
+    color: v.string(),
+    icon: v.string(),
     isArchived: v.boolean(),
     createdAt: v.int64(),
     updatedAt: v.int64(),
@@ -22,6 +22,8 @@ const categoryUpsert = v.object({
     id: v.string(),
     name: v.string(),
     description: v.optional(v.string()),
+    color: v.string(),
+    icon: v.string(),
     isArchived: v.boolean(),
     createdAt: v.int64(),
     updatedAt: v.int64(),
@@ -32,7 +34,7 @@ const tagUpsert = v.object({
     name: v.string(),
     description: v.optional(v.string()),
     parentId: v.optional(v.string()),
-    color: v.optional(v.string()),
+    color: v.string(),
     isArchived: v.boolean(),
     createdAt: v.int64(),
     updatedAt: v.int64(),
@@ -116,8 +118,8 @@ type AccountUpsert = {
     name: string
     currency: string
     description?: string
-    color?: string
-    icon?: string
+    color: string
+    icon: string
     isArchived: boolean
     createdAt: bigint
     updatedAt: bigint
@@ -126,6 +128,8 @@ type CategoryUpsert = {
     id: string
     name: string
     description?: string
+    color: string
+    icon: string
     isArchived: boolean
     createdAt: bigint
     updatedAt: bigint
@@ -135,7 +139,7 @@ type TagUpsert = {
     name: string
     description?: string
     parentId?: string
-    color?: string
+    color: string
     isArchived: boolean
     createdAt: bigint
     updatedAt: bigint
@@ -270,6 +274,8 @@ async function applyCategoryUpsert(
         id: payload.id,
         name: payload.name,
         description: payload.description,
+        color: payload.color,
+        icon: payload.icon,
         isArchived: payload.isArchived,
         createdAt: payload.createdAt,
         updatedAt: payload.updatedAt,

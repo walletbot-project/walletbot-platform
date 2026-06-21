@@ -226,11 +226,11 @@ class ToolExecutors {
       description: args.containsKey('description')
           ? Value(args['description'] as String?)
           : const Value.absent(),
-      color: args.containsKey('color')
-          ? Value(args['color'] as String?)
+      color: args['color'] is String
+          ? Value(args['color'] as String)
           : const Value.absent(),
-      icon: args.containsKey('icon')
-          ? Value(args['icon'] as String?)
+      icon: args['icon'] is String
+          ? Value(args['icon'] as String)
           : const Value.absent(),
     );
     return {'ok': true, 'id': acc.id};
@@ -259,7 +259,13 @@ class ToolExecutors {
       'ok': true,
       'categories': rows
           .map(
-            (c) => {'id': c.id, 'name': c.name, 'description': c.description},
+            (c) => {
+              'id': c.id,
+              'name': c.name,
+              'description': c.description,
+              'color': c.color,
+              'icon': c.icon,
+            },
           )
           .toList(),
     };
@@ -279,6 +285,8 @@ class ToolExecutors {
             'id': value.id,
             'name': value.name,
             'description': value.description,
+            'color': value.color,
+            'icon': value.icon,
           },
         };
     }
@@ -290,6 +298,8 @@ class ToolExecutors {
     final id = await repos.categories.create(
       name: args['name'] as String,
       description: args['description'] as String?,
+      color: args['color'] as String?,
+      icon: args['icon'] as String?,
     );
     return {'ok': true, 'id': id};
   }
@@ -309,6 +319,12 @@ class ToolExecutors {
           : const Value.absent(),
       description: args.containsKey('description')
           ? Value(args['description'] as String?)
+          : const Value.absent(),
+      color: args['color'] is String
+          ? Value(args['color'] as String)
+          : const Value.absent(),
+      icon: args['icon'] is String
+          ? Value(args['icon'] as String)
           : const Value.absent(),
     );
     return {'ok': true, 'id': cat.id};
@@ -411,8 +427,8 @@ class ToolExecutors {
           ? Value(args['description'] as String?)
           : const Value.absent(),
       parentId: parentValue,
-      color: args.containsKey('color')
-          ? Value(args['color'] as String?)
+      color: args['color'] is String
+          ? Value(args['color'] as String)
           : const Value.absent(),
     );
     return {'ok': true, 'id': tag.id};

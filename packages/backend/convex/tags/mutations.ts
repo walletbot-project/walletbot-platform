@@ -5,6 +5,11 @@ import { mutation } from '../_generated/server'
 import { nextSeq, writeTombstone } from '../sync/helpers'
 import { requireAuth } from '../users/helpers'
 
+// Business rule: a tag always has a color. Convex has no column-level
+// defaults, so we fill it here when a writer omits it. Mirrors the native
+// default in apps/native/lib/database.dart.
+const DEFAULT_TAG_COLOR = '#69F0AE'
+
 async function getTagById(
     ctx: MutationCtx,
     userId: string,
@@ -124,17 +129,20 @@ async function replaceTagWith(
         userId: string
         id: string
         name: string
+        color: string
         isArchived: boolean
         createdAt: bigint
         updatedAt: bigint
         seq: bigint
         description?: string
         parentId?: string
-        color?: string
     } = {
         userId: row.userId,
         id: row.id,
         name: next.name ?? row.name,
+        // Always present: fall back to the row's current color, then the
+        // global default if somehow missing.
+        color: color ?? DEFAULT_TAG_COLOR,
         isArchived: next.isArchived ?? row.isArchived,
         createdAt: row.createdAt,
         updatedAt: next.updatedAt,
@@ -142,7 +150,6 @@ async function replaceTagWith(
     }
     if (description !== undefined) doc.description = description
     if (baseParent !== undefined) doc.parentId = baseParent
-    if (color !== undefined) doc.color = color
 
     await ctx.db.replace(row._id, doc)
 }
@@ -180,7 +187,7 @@ export const create = mutation({
             name: args.name,
             description: args.description,
             parentId: args.parentId,
-            color: args.color,
+            color: args.color ?? DEFAULT_TAG_COLOR,
             isArchived: false,
             createdAt: now,
             updatedAt: now,

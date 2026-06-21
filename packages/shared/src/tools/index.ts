@@ -21,8 +21,8 @@ const toolDescriptions = {
     listCategories: 'List user categories.',
     getCategory: 'Get a category by UUID or name.',
     createCategory:
-        'Create a category. Categories are type-agnostic — they classify both expenses and income.',
-    updateCategory: 'Update a category name or description.',
+        'Create a category. Categories are type-agnostic — they classify both expenses and income. Optional color (hex) and icon name.',
+    updateCategory: 'Update a category name, description, color or icon.',
     archiveCategory: 'Archive a category (soft delete).',
 
     // Tags

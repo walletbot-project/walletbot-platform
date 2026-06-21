@@ -37,13 +37,14 @@ class CategoryRepository extends RepositoryBase {
   Stream<List<CategoryWithCount>> watchWithCounts() {
     final query = db.customSelect(
       '''
-        SELECT c.id, c.name, c.description, c.is_archived, c.created_at,
-               c.updated_at, c.dirty, COUNT(t.id) AS transaction_count
+        SELECT c.id, c.name, c.description, c.color, c.icon, c.is_archived,
+               c.created_at, c.updated_at, c.dirty,
+               COUNT(t.id) AS transaction_count
         FROM categories c
         LEFT JOIN transactions t ON t.category_id = c.id
         WHERE c.is_archived = 0
-        GROUP BY c.id, c.name, c.description, c.is_archived, c.created_at,
-                 c.updated_at, c.dirty
+        GROUP BY c.id, c.name, c.description, c.color, c.icon, c.is_archived,
+                 c.created_at, c.updated_at, c.dirty
         ORDER BY c.name COLLATE NOCASE
       ''',
       readsFrom: {db.categories, db.transactions},
@@ -56,6 +57,8 @@ class CategoryRepository extends RepositoryBase {
             id: row.read<String>('id'),
             name: row.read<String>('name'),
             description: row.readNullable<String>('description'),
+            color: row.read<String>('color'),
+            icon: row.read<String>('icon'),
             archived: row.read<bool>('is_archived'),
             createdAt: row.read<BigInt>('created_at'),
             updatedAt: row.read<BigInt>('updated_at'),
@@ -67,8 +70,46 @@ class CategoryRepository extends RepositoryBase {
     });
   }
 
+  /// Live total spent (expenses only) in a category within `[fromMs,
+  /// toExclusiveMs)`, grouped by transaction currency. Computed with a SQL
+  /// `SUM` aggregate (not by loading rows), and re-emits when transactions
+  /// change. Transfers, income and balance adjustments are excluded.
+  Stream<Map<String, BigInt>> watchSpendByCurrency(
+    String categoryId, {
+    required BigInt fromMs,
+    required BigInt toExclusiveMs,
+  }) {
+    final currency = db.transactions.currency;
+    final total = db.transactions.amount.sum();
+    final query = db.selectOnly(db.transactions)
+      ..addColumns([currency, total])
+      ..where(
+        db.transactions.archived.equals(false) &
+            db.transactions.categoryId.equals(categoryId) &
+            db.transactions.type.equals('expense') &
+            db.transactions.date.isBiggerOrEqualValue(fromMs) &
+            db.transactions.date.isSmallerThanValue(toExclusiveMs),
+      )
+      ..groupBy([currency]);
+
+    return query.watch().map((rows) {
+      final result = <String, BigInt>{};
+      for (final row in rows) {
+        final cur = row.read(currency);
+        final sum = row.read(total);
+        if (cur != null && sum != null) result[cur] = sum;
+      }
+      return result;
+    });
+  }
+
   /// Creates a category and returns its new id.
-  Future<String> create({required String name, String? description}) async {
+  Future<String> create({
+    required String name,
+    String? description,
+    String? color,
+    String? icon,
+  }) async {
     final id = newUuid();
     final now = currentMs;
     await db
@@ -78,6 +119,8 @@ class CategoryRepository extends RepositoryBase {
             id: id,
             name: name,
             description: Value(description),
+            color: Value.absentIfNull(color),
+            icon: Value.absentIfNull(icon),
             createdAt: now,
             updatedAt: now,
             dirty: const Value(true),
@@ -92,11 +135,15 @@ class CategoryRepository extends RepositoryBase {
     String id, {
     Value<String> name = const Value.absent(),
     Value<String?> description = const Value.absent(),
+    Value<String> color = const Value.absent(),
+    Value<String> icon = const Value.absent(),
   }) async {
     await (db.update(db.categories)..where((c) => c.id.equals(id))).write(
       CategoriesCompanion(
         name: name,
         description: description,
+        color: color,
+        icon: icon,
         updatedAt: Value(currentMs),
         dirty: const Value(true),
       ),
