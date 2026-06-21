@@ -17,7 +17,20 @@ import 'package:provider/provider.dart';
 
 /// Short Spanish month labels for the compact transaction dates shown in the
 /// account sheet (e.g. `27 may`).
-const _shortMonths = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+const _shortMonths = [
+  'ene',
+  'feb',
+  'mar',
+  'abr',
+  'may',
+  'jun',
+  'jul',
+  'ago',
+  'sep',
+  'oct',
+  'nov',
+  'dic',
+];
 
 class AccountsScreen extends StatelessWidget {
   const AccountsScreen({super.key});
@@ -28,7 +41,10 @@ class AccountsScreen extends StatelessWidget {
     final repos = context.read<AppRepositories>();
     Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) => Provider<AppRepositories>.value(value: repos, child: const CreateAccountScreen()),
+        builder: (_) => Provider<AppRepositories>.value(
+          value: repos,
+          child: const CreateAccountScreen(),
+        ),
       ),
     );
   }
@@ -43,7 +59,8 @@ class AccountsScreen extends StatelessWidget {
       context: context,
       isScrollControlled: true, // let the sheet grow taller than half-screen
       showDragHandle: true,
-      builder: (_) => AccountDetailsSheet(account: account, repos: repos, nav: nav),
+      builder: (_) =>
+          AccountDetailsSheet(account: account, repos: repos, nav: nav),
     );
   }
 
@@ -53,7 +70,13 @@ class AccountsScreen extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Cuentas'),
-        actions: [IconButton(tooltip: 'Nueva cuenta', onPressed: () => _openCreate(context), icon: const Icon(Icons.add))],
+        actions: [
+          IconButton(
+            tooltip: 'Nueva cuenta',
+            onPressed: () => _openCreate(context),
+            icon: const Icon(Icons.add),
+          ),
+        ],
       ),
       body: StreamBuilder<List<Account>>(
         stream: repos.accounts.watchActive(),
@@ -61,7 +84,8 @@ class AccountsScreen extends StatelessWidget {
           if (snapshot.hasError) {
             return _ErrorBody(error: snapshot.error.toString());
           }
-          if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
+          if (snapshot.connectionState == ConnectionState.waiting &&
+              !snapshot.hasData) {
             return const Center(child: CircularProgressIndicator());
           }
           final accounts = snapshot.data ?? const <Account>[];
@@ -91,7 +115,11 @@ class AccountsScreen extends StatelessWidget {
 /// accent (color + icon resolved from their stored string form) and its live
 /// balance.
 class _AccountTile extends StatelessWidget {
-  const _AccountTile({required this.account, required this.borderRadius, required this.onTap});
+  const _AccountTile({
+    required this.account,
+    required this.borderRadius,
+    required this.onTap,
+  });
 
   final Account account;
   final BorderRadius borderRadius;
@@ -130,17 +158,30 @@ class _EmptyBody extends StatelessWidget {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.account_balance_wallet_outlined, size: 64, color: Theme.of(context).colorScheme.outline),
+          Icon(
+            Icons.account_balance_wallet_outlined,
+            size: 64,
+            color: Theme.of(context).colorScheme.outline,
+          ),
           const SizedBox(height: 16),
-          Text('No tenés cuentas aún', style: Theme.of(context).textTheme.titleMedium),
+          Text(
+            'No tenés cuentas aún',
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
           const SizedBox(height: 8),
           Text(
             'Creá tu primera cuenta para empezar a registrar tus gastos.',
             textAlign: TextAlign.center,
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
           ),
           const SizedBox(height: 24),
-          FilledButton.icon(onPressed: onCreateTap, icon: const Icon(Icons.add), label: const Text('Crear cuenta')),
+          FilledButton.icon(
+            onPressed: onCreateTap,
+            icon: const Icon(Icons.add),
+            label: const Text('Crear cuenta'),
+          ),
         ],
       ),
     );
@@ -162,12 +203,18 @@ class _ErrorBody extends StatelessWidget {
         children: [
           Icon(Icons.error_outline_rounded, size: 64, color: colors.error),
           const SizedBox(height: 16),
-          Text('No se pudieron cargar las cuentas', style: Theme.of(context).textTheme.titleMedium, textAlign: TextAlign.center),
+          Text(
+            'No se pudieron cargar las cuentas',
+            style: Theme.of(context).textTheme.titleMedium,
+            textAlign: TextAlign.center,
+          ),
           const SizedBox(height: 8),
           Text(
             error,
             textAlign: TextAlign.center,
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(color: colors.onSurfaceVariant),
+            style: Theme.of(
+              context,
+            ).textTheme.bodySmall?.copyWith(color: colors.onSurfaceVariant),
           ),
         ],
       ),
@@ -179,7 +226,12 @@ class _ErrorBody extends StatelessWidget {
 /// name, color and icon are committed on leaving edit mode; balance changes are
 /// committed immediately as a balance adjustment.
 class AccountDetailsSheet extends StatefulWidget {
-  const AccountDetailsSheet({super.key, required this.account, required this.repos, required this.nav});
+  const AccountDetailsSheet({
+    super.key,
+    required this.account,
+    required this.repos,
+    required this.nav,
+  });
 
   final Account account;
   final AppRepositories repos;
@@ -192,9 +244,14 @@ class AccountDetailsSheet extends StatefulWidget {
 class _AccountDetailsSheetState extends State<AccountDetailsSheet> {
   // Locally editable identity values — the controls mutate these and they are
   // persisted on leaving edit mode.
-  late Color _color = colorFromHex(widget.account.color, fallback: accountDefaultColor);
+  late Color _color = colorFromHex(
+    widget.account.color,
+    fallback: accountDefaultColor,
+  );
   late IconData _icon = accountIconFromName(widget.account.icon);
-  late final TextEditingController _nameController = TextEditingController(text: widget.account.name);
+  late final TextEditingController _nameController = TextEditingController(
+    text: widget.account.name,
+  );
 
   bool _editing = false;
   bool _saving = false;
@@ -209,12 +266,21 @@ class _AccountDetailsSheetState extends State<AccountDetailsSheet> {
   }
 
   Future<void> _editColor() async {
-    final picked = await showColorPickerDialog(context, selected: _color, options: colorOptions);
+    final picked = await showColorPickerDialog(
+      context,
+      selected: _color,
+      options: colorOptions,
+    );
     if (picked != null) setState(() => _color = picked);
   }
 
   Future<void> _editIcon() async {
-    final picked = await showIconPickerDialog(context, selected: _icon, options: accountIconOptions, accent: _color);
+    final picked = await showIconPickerDialog(
+      context,
+      selected: _icon,
+      options: accountIconOptions,
+      accent: _color,
+    );
     if (picked != null) setState(() => _icon = picked);
   }
 
@@ -268,16 +334,27 @@ class _AccountDetailsSheetState extends State<AccountDetailsSheet> {
           content: TextFormField(
             initialValue: text,
             autofocus: true,
-            keyboardType: const TextInputType.numberWithOptions(decimal: true, signed: true),
-            decoration: InputDecoration(prefixText: '$_currency ', border: const OutlineInputBorder()),
+            keyboardType: const TextInputType.numberWithOptions(
+              decimal: true,
+              signed: true,
+            ),
+            decoration: InputDecoration(
+              prefixText: '$_currency ',
+              border: const OutlineInputBorder(),
+            ),
             onChanged: (value) => text = value,
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.of(dialogContext).pop(), child: const Text('Cancelar')),
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Cancelar'),
+            ),
             TextButton(
               onPressed: () {
                 final value = double.tryParse(text.replaceAll(',', '.'));
-                Navigator.of(dialogContext).pop(value == null ? null : (value * 100).round());
+                Navigator.of(
+                  dialogContext,
+                ).pop(value == null ? null : (value * 100).round());
               },
               child: const Text('Guardar'),
             ),
@@ -314,7 +391,10 @@ class _AccountDetailsSheetState extends State<AccountDetailsSheet> {
             'Dejará de aparecer en tus cuentas.',
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.of(dialogContext).pop(false), child: const Text('Cancelar')),
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('Cancelar'),
+            ),
             TextButton(
               onPressed: () => Navigator.of(dialogContext).pop(true),
               style: TextButton.styleFrom(foregroundColor: colors.error),
@@ -345,7 +425,9 @@ class _AccountDetailsSheetState extends State<AccountDetailsSheet> {
 
   void _showSnack(String message) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 
   @override
@@ -383,11 +465,20 @@ class _AccountDetailsSheetState extends State<AccountDetailsSheet> {
         controller: _nameController,
         style: style,
         textCapitalization: TextCapitalization.sentences,
-        decoration: const InputDecoration(isDense: true, labelText: 'Nombre', border: OutlineInputBorder()),
+        decoration: const InputDecoration(
+          isDense: true,
+          labelText: 'Nombre',
+          border: OutlineInputBorder(),
+        ),
         onChanged: (_) => setState(() {}),
       );
     }
-    return Text(_nameController.text, style: style, maxLines: 2, overflow: TextOverflow.ellipsis);
+    return Text(
+      _nameController.text,
+      style: style,
+      maxLines: 2,
+      overflow: TextOverflow.ellipsis,
+    );
   }
 
   /// Identity + balance as one cohesive M3 Expressive containment group: a
@@ -404,7 +495,10 @@ class _AccountDetailsSheetState extends State<AccountDetailsSheet> {
         // color swatch as a trailing accent.
         Material(
           color: _color.withValues(alpha: 0.14),
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(kGroupOuterRadius), bottom: Radius.circular(kGroupInnerRadius)),
+          borderRadius: const BorderRadius.vertical(
+            top: Radius.circular(kGroupOuterRadius),
+            bottom: Radius.circular(kGroupInnerRadius),
+          ),
           clipBehavior: Clip.antiAlias,
           child: Padding(
             padding: const EdgeInsets.all(20),
@@ -418,7 +512,10 @@ class _AccountDetailsSheetState extends State<AccountDetailsSheet> {
                   child: Container(
                     width: 60,
                     height: 60,
-                    decoration: BoxDecoration(color: _color.withValues(alpha: 0.28), borderRadius: BorderRadius.circular(20)),
+                    decoration: BoxDecoration(
+                      color: _color.withValues(alpha: 0.28),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
                     alignment: Alignment.center,
                     child: Icon(_icon, size: 30, color: _color),
                   ),
@@ -438,7 +535,9 @@ class _AccountDetailsSheetState extends State<AccountDetailsSheet> {
                       decoration: BoxDecoration(
                         color: _color,
                         borderRadius: BorderRadius.circular(9),
-                        border: Border.all(color: colors.outlineVariant.withValues(alpha: 0.5)),
+                        border: Border.all(
+                          color: colors.outlineVariant.withValues(alpha: 0.5),
+                        ),
                       ),
                     ),
                   ),
@@ -452,7 +551,10 @@ class _AccountDetailsSheetState extends State<AccountDetailsSheet> {
         // amount is live: it re-emits as balance adjustments and synced
         // transactions land.
         GroupedCard(
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(kGroupInnerRadius), bottom: Radius.circular(kGroupOuterRadius)),
+          borderRadius: const BorderRadius.vertical(
+            top: Radius.circular(kGroupInnerRadius),
+            bottom: Radius.circular(kGroupOuterRadius),
+          ),
           child: Padding(
             padding: const EdgeInsets.fromLTRB(20, 16, 20, 18),
             child: Row(
@@ -462,15 +564,26 @@ class _AccountDetailsSheetState extends State<AccountDetailsSheet> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('SALDO', style: textTheme.labelMedium?.copyWith(color: colors.onSurfaceVariant, letterSpacing: 0.8)),
+                      Text(
+                        'SALDO',
+                        style: textTheme.labelMedium?.copyWith(
+                          color: colors.onSurfaceVariant,
+                          letterSpacing: 0.8,
+                        ),
+                      ),
                       const SizedBox(height: 6),
                       StreamBuilder<BigInt>(
-                        stream: widget.repos.accounts.watchBalanceCents(_accountId),
+                        stream: widget.repos.accounts.watchBalanceCents(
+                          _accountId,
+                        ),
                         builder: (context, snapshot) {
                           final cents = (snapshot.data ?? BigInt.zero).toInt();
                           return Text(
                             formatMoney(cents, _currency),
-                            style: textTheme.displaySmall?.copyWith(fontWeight: FontWeight.w600, color: cents < 0 ? colors.error : null),
+                            style: textTheme.displaySmall?.copyWith(
+                              fontWeight: FontWeight.w600,
+                              color: cents < 0 ? colors.error : null,
+                            ),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                           );
@@ -482,9 +595,20 @@ class _AccountDetailsSheetState extends State<AccountDetailsSheet> {
                 const SizedBox(width: 12),
                 // Currency pill.
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  decoration: BoxDecoration(color: colors.surfaceContainerHighest, borderRadius: BorderRadius.circular(10)),
-                  child: Text(_currency, style: textTheme.labelLarge?.copyWith(color: colors.onSurfaceVariant)),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 6,
+                  ),
+                  decoration: BoxDecoration(
+                    color: colors.surfaceContainerHighest,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Text(
+                    _currency,
+                    style: textTheme.labelLarge?.copyWith(
+                      color: colors.onSurfaceVariant,
+                    ),
+                  ),
                 ),
               ],
             ),
@@ -523,7 +647,10 @@ class _AccountDetailsSheetState extends State<AccountDetailsSheet> {
           size: M3EButtonSize.md,
           tooltip: 'Eliminar',
           semanticLabel: 'Eliminar',
-          decoration: M3EButtonDecoration.styleFrom(backgroundColor: colors.errorContainer, foregroundColor: colors.onErrorContainer),
+          decoration: M3EButtonDecoration.styleFrom(
+            backgroundColor: colors.errorContainer,
+            foregroundColor: colors.onErrorContainer,
+          ),
           child: const Icon(Icons.delete_outline),
         ),
       ],
@@ -536,8 +663,13 @@ class _AccountDetailsSheetState extends State<AccountDetailsSheet> {
     final textTheme = Theme.of(context).textTheme;
     return Row(
       children: [
-        Expanded(child: Text('Últimas transacciones', style: textTheme.titleMedium)),
-        TextButton(onPressed: _openAllTransactions, child: const Text('Ver todas')),
+        Expanded(
+          child: Text('Últimas transacciones', style: textTheme.titleMedium),
+        ),
+        TextButton(
+          onPressed: _openAllTransactions,
+          child: const Text('Ver todas'),
+        ),
       ],
     );
   }
@@ -547,15 +679,24 @@ class _AccountDetailsSheetState extends State<AccountDetailsSheet> {
   Widget _buildTransactions(BuildContext context) {
     final symbol = currencyPrefix(_currency).trim();
     return StreamBuilder<List<Transaction>>(
-      stream: widget.repos.transactions.watch(TransactionFilter(accountIds: {_accountId}), limit: 5),
+      stream: widget.repos.transactions.watch(
+        TransactionFilter(accountIds: {_accountId}),
+        limit: 5,
+      ),
       builder: (context, snapshot) {
         if (snapshot.hasError) {
           return Padding(
             padding: const EdgeInsets.symmetric(vertical: 16),
-            child: Text('No se pudieron cargar las transacciones', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)),
+            child: Text(
+              'No se pudieron cargar las transacciones',
+              style: TextStyle(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+            ),
           );
         }
-        if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
+        if (snapshot.connectionState == ConnectionState.waiting &&
+            !snapshot.hasData) {
           return const Padding(
             padding: EdgeInsets.symmetric(vertical: 24),
             child: Center(child: CircularProgressIndicator()),
@@ -565,7 +706,12 @@ class _AccountDetailsSheetState extends State<AccountDetailsSheet> {
         if (txs.isEmpty) {
           return Padding(
             padding: const EdgeInsets.symmetric(vertical: 16),
-            child: Text('Sin transacciones todavía', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)),
+            child: Text(
+              'Sin transacciones todavía',
+              style: TextStyle(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+            ),
           );
         }
         return Column(

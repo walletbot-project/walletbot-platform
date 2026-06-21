@@ -92,9 +92,8 @@ class _TransactionFiltersBarState extends State<TransactionFiltersBar> {
               Expanded(
                 child: TextField(
                   controller: _searchController,
-                  onChanged: (value) => widget.onChanged(
-                    widget.filter.copyWith(search: value),
-                  ),
+                  onChanged: (value) =>
+                      widget.onChanged(widget.filter.copyWith(search: value)),
                   decoration: InputDecoration(
                     hintText: 'Buscar',
                     prefixIcon: const Icon(Icons.search_rounded),
@@ -215,8 +214,12 @@ class _ActiveFilterChips extends StatelessWidget {
     if (filter.accountIds.isNotEmpty) {
       chips.add(
         _NamedFilterChip(
-          stream: _namesOf(repos.accounts.watchActive(), filter.accountIds,
-              (Account a) => a.id, (Account a) => a.name),
+          stream: _namesOf(
+            repos.accounts.watchActive(),
+            filter.accountIds,
+            (Account a) => a.id,
+            (Account a) => a.name,
+          ),
           fallback: 'cuentas',
           onDeleted: () => onChanged(filter.copyWith(accountIds: const {})),
         ),
@@ -226,8 +229,12 @@ class _ActiveFilterChips extends StatelessWidget {
     if (filter.categoryIds.isNotEmpty) {
       chips.add(
         _NamedFilterChip(
-          stream: _namesOf(repos.categories.watchActive(), filter.categoryIds,
-              (Category c) => c.id, (Category c) => c.name),
+          stream: _namesOf(
+            repos.categories.watchActive(),
+            filter.categoryIds,
+            (Category c) => c.id,
+            (Category c) => c.name,
+          ),
           fallback: 'categorías',
           onDeleted: () => onChanged(filter.copyWith(categoryIds: const {})),
         ),
@@ -237,8 +244,12 @@ class _ActiveFilterChips extends StatelessWidget {
     if (filter.tagIds.isNotEmpty) {
       chips.add(
         _NamedFilterChip(
-          stream: _namesOf(repos.tags.watchActive(), filter.tagIds,
-              (Tag t) => t.id, (Tag t) => t.name),
+          stream: _namesOf(
+            repos.tags.watchActive(),
+            filter.tagIds,
+            (Tag t) => t.id,
+            (Tag t) => t.name,
+          ),
           fallback: 'tags',
           onDeleted: () => onChanged(filter.copyWith(tagIds: const {})),
         ),
@@ -266,8 +277,7 @@ class _ActiveFilterChips extends StatelessWidget {
     String Function(T) nameOf,
   ) {
     return source.map(
-      (rows) =>
-          rows.where((r) => ids.contains(idOf(r))).map(nameOf).toList(),
+      (rows) => rows.where((r) => ids.contains(idOf(r))).map(nameOf).toList(),
     );
   }
 }
@@ -390,8 +400,8 @@ class _FiltersSheetState extends State<_FiltersSheet> {
                     onClear: _draft.dateRange == null
                         ? null
                         : () => setState(
-                            () => _draft =
-                                _draft.copyWith(clearDateRange: true),
+                            () =>
+                                _draft = _draft.copyWith(clearDateRange: true),
                           ),
                   ),
                   const SizedBox(height: 24),

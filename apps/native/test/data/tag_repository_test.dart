@@ -34,12 +34,10 @@ void main() {
       );
 
   group('reparent backfill', () {
-    test(
-        'new parent backfills the ancestor chain onto transactions of the tag '
+    test('new parent backfills the ancestor chain onto transactions of the tag '
         'and its descendants, without duplicating joins', () async {
       final grandparent = await repos.tags.create(name: 'GP');
-      final parent =
-          await repos.tags.create(name: 'P', parentId: grandparent);
+      final parent = await repos.tags.create(name: 'P', parentId: grandparent);
       final tag = await repos.tags.create(name: 'T');
       final child = await repos.tags.create(name: 'C', parentId: tag);
 
@@ -50,37 +48,42 @@ void main() {
 
       await repos.tags.update(tag, parentId: Value(parent));
 
-      expect(
-        (await repos.transactions.tagIdsOf(txnWithTag)).toSet(),
-        {tag, parent, grandparent},
-      );
-      expect(
-        (await repos.transactions.tagIdsOf(txnWithChild)).toSet(),
-        {child, parent, grandparent},
-      );
-      expect(
-        (await repos.transactions.tagIdsOf(txnWithBoth)).toSet(),
-        {tag, parent, grandparent},
-      );
+      expect((await repos.transactions.tagIdsOf(txnWithTag)).toSet(), {
+        tag,
+        parent,
+        grandparent,
+      });
+      expect((await repos.transactions.tagIdsOf(txnWithChild)).toSet(), {
+        child,
+        parent,
+        grandparent,
+      });
+      expect((await repos.transactions.tagIdsOf(txnWithBoth)).toSet(), {
+        tag,
+        parent,
+        grandparent,
+      });
     });
 
-    test('clearing the parent does NOT remove ancestor joins (asymmetric)',
-        () async {
-      final parent = await repos.tags.create(name: 'P');
-      final tag = await repos.tags.create(name: 'T');
-      final txn = await expenseTagged([tag]);
+    test(
+      'clearing the parent does NOT remove ancestor joins (asymmetric)',
+      () async {
+        final parent = await repos.tags.create(name: 'P');
+        final tag = await repos.tags.create(name: 'T');
+        final txn = await expenseTagged([tag]);
 
-      await repos.tags.update(tag, parentId: Value(parent));
-      expect((await repos.transactions.tagIdsOf(txn)).toSet(), {tag, parent});
+        await repos.tags.update(tag, parentId: Value(parent));
+        expect((await repos.transactions.tagIdsOf(txn)).toSet(), {tag, parent});
 
-      await repos.tags.update(tag, parentId: const Value(null));
-      expect(
-        (await repos.transactions.tagIdsOf(txn)).toSet(),
-        {tag, parent},
-        reason: 'backfill is add-only by design',
-      );
-      expect((await repos.tags.getById(tag))!.parentId, isNull);
-    });
+        await repos.tags.update(tag, parentId: const Value(null));
+        expect(
+          (await repos.transactions.tagIdsOf(txn)).toSet(),
+          {tag, parent},
+          reason: 'backfill is add-only by design',
+        );
+        expect((await repos.tags.getById(tag))!.parentId, isNull);
+      },
+    );
 
     test('re-setting the same parent does not backfill again', () async {
       final parent = await repos.tags.create(name: 'P');
@@ -97,8 +100,10 @@ void main() {
     test('cascade archives + tombstones every descendant', () async {
       final root = await repos.tags.create(name: 'root');
       final child = await repos.tags.create(name: 'child', parentId: root);
-      final grandchild =
-          await repos.tags.create(name: 'grandchild', parentId: child);
+      final grandchild = await repos.tags.create(
+        name: 'grandchild',
+        parentId: child,
+      );
       final unrelated = await repos.tags.create(name: 'unrelated');
 
       await repos.tags.archive(root, mode: TagArchiveMode.cascade);
@@ -110,16 +115,15 @@ void main() {
       expect((await repos.tags.getById(unrelated))!.archived, isFalse);
 
       final tombs = await (db.select(db.tombstones)).get();
-      expect(
-        tombs.map((t) => t.entityId).toSet(),
-        {root, child, grandchild},
-      );
+      expect(tombs.map((t) => t.entityId).toSet(), {root, child, grandchild});
     });
 
-    test('reparentChildren lifts direct children to the grandparent',
-        () async {
+    test('reparentChildren lifts direct children to the grandparent', () async {
       final grandparent = await repos.tags.create(name: 'gp');
-      final middle = await repos.tags.create(name: 'mid', parentId: grandparent);
+      final middle = await repos.tags.create(
+        name: 'mid',
+        parentId: grandparent,
+      );
       final child = await repos.tags.create(name: 'child', parentId: middle);
 
       await repos.tags.archive(middle, mode: TagArchiveMode.reparentChildren);
@@ -133,8 +137,7 @@ void main() {
       expect(tombs.map((t) => t.entityId).toList(), [middle]);
     });
 
-    test('reparentChildren with no grandparent makes children roots',
-        () async {
+    test('reparentChildren with no grandparent makes children roots', () async {
       final root = await repos.tags.create(name: 'root');
       final child = await repos.tags.create(name: 'child', parentId: root);
 

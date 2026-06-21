@@ -19,8 +19,7 @@ void main() {
     await db.close();
   });
 
-  Future<Tombstone> single() =>
-      (db.select(db.tombstones)).getSingle();
+  Future<Tombstone> single() => (db.select(db.tombstones)).getSingle();
 
   test('first call inserts a dirty tombstone', () async {
     await writeTombstone(db, 'transactions', 'txn-1');
@@ -33,26 +32,28 @@ void main() {
     expect(row.updatedAt, row.createdAt);
   });
 
-  test('re-delete bumps deletedAt/updatedAt, re-dirties, keeps createdAt',
-      () async {
-    await writeTombstone(db, 'tags', 'tag-1');
-    final first = await single();
+  test(
+    're-delete bumps deletedAt/updatedAt, re-dirties, keeps createdAt',
+    () async {
+      await writeTombstone(db, 'tags', 'tag-1');
+      final first = await single();
 
-    // Simulate the sync engine acking the tombstone (dirty cleared).
-    await (db.update(db.tombstones)).write(
-      const TombstonesCompanion(dirty: Value(false)),
-    );
+      // Simulate the sync engine acking the tombstone (dirty cleared).
+      await (db.update(
+        db.tombstones,
+      )).write(const TombstonesCompanion(dirty: Value(false)));
 
-    // Ensure the clock advances at millisecond resolution.
-    await Future<void>.delayed(const Duration(milliseconds: 5));
-    await writeTombstone(db, 'tags', 'tag-1');
+      // Ensure the clock advances at millisecond resolution.
+      await Future<void>.delayed(const Duration(milliseconds: 5));
+      await writeTombstone(db, 'tags', 'tag-1');
 
-    final second = await single();
-    expect(second.createdAt, first.createdAt);
-    expect(second.deletedAt.compareTo(first.deletedAt) > 0, isTrue);
-    expect(second.updatedAt.compareTo(first.updatedAt) > 0, isTrue);
-    expect(second.dirty, isTrue);
-  });
+      final second = await single();
+      expect(second.createdAt, first.createdAt);
+      expect(second.deletedAt.compareTo(first.deletedAt) > 0, isTrue);
+      expect(second.updatedAt.compareTo(first.updatedAt) > 0, isTrue);
+      expect(second.dirty, isTrue);
+    },
+  );
 
   test('tombstones for different entities do not collide', () async {
     await writeTombstone(db, 'tags', 'shared-id');
