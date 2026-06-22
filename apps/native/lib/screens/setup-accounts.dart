@@ -159,12 +159,12 @@ class _SetupAccountsScreenState extends State<SetupAccountsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      appBar: AppBar(title: const Text('Configurar cuentas')),
       body: Column(
         children: [
           Expanded(
             child: CustomScrollView(
               slivers: [
-                const SliverAppBar.large(title: Text('Configurar cuentas')),
                 SliverPadding(
                   padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
                   sliver: SliverToBoxAdapter(

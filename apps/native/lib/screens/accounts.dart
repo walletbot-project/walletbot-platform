@@ -8,6 +8,7 @@ import 'package:app/components/transaction_row.dart';
 import 'package:app/data/data.dart';
 import 'package:app/database.dart';
 import 'package:app/screens/create_account.dart';
+import 'package:app/screens/setup-accounts.dart';
 import 'package:app/shared/app_navigation.dart';
 import 'package:app/shared/money.dart';
 import 'package:drift/drift.dart' show Value;
@@ -49,6 +50,12 @@ class AccountsScreen extends StatelessWidget {
     );
   }
 
+  void _openSetupAccounts(BuildContext context) {
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const SetupAccountsScreen()),
+    );
+  }
+
   /// Opens the account details as a draggable, scrollable modal sheet. The
   /// sheet is a pushed route below the account-scoped providers, so the data
   /// layer and navigation controller are captured here and handed down.
@@ -75,6 +82,23 @@ class AccountsScreen extends StatelessWidget {
             tooltip: 'Nueva cuenta',
             onPressed: () => _openCreate(context),
             icon: const Icon(Icons.add),
+          ),
+          PopupMenuButton<String>(
+            icon: const Icon(Icons.more_vert),
+            tooltip: 'Más opciones',
+            onSelected: (value) {
+              if (value == 'setup') _openSetupAccounts(context);
+            },
+            itemBuilder: (_) => const [
+              PopupMenuItem(
+                value: 'setup',
+                child: ListTile(
+                  leading: Icon(Icons.playlist_add_rounded),
+                  title: Text('Crear varias cuentas'),
+                  contentPadding: EdgeInsets.zero,
+                ),
+              ),
+            ],
           ),
         ],
       ),
