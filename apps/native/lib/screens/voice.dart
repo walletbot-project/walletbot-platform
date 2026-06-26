@@ -8,7 +8,7 @@ import 'package:record/record.dart';
 
 import '../voice/voice_event.dart';
 import '../voice/voice_expense_command.dart';
-import 'voice-action-widget.dart';
+import 'voice_action_widget.dart';
 
 /// Whether the model should respond with audio (TTS) when the user starts
 /// the session by sending a text message. Hardcoded for now; future work will

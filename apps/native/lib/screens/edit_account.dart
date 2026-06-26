@@ -1,4 +1,4 @@
-import 'package:app/components/currency-picker.dart';
+import 'package:app/components/currency_picker.dart';
 import 'package:app/database.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';

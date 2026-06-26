@@ -1,7 +1,7 @@
 import 'package:app/data/data.dart';
 import 'package:app/database.dart';
 import 'package:app/screens/create_account.dart';
-import 'package:app/screens/edit-account.dart';
+import 'package:app/screens/edit_account.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
