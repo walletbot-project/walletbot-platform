@@ -8,6 +8,7 @@ class TransactionRow extends StatelessWidget {
     required this.amountCents,
     required this.dateCheck,
     this.description,
+    this.currency,
     this.currencySymbol = '\$',
     this.onTap,
   });
@@ -23,6 +24,7 @@ class TransactionRow extends StatelessWidget {
   final bool dateCheck;
 
   final String? description;
+  final String? currency;
   final String currencySymbol;
   final VoidCallback? onTap;
 
@@ -30,7 +32,9 @@ class TransactionRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isPositive = amountCents > 0;
-    final amountColor = isPositive ? Colors.green.shade600 : theme.colorScheme.onSurface;
+    final amountColor = isPositive
+        ? Colors.green.shade600
+        : theme.colorScheme.onSurface;
 
     return Material(
       color: theme.colorScheme.surface,
@@ -52,7 +56,10 @@ class TransactionRow extends StatelessWidget {
                   children: [
                     Text(
                       title,
-                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w500,
+                      ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -60,7 +67,10 @@ class TransactionRow extends StatelessWidget {
                       const SizedBox(height: 2),
                       Text(
                         description!,
-                        style: TextStyle(fontSize: 13, color: theme.colorScheme.onSurfaceVariant),
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
@@ -70,8 +80,14 @@ class TransactionRow extends StatelessWidget {
               ),
               const SizedBox(width: 12),
               Text(
-                _formatSignedAmount(amountCents, currencySymbol),
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: amountColor),
+                currency == null
+                    ? _formatSignedAmount(amountCents, currencySymbol)
+                    : formatMoney(amountCents, currency!),
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  color: amountColor,
+                ),
               ),
             ],
           ),
@@ -91,7 +107,11 @@ class _DateCheckIcon extends StatelessWidget {
     if (dateConfirmed) {
       return Icon(Icons.check_rounded, color: Colors.green.shade600, size: 22);
     }
-    return Icon(Icons.help_outline_rounded, color: Colors.amber.shade700, size: 22);
+    return Icon(
+      Icons.help_outline_rounded,
+      color: Colors.amber.shade700,
+      size: 22,
+    );
   }
 }
 

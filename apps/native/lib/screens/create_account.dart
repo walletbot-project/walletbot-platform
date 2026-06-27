@@ -1,7 +1,68 @@
-import 'package:app/components/currency_picker.dart';
+import 'package:app/components/account_icons.dart';
+import 'package:app/components/color_picker.dart';
+import 'package:app/components/color_utils.dart';
+import 'package:app/components/icon_picker.dart';
 import 'package:app/data/data.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+
+// (ISO code, Spanish name) — sorted alphabetically by code
+const _currencies = [
+  ('AED', 'Dírham emiratí'),
+  ('ARS', 'Peso argentino'),
+  ('AUD', 'Dólar australiano'),
+  ('BOB', 'Boliviano'),
+  ('BRL', 'Real brasileño'),
+  ('CAD', 'Dólar canadiense'),
+  ('CHF', 'Franco suizo'),
+  ('CLP', 'Peso chileno'),
+  ('CNY', 'Yuan chino'),
+  ('COP', 'Peso colombiano'),
+  ('CRC', 'Colón costarricense'),
+  ('CUP', 'Peso cubano'),
+  ('DKK', 'Corona danesa'),
+  ('DOP', 'Peso dominicano'),
+  ('EGP', 'Libra egipcia'),
+  ('EUR', 'Euro'),
+  ('GBP', 'Libra esterlina'),
+  ('GTQ', 'Quetzal guatemalteco'),
+  ('HKD', 'Dólar de Hong Kong'),
+  ('HNL', 'Lempira hondureño'),
+  ('HUF', 'Forinto húngaro'),
+  ('IDR', 'Rupia indonesia'),
+  ('ILS', 'Séquel israelí'),
+  ('INR', 'Rupia india'),
+  ('JPY', 'Yen japonés'),
+  ('KRW', 'Won surcoreano'),
+  ('MXN', 'Peso mexicano'),
+  ('MYR', 'Ringgit malayo'),
+  ('NGN', 'Naira nigeriana'),
+  ('NIO', 'Córdoba nicaragüense'),
+  ('NOK', 'Corona noruega'),
+  ('NZD', 'Dólar neozelandés'),
+  ('PAB', 'Balboa panameño'),
+  ('PEN', 'Sol peruano'),
+  ('PHP', 'Peso filipino'),
+  ('PKR', 'Rupia pakistaní'),
+  ('PLN', 'Esloti polaco'),
+  ('PYG', 'Guaraní paraguayo'),
+  ('RON', 'Leu rumano'),
+  ('RUB', 'Rublo ruso'),
+  ('SAR', 'Riyal saudí'),
+  ('SEK', 'Corona sueca'),
+  ('SGD', 'Dólar singapurense'),
+  ('THB', 'Baht tailandés'),
+  ('TRY', 'Lira turca'),
+  ('TWD', 'Nuevo dólar taiwanés'),
+  ('UAH', 'Grivna ucraniana'),
+  ('USD', 'Dólar estadounidense'),
+  ('UYU', 'Peso uruguayo'),
+  ('VES', 'Bolívar venezolano'),
+  ('VND', 'Dong vietnamita'),
+  ('ZAR', 'Rand sudafricano'),
+];
+
+const _suggestedCurrencies = ['ARS', 'USD', 'EUR', 'BRL'];
 
 const _nameSuggestions = [
   (label: 'Efectivo', icon: Icons.payments_rounded),
@@ -21,6 +82,8 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
   final _nameController = TextEditingController();
   final _balanceController = TextEditingController();
   String _currency = 'ARS';
+  Color _color = accountDefaultColor;
+  IconData _icon = accountDefaultIcon;
   bool _saving = false;
 
   @override
@@ -30,9 +93,11 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
     super.dispose();
   }
 
-  void _applySuggestion(String name) {
+  void _applySuggestion(({String label, IconData icon}) suggestion) {
+    final name = suggestion.label;
     _nameController.text = name;
     _nameController.selection = TextSelection.collapsed(offset: name.length);
+    setState(() => _icon = suggestion.icon);
   }
 
   Future<void> _pickCurrency() async {
@@ -40,9 +105,19 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
       context: context,
       isScrollControlled: true,
       showDragHandle: true,
-      builder: (_) => CurrencyPickerSheet(selected: _currency),
+      builder: (_) => _CurrencyPicker(selected: _currency),
     );
     if (picked != null) setState(() => _currency = picked);
+  }
+
+  Future<void> _pickIcon() async {
+    final picked = await showIconPickerDialog(
+      context,
+      selected: _icon,
+      options: accountIconOptions,
+      accent: _color,
+    );
+    if (picked != null) setState(() => _icon = picked);
   }
 
   Future<void> _submit() async {
@@ -58,10 +133,12 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
     setState(() => _saving = true);
     try {
       await context.read<AppRepositories>().accounts.create(
-            name: _nameController.text.trim(),
-            currency: _currency,
-            initialBalanceCents: initialAmountCents,
-          );
+        name: _nameController.text.trim(),
+        currency: _currency,
+        color: colorToHex(_color),
+        icon: accountIconName(_icon),
+        initialBalanceCents: initialAmountCents,
+      );
       if (mounted) Navigator.of(context).pop();
     } catch (e, st) {
       debugPrint('Error creating account: $e\n$st');
@@ -93,7 +170,7 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                   ActionChip(
                     avatar: Icon(s.icon),
                     label: Text(s.label),
-                    onPressed: () => _applySuggestion(s.label),
+                    onPressed: () => _applySuggestion(s),
                   ),
               ],
             ),
@@ -110,6 +187,41 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
               validator: (v) =>
                   (v == null || v.trim().isEmpty) ? 'Ingresá un nombre' : null,
             ),
+            const SizedBox(height: 24),
+            Text(
+              'Ícono y color',
+              style: Theme.of(context).textTheme.labelLarge,
+            ),
+            const SizedBox(height: 12),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Tappable icon tile, tinted with the selected accent.
+                InkWell(
+                  onTap: _pickIcon,
+                  borderRadius: BorderRadius.circular(18),
+                  child: Container(
+                    width: 56,
+                    height: 56,
+                    decoration: BoxDecoration(
+                      color: _color.withValues(alpha: 0.28),
+                      borderRadius: BorderRadius.circular(18),
+                    ),
+                    alignment: Alignment.center,
+                    child: Icon(_icon, size: 28, color: _color),
+                  ),
+                ),
+                const SizedBox(width: 16),
+                // Inline accent swatches.
+                Expanded(
+                  child: ColorPicker(
+                    selected: _color,
+                    options: colorOptions,
+                    onChanged: (color) => setState(() => _color = color),
+                  ),
+                ),
+              ],
+            ),
             const SizedBox(height: 16),
             InkWell(
               onTap: _pickCurrency,
@@ -124,45 +236,25 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
               ),
             ),
             const SizedBox(height: 16),
-            ExpansionTile(
-              title: const Text('Balance inicial'),
-              subtitle: const Text('Opcional'),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(4),
-                side: BorderSide(
-                  color: Theme.of(context).colorScheme.outline,
-                ),
+            TextFormField(
+              controller: _balanceController,
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
               ),
-              collapsedShape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(4),
-                side: BorderSide(
-                  color: Theme.of(context).colorScheme.outline,
-                ),
+              decoration: InputDecoration(
+                labelText: 'Balance inicial (opcional)',
+                hintText: '0.00',
+                prefixText: '$_currency ',
+                border: const OutlineInputBorder(),
               ),
-              childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-              children: [
-                TextFormField(
-                  controller: _balanceController,
-                  keyboardType: const TextInputType.numberWithOptions(
-                    decimal: true,
-                  ),
-                  decoration: InputDecoration(
-                    labelText: 'Monto',
-                    hintText: '0.00',
-                    prefixText: '$_currency ',
-                    border: const OutlineInputBorder(),
-                  ),
-                  validator: (v) {
-                    if (v == null || v.trim().isEmpty) return null;
-                    final parsed =
-                        double.tryParse(v.trim().replaceAll(',', '.'));
-                    if (parsed == null || parsed < 0) {
-                      return 'Ingresá un monto válido';
-                    }
-                    return null;
-                  },
-                ),
-              ],
+              validator: (v) {
+                if (v == null || v.trim().isEmpty) return null;
+                final parsed = double.tryParse(v.trim().replaceAll(',', '.'));
+                if (parsed == null || parsed < 0) {
+                  return 'Ingresá un monto válido';
+                }
+                return null;
+              },
             ),
             const SizedBox(height: 32),
             FilledButton(
@@ -173,6 +265,111 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                       child: CircularProgressIndicator(strokeWidth: 2),
                     )
                   : const Text('Crear cuenta'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _CurrencyPicker extends StatefulWidget {
+  const _CurrencyPicker({required this.selected});
+
+  final String selected;
+
+  @override
+  State<_CurrencyPicker> createState() => _CurrencyPickerState();
+}
+
+class _CurrencyPickerState extends State<_CurrencyPicker> {
+  final _searchController = TextEditingController();
+  String _query = '';
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  List<(String, String)> get _filtered {
+    if (_query.isEmpty) return _currencies;
+    final q = _query.toLowerCase();
+    return _currencies
+        .where(
+          (c) =>
+              c.$1.toLowerCase().contains(q) || c.$2.toLowerCase().contains(q),
+        )
+        .toList();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final filtered = _filtered;
+
+    return DraggableScrollableSheet(
+      initialChildSize: 0.7,
+      minChildSize: 0.4,
+      maxChildSize: 0.9,
+      expand: false,
+      builder: (context, scrollController) => Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Elegí una moneda',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _searchController,
+              decoration: const InputDecoration(
+                hintText: 'Buscar moneda…',
+                prefixIcon: Icon(Icons.search),
+                border: OutlineInputBorder(),
+                isDense: true,
+              ),
+              onChanged: (v) => setState(() => _query = v),
+            ),
+            if (_query.isEmpty) ...[
+              const SizedBox(height: 16),
+              Text(
+                'Más usadas',
+                style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                children: [
+                  for (final code in _suggestedCurrencies)
+                    FilterChip(
+                      label: Text(code),
+                      selected: widget.selected == code,
+                      onSelected: (_) => Navigator.of(context).pop(code),
+                    ),
+                ],
+              ),
+              const Divider(height: 24),
+            ] else
+              const SizedBox(height: 8),
+            Expanded(
+              child: ListView.builder(
+                controller: scrollController,
+                itemCount: filtered.length,
+                itemBuilder: (context, i) {
+                  final (code, name) = filtered[i];
+                  return ListTile(
+                    dense: true,
+                    title: Text(code),
+                    subtitle: Text(name),
+                    selected: widget.selected == code,
+                    onTap: () => Navigator.of(context).pop(code),
+                  );
+                },
+              ),
             ),
           ],
         ),

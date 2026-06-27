@@ -24,12 +24,22 @@ void main() {
   Future<void> clearAllDirty() async {
     // Simulates the sync engine's ack so the next write's dirty flag is
     // attributable to that write alone.
-    await db.update(db.accounts).write(const AccountsCompanion(dirty: Value(false)));
-    await db.update(db.categories).write(const CategoriesCompanion(dirty: Value(false)));
+    await db
+        .update(db.accounts)
+        .write(const AccountsCompanion(dirty: Value(false)));
+    await db
+        .update(db.categories)
+        .write(const CategoriesCompanion(dirty: Value(false)));
     await db.update(db.tags).write(const TagsCompanion(dirty: Value(false)));
-    await db.update(db.transactions).write(const TransactionsCompanion(dirty: Value(false)));
-    await db.update(db.transactionTags).write(const TransactionTagsCompanion(dirty: Value(false)));
-    await db.update(db.tombstones).write(const TombstonesCompanion(dirty: Value(false)));
+    await db
+        .update(db.transactions)
+        .write(const TransactionsCompanion(dirty: Value(false)));
+    await db
+        .update(db.transactionTags)
+        .write(const TransactionTagsCompanion(dirty: Value(false)));
+    await db
+        .update(db.tombstones)
+        .write(const TombstonesCompanion(dirty: Value(false)));
   }
 
   Future<Tombstone?> tombstoneFor(String table, String id) =>
@@ -196,8 +206,7 @@ void main() {
       );
     });
 
-    test('addBalanceAdjustment stores delta against current balance',
-        () async {
+    test('addBalanceAdjustment stores delta against current balance', () async {
       await repos.transactions.addIncome(
         accountId: accountId,
         categoryId: categoryId,
@@ -214,8 +223,10 @@ void main() {
       expect(row.amount, BigInt.from(15000));
       expect(row.balanceAfter, BigInt.from(25000));
       expect(row.categoryId, '');
-      expect(await repos.accounts.getBalanceCents(accountId),
-          BigInt.from(25000));
+      expect(
+        await repos.accounts.getBalanceCents(accountId),
+        BigInt.from(25000),
+      );
     });
 
     test('update bumps updatedAt and re-dirties', () async {

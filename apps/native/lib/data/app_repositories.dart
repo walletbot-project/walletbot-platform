@@ -16,12 +16,12 @@ import 'repositories/transaction_repository.dart';
 /// raw database.
 class AppRepositories {
   AppRepositories(AppDatabase db)
-      : accounts = AccountRepository(db),
-        categories = CategoryRepository(db),
-        tags = TagRepository(db),
-        transactions = TransactionRepository(db),
-        summaries = SummaryRepository(db),
-        resolver = EntityResolver(db);
+    : accounts = AccountRepository(db),
+      categories = CategoryRepository(db),
+      tags = TagRepository(db),
+      transactions = TransactionRepository(db),
+      summaries = SummaryRepository(db),
+      resolver = EntityResolver(db);
 
   final AccountRepository accounts;
   final CategoryRepository categories;
