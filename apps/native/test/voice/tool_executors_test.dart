@@ -28,41 +28,47 @@ void main() {
     expect(res, {'ok': false, 'error': 'Unknown tool: nope'});
   });
 
-  test('full expense flow: create account/category, add, list, balance',
-      () async {
-    final acc = await tools.execute('createAccount', {
-      'name': 'Cash',
-      'currency': 'ARS',
-    });
-    expect(acc['ok'], isTrue);
+  test(
+    'full expense flow: create account/category, add, list, balance',
+    () async {
+      final acc = await tools.execute('createAccount', {
+        'name': 'Cash',
+        'currency': 'ARS',
+      });
+      expect(acc['ok'], isTrue);
 
-    final cat = await tools.execute('createCategory', {'name': 'Food'});
-    expect(cat['ok'], isTrue);
+      final cat = await tools.execute('createCategory', {'name': 'Food'});
+      expect(cat['ok'], isTrue);
 
-    final exp = await tools.execute('addExpense', {
-      'accountIdOrName': 'cash',
-      'categoryIdOrName': 'food',
-      'name': 'Sandwich',
-      'amount': 15.5,
-      'dateConfirmed': 'true',
-    });
-    expect(exp['ok'], isTrue);
+      final exp = await tools.execute('addExpense', {
+        'accountIdOrName': 'cash',
+        'categoryIdOrName': 'food',
+        'name': 'Sandwich',
+        'amount': 15.5,
+        'dateConfirmed': 'true',
+      });
+      expect(exp['ok'], isTrue);
 
-    final list = await tools.execute('listTransactions', {});
-    expect(list['ok'], isTrue);
-    final items = list['items'] as List;
-    expect(items, hasLength(1));
-    final item = items.single as Map<String, dynamic>;
-    expect(item['amount'], 15.5, reason: 'wire amounts are cents/100 doubles');
-    expect(item['type'], 'expense');
+      final list = await tools.execute('listTransactions', {});
+      expect(list['ok'], isTrue);
+      final items = list['items'] as List;
+      expect(items, hasLength(1));
+      final item = items.single as Map<String, dynamic>;
+      expect(
+        item['amount'],
+        15.5,
+        reason: 'wire amounts are cents/100 doubles',
+      );
+      expect(item['type'], 'expense');
 
-    final balance = await tools.execute('getAccountBalance', {
-      'idOrName': 'Cash',
-    });
-    expect(balance['ok'], isTrue);
-    expect(balance['balance'], -15.5);
-    expect(balance['currency'], 'ARS');
-  });
+      final balance = await tools.execute('getAccountBalance', {
+        'idOrName': 'Cash',
+      });
+      expect(balance['ok'], isTrue);
+      expect(balance['balance'], -15.5);
+      expect(balance['currency'], 'ARS');
+    },
+  );
 
   test('ambiguous account surfaces candidates on getAccount', () async {
     await tools.execute('createAccount', {'name': 'Cash', 'currency': 'ARS'});
@@ -121,8 +127,10 @@ void main() {
       'name': 'Loop',
       'amount': 10,
     });
-    expect(same,
-        {'ok': false, 'error': 'Source and destination accounts must differ'});
+    expect(same, {
+      'ok': false,
+      'error': 'Source and destination accounts must differ',
+    });
 
     final cross = await tools.execute('addTransfer', {
       'fromAccountIdOrName': 'Cash',
@@ -131,8 +139,10 @@ void main() {
       'amount': 10,
     });
     expect(cross['ok'], isFalse);
-    expect(cross['error'],
-        'Cross-currency transfers require toAmount (or exchangeRate to derive it)');
+    expect(
+      cross['error'],
+      'Cross-currency transfers require toAmount (or exchangeRate to derive it)',
+    );
   });
 
   test('summaries serialize cents as doubles', () async {

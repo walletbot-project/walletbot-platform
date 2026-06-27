@@ -17,6 +17,7 @@ export type ActivityTransaction = {
     id: string
     type: TransactionType
     name: string
+    description?: string | null
     date: bigint
     createdAt: bigint
     accountId: string
@@ -222,7 +223,13 @@ export function matchesFilters(
     if (type && t.type !== type) return false
 
     const search = f.search.trim().toLowerCase()
-    if (search && !t.name.toLowerCase().includes(search)) return false
+    if (search) {
+        const nameMatches = t.name.toLowerCase().includes(search)
+        const descriptionMatches = (t.description ?? '')
+            .toLowerCase()
+            .includes(search)
+        if (!nameMatches && !descriptionMatches) return false
+    }
 
     if (f.accountIds.length && !f.accountIds.includes(t.accountId)) return false
     if (f.categoryIds.length && !f.categoryIds.includes(t.categoryId))

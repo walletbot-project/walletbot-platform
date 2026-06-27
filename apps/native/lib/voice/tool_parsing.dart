@@ -17,8 +17,11 @@ BigInt parseNaturalDate(String input, {DateTime? now}) {
   final trimmed = input.trim().toLowerCase();
 
   BigInt asDayOffset(int offset) {
-    final d = DateTime(reference.year, reference.month, reference.day)
-        .add(Duration(days: offset));
+    final d = DateTime(
+      reference.year,
+      reference.month,
+      reference.day,
+    ).add(Duration(days: offset));
     return BigInt.from(d.millisecondsSinceEpoch);
   }
 

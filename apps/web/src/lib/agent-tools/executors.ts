@@ -106,6 +106,8 @@ export const toolExecutors = {
                 id: c.id,
                 name: c.name,
                 description: c.description,
+                color: c.color,
+                icon: c.icon,
             })),
         }
     }),
@@ -122,6 +124,8 @@ export const toolExecutors = {
                 id,
                 name: args.name,
                 description: args.description,
+                color: args.color,
+                icon: args.icon,
             })
             return { ok: true, id }
         },
@@ -135,6 +139,8 @@ export const toolExecutors = {
                 id: r.entity.id,
                 name: args.name,
                 description: args.description,
+                color: args.color,
+                icon: args.icon,
             })
             return { ok: true, id: r.entity.id }
         },
@@ -344,12 +350,11 @@ export const toolExecutors = {
         const toR = await resolveAccount(ctx, args.toAccountIdOrName)
         if (!toR.ok) return resolutionError('Destination account', toR)
 
-        let categoryId: string | undefined
-        if (args.categoryIdOrName) {
-            const catR = await resolveCategory(ctx, args.categoryIdOrName)
-            if (!catR.ok) return resolutionError('Category', catR)
-            categoryId = catR.entity.id
+        if (!args.categoryIdOrName) {
+            return { ok: false, error: 'Category is required' }
         }
+        const catR = await resolveCategory(ctx, args.categoryIdOrName)
+        if (!catR.ok) return resolutionError('Category', catR)
 
         const id = newId()
         await ctx.client.mutation(api.transactions.mutations.createTransfer, {
@@ -364,7 +369,7 @@ export const toolExecutors = {
                     ? parseAmountToCents(args.toAmount)
                     : undefined,
             exchangeRate: args.exchangeRate,
-            categoryId,
+            categoryId: catR.entity.id,
             date: parseOptionalDate(args.date),
             dateConfirmed: args.dateConfirmed,
         })

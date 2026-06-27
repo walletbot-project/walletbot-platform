@@ -37,10 +37,11 @@ Expression<bool> _touchesAccount($TransactionsTable t, String accountId) =>
     (t.type.equals('transfer') & t.toAccountId.equals(accountId));
 
 Future<BigInt> computeAccountBalance(AppDatabase db, String accountId) async {
-  final rows = await (db.select(db.transactions)
-        ..where((t) => t.archived.equals(false))
-        ..where((t) => _touchesAccount(t, accountId)))
-      .get();
+  final rows =
+      await (db.select(db.transactions)
+            ..where((t) => t.archived.equals(false))
+            ..where((t) => _touchesAccount(t, accountId)))
+          .get();
   return accountBalanceFromRows(rows, accountId);
 }
 

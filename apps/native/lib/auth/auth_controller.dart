@@ -26,10 +26,12 @@ class AuthController extends ChangeNotifier {
   List<UserAccount> _accounts = const [];
   String? _activeId;
   AuthHandleWrapper? _authHandle;
+  bool _convexAuthenticated = false;
   Future<void> _persistQueue = Future.value();
 
   List<UserAccount> get accounts => List.unmodifiable(_accounts);
   String? get activeId => _activeId;
+  bool get convexAuthenticated => _convexAuthenticated;
   UserAccount? get activeAccount {
     if (_activeId == null) return null;
     for (final a in _accounts) {
@@ -215,6 +217,11 @@ class AuthController extends ChangeNotifier {
     }
     _authHandle = await ConvexClient.instance.setAuthWithRefresh(
       fetchToken: _fetchFreshAccessToken,
+      onAuthChange: (isAuthenticated) {
+        if (_convexAuthenticated == isAuthenticated) return;
+        _convexAuthenticated = isAuthenticated;
+        notifyListeners();
+      },
     );
   }
 
@@ -223,6 +230,10 @@ class AuthController extends ChangeNotifier {
     _authHandle = null;
     if (handle != null) {
       handle.dispose();
+    }
+    if (_convexAuthenticated) {
+      _convexAuthenticated = false;
+      notifyListeners();
     }
     await ConvexClient.instance.setAuth(token: null);
   }

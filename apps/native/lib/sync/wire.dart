@@ -14,8 +14,7 @@ const _intKey = r'$integer';
 
 /// Encodes a `BigInt` as Convex's int64 envelope.
 Map<String, String> int64Wire(BigInt value) {
-  final bytes = ByteData(8)
-    ..setInt64(0, value.toInt(), Endian.little);
+  final bytes = ByteData(8)..setInt64(0, value.toInt(), Endian.little);
   // BigInt.toInt() truncates to a Dart int (64-bit on native). We only
   // store epoch-ms timestamps and cents — well within int64 range.
   return {_intKey: base64Encode(bytes.buffer.asUint8List())};
