@@ -345,6 +345,139 @@ class AppDatabase extends _$AppDatabase {
     );
   }
 
+  Stream<List<Account>> watchAccounts() =>
+      (select(accounts)
+            ..where((a) => a.archived.equals(false))
+            ..orderBy([(a) => OrderingTerm(expression: a.createdAt)]))
+          .watch();
+
+  Future<void> insertAccount({
+    required String id,
+    required String name,
+    required String currency,
+  }) {
+    final now = BigInt.from(DateTime.now().millisecondsSinceEpoch);
+    return into(accounts).insert(
+      AccountsCompanion.insert(
+        id: id,
+        name: name,
+        currency: currency,
+        createdAt: now,
+        updatedAt: now,
+        dirty: const Value(true),
+      ),
+    );
+  }
+
+  Future<void> insertTransaction({
+    required String id,
+    required String type,
+    required String name,
+    required String status,
+    required BigInt date,
+    required String accountId,
+    required String categoryId,
+    required BigInt amount,
+    required String currency,
+    BigInt? balanceAfter,
+  }) {
+    final now = BigInt.from(DateTime.now().millisecondsSinceEpoch);
+    return into(transactions).insert(
+      TransactionsCompanion.insert(
+        id: id,
+        type: type,
+        name: name,
+        status: status,
+        date: date,
+        accountId: accountId,
+        categoryId: categoryId,
+        amount: amount,
+        currency: currency,
+        balanceAfter: balanceAfter != null
+            ? Value(balanceAfter)
+            : const Value.absent(),
+        createdAt: now,
+        updatedAt: now,
+        dirty: const Value(true),
+      ),
+    );
+  }
+
+  // ── Read helpers ──────────────────────────────────────────────────────────
+
+  Future<Transaction?> getTransaction(String id) =>
+      (select(transactions)..where((t) => t.id.equals(id))).getSingleOrNull();
+
+  Future<Account?> getAccount(String id) =>
+      (select(accounts)..where((a) => a.id.equals(id))).getSingleOrNull();
+
+  Future<Category?> getCategory(String id) =>
+      (select(categories)..where((c) => c.id.equals(id))).getSingleOrNull();
+
+  Future<List<Category>> listActiveCategories() =>
+      (select(categories)
+            ..where((c) => c.archived.equals(false))
+            ..orderBy([(c) => OrderingTerm(expression: c.name)]))
+          .get();
+
+  // ── Patch helpers (used by voice action widget edit forms) ─────────────────
+
+  Future<void> patchTransaction(
+    String id, {
+    required String name,
+    required BigInt date,
+    BigInt? amount,
+    String? categoryId,
+    String? description,
+    String? status,
+  }) {
+    final now = BigInt.from(DateTime.now().millisecondsSinceEpoch);
+    return (update(transactions)..where((t) => t.id.equals(id))).write(
+      TransactionsCompanion(
+        name: Value(name),
+        date: Value(date),
+        amount: amount != null ? Value(amount) : const Value.absent(),
+        categoryId: categoryId != null ? Value(categoryId) : const Value.absent(),
+        description: Value(description),
+        status: status != null ? Value(status) : const Value.absent(),
+        updatedAt: Value(now),
+        dirty: const Value(true),
+      ),
+    );
+  }
+
+  Future<void> patchAccount(
+    String id, {
+    required String name,
+    String? description,
+  }) {
+    final now = BigInt.from(DateTime.now().millisecondsSinceEpoch);
+    return (update(accounts)..where((a) => a.id.equals(id))).write(
+      AccountsCompanion(
+        name: Value(name),
+        description: Value(description),
+        updatedAt: Value(now),
+        dirty: const Value(true),
+      ),
+    );
+  }
+
+  Future<void> patchCategory(
+    String id, {
+    required String name,
+    String? description,
+  }) {
+    final now = BigInt.from(DateTime.now().millisecondsSinceEpoch);
+    return (update(categories)..where((c) => c.id.equals(id))).write(
+      CategoriesCompanion(
+        name: Value(name),
+        description: Value(description),
+        updatedAt: Value(now),
+        dirty: const Value(true),
+      ),
+    );
+  }
+
   static Future<void> deleteForUser(String userId) async {
     final dir = await getApplicationSupportDirectory();
     final base = p.join(dir.path, '${_dbNameFor(userId)}.sqlite');

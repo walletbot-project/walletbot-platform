@@ -181,16 +181,20 @@ class _AppMainState extends State<AppMain> {
           // account-scoped providers: capture the active account's data layer
           // here, and dismiss the route if the account changes while open so
           // the agent can never write to a closed/foreign database.
+          final db = context.read<AppDatabase>();
           final repositories = context.read<AppRepositories>();
           final accountId = context.read<AuthController>().activeAccount?.id;
           Navigator.of(context).push(
             MaterialPageRoute(
-              builder: (_) => PopOnAccountSwitch(
-                accountId: accountId,
-                child: VoiceScreen(
-                  commandFactory: GeminiVoiceExpenseCommandFactory(
-                    repositories: repositories,
-                    convexSiteUrl: AppConfig.convexSiteUrl,
+              builder: (_) => Provider<AppDatabase>.value(
+                value: db,
+                child: PopOnAccountSwitch(
+                  accountId: accountId,
+                  child: VoiceScreen(
+                    commandFactory: GeminiVoiceExpenseCommandFactory(
+                      repositories: repositories,
+                      convexSiteUrl: AppConfig.convexSiteUrl,
+                    ),
                   ),
                 ),
               ),
