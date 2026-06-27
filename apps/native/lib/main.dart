@@ -245,7 +245,7 @@ class _ReauthBanner extends StatelessWidget {
                     // Dismissing the Google sheet isn't a failure to report.
                     if (e.code != GoogleSignInExceptionCode.canceled) {
                       messenger.showSnackBar(
-                        SnackBar(content: Text('Reconnect failed: $e')),
+                        SnackBar(content: Text('No se pudo reconectar: $e')),
                       );
                     }
                   } catch (e) {

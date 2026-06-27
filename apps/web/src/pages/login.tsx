@@ -65,7 +65,7 @@ export function Login({ mode }: { mode: AuthMode }) {
                       })
 
             if (result.error) {
-                throw new Error(result.error.message ?? 'Authentication failed')
+                throw new Error(result.error.message ?? 'No se pudo autenticar')
             }
 
             navigate(from, { replace: true })
@@ -76,7 +76,7 @@ export function Login({ mode }: { mode: AuthMode }) {
             // email exists or which provider it uses.
             setError(
                 mode === 'sign-in'
-                    ? `${message}. If you signed up with Google, use "Continue with Google" instead.`
+                    ? `${message}. Si te registraste con Google, usá "Continuar con Google".`
                     : message,
             )
         } finally {
@@ -92,7 +92,7 @@ export function Login({ mode }: { mode: AuthMode }) {
                         Wallet Bot
                     </h1>
                     <p className="text-sm text-muted-foreground">
-                        Sign in to continue
+                        Iniciá sesión para continuar
                     </p>
                 </div>
 
@@ -104,7 +104,7 @@ export function Login({ mode }: { mode: AuthMode }) {
                         aria-pressed={mode === 'sign-in'}
                         onClick={() => goToMode('sign-in')}
                     >
-                        Sign in
+                        Iniciar sesión
                     </Button>
                     <Button
                         type="button"
@@ -113,7 +113,7 @@ export function Login({ mode }: { mode: AuthMode }) {
                         aria-pressed={mode === 'sign-up'}
                         onClick={() => goToMode('sign-up')}
                     >
-                        Create
+                        Crear cuenta
                     </Button>
                 </div>
 
@@ -123,14 +123,14 @@ export function Login({ mode }: { mode: AuthMode }) {
                 >
                     {mode === 'sign-up' ? (
                         <div className="grid gap-2">
-                            <Label htmlFor="name">Name</Label>
+                            <Label htmlFor="name">Nombre</Label>
                             <div className="relative">
                                 <UserRound className="-translate-y-1/2 pointer-events-none absolute top-1/2 left-2.5 size-4 text-muted-foreground" />
                                 <Input
                                     id="name"
                                     name="name"
                                     autoComplete="name"
-                                    placeholder="Your name"
+                                    placeholder="Tu nombre"
                                     className="pl-8"
                                     disabled={loading !== null}
                                 />
@@ -139,7 +139,7 @@ export function Login({ mode }: { mode: AuthMode }) {
                     ) : null}
 
                     <div className="grid gap-2">
-                        <Label htmlFor="email">Email</Label>
+                        <Label htmlFor="email">Correo</Label>
                         <div className="relative">
                             <Mail className="-translate-y-1/2 pointer-events-none absolute top-1/2 left-2.5 size-4 text-muted-foreground" />
                             <Input
@@ -156,7 +156,7 @@ export function Login({ mode }: { mode: AuthMode }) {
                     </div>
 
                     <div className="grid gap-2">
-                        <Label htmlFor="password">Password</Label>
+                        <Label htmlFor="password">Contraseña</Label>
                         <div className="relative">
                             <Lock className="-translate-y-1/2 pointer-events-none absolute top-1/2 left-2.5 size-4 text-muted-foreground" />
                             <Input
@@ -170,8 +170,8 @@ export function Login({ mode }: { mode: AuthMode }) {
                                 }
                                 placeholder={
                                     mode === 'sign-in'
-                                        ? 'Your password'
-                                        : 'At least 8 characters'
+                                        ? 'Tu contraseña'
+                                        : 'Al menos 8 caracteres'
                                 }
                                 className="pl-8"
                                 minLength={8}
@@ -195,13 +195,13 @@ export function Login({ mode }: { mode: AuthMode }) {
                         {loading === 'email' ? (
                             <LoaderCircle className="animate-spin" />
                         ) : null}
-                        {mode === 'sign-in' ? 'Sign in' : 'Create account'}
+                        {mode === 'sign-in' ? 'Iniciar sesión' : 'Crear cuenta'}
                     </Button>
                 </form>
 
                 <div className="flex w-full items-center gap-3">
                     <Separator className="flex-1" />
-                    <span className="text-xs text-muted-foreground">or</span>
+                    <span className="text-xs text-muted-foreground">o</span>
                     <Separator className="flex-1" />
                 </div>
 
@@ -221,8 +221,8 @@ export function Login({ mode }: { mode: AuthMode }) {
                         />
                     )}
                     {loading === 'google'
-                        ? 'Signing in...'
-                        : 'Continue with Google'}
+                        ? 'Iniciando sesión...'
+                        : 'Continuar con Google'}
                 </Button>
             </div>
         </div>
