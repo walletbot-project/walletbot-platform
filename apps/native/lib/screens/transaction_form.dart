@@ -42,6 +42,7 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
   bool _updatingTransferAmounts = false;
   bool _sourceAmountTouched = false;
   bool _destinationAmountTouched = false;
+  String? _transferAccountError;
 
   @override
   void didChangeDependencies() {
@@ -212,6 +213,7 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
     );
     if (account == null || !mounted) return;
     setState(() {
+      _transferAccountError = null;
       if (destination) {
         _selectedDestinationAccount = account;
       } else {
@@ -284,10 +286,7 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
     final repos = _repos;
     if (repos == null) return;
     try {
-      final id = await repos.tags.create(
-        name: name,
-        color: colorToHex(color),
-      );
+      final id = await repos.tags.create(name: name, color: colorToHex(color));
       if (!mounted) return;
       final tag = _FormTag(id: id, name: name, color: color);
       setState(() {
@@ -427,19 +426,18 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
     final destinationAccount = _selectedDestinationAccount;
     if (_type == TransactionFormType.transfer) {
       if (destinationAccount == null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Selecciona una cuenta destino')),
+        setState(() => _transferAccountError = 'Selecciona una cuenta destino');
+        return;
+      }
+      if (destinationAccount.id == account.id) {
+        setState(
+          () => _transferAccountError =
+              'Origen y destino deben ser cuentas distintas',
         );
         return;
       }
-      if (destinationAccount.name == account.name &&
-          destinationAccount.currency == account.currency) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Origen y destino deben ser cuentas distintas'),
-          ),
-        );
-        return;
+      if (_transferAccountError != null) {
+        setState(() => _transferAccountError = null);
       }
     }
 
@@ -596,6 +594,7 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
                   destinationAccount: _selectedDestinationAccount,
                   amountController: _amountController,
                   destinationAmountController: _destinationAmountController,
+                  accountErrorText: _transferAccountError,
                   enabled: !_isSaving,
                   onPickSource: () => _pickAccount(),
                   onPickDestination: () => _pickAccount(destination: true),
@@ -623,28 +622,9 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
                         children: [
                           _SectionLabel('Cuenta'),
                           const SizedBox(height: 10),
-                          Row(
-                            children: [
-                              Expanded(
-                                child: _PickerChip(
-                                  label:
-                                      _selectedAccount?.name ?? 'Seleccionar',
-                                  onPressed: _isSaving
-                                      ? null
-                                      : () => _pickAccount(),
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              IconButton.outlined(
-                                onPressed: _isSaving
-                                    ? null
-                                    : () => unawaited(
-                                        _createMockAccountFromButton(),
-                                      ),
-                                icon: const Icon(Icons.add_rounded),
-                                tooltip: 'Nueva cuenta',
-                              ),
-                            ],
+                          _PickerChip(
+                            label: _selectedAccount?.name ?? 'Seleccionar',
+                            onPressed: _isSaving ? null : () => _pickAccount(),
                           ),
                         ],
                       ),
@@ -718,18 +698,7 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
                 ),
               ),
               const SizedBox(height: 28),
-              Row(
-                children: [
-                  const Expanded(child: _SectionLabel('Categoria')),
-                  IconButton.outlined(
-                    onPressed: _isSaving
-                        ? null
-                        : () => unawaited(_createMockCategoryFromButton()),
-                    icon: const Icon(Icons.add_rounded),
-                    tooltip: 'Nueva categoria',
-                  ),
-                ],
-              ),
+              const _SectionLabel('Categoria'),
               const SizedBox(height: 10),
               _PickerChip(
                 label: _selectedCategory?.name ?? 'Seleccionar',
@@ -839,6 +808,7 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
       _isRecurringExpense = false;
       _sourceAmountTouched = false;
       _destinationAmountTouched = false;
+      _transferAccountError = null;
     });
   }
 
@@ -900,6 +870,7 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
 
   void _swapTransferAccounts() {
     setState(() {
+      _transferAccountError = null;
       final source = _selectedAccount;
       _selectedAccount = _selectedDestinationAccount;
       _selectedDestinationAccount = source;
@@ -1073,7 +1044,9 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
       );
       await _loadFormData(repos);
       if (!mounted) return null;
-      final account = _accounts.where((item) => item.id == accountId).firstOrNull;
+      final account = _accounts
+          .where((item) => item.id == accountId)
+          .firstOrNull;
       if (account == null) return null;
       setState(() {
         _selectedAccount = account;
@@ -1116,22 +1089,6 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
       ).showSnackBar(SnackBar(content: Text(error.toString())));
       return null;
     }
-  }
-
-  Future<void> _createMockAccountFromButton() async {
-    final created = await _createMockAccountDialog();
-    if (created == null || !mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Cuenta agregada al formulario')),
-    );
-  }
-
-  Future<void> _createMockCategoryFromButton() async {
-    final created = await _createMockCategoryDialog();
-    if (created == null || !mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Categoria agregada al formulario')),
-    );
   }
 }
 
@@ -1184,6 +1141,7 @@ class _TransferBlock extends StatelessWidget {
     required this.destinationAccount,
     required this.amountController,
     required this.destinationAmountController,
+    required this.accountErrorText,
     required this.enabled,
     required this.onPickSource,
     required this.onPickDestination,
@@ -1196,6 +1154,7 @@ class _TransferBlock extends StatelessWidget {
   final Account? destinationAccount;
   final TextEditingController amountController;
   final TextEditingController destinationAmountController;
+  final String? accountErrorText;
   final bool enabled;
   final VoidCallback onPickSource;
   final VoidCallback onPickDestination;
@@ -1205,40 +1164,59 @@ class _TransferBlock extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
+    final errorText = accountErrorText;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Expanded(
-          child: _TransferSide(
-            label: 'Sale',
-            account: sourceAccount,
-            amountController: amountController,
-            enabled: enabled,
-            onPickAccount: onPickSource,
-            onAmountChanged: onAmountChanged,
-          ),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: _TransferSide(
+                label: 'Sale',
+                account: sourceAccount,
+                amountController: amountController,
+                enabled: enabled,
+                onPickAccount: onPickSource,
+                onAmountChanged: onAmountChanged,
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(8, 34, 8, 0),
+              child: IconButton.filledTonal(
+                onPressed: onSwap,
+                icon: const Icon(Icons.swap_horiz_rounded),
+                style: IconButton.styleFrom(
+                  backgroundColor: const Color(0xFFE7FFFA),
+                  foregroundColor: Colors.black,
+                ),
+              ),
+            ),
+            Expanded(
+              child: _TransferSide(
+                label: 'Entra',
+                account: destinationAccount,
+                amountController: destinationAmountController,
+                enabled: enabled,
+                onPickAccount: onPickDestination,
+                onAmountChanged: onDestinationAmountChanged,
+              ),
+            ),
+          ],
         ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(8, 34, 8, 0),
-          child: IconButton.filledTonal(
-            onPressed: onSwap,
-            icon: const Icon(Icons.swap_horiz_rounded),
-            style: IconButton.styleFrom(
-              backgroundColor: const Color(0xFFE7FFFA),
-              foregroundColor: Colors.black,
+        if (errorText != null) ...[
+          const SizedBox(height: 8),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: Text(
+              errorText,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: Theme.of(context).colorScheme.error,
+              ),
+              textAlign: TextAlign.center,
             ),
           ),
-        ),
-        Expanded(
-          child: _TransferSide(
-            label: 'Entra',
-            account: destinationAccount,
-            amountController: destinationAmountController,
-            enabled: enabled,
-            onPickAccount: onPickDestination,
-            onAmountChanged: onDestinationAmountChanged,
-          ),
-        ),
+        ],
       ],
     );
   }
@@ -1515,5 +1493,9 @@ String? _emptyToNull(String value) {
 }
 
 String _formatDate(DateTime date) {
+  final now = DateTime.now();
+  if (date.year == now.year && date.month == now.month && date.day == now.day) {
+    return 'Hoy';
+  }
   return '${date.day}/${date.month}/${date.year}';
 }

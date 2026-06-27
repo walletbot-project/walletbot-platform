@@ -45,7 +45,7 @@ Future<Tag> createLocalTag(
           name: trimmed,
           description: Value(description),
           parentId: Value(parentId),
-          color: Value(colorHex),
+          color: Value.absentIfNull(colorHex),
           createdAt: now,
           updatedAt: now,
           dirty: const Value(true),

@@ -6,6 +6,7 @@
     "scripts": {
         "dev": "convex dev",
         "setup": "convex dev --until-success",
+        "reset:dev-data": "bash scripts/reset-dev-data.sh",
         "typecheck": "tsc --noEmit -p convex"
     },
     "dependencies": {
