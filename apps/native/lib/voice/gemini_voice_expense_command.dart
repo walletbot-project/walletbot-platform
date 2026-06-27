@@ -42,7 +42,7 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
   }) : _executors = ToolExecutors(repositories);
 
   static const _model = 'gemini-3.1-flash-live-preview';
-  static const _voiceName = 'Kore';
+  static const _voiceName = 'Charon';
 
   final AppRepositories repositories;
   final String apiKey;
@@ -369,10 +369,12 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
       if (editableToolNames.contains(name) &&
           result['ok'] == true &&
           result['id'] is String) {
-        _events.add(VoiceActionResultEvent(
-          toolName: name,
-          entityId: result['id'] as String,
-        ));
+        _events.add(
+          VoiceActionResultEvent(
+            toolName: name,
+            entityId: result['id'] as String,
+          ),
+        );
       }
 
       responses.add({

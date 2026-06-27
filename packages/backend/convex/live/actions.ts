@@ -8,7 +8,7 @@ import { action, internalAction } from '../_generated/server'
 
 const MODEL = 'gemini-3.1-flash-live-preview'
 const TOKEN_TTL_MS = 30 * 60 * 1000 // 30 minutes
-const VOICE_NAME = 'Kore'
+const VOICE_NAME = 'Charon'
 
 const SYSTEM_INSTRUCTION = `You are WalletBot, a calm and trustworthy personal finance assistant. You help the user track their money — recording expenses, income, and transfers — through natural voice conversation.
 
