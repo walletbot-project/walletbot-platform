@@ -51,8 +51,18 @@ export const toolSchemas = {
         currency: z
             .string()
             .describe('ISO 4217 currency code (e.g. "ARS", "USD"). Immutable.'),
-        color: z.string().optional().describe('Hex color (e.g. "#4F46E5")'),
-        icon: z.string().optional().describe('Icon name from predefined list'),
+        color: z
+            .string()
+            .optional()
+            .describe(
+                'Hex color (e.g. "#4F46E5"). Optional — a sensible default is applied. Only set it if the user explicitly states a color. Never ask the user for it.',
+            ),
+        icon: z
+            .string()
+            .optional()
+            .describe(
+                'Icon name. Optional — a sensible default is applied. Only set it if the user explicitly names an icon. Never ask the user for it.',
+            ),
         description: z.string().optional(),
     }),
     updateAccount: z.object({
@@ -75,11 +85,25 @@ export const toolSchemas = {
     }),
     createCategory: z.object({
         name: z.string(),
+        color: z
+            .string()
+            .optional()
+            .describe(
+                'Hex color (e.g. "#4F46E5"). Optional — a sensible default is applied. Only set it if the user explicitly states a color. Never ask the user for it.',
+            ),
+        icon: z
+            .string()
+            .optional()
+            .describe(
+                'Icon name. Optional — a sensible default is applied. Only set it if the user explicitly names an icon. Never ask the user for it.',
+            ),
         description: z.string().optional(),
     }),
     updateCategory: z.object({
         idOrName: idOrName,
         name: z.string().optional(),
+        color: z.string().optional(),
+        icon: z.string().optional(),
         description: z.string().optional(),
     }),
     archiveCategory: z.object({
@@ -96,7 +120,12 @@ export const toolSchemas = {
     createTag: z.object({
         name: z.string(),
         parentIdOrName: optionalIdOrName,
-        color: z.string().optional(),
+        color: z
+            .string()
+            .optional()
+            .describe(
+                'Hex color (e.g. "#4F46E5"). Optional — a sensible default is applied. Only set it if the user explicitly states a color. Never ask the user for it.',
+            ),
         description: z.string().optional(),
     }),
     updateTag: z.object({

@@ -106,6 +106,8 @@ export const toolExecutors = {
                 id: c.id,
                 name: c.name,
                 description: c.description,
+                color: c.color,
+                icon: c.icon,
             })),
         }
     }),
@@ -122,6 +124,8 @@ export const toolExecutors = {
                 id,
                 name: args.name,
                 description: args.description,
+                color: args.color,
+                icon: args.icon,
             })
             return { ok: true, id }
         },
@@ -135,6 +139,8 @@ export const toolExecutors = {
                 id: r.entity.id,
                 name: args.name,
                 description: args.description,
+                color: args.color,
+                icon: args.icon,
             })
             return { ok: true, id: r.entity.id }
         },

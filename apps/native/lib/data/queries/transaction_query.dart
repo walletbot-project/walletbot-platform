@@ -20,7 +20,9 @@ List<Set<String>> expandTagGroups(
 ) {
   if (filter.tagIds.isEmpty) return const [];
   if (!filter.includeSubtags) {
-    return [for (final id in filter.tagIds) {id}];
+    return [
+      for (final id in filter.tagIds) {id},
+    ];
   }
   final childrenByParent = <String, List<String>>{};
   for (final tag in activeTags) {
@@ -126,7 +128,8 @@ SimpleSelectStatement<$TransactionsTable, Transaction> buildTransactionQuery(
 
   // One membership subquery per group: `any` produces a single group (union),
   // `all` produces one group per selected tag, ANDed together.
-  final effectiveGroups = filter.tagMatch == TagMatch.any && tagGroups.isNotEmpty
+  final effectiveGroups =
+      filter.tagMatch == TagMatch.any && tagGroups.isNotEmpty
       ? [tagGroups.expand((g) => g).toSet()]
       : tagGroups;
   for (final group in effectiveGroups) {

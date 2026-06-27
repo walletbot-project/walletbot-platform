@@ -2,6 +2,7 @@ import 'package:app/components/transaction_filters_bar.dart';
 import 'package:app/components/transaction_row.dart';
 import 'package:app/data/data.dart';
 import 'package:app/database.dart';
+import 'package:app/shared/app_navigation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:app/screens/transaction_form.dart';
@@ -26,6 +27,8 @@ class _ActivityScreenState extends State<ActivityScreen> {
   ];
 
   final _scrollController = ScrollController();
+
+  AppNavigation? _nav;
 
   TransactionFilter _filter = const TransactionFilter();
   int _limit = _pageSize;
@@ -56,11 +59,36 @@ class _ActivityScreenState extends State<ActivityScreen> {
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Subscribe once to cross-tab navigation so another tab (the accounts
+    // "Ver todas" action) can hand us a filter to apply when it switches here.
+    final nav = context.read<AppNavigation>();
+    if (nav != _nav) {
+      _nav?.removeListener(_applyPendingFilter);
+      _nav = nav..addListener(_applyPendingFilter);
+      _applyPendingFilter();
+    }
+  }
+
+  @override
   void dispose() {
+    _nav?.removeListener(_applyPendingFilter);
     _scrollController
       ..removeListener(_onScroll)
       ..dispose();
     super.dispose();
+  }
+
+  /// Applies any filter staged by [AppNavigation] (e.g. from an account's
+  /// "Ver todas"), replacing the current filter and resetting pagination.
+  void _applyPendingFilter() {
+    final pending = _nav?.takePendingActivityFilter();
+    if (pending == null || !mounted) return;
+    setState(() {
+      _filter = pending;
+      _resetPagination();
+    });
   }
 
   void _onScroll() {

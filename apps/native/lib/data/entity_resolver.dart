@@ -41,41 +41,50 @@ class EntityResolver {
   final AppDatabase db;
 
   Future<ResolveResult<Account>> account(String idOrName) async {
-    final byId = await (db.select(db.accounts)
-          ..where((t) => t.id.equals(idOrName)))
-        .getSingleOrNull();
+    final byId = await (db.select(
+      db.accounts,
+    )..where((t) => t.id.equals(idOrName))).getSingleOrNull();
     if (byId != null) return Resolved(byId);
 
-    final matches = await (db.select(db.accounts)
-          ..where((t) => t.archived.equals(false))
-          ..where((t) => t.name.trim().lower().equals(normalizeName(idOrName))))
-        .get();
+    final matches =
+        await (db.select(db.accounts)
+              ..where((t) => t.archived.equals(false))
+              ..where(
+                (t) => t.name.trim().lower().equals(normalizeName(idOrName)),
+              ))
+            .get();
     return _result(matches, (a) => a.id, (a) => a.name);
   }
 
   Future<ResolveResult<Category>> category(String idOrName) async {
-    final byId = await (db.select(db.categories)
-          ..where((t) => t.id.equals(idOrName)))
-        .getSingleOrNull();
+    final byId = await (db.select(
+      db.categories,
+    )..where((t) => t.id.equals(idOrName))).getSingleOrNull();
     if (byId != null) return Resolved(byId);
 
-    final matches = await (db.select(db.categories)
-          ..where((t) => t.archived.equals(false))
-          ..where((t) => t.name.trim().lower().equals(normalizeName(idOrName))))
-        .get();
+    final matches =
+        await (db.select(db.categories)
+              ..where((t) => t.archived.equals(false))
+              ..where(
+                (t) => t.name.trim().lower().equals(normalizeName(idOrName)),
+              ))
+            .get();
     return _result(matches, (c) => c.id, (c) => c.name);
   }
 
   Future<ResolveResult<Tag>> tag(String idOrName) async {
-    final byId = await (db.select(db.tags)
-          ..where((t) => t.id.equals(idOrName)))
-        .getSingleOrNull();
+    final byId = await (db.select(
+      db.tags,
+    )..where((t) => t.id.equals(idOrName))).getSingleOrNull();
     if (byId != null) return Resolved(byId);
 
-    final matches = await (db.select(db.tags)
-          ..where((t) => t.archived.equals(false))
-          ..where((t) => t.name.trim().lower().equals(normalizeName(idOrName))))
-        .get();
+    final matches =
+        await (db.select(db.tags)
+              ..where((t) => t.archived.equals(false))
+              ..where(
+                (t) => t.name.trim().lower().equals(normalizeName(idOrName)),
+              ))
+            .get();
     return _result(matches, (t) => t.id, (t) => t.name);
   }
 
@@ -86,9 +95,9 @@ class EntityResolver {
   ) {
     if (matches.length == 1) return Resolved(matches.first);
     if (matches.length > 1) {
-      return Ambiguous(
-        [for (final m in matches) (id: idOf(m), name: nameOf(m))],
-      );
+      return Ambiguous([
+        for (final m in matches) (id: idOf(m), name: nameOf(m)),
+      ]);
     }
     return const NotFound();
   }

@@ -34,9 +34,9 @@ class SummaryRepository extends RepositoryBase {
       totals[t.categoryId] = (totals[t.categoryId] ?? BigInt.zero) + t.amount;
     }
 
-    final cats = await (db.select(db.categories)
-          ..where((c) => c.archived.equals(false)))
-        .get();
+    final cats = await (db.select(
+      db.categories,
+    )..where((c) => c.archived.equals(false))).get();
     final nameById = {for (final c in cats) c.id: c.name};
 
     return [
@@ -56,16 +56,21 @@ class SummaryRepository extends RepositoryBase {
     required BigInt fromMs,
     required BigInt toMs,
   }) async {
-    final items = await (db.select(db.transactions)
-          ..where((t) => t.archived.equals(false))
-          ..where((t) => t.date.isBiggerOrEqualValue(fromMs))
-          ..where((t) => t.date.isSmallerOrEqualValue(toMs)))
-        .get();
-    final accounts = await (db.select(db.accounts)
-          ..where((a) => a.archived.equals(false)))
-        .get();
+    final items =
+        await (db.select(db.transactions)
+              ..where((t) => t.archived.equals(false))
+              ..where((t) => t.date.isBiggerOrEqualValue(fromMs))
+              ..where((t) => t.date.isSmallerOrEqualValue(toMs)))
+            .get();
+    final accounts = await (db.select(
+      db.accounts,
+    )..where((a) => a.archived.equals(false))).get();
 
-    final rows = <String, ({String name, String currency, BigInt inSum, BigInt outSum})>{};
+    final rows =
+        <
+          String,
+          ({String name, String currency, BigInt inSum, BigInt outSum})
+        >{};
     for (final a in accounts) {
       rows[a.id] = (
         name: a.name,

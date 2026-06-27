@@ -10,6 +10,7 @@ import 'package:app/screens/home.dart';
 import 'package:app/screens/insights.dart';
 import 'package:app/screens/login.dart';
 import 'package:app/screens/voice.dart';
+import 'package:app/shared/app_navigation.dart';
 import 'package:app/sync/sync_engine.dart';
 import 'package:app/voice/gemini_voice_expense_command.dart';
 import 'package:convex_flutter/convex_flutter.dart';
@@ -78,6 +79,9 @@ class _AuthGate extends StatelessWidget {
         Provider<AppRepositories>(
           create: (ctx) => AppRepositories(ctx.read<AppDatabase>()),
         ),
+        // Drives the bottom-nav tab selection and lets one tab hand a filter to
+        // another (e.g. an account's "Ver todas" opens Activity filtered to it).
+        ChangeNotifierProvider<AppNavigation>(create: (_) => AppNavigation()),
         // SyncEngine only attaches for remote accounts. For local accounts
         // we still create one (so `Provider.of<SyncEngine>` is non-null
         // throughout the tree) but never call `.start()`, keeping it inert.
@@ -133,17 +137,11 @@ class AppMain extends StatefulWidget {
 
 class _AppMainState extends State<AppMain> {
   @override
-  void initState() {
-    super.initState();
-  }
-
-  int selectedIndex = 0;
-
-  @override
   Widget build(BuildContext context) {
     final needsReauth = context.select<AuthController, bool>(
       (a) => a.activeAccount?.requiresReauth ?? false,
     );
+    final selectedIndex = context.watch<AppNavigation>().index;
     return Scaffold(
       body: Column(
         children: [
@@ -189,7 +187,8 @@ class _AppMainState extends State<AppMain> {
       ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: selectedIndex,
-        onDestinationSelected: (value) => setState(() => selectedIndex = value),
+        onDestinationSelected: (value) =>
+            context.read<AppNavigation>().index = value,
         destinations: [
           NavigationDestination(icon: Icon(Icons.home_rounded), label: "Home"),
           NavigationDestination(

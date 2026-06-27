@@ -3,6 +3,12 @@ import { mutation } from '../_generated/server'
 import { nextSeq, writeTombstone } from '../sync/helpers'
 import { requireAuth } from '../users/helpers'
 
+// Business rule: an account always has a color + icon. Convex has no
+// column-level defaults, so we fill them here when a writer omits them.
+// Mirror the native defaults in apps/native/lib/database.dart.
+const DEFAULT_ACCOUNT_COLOR = '#3B82F6'
+const DEFAULT_ACCOUNT_ICON = 'wallet'
+
 export const create = mutation({
     args: {
         id: v.string(),
@@ -34,8 +40,8 @@ export const create = mutation({
             name: args.name,
             currency: args.currency,
             description: args.description,
-            color: args.color,
-            icon: args.icon,
+            color: args.color ?? DEFAULT_ACCOUNT_COLOR,
+            icon: args.icon ?? DEFAULT_ACCOUNT_ICON,
             isArchived: false,
             createdAt: now,
             updatedAt: now,
@@ -50,6 +56,7 @@ export const update = mutation({
     args: {
         id: v.string(),
         name: v.optional(v.string()),
+        currency: v.optional(v.string()),
         description: v.optional(v.string()),
         color: v.optional(v.string()),
         icon: v.optional(v.string()),
@@ -69,11 +76,13 @@ export const update = mutation({
 
         const patch: {
             name?: string
+            currency?: string
             description?: string
             color?: string
             icon?: string
         } = {}
         if (args.name !== undefined) patch.name = args.name
+        if (args.currency !== undefined) patch.currency = args.currency
         if (args.description !== undefined) patch.description = args.description
         if (args.color !== undefined) patch.color = args.color
         if (args.icon !== undefined) patch.icon = args.icon
