@@ -1,6 +1,6 @@
+import { LoaderCircle, Lock, Mail, UserRound } from 'lucide-react'
 import { type FormEvent, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { LoaderCircle, Lock, Mail, UserRound } from 'lucide-react'
 
 import googleIcon from '@/assets/google.svg'
 import { Button } from '@/components/ui/button'
@@ -9,14 +9,26 @@ import { Label } from '@/components/ui/label'
 import { Separator } from '@/components/ui/separator'
 import { authClient } from '@/lib/auth-client'
 
-export function Login() {
+type AuthMode = 'sign-in' | 'sign-up'
+
+export function Login({ mode }: { mode: AuthMode }) {
     const location = useLocation()
     const navigate = useNavigate()
     const from = location.state?.from?.pathname || '/'
 
-    const [mode, setMode] = useState<'sign-in' | 'sign-up'>('sign-in')
     const [loading, setLoading] = useState<'email' | 'google' | null>(null)
     const [error, setError] = useState<string | null>(null)
+
+    // Sign-in and create are separate routes; clear any stale error as the user
+    // moves between them.
+    const goToMode = (next: AuthMode) => {
+        if (next === mode) return
+        setError(null)
+        navigate(next === 'sign-in' ? '/login' : '/signup', {
+            state: location.state,
+            replace: true,
+        })
+    }
 
     const handleGoogleSignIn = () => {
         setError(null)
@@ -58,7 +70,15 @@ export function Login() {
 
             navigate(from, { replace: true })
         } catch (err) {
-            setError(err instanceof Error ? err.message : String(err))
+            const message = err instanceof Error ? err.message : String(err)
+            // Generic, account-independent hint so users who actually signed up
+            // with Google are nudged toward it — without disclosing whether the
+            // email exists or which provider it uses.
+            setError(
+                mode === 'sign-in'
+                    ? `${message}. If you signed up with Google, use "Continue with Google" instead.`
+                    : message,
+            )
         } finally {
             setLoading(null)
         }
@@ -82,10 +102,7 @@ export function Login() {
                         variant={mode === 'sign-in' ? 'secondary' : 'ghost'}
                         size="sm"
                         aria-pressed={mode === 'sign-in'}
-                        onClick={() => {
-                            setMode('sign-in')
-                            setError(null)
-                        }}
+                        onClick={() => goToMode('sign-in')}
                     >
                         Sign in
                     </Button>
@@ -94,10 +111,7 @@ export function Login() {
                         variant={mode === 'sign-up' ? 'secondary' : 'ghost'}
                         size="sm"
                         aria-pressed={mode === 'sign-up'}
-                        onClick={() => {
-                            setMode('sign-up')
-                            setError(null)
-                        }}
+                        onClick={() => goToMode('sign-up')}
                     >
                         Create
                     </Button>

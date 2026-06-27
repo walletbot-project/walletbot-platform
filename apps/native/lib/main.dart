@@ -241,6 +241,13 @@ class _ReauthBanner extends StatelessWidget {
                   final messenger = ScaffoldMessenger.of(context);
                   try {
                     await context.read<AuthController>().signInWithGoogle();
+                  } on GoogleSignInException catch (e) {
+                    // Dismissing the Google sheet isn't a failure to report.
+                    if (e.code != GoogleSignInExceptionCode.canceled) {
+                      messenger.showSnackBar(
+                        SnackBar(content: Text('Reconnect failed: $e')),
+                      );
+                    }
                   } catch (e) {
                     messenger.showSnackBar(
                       SnackBar(content: Text('Reconnect failed: $e')),

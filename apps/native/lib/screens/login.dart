@@ -1,6 +1,7 @@
 import 'package:app/auth/auth_controller.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 import 'package:provider/provider.dart';
 
 enum _EmailAuthMode { signIn, signUp }
@@ -52,18 +53,34 @@ class _LoginScreenState extends State<LoginScreen> {
 
     try {
       if (_emailMode == _EmailAuthMode.signIn) {
-        await auth.signInWithEmail(email: email, password: password);
+        await auth.signInWithEmail(
+          email: email,
+          password: password,
+          rejectExisting: widget.canDismiss,
+        );
       } else {
         await auth.signUpWithEmail(
           name: _remoteNameController.text.trim(),
           email: email,
           password: password,
+          rejectExisting: widget.canDismiss,
         );
       }
-    } catch (e) {
+    } on AccountAlreadyAddedError {
       messenger.showSnackBar(
-        SnackBar(content: Text('No se pudo ${_emailMode.actionLabel}: $e')),
+        const SnackBar(
+          content: Text('Ya tenés una cuenta agregada con ese correo'),
+        ),
       );
+    } catch (e) {
+      // Generic, account-independent hint: many failed sign-ins are users who
+      // actually registered with Google. Avoids leaking whether the email
+      // exists or which provider it uses.
+      final message = _emailMode == _EmailAuthMode.signIn
+          ? 'No se pudo iniciar sesión. Si te registraste con Google, '
+                'usá "Continuar con Google".'
+          : 'No se pudo ${_emailMode.actionLabel}: $e';
+      messenger.showSnackBar(SnackBar(content: Text(message)));
     } finally {
       if (mounted) setState(() => _submitting = false);
     }
@@ -91,7 +108,22 @@ class _LoginScreenState extends State<LoginScreen> {
     setState(() => _submitting = true);
     final messenger = ScaffoldMessenger.of(context);
     try {
-      await context.read<AuthController>().signInWithGoogle();
+      await context.read<AuthController>().signInWithGoogle(
+        rejectExisting: widget.canDismiss,
+      );
+    } on GoogleSignInException catch (e) {
+      // The user dismissing the Google sheet isn't an error worth surfacing.
+      if (e.code != GoogleSignInExceptionCode.canceled) {
+        messenger.showSnackBar(
+          SnackBar(content: Text('No se pudo iniciar sesión con Google: $e')),
+        );
+      }
+    } on AccountAlreadyAddedError {
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text('Ya tenés una cuenta agregada con ese correo'),
+        ),
+      );
     } catch (e) {
       messenger.showSnackBar(
         SnackBar(content: Text('No se pudo iniciar sesión con Google: $e')),
@@ -108,60 +140,65 @@ class _LoginScreenState extends State<LoginScreen> {
         children: [
           const Positioned.fill(child: _LoginBackdrop()),
           SafeArea(
-            child: ListView(
-              padding: const EdgeInsets.fromLTRB(20, 18, 20, 28),
+            child: Stack(
               children: [
-                Align(
-                  alignment: Alignment.topCenter,
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 480),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        if (widget.canDismiss)
-                          Align(
-                            alignment: Alignment.centerLeft,
-                            child: IconButton(
-                              tooltip: 'Cerrar',
-                              onPressed: _submitting
-                                  ? null
-                                  : () => Navigator.of(context).pop(),
-                              icon: const Icon(Icons.close_rounded),
+                ListView(
+                  padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
+                  children: [
+                    Align(
+                      alignment: Alignment.topCenter,
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 480),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            const _HeroHeader(),
+                            const SizedBox(height: 22),
+                            _PathPicker(
+                              selected: _path,
+                              enabled: !_submitting,
+                              onChanged: (path) => setState(() => _path = path),
                             ),
-                          ),
-                        const _HeroHeader(),
-                        const SizedBox(height: 22),
-                        _PathPicker(
-                          selected: _path,
-                          enabled: !_submitting,
-                          onChanged: (path) => setState(() => _path = path),
+                            const SizedBox(height: 14),
+                            _AuthPathSwitcher(
+                              path: _path,
+                              remote: _RemoteLoginPanel(
+                                mode: _emailMode,
+                                submitting: _submitting,
+                                formKey: _remoteFormKey,
+                                nameController: _remoteNameController,
+                                emailController: _emailController,
+                                passwordController: _passwordController,
+                                onModeChanged: (mode) =>
+                                    setState(() => _emailMode = mode),
+                                onSubmit: _submitRemote,
+                                onGoogle: _signInWithGoogle,
+                              ),
+                              local: _LocalLoginPanel(
+                                submitting: _submitting,
+                                formKey: _localFormKey,
+                                nameController: _localNameController,
+                                onSubmit: _submitLocal,
+                              ),
+                            ),
+                          ],
                         ),
-                        const SizedBox(height: 14),
-                        _AuthPathSwitcher(
-                          path: _path,
-                          remote: _RemoteLoginPanel(
-                            mode: _emailMode,
-                            submitting: _submitting,
-                            formKey: _remoteFormKey,
-                            nameController: _remoteNameController,
-                            emailController: _emailController,
-                            passwordController: _passwordController,
-                            onModeChanged: (mode) =>
-                                setState(() => _emailMode = mode),
-                            onSubmit: _submitRemote,
-                            onGoogle: _signInWithGoogle,
-                          ),
-                          local: _LocalLoginPanel(
-                            submitting: _submitting,
-                            formKey: _localFormKey,
-                            nameController: _localNameController,
-                            onSubmit: _submitLocal,
-                          ),
-                        ),
-                      ],
+                      ),
+                    ),
+                  ],
+                ),
+                if (widget.canDismiss)
+                  Positioned(
+                    top: 0,
+                    right: 0,
+                    child: IconButton(
+                      tooltip: 'Cerrar',
+                      onPressed: _submitting
+                          ? null
+                          : () => Navigator.of(context).pop(),
+                      icon: const Icon(Icons.close_rounded),
                     ),
                   ),
-                ),
               ],
             ),
           ),

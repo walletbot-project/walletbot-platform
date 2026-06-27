@@ -11,7 +11,7 @@ import 'package:provider/provider.dart';
 /// when the route was opened with no active account (e.g. the login screen
 /// surfaced from the account switcher) so it pops once any account becomes
 /// active.
-class PopOnAccountSwitch extends StatelessWidget {
+class PopOnAccountSwitch extends StatefulWidget {
   const PopOnAccountSwitch({
     super.key,
     required this.accountId,
@@ -22,14 +22,22 @@ class PopOnAccountSwitch extends StatelessWidget {
   final Widget child;
 
   @override
+  State<PopOnAccountSwitch> createState() => _PopOnAccountSwitchState();
+}
+
+class _PopOnAccountSwitchState extends State<PopOnAccountSwitch> {
+  bool _popScheduled = false;
+
+  @override
   Widget build(BuildContext context) {
     final activeId = context.watch<AuthController>().activeAccount?.id;
-    if (activeId != accountId) {
+    if (activeId != widget.accountId && !_popScheduled) {
+      _popScheduled = true;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!context.mounted) return;
         Navigator.of(context).pop();
       });
     }
-    return child;
+    return widget.child;
   }
 }
