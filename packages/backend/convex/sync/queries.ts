@@ -17,6 +17,8 @@ const SYNCED_TABLES = [
     'transactions',
     'tags',
     'transactionTags',
+    'savedFilters',
+    'dashboardWidgets',
 ] as const
 type SyncedTable = (typeof SYNCED_TABLES)[number]
 
@@ -102,6 +104,12 @@ function tablePriority(t: SyncedTable): number {
             return 3
         case 'transactionTags':
             return 4
+        // Dashboard layout: saved filters before widgets (a widget's filterId
+        // soft-references a saved filter).
+        case 'savedFilters':
+            return 5
+        case 'dashboardWidgets':
+            return 6
     }
 }
 
@@ -170,6 +178,24 @@ async function fetchTableRows(
         case 'transactionTags':
             docs = await ctx.db
                 .query('transactionTags')
+                .withIndex('by_user_seq', (q) =>
+                    q.eq('userId', userId).gt('seq', since),
+                )
+                .order('asc')
+                .take(take)
+            break
+        case 'savedFilters':
+            docs = await ctx.db
+                .query('savedFilters')
+                .withIndex('by_user_seq', (q) =>
+                    q.eq('userId', userId).gt('seq', since),
+                )
+                .order('asc')
+                .take(take)
+            break
+        case 'dashboardWidgets':
+            docs = await ctx.db
+                .query('dashboardWidgets')
                 .withIndex('by_user_seq', (q) =>
                     q.eq('userId', userId).gt('seq', since),
                 )

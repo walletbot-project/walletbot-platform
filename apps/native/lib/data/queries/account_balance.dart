@@ -1,6 +1,7 @@
 import 'package:drift/drift.dart';
 
 import '../../database.dart';
+import 'stream_utils.dart';
 
 /// Per-transaction balance arithmetic. MUST stay identical to the replay in
 /// `lib/sync/sync_recompute.dart` — if the two diverge, every sync cycle
@@ -51,4 +52,29 @@ Stream<BigInt> watchAccountBalance(AppDatabase db, String accountId) {
         ..where((t) => _touchesAccount(t, accountId)))
       .watch()
       .map((rows) => accountBalanceFromRows(rows, accountId));
+}
+
+/// Live total balance across every active account in [currency] — the sum of
+/// each account's [accountBalanceFromRows] balance. Reactive to both account
+/// changes (a new account, an archive) and transaction changes (any write or
+/// sync merge), so a Balance-card widget stays current "as of now".
+///
+/// Reuses [accountBalanceFromRows] per account so the arithmetic can never
+/// diverge from the per-account balance or the sync recompute.
+Stream<BigInt> watchTotalBalanceForCurrency(AppDatabase db, String currency) {
+  final accountsStream =
+      (db.select(db.accounts)
+            ..where((a) => a.archived.equals(false))
+            ..where((a) => a.currency.equals(currency)))
+          .watch();
+  final txnsStream = (db.select(
+    db.transactions,
+  )..where((t) => t.archived.equals(false))).watch();
+  return combineLatest2(accountsStream, txnsStream, (accounts, txns) {
+    var total = BigInt.zero;
+    for (final a in accounts) {
+      total += accountBalanceFromRows(txns, a.id);
+    }
+    return total;
+  });
 }
