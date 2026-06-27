@@ -350,12 +350,11 @@ export const toolExecutors = {
         const toR = await resolveAccount(ctx, args.toAccountIdOrName)
         if (!toR.ok) return resolutionError('Destination account', toR)
 
-        let categoryId: string | undefined
-        if (args.categoryIdOrName) {
-            const catR = await resolveCategory(ctx, args.categoryIdOrName)
-            if (!catR.ok) return resolutionError('Category', catR)
-            categoryId = catR.entity.id
+        if (!args.categoryIdOrName) {
+            return { ok: false, error: 'Category is required' }
         }
+        const catR = await resolveCategory(ctx, args.categoryIdOrName)
+        if (!catR.ok) return resolutionError('Category', catR)
 
         const id = newId()
         await ctx.client.mutation(api.transactions.mutations.createTransfer, {
@@ -370,7 +369,7 @@ export const toolExecutors = {
                     ? parseAmountToCents(args.toAmount)
                     : undefined,
             exchangeRate: args.exchangeRate,
-            categoryId,
+            categoryId: catR.entity.id,
             date: parseOptionalDate(args.date),
             dateConfirmed: args.dateConfirmed,
         })

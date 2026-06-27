@@ -5,8 +5,7 @@ import 'package:app/database.dart';
 import 'package:app/shared/app_navigation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-
-import 'transaction_form.dart';
+import 'package:app/screens/transaction_form.dart';
 
 class ActivityScreen extends StatefulWidget {
   const ActivityScreen({super.key});
@@ -40,9 +39,19 @@ class _ActivityScreenState extends State<ActivityScreen> {
   int _lastRenderedCount = 0;
 
   Future<void> _openTransactionForm() async {
-    await Navigator.of(context).push<void>(
-      MaterialPageRoute(builder: (_) => const TransactionFormScreen()),
+    // Pushed routes sit above the account-scoped providers; re-provide them
+    // so the new route keeps using the active account's data layer.
+    final repos = context.read<AppRepositories>();
+    final saved = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (_) => Provider<AppRepositories>.value(
+          value: repos,
+          child: const TransactionFormScreen(),
+        ),
+      ),
     );
+    if (!mounted || saved != true) return;
+    context.read<AppNavigation>().index = AppNavigation.activityTab;
   }
 
   @override
@@ -223,7 +232,17 @@ class _ActivityScreenState extends State<ActivityScreen> {
         entries.add(_HeaderEntry(label: _sectionLabel(day, today)));
         currentDay = day;
       }
-      entries.add(_TxnEntry(transaction: t));
+      if (t.type == 'transfer') {
+        entries.addAll(_transferEntries(t));
+      } else {
+        entries.add(
+          _TxnEntry.fromTransaction(
+            t,
+            amountCents: _signedAmountCents(t),
+            description: _descriptionFor(t),
+          ),
+        );
+      }
     }
 
     if (hasMore) {
@@ -244,14 +263,21 @@ class _ActivityScreenState extends State<ActivityScreen> {
             style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
           ),
         );
-      case _TxnEntry(:final transaction):
+      case _TxnEntry(
+        :final title,
+        :final amountCents,
+        :final currency,
+        :final dateConfirmed,
+        :final description,
+      ):
         return Padding(
           padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
           child: TransactionRow(
-            title: transaction.name,
-            amountCents: _signedAmountCents(transaction),
-            dateCheck: transaction.dateConfirmed,
-            description: _descriptionFor(transaction),
+            title: title,
+            amountCents: amountCents,
+            currency: currency,
+            dateCheck: dateConfirmed,
+            description: description,
           ),
         );
       case _LoadingEntry():
@@ -290,10 +316,43 @@ class _ActivityScreenState extends State<ActivityScreen> {
     }
   }
 
+  List<_TxnEntry> _transferEntries(Transaction t) {
+    final description = _descriptionFor(t);
+    final sourceAmount = -t.amount.toInt().abs();
+    final destinationAmount = (t.toAmount ?? t.amount).toInt().abs();
+    return [
+      _TxnEntry(
+        title: 'Transferencia enviada',
+        amountCents: sourceAmount,
+        currency: t.currency,
+        dateConfirmed: t.dateConfirmed,
+        description: description,
+      ),
+      _TxnEntry(
+        title: 'Transferencia recibida',
+        amountCents: destinationAmount,
+        currency: t.toCurrency ?? t.currency,
+        dateConfirmed: t.dateConfirmed,
+        description: description,
+      ),
+    ];
+  }
+
+  String? _joinDescriptions(String? first, String? second) {
+    final parts = [
+      if (first != null && first.isNotEmpty) first,
+      if (second != null && second.isNotEmpty) second,
+    ];
+    if (parts.isEmpty) return null;
+    return parts.join(' · ');
+  }
+
   String? _descriptionFor(Transaction t) {
-    if (t.dateConfirmed) return null;
+    final details = t.description;
+    if (t.dateConfirmed) return details;
     final dt = DateTime.fromMillisecondsSinceEpoch(t.date.toInt());
-    return '${_spanishWeekdays[dt.weekday - 1]} (estimado)';
+    final estimated = '${_spanishWeekdays[dt.weekday - 1]} (estimado)';
+    return _joinDescriptions(estimated, details);
   }
 }
 
@@ -307,8 +366,31 @@ class _HeaderEntry extends _ListEntry {
 }
 
 class _TxnEntry extends _ListEntry {
-  const _TxnEntry({required this.transaction});
-  final Transaction transaction;
+  const _TxnEntry({
+    required this.title,
+    required this.amountCents,
+    required this.currency,
+    required this.dateConfirmed,
+    this.description,
+  });
+
+  factory _TxnEntry.fromTransaction(
+    Transaction transaction, {
+    required int amountCents,
+    String? description,
+  }) => _TxnEntry(
+    title: transaction.name,
+    amountCents: amountCents,
+    currency: transaction.currency,
+    dateConfirmed: transaction.dateConfirmed,
+    description: description,
+  );
+
+  final String title;
+  final int amountCents;
+  final String currency;
+  final bool dateConfirmed;
+  final String? description;
 }
 
 class _LoadingEntry extends _ListEntry {
