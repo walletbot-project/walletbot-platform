@@ -50,7 +50,9 @@ class MyApp extends StatelessWidget {
       value: auth,
       child: MaterialApp(
         title: 'Wallet Bot',
-        theme: ThemeData(colorScheme: .fromSeed(seedColor: Colors.greenAccent)),
+        theme: ThemeData(
+          colorScheme: ColorScheme.fromSeed(seedColor: Colors.greenAccent),
+        ),
         home: const _AuthGate(),
       ),
     );
@@ -112,7 +114,10 @@ class _SyncStarterState extends State<_SyncStarter> {
   Widget build(BuildContext context) {
     final auth = context.watch<AuthController>();
     final active = auth.activeAccount;
-    if (!_kicked && active != null && active.sessionToken != null) {
+    if (!_kicked &&
+        active != null &&
+        active.sessionToken != null &&
+        auth.convexAuthenticated) {
       _kicked = true;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;

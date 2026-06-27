@@ -5,6 +5,7 @@ import 'package:app/components/dashboard/dashboard_section.dart';
 import 'package:app/components/dashboard/default_dashboard.dart';
 import 'package:app/data/data.dart';
 import 'package:app/screens/transaction_form.dart';
+import 'package:app/shared/app_navigation.dart';
 import 'package:app/sync/sync_status_pill.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -95,9 +96,19 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _openManualAdd() async {
-    await Navigator.of(
-      context,
-    ).push(MaterialPageRoute(builder: (_) => const TransactionFormScreen()));
+    // Pushed routes sit above the account-scoped providers; re-provide them
+    // so the new route keeps using the active account's data layer.
+    final repos = context.read<AppRepositories>();
+    final saved = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (_) => Provider<AppRepositories>.value(
+          value: repos,
+          child: const TransactionFormScreen(),
+        ),
+      ),
+    );
+    if (!mounted || saved != true) return;
+    context.read<AppNavigation>().index = AppNavigation.activityTab;
   }
 
   bool _editing = false;

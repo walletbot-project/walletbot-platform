@@ -8,6 +8,7 @@ class TransactionRow extends StatelessWidget {
     required this.amountCents,
     required this.dateCheck,
     this.description,
+    this.currency,
     this.currencySymbol = '\$',
     this.onTap,
     this.contained = true,
@@ -24,6 +25,7 @@ class TransactionRow extends StatelessWidget {
   final bool dateCheck;
 
   final String? description;
+  final String? currency;
   final String currencySymbol;
   final VoidCallback? onTap;
   final bool contained;
@@ -76,7 +78,9 @@ class TransactionRow extends StatelessWidget {
           ),
           const SizedBox(width: 12),
           Text(
-            _formatSignedAmount(amountCents, currencySymbol),
+            currency == null
+                ? _formatSignedAmount(amountCents, currencySymbol)
+                : formatMoney(amountCents, currency!),
             style: TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.w600,

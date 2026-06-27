@@ -1,44 +1,15 @@
 import 'dart:async';
 
 import 'package:app/components/color_utils.dart';
+import 'package:app/data/data.dart';
+import 'package:app/database.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:provider/provider.dart';
 
 enum TransactionFormType { income, expense, transfer }
 
 enum _TransferAmountField { source, destination }
-
-class TransactionFormResult {
-  const TransactionFormResult({
-    required this.type,
-    required this.accountName,
-    required this.accountCurrency,
-    this.destinationAccountName,
-    this.destinationAccountCurrency,
-    required this.date,
-    required this.amount,
-    this.destinationAmount,
-    this.exchangeRate,
-    required this.title,
-    required this.description,
-    required this.categoryName,
-    required this.tags,
-  });
-
-  final TransactionFormType type;
-  final String accountName;
-  final String accountCurrency;
-  final String? destinationAccountName;
-  final String? destinationAccountCurrency;
-  final DateTime date;
-  final double amount;
-  final double? destinationAmount;
-  final double? exchangeRate;
-  final String title;
-  final String? description;
-  final String? categoryName;
-  final List<String> tags;
-}
 
 class TransactionFormScreen extends StatefulWidget {
   const TransactionFormScreen({super.key});
@@ -53,20 +24,33 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
   TextEditingController _destinationAmountController = TextEditingController();
   TextEditingController _titleController = TextEditingController();
   TextEditingController _descriptionController = TextEditingController();
-  TextEditingController _tagController = TextEditingController();
 
   TransactionFormType _type = TransactionFormType.income;
-  _MockAccount? _selectedAccount;
-  _MockAccount? _selectedDestinationAccount;
-  _MockCategory? _selectedCategory;
+  AppRepositories? _repos;
+  List<Account> _accounts = const [];
+  List<Category> _categories = const [];
+  List<_FormTag> _knownTags = const [];
+  Account? _selectedAccount;
+  Account? _selectedDestinationAccount;
+  Category? _selectedCategory;
   DateTime _selectedDate = DateTime.now();
-  final List<_FormTag> _knownTags = List.of(_mockTags);
   final List<_FormTag> _tags = [];
+  bool _isLoading = true;
   bool _isSaving = false;
   bool _isRecurringExpense = false;
   bool _updatingTransferAmounts = false;
   bool _sourceAmountTouched = false;
   bool _destinationAmountTouched = false;
+  String? _transferAccountError;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final repos = context.read<AppRepositories>();
+    if (_repos == repos) return;
+    _repos = repos;
+    unawaited(_loadFormData(repos));
+  }
 
   @override
   void dispose() {
@@ -74,8 +58,104 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
     _destinationAmountController.dispose();
     _titleController.dispose();
     _descriptionController.dispose();
-    _tagController.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadFormData(AppRepositories repos) async {
+    setState(() => _isLoading = true);
+    final results = await Future.wait([
+      repos.accounts.listActive(),
+      repos.categories.listActive(),
+      repos.tags.listActive(),
+    ]);
+    final accounts = List<Account>.from(results[0] as List<Account>)
+      ..sort((a, b) => a.createdAt.compareTo(b.createdAt));
+    final categories = List<Category>.from(results[1] as List<Category>)
+      ..sort((a, b) => a.createdAt.compareTo(b.createdAt));
+    final tags = List<Tag>.from(results[2] as List<Tag>)
+      ..sort((a, b) => a.createdAt.compareTo(b.createdAt));
+
+    if (!mounted) return;
+    setState(() {
+      _accounts = accounts;
+      _categories = categories;
+      _knownTags = tags
+          .map(
+            (tag) => _FormTag(
+              id: tag.id,
+              name: tag.name,
+              color: colorFromHex(tag.color),
+            ),
+          )
+          .toList();
+      _selectedAccount = _resolveSelectedAccount(
+        current: _selectedAccount,
+        accounts: accounts,
+      );
+      _selectedDestinationAccount = _resolveDestinationAccount(
+        current: _selectedDestinationAccount,
+        accounts: accounts,
+        source: _selectedAccount,
+      );
+      _selectedCategory = _resolveSelectedCategory(
+        current: _selectedCategory,
+        categories: categories,
+        type: _type,
+      );
+      _isLoading = false;
+    });
+  }
+
+  Account? _resolveSelectedAccount({
+    required Account? current,
+    required List<Account> accounts,
+  }) {
+    if (accounts.isEmpty) return null;
+    if (current != null) {
+      for (final account in accounts) {
+        if (account.id == current.id) return account;
+      }
+    }
+    return accounts.first;
+  }
+
+  Account? _resolveDestinationAccount({
+    required Account? current,
+    required List<Account> accounts,
+    required Account? source,
+  }) {
+    if (accounts.isEmpty) return null;
+    if (current != null) {
+      for (final account in accounts) {
+        if (account.id == current.id) return account;
+      }
+    }
+    if (source == null) return accounts.first;
+    for (final account in accounts) {
+      if (account.id != source.id) return account;
+    }
+    return source;
+  }
+
+  Category? _resolveSelectedCategory({
+    required Category? current,
+    required List<Category> categories,
+    required TransactionFormType type,
+  }) {
+    if (categories.isEmpty) return null;
+    if (current != null) {
+      for (final category in categories) {
+        if (category.id == current.id) return category;
+      }
+    }
+
+    if (type == TransactionFormType.transfer) {
+      for (final category in categories) {
+        if (category.name.toLowerCase() == 'transferencia') return category;
+      }
+    }
+
+    return categories.first;
   }
 
   Future<void> _pickDate() async {
@@ -97,7 +177,7 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
     final selectedAccount = destination
         ? _selectedDestinationAccount
         : _selectedAccount;
-    final account = await showModalBottomSheet<_MockAccount>(
+    final account = await showModalBottomSheet<Account>(
       context: context,
       showDragHandle: true,
       builder: (context) {
@@ -105,7 +185,16 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
           child: ListView(
             shrinkWrap: true,
             children: [
-              for (final account in _mockAccounts)
+              ListTile(
+                leading: const Icon(Icons.add_circle_outline_rounded),
+                title: const Text('Nueva cuenta'),
+                onTap: () async {
+                  final created = await _createMockAccountDialog();
+                  if (!context.mounted) return;
+                  Navigator.pop(context, created);
+                },
+              ),
+              for (final account in _accounts)
                 ListTile(
                   leading: const Icon(Icons.account_balance_wallet_rounded),
                   title: Text(account.name),
@@ -122,6 +211,7 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
     );
     if (account == null || !mounted) return;
     setState(() {
+      _transferAccountError = null;
       if (destination) {
         _selectedDestinationAccount = account;
       } else {
@@ -134,7 +224,7 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
   Future<void> _pickCategory() async {
     await _commitInlineEditing();
     if (!mounted) return;
-    final selection = await showModalBottomSheet<_CategorySelection>(
+    final category = await showModalBottomSheet<Category>(
       context: context,
       showDragHandle: true,
       builder: (context) {
@@ -143,67 +233,67 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
             shrinkWrap: true,
             children: [
               ListTile(
-                leading: const Icon(Icons.block_rounded),
-                title: const Text('Sin categoria'),
-                trailing: _selectedCategory == null
-                    ? const Icon(Icons.check_circle_rounded)
-                    : null,
-                onTap: () =>
-                    Navigator.pop(context, const _CategorySelection.none()),
+                leading: const Icon(Icons.add_circle_outline_rounded),
+                title: const Text('Nueva categoria'),
+                onTap: () async {
+                  final created = await _createMockCategoryDialog();
+                  if (!context.mounted) return;
+                  Navigator.pop(context, created);
+                },
               ),
-              for (final category in _mockCategories)
+              for (final category in _categories)
                 ListTile(
                   leading: const Icon(Icons.label_rounded),
                   title: Text(category.name),
                   trailing: category == _selectedCategory
                       ? const Icon(Icons.check_circle_rounded)
                       : null,
-                  onTap: () => Navigator.pop(
-                    context,
-                    _CategorySelection.category(category),
-                  ),
+                  onTap: () => Navigator.pop(context, category),
                 ),
             ],
           ),
         );
       },
     );
-    if (selection == null || !mounted) return;
-    setState(() => _selectedCategory = selection.category);
+    if (category == null || !mounted) return;
+    setState(() => _selectedCategory = category);
   }
 
-  Future<void> _addTag(String rawValue) async {
+  Future<_FormTag?> _createTag(String rawValue) async {
     final name = rawValue.trim();
-    if (name.isEmpty) return;
+    if (name.isEmpty) return null;
     final alreadySelected = _tags.any(
       (tag) => tag.name.toLowerCase() == name.toLowerCase(),
     );
     if (alreadySelected) {
-      _tagController.clear();
-      return;
+      return null;
     }
 
     final existingTag = _findKnownTag(name);
     if (existingTag != null) {
-      setState(() {
-        _tags.add(existingTag);
-        _tagController.clear();
-      });
-      return;
+      return existingTag;
     }
 
     final color = await _pickNewTagColor(name);
-    if (color == null || !mounted) return;
-    final tag = _FormTag(name: name, color: color);
-    setState(() {
-      _knownTags.add(tag);
-      _tags.add(tag);
-      _tagController.clear();
-    });
+    if (color == null || !mounted) return null;
+    final repos = _repos;
+    if (repos == null) return null;
+    try {
+      final id = await repos.tags.create(name: name, color: colorToHex(color));
+      if (!mounted) return null;
+      final tag = _FormTag(id: id, name: name, color: color);
+      setState(() => _knownTags = [..._knownTags, tag]);
+      return tag;
+    } catch (error) {
+      if (!mounted) return null;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('No se pudo crear la etiqueta: $error')),
+      );
+      return null;
+    }
   }
 
   Future<void> _commitInlineEditing() async {
-    await _addTag(_tagController.text);
     FocusManager.instance.primaryFocus?.unfocus();
   }
 
@@ -215,11 +305,9 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
     return null;
   }
 
-  Future<void> _pickExistingTag() async {
+  Future<void> _pickTag() async {
     await _commitInlineEditing();
     if (!mounted) return;
-    // TODO: cargar los tags actuales desde almacenamiento local/sync antes de
-    // mostrar esta opcion de etiquetas.
     final availableTags = _knownTags
         .where(
           (tag) => !_tags.any(
@@ -235,6 +323,15 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
           child: ListView(
             shrinkWrap: true,
             children: [
+              ListTile(
+                leading: const Icon(Icons.add_circle_outline_rounded),
+                title: const Text('Nueva etiqueta'),
+                onTap: () async {
+                  final created = await _createMockTagDialog();
+                  if (!context.mounted) return;
+                  Navigator.pop(context, created);
+                },
+              ),
               if (availableTags.isEmpty)
                 const ListTile(title: Text('No hay etiquetas disponibles')),
               for (final tag in availableTags)
@@ -256,6 +353,13 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
     setState(() => _tags.add(tag));
   }
 
+  Future<_FormTag?> _createMockTagDialog() async {
+    return showDialog<_FormTag>(
+      context: context,
+      builder: (context) => _CreateTagDialog(onCreate: _createTag),
+    );
+  }
+
   Future<Color?> _pickNewTagColor(String name) {
     var selectedColor = tagDefaultColor;
     return showDialog<Color>(
@@ -263,23 +367,41 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
       builder: (context) {
         return StatefulBuilder(
           builder: (context, setDialogState) {
-            return AlertDialog(
-              title: Text('Color de "$name"'),
-              content: _TagColorPicker(
-                selected: selectedColor,
-                onChanged: (color) =>
-                    setDialogState(() => selectedColor = color),
+            return Shortcuts(
+              shortcuts: <ShortcutActivator, Intent>{
+                const SingleActivator(LogicalKeyboardKey.enter):
+                    const ActivateIntent(),
+                const SingleActivator(LogicalKeyboardKey.numpadEnter):
+                    const ActivateIntent(),
+              },
+              child: Actions(
+                actions: <Type, Action<Intent>>{
+                  ActivateIntent: CallbackAction<Intent>(
+                    onInvoke: (intent) {
+                      Navigator.pop(context, selectedColor);
+                      return null;
+                    },
+                  ),
+                },
+                child: AlertDialog(
+                  title: Text('Color de "$name"'),
+                  content: _TagColorPicker(
+                    selected: selectedColor,
+                    onChanged: (color) =>
+                        setDialogState(() => selectedColor = color),
+                  ),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(context),
+                      child: const Text('Cancelar'),
+                    ),
+                    TextButton(
+                      onPressed: () => Navigator.pop(context, selectedColor),
+                      child: const Text('Crear'),
+                    ),
+                  ],
+                ),
               ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text('Cancelar'),
-                ),
-                TextButton(
-                  onPressed: () => Navigator.pop(context, selectedColor),
-                  child: const Text('Crear'),
-                ),
-              ],
             );
           },
         );
@@ -291,6 +413,8 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
     await _commitInlineEditing();
     if (!mounted) return;
     if (!(_formKey.currentState?.validate() ?? false)) return;
+    final repos = _repos;
+    if (repos == null) return;
     final account = _selectedAccount;
     if (account == null) {
       ScaffoldMessenger.of(
@@ -298,69 +422,100 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
       ).showSnackBar(const SnackBar(content: Text('Selecciona una cuenta')));
       return;
     }
+    final category = _selectedCategory;
+    if (category == null) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Selecciona una categoria')));
+      return;
+    }
     final destinationAccount = _selectedDestinationAccount;
     if (_type == TransactionFormType.transfer) {
       if (destinationAccount == null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Selecciona una cuenta destino')),
+        setState(() => _transferAccountError = 'Selecciona una cuenta destino');
+        return;
+      }
+      if (destinationAccount.id == account.id) {
+        setState(
+          () => _transferAccountError =
+              'Origen y destino deben ser cuentas distintas',
         );
         return;
       }
-      if (destinationAccount.name == account.name &&
-          destinationAccount.currency == account.currency) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Origen y destino deben ser cuentas distintas'),
-          ),
-        );
-        return;
+      if (_transferAccountError != null) {
+        setState(() => _transferAccountError = null);
       }
     }
 
     setState(() => _isSaving = true);
-    final messenger = ScaffoldMessenger.of(context);
     final navigator = Navigator.of(context);
 
     try {
-      await Future<void>.delayed(const Duration(milliseconds: 650));
-      final amount = _parseAmount(_amountController.text)!;
-      final destinationAmount = _type == TransactionFormType.transfer
+      final amountValue = _parseAmount(_amountController.text)!;
+      final amount = _amountToCents(amountValue);
+      final destinationAmountValue = _type == TransactionFormType.transfer
           ? _parseAmount(_destinationAmountController.text)
           : null;
       final exchangeRate =
           _shouldShowExchangeRate &&
-              destinationAmount != null &&
-              destinationAmount > 0
-          ? destinationAmount / amount
+              destinationAmountValue != null &&
+              destinationAmountValue > 0
+          ? destinationAmountValue / amountValue
           : null;
-      final result = TransactionFormResult(
-        type: _type,
-        accountName: account.name,
-        accountCurrency: account.currency,
-        destinationAccountName: destinationAccount?.name,
-        destinationAccountCurrency: destinationAccount?.currency,
-        date: _selectedDate,
-        amount: amount,
-        destinationAmount: destinationAmount,
-        exchangeRate: exchangeRate,
-        title: _type == TransactionFormType.transfer
-            ? 'Transferencia'
-            : _titleController.text.trim(),
-        description: _emptyToNull(_descriptionController.text),
-        categoryName: _selectedCategory?.name,
-        tags: List.unmodifiable(_tags.map((tag) => tag.name)),
-      );
+      final dateMs = BigInt.from(_selectedDate.millisecondsSinceEpoch);
+      final tagIds = _tags
+          .map((tag) => tag.id)
+          .whereType<String>()
+          .toList(growable: false);
+      switch (_type) {
+        case TransactionFormType.income:
+          await repos.transactions.addIncome(
+            accountId: account.id,
+            categoryId: category.id,
+            name: _titleController.text.trim(),
+            amountCents: amount,
+            currency: account.currency,
+            description: _emptyToNull(_descriptionController.text),
+            dateMs: dateMs,
+            tagIds: tagIds,
+          );
+        case TransactionFormType.expense:
+          await repos.transactions.addExpense(
+            accountId: account.id,
+            categoryId: category.id,
+            name: _titleController.text.trim(),
+            amountCents: amount,
+            currency: account.currency,
+            description: _emptyToNull(_descriptionController.text),
+            dateMs: dateMs,
+            tagIds: tagIds,
+          );
+        case TransactionFormType.transfer:
+          await repos.transactions.addTransfer(
+            fromAccountId: account.id,
+            toAccountId: destinationAccount!.id,
+            name: 'Transferencia',
+            amountCents: amount,
+            currency: account.currency,
+            toAmountCents: _amountToCents(
+              destinationAmountValue ?? amountValue,
+            ),
+            toCurrency: destinationAccount.currency,
+            exchangeRate: exchangeRate,
+            categoryId: category.id,
+            description: _emptyToNull(_descriptionController.text),
+            dateMs: dateMs,
+            tagIds: tagIds,
+          );
+      }
 
       if (!mounted) return;
-      messenger.showSnackBar(
-        const SnackBar(content: Text('Movimiento anotado')),
-      );
-      navigator.pop(result);
+      navigator.pop(true);
     } catch (error) {
       if (!mounted) return;
-      messenger.showSnackBar(
-        SnackBar(content: Text('No se pudo anotar: $error')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('No se pudo anotar: $error')));
       setState(() => _isSaving = false);
     }
   }
@@ -372,6 +527,13 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
       TransactionFormType.expense => const Color(0xFFFF3744),
       TransactionFormType.transfer => const Color(0xFF6DE7D8),
     };
+
+    if (_isLoading) {
+      return const Scaffold(
+        backgroundColor: Color(0xFFFFF8F8),
+        body: SafeArea(child: Center(child: CircularProgressIndicator())),
+      );
+    }
 
     return Scaffold(
       backgroundColor: const Color(0xFFFFF8F8),
@@ -434,6 +596,7 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
                   destinationAccount: _selectedDestinationAccount,
                   amountController: _amountController,
                   destinationAmountController: _destinationAmountController,
+                  accountErrorText: _transferAccountError,
                   enabled: !_isSaving,
                   onPickSource: () => _pickAccount(),
                   onPickDestination: () => _pickAccount(destination: true),
@@ -537,39 +700,18 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
                 ),
               ),
               const SizedBox(height: 28),
-              _SectionLabel('Categoria'),
+              const _SectionLabel('Categoria'),
               const SizedBox(height: 10),
               _PickerChip(
                 label: _selectedCategory?.name ?? 'Seleccionar',
                 onPressed: _isSaving ? null : _pickCategory,
               ),
               const SizedBox(height: 24),
-              TextFormField(
-                controller: _tagController,
-                enabled: !_isSaving,
-                textInputAction: TextInputAction.done,
-                textCapitalization: TextCapitalization.none,
-                decoration: InputDecoration(
-                  labelText: 'Etiquetas',
-                  border: const OutlineInputBorder(),
-                  prefixIcon: IconButton(
-                    tooltip: 'Elegir etiqueta existente',
-                    onPressed: _isSaving ? null : _pickExistingTag,
-                    icon: const Icon(Icons.sell_rounded),
-                  ),
-                  suffixIcon: IconButton(
-                    onPressed: _isSaving
-                        ? null
-                        : () => unawaited(_addTag(_tagController.text)),
-                    icon: const Icon(Icons.add_rounded),
-                  ),
-                ),
-                onFieldSubmitted: (value) => unawaited(_addTag(value)),
-                onChanged: (value) {
-                  if (value.endsWith(',')) {
-                    unawaited(_addTag(value.substring(0, value.length - 1)));
-                  }
-                },
+              const _SectionLabel('Etiquetas'),
+              const SizedBox(height: 10),
+              _PickerChip(
+                label: 'Agregar etiqueta',
+                onPressed: _isSaving ? null : _pickTag,
               ),
               if (_tags.isNotEmpty) ...[
                 const SizedBox(height: 10),
@@ -638,13 +780,16 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
     setState(() {
       _type = type;
       _replaceEditableControllers();
-      _selectedCategory = type == TransactionFormType.transfer
-          ? _transferCategory
-          : null;
+      _selectedCategory = _resolveSelectedCategory(
+        current: null,
+        categories: _categories,
+        type: type,
+      );
       _tags.clear();
       _isRecurringExpense = false;
       _sourceAmountTouched = false;
       _destinationAmountTouched = false;
+      _transferAccountError = null;
     });
   }
 
@@ -653,20 +798,17 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
     final oldDestinationAmountController = _destinationAmountController;
     final oldTitleController = _titleController;
     final oldDescriptionController = _descriptionController;
-    final oldTagController = _tagController;
 
     _amountController = TextEditingController();
     _destinationAmountController = TextEditingController();
     _titleController = TextEditingController();
     _descriptionController = TextEditingController();
-    _tagController = TextEditingController();
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       oldAmountController.dispose();
       oldDestinationAmountController.dispose();
       oldTitleController.dispose();
       oldDescriptionController.dispose();
-      oldTagController.dispose();
     });
   }
 
@@ -706,6 +848,7 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
 
   void _swapTransferAccounts() {
     setState(() {
+      _transferAccountError = null;
       final source = _selectedAccount;
       _selectedAccount = _selectedDestinationAccount;
       _selectedDestinationAccount = source;
@@ -725,7 +868,209 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
       selection: TextSelection.collapsed(offset: value.length),
     );
   }
+
+  Future<Account?> _createMockAccountDialog() async {
+    final controller = TextEditingController();
+    String currency = _mockCurrencyOptions.first;
+    bool saving = false;
+    final result = await showDialog<Account>(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              title: const Text('Nueva cuenta'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: controller,
+                    autofocus: true,
+                    textInputAction: TextInputAction.done,
+                    onSubmitted: (_) async {
+                      if (saving) return;
+                      setDialogState(() => saving = true);
+                      final created = await _createRealAccount(
+                        controller.text.trim(),
+                        currency,
+                      );
+                      if (context.mounted) {
+                        setDialogState(() => saving = false);
+                      }
+                      if (created != null && context.mounted) {
+                        Navigator.pop(context, created);
+                      }
+                    },
+                    decoration: const InputDecoration(labelText: 'Nombre'),
+                  ),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<String>(
+                    initialValue: currency,
+                    decoration: const InputDecoration(labelText: 'Moneda'),
+                    items: _mockCurrencyOptions
+                        .map(
+                          (option) => DropdownMenuItem<String>(
+                            value: option,
+                            child: Text(option),
+                          ),
+                        )
+                        .toList(growable: false),
+                    onChanged: (value) {
+                      if (value == null) return;
+                      setDialogState(() => currency = value);
+                    },
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Cancelar'),
+                ),
+                TextButton(
+                  onPressed: saving
+                      ? null
+                      : () async {
+                          setDialogState(() => saving = true);
+                          final created = await _createRealAccount(
+                            controller.text.trim(),
+                            currency,
+                          );
+                          if (context.mounted) {
+                            setDialogState(() => saving = false);
+                          }
+                          if (created != null && context.mounted) {
+                            Navigator.pop(context, created);
+                          }
+                        },
+                  child: const Text('Crear'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+    return result;
+  }
+
+  Future<Category?> _createMockCategoryDialog() async {
+    final controller = TextEditingController();
+    bool saving = false;
+    final result = await showDialog<Category>(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) => AlertDialog(
+            title: const Text('Nueva categoria'),
+            content: TextField(
+              controller: controller,
+              autofocus: true,
+              textInputAction: TextInputAction.done,
+              onSubmitted: (_) async {
+                if (saving) return;
+                setDialogState(() => saving = true);
+                final created = await _createRealCategory(
+                  controller.text.trim(),
+                );
+                if (context.mounted) {
+                  setDialogState(() => saving = false);
+                }
+                if (created != null && context.mounted) {
+                  Navigator.pop(context, created);
+                }
+              },
+              decoration: const InputDecoration(labelText: 'Nombre'),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Cancelar'),
+              ),
+              TextButton(
+                onPressed: saving
+                    ? null
+                    : () async {
+                        setDialogState(() => saving = true);
+                        final created = await _createRealCategory(
+                          controller.text.trim(),
+                        );
+                        if (context.mounted) {
+                          setDialogState(() => saving = false);
+                        }
+                        if (created != null && context.mounted) {
+                          Navigator.pop(context, created);
+                        }
+                      },
+                child: const Text('Crear'),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+    return result;
+  }
+
+  Future<Account?> _createRealAccount(String name, String currency) async {
+    final repos = _repos;
+    if (repos == null) return null;
+    try {
+      final accountId = await repos.accounts.create(
+        name: name,
+        currency: currency,
+      );
+      await _loadFormData(repos);
+      if (!mounted) return null;
+      final account = _accounts
+          .where((item) => item.id == accountId)
+          .firstOrNull;
+      if (account == null) return null;
+      setState(() {
+        _selectedAccount = account;
+        if (_type == TransactionFormType.transfer &&
+            _selectedDestinationAccount == null) {
+          _selectedDestinationAccount = _resolveDestinationAccount(
+            current: null,
+            accounts: _accounts,
+            source: account,
+          );
+        }
+      });
+      return account;
+    } catch (error) {
+      if (!mounted) return null;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(error.toString())));
+      return null;
+    }
+  }
+
+  Future<Category?> _createRealCategory(String name) async {
+    final repos = _repos;
+    if (repos == null) return null;
+    try {
+      final categoryId = await repos.categories.create(name: name);
+      await _loadFormData(repos);
+      if (!mounted) return null;
+      final category = _categories
+          .where((item) => item.id == categoryId)
+          .firstOrNull;
+      if (category == null) return null;
+      setState(() => _selectedCategory = category);
+      return category;
+    } catch (error) {
+      if (!mounted) return null;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(error.toString())));
+      return null;
+    }
+  }
 }
+
+const _mockCurrencyOptions = ['ARS', 'USD', 'EUR', 'BRL'];
 
 class _RecurringExpenseControl extends StatelessWidget {
   const _RecurringExpenseControl({
@@ -774,6 +1119,7 @@ class _TransferBlock extends StatelessWidget {
     required this.destinationAccount,
     required this.amountController,
     required this.destinationAmountController,
+    required this.accountErrorText,
     required this.enabled,
     required this.onPickSource,
     required this.onPickDestination,
@@ -782,10 +1128,11 @@ class _TransferBlock extends StatelessWidget {
     required this.onDestinationAmountChanged,
   });
 
-  final _MockAccount? sourceAccount;
-  final _MockAccount? destinationAccount;
+  final Account? sourceAccount;
+  final Account? destinationAccount;
   final TextEditingController amountController;
   final TextEditingController destinationAmountController;
+  final String? accountErrorText;
   final bool enabled;
   final VoidCallback onPickSource;
   final VoidCallback onPickDestination;
@@ -795,40 +1142,59 @@ class _TransferBlock extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
+    final errorText = accountErrorText;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Expanded(
-          child: _TransferSide(
-            label: 'Sale',
-            account: sourceAccount,
-            amountController: amountController,
-            enabled: enabled,
-            onPickAccount: onPickSource,
-            onAmountChanged: onAmountChanged,
-          ),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: _TransferSide(
+                label: 'Sale',
+                account: sourceAccount,
+                amountController: amountController,
+                enabled: enabled,
+                onPickAccount: onPickSource,
+                onAmountChanged: onAmountChanged,
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(8, 34, 8, 0),
+              child: IconButton.filledTonal(
+                onPressed: onSwap,
+                icon: const Icon(Icons.swap_horiz_rounded),
+                style: IconButton.styleFrom(
+                  backgroundColor: const Color(0xFFE7FFFA),
+                  foregroundColor: Colors.black,
+                ),
+              ),
+            ),
+            Expanded(
+              child: _TransferSide(
+                label: 'Entra',
+                account: destinationAccount,
+                amountController: destinationAmountController,
+                enabled: enabled,
+                onPickAccount: onPickDestination,
+                onAmountChanged: onDestinationAmountChanged,
+              ),
+            ),
+          ],
         ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(8, 34, 8, 0),
-          child: IconButton.filledTonal(
-            onPressed: onSwap,
-            icon: const Icon(Icons.swap_horiz_rounded),
-            style: IconButton.styleFrom(
-              backgroundColor: const Color(0xFFE7FFFA),
-              foregroundColor: Colors.black,
+        if (errorText != null) ...[
+          const SizedBox(height: 8),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: Text(
+              errorText,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: Theme.of(context).colorScheme.error,
+              ),
+              textAlign: TextAlign.center,
             ),
           ),
-        ),
-        Expanded(
-          child: _TransferSide(
-            label: 'Entra',
-            account: destinationAccount,
-            amountController: destinationAmountController,
-            enabled: enabled,
-            onPickAccount: onPickDestination,
-            onAmountChanged: onDestinationAmountChanged,
-          ),
-        ),
+        ],
       ],
     );
   }
@@ -845,7 +1211,7 @@ class _TransferSide extends StatelessWidget {
   });
 
   final String label;
-  final _MockAccount? account;
+  final Account? account;
   final TextEditingController amountController;
   final bool enabled;
   final VoidCallback onPickAccount;
@@ -1076,59 +1442,77 @@ class _ReadonlyField extends StatelessWidget {
   }
 }
 
-class _MockAccount {
-  const _MockAccount({required this.name, required this.currency});
+class _CreateTagDialog extends StatefulWidget {
+  const _CreateTagDialog({required this.onCreate});
 
-  final String name;
-  final String currency;
+  final Future<_FormTag?> Function(String name) onCreate;
+
+  @override
+  State<_CreateTagDialog> createState() => _CreateTagDialogState();
 }
 
-class _MockCategory {
-  const _MockCategory(this.name);
+class _CreateTagDialogState extends State<_CreateTagDialog> {
+  final _controller = TextEditingController();
+  bool _saving = false;
 
-  final String name;
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    if (_saving) return;
+    setState(() => _saving = true);
+    final created = await widget.onCreate(_controller.text);
+    if (!mounted) return;
+    if (created == null) {
+      setState(() => _saving = false);
+      return;
+    }
+    Navigator.pop(context, created);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Nueva etiqueta'),
+      content: TextField(
+        controller: _controller,
+        autofocus: true,
+        textInputAction: TextInputAction.done,
+        textCapitalization: TextCapitalization.none,
+        onSubmitted: (_) => unawaited(_submit()),
+        decoration: const InputDecoration(labelText: 'Nombre'),
+      ),
+      actions: [
+        TextButton(
+          onPressed: _saving ? null : () => Navigator.pop(context),
+          child: const Text('Cancelar'),
+        ),
+        TextButton(
+          onPressed: _saving ? null : () => unawaited(_submit()),
+          child: const Text('Crear'),
+        ),
+      ],
+    );
+  }
 }
 
 class _FormTag {
-  const _FormTag({required this.name, required this.color});
+  const _FormTag({this.id, required this.name, required this.color});
 
+  final String? id;
   final String name;
   final Color color;
 }
 
-class _CategorySelection {
-  const _CategorySelection.category(this.category);
-
-  const _CategorySelection.none() : category = null;
-
-  final _MockCategory? category;
-}
-
-const _mockAccounts = [
-  _MockAccount(name: 'Mercado Pago', currency: 'ARS'),
-  _MockAccount(name: 'Efectivo', currency: 'ARS'),
-  _MockAccount(name: 'USD', currency: 'USD'),
-];
-
-const _transferCategory = _MockCategory('Transferencia');
-
-const _mockCategories = [
-  _transferCategory,
-  _MockCategory('Intereses'),
-  _MockCategory('Comida'),
-  _MockCategory('Transporte'),
-  _MockCategory('Entretenimiento'),
-  _MockCategory('Otros'),
-];
-
-const _mockTags = [
-  _FormTag(name: 'Ahorro', color: Color(0xFF42A5F5)),
-  _FormTag(name: 'Inversion', color: Color(0xFFFFCA28)),
-  _FormTag(name: 'Viaje', color: Color(0xFFAB47BC)),
-];
-
 double? _parseAmount(String value) {
   return double.tryParse(value.trim().replaceAll(',', '.'));
+}
+
+BigInt _amountToCents(double amount) {
+  return BigInt.from((amount * 100).round());
 }
 
 void _setAmountToZero(TextEditingController controller) {
@@ -1144,5 +1528,9 @@ String? _emptyToNull(String value) {
 }
 
 String _formatDate(DateTime date) {
+  final now = DateTime.now();
+  if (date.year == now.year && date.month == now.month && date.day == now.day) {
+    return 'Hoy';
+  }
   return '${date.day}/${date.month}/${date.year}';
 }
