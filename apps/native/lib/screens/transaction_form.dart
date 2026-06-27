@@ -24,7 +24,6 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
   TextEditingController _destinationAmountController = TextEditingController();
   TextEditingController _titleController = TextEditingController();
   TextEditingController _descriptionController = TextEditingController();
-  TextEditingController _tagController = TextEditingController();
 
   TransactionFormType _type = TransactionFormType.income;
   AppRepositories? _repos;
@@ -59,7 +58,6 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
     _destinationAmountController.dispose();
     _titleController.dispose();
     _descriptionController.dispose();
-    _tagController.dispose();
     super.dispose();
   }
 
@@ -261,49 +259,41 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
     setState(() => _selectedCategory = category);
   }
 
-  Future<void> _addTag(String rawValue) async {
+  Future<_FormTag?> _createTag(String rawValue) async {
     final name = rawValue.trim();
-    if (name.isEmpty) return;
+    if (name.isEmpty) return null;
     final alreadySelected = _tags.any(
       (tag) => tag.name.toLowerCase() == name.toLowerCase(),
     );
     if (alreadySelected) {
-      _tagController.clear();
-      return;
+      return null;
     }
 
     final existingTag = _findKnownTag(name);
     if (existingTag != null) {
-      setState(() {
-        _tags.add(existingTag);
-        _tagController.clear();
-      });
-      return;
+      return existingTag;
     }
 
     final color = await _pickNewTagColor(name);
-    if (color == null || !mounted) return;
+    if (color == null || !mounted) return null;
     final repos = _repos;
-    if (repos == null) return;
+    if (repos == null) return null;
     try {
       final id = await repos.tags.create(name: name, color: colorToHex(color));
-      if (!mounted) return;
+      if (!mounted) return null;
       final tag = _FormTag(id: id, name: name, color: color);
-      setState(() {
-        _knownTags = [..._knownTags, tag];
-        _tags.add(tag);
-        _tagController.clear();
-      });
+      setState(() => _knownTags = [..._knownTags, tag]);
+      return tag;
     } catch (error) {
-      if (!mounted) return;
+      if (!mounted) return null;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('No se pudo crear la etiqueta: $error')),
       );
+      return null;
     }
   }
 
   Future<void> _commitInlineEditing() async {
-    await _addTag(_tagController.text);
     FocusManager.instance.primaryFocus?.unfocus();
   }
 
@@ -315,7 +305,7 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
     return null;
   }
 
-  Future<void> _pickExistingTag() async {
+  Future<void> _pickTag() async {
     await _commitInlineEditing();
     if (!mounted) return;
     final availableTags = _knownTags
@@ -333,6 +323,15 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
           child: ListView(
             shrinkWrap: true,
             children: [
+              ListTile(
+                leading: const Icon(Icons.add_circle_outline_rounded),
+                title: const Text('Nueva etiqueta'),
+                onTap: () async {
+                  final created = await _createMockTagDialog();
+                  if (!context.mounted) return;
+                  Navigator.pop(context, created);
+                },
+              ),
               if (availableTags.isEmpty)
                 const ListTile(title: Text('No hay etiquetas disponibles')),
               for (final tag in availableTags)
@@ -352,6 +351,13 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
     );
     if (tag == null || !mounted) return;
     setState(() => _tags.add(tag));
+  }
+
+  Future<_FormTag?> _createMockTagDialog() async {
+    return showDialog<_FormTag>(
+      context: context,
+      builder: (context) => _CreateTagDialog(onCreate: _createTag),
+    );
   }
 
   Future<Color?> _pickNewTagColor(String name) {
@@ -442,7 +448,6 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
     }
 
     setState(() => _isSaving = true);
-    final messenger = ScaffoldMessenger.of(context);
     final navigator = Navigator.of(context);
 
     try {
@@ -505,15 +510,12 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
       }
 
       if (!mounted) return;
-      messenger.showSnackBar(
-        const SnackBar(content: Text('Movimiento anotado')),
-      );
-      navigator.pop();
+      navigator.pop(true);
     } catch (error) {
       if (!mounted) return;
-      messenger.showSnackBar(
-        SnackBar(content: Text('No se pudo anotar: $error')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('No se pudo anotar: $error')));
       setState(() => _isSaving = false);
     }
   }
@@ -705,32 +707,11 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
                 onPressed: _isSaving ? null : _pickCategory,
               ),
               const SizedBox(height: 24),
-              TextFormField(
-                controller: _tagController,
-                enabled: !_isSaving,
-                textInputAction: TextInputAction.done,
-                textCapitalization: TextCapitalization.none,
-                decoration: InputDecoration(
-                  labelText: 'Etiquetas',
-                  border: const OutlineInputBorder(),
-                  prefixIcon: IconButton(
-                    tooltip: 'Elegir etiqueta existente',
-                    onPressed: _isSaving ? null : _pickExistingTag,
-                    icon: const Icon(Icons.sell_rounded),
-                  ),
-                  suffixIcon: IconButton(
-                    onPressed: _isSaving
-                        ? null
-                        : () => unawaited(_addTag(_tagController.text)),
-                    icon: const Icon(Icons.add_rounded),
-                  ),
-                ),
-                onFieldSubmitted: (value) => unawaited(_addTag(value)),
-                onChanged: (value) {
-                  if (value.endsWith(',')) {
-                    unawaited(_addTag(value.substring(0, value.length - 1)));
-                  }
-                },
+              const _SectionLabel('Etiquetas'),
+              const SizedBox(height: 10),
+              _PickerChip(
+                label: 'Agregar etiqueta',
+                onPressed: _isSaving ? null : _pickTag,
               ),
               if (_tags.isNotEmpty) ...[
                 const SizedBox(height: 10),
@@ -817,20 +798,17 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
     final oldDestinationAmountController = _destinationAmountController;
     final oldTitleController = _titleController;
     final oldDescriptionController = _descriptionController;
-    final oldTagController = _tagController;
 
     _amountController = TextEditingController();
     _destinationAmountController = TextEditingController();
     _titleController = TextEditingController();
     _descriptionController = TextEditingController();
-    _tagController = TextEditingController();
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       oldAmountController.dispose();
       oldDestinationAmountController.dispose();
       oldTitleController.dispose();
       oldDescriptionController.dispose();
-      oldTagController.dispose();
     });
   }
 
@@ -1460,6 +1438,63 @@ class _ReadonlyField extends StatelessWidget {
         ),
         child: Text(value, style: Theme.of(context).textTheme.titleMedium),
       ),
+    );
+  }
+}
+
+class _CreateTagDialog extends StatefulWidget {
+  const _CreateTagDialog({required this.onCreate});
+
+  final Future<_FormTag?> Function(String name) onCreate;
+
+  @override
+  State<_CreateTagDialog> createState() => _CreateTagDialogState();
+}
+
+class _CreateTagDialogState extends State<_CreateTagDialog> {
+  final _controller = TextEditingController();
+  bool _saving = false;
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    if (_saving) return;
+    setState(() => _saving = true);
+    final created = await widget.onCreate(_controller.text);
+    if (!mounted) return;
+    if (created == null) {
+      setState(() => _saving = false);
+      return;
+    }
+    Navigator.pop(context, created);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Nueva etiqueta'),
+      content: TextField(
+        controller: _controller,
+        autofocus: true,
+        textInputAction: TextInputAction.done,
+        textCapitalization: TextCapitalization.none,
+        onSubmitted: (_) => unawaited(_submit()),
+        decoration: const InputDecoration(labelText: 'Nombre'),
+      ),
+      actions: [
+        TextButton(
+          onPressed: _saving ? null : () => Navigator.pop(context),
+          child: const Text('Cancelar'),
+        ),
+        TextButton(
+          onPressed: _saving ? null : () => unawaited(_submit()),
+          child: const Text('Crear'),
+        ),
+      ],
     );
   }
 }

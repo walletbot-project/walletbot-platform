@@ -42,7 +42,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
     // Pushed routes sit above the account-scoped providers; re-provide them
     // so the new route keeps using the active account's data layer.
     final repos = context.read<AppRepositories>();
-    await Navigator.of(context).push<void>(
+    final saved = await Navigator.of(context).push<bool>(
       MaterialPageRoute(
         builder: (_) => Provider<AppRepositories>.value(
           value: repos,
@@ -50,6 +50,8 @@ class _ActivityScreenState extends State<ActivityScreen> {
         ),
       ),
     );
+    if (!mounted || saved != true) return;
+    context.read<AppNavigation>().index = AppNavigation.activityTab;
   }
 
   @override
