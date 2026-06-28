@@ -1,6 +1,9 @@
 import 'package:app/auth/account.dart';
 import 'package:app/auth/auth_controller.dart';
 import 'package:app/auth/pop_on_account_switch.dart';
+import 'package:app/components/dashboard/add_widget_sheet.dart';
+import 'package:app/components/dashboard/dashboard_section.dart';
+import 'package:app/components/dashboard/default_dashboard.dart';
 import 'package:app/data/data.dart';
 import 'package:app/screens/login.dart';
 import 'package:app/screens/transaction_form.dart';
@@ -10,15 +13,35 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key});
+  const HomeScreen({super.key, required this.onOpenActivity});
+
+  final ValueChanged<TransactionFilter> onOpenActivity;
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  void _showAccountSwitcher() {
-    showDialog<void>(
+  @override
+  void initState() {
+    super.initState();
+    _maybeSeedDashboard();
+  }
+
+  /// Seeds the default dashboard once per device (the repository enforces the
+  /// empty-table + one-time guard). Fire-and-forget: the dashboard stream
+  /// updates reactively once the rows land.
+  void _maybeSeedDashboard() {
+    final repos = context.read<AppRepositories>();
+    repos.dashboard
+        .seedDefaultIfEmpty(() => writeDefaultDashboardSeed(repos))
+        .catchError((Object e, StackTrace st) {
+          debugPrint('home: default dashboard seed failed: $e');
+        });
+  }
+
+  void showUserMenu() {
+    showDialog(
       context: context,
       useSafeArea: false,
       builder: (dialogContext) {
@@ -158,36 +181,67 @@ class _HomeScreenState extends State<HomeScreen> {
     context.read<AppNavigation>().index = AppNavigation.activityTab;
   }
 
+  bool _editing = false;
+
+  Future<void> _openAddWidget() async {
+    final repos = context.read<AppRepositories>();
+    await showAddWidgetSheet(context, repos);
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Home'),
-        actions: [
-          const Padding(
-            padding: EdgeInsets.only(right: 4),
-            child: Center(child: SyncStatusPill()),
+        actions: _editing
+            ? [
+                IconButton(
+                  tooltip: 'Agregar widget',
+                  onPressed: _openAddWidget,
+                  icon: const Icon(Icons.add_rounded),
+                ),
+                IconButton(
+                  tooltip: 'Listo',
+                  onPressed: () => setState(() => _editing = false),
+                  icon: const Icon(Icons.check_rounded),
+                ),
+              ]
+            : [
+                const Padding(
+                  padding: EdgeInsets.only(right: 4),
+                  child: Center(child: SyncStatusPill()),
+                ),
+                IconButton(
+                  tooltip: 'Editar tablero',
+                  onPressed: () => setState(() => _editing = true),
+                  icon: const Icon(Icons.edit_outlined),
+                ),
+                IconButton(
+                  onPressed: showUserMenu,
+                  icon: const Icon(Icons.person_rounded),
+                ),
+              ],
+      ),
+      body: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          DashboardSection(
+            editing: _editing,
+            onStartEditing: () => setState(() => _editing = true),
+            onOpenFilter: widget.onOpenActivity,
           ),
-          IconButton(
-            onPressed: _showAccountSwitcher,
-            icon: const Icon(Icons.person_rounded),
+          const SizedBox(height: 24),
+          Text('Acciones', style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(height: 12),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: _HomeActionCard(
+              label: 'Agregar a mano',
+              icon: Icons.add_rounded,
+              onTap: _openManualAdd,
+            ),
           ),
         ],
-      ),
-      body: Padding(
-        padding: const EdgeInsets.all(16),
-        child: ListView(
-          children: [
-            Align(
-              alignment: Alignment.centerLeft,
-              child: _HomeActionCard(
-                label: 'Agregar a mano',
-                icon: Icons.add_rounded,
-                onTap: _openManualAdd,
-              ),
-            ),
-          ],
-        ),
       ),
     );
   }

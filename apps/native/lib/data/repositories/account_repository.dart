@@ -43,6 +43,11 @@ class AccountRepository extends RepositoryBase {
   Stream<BigInt> watchBalanceCents(String accountId) =>
       watchAccountBalance(db, accountId);
 
+  /// Live total balance across all active accounts in [currency], for the
+  /// dashboard Balance card.
+  Stream<BigInt> watchBalanceForCurrency(String currency) =>
+      watchTotalBalanceForCurrency(db, currency);
+
   /// Creates an account, optionally with an initial-balance adjustment
   /// (`Balance inicial`), atomically. Returns the new account id.
   Future<String> create({

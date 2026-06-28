@@ -197,6 +197,66 @@ class TransactionTags extends Table {
   ];
 }
 
+// A reusable, named slice of transactions (the "Saved View" primitive from
+// docs/home-dashboard.md). `config` is an opaque JSON string of the canonical
+// `{combinator, children}` condition tree (see
+// `TransactionFilter.toCanonicalJson`); the backend never parses it.
+@TableIndex(name: 'saved_filters_archived', columns: {#archived})
+@TableIndex(name: 'saved_filters_updated_at', columns: {#updatedAt})
+@TableIndex.sql('''
+  CREATE INDEX saved_filters_needs_sync ON saved_filters (updated_at)
+    WHERE dirty = 1;
+''')
+class SavedFilters extends Table {
+  TextColumn get id => text().named('id')();
+  TextColumn get name => text().named('name')();
+  TextColumn get config => text().named('config')(); // JSON canonical tree
+
+  BoolColumn get archived =>
+      boolean().named('is_archived').withDefault(const Constant(false))();
+  Int64Column get createdAt => int64().named('created_at')();
+  Int64Column get updatedAt => int64().named('updated_at')();
+
+  // Sync
+  BoolColumn get dirty =>
+      boolean().named('dirty').withDefault(const Constant(false))();
+
+  @override
+  Set<Column<Object>> get primaryKey => {id};
+}
+
+// One configured dashboard tile. `filterId` is a soft reference into
+// `saved_filters` (null for the balance card, which carries its currency in
+// `options`). `options` is an opaque JSON string (title, aggregation, limit,
+// currency); the backend never parses it.
+@TableIndex(name: 'dashboard_widgets_position', columns: {#position})
+@TableIndex(name: 'dashboard_widgets_archived', columns: {#archived})
+@TableIndex(name: 'dashboard_widgets_updated_at', columns: {#updatedAt})
+@TableIndex.sql('''
+  CREATE INDEX dashboard_widgets_needs_sync ON dashboard_widgets (updated_at)
+    WHERE dirty = 1;
+''')
+class DashboardWidgets extends Table {
+  TextColumn get id => text().named('id')();
+  TextColumn get type => text().named('type')(); // "stat" | "list" | "balance"
+  TextColumn get filterId => text().named('filter_id').nullable()();
+  IntColumn get position => integer().named('position')();
+  TextColumn get width => text().named('width')(); // "full" | "half" | "third"
+  TextColumn get options => text().named('options')(); // JSON display options
+
+  BoolColumn get archived =>
+      boolean().named('is_archived').withDefault(const Constant(false))();
+  Int64Column get createdAt => int64().named('created_at')();
+  Int64Column get updatedAt => int64().named('updated_at')();
+
+  // Sync
+  BoolColumn get dirty =>
+      boolean().named('dirty').withDefault(const Constant(false))();
+
+  @override
+  Set<Column<Object>> get primaryKey => {id};
+}
+
 // Singleton — tracks the highest server-side seq the client has pulled.
 class SyncState extends Table {
   TextColumn get id =>
@@ -204,6 +264,10 @@ class SyncState extends Table {
   Int64Column get lastServerSeq =>
       int64().named('last_server_seq').withDefault(Constant(BigInt.zero))();
   Int64Column get lastSyncedAt => int64().named('last_synced_at').nullable()();
+  // One-time guard so the default dashboard is seeded at most once per device
+  // (see DashboardRepository.seedDefaultIfEmpty).
+  BoolColumn get dashboardSeeded =>
+      boolean().named('dashboard_seeded').withDefault(const Constant(false))();
 
   @override
   Set<Column<Object>> get primaryKey => {id};
@@ -239,6 +303,8 @@ class Tombstones extends Table {
     Transactions,
     Tags,
     TransactionTags,
+    SavedFilters,
+    DashboardWidgets,
     SyncState,
     Tombstones,
   ],
@@ -252,7 +318,21 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.executor);
 
   @override
-  int get schemaVersion => 1;
+  int get schemaVersion => 2;
+
+  @override
+  MigrationStrategy get migration => MigrationStrategy(
+    onCreate: (m) => m.createAll(),
+    onUpgrade: (m, from, to) async {
+      // v2: home dashboard persistence (savedFilters + dashboardWidgets)
+      // and the one-time auto-seed guard on syncState.
+      if (from < 2) {
+        await m.createTable(savedFilters);
+        await m.createTable(dashboardWidgets);
+        await m.addColumn(syncState, syncState.dashboardSeeded);
+      }
+    },
+  );
 
   static String _dbNameFor(String userId) => 'app_database_$userId';
 
@@ -261,64 +341,6 @@ class AppDatabase extends _$AppDatabase {
       name: name,
       native: const DriftNativeOptions(
         databaseDirectory: getApplicationSupportDirectory,
-      ),
-    );
-  }
-
-  Stream<List<Account>> watchAccounts() =>
-      (select(accounts)
-            ..where((a) => a.archived.equals(false))
-            ..orderBy([(a) => OrderingTerm(expression: a.createdAt)]))
-          .watch();
-
-  Future<void> insertAccount({
-    required String id,
-    required String name,
-    required String currency,
-  }) {
-    final now = BigInt.from(DateTime.now().millisecondsSinceEpoch);
-    return into(accounts).insert(
-      AccountsCompanion.insert(
-        id: id,
-        name: name,
-        currency: currency,
-        createdAt: now,
-        updatedAt: now,
-        dirty: const Value(true),
-      ),
-    );
-  }
-
-  Future<void> insertTransaction({
-    required String id,
-    required String type,
-    required String name,
-    required String status,
-    required BigInt date,
-    required String accountId,
-    required String categoryId,
-    required BigInt amount,
-    required String currency,
-    BigInt? balanceAfter,
-  }) {
-    final now = BigInt.from(DateTime.now().millisecondsSinceEpoch);
-    return into(transactions).insert(
-      TransactionsCompanion.insert(
-        id: id,
-        type: type,
-        name: name,
-        status: status,
-        date: date,
-        accountId: accountId,
-        categoryId: categoryId,
-        amount: amount,
-        currency: currency,
-        balanceAfter: balanceAfter != null
-            ? Value(balanceAfter)
-            : const Value.absent(),
-        createdAt: now,
-        updatedAt: now,
-        dirty: const Value(true),
       ),
     );
   }

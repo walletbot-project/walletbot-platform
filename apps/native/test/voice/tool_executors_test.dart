@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:app/data/data.dart';
 import 'package:app/database.dart';
 import 'package:app/voice/tool_executors.dart';
@@ -165,5 +167,156 @@ void main() {
     expect(rows, hasLength(1));
     expect((rows.single as Map)['total'], 12.34);
     expect((rows.single as Map)['name'], 'Food');
+  });
+
+  test(
+    'dashboard widget tools preserve advanced filters and backgrounds',
+    () async {
+      final advancedFilter = {
+        'combinator': 'and',
+        'children': [
+          {'field': 'date', 'operator': 'relative', 'value': 'this_month'},
+          {
+            'combinator': 'or',
+            'children': [
+              {
+                'field': 'type',
+                'operator': 'in',
+                'value': ['expense'],
+              },
+              {
+                'field': 'tag',
+                'operator': 'in',
+                'value': ['work'],
+                'match': 'any',
+                'includeSubtags': true,
+              },
+            ],
+          },
+        ],
+      };
+
+      final created = await tools.execute('createDashboardWidget', {
+        'type': 'stat',
+        'title': 'Gastos o trabajo',
+        'width': 'two_thirds',
+        'aggregation': 'net',
+        'filterConfigJson': jsonEncode(advancedFilter),
+        'background': {
+          'mode': 'value',
+          'low': 0,
+          'high': 10000,
+          'lowColor': '#FFCBCB',
+          'betweenColor': '#FFE588',
+          'highColor': '#C8F2D8',
+        },
+      });
+      expect(created['ok'], isTrue);
+      expect(created['filterId'], isA<String>());
+
+      final list = await tools.execute('listDashboardWidgets', {});
+      expect(list['ok'], isTrue);
+      final widgets = list['widgets'] as List;
+      expect(widgets, hasLength(1));
+      final widget = widgets.single as Map<String, dynamic>;
+      expect(widget['type'], 'stat');
+      expect(widget['width'], 'two_thirds');
+
+      final options = widget['options'] as Map;
+      expect(options['title'], 'Gastos o trabajo');
+      expect(options['aggregation'], 'net');
+      expect((options['background'] as Map)['mode'], 'value');
+
+      final filterConfig = widget['filterConfig'] as Map;
+      expect(filterConfig['combinator'], 'and');
+      expect((filterConfig['children'] as List)[1], isA<Map>());
+    },
+  );
+
+  test('dashboard widget edit updates linked filter and can archive', () async {
+    final initialFilter = {
+      'combinator': 'and',
+      'children': [
+        {
+          'field': 'type',
+          'operator': 'in',
+          'value': ['expense'],
+        },
+      ],
+    };
+    final nextFilter = {
+      'combinator': 'and',
+      'children': [
+        {'field': 'date', 'operator': 'relative', 'value': 'this_year'},
+      ],
+    };
+
+    final created = await tools.execute('createDashboardWidget', {
+      'type': 'list',
+      'title': 'Últimos gastos',
+      'limit': 3,
+      'filterConfigJson': jsonEncode(initialFilter),
+    });
+    final id = created['id'] as String;
+    final filterId = created['filterId'] as String;
+
+    final updated = await tools.execute('updateDashboardWidget', {
+      'id': id,
+      'title': 'Movimientos del año',
+      'width': 'full',
+      'limit': 8,
+      'filterConfigJson': jsonEncode(nextFilter),
+      'background': {'mode': 'fixed', 'fixedColor': '#C7E5FF'},
+    });
+    expect(updated, {'ok': true, 'id': id, 'filterId': filterId});
+
+    final savedFilter = await repos.savedFilters.getById(filterId);
+    expect(savedFilter?.name, 'Movimientos del año');
+    expect((jsonDecode(savedFilter!.config) as Map)['children'], hasLength(1));
+
+    final listed = await tools.execute('listDashboardWidgets', {});
+    final widget = (listed['widgets'] as List).single as Map<String, dynamic>;
+    final options = widget['options'] as Map;
+    expect(options['limit'], 8);
+    expect((options['background'] as Map)['fixedColor'], '#C7E5FF');
+
+    final archived = await tools.execute('archiveDashboardWidget', {'id': id});
+    expect(archived, {'ok': true, 'id': id});
+    final empty = await tools.execute('listDashboardWidgets', {});
+    expect(empty['widgets'], isEmpty);
+  });
+
+  test('saved filter tools create update list and archive', () async {
+    final config = jsonEncode({
+      'combinator': 'and',
+      'children': [
+        {
+          'field': 'currency',
+          'operator': 'in',
+          'value': ['ARS'],
+        },
+      ],
+    });
+    final created = await tools.execute('createSavedFilter', {
+      'name': 'ARS',
+      'filterConfigJson': config,
+    });
+    expect(created['ok'], isTrue);
+    final id = created['id'] as String;
+
+    final updated = await tools.execute('updateSavedFilter', {
+      'id': id,
+      'name': 'Solo ARS',
+    });
+    expect(updated, {'ok': true, 'id': id});
+
+    final listed = await tools.execute('listSavedFilters', {});
+    final filters = listed['filters'] as List;
+    expect(filters, hasLength(1));
+    expect((filters.single as Map)['name'], 'Solo ARS');
+
+    await tools.execute('archiveSavedFilter', {'id': id});
+    final empty = await tools.execute('listSavedFilters', {});
+    expect(empty['filters'], isEmpty);
   });
 }

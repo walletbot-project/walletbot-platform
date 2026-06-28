@@ -38,6 +38,12 @@ void main() {
         .update(db.transactionTags)
         .write(const TransactionTagsCompanion(dirty: Value(false)));
     await db
+        .update(db.savedFilters)
+        .write(const SavedFiltersCompanion(dirty: Value(false)));
+    await db
+        .update(db.dashboardWidgets)
+        .write(const DashboardWidgetsCompanion(dirty: Value(false)));
+    await db
         .update(db.tombstones)
         .write(const TombstonesCompanion(dirty: Value(false)));
   }
@@ -248,5 +254,134 @@ void main() {
       expect(after.dirty, isTrue);
       expect(after.updatedAt.compareTo(before.updatedAt) > 0, isTrue);
     });
+  });
+
+  group('savedFilters', () {
+    test('create/update/archive uphold the contract', () async {
+      final id = await repos.savedFilters.create(
+        name: 'Gastos',
+        config: '{"combinator":"and","children":[]}',
+      );
+      var row = (await repos.savedFilters.getById(id))!;
+      expect(row.dirty, isTrue);
+      expect(row.updatedAt, row.createdAt);
+
+      await clearAllDirty();
+      await Future<void>.delayed(const Duration(milliseconds: 5));
+      await repos.savedFilters.update(id, name: const Value('Egresos'));
+      row = (await repos.savedFilters.getById(id))!;
+      expect(row.name, 'Egresos');
+      expect(row.dirty, isTrue);
+      expect(row.updatedAt.compareTo(row.createdAt) > 0, isTrue);
+
+      await repos.savedFilters.archive(id);
+      row = (await repos.savedFilters.getById(id))!;
+      expect(row.archived, isTrue);
+      expect(row.dirty, isTrue);
+      expect(await tombstoneFor('savedFilters', id), isNotNull);
+    });
+  });
+
+  group('dashboardWidgets', () {
+    test('create/update/archive uphold the contract', () async {
+      final id = await repos.dashboard.create(
+        type: 'balance',
+        position: 0,
+        width: 'full',
+        options: '{"title":"Saldo","currency":"ARS"}',
+      );
+      var row = (await repos.dashboard.getById(id))!;
+      expect(row.dirty, isTrue);
+      expect(row.updatedAt, row.createdAt);
+
+      await clearAllDirty();
+      await Future<void>.delayed(const Duration(milliseconds: 5));
+      await repos.dashboard.update(id, width: const Value('half'));
+      row = (await repos.dashboard.getById(id))!;
+      expect(row.width, 'half');
+      expect(row.dirty, isTrue);
+      expect(row.updatedAt.compareTo(row.createdAt) > 0, isTrue);
+
+      await repos.dashboard.archive(id);
+      row = (await repos.dashboard.getById(id))!;
+      expect(row.archived, isTrue);
+      expect(row.dirty, isTrue);
+      expect(await tombstoneFor('dashboardWidgets', id), isNotNull);
+    });
+
+    test(
+      'reorder rewrites positions, re-dirties, and bumps updatedAt',
+      () async {
+        final a = await repos.dashboard.create(
+          type: 'balance',
+          position: 0,
+          width: 'full',
+          options: '{}',
+        );
+        final b = await repos.dashboard.create(
+          type: 'stat',
+          position: 1,
+          width: 'third',
+          options: '{}',
+        );
+        await clearAllDirty();
+        await Future<void>.delayed(const Duration(milliseconds: 5));
+
+        await repos.dashboard.reorder([b, a]);
+
+        final rowB = (await repos.dashboard.getById(b))!;
+        final rowA = (await repos.dashboard.getById(a))!;
+        expect(rowB.position, 0);
+        expect(rowA.position, 1);
+        expect(rowB.dirty, isTrue);
+        expect(rowA.dirty, isTrue);
+        expect(rowA.updatedAt.compareTo(rowA.createdAt) > 0, isTrue);
+      },
+    );
+
+    test('seedDefaultIfEmpty runs once, then guards', () async {
+      var runs = 0;
+      Future<void> seed() async {
+        runs++;
+        await repos.dashboard.create(
+          type: 'balance',
+          position: 0,
+          width: 'full',
+          options: '{}',
+        );
+      }
+
+      await repos.dashboard.seedDefaultIfEmpty(seed);
+      expect(runs, 1);
+      expect(await repos.dashboard.listActive(), hasLength(1));
+
+      // Second call is a no-op even though widgets now exist.
+      await repos.dashboard.seedDefaultIfEmpty(seed);
+      expect(runs, 1);
+    });
+
+    test(
+      'seedDefaultIfEmpty skips writing when widgets already exist',
+      () async {
+        await repos.dashboard.create(
+          type: 'stat',
+          position: 0,
+          width: 'third',
+          options: '{}',
+        );
+
+        var runs = 0;
+        await repos.dashboard.seedDefaultIfEmpty(() async => runs++);
+        expect(runs, 0);
+        expect(await repos.dashboard.listActive(), hasLength(1));
+
+        // Guard is now set, so a later empty table won't re-seed.
+        await repos.dashboard.archive(
+          (await repos.dashboard.listActive()).single.id,
+        );
+        await repos.dashboard.seedDefaultIfEmpty(() async => runs++);
+        expect(runs, 0);
+      },
+    );
   });
 }
