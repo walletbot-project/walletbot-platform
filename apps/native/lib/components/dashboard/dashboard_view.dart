@@ -1,5 +1,6 @@
 import 'package:app/components/dashboard/balance_card_widget.dart';
 import 'package:app/components/dashboard/breakdown_chart_widget.dart';
+import 'package:app/components/dashboard/dashboard_layout.dart';
 import 'package:app/components/dashboard/dashboard_models.dart';
 import 'package:app/components/dashboard/stat_widget.dart';
 import 'package:app/components/dashboard/transaction_list_widget.dart';
@@ -13,9 +14,11 @@ class DashboardViewItem {
   final DashboardWidgetSpec spec;
 }
 
-/// Renders the dashboard as one flat ordered flow: each widget keeps a position
-/// and width, while this view groups the flow into visual rows. The data model
-/// stays flat; row grouping is only a rendering detail for compact gaps.
+/// Renders the dashboard as a manual grid: each widget keeps an explicit
+/// `(row, col)` placement (stored in its `options`) plus a `width`. The user
+/// places tiles freely — empty horizontal gaps are allowed, only empty *rows*
+/// collapse. Dropping a tile onto an empty cell auto-shrinks it to fit; dropping
+/// between rows creates a new row. See [DashboardGridLayout] for the engine.
 class DashboardView extends StatelessWidget {
   const DashboardView({
     super.key,
@@ -24,8 +27,10 @@ class DashboardView extends StatelessWidget {
     this.selectedItemId,
     this.onTapItem,
     this.onLongPressItem,
-    this.onMoveItem,
-    this.onMoveIntoGap,
+    this.onPlaceInCell,
+    this.onSwap,
+    this.onInsertRow,
+    this.onNudge,
     this.onWidthChanged,
     this.onEditItem,
     this.onDeleteItem,
@@ -36,79 +41,55 @@ class DashboardView extends StatelessWidget {
   final String? selectedItemId;
   final ValueChanged<DashboardViewItem>? onTapItem;
   final ValueChanged<DashboardViewItem>? onLongPressItem;
-  final void Function(String draggedId, String targetId)? onMoveItem;
 
-  /// Drops a widget into the empty trailing space of a row. The widget is moved
-  /// right after [afterItemId]; when it is wider than the gap, [fitWidth] holds
-  /// the largest width that fits so the caller can shrink it to fill the space.
-  final void Function(
-    String draggedId,
-    String afterItemId,
-    DashboardWidth? fitWidth,
-  )?
-  onMoveIntoGap;
+  /// Places [draggedId] at the empty cell ([row], [col]) with [width] — the
+  /// largest width that fits the free span there (auto-shrink to a smaller
+  /// area), already computed by the view.
+  final void Function(String draggedId, int row, int col, DashboardWidth width)?
+  onPlaceInCell;
+
+  /// Swaps the dropped widget with the widget it was dropped onto.
+  final void Function(String draggedId, String targetId)? onSwap;
+
+  /// Inserts a new row at [rowIndex] and drops [draggedId] onto it.
+  final void Function(String draggedId, int rowIndex)? onInsertRow;
+
+  /// One-cell directional move from the floating menu's arrow buttons.
+  final void Function(DashboardViewItem item, DashboardMoveDirection direction)?
+  onNudge;
+
   final void Function(DashboardViewItem item, DashboardWidth width)?
   onWidthChanged;
   final ValueChanged<DashboardViewItem>? onEditItem;
   final ValueChanged<DashboardViewItem>? onDeleteItem;
-  static const _gridUnits = 6;
+
   static const _gap = 4.0;
 
   @override
   Widget build(BuildContext context) {
+    final layout = DashboardGridLayout.fromPlacements(
+      resolvePlacements([
+        for (final item in items)
+          PlacementInput(
+            id: item.row.id,
+            width: item.spec.width,
+            coord: dashboardLayoutFromOptions(item.row.options),
+          ),
+      ]),
+    );
+    final itemsById = {for (final item in items) item.row.id: item};
+
     return LayoutBuilder(
       builder: (context, constraints) {
         final maxWidth = constraints.maxWidth;
-        final rows = _buildRows(maxWidth);
+        final rowCount = layout.rowCount;
         return Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            for (var rowIndex = 0; rowIndex < rows.length; rowIndex++) ...[
-              if (rowIndex > 0) const SizedBox(height: _gap),
-              IntrinsicHeight(
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    for (
-                      var itemIndex = 0;
-                      itemIndex < rows[rowIndex].items.length;
-                      itemIndex++
-                    ) ...[
-                      if (itemIndex > 0) const SizedBox(width: _gap),
-                      Expanded(
-                        key: ValueKey(
-                          rows[rowIndex].items[itemIndex].item.row.id,
-                        ),
-                        flex: rows[rowIndex].items[itemIndex].units,
-                        child: _buildInteractiveItem(
-                          context,
-                          rows[rowIndex].items[itemIndex].item,
-                          maxWidth *
-                              rows[rowIndex].items[itemIndex].units /
-                              _gridUnits,
-                          // Anchor the floating menu to the side the tile sits
-                          // on so a natural-width menu never runs off-screen.
-                          menuAlignRight: _alignMenuRight(
-                            rows[rowIndex],
-                            itemIndex,
-                          ),
-                        ),
-                      ),
-                    ],
-                    if (rows[rowIndex].remainingUnits > 0) ...[
-                      const SizedBox(width: _gap),
-                      Expanded(
-                        flex: rows[rowIndex].remainingUnits,
-                        child: _buildGapDropTarget(
-                          context,
-                          rows[rowIndex],
-                          maxWidth,
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
+            _interRowZone(context, layout, 0),
+            for (var row = 0; row < rowCount; row++) ...[
+              _buildRow(context, layout, itemsById, row, maxWidth),
+              _interRowZone(context, layout, row + 1),
             ],
           ],
         );
@@ -116,141 +97,142 @@ class DashboardView extends StatelessWidget {
     );
   }
 
-  List<_DashboardRow> _buildRows(double maxWidth) {
-    final rows = <_DashboardRow>[];
-    var current = <_DashboardRowItem>[];
-    var usedUnits = 0;
-
-    void flush() {
-      if (current.isEmpty) return;
-      rows.add(_DashboardRow(current));
-      current = <_DashboardRowItem>[];
-      usedUnits = 0;
-    }
-
-    for (final item in items) {
-      final units = _tileUnits(maxWidth, item.spec.width);
-      if (units == _gridUnits) {
-        flush();
-        rows.add(_DashboardRow([_DashboardRowItem(item, units)]));
-        continue;
-      }
-
-      if (usedUnits + units > _gridUnits) flush();
-      current.add(_DashboardRowItem(item, units));
-      usedUnits += units;
-      if (usedUnits == _gridUnits) flush();
-    }
-    flush();
-    return rows;
-  }
-
-  int _tileUnits(double maxWidth, DashboardWidth width) {
-    return switch (width) {
-      DashboardWidth.full => _gridUnits,
-      DashboardWidth.twoThirds => maxWidth < 360 ? _gridUnits : 4,
-      DashboardWidth.half => maxWidth < 320 ? _gridUnits : 3,
-      DashboardWidth.third => maxWidth < 300 ? _gridUnits : 2,
-    };
-  }
-
-  /// The largest stored width whose rendered size fits within [gapUnits], or
-  /// null when not even the smallest width fits (a 1-unit leftover).
-  DashboardWidth? _fitWidthForGap(int gapUnits, double maxWidth) {
-    const ordered = [
-      DashboardWidth.full,
-      DashboardWidth.twoThirds,
-      DashboardWidth.half,
-      DashboardWidth.third,
-    ];
-    for (final width in ordered) {
-      if (_tileUnits(maxWidth, width) <= gapUnits) return width;
-    }
-    return null;
-  }
-
-  DashboardViewItem? _itemById(String id) {
-    for (final item in items) {
-      if (item.row.id == id) return item;
-    }
-    return null;
-  }
-
-  /// Renders the empty trailing space of a row. In editing mode it becomes a
-  /// drop zone: a widget dropped here is moved to the end of the row and, when
-  /// it is wider than the gap, shrunk to the largest width that fits.
-  Widget _buildGapDropTarget(
+  /// The space between (and around) rows. In editing mode every boundary — top,
+  /// between, and bottom — is a drop zone that inserts a new row; otherwise only
+  /// the gaps between rows reserve the usual spacing.
+  Widget _interRowZone(
     BuildContext context,
-    _DashboardRow row,
-    double maxWidth,
+    DashboardGridLayout layout,
+    int rowIndex,
   ) {
-    final canReorder = editing && onMoveIntoGap != null;
-    final gapUnits = row.remainingUnits;
-    final lastId = row.items.last.item.row.id;
-    final fits = canReorder && _fitWidthForGap(gapUnits, maxWidth) != null;
-
-    return DragTarget<String>(
-      onWillAcceptWithDetails: fits
-          ? (details) => details.data != lastId
-          : null,
-      onAcceptWithDetails: fits
-          ? (details) {
-              final dragged = _itemById(details.data);
-              if (dragged == null) return;
-              final draggedUnits = _tileUnits(maxWidth, dragged.spec.width);
-              final fitWidth = draggedUnits <= gapUnits
-                  ? null
-                  : _fitWidthForGap(gapUnits, maxWidth);
-              onMoveIntoGap!(details.data, lastId, fitWidth);
-            }
-          : null,
-      builder: (context, candidateData, rejectedData) {
-        if (!fits) return const SizedBox.shrink();
-        final hovering = candidateData.isNotEmpty;
-        final scheme = Theme.of(context).colorScheme;
-        return DecoratedBox(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(8),
-            color: hovering
-                ? scheme.primary.withValues(alpha: 0.12)
-                : scheme.surfaceContainerHighest.withValues(alpha: 0.4),
-            border: Border.all(
-              color: hovering ? scheme.primary : scheme.outlineVariant,
-              width: hovering ? 2 : 1,
-            ),
-          ),
-        );
-      },
+    final canDrop = editing && onInsertRow != null;
+    if (!canDrop) {
+      final isEdge = rowIndex == 0 || rowIndex == layout.rowCount;
+      return SizedBox(height: isEdge ? 0 : _gap);
+    }
+    return _InterRowDropZone(
+      onAccept: (draggedId) => onInsertRow!(draggedId, rowIndex),
     );
   }
 
-  /// Whether the item at [itemIndex] sits on the right half of its row. The
-  /// floating menu anchors to that side so its natural width grows toward the
-  /// center of the screen instead of running off the edge.
-  bool _alignMenuRight(_DashboardRow row, int itemIndex) {
-    var leading = 0;
-    for (var i = 0; i < itemIndex; i++) {
-      leading += row.items[i].units;
+  Widget _buildRow(
+    BuildContext context,
+    DashboardGridLayout layout,
+    Map<String, DashboardViewItem> itemsById,
+    int row,
+    double maxWidth,
+  ) {
+    final rowItems = layout.rowItems(row);
+    // Build left-to-right segments: tiles interleaved with gap regions, each
+    // sized by its unit span so the grid stays aligned.
+    final segments = <Widget>[];
+
+    void addGapRegion(int from, int to) {
+      if (to <= from) return;
+      segments.add(
+        Expanded(
+          flex: to - from,
+          child: _gapRegion(context, layout, row, from, to),
+        ),
+      );
     }
-    final center = leading + row.items[itemIndex].units / 2;
-    return center > _gridUnits / 2;
+
+    var unit = 0;
+    for (final placement in rowItems) {
+      addGapRegion(unit, placement.col);
+      final item = itemsById[placement.id];
+      segments.add(
+        Expanded(
+          key: ValueKey(placement.id),
+          flex: placement.units,
+          child: item == null
+              ? const SizedBox.shrink()
+              : _buildInteractiveItem(
+                  context,
+                  item,
+                  placement,
+                  layout,
+                  maxWidth * placement.units / dashboardGridUnits,
+                ),
+        ),
+      );
+      unit = placement.endCol;
+    }
+    addGapRegion(unit, dashboardGridUnits);
+
+    final children = <Widget>[];
+    for (var i = 0; i < segments.length; i++) {
+      if (i > 0) children.add(const SizedBox(width: _gap));
+      children.add(segments[i]);
+    }
+
+    return IntrinsicHeight(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: children,
+      ),
+    );
+  }
+
+  /// A contiguous run of empty units. In editing mode each unit becomes its own
+  /// drop cell (so a tile can land at any column); otherwise it's just reserved
+  /// space that keeps the surrounding tiles aligned.
+  Widget _gapRegion(
+    BuildContext context,
+    DashboardGridLayout layout,
+    int row,
+    int from,
+    int to,
+  ) {
+    if (!editing || onPlaceInCell == null) return const SizedBox.shrink();
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        for (var u = from; u < to; u++)
+          Expanded(
+            child: _GapDropCell(
+              row: row,
+              unit: u,
+              layout: layout,
+              onPlace: onPlaceInCell!,
+            ),
+          ),
+      ],
+    );
+  }
+
+  /// Whether the tile at [placement] sits on the right half of its row, so the
+  /// floating menu anchors to that side and grows toward the screen center.
+  bool _alignMenuRight(WidgetPlacement placement) {
+    final center = placement.col + placement.units / 2;
+    return center > dashboardGridUnits / 2;
   }
 
   Widget _buildInteractiveItem(
     BuildContext context,
     DashboardViewItem item,
-    double estimatedWidth, {
-    required bool menuAlignRight,
-  }) {
+    WidgetPlacement placement,
+    DashboardGridLayout layout,
+    double estimatedWidth,
+  ) {
     final selected = editing && selectedItemId == item.row.id;
     final hasMenu =
-        onWidthChanged != null || onEditItem != null || onDeleteItem != null;
+        onWidthChanged != null ||
+        onEditItem != null ||
+        onDeleteItem != null ||
+        onNudge != null;
     final menu = hasMenu
         ? _DashboardFloatingMenu(
             width: item.spec.width,
+            enabledDirections: onNudge == null
+                ? const {}
+                : layout.enabledDirections(item.row.id),
             onWidthChanged: onWidthChanged == null
                 ? null
                 : (width) => onWidthChanged!(item, width),
+            onMove: onNudge == null
+                ? null
+                : (direction) => onNudge!(item, direction),
             onEdit: onEditItem == null ? null : () => onEditItem!(item),
             onDelete: onDeleteItem == null ? null : () => onDeleteItem!(item),
           )
@@ -271,17 +253,17 @@ class DashboardView extends StatelessWidget {
       ),
     );
 
-    final canReorder = editing && onMoveItem != null;
+    final canSwap = editing && onSwap != null;
 
     final dragTarget = DragTarget<String>(
-      onWillAcceptWithDetails: canReorder
+      onWillAcceptWithDetails: canSwap
           ? (details) => details.data != item.row.id
           : null,
-      onAcceptWithDetails: canReorder
-          ? (details) => onMoveItem!(details.data, item.row.id)
+      onAcceptWithDetails: canSwap
+          ? (details) => onSwap!(details.data, item.row.id)
           : null,
       builder: (context, candidateData, rejectedData) {
-        final hovering = canReorder && candidateData.isNotEmpty;
+        final hovering = canSwap && candidateData.isNotEmpty;
         return DecoratedBox(
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(8),
@@ -302,13 +284,15 @@ class DashboardView extends StatelessWidget {
       },
     );
 
+    final canDrag = editing && (onPlaceInCell != null || onSwap != null);
+
     return _FloatingMenuAnchor(
       show: selected,
-      alignRight: menuAlignRight,
+      alignRight: _alignMenuRight(placement),
       menu: menu,
       child: LongPressDraggable<String>(
         data: item.row.id,
-        maxSimultaneousDrags: canReorder ? null : 0,
+        maxSimultaneousDrags: canDrag ? null : 0,
         dragAnchorStrategy: pointerDragAnchorStrategy,
         feedback: SizedBox(
           width: estimatedWidth.clamp(
@@ -338,6 +322,92 @@ class DashboardView extends StatelessWidget {
       BalanceCardWidgetSpec() => BalanceCardWidget(spec: spec),
       ChartWidgetSpec() => BreakdownChartWidget(spec: spec),
     };
+  }
+}
+
+/// An empty grid unit in editing mode. Accepts a dropped widget at this cell,
+/// shrinking it to the free span when it's wider than the space available.
+class _GapDropCell extends StatelessWidget {
+  const _GapDropCell({
+    required this.row,
+    required this.unit,
+    required this.layout,
+    required this.onPlace,
+  });
+
+  final int row;
+  final int unit;
+  final DashboardGridLayout layout;
+  final void Function(String draggedId, int row, int col, DashboardWidth width)
+  onPlace;
+
+  @override
+  Widget build(BuildContext context) {
+    return DragTarget<String>(
+      onWillAcceptWithDetails: (details) =>
+          layout.fitWidth(row, unit, ignoreId: details.data) != null,
+      onAcceptWithDetails: (details) {
+        final dragged = layout.byId(details.data);
+        final fit = layout.fitWidth(row, unit, ignoreId: details.data);
+        if (dragged == null || fit == null) return;
+        // Keep the dragged width unless the free span is narrower (auto-shrink
+        // to the smaller area).
+        final width = fit.units < dragged.units ? fit : dragged.width;
+        onPlace(details.data, row, unit, width);
+      },
+      builder: (context, candidateData, rejectedData) {
+        final hovering = candidateData.isNotEmpty;
+        final scheme = Theme.of(context).colorScheme;
+        return Padding(
+          padding: const EdgeInsets.all(2),
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(8),
+              color: hovering
+                  ? scheme.primary.withValues(alpha: 0.12)
+                  : scheme.surfaceContainerHighest.withValues(alpha: 0.35),
+              border: Border.all(
+                color: hovering ? scheme.primary : scheme.outlineVariant,
+                width: hovering ? 2 : 1,
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+/// The drop band between two rows. Dropping a widget here splits the layout,
+/// inserting a fresh row at this boundary. Expands and shows a line on hover.
+class _InterRowDropZone extends StatelessWidget {
+  const _InterRowDropZone({required this.onAccept});
+
+  final void Function(String draggedId) onAccept;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return DragTarget<String>(
+      onAcceptWithDetails: (details) => onAccept(details.data),
+      builder: (context, candidateData, rejectedData) {
+        final hovering = candidateData.isNotEmpty;
+        return AnimatedContainer(
+          duration: const Duration(milliseconds: 120),
+          height: hovering ? 26 : 12,
+          alignment: Alignment.center,
+          child: hovering
+              ? Container(
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: scheme.primary,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                )
+              : const SizedBox.shrink(),
+        );
+      },
+    );
   }
 }
 
@@ -513,13 +583,17 @@ class _DashboardEditableFrame extends StatelessWidget {
 class _DashboardFloatingMenu extends StatelessWidget {
   const _DashboardFloatingMenu({
     required this.width,
+    required this.enabledDirections,
     this.onWidthChanged,
+    this.onMove,
     this.onEdit,
     this.onDelete,
   });
 
   final DashboardWidth width;
+  final Set<DashboardMoveDirection> enabledDirections;
   final ValueChanged<DashboardWidth>? onWidthChanged;
+  final ValueChanged<DashboardMoveDirection>? onMove;
   final VoidCallback? onEdit;
   final VoidCallback? onDelete;
 
@@ -531,40 +605,82 @@ class _DashboardFloatingMenu extends StatelessWidget {
       elevation: 8,
       shadowColor: colors.shadow.withValues(alpha: 0.24),
       borderRadius: BorderRadius.circular(8),
-      child: SizedBox(
-        height: 44,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 6),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              for (final option in DashboardWidth.values)
-                _WidthMenuButton(
-                  label: _labelForWidth(option),
-                  selected: width == option,
-                  onTap: onWidthChanged == null
-                      ? null
-                      : () => onWidthChanged!(option),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                for (final option in DashboardWidth.values)
+                  _WidthMenuButton(
+                    label: _labelForWidth(option),
+                    selected: width == option,
+                    onTap: onWidthChanged == null
+                        ? null
+                        : () => onWidthChanged!(option),
+                  ),
+                const SizedBox(width: 4),
+                IconButton(
+                  tooltip: 'Editar',
+                  visualDensity: VisualDensity.compact,
+                  icon: const Icon(Icons.tune_rounded, size: 20),
+                  onPressed: onEdit,
                 ),
-              const SizedBox(width: 4),
-              IconButton(
-                tooltip: 'Editar',
-                visualDensity: VisualDensity.compact,
-                icon: const Icon(Icons.tune_rounded, size: 20),
-                onPressed: onEdit,
-              ),
-              IconButton(
-                tooltip: 'Quitar',
-                visualDensity: VisualDensity.compact,
-                icon: Icon(
-                  Icons.delete_outline_rounded,
-                  size: 20,
-                  color: colors.error,
+                IconButton(
+                  tooltip: 'Quitar',
+                  visualDensity: VisualDensity.compact,
+                  icon: Icon(
+                    Icons.delete_outline_rounded,
+                    size: 20,
+                    color: colors.error,
+                  ),
+                  onPressed: onDelete,
                 ),
-                onPressed: onDelete,
+              ],
+            ),
+            if (onMove != null) ...[
+              const SizedBox(height: 2),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _MoveButton(
+                    icon: Icons.arrow_back_rounded,
+                    tooltip: 'Mover a la izquierda',
+                    onPressed:
+                        enabledDirections.contains(DashboardMoveDirection.left)
+                        ? () => onMove!(DashboardMoveDirection.left)
+                        : null,
+                  ),
+                  _MoveButton(
+                    icon: Icons.arrow_upward_rounded,
+                    tooltip: 'Mover hacia arriba',
+                    onPressed:
+                        enabledDirections.contains(DashboardMoveDirection.up)
+                        ? () => onMove!(DashboardMoveDirection.up)
+                        : null,
+                  ),
+                  _MoveButton(
+                    icon: Icons.arrow_downward_rounded,
+                    tooltip: 'Mover hacia abajo',
+                    onPressed:
+                        enabledDirections.contains(DashboardMoveDirection.down)
+                        ? () => onMove!(DashboardMoveDirection.down)
+                        : null,
+                  ),
+                  _MoveButton(
+                    icon: Icons.arrow_forward_rounded,
+                    tooltip: 'Mover a la derecha',
+                    onPressed:
+                        enabledDirections.contains(DashboardMoveDirection.right)
+                        ? () => onMove!(DashboardMoveDirection.right)
+                        : null,
+                  ),
+                ],
               ),
             ],
-          ),
+          ],
         ),
       ),
     );
@@ -577,6 +693,28 @@ class _DashboardFloatingMenu extends StatelessWidget {
       DashboardWidth.half => '1/2',
       DashboardWidth.third => '1/3',
     };
+  }
+}
+
+class _MoveButton extends StatelessWidget {
+  const _MoveButton({
+    required this.icon,
+    required this.tooltip,
+    required this.onPressed,
+  });
+
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return IconButton(
+      tooltip: tooltip,
+      visualDensity: VisualDensity.compact,
+      icon: Icon(icon, size: 20),
+      onPressed: onPressed,
+    );
   }
 }
 
@@ -619,21 +757,4 @@ class _WidthMenuButton extends StatelessWidget {
       ),
     );
   }
-}
-
-class _DashboardRow {
-  const _DashboardRow(this.items);
-
-  final List<_DashboardRowItem> items;
-
-  int get remainingUnits =>
-      DashboardView._gridUnits -
-      items.fold<int>(0, (sum, item) => sum + item.units);
-}
-
-class _DashboardRowItem {
-  const _DashboardRowItem(this.item, this.units);
-
-  final DashboardViewItem item;
-  final int units;
 }

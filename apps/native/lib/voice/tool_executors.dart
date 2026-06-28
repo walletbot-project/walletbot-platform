@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:app/components/dashboard/dashboard_layout.dart';
 import 'package:app/components/dashboard/dashboard_models.dart';
 import 'package:drift/drift.dart' show Value;
 
@@ -917,15 +918,30 @@ class ToolExecutors {
       return {'ok': false, 'error': optionsResult.error};
     }
 
-    final position = (await repos.dashboard.listActive()).length;
-    final filterId = await _createFilterForWidget(type, title, args);
+    final existing = await repos.dashboard.listActive();
     final width = _dashboardWidth(args['width']) ?? _defaultWidthFor(type);
+    // Place the new widget on a fresh row below everything else, matching the
+    // manual-grid layout the UI uses (coordinates live in `options.layout`).
+    final layout = DashboardGridLayout.fromPlacements(
+      resolvePlacements([
+        for (final row in existing)
+          PlacementInput(
+            id: row.id,
+            width: DashboardWidth.fromWire(row.width) ?? DashboardWidth.full,
+            coord: dashboardLayoutFromOptions(row.options),
+          ),
+      ]),
+    );
+    final filterId = await _createFilterForWidget(type, title, args);
     final id = await repos.dashboard.create(
       type: type.wire,
       filterId: filterId,
-      position: position,
+      position: existing.length,
       width: width.wire,
-      options: encodeWidgetOptions(optionsResult.options),
+      options: encodeWidgetOptions({
+        ...optionsResult.options,
+        'layout': {'row': layout.rowCount, 'col': 0},
+      }),
     );
     return {'ok': true, 'id': id, 'filterId': filterId};
   }

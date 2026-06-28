@@ -50,11 +50,16 @@ Future<void> writeDefaultDashboardSeed(AppRepositories repos) async {
     const TransactionFilter(datePreset: DatePreset.thisMonth),
   );
 
+  // Each widget seeds with an explicit manual-grid placement under
+  // `options.layout` so the default dashboard renders the same balance row,
+  // three-stat row, and recent-list row a user would build by hand.
   Future<void> seedWidget({
     required String id,
     required WidgetType type,
     required int position,
     required DashboardWidth width,
+    required int row,
+    required int col,
     required Map<String, Object?> options,
     String? filterId,
   }) => repos.dashboard.create(
@@ -63,7 +68,10 @@ Future<void> writeDefaultDashboardSeed(AppRepositories repos) async {
     filterId: filterId,
     position: position,
     width: width.wire,
-    options: encodeWidgetOptions(options),
+    options: encodeWidgetOptions({
+      ...options,
+      'layout': {'row': row, 'col': col},
+    }),
   );
 
   await seedWidget(
@@ -71,6 +79,8 @@ Future<void> writeDefaultDashboardSeed(AppRepositories repos) async {
     type: WidgetType.balance,
     position: 0,
     width: DashboardWidth.full,
+    row: 0,
+    col: 0,
     options: {'title': 'Saldo total (ARS)', 'currency': 'ARS'},
   );
   await seedWidget(
@@ -79,6 +89,8 @@ Future<void> writeDefaultDashboardSeed(AppRepositories repos) async {
     filterId: expenseFilterId,
     position: 1,
     width: DashboardWidth.third,
+    row: 1,
+    col: 0,
     options: {'title': 'Gastos del mes', 'aggregation': 'sum'},
   );
   await seedWidget(
@@ -87,6 +99,8 @@ Future<void> writeDefaultDashboardSeed(AppRepositories repos) async {
     filterId: incomeFilterId,
     position: 2,
     width: DashboardWidth.third,
+    row: 1,
+    col: 2,
     options: {'title': 'Ingresos del mes', 'aggregation': 'sum'},
   );
   await seedWidget(
@@ -95,6 +109,8 @@ Future<void> writeDefaultDashboardSeed(AppRepositories repos) async {
     filterId: monthFilterId,
     position: 3,
     width: DashboardWidth.third,
+    row: 1,
+    col: 4,
     options: {'title': 'Movimientos', 'aggregation': 'count'},
   );
   await seedWidget(
@@ -102,6 +118,8 @@ Future<void> writeDefaultDashboardSeed(AppRepositories repos) async {
     type: WidgetType.list,
     position: 4,
     width: DashboardWidth.full,
+    row: 2,
+    col: 0,
     options: {'title': 'Movimientos recientes', 'limit': 5},
   );
 }

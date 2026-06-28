@@ -135,28 +135,39 @@ the default UX — the advanced editor is hidden until summoned.
 
 ---
 
-## Layout: width, not nested rows
+## Layout: manual grid
 
-The dashboard is **one flat ordered list**. Each widget has a `position` and a
-`width` (`full` / `two_thirds` / `half` / `third`). Narrower widgets flow and
-wrap into rows — a "row of stat blocks" is just three `third`-width stats in
-sequence.
+The dashboard is a **manual 6-unit grid**. Each widget keeps a `width`
+(`full` = 6 units · `two_thirds` = 4 · `half` = 3 · `third` = 2) **and** an
+explicit placement — `{row, col}` (0-based row, 0-based starting column in grid
+units, with `col + width.units <= 6`). The placement is stored inside the
+widget's `options` JSON under the `layout` key, so it rides the existing opaque
+`options` sync with **no schema change** on Drift or Convex.
 
 ```
-┌─────────────────────────────┐  full   — Balance card
+┌─────────────────────────────┐  row 0      — Balance card (full)
 ├──────────┬──────────┬───────┤
-│ third    │ third    │ third │  three stats → one row
-├──────────────────┬──────────┤
-│ two-thirds       │ third    │  asymmetric feature row
-├──────────┴──────────┴───────┤
-│ full-width breakdown chart  │
-├─────────────────────────────┤
-│ transaction list            │
+│ third    │ third    │ third │  row 1      — three stats, cols 0 / 2 / 4
+├──────────┴───┬──────┴───────┤
+│ two-thirds   │              │  row 2      — tile at col 0, cols 4–6 left empty
+├──────────────┴─────────────┤
+│ full-width breakdown chart  │  row 3
 └─────────────────────────────┘
 ```
 
-Flat list keeps reorder and future sync simple. Renders with a `Wrap` / flex
-grouping; reorder via built-in `ReorderableListView`.
+Users place tiles freely: drag a tile onto any empty cell (it auto-shrinks to
+the largest width that fits the free span), drop it onto another tile to swap,
+or drop it between rows to **create a new row**. Empty *rows* collapse
+automatically; horizontal gaps within a row are kept. The floating tile menu
+also offers up/down/left/right arrows for one-cell nudges and the
+`1/3 · 1/2 · 2/3 · 1/1` width controls.
+
+The layout engine (`dashboard_layout.dart`) is pure Dart: it resolves stored
+coordinates into placements (falling back to the legacy auto-flow for any widget
+that predates manual placement, so old dashboards upgrade cleanly) and computes
+moves, fits, swaps, row inserts, and empty-row collapse. The first manual move
+persists coordinates for every widget. `position` is still written (row-major)
+so the non-editing read order and the legacy fallback stay stable.
 
 ---
 

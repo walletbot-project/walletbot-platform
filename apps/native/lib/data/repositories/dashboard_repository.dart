@@ -111,6 +111,32 @@ class DashboardRepository extends RepositoryBase {
     });
   }
 
+  /// Persists a manual-grid layout snapshot in one transaction: each entry
+  /// carries the widget's already-encoded `options` (which embeds its
+  /// `{row, col}`), its row-major `position`, and its `width`. Every row bumps
+  /// `updatedAt` + re-dirties. Writing every visible widget on each move keeps
+  /// `position` consistent and migrates legacy (coord-less) rows on first edit.
+  Future<void> applyLayout(
+    List<({String id, String options, int position, String width})> entries,
+  ) async {
+    final now = currentMs;
+    await db.transaction(() async {
+      for (final entry in entries) {
+        await (db.update(
+          db.dashboardWidgets,
+        )..where((w) => w.id.equals(entry.id))).write(
+          DashboardWidgetsCompanion(
+            options: Value(entry.options),
+            position: Value(entry.position),
+            width: Value(entry.width),
+            updatedAt: Value(now),
+            dirty: const Value(true),
+          ),
+        );
+      }
+    });
+  }
+
   /// Soft delete: `archived = true` + tombstone, atomically.
   Future<void> archive(String id) async {
     final now = currentMs;

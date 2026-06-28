@@ -26,6 +26,30 @@ enum DashboardWidth {
   }
 }
 
+/// The dashboard grid is this many columns wide. Widths map onto a whole
+/// number of these units (see [DashboardWidthUnits]).
+const int dashboardGridUnits = 6;
+
+/// How many grid units each width spans. `third` = 2, `half` = 3,
+/// `twoThirds` = 4, `full` = 6 (the whole [dashboardGridUnits] grid).
+extension DashboardWidthUnits on DashboardWidth {
+  int get units => switch (this) {
+    DashboardWidth.full => dashboardGridUnits,
+    DashboardWidth.twoThirds => 4,
+    DashboardWidth.half => 3,
+    DashboardWidth.third => 2,
+  };
+}
+
+/// The widest width that fits within [maxUnits] grid units, or null when not
+/// even the narrowest width ([DashboardWidth.third]) fits (a 1-unit leftover).
+DashboardWidth? dashboardWidthForUnits(int maxUnits) {
+  for (final width in DashboardWidth.values) {
+    if (width.units <= maxUnits) return width;
+  }
+  return null;
+}
+
 /// The persisted widget kinds. `wire` is the value stored in
 /// `dashboard_widgets.type`.
 enum WidgetType {
@@ -199,6 +223,39 @@ Map<String, Object?> _decodeOptions(String raw) {
   if (raw.isEmpty) return const {};
   final decoded = jsonDecode(raw);
   return decoded is Map<String, Object?> ? decoded : const {};
+}
+
+/// A widget's manual placement on the dashboard grid: which [row] it sits on
+/// (0-based, contiguous) and the starting column [col] (0-based, in grid units,
+/// where `col + width.units <= dashboardGridUnits`). Persisted inside the
+/// widget's `options` JSON under the `layout` key, so it rides the existing
+/// opaque-options sync with no schema change.
+class DashboardLayoutCoord {
+  const DashboardLayoutCoord({required this.row, required this.col});
+
+  final int row;
+  final int col;
+}
+
+/// Reads the manual [DashboardLayoutCoord] out of a widget's `options` JSON, or
+/// null when absent/malformed. A null means the widget predates manual layout
+/// (or was written by an older client); callers derive a coordinate from the
+/// legacy auto-flow in that case.
+DashboardLayoutCoord? dashboardLayoutFromOptions(String optionsJson) {
+  final layout = _decodeOptions(optionsJson)['layout'];
+  if (layout is! Map) return null;
+  final row = layout['row'];
+  final col = layout['col'];
+  if (row is! num || col is! num) return null;
+  return DashboardLayoutCoord(row: row.toInt(), col: col.toInt());
+}
+
+/// Returns a copy of [optionsJson] with the manual [coord] written under the
+/// `layout` key, leaving all other options intact. Used when persisting a move.
+String writeDashboardLayout(String optionsJson, DashboardLayoutCoord coord) {
+  final options = {..._decodeOptions(optionsJson)};
+  options['layout'] = {'row': coord.row, 'col': coord.col};
+  return jsonEncode(options);
 }
 
 /// Resolves a persisted widget row's saved filter to the transaction filter

@@ -1,10 +1,10 @@
 import 'package:app/components/dashboard/add_widget_sheet.dart';
+import 'package:app/components/dashboard/dashboard_layout.dart';
 import 'package:app/components/dashboard/dashboard_models.dart';
 import 'package:app/components/dashboard/dashboard_view.dart';
 import 'package:app/data/data.dart';
 import 'package:app/data/queries/stream_utils.dart';
 import 'package:app/database.dart';
-import 'package:drift/drift.dart' show Value;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -31,7 +31,11 @@ class DashboardSection extends StatefulWidget {
 class _DashboardSectionState extends State<DashboardSection> {
   var _ordered = <DashboardWidget>[];
   final _pendingDeletes = <String>{};
-  final _pendingWidths = <String, DashboardWidth>{};
+  // Optimistic layout writes awaiting their stream round-trip, keyed by widget
+  // id. Each holds the exact `options` (carrying the new `{row, col}`) and
+  // `width` we wrote, so a stream re-emit doesn't flicker back to stale content
+  // before the write lands. Cleared once the incoming row matches.
+  final _pendingLayout = <String, ({String options, String width})>{};
   String? _selectedId;
 
   @override
@@ -111,8 +115,10 @@ class _DashboardSectionState extends State<DashboardSection> {
                   setState(() => _selectedId = item.row.id);
                   widget.onStartEditing?.call();
                 },
-          onMoveItem: widget.editing ? _moveItem : null,
-          onMoveIntoGap: widget.editing ? _moveIntoGap : null,
+          onPlaceInCell: widget.editing ? _placeInCell : null,
+          onSwap: widget.editing ? _swap : null,
+          onInsertRow: widget.editing ? _insertRow : null,
+          onNudge: widget.editing ? _nudge : null,
           onWidthChanged: widget.editing ? _changeWidth : null,
           onEditItem: widget.editing
               ? (item) => _editItem(repos, item, filtersById)
@@ -129,7 +135,7 @@ class _DashboardSectionState extends State<DashboardSection> {
 
     final widgets = [
       for (final row in incomingWidgets)
-        if (!_pendingDeletes.contains(row.id)) _withPendingWidth(row),
+        if (!_pendingDeletes.contains(row.id)) _withPendingLayout(row),
     ];
 
     if (!widget.editing) {
@@ -152,121 +158,110 @@ class _DashboardSectionState extends State<DashboardSection> {
     _ordered = next;
   }
 
-  DashboardWidget _withPendingWidth(DashboardWidget row) {
-    final pendingWidth = _pendingWidths[row.id];
-    if (pendingWidth == null) return row;
-    if (row.width == pendingWidth.wire) {
-      _pendingWidths.remove(row.id);
+  DashboardWidget _withPendingLayout(DashboardWidget row) {
+    final pending = _pendingLayout[row.id];
+    if (pending == null) return row;
+    if (row.options == pending.options && row.width == pending.width) {
+      _pendingLayout.remove(row.id);
       return row;
     }
-    return row.copyWith(width: pendingWidth.wire);
+    return row.copyWith(options: pending.options, width: pending.width);
   }
 
   void _selectItem(DashboardViewItem item) {
     setState(() => _selectedId = item.row.id);
   }
 
-  Future<void> _moveItem(String draggedId, String targetId) async {
-    if (draggedId == targetId) return;
-    final oldIndex = _ordered.indexWhere((row) => row.id == draggedId);
-    final targetIndex = _ordered.indexWhere((row) => row.id == targetId);
-    if (oldIndex == -1 || targetIndex == -1) return;
-
-    final previous = [..._ordered];
-    setState(() {
-      final row = _ordered.removeAt(oldIndex);
-      _ordered.insert(targetIndex, row);
-      _selectedId = draggedId;
-    });
-
-    try {
-      await context.read<AppRepositories>().dashboard.reorder(
-        _ordered.map((row) => row.id).toList(),
-      );
-    } catch (error) {
-      if (!mounted) return;
-      setState(() => _ordered = previous);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('No se pudo reordenar el tablero: $error')),
-      );
-    }
+  /// The manual grid resolved from the current local order, with the legacy
+  /// auto-flow used for any widget that predates manual placement.
+  DashboardGridLayout _currentLayout() {
+    return DashboardGridLayout.fromPlacements(
+      resolvePlacements([
+        for (final row in _ordered)
+          PlacementInput(
+            id: row.id,
+            width: DashboardWidth.fromWire(row.width) ?? DashboardWidth.full,
+            coord: dashboardLayoutFromOptions(row.options),
+          ),
+      ]),
+    );
   }
 
-  Future<void> _moveIntoGap(
-    String draggedId,
-    String afterItemId,
-    DashboardWidth? fitWidth,
-  ) async {
-    if (draggedId == afterItemId) return;
-    final oldIndex = _ordered.indexWhere((row) => row.id == draggedId);
-    if (oldIndex == -1) return;
+  void _placeInCell(String draggedId, int row, int col, DashboardWidth width) {
+    _applyLayout(
+      _currentLayout().place(draggedId, row, col, width: width),
+      draggedId,
+    );
+  }
 
-    final previous = [..._ordered];
-    final hadPendingWidth = _pendingWidths.containsKey(draggedId);
-    final previousPendingWidth = _pendingWidths[draggedId];
+  void _swap(String draggedId, String targetId) {
+    _applyLayout(_currentLayout().swap(draggedId, targetId), draggedId);
+  }
 
+  void _insertRow(String draggedId, int rowIndex) {
+    _applyLayout(_currentLayout().insertRowAt(draggedId, rowIndex), draggedId);
+  }
+
+  void _nudge(DashboardViewItem item, DashboardMoveDirection direction) {
+    _applyLayout(_currentLayout().nudge(item.row.id, direction), item.row.id);
+  }
+
+  void _changeWidth(DashboardViewItem item, DashboardWidth width) {
+    if (item.spec.width == width) return;
+    _applyLayout(_currentLayout().resize(item.row.id, width), item.row.id);
+  }
+
+  /// Persists a [next] layout snapshot: reorders `_ordered` to row-major,
+  /// writes each widget's `{row, col}` into its options, and saves all in one
+  /// transaction. A null [next] means the move was invalid — no-op. Optimistic
+  /// with rollback on failure.
+  Future<void> _applyLayout(DashboardGridLayout? next, String selectId) async {
+    if (next == null) return;
+
+    final byId = {for (final row in _ordered) row.id: row};
+    final entries =
+        <({String id, String options, int position, String width})>[];
+    final reordered = <DashboardWidget>[];
+    for (var i = 0; i < next.placements.length; i++) {
+      final placement = next.placements[i];
+      final existing = byId[placement.id];
+      if (existing == null) continue;
+      final options = writeDashboardLayout(
+        existing.options,
+        DashboardLayoutCoord(row: placement.row, col: placement.col),
+      );
+      final width = placement.width.wire;
+      entries.add((
+        id: placement.id,
+        options: options,
+        position: i,
+        width: width,
+      ));
+      reordered.add(existing.copyWith(options: options, width: width));
+    }
+
+    final previousOrdered = [..._ordered];
+    final previousPending = {..._pendingLayout};
     setState(() {
-      var row = _ordered.removeAt(oldIndex);
-      if (fitWidth != null) {
-        row = row.copyWith(width: fitWidth.wire);
-        _pendingWidths[draggedId] = fitWidth;
+      _ordered = reordered;
+      for (final entry in entries) {
+        _pendingLayout[entry.id] = (options: entry.options, width: entry.width);
       }
-      final afterIndex = _ordered.indexWhere((r) => r.id == afterItemId);
-      final insertAt = afterIndex == -1 ? _ordered.length : afterIndex + 1;
-      _ordered.insert(insertAt, row);
-      _selectedId = draggedId;
+      _selectedId = selectId;
     });
 
     try {
-      final dashboard = context.read<AppRepositories>().dashboard;
-      if (fitWidth != null) {
-        await dashboard.update(draggedId, width: Value(fitWidth.wire));
-      }
-      await dashboard.reorder(_ordered.map((row) => row.id).toList());
+      await context.read<AppRepositories>().dashboard.applyLayout(entries);
     } catch (error) {
       if (!mounted) return;
       setState(() {
-        _ordered = previous;
-        if (fitWidth != null) {
-          if (hadPendingWidth && previousPendingWidth != null) {
-            _pendingWidths[draggedId] = previousPendingWidth;
-          } else {
-            _pendingWidths.remove(draggedId);
-          }
-        }
+        _ordered = previousOrdered;
+        _pendingLayout
+          ..clear()
+          ..addAll(previousPending);
       });
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('No se pudo mover el widget: $error')),
-      );
-    }
-  }
-
-  Future<void> _changeWidth(
-    DashboardViewItem item,
-    DashboardWidth width,
-  ) async {
-    if (item.spec.width == width) return;
-    final previous = [..._ordered];
-    setState(() {
-      _pendingWidths[item.row.id] = width;
-      _ordered = [
-        for (final row in _ordered)
-          row.id == item.row.id ? row.copyWith(width: width.wire) : row,
-      ];
-      _selectedId = item.row.id;
-    });
-
-    try {
-      await context.read<AppRepositories>().dashboard.update(
-        item.row.id,
-        width: Value(width.wire),
-      );
-    } catch (error) {
-      if (!mounted) return;
-      _pendingWidths.remove(item.row.id);
-      setState(() => _ordered = previous);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('No se pudo cambiar el tamaño: $error')),
+        SnackBar(content: Text('No se pudo actualizar el tablero: $error')),
       );
     }
   }

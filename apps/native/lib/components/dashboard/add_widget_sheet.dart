@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:app/components/dashboard/dashboard_background.dart';
+import 'package:app/components/dashboard/dashboard_layout.dart';
 import 'package:app/components/dashboard/dashboard_models.dart';
 import 'package:app/components/filter_sheet.dart';
 import 'package:app/data/data.dart';
@@ -323,7 +324,22 @@ class _WidgetSheetState extends State<_WidgetSheet> {
   }
 
   Future<void> _create(String title, Map<String, Object?> options) async {
-    final position = (await widget.repos.dashboard.listActive()).length;
+    final existing = await widget.repos.dashboard.listActive();
+    // Drop the new widget on a fresh row below everything else.
+    final layout = DashboardGridLayout.fromPlacements(
+      resolvePlacements([
+        for (final row in existing)
+          PlacementInput(
+            id: row.id,
+            width: DashboardWidth.fromWire(row.width) ?? DashboardWidth.full,
+            coord: dashboardLayoutFromOptions(row.options),
+          ),
+      ]),
+    );
+    final placedOptions = {
+      ...options,
+      'layout': {'row': layout.rowCount, 'col': 0},
+    };
     String? filterId;
     if (_type != WidgetType.balance && _filterConfigured) {
       filterId = await widget.repos.savedFilters.create(
@@ -334,9 +350,9 @@ class _WidgetSheetState extends State<_WidgetSheet> {
     await widget.repos.dashboard.create(
       type: _type.wire,
       filterId: filterId,
-      position: position,
+      position: existing.length,
       width: _defaultWidthFor[_type]!.wire,
-      options: encodeWidgetOptions(options),
+      options: encodeWidgetOptions(placedOptions),
     );
   }
 
