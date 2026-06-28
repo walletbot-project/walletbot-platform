@@ -71,19 +71,23 @@ class _TransactionListContent extends StatelessWidget {
       );
     }
 
-    return Column(
-      children: [
-        for (var i = 0; i < items.length; i++) ...[
-          if (i > 0)
-            Divider(height: 1, color: theme.colorScheme.outlineVariant),
-          TransactionRow(
-            title: items[i].name,
-            amountCents: signedDisplayCents(items[i].type, items[i].amount),
-            dateCheck: items[i].dateConfirmed,
-            contained: false,
-          ),
+    return Padding(
+      // Leaves room for the icon that floats in the cell's bottom-left corner.
+      padding: const EdgeInsets.only(bottom: 24),
+      child: Column(
+        children: [
+          for (var i = 0; i < items.length; i++) ...[
+            if (i > 0)
+              Divider(height: 1, color: theme.colorScheme.outlineVariant),
+            TransactionRow(
+              title: items[i].name,
+              amountCents: signedDisplayCents(items[i].type, items[i].amount),
+              dateCheck: items[i].dateConfirmed,
+              contained: false,
+            ),
+          ],
         ],
-      ],
+      ),
     );
   }
 }

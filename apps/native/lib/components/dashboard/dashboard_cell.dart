@@ -35,6 +35,7 @@ class DashboardCell extends StatelessWidget {
           colors.primary.withValues(alpha: 0.04),
           colors.surface,
         );
+    final resolvedPadding = padding.resolve(Directionality.of(context));
 
     return DecoratedBox(
       decoration: BoxDecoration(
@@ -43,51 +44,58 @@ class DashboardCell extends StatelessWidget {
       ),
       child: ConstrainedBox(
         constraints: BoxConstraints(minHeight: minHeight),
-        child: Padding(
-          padding: padding,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Row(
+        child: Stack(
+          children: [
+            Padding(
+              padding: padding,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  if (icon != null) ...[
-                    Container(
-                      width: 26,
-                      height: 26,
-                      decoration: BoxDecoration(
-                        color: colors.primaryContainer.withValues(alpha: 0.62),
-                        borderRadius: BorderRadius.circular(8),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          resolvedTitle,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.labelLarge?.copyWith(
+                            color: colors.onSurfaceVariant,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
                       ),
-                      child: Icon(
-                        icon,
-                        size: 16,
-                        color: colors.onPrimaryContainer,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                  ],
-                  Expanded(
-                    child: Text(
-                      resolvedTitle,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.labelLarge?.copyWith(
-                        color: colors.onSurfaceVariant,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
+                      if (trailing != null) ...[
+                        const SizedBox(width: 8),
+                        trailing!,
+                      ],
+                    ],
                   ),
-                  if (trailing != null) ...[
-                    const SizedBox(width: 8),
-                    trailing!,
-                  ],
+                  SizedBox(height: bodySpacing),
+                  child,
                 ],
               ),
-              SizedBox(height: bodySpacing),
-              child,
-            ],
-          ),
+            ),
+            // Floats in the bottom-left corner without affecting layout.
+            if (icon != null)
+              Positioned(
+                left: resolvedPadding.left,
+                bottom: resolvedPadding.bottom,
+                child: Container(
+                  width: 20,
+                  height: 20,
+                  decoration: BoxDecoration(
+                    color: colors.primaryContainer.withValues(alpha: 0.62),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Icon(
+                    icon,
+                    size: 13,
+                    color: colors.onPrimaryContainer,
+                  ),
+                ),
+              ),
+          ],
         ),
       ),
     );
