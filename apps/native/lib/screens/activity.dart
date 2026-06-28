@@ -176,7 +176,11 @@ class _ActivityScreenState extends State<ActivityScreen> {
               ),
             ),
             StreamBuilder<List<Transaction>>(
-              stream: repos.transactions.watch(_filter, limit: _limit),
+              stream: repos.transactions.watch(
+                _filter,
+                limit: _limit,
+                ordering: TxnOrdering.dateDesc,
+              ),
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting &&
                     !snapshot.hasData) {
@@ -240,9 +244,9 @@ class _ActivityScreenState extends State<ActivityScreen> {
 
     DateTime? currentDay;
     for (final t in items) {
-      // Group by creation time so the day headers stay contiguous with the
-      // creation-order sorting above.
-      final dt = DateTime.fromMillisecondsSinceEpoch(t.createdAt.toInt());
+      // Group by transaction date (matches web). The list is ordered by date
+      // desc above, so day headers stay contiguous.
+      final dt = DateTime.fromMillisecondsSinceEpoch(t.date.toInt());
       final day = DateTime(dt.year, dt.month, dt.day);
       if (currentDay == null || day != currentDay) {
         entries.add(_HeaderEntry(label: _sectionLabel(day, today)));
