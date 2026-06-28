@@ -15,6 +15,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import {
     DropdownMenu,
     DropdownMenuContent,
+    DropdownMenuGroup,
     DropdownMenuItem,
     DropdownMenuLabel,
     DropdownMenuSeparator,
@@ -197,9 +198,11 @@ export function RootLayout() {
                                     side="top"
                                     className="w-56"
                                 >
-                                    <DropdownMenuLabel>
-                                        {user.name || user.email}
-                                    </DropdownMenuLabel>
+                                    <DropdownMenuGroup>
+                                        <DropdownMenuLabel>
+                                            {user.name || user.email}
+                                        </DropdownMenuLabel>
+                                    </DropdownMenuGroup>
                                     <DropdownMenuSeparator />
                                     <DropdownMenuItem disabled>
                                         <RefreshCw className="size-4" />
