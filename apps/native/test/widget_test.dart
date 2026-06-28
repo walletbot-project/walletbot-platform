@@ -19,6 +19,28 @@ void main() {
     await tester.pumpWidget(MyApp(auth: auth));
     await tester.pump();
 
-    expect(find.text('Continue without account'), findsOneWidget);
+    expect(find.text('Sin cuenta'), findsWidgets);
+  });
+
+  testWidgets('requires a name before continuing without an account', (
+    WidgetTester tester,
+  ) async {
+    FlutterSecureStorage.setMockInitialValues({});
+
+    final auth = AuthController();
+
+    await tester.pumpWidget(MyApp(auth: auth));
+    await tester.pump();
+
+    await tester.tap(find.text('Sin cuenta').first);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Nombre'), findsOneWidget);
+
+    await tester.tap(find.text('Continuar sin cuenta'));
+    await tester.pump();
+
+    expect(find.text('Ingresá un nombre'), findsOneWidget);
+    expect(auth.activeAccount, isNull);
   });
 }

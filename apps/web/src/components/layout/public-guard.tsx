@@ -1,12 +1,12 @@
 import { Navigate, Outlet, useLocation } from 'react-router-dom'
-import { authClient } from '@/lib/auth-client'
+import { useCachedSession } from '@/hooks/use-cached-session'
 
 export function PublicGuard() {
-    const { data: session, isPending } = authClient.useSession()
+    const { session, isInitialLoading } = useCachedSession()
     const location = useLocation()
     const from = location.state?.from?.pathname || '/'
 
-    if (isPending) return null
+    if (isInitialLoading) return null
 
     if (session) {
         return <Navigate to={from} replace />

@@ -188,13 +188,16 @@ export function AddManual() {
         })),
         createdCategories,
     )
-    const knownTags = mergeTags([
-        ...(availableTags ?? []).map((tag) => ({
-            id: tag.id,
-            name: tag.name,
-            color: tag.color ?? TAG_COLOR_OPTIONS[0],
-        })),
-    ], createdTags)
+    const knownTags = mergeTags(
+        [
+            ...(availableTags ?? []).map((tag) => ({
+                id: tag.id,
+                name: tag.name,
+                color: tag.color ?? TAG_COLOR_OPTIONS[0],
+            })),
+        ],
+        createdTags,
+    )
 
     const [type, setType] = useState<MovementType>('income')
     const [amount, setAmount] = useState('0')
@@ -256,7 +259,7 @@ export function AddManual() {
             }
             return ''
         })
-    }, [categoryOptions, type])
+    }, [categoryOptions])
 
     const selectedAccount = accountOptions.find(
         (account) => account.id === accountId,
