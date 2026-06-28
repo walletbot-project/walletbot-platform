@@ -103,6 +103,11 @@ class _WidgetSheet extends StatefulWidget {
 }
 
 class _WidgetSheetState extends State<_WidgetSheet> {
+  // Whether the background editor offers the "Valor" (range) mode. Disabled by
+  // default; a widget already configured with it (e.g. by the agent) still
+  // shows the option so it stays editable — see [_showValueBackgroundMode].
+  static const bool _enableValueBackgroundMode = false;
+
   late WidgetType _type;
   late final TextEditingController _titleController;
   late final TextEditingController _limitController;
@@ -232,6 +237,11 @@ class _WidgetSheetState extends State<_WidgetSheet> {
       context,
       repos: widget.repos,
       initial: _filter,
+      hiddenSections: const {FilterSection.status},
+      // Keep the simple/advanced toggle available; hiding a section otherwise
+      // suppresses it (the sheet defaults `allowAdvanced` to "no hidden
+      // sections").
+      allowAdvanced: true,
     );
     if (result != null) setState(() => _filter = result);
   }
@@ -445,6 +455,13 @@ class _WidgetSheetState extends State<_WidgetSheet> {
     );
   }
 
+  /// Whether the "Valor" (range) background mode is offered. Gated off by
+  /// [_enableValueBackgroundMode], but always shown when the widget is already
+  /// on that mode (e.g. configured by the agent) so it stays editable.
+  bool get _showValueBackgroundMode =>
+      _enableValueBackgroundMode ||
+      _backgroundMode == DashboardBackgroundMode.value;
+
   Widget _backgroundFields(ThemeData theme) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -454,19 +471,22 @@ class _WidgetSheetState extends State<_WidgetSheet> {
         SegmentedButton<DashboardBackgroundMode>(
           showSelectedIcon: false,
           style: const ButtonStyle(visualDensity: VisualDensity.compact),
-          segments: const [
-            ButtonSegment(
+          segments: [
+            const ButtonSegment(
               value: DashboardBackgroundMode.none,
               label: Text('Base'),
             ),
             ButtonSegment(
               value: DashboardBackgroundMode.fixed,
-              label: Text('Fijo'),
+              // Without the "Valor" option there's nothing to contrast "Fijo"
+              // against, so the simpler "Color" reads better.
+              label: Text(_showValueBackgroundMode ? 'Fijo' : 'Color'),
             ),
-            ButtonSegment(
-              value: DashboardBackgroundMode.value,
-              label: Text('Valor'),
-            ),
+            if (_showValueBackgroundMode)
+              const ButtonSegment(
+                value: DashboardBackgroundMode.value,
+                label: Text('Valor'),
+              ),
           ],
           selected: {_backgroundMode},
           onSelectionChanged: (s) => setState(() => _backgroundMode = s.first),
@@ -725,8 +745,8 @@ class _ColorSwatches extends StatelessWidget {
 
 /// The filter call-to-action. When no filter is set it's a full-width filled
 /// button that gently pulses to invite a tap; once configured it settles into a
-/// calm outlined "Filtro configurado" with a clear (✕) action. The pulse is
-/// skipped when the OS "reduce motion" setting is on.
+/// calm outlined "Editar filtro" action alongside a clear (✕) action. The pulse
+/// is skipped when the OS "reduce motion" setting is on.
 class _FilterCallToAction extends StatefulWidget {
   const _FilterCallToAction({
     required this.configured,
@@ -763,8 +783,8 @@ class _FilterCallToActionState extends State<_FilterCallToAction>
           Expanded(
             child: OutlinedButton.icon(
               onPressed: widget.onConfigure,
-              icon: const Icon(Icons.check_rounded, size: 18),
-              label: const Text('Filtro configurado'),
+              icon: const Icon(Icons.tune, size: 18),
+              label: const Text('Editar filtro'),
             ),
           ),
           const SizedBox(width: 8),

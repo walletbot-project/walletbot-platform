@@ -112,6 +112,7 @@ class _DashboardSectionState extends State<DashboardSection> {
                   widget.onStartEditing?.call();
                 },
           onMoveItem: widget.editing ? _moveItem : null,
+          onMoveIntoGap: widget.editing ? _moveIntoGap : null,
           onWidthChanged: widget.editing ? _changeWidth : null,
           onEditItem: widget.editing
               ? (item) => _editItem(repos, item, filtersById)
@@ -187,6 +188,55 @@ class _DashboardSectionState extends State<DashboardSection> {
       setState(() => _ordered = previous);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('No se pudo reordenar el tablero: $error')),
+      );
+    }
+  }
+
+  Future<void> _moveIntoGap(
+    String draggedId,
+    String afterItemId,
+    DashboardWidth? fitWidth,
+  ) async {
+    if (draggedId == afterItemId) return;
+    final oldIndex = _ordered.indexWhere((row) => row.id == draggedId);
+    if (oldIndex == -1) return;
+
+    final previous = [..._ordered];
+    final hadPendingWidth = _pendingWidths.containsKey(draggedId);
+    final previousPendingWidth = _pendingWidths[draggedId];
+
+    setState(() {
+      var row = _ordered.removeAt(oldIndex);
+      if (fitWidth != null) {
+        row = row.copyWith(width: fitWidth.wire);
+        _pendingWidths[draggedId] = fitWidth;
+      }
+      final afterIndex = _ordered.indexWhere((r) => r.id == afterItemId);
+      final insertAt = afterIndex == -1 ? _ordered.length : afterIndex + 1;
+      _ordered.insert(insertAt, row);
+      _selectedId = draggedId;
+    });
+
+    try {
+      final dashboard = context.read<AppRepositories>().dashboard;
+      if (fitWidth != null) {
+        await dashboard.update(draggedId, width: Value(fitWidth.wire));
+      }
+      await dashboard.reorder(_ordered.map((row) => row.id).toList());
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _ordered = previous;
+        if (fitWidth != null) {
+          if (hadPendingWidth && previousPendingWidth != null) {
+            _pendingWidths[draggedId] = previousPendingWidth;
+          } else {
+            _pendingWidths.remove(draggedId);
+          }
+        }
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('No se pudo mover el widget: $error')),
       );
     }
   }

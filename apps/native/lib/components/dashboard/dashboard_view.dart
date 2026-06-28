@@ -25,6 +25,7 @@ class DashboardView extends StatelessWidget {
     this.onTapItem,
     this.onLongPressItem,
     this.onMoveItem,
+    this.onMoveIntoGap,
     this.onWidthChanged,
     this.onEditItem,
     this.onDeleteItem,
@@ -36,6 +37,16 @@ class DashboardView extends StatelessWidget {
   final ValueChanged<DashboardViewItem>? onTapItem;
   final ValueChanged<DashboardViewItem>? onLongPressItem;
   final void Function(String draggedId, String targetId)? onMoveItem;
+
+  /// Drops a widget into the empty trailing space of a row. The widget is moved
+  /// right after [afterItemId]; when it is wider than the gap, [fitWidth] holds
+  /// the largest width that fits so the caller can shrink it to fill the space.
+  final void Function(
+    String draggedId,
+    String afterItemId,
+    DashboardWidth? fitWidth,
+  )?
+  onMoveIntoGap;
   final void Function(DashboardViewItem item, DashboardWidth width)?
   onWidthChanged;
   final ValueChanged<DashboardViewItem>? onEditItem;
@@ -84,11 +95,17 @@ class DashboardView extends StatelessWidget {
                         ),
                       ),
                     ],
-                    if (rows[rowIndex].remainingUnits > 0)
+                    if (rows[rowIndex].remainingUnits > 0) ...[
+                      const SizedBox(width: _gap),
                       Expanded(
                         flex: rows[rowIndex].remainingUnits,
-                        child: const SizedBox.shrink(),
+                        child: _buildGapDropTarget(
+                          context,
+                          rows[rowIndex],
+                          maxWidth,
+                        ),
                       ),
+                    ],
                   ],
                 ),
               ),
@@ -106,7 +123,7 @@ class DashboardView extends StatelessWidget {
 
     void flush() {
       if (current.isEmpty) return;
-      rows.add(_DashboardRow(_normalizedRowItems(current, usedUnits)));
+      rows.add(_DashboardRow(current));
       current = <_DashboardRowItem>[];
       usedUnits = 0;
     }
@@ -128,29 +145,6 @@ class DashboardView extends StatelessWidget {
     return rows;
   }
 
-  /// Avoids awkward incomplete rows like half + third or third + third. The
-  /// stored width remains unchanged; this is only a visual promotion.
-  List<_DashboardRowItem> _normalizedRowItems(
-    List<_DashboardRowItem> items,
-    int usedUnits,
-  ) {
-    if (usedUnits == 4 &&
-        items.length == 2 &&
-        items.every((item) => item.units == 2)) {
-      return [for (final item in items) _DashboardRowItem(item.item, 3)];
-    }
-
-    if (usedUnits != _gridUnits - 1) return items;
-
-    final promotableIndex = items.indexWhere((item) => item.units == 2);
-    if (promotableIndex == -1) return items;
-
-    return [
-      for (var i = 0; i < items.length; i++)
-        i == promotableIndex ? _DashboardRowItem(items[i].item, 3) : items[i],
-    ];
-  }
-
   int _tileUnits(double maxWidth, DashboardWidth width) {
     return switch (width) {
       DashboardWidth.full => _gridUnits,
@@ -158,6 +152,76 @@ class DashboardView extends StatelessWidget {
       DashboardWidth.half => maxWidth < 320 ? _gridUnits : 3,
       DashboardWidth.third => maxWidth < 300 ? _gridUnits : 2,
     };
+  }
+
+  /// The largest stored width whose rendered size fits within [gapUnits], or
+  /// null when not even the smallest width fits (a 1-unit leftover).
+  DashboardWidth? _fitWidthForGap(int gapUnits, double maxWidth) {
+    const ordered = [
+      DashboardWidth.full,
+      DashboardWidth.twoThirds,
+      DashboardWidth.half,
+      DashboardWidth.third,
+    ];
+    for (final width in ordered) {
+      if (_tileUnits(maxWidth, width) <= gapUnits) return width;
+    }
+    return null;
+  }
+
+  DashboardViewItem? _itemById(String id) {
+    for (final item in items) {
+      if (item.row.id == id) return item;
+    }
+    return null;
+  }
+
+  /// Renders the empty trailing space of a row. In editing mode it becomes a
+  /// drop zone: a widget dropped here is moved to the end of the row and, when
+  /// it is wider than the gap, shrunk to the largest width that fits.
+  Widget _buildGapDropTarget(
+    BuildContext context,
+    _DashboardRow row,
+    double maxWidth,
+  ) {
+    final canReorder = editing && onMoveIntoGap != null;
+    final gapUnits = row.remainingUnits;
+    final lastId = row.items.last.item.row.id;
+    final fits = canReorder && _fitWidthForGap(gapUnits, maxWidth) != null;
+
+    return DragTarget<String>(
+      onWillAcceptWithDetails: fits
+          ? (details) => details.data != lastId
+          : null,
+      onAcceptWithDetails: fits
+          ? (details) {
+              final dragged = _itemById(details.data);
+              if (dragged == null) return;
+              final draggedUnits = _tileUnits(maxWidth, dragged.spec.width);
+              final fitWidth = draggedUnits <= gapUnits
+                  ? null
+                  : _fitWidthForGap(gapUnits, maxWidth);
+              onMoveIntoGap!(details.data, lastId, fitWidth);
+            }
+          : null,
+      builder: (context, candidateData, rejectedData) {
+        if (!fits) return const SizedBox.shrink();
+        final hovering = candidateData.isNotEmpty;
+        final scheme = Theme.of(context).colorScheme;
+        return DecoratedBox(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(8),
+            color: hovering
+                ? scheme.primary.withValues(alpha: 0.12)
+                : scheme.surfaceContainerHighest.withValues(alpha: 0.4),
+            border: Border.all(
+              color: hovering ? scheme.primary : scheme.outlineVariant,
+              width: hovering ? 2 : 1,
+            ),
+          ),
+        );
+      },
+    );
   }
 
   /// Whether the item at [itemIndex] sits on the right half of its row. The
