@@ -30,6 +30,8 @@ class DashboardView extends StatelessWidget {
     this.onPlaceInCell,
     this.onSwap,
     this.onInsertRow,
+    this.onInsertInRow,
+    this.onAddWidget,
     this.onNudge,
     this.onWidthChanged,
     this.onEditItem,
@@ -54,6 +56,14 @@ class DashboardView extends StatelessWidget {
   /// Inserts a new row at [rowIndex] and drops [draggedId] onto it.
   final void Function(String draggedId, int rowIndex)? onInsertRow;
 
+  /// Wedges [draggedId] into [row] at the ordinal [slot] (between two tiles or
+  /// at a flush row edge), shifting the row's other tiles aside.
+  final void Function(String draggedId, int row, int slot)? onInsertInRow;
+
+  /// Adds a brand-new widget at the empty cell ([row], [col]). [maxUnits] is the
+  /// free span there, so the add flow can cap the new widget's width to fit.
+  final void Function(int row, int col, int maxUnits)? onAddWidget;
+
   /// One-cell directional move from the floating menu's arrow buttons.
   final void Function(DashboardViewItem item, DashboardMoveDirection direction)?
   onNudge;
@@ -64,6 +74,11 @@ class DashboardView extends StatelessWidget {
   final ValueChanged<DashboardViewItem>? onDeleteItem;
 
   static const _gap = 4.0;
+
+  /// Hit width of the (overlaid) between-tile insert strips. Wider than [_gap]
+  /// so the seam is easy to hit while dragging, but it lives in a Stack overlay
+  /// so it never widens the row's actual layout.
+  static const _insertHit = 22.0;
 
   @override
   Widget build(BuildContext context) {
@@ -122,29 +137,41 @@ class DashboardView extends StatelessWidget {
     int row,
     double maxWidth,
   ) {
-    final rowItems = layout.rowItems(row);
-    // Build left-to-right segments: tiles interleaved with gap regions, each
-    // sized by its unit span so the grid stays aligned.
-    final segments = <Widget>[];
+    // Fixed 6-column grid: every unit is exactly [unitWidth], every column
+    // boundary exactly [_gap]. Tiles and gaps are sized from this, so a tile of
+    // a given width is pixel-identical in every row, and the layout is the same
+    // whether editing or not (drop affordances are painted/overlaid, never
+    // inserted into the flow — no shift when toggling edit mode).
+    final unitWidth =
+        (maxWidth - _gap * (dashboardGridUnits - 1)) / dashboardGridUnits;
+    double span(int units) => units * unitWidth + (units - 1) * _gap;
+    double columnLeft(int col) => col * (unitWidth + _gap);
 
-    void addGapRegion(int from, int to) {
+    final rowItems = layout.rowItems(row);
+
+    // Base flow: tiles and (in edit mode) dashed gap placeholders, at exact
+    // widths, separated by a constant [_gap].
+    final base = <Widget>[];
+    void addGap(int from, int to) {
       if (to <= from) return;
-      segments.add(
-        Expanded(
-          flex: to - from,
-          child: _gapRegion(context, layout, row, from, to),
+      if (base.isNotEmpty) base.add(const SizedBox(width: _gap));
+      base.add(
+        SizedBox(
+          width: span(to - from),
+          child: _gapPlaceholder(context, layout, row, from, to),
         ),
       );
     }
 
     var unit = 0;
     for (final placement in rowItems) {
-      addGapRegion(unit, placement.col);
+      addGap(unit, placement.col);
+      if (base.isNotEmpty) base.add(const SizedBox(width: _gap));
       final item = itemsById[placement.id];
-      segments.add(
-        Expanded(
+      base.add(
+        SizedBox(
           key: ValueKey(placement.id),
-          flex: placement.units,
+          width: span(placement.units),
           child: item == null
               ? const SizedBox.shrink()
               : _buildInteractiveItem(
@@ -152,32 +179,59 @@ class DashboardView extends StatelessWidget {
                   item,
                   placement,
                   layout,
-                  maxWidth * placement.units / dashboardGridUnits,
+                  span(placement.units),
                 ),
         ),
       );
       unit = placement.endCol;
     }
-    addGapRegion(unit, dashboardGridUnits);
+    addGap(unit, dashboardGridUnits);
 
-    final children = <Widget>[];
-    for (var i = 0; i < segments.length; i++) {
-      if (i > 0) children.add(const SizedBox(width: _gap));
-      children.add(segments[i]);
+    final baseRow = Row(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: base,
+    );
+
+    if (!(editing && onInsertInRow != null)) {
+      return IntrinsicHeight(child: baseRow);
     }
 
-    return IntrinsicHeight(
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: children,
+    // Insert strips at adjacent-tile seams (and flush row edges), as a Stack
+    // overlay so their generous hit width never widens the row.
+    Widget strip(double centerX, int slot) => Positioned(
+      left: centerX - _insertHit / 2,
+      width: _insertHit,
+      top: 0,
+      bottom: 0,
+      child: _RowInsertZone(
+        onAccept: (draggedId) => onInsertInRow!(draggedId, row, slot),
+        enabled: (draggedId) => layout.canInsertInRow(row, draggedId),
       ),
     );
+
+    final strips = <Widget>[];
+    for (var i = 0; i < rowItems.length; i++) {
+      final placement = rowItems[i];
+      if (i == 0 && placement.col == 0) {
+        strips.add(strip(0, 0));
+      }
+      if (i > 0 && rowItems[i - 1].endCol == placement.col) {
+        strips.add(strip(columnLeft(placement.col) - _gap / 2, i));
+      }
+      if (i == rowItems.length - 1 && placement.endCol == dashboardGridUnits) {
+        strips.add(strip(maxWidth, rowItems.length));
+      }
+    }
+
+    return IntrinsicHeight(child: Stack(children: [baseRow, ...strips]));
   }
 
-  /// A contiguous run of empty units. In editing mode each unit becomes its own
-  /// drop cell (so a tile can land at any column); otherwise it's just reserved
-  /// space that keeps the surrounding tiles aligned.
-  Widget _gapRegion(
+  /// A contiguous run of empty units. In editing mode it renders as one merged
+  /// dashed placeholder (tap to add a widget here) with a per-unit drop target
+  /// overlay, so a dropped tile still lands on the exact unit under the pointer
+  /// and auto-shrinks to the free run. Outside editing it's just reserved space
+  /// keeping the tiles aligned.
+  Widget _gapPlaceholder(
     BuildContext context,
     DashboardGridLayout layout,
     int row,
@@ -185,18 +239,38 @@ class DashboardView extends StatelessWidget {
     int to,
   ) {
     if (!editing || onPlaceInCell == null) return const SizedBox.shrink();
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
+    final span = to - from;
+    // A run can only hold a widget when it's at least a `1/3` (2 units) wide;
+    // narrower runs still show the dashed cell but can't be added/dropped into.
+    final canHold = dashboardWidthForUnits(span) != null;
+    return Stack(
+      fit: StackFit.expand,
       children: [
-        for (var u = from; u < to; u++)
-          Expanded(
-            child: _GapDropCell(
-              row: row,
-              unit: u,
-              layout: layout,
-              onPlace: onPlaceInCell!,
-            ),
+        Positioned.fill(
+          child: _GapVisual(
+            onAdd: canHold && onAddWidget != null
+                ? () => onAddWidget!(row, from, span)
+                : null,
           ),
+        ),
+        Positioned.fill(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              for (var u = from; u < to; u++) ...[
+                if (u > from) const SizedBox(width: _gap),
+                Expanded(
+                  child: _UnitDropTarget(
+                    row: row,
+                    unit: u,
+                    layout: layout,
+                    onPlace: onPlaceInCell!,
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
       ],
     );
   }
@@ -325,10 +399,58 @@ class DashboardView extends StatelessWidget {
   }
 }
 
-/// An empty grid unit in editing mode. Accepts a dropped widget at this cell,
-/// shrinking it to the free span when it's wider than the space available.
-class _GapDropCell extends StatelessWidget {
-  const _GapDropCell({
+/// The merged dashed visual filling a contiguous empty run in editing mode. Tap
+/// it (or its `+`) to add a new widget there. The dashed outline is light so
+/// empty space reads as "available" rather than a heavy box. Drop feedback is
+/// handled by the per-unit [_UnitDropTarget]s layered on top.
+class _GapVisual extends StatelessWidget {
+  const _GapVisual({required this.onAdd});
+
+  /// Null when the run is too narrow to hold a widget — then no `+`/tap.
+  final VoidCallback? onAdd;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final content = CustomPaint(
+      painter: _DashedRRectPainter(
+        color: scheme.outlineVariant.withValues(alpha: 0.8),
+        strokeWidth: 1,
+        radius: 8,
+      ),
+      child: onAdd == null
+          ? const SizedBox.expand()
+          : Center(
+              child: Icon(
+                Icons.add_rounded,
+                size: 18,
+                color: scheme.onSurfaceVariant.withValues(alpha: 0.6),
+              ),
+            ),
+    );
+    return Padding(
+      padding: const EdgeInsets.all(2),
+      child: onAdd == null
+          ? content
+          : Material(
+              type: MaterialType.transparency,
+              borderRadius: BorderRadius.circular(8),
+              child: InkWell(
+                onTap: onAdd,
+                borderRadius: BorderRadius.circular(8),
+                child: content,
+              ),
+            ),
+    );
+  }
+}
+
+/// One empty grid unit's drop target, layered transparently over a [_GapVisual]
+/// so dropping lands on the exact unit under the pointer (shrinking the tile to
+/// the free run). Lights up only the hovered unit; lets taps fall through to the
+/// `+` beneath it.
+class _UnitDropTarget extends StatelessWidget {
+  const _UnitDropTarget({
     required this.row,
     required this.unit,
     required this.layout,
@@ -350,32 +472,80 @@ class _GapDropCell extends StatelessWidget {
         final dragged = layout.byId(details.data);
         final fit = layout.fitWidth(row, unit, ignoreId: details.data);
         if (dragged == null || fit == null) return;
-        // Keep the dragged width unless the free span is narrower (auto-shrink
-        // to the smaller area).
+        // Keep the dragged width unless the free run is narrower (auto-shrink).
         final width = fit.units < dragged.units ? fit : dragged.width;
         onPlace(details.data, row, unit, width);
       },
       builder: (context, candidateData, rejectedData) {
-        final hovering = candidateData.isNotEmpty;
+        if (candidateData.isEmpty) return const SizedBox.expand();
         final scheme = Theme.of(context).colorScheme;
         return Padding(
           padding: const EdgeInsets.all(2),
           child: DecoratedBox(
             decoration: BoxDecoration(
+              color: scheme.primary.withValues(alpha: 0.16),
               borderRadius: BorderRadius.circular(8),
-              color: hovering
-                  ? scheme.primary.withValues(alpha: 0.12)
-                  : scheme.surfaceContainerHighest.withValues(alpha: 0.35),
-              border: Border.all(
-                color: hovering ? scheme.primary : scheme.outlineVariant,
-                width: hovering ? 2 : 1,
-              ),
             ),
           ),
         );
       },
     );
   }
+}
+
+/// Paints a dashed rounded-rectangle border the size of its child. Flutter has
+/// no dashed `BoxBorder`, so the stroke is walked manually with [dash]/[gap].
+class _DashedRRectPainter extends CustomPainter {
+  _DashedRRectPainter({
+    required this.color,
+    required this.strokeWidth,
+    required this.radius,
+  });
+
+  final Color color;
+  final double strokeWidth;
+  final double radius;
+  static const double dash = 5;
+  static const double gap = 4;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final outline = Path()
+      ..addRRect(
+        RRect.fromRectAndRadius(
+          // Inset by half the stroke so the dashes aren't clipped at the edge.
+          Rect.fromLTWH(
+            strokeWidth / 2,
+            strokeWidth / 2,
+            size.width - strokeWidth,
+            size.height - strokeWidth,
+          ),
+          Radius.circular(radius),
+        ),
+      );
+    final dashed = Path();
+    for (final metric in outline.computeMetrics()) {
+      var distance = 0.0;
+      while (distance < metric.length) {
+        final end = (distance + dash).clamp(0.0, metric.length);
+        dashed.addPath(metric.extractPath(distance, end), Offset.zero);
+        distance += dash + gap;
+      }
+    }
+    canvas.drawPath(
+      dashed,
+      Paint()
+        ..color = color
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = strokeWidth,
+    );
+  }
+
+  @override
+  bool shouldRepaint(_DashedRRectPainter old) =>
+      old.color != color ||
+      old.strokeWidth != strokeWidth ||
+      old.radius != radius;
 }
 
 /// The drop band between two rows. Dropping a widget here splits the layout,
@@ -405,6 +575,41 @@ class _InterRowDropZone extends StatelessWidget {
                   ),
                 )
               : const SizedBox.shrink(),
+        );
+      },
+    );
+  }
+}
+
+/// The vertical drop strip between two adjacent tiles (or at a flush row edge).
+/// Dropping here wedges the dragged tile into the row at this position, shifting
+/// the others aside. Rendered in a Stack overlay (so its hit width never widens
+/// the row): invisible until a tile is dragged over it, then a full-height bar
+/// previews where the tile will land.
+class _RowInsertZone extends StatelessWidget {
+  const _RowInsertZone({required this.onAccept, required this.enabled});
+
+  final void Function(String draggedId) onAccept;
+  final bool Function(String draggedId) enabled;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return DragTarget<String>(
+      onWillAcceptWithDetails: (details) => enabled(details.data),
+      onAcceptWithDetails: (details) => onAccept(details.data),
+      builder: (context, candidateData, rejectedData) {
+        final hovering = candidateData.isNotEmpty;
+        return Align(
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 120),
+            width: hovering ? 4 : 0,
+            height: double.infinity,
+            decoration: BoxDecoration(
+              color: scheme.primary,
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
         );
       },
     );

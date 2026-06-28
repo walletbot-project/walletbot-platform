@@ -15,8 +15,16 @@ import 'package:flutter/material.dart';
 /// [repos] is passed in explicitly because this sheet is pushed on a Navigator
 /// that sits above the account-scoped providers (same reason as
 /// `showFilterSheet`).
-Future<bool> showAddWidgetSheet(BuildContext context, AppRepositories repos) =>
-    _showWidgetSheet(context, repos);
+/// [at] places the new widget at a specific grid cell (used by the in-grid
+/// "+" placeholders); [maxUnits] is the free span there, so the new widget's
+/// width is capped to fit. When [at] is null the widget lands on a fresh bottom
+/// row (the default for the toolbar "add" action).
+Future<bool> showAddWidgetSheet(
+  BuildContext context,
+  AppRepositories repos, {
+  DashboardLayoutCoord? at,
+  int? maxUnits,
+}) => _showWidgetSheet(context, repos, at: at, maxUnits: maxUnits);
 
 /// Opens the same sheet pre-filled to edit an existing [widget]. [initialFilter]
 /// is the widget's current saved filter resolved to a [TransactionFilter] (or
@@ -38,6 +46,8 @@ Future<bool> _showWidgetSheet(
   AppRepositories repos, {
   DashboardWidget? existing,
   TransactionFilter initialFilter = const TransactionFilter(),
+  DashboardLayoutCoord? at,
+  int? maxUnits,
 }) async {
   final saved = await showModalBottomSheet<bool>(
     context: context,
@@ -51,6 +61,8 @@ Future<bool> _showWidgetSheet(
       repos: repos,
       existing: existing,
       initialFilter: initialFilter,
+      at: at,
+      maxUnits: maxUnits,
     ),
   );
   return saved ?? false;
@@ -93,11 +105,19 @@ class _WidgetSheet extends StatefulWidget {
     required this.repos,
     this.existing,
     this.initialFilter = const TransactionFilter(),
+    this.at,
+    this.maxUnits,
   });
 
   final AppRepositories repos;
   final DashboardWidget? existing;
   final TransactionFilter initialFilter;
+
+  /// Target grid cell for a new widget (null = append on a fresh bottom row).
+  final DashboardLayoutCoord? at;
+
+  /// Free span at [at], capping the new widget's width when placing in a cell.
+  final int? maxUnits;
 
   @override
   State<_WidgetSheet> createState() => _WidgetSheetState();
@@ -325,21 +345,33 @@ class _WidgetSheetState extends State<_WidgetSheet> {
 
   Future<void> _create(String title, Map<String, Object?> options) async {
     final existing = await widget.repos.dashboard.listActive();
-    // Drop the new widget on a fresh row below everything else.
-    final layout = DashboardGridLayout.fromPlacements(
-      resolvePlacements([
-        for (final row in existing)
-          PlacementInput(
-            id: row.id,
-            width: DashboardWidth.fromWire(row.width) ?? DashboardWidth.full,
-            coord: dashboardLayoutFromOptions(row.options),
-          ),
-      ]),
-    );
-    final placedOptions = {
-      ...options,
-      'layout': {'row': layout.rowCount, 'col': 0},
-    };
+    final at = widget.at;
+
+    var width = _defaultWidthFor[_type]!;
+    final Map<String, Object?> layout;
+    if (at != null) {
+      // Targeted placement: cap the width to the free span at the cell.
+      final maxUnits = widget.maxUnits;
+      if (maxUnits != null) {
+        final fit = dashboardWidthForUnits(maxUnits);
+        if (fit != null && fit.units < width.units) width = fit;
+      }
+      layout = {'row': at.row, 'col': at.col};
+    } else {
+      // Default: drop the new widget on a fresh row below everything else.
+      final resolved = DashboardGridLayout.fromPlacements(
+        resolvePlacements([
+          for (final row in existing)
+            PlacementInput(
+              id: row.id,
+              width: DashboardWidth.fromWire(row.width) ?? DashboardWidth.full,
+              coord: dashboardLayoutFromOptions(row.options),
+            ),
+        ]),
+      );
+      layout = {'row': resolved.rowCount, 'col': 0};
+    }
+
     String? filterId;
     if (_type != WidgetType.balance && _filterConfigured) {
       filterId = await widget.repos.savedFilters.create(
@@ -351,8 +383,8 @@ class _WidgetSheetState extends State<_WidgetSheet> {
       type: _type.wire,
       filterId: filterId,
       position: existing.length,
-      width: _defaultWidthFor[_type]!.wire,
-      options: encodeWidgetOptions(placedOptions),
+      width: width.wire,
+      options: encodeWidgetOptions({...options, 'layout': layout}),
     );
   }
 

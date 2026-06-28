@@ -209,6 +209,55 @@ class DashboardGridLayout {
     return DashboardGridLayout.fromPlacements(moved);
   }
 
+  /// Whether [row] has room to wedge in another tile: at least one `third`
+  /// (the narrowest width) of free units once [ignoreId] is set aside. Drives
+  /// the enabled state of the row's vertical insert strips.
+  bool canInsertInRow(int row, String ignoreId) {
+    final used = placements
+        .where((p) => p.row == row && p.id != ignoreId)
+        .fold<int>(0, (sum, p) => sum + p.units);
+    return dashboardGridUnits - used >= DashboardWidth.third.units;
+  }
+
+  /// Wedges [id] into [row] at the ordinal [slot] (0 = before the first tile,
+  /// N = after the last), shifting the row's other tiles aside and re-flowing
+  /// them flush left-to-right. The inserted tile auto-shrinks to the free span
+  /// when it's too wide. Returns null when the row has no room (see
+  /// [canInsertInRow]). The tile's old row collapses if it empties.
+  DashboardGridLayout? insertInRow(String id, int row, int slot) {
+    final current = byId(id);
+    if (current == null) return null;
+    final rowTiles = [
+      for (final p in placements)
+        if (p.row == row && p.id != id) p,
+    ]..sort((a, b) => a.col.compareTo(b.col));
+    final usedUnits = rowTiles.fold<int>(0, (sum, p) => sum + p.units);
+    final freeUnits = dashboardGridUnits - usedUnits;
+    if (freeUnits < DashboardWidth.third.units) return null;
+    // Shrink only when the tile can't fit the free span as-is.
+    final width = current.units <= freeUnits
+        ? current.width
+        : dashboardWidthForUnits(freeUnits)!;
+
+    final ordered = [...rowTiles];
+    ordered.insert(
+      slot.clamp(0, ordered.length),
+      current.copyWith(width: width),
+    );
+
+    final reflowed = <WidgetPlacement>[];
+    var col = 0;
+    for (final p in ordered) {
+      reflowed.add(p.copyWith(row: row, col: col));
+      col += p.width.units;
+    }
+    final others = [
+      for (final p in placements)
+        if (p.row != row && p.id != id) p,
+    ];
+    return DashboardGridLayout.fromPlacements([...others, ...reflowed]);
+  }
+
   /// Swaps the positions of [aId] and [bId] (used when a widget is dropped onto
   /// another). Returns null unless each fits in the other's slot without
   /// overlapping a third widget.

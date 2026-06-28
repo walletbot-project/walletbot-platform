@@ -118,6 +118,8 @@ class _DashboardSectionState extends State<DashboardSection> {
           onPlaceInCell: widget.editing ? _placeInCell : null,
           onSwap: widget.editing ? _swap : null,
           onInsertRow: widget.editing ? _insertRow : null,
+          onInsertInRow: widget.editing ? _insertInRow : null,
+          onAddWidget: widget.editing ? _addWidgetAt : null,
           onNudge: widget.editing ? _nudge : null,
           onWidthChanged: widget.editing ? _changeWidth : null,
           onEditItem: widget.editing
@@ -200,6 +202,31 @@ class _DashboardSectionState extends State<DashboardSection> {
 
   void _insertRow(String draggedId, int rowIndex) {
     _applyLayout(_currentLayout().insertRowAt(draggedId, rowIndex), draggedId);
+  }
+
+  void _insertInRow(String draggedId, int row, int slot) {
+    _applyLayout(_currentLayout().insertInRow(draggedId, row, slot), draggedId);
+  }
+
+  /// Opens the add-widget flow targeting the empty cell ([row], [col]). On a
+  /// legacy board (no stored coordinates) we persist the current layout first,
+  /// so the new widget's placement is honored instead of being re-derived by the
+  /// auto-flow fallback. [maxUnits] caps the new widget's width to the free run.
+  Future<void> _addWidgetAt(int row, int col, int maxUnits) async {
+    final repos = context.read<AppRepositories>();
+    final needsMigration = _ordered.any(
+      (w) => dashboardLayoutFromOptions(w.options) == null,
+    );
+    if (needsMigration) {
+      await _applyLayout(_currentLayout(), _selectedId ?? '');
+      if (!mounted) return;
+    }
+    await showAddWidgetSheet(
+      context,
+      repos,
+      at: DashboardLayoutCoord(row: row, col: col),
+      maxUnits: maxUnits,
+    );
   }
 
   void _nudge(DashboardViewItem item, DashboardMoveDirection direction) {
