@@ -80,6 +80,10 @@ class DashboardView extends StatelessWidget {
   /// so it never widens the row's actual layout.
   static const _insertHit = 22.0;
 
+  /// Hit height of the (overlaid) new-row drop bands at each row's top/bottom
+  /// edge. Overlaid, so it doesn't change the between-row spacing.
+  static const _rowBand = 16.0;
+
   @override
   Widget build(BuildContext context) {
     final layout = DashboardGridLayout.fromPlacements(
@@ -98,35 +102,19 @@ class DashboardView extends StatelessWidget {
       builder: (context, constraints) {
         final maxWidth = constraints.maxWidth;
         final rowCount = layout.rowCount;
+        // Identical spacing in view and edit mode (a constant [_gap] between
+        // rows, nothing at the edges) so toggling edit never shifts the layout.
+        // The new-row drop bands are overlaid inside each row (see _buildRow).
         return Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            _interRowZone(context, layout, 0),
             for (var row = 0; row < rowCount; row++) ...[
+              if (row > 0) const SizedBox(height: _gap),
               _buildRow(context, layout, itemsById, row, maxWidth),
-              _interRowZone(context, layout, row + 1),
             ],
           ],
         );
       },
-    );
-  }
-
-  /// The space between (and around) rows. In editing mode every boundary — top,
-  /// between, and bottom — is a drop zone that inserts a new row; otherwise only
-  /// the gaps between rows reserve the usual spacing.
-  Widget _interRowZone(
-    BuildContext context,
-    DashboardGridLayout layout,
-    int rowIndex,
-  ) {
-    final canDrop = editing && onInsertRow != null;
-    if (!canDrop) {
-      final isEdge = rowIndex == 0 || rowIndex == layout.rowCount;
-      return SizedBox(height: isEdge ? 0 : _gap);
-    }
-    return _InterRowDropZone(
-      onAccept: (draggedId) => onInsertRow!(draggedId, rowIndex),
     );
   }
 
@@ -192,38 +180,76 @@ class DashboardView extends StatelessWidget {
       children: base,
     );
 
-    if (!(editing && onInsertInRow != null)) {
+    final canInsertInRow = editing && onInsertInRow != null;
+    final canInsertRow = editing && onInsertRow != null;
+    if (!canInsertInRow && !canInsertRow) {
       return IntrinsicHeight(child: baseRow);
     }
 
-    // Insert strips at adjacent-tile seams (and flush row edges), as a Stack
-    // overlay so their generous hit width never widens the row.
-    Widget strip(double centerX, int slot) => Positioned(
-      left: centerX - _insertHit / 2,
-      width: _insertHit,
-      top: 0,
-      bottom: 0,
-      child: _RowInsertZone(
-        onAccept: (draggedId) => onInsertInRow!(draggedId, row, slot),
-        enabled: (draggedId) => layout.canInsertInRow(row, draggedId),
-      ),
-    );
+    // All drop affordances live in a Stack overlay so their generous hit areas
+    // never change the row's actual size (no layout shift when editing).
+    final overlay = <Widget>[];
 
-    final strips = <Widget>[];
-    for (var i = 0; i < rowItems.length; i++) {
-      final placement = rowItems[i];
-      if (i == 0 && placement.col == 0) {
-        strips.add(strip(0, 0));
-      }
-      if (i > 0 && rowItems[i - 1].endCol == placement.col) {
-        strips.add(strip(columnLeft(placement.col) - _gap / 2, i));
-      }
-      if (i == rowItems.length - 1 && placement.endCol == dashboardGridUnits) {
-        strips.add(strip(maxWidth, rowItems.length));
+    // Between-tile insert strips (and flush row edges): wedge into this row.
+    if (canInsertInRow) {
+      Widget strip(double centerX, int slot) => Positioned(
+        left: centerX - _insertHit / 2,
+        width: _insertHit,
+        top: 0,
+        bottom: 0,
+        child: _RowInsertZone(
+          onAccept: (draggedId) => onInsertInRow!(draggedId, row, slot),
+          enabled: (draggedId) => layout.canInsertInRow(row, draggedId),
+        ),
+      );
+      for (var i = 0; i < rowItems.length; i++) {
+        final placement = rowItems[i];
+        if (i == 0 && placement.col == 0) {
+          overlay.add(strip(0, 0));
+        }
+        if (i > 0 && rowItems[i - 1].endCol == placement.col) {
+          overlay.add(strip(columnLeft(placement.col) - _gap / 2, i));
+        }
+        if (i == rowItems.length - 1 &&
+            placement.endCol == dashboardGridUnits) {
+          overlay.add(strip(maxWidth, rowItems.length));
+        }
       }
     }
 
-    return IntrinsicHeight(child: Stack(children: [baseRow, ...strips]));
+    // New-row drop bands at the row's top edge (insert a row above) and, for the
+    // last row, its bottom edge (insert a row below). Overlaid at the edges so
+    // the between-row spacing matches view mode exactly.
+    if (canInsertRow) {
+      overlay.add(
+        Positioned(
+          top: 0,
+          left: 0,
+          right: 0,
+          height: _rowBand,
+          child: _NewRowDropZone(
+            alignment: Alignment.topCenter,
+            onAccept: (draggedId) => onInsertRow!(draggedId, row),
+          ),
+        ),
+      );
+      if (row == layout.rowCount - 1) {
+        overlay.add(
+          Positioned(
+            bottom: 0,
+            left: 0,
+            right: 0,
+            height: _rowBand,
+            child: _NewRowDropZone(
+              alignment: Alignment.bottomCenter,
+              onAccept: (draggedId) => onInsertRow!(draggedId, row + 1),
+            ),
+          ),
+        );
+      }
+    }
+
+    return IntrinsicHeight(child: Stack(children: [baseRow, ...overlay]));
   }
 
   /// A contiguous run of empty units. In editing mode it renders as one merged
@@ -548,11 +574,14 @@ class _DashedRRectPainter extends CustomPainter {
       old.radius != radius;
 }
 
-/// The drop band between two rows. Dropping a widget here splits the layout,
-/// inserting a fresh row at this boundary. Expands and shows a line on hover.
-class _InterRowDropZone extends StatelessWidget {
-  const _InterRowDropZone({required this.onAccept});
+/// A new-row drop band, overlaid at a row's top or bottom edge. Dropping a tile
+/// here inserts a fresh row at that boundary. Invisible until a tile is dragged
+/// over it (so it never alters the between-row spacing), then shows a full-width
+/// bar at the [alignment] edge to preview the new row.
+class _NewRowDropZone extends StatelessWidget {
+  const _NewRowDropZone({required this.alignment, required this.onAccept});
 
+  final Alignment alignment;
   final void Function(String draggedId) onAccept;
 
   @override
@@ -561,20 +590,16 @@ class _InterRowDropZone extends StatelessWidget {
     return DragTarget<String>(
       onAcceptWithDetails: (details) => onAccept(details.data),
       builder: (context, candidateData, rejectedData) {
-        final hovering = candidateData.isNotEmpty;
-        return AnimatedContainer(
-          duration: const Duration(milliseconds: 120),
-          height: hovering ? 26 : 12,
-          alignment: Alignment.center,
-          child: hovering
-              ? Container(
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: scheme.primary,
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                )
-              : const SizedBox.shrink(),
+        if (candidateData.isEmpty) return const SizedBox.expand();
+        return Align(
+          alignment: alignment,
+          child: Container(
+            height: 4,
+            decoration: BoxDecoration(
+              color: scheme.primary,
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
         );
       },
     );
