@@ -87,12 +87,12 @@ class DashboardValueBackground {
   final Color betweenColor;
   final Color highColor;
 
-  static const defaults = DashboardValueBackground(
+  static final defaults = DashboardValueBackground(
     low: 0,
     high: 10000,
-    lowColor: Color(0xFFFFCBCB),
-    betweenColor: Color(0xFFFFE588),
-    highColor: Color(0xFFC8F2D8),
+    lowColor: pastelize(const Color(0xFFEF4444)),
+    betweenColor: pastelize(const Color(0xFFFFCA28)),
+    highColor: pastelize(tagDefaultColor),
   );
 
   static DashboardValueBackground? fromJson(Object? raw) {
@@ -123,19 +123,11 @@ class DashboardValueBackground {
   }
 }
 
-const dashboardBackgroundPalette = <Color>[
-  Color(0xFFC8F2D8),
-  Color(0xFFBDEFE9),
-  Color(0xFFC7E5FF),
-  Color(0xFFD7E0FF),
-  Color(0xFFE6D3FF),
-  Color(0xFFFFD0E0),
-  Color(0xFFFFCBCB),
-  Color(0xFFFFE588),
-  Color(0xFFFFD1A8),
-  Color(0xFFF3E2BF),
-  Color(0xFFDCE4E2),
-  Color(0xFFD5E1E7),
+/// Widget background swatches, derived from the shared entity accent palette
+/// ([colorOptions]) so dashboard widgets offer the same colors as tags,
+/// categories and accounts — just softened into pastels via [pastelize].
+final dashboardBackgroundPalette = <Color>[
+  for (final color in colorOptions) pastelize(color),
 ];
 
 Color? _colorFrom(Object? raw) {

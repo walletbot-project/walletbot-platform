@@ -35,6 +35,21 @@ const colorOptions = <Color>[
   Color(0xFFF97316),
 ];
 
+/// Derives a soft pastel tint of [color]: keeps the hue but drops the
+/// saturation and lifts the lightness, so an accent from [colorOptions] reads as
+/// a gentle wash of itself. Shared by every surface that wants a pastel fill
+/// (e.g. dashboard widget backgrounds) so they stay consistent with the entity
+/// accents tags, categories and accounts pick from.
+Color pastelize(Color color) {
+  final hsl = HSLColor.fromColor(color);
+  return hsl
+      .withSaturation((hsl.saturation * 0.6).clamp(0.0, 1.0))
+      .withLightness(
+        (hsl.lightness + (1 - hsl.lightness) * 0.7).clamp(0.0, 1.0),
+      )
+      .toColor();
+}
+
 String colorToHex(Color color) {
   final alpha = (color.a * 255).round() & 0xff;
   final red = (color.r * 255).round() & 0xff;

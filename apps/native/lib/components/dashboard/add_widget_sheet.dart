@@ -117,7 +117,8 @@ class _WidgetSheetState extends State<_WidgetSheet> {
   late BreakdownGroupBy _groupBy;
   late BreakdownChartKind _chartKind;
   late TransactionFilter _filter;
-  late DashboardBackgroundMode _backgroundMode;
+  late bool _advanced;
+  late bool _simpleHasColor;
   late Color _fixedBackgroundColor;
   late Color _lowBackgroundColor;
   late Color _betweenBackgroundColor;
@@ -157,7 +158,8 @@ class _WidgetSheetState extends State<_WidgetSheet> {
     final background = DashboardBackgroundStyle.fromJson(options['background']);
     final valueBackground =
         background.value ?? DashboardValueBackground.defaults;
-    _backgroundMode = background.mode;
+    _advanced = background.mode == DashboardBackgroundMode.value;
+    _simpleHasColor = background.mode == DashboardBackgroundMode.fixed;
     _fixedBackgroundColor =
         background.fixedColor ?? dashboardBackgroundPalette.first;
     _lowBackgroundColor = valueBackground.lowColor;
@@ -302,8 +304,13 @@ class _WidgetSheetState extends State<_WidgetSheet> {
 
   DashboardBackgroundStyle _backgroundFromFields() {
     final defaults = DashboardValueBackground.defaults;
+    final mode = _advanced
+        ? DashboardBackgroundMode.value
+        : (_simpleHasColor
+              ? DashboardBackgroundMode.fixed
+              : DashboardBackgroundMode.none);
     return DashboardBackgroundStyle(
-      mode: _backgroundMode,
+      mode: mode,
       fixedColor: _fixedBackgroundColor,
       value: DashboardValueBackground(
         low: _parseNumber(_backgroundLowController.text, defaults.low),
@@ -455,53 +462,50 @@ class _WidgetSheetState extends State<_WidgetSheet> {
     );
   }
 
-  /// Whether the "Valor" (range) background mode is offered. Gated off by
+  /// Whether the "Avanzado" (value-range) toggle is offered. Gated off by
   /// [_enableValueBackgroundMode], but always shown when the widget is already
   /// on that mode (e.g. configured by the agent) so it stays editable.
-  bool get _showValueBackgroundMode =>
-      _enableValueBackgroundMode ||
-      _backgroundMode == DashboardBackgroundMode.value;
+  bool get _showAdvancedToggle => _enableValueBackgroundMode || _advanced;
 
   Widget _backgroundFields(ThemeData theme) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('Fondo', style: theme.textTheme.titleSmall),
-        const SizedBox(height: 8),
-        SegmentedButton<DashboardBackgroundMode>(
-          showSelectedIcon: false,
-          style: const ButtonStyle(visualDensity: VisualDensity.compact),
-          segments: [
-            const ButtonSegment(
-              value: DashboardBackgroundMode.none,
-              label: Text('Base'),
-            ),
-            ButtonSegment(
-              value: DashboardBackgroundMode.fixed,
-              // Without the "Valor" option there's nothing to contrast "Fijo"
-              // against, so the simpler "Color" reads better.
-              label: Text(_showValueBackgroundMode ? 'Fijo' : 'Color'),
-            ),
-            if (_showValueBackgroundMode)
-              const ButtonSegment(
-                value: DashboardBackgroundMode.value,
-                label: Text('Valor'),
+        Row(
+          children: [
+            Text('Fondo', style: theme.textTheme.titleSmall),
+            if (_showAdvancedToggle) ...[
+              const Spacer(),
+              Text(
+                'Avanzado',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
+              const SizedBox(width: 4),
+              Switch(
+                value: _advanced,
+                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                onChanged: (v) => setState(() => _advanced = v),
+              ),
+            ],
           ],
-          selected: {_backgroundMode},
-          onSelectionChanged: (s) => setState(() => _backgroundMode = s.first),
         ),
-        if (_backgroundMode == DashboardBackgroundMode.fixed) ...[
-          const SizedBox(height: 12),
+        const SizedBox(height: 8),
+        // Simple mode: pick a fixed color, or the leading "sin color" swatch to
+        // leave the widget on its base background.
+        if (!_advanced)
           _ColorSwatches(
             selected: _fixedBackgroundColor,
+            cleared: !_simpleHasColor,
+            onCleared: () => setState(() => _simpleHasColor = false),
             onSelected: (color) => setState(() {
+              _simpleHasColor = true;
               _fixedBackgroundColor = color;
             }),
           ),
-        ],
-        if (_backgroundMode == DashboardBackgroundMode.value) ...[
-          const SizedBox(height: 12),
+        if (_advanced) ...[
           Row(
             children: [
               Expanded(
@@ -700,18 +704,58 @@ class _ValueColorRow extends StatelessWidget {
 }
 
 class _ColorSwatches extends StatelessWidget {
-  const _ColorSwatches({required this.selected, required this.onSelected});
+  const _ColorSwatches({
+    required this.selected,
+    required this.onSelected,
+    this.cleared = false,
+    this.onCleared,
+  });
 
   final Color selected;
   final ValueChanged<Color> onSelected;
 
+  /// Whether the "sin color" (no background) option is the active selection.
+  /// Only meaningful when [onCleared] is provided.
+  final bool cleared;
+
+  /// When provided, a leading "sin color" swatch is shown that clears the
+  /// background; tapping it invokes this.
+  final VoidCallback? onCleared;
+
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
+    final onCleared = this.onCleared;
     return Wrap(
       spacing: 8,
       runSpacing: 8,
       children: [
+        if (onCleared != null)
+          Tooltip(
+            message: 'Sin color',
+            child: InkResponse(
+              radius: 20,
+              onTap: onCleared,
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 140),
+                width: 30,
+                height: 30,
+                decoration: BoxDecoration(
+                  color: Colors.transparent,
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: cleared ? colors.primary : colors.outlineVariant,
+                    width: cleared ? 2.4 : 1,
+                  ),
+                ),
+                child: Icon(
+                  Icons.format_color_reset_rounded,
+                  size: 16,
+                  color: cleared ? colors.primary : colors.onSurfaceVariant,
+                ),
+              ),
+            ),
+          ),
         for (final color in dashboardBackgroundPalette)
           Tooltip(
             message: 'Color',
@@ -726,13 +770,13 @@ class _ColorSwatches extends StatelessWidget {
                   color: color,
                   shape: BoxShape.circle,
                   border: Border.all(
-                    color: color == selected
+                    color: (!cleared && color == selected)
                         ? colors.primary
                         : colors.outlineVariant,
-                    width: color == selected ? 2.4 : 1,
+                    width: (!cleared && color == selected) ? 2.4 : 1,
                   ),
                 ),
-                child: color == selected
+                child: (!cleared && color == selected)
                     ? Icon(Icons.check_rounded, size: 16, color: colors.primary)
                     : null,
               ),
