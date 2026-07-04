@@ -24,7 +24,7 @@ export const createAuth = (ctx: GenericCtx<DataModel>) => {
         database: authComponent.adapter(ctx),
         // Configure simple, non-verified email/password to get started
         emailAndPassword: {
-            enabled: false,
+            enabled: true,
             requireEmailVerification: false,
         },
         socialProviders: {

@@ -1,7 +1,10 @@
-import 'package:app/database.dart';
+import 'package:app/components/account_icons.dart';
+import 'package:app/components/color_picker.dart';
+import 'package:app/components/color_utils.dart';
+import 'package:app/components/icon_picker.dart';
+import 'package:app/data/data.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:uuid/uuid.dart';
 
 // (ISO code, Spanish name) — sorted alphabetically by code
 const _currencies = [
@@ -79,6 +82,8 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
   final _nameController = TextEditingController();
   final _balanceController = TextEditingController();
   String _currency = 'ARS';
+  Color _color = accountDefaultColor;
+  IconData _icon = accountDefaultIcon;
   bool _saving = false;
 
   @override
@@ -88,9 +93,11 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
     super.dispose();
   }
 
-  void _applySuggestion(String name) {
+  void _applySuggestion(({String label, IconData icon}) suggestion) {
+    final name = suggestion.label;
     _nameController.text = name;
     _nameController.selection = TextSelection.collapsed(offset: name.length);
+    setState(() => _icon = suggestion.icon);
   }
 
   Future<void> _pickCurrency() async {
@@ -101,6 +108,16 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
       builder: (_) => _CurrencyPicker(selected: _currency),
     );
     if (picked != null) setState(() => _currency = picked);
+  }
+
+  Future<void> _pickIcon() async {
+    final picked = await showIconPickerDialog(
+      context,
+      selected: _icon,
+      options: accountIconOptions,
+      accent: _color,
+    );
+    if (picked != null) setState(() => _icon = picked);
   }
 
   Future<void> _submit() async {
@@ -115,30 +132,13 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
 
     setState(() => _saving = true);
     try {
-      final db = context.read<AppDatabase>();
-      final accountId = const Uuid().v4();
-      await db.transaction(() async {
-        await db.insertAccount(
-          id: accountId,
-          name: _nameController.text.trim(),
-          currency: _currency,
-        );
-        if (initialAmountCents != null) {
-          final now = BigInt.from(DateTime.now().millisecondsSinceEpoch);
-          await db.insertTransaction(
-            id: const Uuid().v4(),
-            type: 'balance_adjustment',
-            name: 'Balance inicial',
-            status: 'cleared',
-            date: now,
-            accountId: accountId,
-            categoryId: '',
-            amount: initialAmountCents,
-            currency: _currency,
-            balanceAfter: initialAmountCents,
-          );
-        }
-      });
+      await context.read<AppRepositories>().accounts.create(
+        name: _nameController.text.trim(),
+        currency: _currency,
+        color: colorToHex(_color),
+        icon: accountIconName(_icon),
+        initialBalanceCents: initialAmountCents,
+      );
       if (mounted) Navigator.of(context).pop();
     } catch (e, st) {
       debugPrint('Error creating account: $e\n$st');
@@ -170,7 +170,7 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                   ActionChip(
                     avatar: Icon(s.icon),
                     label: Text(s.label),
-                    onPressed: () => _applySuggestion(s.label),
+                    onPressed: () => _applySuggestion(s),
                   ),
               ],
             ),
@@ -186,6 +186,41 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
               ),
               validator: (v) =>
                   (v == null || v.trim().isEmpty) ? 'Ingresá un nombre' : null,
+            ),
+            const SizedBox(height: 24),
+            Text(
+              'Ícono y color',
+              style: Theme.of(context).textTheme.labelLarge,
+            ),
+            const SizedBox(height: 12),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Tappable icon tile, tinted with the selected accent.
+                InkWell(
+                  onTap: _pickIcon,
+                  borderRadius: BorderRadius.circular(18),
+                  child: Container(
+                    width: 56,
+                    height: 56,
+                    decoration: BoxDecoration(
+                      color: _color.withValues(alpha: 0.28),
+                      borderRadius: BorderRadius.circular(18),
+                    ),
+                    alignment: Alignment.center,
+                    child: Icon(_icon, size: 28, color: _color),
+                  ),
+                ),
+                const SizedBox(width: 16),
+                // Inline accent swatches.
+                Expanded(
+                  child: ColorPicker(
+                    selected: _color,
+                    options: colorOptions,
+                    onChanged: (color) => setState(() => _color = color),
+                  ),
+                ),
+              ],
             ),
             const SizedBox(height: 16),
             InkWell(
@@ -261,8 +296,10 @@ class _CurrencyPickerState extends State<_CurrencyPicker> {
     if (_query.isEmpty) return _currencies;
     final q = _query.toLowerCase();
     return _currencies
-        .where((c) =>
-            c.$1.toLowerCase().contains(q) || c.$2.toLowerCase().contains(q))
+        .where(
+          (c) =>
+              c.$1.toLowerCase().contains(q) || c.$2.toLowerCase().contains(q),
+        )
         .toList();
   }
 
@@ -300,8 +337,8 @@ class _CurrencyPickerState extends State<_CurrencyPicker> {
               Text(
                 'Más usadas',
                 style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    ),
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
               ),
               const SizedBox(height: 8),
               Wrap(

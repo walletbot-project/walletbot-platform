@@ -1,21 +1,32 @@
-import 'dart:math';
+import 'dart:convert';
 
-import 'package:drift/drift.dart';
+import 'package:app/components/dashboard/dashboard_layout.dart';
+import 'package:app/components/dashboard/dashboard_models.dart';
+import 'package:drift/drift.dart' show Value;
 
+import '../data/data.dart';
 import '../database.dart';
-import '../sync/local_writes.dart' as sync_writes;
+import '../shared/money.dart' show centsToDouble;
 import 'tool_parsing.dart';
 
-// Native tool executors. All operations run against the local Drift database;
-// the sync layer pushes dirty rows to Convex. NEVER call the Convex backend
-// directly from here — native must work offline.
+// Native tool executors. All operations run against the local database via
+// the repository layer (lib/data/); the sync layer pushes dirty rows to
+// Convex. NEVER call the Convex backend directly from here — native must work
+// offline.
+//
+// This class owns the agent *protocol*: argument coercion (Gemini's loosely
+// typed function-call args) and the `{'ok': bool, ...}` JSON envelopes the
+// model's prompt expects. Data semantics live in the repositories.
 
 class ToolExecutors {
-  ToolExecutors(this.db);
+  ToolExecutors(this.repos);
 
-  final AppDatabase db;
+  final AppRepositories repos;
 
-  Future<Map<String, dynamic>> execute(String name, Map<String, dynamic> args) async {
+  Future<Map<String, dynamic>> execute(
+    String name,
+    Map<String, dynamic> args,
+  ) async {
     try {
       switch (name) {
         // Accounts
@@ -82,6 +93,26 @@ class ToolExecutors {
           return await _summarizeByCategory(args);
         case 'summarizeByAccount':
           return await _summarizeByAccount(args);
+        // Saved filters
+        case 'listSavedFilters':
+          return await _listSavedFilters(args);
+        case 'createSavedFilter':
+          return await _createSavedFilter(args);
+        case 'updateSavedFilter':
+          return await _updateSavedFilter(args);
+        case 'archiveSavedFilter':
+          return await _archiveSavedFilter(args);
+        // Home dashboard widgets
+        case 'listDashboardWidgets':
+          return await _listDashboardWidgets(args);
+        case 'createDashboardWidget':
+          return await _createDashboardWidget(args);
+        case 'updateDashboardWidget':
+          return await _updateDashboardWidget(args);
+        case 'reorderDashboardWidgets':
+          return await _reorderDashboardWidgets(args);
+        case 'archiveDashboardWidget':
+          return await _archiveDashboardWidget(args);
         default:
           return {'ok': false, 'error': 'Unknown tool: $name'};
       }
@@ -90,282 +121,288 @@ class ToolExecutors {
     }
   }
 
-  // ───── Resolvers ─────
+  // ───── Resolution helpers ─────
 
-  Future<Account?> _resolveAccount(String idOrName) async {
-    final byId = await (db.select(db.accounts)..where((t) => t.id.equals(idOrName))).getSingleOrNull();
-    if (byId != null) return byId;
+  /// Most tools treat an ambiguous name the same as not-found (the original
+  /// behavior); only getAccount/getCategory surface candidates.
+  T? _valueOrNull<T>(ResolveResult<T> result) =>
+      result is Resolved<T> ? result.value : null;
 
-    final target = normalizeName(idOrName);
-    final candidates = await (db.select(db.accounts)..where((t) => t.archived.equals(false))).get();
-    final matches = candidates.where((a) => normalizeName(a.name) == target).toList();
-    if (matches.length == 1) return matches.first;
-    return null;
-  }
-
-  Future<List<Account>> _resolveAccountCandidates(String idOrName) async {
-    final target = normalizeName(idOrName);
-    final candidates = await (db.select(db.accounts)..where((t) => t.archived.equals(false))).get();
-    return candidates.where((a) => normalizeName(a.name) == target).toList();
-  }
-
-  Future<Category?> _resolveCategory(String idOrName) async {
-    final byId = await (db.select(db.categories)..where((t) => t.id.equals(idOrName))).getSingleOrNull();
-    if (byId != null) return byId;
-
-    final target = normalizeName(idOrName);
-    final candidates = await (db.select(db.categories)..where((t) => t.archived.equals(false))).get();
-    final matches = candidates.where((c) => normalizeName(c.name) == target).toList();
-    if (matches.length == 1) return matches.first;
-    return null;
-  }
-
-  Future<List<Category>> _resolveCategoryCandidates(String idOrName) async {
-    final target = normalizeName(idOrName);
-    final candidates = await (db.select(db.categories)..where((t) => t.archived.equals(false))).get();
-    return candidates.where((c) => normalizeName(c.name) == target).toList();
-  }
-
-  Future<Tag?> _resolveTag(String idOrName) async {
-    final byId = await (db.select(db.tags)..where((t) => t.id.equals(idOrName))).getSingleOrNull();
-    if (byId != null) return byId;
-
-    final target = normalizeName(idOrName);
-    final candidates = await (db.select(db.tags)..where((t) => t.archived.equals(false))).get();
-    final matches = candidates.where((t) => normalizeName(t.name) == target).toList();
-    if (matches.length == 1) return matches.first;
-    return null;
-  }
-
-  Map<String, dynamic> _ambiguous(String label, List<({String id, String name})> candidates) {
+  Map<String, dynamic> _ambiguous(
+    String label,
+    List<({String id, String name})> candidates,
+  ) {
     return {
       'ok': false,
       'error': '$label is ambiguous',
-      'candidates': candidates.map((c) => {'id': c.id, 'name': c.name}).toList(),
+      'candidates': candidates
+          .map((c) => {'id': c.id, 'name': c.name})
+          .toList(),
     };
   }
 
   // ───── Account tools ─────
 
   Future<Map<String, dynamic>> _listAccounts(Map<String, dynamic> args) async {
-    final includeArchived = args['includeArchived'] == true;
-    final query = db.select(db.accounts);
-    if (!includeArchived) {
-      query.where((t) => t.archived.equals(false));
-    }
-    final rows = await query.get();
+    final rows = await repos.accounts.listAll(
+      includeArchived: args['includeArchived'] == true,
+    );
     return {
       'ok': true,
       'accounts': rows
-          .map((a) => {'id': a.id, 'name': a.name, 'currency': a.currency, 'color': a.color, 'icon': a.icon, 'isArchived': a.archived})
+          .map(
+            (a) => {
+              'id': a.id,
+              'name': a.name,
+              'currency': a.currency,
+              'color': a.color,
+              'icon': a.icon,
+              'isArchived': a.archived,
+            },
+          )
           .toList(),
     };
   }
 
   Future<Map<String, dynamic>> _getAccount(Map<String, dynamic> args) async {
-    final idOrName = args['idOrName'] as String;
-    final acc = await _resolveAccount(idOrName);
-    if (acc == null) {
-      final cands = await _resolveAccountCandidates(idOrName);
-      if (cands.length > 1) {
-        return _ambiguous('Account', cands.map((c) => (id: c.id, name: c.name)).toList());
-      }
-      return {'ok': false, 'error': 'Account not found'};
+    final result = await repos.resolver.account(args['idOrName'] as String);
+    switch (result) {
+      case Ambiguous<Account>(:final candidates):
+        return _ambiguous('Account', candidates);
+      case NotFound<Account>():
+        return {'ok': false, 'error': 'Account not found'};
+      case Resolved<Account>(:final value):
+        return {
+          'ok': true,
+          'account': {
+            'id': value.id,
+            'name': value.name,
+            'currency': value.currency,
+            'color': value.color,
+            'icon': value.icon,
+          },
+        };
     }
+  }
+
+  Future<Map<String, dynamic>> _getAccountBalance(
+    Map<String, dynamic> args,
+  ) async {
+    final acc = _valueOrNull(
+      await repos.resolver.account(args['idOrName'] as String),
+    );
+    if (acc == null) return {'ok': false, 'error': 'Account not found'};
+    final balance = await repos.accounts.getBalanceCents(acc.id);
     return {
       'ok': true,
-      'account': {'id': acc.id, 'name': acc.name, 'currency': acc.currency, 'color': acc.color, 'icon': acc.icon},
+      'accountId': acc.id,
+      'accountName': acc.name,
+      'balance': centsToDouble(balance),
+      'currency': acc.currency,
     };
   }
 
-  Future<Map<String, dynamic>> _getAccountBalance(Map<String, dynamic> args) async {
-    final acc = await _resolveAccount(args['idOrName'] as String);
-    if (acc == null) return {'ok': false, 'error': 'Account not found'};
-    final balance = await _computeAccountBalance(acc.id);
-    return {'ok': true, 'accountId': acc.id, 'accountName': acc.name, 'balance': balance.toDouble() / 100, 'currency': acc.currency};
-  }
-
   Future<Map<String, dynamic>> _createAccount(Map<String, dynamic> args) async {
-    final id = _newUuid();
-    final now = BigInt.from(DateTime.now().millisecondsSinceEpoch);
-    await db
-        .into(db.accounts)
-        .insert(
-          AccountsCompanion.insert(
-            id: id,
-            name: args['name'] as String,
-            currency: args['currency'] as String,
-            description: Value(args['description'] as String?),
-            color: Value(args['color'] as String?),
-            icon: Value(args['icon'] as String?),
-            createdAt: now,
-            updatedAt: now,
-            dirty: const Value(true),
-          ),
-        );
+    final id = await repos.accounts.create(
+      name: args['name'] as String,
+      currency: args['currency'] as String,
+      description: args['description'] as String?,
+      color: args['color'] as String?,
+      icon: args['icon'] as String?,
+    );
     return {'ok': true, 'id': id};
   }
 
   Future<Map<String, dynamic>> _updateAccount(Map<String, dynamic> args) async {
-    final acc = await _resolveAccount(args['idOrName'] as String);
+    final acc = _valueOrNull(
+      await repos.resolver.account(args['idOrName'] as String),
+    );
     if (acc == null) return {'ok': false, 'error': 'Account not found'};
 
-    final now = BigInt.from(DateTime.now().millisecondsSinceEpoch);
-    await (db.update(db.accounts)..where((t) => t.id.equals(acc.id))).write(
-      AccountsCompanion(
-        name: args.containsKey('name') ? Value(args['name'] as String) : const Value.absent(),
-        description: args.containsKey('description') ? Value(args['description'] as String?) : const Value.absent(),
-        color: args.containsKey('color') ? Value(args['color'] as String?) : const Value.absent(),
-        icon: args.containsKey('icon') ? Value(args['icon'] as String?) : const Value.absent(),
-        updatedAt: Value(now),
-        dirty: const Value(true),
-      ),
+    await repos.accounts.update(
+      acc.id,
+      name: args.containsKey('name')
+          ? Value(args['name'] as String)
+          : const Value.absent(),
+      description: args.containsKey('description')
+          ? Value(args['description'] as String?)
+          : const Value.absent(),
+      color: args['color'] is String
+          ? Value(args['color'] as String)
+          : const Value.absent(),
+      icon: args['icon'] is String
+          ? Value(args['icon'] as String)
+          : const Value.absent(),
     );
     return {'ok': true, 'id': acc.id};
   }
 
-  Future<Map<String, dynamic>> _archiveAccount(Map<String, dynamic> args) async {
-    final acc = await _resolveAccount(args['idOrName'] as String);
-    if (acc == null) return {'ok': false, 'error': 'Account not found'};
-
-    final now = BigInt.from(DateTime.now().millisecondsSinceEpoch);
-    await (db.update(db.accounts)..where((t) => t.id.equals(acc.id))).write(
-      AccountsCompanion(archived: const Value(true), updatedAt: Value(now), dirty: const Value(true)),
+  Future<Map<String, dynamic>> _archiveAccount(
+    Map<String, dynamic> args,
+  ) async {
+    final acc = _valueOrNull(
+      await repos.resolver.account(args['idOrName'] as String),
     );
-    await _writeTombstone('accounts', acc.id);
+    if (acc == null) return {'ok': false, 'error': 'Account not found'};
+    await repos.accounts.archive(acc.id);
     return {'ok': true, 'id': acc.id};
   }
 
   // ───── Category tools ─────
 
-  Future<Map<String, dynamic>> _listCategories(Map<String, dynamic> args) async {
-    final includeArchived = args['includeArchived'] == true;
-    final query = db.select(db.categories);
-    if (!includeArchived) {
-      query.where((t) => t.archived.equals(false));
-    }
-    final rows = await query.get();
+  Future<Map<String, dynamic>> _listCategories(
+    Map<String, dynamic> args,
+  ) async {
+    final rows = await repos.categories.listAll(
+      includeArchived: args['includeArchived'] == true,
+    );
     return {
       'ok': true,
-      'categories': rows.map((c) => {'id': c.id, 'name': c.name, 'description': c.description}).toList(),
+      'categories': rows
+          .map(
+            (c) => {
+              'id': c.id,
+              'name': c.name,
+              'description': c.description,
+              'color': c.color,
+              'icon': c.icon,
+            },
+          )
+          .toList(),
     };
   }
 
   Future<Map<String, dynamic>> _getCategory(Map<String, dynamic> args) async {
-    final cat = await _resolveCategory(args['idOrName'] as String);
-    if (cat == null) {
-      final cands = await _resolveCategoryCandidates(args['idOrName'] as String);
-      if (cands.length > 1) {
-        return _ambiguous('Category', cands.map((c) => (id: c.id, name: c.name)).toList());
-      }
-      return {'ok': false, 'error': 'Category not found'};
+    final result = await repos.resolver.category(args['idOrName'] as String);
+    switch (result) {
+      case Ambiguous<Category>(:final candidates):
+        return _ambiguous('Category', candidates);
+      case NotFound<Category>():
+        return {'ok': false, 'error': 'Category not found'};
+      case Resolved<Category>(:final value):
+        return {
+          'ok': true,
+          'category': {
+            'id': value.id,
+            'name': value.name,
+            'description': value.description,
+            'color': value.color,
+            'icon': value.icon,
+          },
+        };
     }
-    return {
-      'ok': true,
-      'category': {'id': cat.id, 'name': cat.name, 'description': cat.description},
-    };
   }
 
-  Future<Map<String, dynamic>> _createCategory(Map<String, dynamic> args) async {
-    final id = _newUuid();
-    final now = BigInt.from(DateTime.now().millisecondsSinceEpoch);
-    await db
-        .into(db.categories)
-        .insert(
-          CategoriesCompanion.insert(
-            id: id,
-            name: args['name'] as String,
-            description: Value(args['description'] as String?),
-            createdAt: now,
-            updatedAt: now,
-            dirty: const Value(true),
-          ),
-        );
+  Future<Map<String, dynamic>> _createCategory(
+    Map<String, dynamic> args,
+  ) async {
+    final id = await repos.categories.create(
+      name: args['name'] as String,
+      description: args['description'] as String?,
+      color: args['color'] as String?,
+      icon: args['icon'] as String?,
+    );
     return {'ok': true, 'id': id};
   }
 
-  Future<Map<String, dynamic>> _updateCategory(Map<String, dynamic> args) async {
-    final cat = await _resolveCategory(args['idOrName'] as String);
+  Future<Map<String, dynamic>> _updateCategory(
+    Map<String, dynamic> args,
+  ) async {
+    final cat = _valueOrNull(
+      await repos.resolver.category(args['idOrName'] as String),
+    );
     if (cat == null) return {'ok': false, 'error': 'Category not found'};
 
-    final now = BigInt.from(DateTime.now().millisecondsSinceEpoch);
-    await (db.update(db.categories)..where((t) => t.id.equals(cat.id))).write(
-      CategoriesCompanion(
-        name: args.containsKey('name') ? Value(args['name'] as String) : const Value.absent(),
-        description: args.containsKey('description') ? Value(args['description'] as String?) : const Value.absent(),
-        updatedAt: Value(now),
-        dirty: const Value(true),
-      ),
+    await repos.categories.update(
+      cat.id,
+      name: args.containsKey('name')
+          ? Value(args['name'] as String)
+          : const Value.absent(),
+      description: args.containsKey('description')
+          ? Value(args['description'] as String?)
+          : const Value.absent(),
+      color: args['color'] is String
+          ? Value(args['color'] as String)
+          : const Value.absent(),
+      icon: args['icon'] is String
+          ? Value(args['icon'] as String)
+          : const Value.absent(),
     );
     return {'ok': true, 'id': cat.id};
   }
 
-  Future<Map<String, dynamic>> _archiveCategory(Map<String, dynamic> args) async {
-    final cat = await _resolveCategory(args['idOrName'] as String);
-    if (cat == null) return {'ok': false, 'error': 'Category not found'};
-
-    final now = BigInt.from(DateTime.now().millisecondsSinceEpoch);
-    await (db.update(db.categories)..where((t) => t.id.equals(cat.id))).write(
-      CategoriesCompanion(archived: const Value(true), updatedAt: Value(now), dirty: const Value(true)),
+  Future<Map<String, dynamic>> _archiveCategory(
+    Map<String, dynamic> args,
+  ) async {
+    final cat = _valueOrNull(
+      await repos.resolver.category(args['idOrName'] as String),
     );
-    await _writeTombstone('categories', cat.id);
+    if (cat == null) return {'ok': false, 'error': 'Category not found'};
+    await repos.categories.archive(cat.id);
     return {'ok': true, 'id': cat.id};
   }
 
   // ───── Tag tools ─────
 
   Future<Map<String, dynamic>> _listTags(Map<String, dynamic> args) async {
-    final includeArchived = args['includeArchived'] == true;
-    final query = db.select(db.tags);
-    if (!includeArchived) {
-      query.where((t) => t.archived.equals(false));
-    }
-    final rows = await query.get();
+    final rows = await repos.tags.listAll(
+      includeArchived: args['includeArchived'] == true,
+    );
     return {
       'ok': true,
-      'tags': rows.map((t) => {'id': t.id, 'name': t.name, 'parentId': t.parentId, 'color': t.color}).toList(),
+      'tags': rows
+          .map(
+            (t) => {
+              'id': t.id,
+              'name': t.name,
+              'parentId': t.parentId,
+              'color': t.color,
+            },
+          )
+          .toList(),
     };
   }
 
   Future<Map<String, dynamic>> _getTag(Map<String, dynamic> args) async {
-    final tag = await _resolveTag(args['idOrName'] as String);
+    final tag = _valueOrNull(
+      await repos.resolver.tag(args['idOrName'] as String),
+    );
     if (tag == null) return {'ok': false, 'error': 'Tag not found'};
     return {
       'ok': true,
-      'tag': {'id': tag.id, 'name': tag.name, 'parentId': tag.parentId, 'color': tag.color},
+      'tag': {
+        'id': tag.id,
+        'name': tag.name,
+        'parentId': tag.parentId,
+        'color': tag.color,
+      },
     };
   }
 
   Future<Map<String, dynamic>> _createTag(Map<String, dynamic> args) async {
     String? parentId;
     if (args['parentIdOrName'] != null) {
-      final parent = await _resolveTag(args['parentIdOrName'] as String);
+      final parent = _valueOrNull(
+        await repos.resolver.tag(args['parentIdOrName'] as String),
+      );
       if (parent == null) {
         return {'ok': false, 'error': 'Parent tag not found'};
       }
       parentId = parent.id;
     }
-    final id = _newUuid();
-    final now = BigInt.from(DateTime.now().millisecondsSinceEpoch);
-    await db
-        .into(db.tags)
-        .insert(
-          TagsCompanion.insert(
-            id: id,
-            name: args['name'] as String,
-            description: Value(args['description'] as String?),
-            parentId: Value(parentId),
-            color: Value(args['color'] as String?),
-            createdAt: now,
-            updatedAt: now,
-            dirty: const Value(true),
-          ),
-        );
+    final id = await repos.tags.create(
+      name: args['name'] as String,
+      description: args['description'] as String?,
+      parentId: parentId,
+      color: args['color'] as String?,
+    );
     return {'ok': true, 'id': id};
   }
 
   Future<Map<String, dynamic>> _updateTag(Map<String, dynamic> args) async {
-    final tag = await _resolveTag(args['idOrName'] as String);
+    final tag = _valueOrNull(
+      await repos.resolver.tag(args['idOrName'] as String),
+    );
     if (tag == null) return {'ok': false, 'error': 'Tag not found'};
 
     Value<String?> parentValue = const Value.absent();
@@ -374,7 +411,7 @@ class ToolExecutors {
       if (raw == null) {
         parentValue = const Value(null);
       } else {
-        final parent = await _resolveTag(raw as String);
+        final parent = _valueOrNull(await repos.resolver.tag(raw as String));
         if (parent == null) {
           return {'ok': false, 'error': 'Parent tag not found'};
         }
@@ -382,111 +419,120 @@ class ToolExecutors {
       }
     }
 
-    final now = BigInt.from(DateTime.now().millisecondsSinceEpoch);
-    await (db.update(db.tags)..where((t) => t.id.equals(tag.id))).write(
-      TagsCompanion(
-        name: args.containsKey('name') ? Value(args['name'] as String) : const Value.absent(),
-        description: args.containsKey('description') ? Value(args['description'] as String?) : const Value.absent(),
-        parentId: parentValue,
-        color: args.containsKey('color') ? Value(args['color'] as String?) : const Value.absent(),
-        updatedAt: Value(now),
-        dirty: const Value(true),
-      ),
+    await repos.tags.update(
+      tag.id,
+      name: args.containsKey('name')
+          ? Value(args['name'] as String)
+          : const Value.absent(),
+      description: args.containsKey('description')
+          ? Value(args['description'] as String?)
+          : const Value.absent(),
+      parentId: parentValue,
+      color: args['color'] is String
+          ? Value(args['color'] as String)
+          : const Value.absent(),
     );
     return {'ok': true, 'id': tag.id};
   }
 
   Future<Map<String, dynamic>> _archiveTag(Map<String, dynamic> args) async {
-    final tag = await _resolveTag(args['idOrName'] as String);
-    if (tag == null) return {'ok': false, 'error': 'Tag not found'};
-
-    final now = BigInt.from(DateTime.now().millisecondsSinceEpoch);
-    await (db.update(db.tags)..where((t) => t.id.equals(tag.id))).write(
-      TagsCompanion(archived: const Value(true), updatedAt: Value(now), dirty: const Value(true)),
+    final tag = _valueOrNull(
+      await repos.resolver.tag(args['idOrName'] as String),
     );
-    await _writeTombstone('tags', tag.id);
+    if (tag == null) return {'ok': false, 'error': 'Tag not found'};
+    await repos.tags.archive(tag.id, mode: TagArchiveMode.reparentChildren);
     return {'ok': true, 'id': tag.id};
   }
 
   // ───── Transaction reads ─────
 
-  Future<Map<String, dynamic>> _listTransactions(Map<String, dynamic> args) async {
+  Future<Map<String, dynamic>> _listTransactions(
+    Map<String, dynamic> args,
+  ) async {
     final limit = (args['limit'] as num?)?.toInt() ?? 50;
 
     String? accountId;
     if (args['accountIdOrName'] != null) {
-      final acc = await _resolveAccount(args['accountIdOrName'] as String);
+      final acc = _valueOrNull(
+        await repos.resolver.account(args['accountIdOrName'] as String),
+      );
       if (acc == null) return {'ok': false, 'error': 'Account not found'};
       accountId = acc.id;
     }
     String? categoryId;
     if (args['categoryIdOrName'] != null) {
-      final cat = await _resolveCategory(args['categoryIdOrName'] as String);
+      final cat = _valueOrNull(
+        await repos.resolver.category(args['categoryIdOrName'] as String),
+      );
       if (cat == null) return {'ok': false, 'error': 'Category not found'};
       categoryId = cat.id;
     }
     String? tagId;
     if (args['tagIdOrName'] != null) {
-      final tag = await _resolveTag(args['tagIdOrName'] as String);
+      final tag = _valueOrNull(
+        await repos.resolver.tag(args['tagIdOrName'] as String),
+      );
       if (tag == null) return {'ok': false, 'error': 'Tag not found'};
       tagId = tag.id;
     }
 
-    final query = db.select(db.transactions)..where((t) => t.archived.equals(false));
+    // Unknown wire strings filter out everything (original SQL-equality
+    // behavior) rather than throwing.
+    Set<TxnType> types = const {};
     if (args['type'] != null) {
-      query.where((t) => t.type.equals(args['type'] as String));
+      final matches = TxnType.values.where((t) => t.wire == args['type']);
+      if (matches.isEmpty) return {'ok': true, 'items': const []};
+      types = {matches.single};
     }
-    if (accountId != null) {
-      final acc = accountId;
-      query.where((t) => t.accountId.equals(acc));
-    }
-    if (categoryId != null) {
-      final cat = categoryId;
-      query.where((t) => t.categoryId.equals(cat));
-    }
+    TxnStatus? status;
     if (args['status'] != null) {
-      query.where((t) => t.status.equals(args['status'] as String));
+      final matches = TxnStatus.values.where((s) => s.wire == args['status']);
+      if (matches.isEmpty) return {'ok': true, 'items': const []};
+      status = matches.single;
     }
-    if (args['dateFrom'] != null) {
-      final from = parseNaturalDate(args['dateFrom'] as String);
-      query.where((t) => t.date.isBiggerOrEqualValue(from));
-    }
-    if (args['dateTo'] != null) {
-      final to = parseNaturalDate(args['dateTo'] as String);
-      query.where((t) => t.date.isSmallerOrEqualValue(to));
-    }
-    query
-      ..orderBy([(t) => OrderingTerm.desc(t.date)])
-      ..limit(limit);
-    var items = await query.get();
 
-    if (tagId != null) {
-      final tg = tagId;
-      final joins = await (db.select(db.transactionTags)..where((j) => j.tagId.equals(tg))).get();
-      final allowed = joins.map((j) => j.transactionId).toSet();
-      items = items.where((t) => allowed.contains(t.id)).toList();
-    }
+    final items = await repos.transactions.list(
+      TransactionFilter(
+        types: types,
+        status: status,
+        accountIds: accountId != null ? {accountId} : const {},
+        accountDirection: AccountDirection.source,
+        categoryIds: categoryId != null ? {categoryId} : const {},
+        tagIds: tagId != null ? {tagId} : const {},
+      ),
+      limit: limit,
+      ordering: TxnOrdering.dateDesc,
+      exactFromMs: args['dateFrom'] != null
+          ? parseNaturalDate(args['dateFrom'] as String)
+          : null,
+      exactToInclusiveMs: args['dateTo'] != null
+          ? parseNaturalDate(args['dateTo'] as String)
+          : null,
+    );
 
     return {'ok': true, 'items': items.map(_serializeTransaction).toList()};
   }
 
-  Future<Map<String, dynamic>> _getTransaction(Map<String, dynamic> args) async {
+  Future<Map<String, dynamic>> _getTransaction(
+    Map<String, dynamic> args,
+  ) async {
     final id = args['id'] as String;
-    final txn = await (db.select(db.transactions)..where((t) => t.id.equals(id))).getSingleOrNull();
+    final txn = await repos.transactions.getById(id);
     if (txn == null) return {'ok': false, 'error': 'Transaction not found'};
-    final joins = await (db.select(db.transactionTags)..where((j) => j.transactionId.equals(id))).get();
     final result = _serializeTransaction(txn);
-    result['tagIds'] = joins.map((j) => j.tagId).toList();
+    result['tagIds'] = await repos.transactions.tagIdsOf(id);
     return {'ok': true, 'transaction': result};
   }
 
-  Future<Map<String, dynamic>> _getRecentTransactions(Map<String, dynamic> args) async {
+  Future<Map<String, dynamic>> _getRecentTransactions(
+    Map<String, dynamic> args,
+  ) async {
     final limit = (args['limit'] as num?)?.toInt() ?? 10;
-    final query = db.select(db.transactions)
-      ..where((t) => t.archived.equals(false))
-      ..orderBy([(t) => OrderingTerm.desc(t.date)])
-      ..limit(limit);
-    final items = await query.get();
+    final items = await repos.transactions.list(
+      const TransactionFilter(),
+      limit: limit,
+      ordering: TxnOrdering.dateDesc,
+    );
     return {'ok': true, 'items': items.map(_serializeTransaction).toList()};
   }
 
@@ -499,390 +545,712 @@ class ToolExecutors {
   // on the model it arrives as a real bool, the string "true"/"false", or a
   // number (1/0). We coerce all of those here. A truly unparseable value falls
   // back to false (conservative: treat the date as unconfirmed).
-  Value<bool> _dateConfirmedValue(Map<String, dynamic> args) {
+  bool _dateConfirmedOf(Map<String, dynamic> args) {
     final raw = args['dateConfirmed'];
-    if (raw is bool) return Value(raw);
-    if (raw is num) return Value(raw != 0);
+    if (raw is bool) return raw;
+    if (raw is num) return raw != 0;
     if (raw is String) {
       final normalized = raw.trim().toLowerCase();
-      if (normalized == 'true') return const Value(true);
-      if (normalized == 'false') return const Value(false);
+      if (normalized == 'true') return true;
+      if (normalized == 'false') return false;
     }
-    return const Value(false);
+    return false;
+  }
+
+  /// Resolves the loosely typed `tagIdsOrNames` argument to tag ids,
+  /// silently skipping anything unresolvable (original attach behavior).
+  Future<List<String>> _resolveTagIds(dynamic raw) async {
+    if (raw is! List) return const [];
+    final ids = <String>[];
+    for (final item in raw) {
+      if (item is! String) continue;
+      final tag = _valueOrNull(await repos.resolver.tag(item));
+      if (tag == null) continue;
+      ids.add(tag.id);
+    }
+    return ids;
   }
 
   Future<Map<String, dynamic>> _addExpense(Map<String, dynamic> args) async {
-    final acc = await _resolveAccount(args['accountIdOrName'] as String);
+    final acc = _valueOrNull(
+      await repos.resolver.account(args['accountIdOrName'] as String),
+    );
     if (acc == null) return {'ok': false, 'error': 'Account not found'};
-    final cat = await _resolveCategory(args['categoryIdOrName'] as String);
+    final cat = _valueOrNull(
+      await repos.resolver.category(args['categoryIdOrName'] as String),
+    );
     if (cat == null) return {'ok': false, 'error': 'Category not found'};
 
-    final id = _newUuid();
-    final now = BigInt.from(DateTime.now().millisecondsSinceEpoch);
-    final date = parseOptionalDate(args['date'] as String?) ?? now;
-    final amount = parseAmountToCents(args['amount'] as num);
-
-    await db
-        .into(db.transactions)
-        .insert(
-          TransactionsCompanion.insert(
-            id: id,
-            type: 'expense',
-            name: args['name'] as String,
-            description: Value(args['description'] as String?),
-            status: (args['status'] as String?) ?? 'cleared',
-            date: date,
-            accountId: acc.id,
-            categoryId: cat.id,
-            amount: amount,
-            currency: acc.currency,
-            dateConfirmed: _dateConfirmedValue(args),
-            createdAt: now,
-            updatedAt: now,
-            dirty: const Value(true),
-          ),
-        );
-    await _attachTags(id, args['tagIdsOrNames']);
+    final id = await repos.transactions.addExpense(
+      accountId: acc.id,
+      categoryId: cat.id,
+      name: args['name'] as String,
+      amountCents: parseAmountToCents(args['amount'] as num),
+      currency: acc.currency,
+      description: args['description'] as String?,
+      status: (args['status'] as String?) ?? 'cleared',
+      dateMs: parseOptionalDate(args['date'] as String?),
+      dateConfirmed: _dateConfirmedOf(args),
+      tagIds: await _resolveTagIds(args['tagIdsOrNames']),
+    );
     return {'ok': true, 'id': id};
   }
 
   Future<Map<String, dynamic>> _addIncome(Map<String, dynamic> args) async {
-    final acc = await _resolveAccount(args['accountIdOrName'] as String);
+    final acc = _valueOrNull(
+      await repos.resolver.account(args['accountIdOrName'] as String),
+    );
     if (acc == null) return {'ok': false, 'error': 'Account not found'};
-    final cat = await _resolveCategory(args['categoryIdOrName'] as String);
+    final cat = _valueOrNull(
+      await repos.resolver.category(args['categoryIdOrName'] as String),
+    );
     if (cat == null) return {'ok': false, 'error': 'Category not found'};
 
-    final id = _newUuid();
-    final now = BigInt.from(DateTime.now().millisecondsSinceEpoch);
-    final date = parseOptionalDate(args['date'] as String?) ?? now;
-    final amount = parseAmountToCents(args['amount'] as num);
-
-    await db
-        .into(db.transactions)
-        .insert(
-          TransactionsCompanion.insert(
-            id: id,
-            type: 'income',
-            name: args['name'] as String,
-            description: Value(args['description'] as String?),
-            status: (args['status'] as String?) ?? 'cleared',
-            date: date,
-            accountId: acc.id,
-            categoryId: cat.id,
-            amount: amount,
-            currency: acc.currency,
-            dateConfirmed: _dateConfirmedValue(args),
-            createdAt: now,
-            updatedAt: now,
-            dirty: const Value(true),
-          ),
-        );
-    await _attachTags(id, args['tagIdsOrNames']);
+    final id = await repos.transactions.addIncome(
+      accountId: acc.id,
+      categoryId: cat.id,
+      name: args['name'] as String,
+      amountCents: parseAmountToCents(args['amount'] as num),
+      currency: acc.currency,
+      description: args['description'] as String?,
+      status: (args['status'] as String?) ?? 'cleared',
+      dateMs: parseOptionalDate(args['date'] as String?),
+      dateConfirmed: _dateConfirmedOf(args),
+      tagIds: await _resolveTagIds(args['tagIdsOrNames']),
+    );
     return {'ok': true, 'id': id};
   }
 
   Future<Map<String, dynamic>> _addTransfer(Map<String, dynamic> args) async {
-    final from = await _resolveAccount(args['fromAccountIdOrName'] as String);
+    final from = _valueOrNull(
+      await repos.resolver.account(args['fromAccountIdOrName'] as String),
+    );
     if (from == null) {
       return {'ok': false, 'error': 'Source account not found'};
     }
-    final to = await _resolveAccount(args['toAccountIdOrName'] as String);
+    final to = _valueOrNull(
+      await repos.resolver.account(args['toAccountIdOrName'] as String),
+    );
     if (to == null) {
       return {'ok': false, 'error': 'Destination account not found'};
     }
     if (from.id == to.id) {
-      return {'ok': false, 'error': 'Source and destination accounts must differ'};
+      return {
+        'ok': false,
+        'error': 'Source and destination accounts must differ',
+      };
     }
     String? categoryId;
     if (args['categoryIdOrName'] != null) {
-      final cat = await _resolveCategory(args['categoryIdOrName'] as String);
+      final cat = _valueOrNull(
+        await repos.resolver.category(args['categoryIdOrName'] as String),
+      );
       if (cat == null) return {'ok': false, 'error': 'Category not found'};
       categoryId = cat.id;
     }
 
-    final id = _newUuid();
-    final now = BigInt.from(DateTime.now().millisecondsSinceEpoch);
-    final date = parseOptionalDate(args['date'] as String?) ?? now;
     final amount = parseAmountToCents(args['amount'] as num);
     final sameCurrency = from.currency == to.currency;
-    final BigInt? toAmount = args['toAmount'] != null ? parseAmountToCents(args['toAmount'] as num) : (sameCurrency ? amount : null);
+    final BigInt? toAmount = args['toAmount'] != null
+        ? parseAmountToCents(args['toAmount'] as num)
+        : (sameCurrency ? amount : null);
     if (toAmount == null) {
-      return {'ok': false, 'error': 'Cross-currency transfers require toAmount (or exchangeRate to derive it)'};
+      return {
+        'ok': false,
+        'error':
+            'Cross-currency transfers require toAmount (or exchangeRate to derive it)',
+      };
     }
 
-    await db
-        .into(db.transactions)
-        .insert(
-          TransactionsCompanion.insert(
-            id: id,
-            type: 'transfer',
-            name: args['name'] as String,
-            description: Value(args['description'] as String?),
-            status: 'cleared',
-            date: date,
-            accountId: from.id,
-            categoryId: categoryId ?? '',
-            amount: amount,
-            currency: from.currency,
-            toAccountId: Value(to.id),
-            toAmount: Value(toAmount),
-            toCurrency: Value(to.currency),
-            exchangeRate: Value((args['exchangeRate'] as num?)?.toDouble()),
-            dateConfirmed: _dateConfirmedValue(args),
-            createdAt: now,
-            updatedAt: now,
-            dirty: const Value(true),
-          ),
-        );
-    await _attachTags(id, args['tagIdsOrNames']);
+    final id = await repos.transactions.addTransfer(
+      fromAccountId: from.id,
+      toAccountId: to.id,
+      name: args['name'] as String,
+      amountCents: amount,
+      currency: from.currency,
+      toAmountCents: toAmount,
+      toCurrency: to.currency,
+      exchangeRate: (args['exchangeRate'] as num?)?.toDouble(),
+      categoryId: categoryId ?? '',
+      description: args['description'] as String?,
+      dateMs: parseOptionalDate(args['date'] as String?),
+      dateConfirmed: _dateConfirmedOf(args),
+      tagIds: await _resolveTagIds(args['tagIdsOrNames']),
+    );
     return {'ok': true, 'id': id};
   }
 
-  Future<Map<String, dynamic>> _addBalanceAdjustment(Map<String, dynamic> args) async {
-    final acc = await _resolveAccount(args['accountIdOrName'] as String);
+  Future<Map<String, dynamic>> _addBalanceAdjustment(
+    Map<String, dynamic> args,
+  ) async {
+    final acc = _valueOrNull(
+      await repos.resolver.account(args['accountIdOrName'] as String),
+    );
     if (acc == null) return {'ok': false, 'error': 'Account not found'};
 
-    final id = _newUuid();
-    final now = BigInt.from(DateTime.now().millisecondsSinceEpoch);
-    final date = parseOptionalDate(args['date'] as String?) ?? now;
-    final balanceAfter = parseAmountToCents(args['balanceAfter'] as num);
-    // Local best-effort delta. The server recomputes this on sync.
-    final currentBalance = await _computeAccountBalance(acc.id);
-    final amount = balanceAfter - currentBalance;
-
-    await db
-        .into(db.transactions)
-        .insert(
-          TransactionsCompanion.insert(
-            id: id,
-            type: 'balance_adjustment',
-            name: (args['name'] as String?) ?? 'Ajuste de saldo',
-            description: Value(args['description'] as String?),
-            status: 'cleared',
-            date: date,
-            accountId: acc.id,
-            categoryId: '',
-            amount: amount,
-            currency: acc.currency,
-            balanceAfter: Value(balanceAfter),
-            dateConfirmed: _dateConfirmedValue(args),
-            createdAt: now,
-            updatedAt: now,
-            dirty: const Value(true),
-          ),
-        );
+    final id = await repos.transactions.addBalanceAdjustment(
+      accountId: acc.id,
+      balanceAfterCents: parseAmountToCents(args['balanceAfter'] as num),
+      currency: acc.currency,
+      name: (args['name'] as String?) ?? 'Ajuste de saldo',
+      description: args['description'] as String?,
+      dateMs: parseOptionalDate(args['date'] as String?),
+      dateConfirmed: _dateConfirmedOf(args),
+    );
     return {'ok': true, 'id': id};
   }
 
-  Future<Map<String, dynamic>> _updateTransaction(Map<String, dynamic> args) async {
+  Future<Map<String, dynamic>> _updateTransaction(
+    Map<String, dynamic> args,
+  ) async {
     final id = args['id'] as String;
-    final txn = await (db.select(db.transactions)..where((t) => t.id.equals(id))).getSingleOrNull();
+    final txn = await repos.transactions.getById(id);
     if (txn == null) return {'ok': false, 'error': 'Transaction not found'};
 
     String? categoryId;
     if (args['categoryIdOrName'] != null) {
-      final cat = await _resolveCategory(args['categoryIdOrName'] as String);
+      final cat = _valueOrNull(
+        await repos.resolver.category(args['categoryIdOrName'] as String),
+      );
       if (cat == null) return {'ok': false, 'error': 'Category not found'};
       categoryId = cat.id;
     }
-    final now = BigInt.from(DateTime.now().millisecondsSinceEpoch);
 
-    await (db.update(db.transactions)..where((t) => t.id.equals(id))).write(
-      TransactionsCompanion(
-        name: args.containsKey('name') ? Value(args['name'] as String) : const Value.absent(),
-        description: args.containsKey('description') ? Value(args['description'] as String?) : const Value.absent(),
-        date: args['date'] != null ? Value(parseNaturalDate(args['date'] as String)) : const Value.absent(),
-        dateConfirmed: args.containsKey('dateConfirmed')
-            ? _dateConfirmedValue(args)
-            : const Value.absent(),
-        amount: args['amount'] != null ? Value(parseAmountToCents(args['amount'] as num)) : const Value.absent(),
-        categoryId: categoryId != null ? Value(categoryId) : const Value.absent(),
-        status: args.containsKey('status') ? Value(args['status'] as String) : const Value.absent(),
-        updatedAt: Value(now),
-        dirty: const Value(true),
-      ),
+    await repos.transactions.update(
+      id,
+      name: args.containsKey('name')
+          ? Value(args['name'] as String)
+          : const Value.absent(),
+      description: args.containsKey('description')
+          ? Value(args['description'] as String?)
+          : const Value.absent(),
+      date: args['date'] != null
+          ? Value(parseNaturalDate(args['date'] as String))
+          : const Value.absent(),
+      dateConfirmed: args.containsKey('dateConfirmed')
+          ? Value(_dateConfirmedOf(args))
+          : const Value.absent(),
+      amount: args['amount'] != null
+          ? Value(parseAmountToCents(args['amount'] as num))
+          : const Value.absent(),
+      categoryId: categoryId != null ? Value(categoryId) : const Value.absent(),
+      status: args.containsKey('status')
+          ? Value(args['status'] as String)
+          : const Value.absent(),
     );
     return {'ok': true, 'id': id};
   }
 
-  Future<Map<String, dynamic>> _deleteTransaction(Map<String, dynamic> args) async {
+  Future<Map<String, dynamic>> _deleteTransaction(
+    Map<String, dynamic> args,
+  ) async {
     final id = args['id'] as String;
-    final txn = await (db.select(db.transactions)..where((t) => t.id.equals(id))).getSingleOrNull();
-    if (txn == null) return {'ok': true, 'id': id};
-
-    // Detach joins
-    final joins = await (db.select(db.transactionTags)..where((j) => j.transactionId.equals(id))).get();
-    for (final j in joins) {
-      await (db.delete(db.transactionTags)..where((t) => t.id.equals(j.id))).go();
-      await _writeTombstone('transactionTags', j.id);
-    }
-
-    final now = BigInt.from(DateTime.now().millisecondsSinceEpoch);
-    await (db.update(db.transactions)..where((t) => t.id.equals(id))).write(
-      TransactionsCompanion(archived: const Value(true), updatedAt: Value(now), dirty: const Value(true)),
-    );
-    await _writeTombstone('transactions', id);
+    // Idempotent: deleting a missing transaction still reports ok.
+    await repos.transactions.delete(id);
     return {'ok': true, 'id': id};
   }
 
-  Future<Map<String, dynamic>> _tagTransaction(Map<String, dynamic> args) async {
+  Future<Map<String, dynamic>> _tagTransaction(
+    Map<String, dynamic> args,
+  ) async {
     final transactionId = args['transactionId'] as String;
     final raw = (args['tagIdsOrNames'] as List).cast<String>();
     final missing = <String>[];
-    var added = 0;
-    final now = BigInt.from(DateTime.now().millisecondsSinceEpoch);
+    final resolved = <String>[];
     for (final item in raw) {
-      final tag = await _resolveTag(item);
+      final tag = _valueOrNull(await repos.resolver.tag(item));
       if (tag == null) {
         missing.add(item);
-        continue;
+      } else {
+        resolved.add(tag.id);
       }
-      final existing = await (db.select(
-        db.transactionTags,
-      )..where((j) => j.transactionId.equals(transactionId) & j.tagId.equals(tag.id))).getSingleOrNull();
-      if (existing != null) continue;
-      await db
-          .into(db.transactionTags)
-          .insert(
-            TransactionTagsCompanion.insert(
-              id: '${transactionId}__${tag.id}',
-              transactionId: transactionId,
-              tagId: tag.id,
-              createdAt: now,
-              updatedAt: now,
-              dirty: const Value(true),
-            ),
-          );
-      added += 1;
     }
+    final added = await repos.transactions.addTags(transactionId, resolved);
     return {'ok': true, 'added': added, 'missing': missing};
   }
 
-  Future<Map<String, dynamic>> _untagTransaction(Map<String, dynamic> args) async {
+  Future<Map<String, dynamic>> _untagTransaction(
+    Map<String, dynamic> args,
+  ) async {
     final transactionId = args['transactionId'] as String;
     final raw = (args['tagIdsOrNames'] as List).cast<String>();
     final missing = <String>[];
-    var removed = 0;
+    final resolved = <String>[];
     for (final item in raw) {
-      final tag = await _resolveTag(item);
+      final tag = _valueOrNull(await repos.resolver.tag(item));
       if (tag == null) {
         missing.add(item);
-        continue;
+      } else {
+        resolved.add(tag.id);
       }
-      final join = await (db.select(
-        db.transactionTags,
-      )..where((j) => j.transactionId.equals(transactionId) & j.tagId.equals(tag.id))).getSingleOrNull();
-      if (join == null) continue;
-      await (db.delete(db.transactionTags)..where((t) => t.id.equals(join.id))).go();
-      await _writeTombstone('transactionTags', join.id);
-      removed += 1;
     }
+    final removed = await repos.transactions.removeTags(
+      transactionId,
+      resolved,
+    );
     return {'ok': true, 'removed': removed, 'missing': missing};
   }
 
   // ───── Summaries ─────
 
-  Future<Map<String, dynamic>> _summarizeByCategory(Map<String, dynamic> args) async {
-    final from = parseNaturalDate(args['dateFrom'] as String);
-    final to = parseNaturalDate(args['dateTo'] as String);
-    final typeFilter = args['type'] as String?;
-    final currencyFilter = args['currency'] as String?;
-
-    final query = db.select(db.transactions)
-      ..where((t) => t.archived.equals(false))
-      ..where((t) => t.date.isBiggerOrEqualValue(from))
-      ..where((t) => t.date.isSmallerOrEqualValue(to));
-    if (typeFilter != null) {
-      query.where((t) => t.type.equals(typeFilter));
-    }
-    final items = await query.get();
-
-    final totals = <String, BigInt>{};
-    for (final t in items) {
-      if (t.type == 'transfer') continue;
-      if (currencyFilter != null && t.currency != currencyFilter) continue;
-      totals[t.categoryId] = (totals[t.categoryId] ?? BigInt.zero) + t.amount;
-    }
-
-    final cats = await (db.select(db.categories)..where((c) => c.archived.equals(false))).get();
-    final nameById = {for (final c in cats) c.id: c.name};
-
+  Future<Map<String, dynamic>> _summarizeByCategory(
+    Map<String, dynamic> args,
+  ) async {
+    final rows = await repos.summaries.byCategory(
+      fromMs: parseNaturalDate(args['dateFrom'] as String),
+      toMs: parseNaturalDate(args['dateTo'] as String),
+      type: args['type'] as String?,
+      currency: args['currency'] as String?,
+    );
     return {
       'ok': true,
-      'rows': totals.entries
-          .map((e) => {'categoryId': e.key, 'name': nameById[e.key] ?? '(unknown)', 'total': e.value.toDouble() / 100})
-          .toList(),
-    };
-  }
-
-  Future<Map<String, dynamic>> _summarizeByAccount(Map<String, dynamic> args) async {
-    final from = parseNaturalDate(args['dateFrom'] as String);
-    final to = parseNaturalDate(args['dateTo'] as String);
-
-    final items =
-        await (db.select(db.transactions)
-              ..where((t) => t.archived.equals(false))
-              ..where((t) => t.date.isBiggerOrEqualValue(from))
-              ..where((t) => t.date.isSmallerOrEqualValue(to)))
-            .get();
-    final accounts = await (db.select(db.accounts)..where((a) => a.archived.equals(false))).get();
-
-    final rows = <String, ({String name, String currency, BigInt inSum, BigInt outSum})>{};
-    for (final a in accounts) {
-      rows[a.id] = (name: a.name, currency: a.currency, inSum: BigInt.zero, outSum: BigInt.zero);
-    }
-
-    for (final t in items) {
-      final cur = rows[t.accountId];
-      if (cur != null) {
-        BigInt nextIn = cur.inSum;
-        BigInt nextOut = cur.outSum;
-        if (t.type == 'expense') {
-          nextOut += t.amount;
-        } else if (t.type == 'income') {
-          nextIn += t.amount;
-        } else if (t.type == 'transfer') {
-          nextOut += t.amount;
-        } else if (t.type == 'balance_adjustment') {
-          if (t.amount >= BigInt.zero) {
-            nextIn += t.amount;
-          } else {
-            nextOut += -t.amount;
-          }
-        }
-        rows[t.accountId] = (name: cur.name, currency: cur.currency, inSum: nextIn, outSum: nextOut);
-      }
-      if (t.type == 'transfer' && t.toAccountId != null) {
-        final dest = rows[t.toAccountId];
-        if (dest != null) {
-          rows[t.toAccountId!] = (
-            name: dest.name,
-            currency: dest.currency,
-            inSum: dest.inSum + (t.toAmount ?? t.amount),
-            outSum: dest.outSum,
-          );
-        }
-      }
-    }
-
-    return {
-      'ok': true,
-      'rows': rows.entries
+      'rows': rows
           .map(
-            (e) => {
-              'accountId': e.key,
-              'name': e.value.name,
-              'currency': e.value.currency,
-              'in': e.value.inSum.toDouble() / 100,
-              'out': e.value.outSum.toDouble() / 100,
-              'net': (e.value.inSum - e.value.outSum).toDouble() / 100,
+            (r) => {
+              'categoryId': r.categoryId,
+              'name': r.name,
+              'total': centsToDouble(r.totalCents),
             },
           )
           .toList(),
     };
   }
 
+  Future<Map<String, dynamic>> _summarizeByAccount(
+    Map<String, dynamic> args,
+  ) async {
+    final rows = await repos.summaries.byAccount(
+      fromMs: parseNaturalDate(args['dateFrom'] as String),
+      toMs: parseNaturalDate(args['dateTo'] as String),
+    );
+    return {
+      'ok': true,
+      'rows': rows
+          .map(
+            (r) => {
+              'accountId': r.accountId,
+              'name': r.name,
+              'currency': r.currency,
+              'in': centsToDouble(r.inCents),
+              'out': centsToDouble(r.outCents),
+              'net': centsToDouble(r.netCents),
+            },
+          )
+          .toList(),
+    };
+  }
+
+  // ───── Saved filter tools ─────
+
+  Future<Map<String, dynamic>> _listSavedFilters(
+    Map<String, dynamic> args,
+  ) async {
+    final filters = await repos.savedFilters.listActive();
+    return {'ok': true, 'filters': filters.map(_serializeSavedFilter).toList()};
+  }
+
+  Future<Map<String, dynamic>> _createSavedFilter(
+    Map<String, dynamic> args,
+  ) async {
+    final name = (args['name'] as String).trim();
+    if (name.isEmpty) return {'ok': false, 'error': 'Filter name is required'};
+    final config = _canonicalFilterConfig(args['filterConfigJson'] as String);
+    final id = await repos.savedFilters.create(name: name, config: config);
+    return {'ok': true, 'id': id};
+  }
+
+  Future<Map<String, dynamic>> _updateSavedFilter(
+    Map<String, dynamic> args,
+  ) async {
+    final id = args['id'] as String;
+    final existing = await repos.savedFilters.getById(id);
+    if (existing == null || existing.archived) {
+      return {'ok': false, 'error': 'Saved filter not found'};
+    }
+    final name = args.containsKey('name')
+        ? Value((args['name'] as String).trim())
+        : const Value<String>.absent();
+    final config = args.containsKey('filterConfigJson')
+        ? Value(_canonicalFilterConfig(args['filterConfigJson'] as String))
+        : const Value<String>.absent();
+    await repos.savedFilters.update(id, name: name, config: config);
+    return {'ok': true, 'id': id};
+  }
+
+  Future<Map<String, dynamic>> _archiveSavedFilter(
+    Map<String, dynamic> args,
+  ) async {
+    final id = args['id'] as String;
+    await repos.savedFilters.archive(id);
+    return {'ok': true, 'id': id};
+  }
+
+  // ───── Dashboard widget tools ─────
+
+  Future<Map<String, dynamic>> _listDashboardWidgets(
+    Map<String, dynamic> args,
+  ) async {
+    final widgets = await repos.dashboard.listActive();
+    final filters = {
+      for (final filter in await repos.savedFilters.listActive())
+        filter.id: filter,
+    };
+    return {
+      'ok': true,
+      'widgets': widgets
+          .map((widget) => _serializeDashboardWidget(widget, filters))
+          .toList(),
+    };
+  }
+
+  Future<Map<String, dynamic>> _createDashboardWidget(
+    Map<String, dynamic> args,
+  ) async {
+    final type = _widgetType(args['type']);
+    if (type == null) return {'ok': false, 'error': 'Invalid widget type'};
+    final title = (args['title'] as String).trim();
+    if (title.isEmpty) {
+      return {'ok': false, 'error': 'Widget title is required'};
+    }
+
+    final optionsResult = _widgetOptionsFor(type, title, args);
+    if (optionsResult.error != null) {
+      return {'ok': false, 'error': optionsResult.error};
+    }
+
+    final existing = await repos.dashboard.listActive();
+    final width = _dashboardWidth(args['width']) ?? _defaultWidthFor(type);
+    // Place the new widget on a fresh row below everything else, matching the
+    // manual-grid layout the UI uses (coordinates live in `options.layout`).
+    final layout = DashboardGridLayout.fromPlacements(
+      resolvePlacements([
+        for (final row in existing)
+          PlacementInput(
+            id: row.id,
+            width: DashboardWidth.fromWire(row.width) ?? DashboardWidth.full,
+            coord: dashboardLayoutFromOptions(row.options),
+          ),
+      ]),
+    );
+    final filterId = await _createFilterForWidget(type, title, args);
+    final id = await repos.dashboard.create(
+      type: type.wire,
+      filterId: filterId,
+      position: existing.length,
+      width: width.wire,
+      options: encodeWidgetOptions({
+        ...optionsResult.options,
+        'layout': {'row': layout.rowCount, 'col': 0},
+      }),
+    );
+    return {'ok': true, 'id': id, 'filterId': filterId};
+  }
+
+  Future<Map<String, dynamic>> _updateDashboardWidget(
+    Map<String, dynamic> args,
+  ) async {
+    final id = args['id'] as String;
+    final existing = await repos.dashboard.getById(id);
+    if (existing == null || existing.archived) {
+      return {'ok': false, 'error': 'Dashboard widget not found'};
+    }
+
+    final currentType = _widgetType(existing.type);
+    final nextType = args.containsKey('type')
+        ? _widgetType(args['type'])
+        : currentType;
+    if (nextType == null) return {'ok': false, 'error': 'Invalid widget type'};
+
+    final currentOptions = _decodeJsonMap(existing.options);
+    final title = args.containsKey('title')
+        ? (args['title'] as String).trim()
+        : (currentOptions['title'] as String? ?? '').trim();
+    if (title.isEmpty) {
+      return {'ok': false, 'error': 'Widget title is required'};
+    }
+
+    final optionsResult = _widgetOptionsFor(
+      nextType,
+      title,
+      args,
+      existingOptions: currentOptions,
+    );
+    if (optionsResult.error != null) {
+      return {'ok': false, 'error': optionsResult.error};
+    }
+
+    final filterId = await _filterIdForWidgetUpdate(
+      existing,
+      nextType,
+      title,
+      args,
+    );
+    final width = _dashboardWidth(args['width']);
+    await repos.dashboard.update(
+      id,
+      type: args.containsKey('type')
+          ? Value(nextType.wire)
+          : const Value.absent(),
+      filterId: Value(filterId),
+      width: width != null ? Value(width.wire) : const Value.absent(),
+      options: Value(encodeWidgetOptions(optionsResult.options)),
+    );
+    return {'ok': true, 'id': id, 'filterId': filterId};
+  }
+
+  Future<Map<String, dynamic>> _reorderDashboardWidgets(
+    Map<String, dynamic> args,
+  ) async {
+    final rawIds = args['ids'];
+    if (rawIds is! List) {
+      return {'ok': false, 'error': 'ids must be a list'};
+    }
+    final ids = rawIds.whereType<String>().toList();
+    if (ids.length != rawIds.length) {
+      return {'ok': false, 'error': 'ids must only contain strings'};
+    }
+    await repos.dashboard.reorder(ids);
+    return {'ok': true, 'ids': ids};
+  }
+
+  Future<Map<String, dynamic>> _archiveDashboardWidget(
+    Map<String, dynamic> args,
+  ) async {
+    final id = args['id'] as String;
+    await repos.dashboard.archive(id);
+    return {'ok': true, 'id': id};
+  }
+
   // ───── Internal helpers ─────
+
+  Map<String, dynamic> _serializeSavedFilter(SavedFilter filter) {
+    return {
+      'id': filter.id,
+      'name': filter.name,
+      'filterConfigJson': filter.config,
+      'filterConfig': _decodeJson(filter.config),
+    };
+  }
+
+  Map<String, dynamic> _serializeDashboardWidget(
+    DashboardWidget widget,
+    Map<String, SavedFilter> filtersById,
+  ) {
+    final filter = widget.filterId == null
+        ? null
+        : filtersById[widget.filterId];
+    return {
+      'id': widget.id,
+      'type': widget.type,
+      'filterId': widget.filterId,
+      'position': widget.position,
+      'width': widget.width,
+      'options': _decodeJson(widget.options),
+      'filterConfigJson': filter?.config,
+      'filterConfig': filter == null ? null : _decodeJson(filter.config),
+    };
+  }
+
+  String _canonicalFilterConfig(String raw) {
+    final decoded = jsonDecode(raw);
+    if (decoded is! Map) {
+      throw const FormatException('Filter config must be a JSON object');
+    }
+    final filter = TransactionFilter.fromCanonicalJson(
+      Map<String, Object?>.from(decoded),
+    );
+    return jsonEncode(filter.toCanonicalJson());
+  }
+
+  bool _isEmptyFilterConfig(String config) {
+    final decoded = jsonDecode(config);
+    if (decoded is! Map) return true;
+    return TransactionFilter.fromCanonicalJson(
+      Map<String, Object?>.from(decoded),
+    ).isEmpty;
+  }
+
+  Object? _decodeJson(String raw) {
+    if (raw.isEmpty) return null;
+    try {
+      return jsonDecode(raw);
+    } catch (_) {
+      return raw;
+    }
+  }
+
+  Map<String, Object?> _decodeJsonMap(String raw) {
+    final decoded = _decodeJson(raw);
+    return decoded is Map ? Map<String, Object?>.from(decoded) : {};
+  }
+
+  WidgetType? _widgetType(Object? raw) {
+    if (raw is! String) return null;
+    return WidgetType.fromWire(raw);
+  }
+
+  DashboardWidth? _dashboardWidth(Object? raw) {
+    if (raw is! String) return null;
+    return DashboardWidth.fromWire(raw);
+  }
+
+  DashboardWidth _defaultWidthFor(WidgetType type) => switch (type) {
+    WidgetType.stat => DashboardWidth.third,
+    WidgetType.list => DashboardWidth.full,
+    WidgetType.balance => DashboardWidth.half,
+    WidgetType.chart => DashboardWidth.full,
+  };
+
+  ({Map<String, Object?> options, String? error}) _widgetOptionsFor(
+    WidgetType type,
+    String title,
+    Map<String, dynamic> args, {
+    Map<String, Object?> existingOptions = const {},
+  }) {
+    final options = <String, Object?>{};
+    switch (type) {
+      case WidgetType.stat:
+        options['title'] = title;
+        options['aggregation'] =
+            _statAggregation(args['aggregation']) ??
+            _statAggregation(existingOptions['aggregation']) ??
+            StatAggregation.sum.name;
+      case WidgetType.list:
+        options['title'] = title;
+        options['limit'] =
+            _positiveInt(args['limit']) ??
+            _positiveInt(existingOptions['limit']) ??
+            5;
+      case WidgetType.balance:
+        final currency =
+            args['currency'] as String? ??
+            existingOptions['currency'] as String?;
+        if (currency == null || currency.trim().isEmpty) {
+          return (options: const {}, error: 'Balance widgets require currency');
+        }
+        options['title'] = title;
+        options['currency'] = currency.trim().toUpperCase();
+      case WidgetType.chart:
+        options['title'] = title;
+        options['groupBy'] =
+            _breakdownGroupBy(args['groupBy']) ??
+            _breakdownGroupBy(existingOptions['groupBy']) ??
+            BreakdownGroupBy.category.wire;
+        options['chartKind'] =
+            _breakdownChartKind(args['chartKind']) ??
+            _breakdownChartKind(existingOptions['chartKind']) ??
+            BreakdownChartKind.pie.wire;
+    }
+
+    final background = args.containsKey('background')
+        ? _backgroundFromArgs(args['background'])
+        : existingOptions['background'];
+    if (background != null) options['background'] = background;
+    return (options: options, error: null);
+  }
+
+  String? _statAggregation(Object? raw) {
+    if (raw is! String) return null;
+    for (final value in StatAggregation.values) {
+      if (value.name == raw) return value.name;
+    }
+    return null;
+  }
+
+  String? _breakdownGroupBy(Object? raw) {
+    if (raw is! String) return null;
+    return BreakdownGroupBy.fromWire(raw)?.wire;
+  }
+
+  String? _breakdownChartKind(Object? raw) {
+    if (raw is! String) return null;
+    return BreakdownChartKind.fromWire(raw)?.wire;
+  }
+
+  int? _positiveInt(Object? raw) {
+    final value = raw is num ? raw.toInt() : null;
+    return value != null && value > 0 ? value : null;
+  }
+
+  Object? _backgroundFromArgs(Object? raw) {
+    if (raw is! Map) return null;
+    final mode = raw['mode'];
+    if (mode == 'none') return null;
+    if (mode == 'fixed') {
+      return {
+        'mode': 'fixed',
+        'fixedColor': _hex(raw['fixedColor']) ?? '#C8F2D8',
+      };
+    }
+    if (mode == 'value') {
+      final nested = raw['value'];
+      final source = nested is Map ? nested : raw;
+      return {
+        'mode': 'value',
+        'value': {
+          'low': _double(source['low']) ?? 0,
+          'high': _double(source['high']) ?? 10000,
+          'lowColor': _hex(source['lowColor']) ?? '#FFCBCB',
+          'betweenColor': _hex(source['betweenColor']) ?? '#FFE588',
+          'highColor': _hex(source['highColor']) ?? '#C8F2D8',
+        },
+      };
+    }
+    return null;
+  }
+
+  String? _hex(Object? raw) {
+    if (raw is! String || raw.trim().isEmpty) return null;
+    final trimmed = raw.trim();
+    return trimmed.startsWith('#') ? trimmed : '#$trimmed';
+  }
+
+  double? _double(Object? raw) {
+    if (raw is num) return raw.toDouble();
+    if (raw is String) return double.tryParse(raw.replaceAll(',', '.'));
+    return null;
+  }
+
+  Future<String?> _createFilterForWidget(
+    WidgetType type,
+    String title,
+    Map<String, dynamic> args,
+  ) async {
+    if (type == WidgetType.balance || !args.containsKey('filterConfigJson')) {
+      return null;
+    }
+    final config = _canonicalFilterConfig(args['filterConfigJson'] as String);
+    if (_isEmptyFilterConfig(config)) return null;
+    return repos.savedFilters.create(name: title, config: config);
+  }
+
+  Future<String?> _filterIdForWidgetUpdate(
+    DashboardWidget existing,
+    WidgetType type,
+    String title,
+    Map<String, dynamic> args,
+  ) async {
+    if (type == WidgetType.balance) return null;
+
+    if (args.containsKey('filterConfigJson')) {
+      final config = _canonicalFilterConfig(args['filterConfigJson'] as String);
+      if (_isEmptyFilterConfig(config)) return null;
+      if (existing.filterId != null) {
+        await repos.savedFilters.update(
+          existing.filterId!,
+          name: Value(title),
+          config: Value(config),
+        );
+        return existing.filterId;
+      }
+      return repos.savedFilters.create(name: title, config: config);
+    }
+
+    if (existing.filterId != null && args.containsKey('title')) {
+      await repos.savedFilters.update(existing.filterId!, name: Value(title));
+    }
+    return existing.filterId;
+  }
 
   Map<String, dynamic> _serializeTransaction(Transaction t) {
     return {
@@ -892,84 +1260,14 @@ class ToolExecutors {
       'date': t.date.toString(),
       'accountId': t.accountId,
       'categoryId': t.categoryId,
-      'amount': t.amount.toDouble() / 100,
+      'amount': centsToDouble(t.amount),
       'currency': t.currency,
       'toAccountId': t.toAccountId,
-      'toAmount': t.toAmount != null ? t.toAmount!.toDouble() / 100 : null,
+      'toAmount': t.toAmount != null ? centsToDouble(t.toAmount!) : null,
       'status': t.status,
-      'balanceAfter': t.balanceAfter != null ? t.balanceAfter!.toDouble() / 100 : null,
+      'balanceAfter': t.balanceAfter != null
+          ? centsToDouble(t.balanceAfter!)
+          : null,
     };
-  }
-
-  Future<BigInt> _computeAccountBalance(String accountId) async {
-    final own =
-        await (db.select(db.transactions)
-              ..where((t) => t.accountId.equals(accountId))
-              ..where((t) => t.archived.equals(false)))
-            .get();
-    BigInt sum = BigInt.zero;
-    for (final t in own) {
-      switch (t.type) {
-        case 'expense':
-        case 'transfer':
-          sum -= t.amount;
-          break;
-        case 'income':
-        case 'balance_adjustment':
-          sum += t.amount;
-          break;
-      }
-    }
-
-    final incoming =
-        await (db.select(db.transactions)
-              ..where((t) => t.toAccountId.equals(accountId))
-              ..where((t) => t.type.equals('transfer'))
-              ..where((t) => t.archived.equals(false)))
-            .get();
-    for (final t in incoming) {
-      sum += t.toAmount ?? t.amount;
-    }
-    return sum;
-  }
-
-  Future<void> _attachTags(String transactionId, dynamic raw) async {
-    if (raw is! List) return;
-    final now = BigInt.from(DateTime.now().millisecondsSinceEpoch);
-    for (final item in raw) {
-      if (item is! String) continue;
-      final tag = await _resolveTag(item);
-      if (tag == null) continue;
-      final existing = await (db.select(
-        db.transactionTags,
-      )..where((j) => j.transactionId.equals(transactionId) & j.tagId.equals(tag.id))).getSingleOrNull();
-      if (existing != null) continue;
-      await db
-          .into(db.transactionTags)
-          .insert(
-            TransactionTagsCompanion.insert(
-              id: '${transactionId}__${tag.id}',
-              transactionId: transactionId,
-              tagId: tag.id,
-              createdAt: now,
-              updatedAt: now,
-              dirty: const Value(true),
-            ),
-          );
-    }
-  }
-
-  Future<void> _writeTombstone(String table, String entityId) =>
-      sync_writes.writeTombstone(db, table, entityId);
-
-  String _newUuid() {
-    final rng = Random.secure();
-    final bytes = List<int>.generate(16, (_) => rng.nextInt(256));
-    bytes[6] = (bytes[6] & 0x0f) | 0x40;
-    bytes[8] = (bytes[8] & 0x3f) | 0x80;
-    String hex(int b) => b.toRadixString(16).padLeft(2, '0');
-    final s = bytes.map(hex).join();
-    return '${s.substring(0, 8)}-${s.substring(8, 12)}-'
-        '${s.substring(12, 16)}-${s.substring(16, 20)}-${s.substring(20)}';
   }
 }

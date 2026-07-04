@@ -1,7 +1,9 @@
 import 'dart:async';
 
 import 'package:app/auth/auth_controller.dart';
+import 'package:app/auth/pop_on_account_switch.dart';
 import 'package:app/config.dart';
+import 'package:app/data/data.dart';
 import 'package:app/database.dart';
 import 'package:app/screens/accounts.dart';
 import 'package:app/screens/activity.dart';
@@ -9,6 +11,7 @@ import 'package:app/screens/home.dart';
 import 'package:app/screens/insights.dart';
 import 'package:app/screens/login.dart';
 import 'package:app/screens/voice.dart';
+import 'package:app/shared/app_navigation.dart';
 import 'package:app/sync/sync_engine.dart';
 import 'package:app/voice/gemini_voice_expense_command.dart';
 import 'package:convex_flutter/convex_flutter.dart';
@@ -48,7 +51,9 @@ class MyApp extends StatelessWidget {
       value: auth,
       child: MaterialApp(
         title: 'Wallet Bot',
-        theme: ThemeData(colorScheme: .fromSeed(seedColor: Colors.greenAccent)),
+        theme: ThemeData(
+          colorScheme: ColorScheme.fromSeed(seedColor: Colors.greenAccent),
+        ),
         home: const _AuthGate(),
       ),
     );
@@ -69,6 +74,15 @@ class _AuthGate extends StatelessWidget {
           create: (_) => AppDatabase.forUser(active.id),
           dispose: (_, db) => db.close(),
         ),
+        // The app-facing data layer: all reads/writes from screens and the
+        // voice agent go through this. Scoped to the account subtree so it is
+        // recreated together with the database on account switch.
+        Provider<AppRepositories>(
+          create: (ctx) => AppRepositories(ctx.read<AppDatabase>()),
+        ),
+        // Drives the bottom-nav tab selection and lets one tab hand a filter to
+        // another (e.g. an account's "Ver todas" opens Activity filtered to it).
+        ChangeNotifierProvider<AppNavigation>(create: (_) => AppNavigation()),
         // SyncEngine only attaches for remote accounts. For local accounts
         // we still create one (so `Provider.of<SyncEngine>` is non-null
         // throughout the tree) but never call `.start()`, keeping it inert.
@@ -101,7 +115,10 @@ class _SyncStarterState extends State<_SyncStarter> {
   Widget build(BuildContext context) {
     final auth = context.watch<AuthController>();
     final active = auth.activeAccount;
-    if (!_kicked && active != null && active.sessionToken != null) {
+    if (!_kicked &&
+        active != null &&
+        active.sessionToken != null &&
+        auth.convexAuthenticated) {
       _kicked = true;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
@@ -120,18 +137,23 @@ class AppMain extends StatefulWidget {
 }
 
 class _AppMainState extends State<AppMain> {
-  @override
-  void initState() {
-    super.initState();
-  }
+  TransactionFilter _activityFilter = const TransactionFilter();
+  int _activityFilterRevision = 0;
 
-  int selectedIndex = 0;
+  void _openActivityWithFilter(TransactionFilter filter) {
+    setState(() {
+      _activityFilter = filter;
+      _activityFilterRevision++;
+    });
+    context.read<AppNavigation>().index = 1;
+  }
 
   @override
   Widget build(BuildContext context) {
     final needsReauth = context.select<AuthController, bool>(
       (a) => a.activeAccount?.requiresReauth ?? false,
     );
+    final selectedIndex = context.watch<AppNavigation>().index;
     return Scaffold(
       body: Column(
         children: [
@@ -140,8 +162,11 @@ class _AppMainState extends State<AppMain> {
             child: IndexedStack(
               index: selectedIndex,
               children: [
-                HomeScreen(),
-                ActivityScreen(),
+                HomeScreen(onOpenActivity: _openActivityWithFilter),
+                ActivityScreen(
+                  initialFilter: _activityFilter,
+                  filterRevision: _activityFilterRevision,
+                ),
                 AccountsScreen(),
                 InsightsScreen(),
               ],
@@ -152,13 +177,21 @@ class _AppMainState extends State<AppMain> {
       floatingActionButton: FloatingActionButton(
         heroTag: 'voiceFab',
         onPressed: () {
-          final database = context.read<AppDatabase>();
+          // The voice route is pushed on the root navigator, above the
+          // account-scoped providers: capture the active account's data layer
+          // here, and dismiss the route if the account changes while open so
+          // the agent can never write to a closed/foreign database.
+          final repositories = context.read<AppRepositories>();
+          final accountId = context.read<AuthController>().activeAccount?.id;
           Navigator.of(context).push(
             MaterialPageRoute(
-              builder: (_) => VoiceScreen(
-                commandFactory: GeminiVoiceExpenseCommandFactory(
-                  database: database,
-                  convexSiteUrl: AppConfig.convexSiteUrl,
+              builder: (_) => PopOnAccountSwitch(
+                accountId: accountId,
+                child: VoiceScreen(
+                  commandFactory: GeminiVoiceExpenseCommandFactory(
+                    repositories: repositories,
+                    convexSiteUrl: AppConfig.convexSiteUrl,
+                  ),
                 ),
               ),
             ),
@@ -169,7 +202,8 @@ class _AppMainState extends State<AppMain> {
       ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: selectedIndex,
-        onDestinationSelected: (value) => setState(() => selectedIndex = value),
+        onDestinationSelected: (value) =>
+            context.read<AppNavigation>().index = value,
         destinations: [
           NavigationDestination(icon: Icon(Icons.home_rounded), label: "Home"),
           NavigationDestination(
@@ -221,6 +255,13 @@ class _ReauthBanner extends StatelessWidget {
                   final messenger = ScaffoldMessenger.of(context);
                   try {
                     await context.read<AuthController>().signInWithGoogle();
+                  } on GoogleSignInException catch (e) {
+                    // Dismissing the Google sheet isn't a failure to report.
+                    if (e.code != GoogleSignInExceptionCode.canceled) {
+                      messenger.showSnackBar(
+                        SnackBar(content: Text('No se pudo reconectar: $e')),
+                      );
+                    }
                   } catch (e) {
                     messenger.showSnackBar(
                       SnackBar(content: Text('Reconnect failed: $e')),

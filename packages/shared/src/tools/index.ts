@@ -21,8 +21,8 @@ const toolDescriptions = {
     listCategories: 'List user categories.',
     getCategory: 'Get a category by UUID or name.',
     createCategory:
-        'Create a category. Categories are type-agnostic — they classify both expenses and income.',
-    updateCategory: 'Update a category name or description.',
+        'Create a category. Categories are type-agnostic — they classify both expenses and income. Optional color (hex) and icon name.',
+    updateCategory: 'Update a category name, description, color or icon.',
     archiveCategory: 'Archive a category (soft delete).',
 
     // Tags
@@ -58,6 +58,27 @@ const toolDescriptions = {
         'Totals per category over a date range. Optionally filter by transaction type.',
     summarizeByAccount:
         'Per-account balance, money-in and money-out over a date range.',
+
+    // Dashboard saved filters
+    listSavedFilters:
+        'List saved transaction filters used by native home dashboard widgets. Returns each canonical filter JSON.',
+    createSavedFilter:
+        'Create a reusable saved transaction filter from canonical filter JSON. Native dashboard feature.',
+    updateSavedFilter:
+        'Update a saved transaction filter name and/or canonical filter JSON. Native dashboard feature.',
+    archiveSavedFilter:
+        'Archive a saved transaction filter. Widgets that referenced it will fall back to all transactions.',
+
+    // Home dashboard widgets
+    listDashboardWidgets:
+        'List native home dashboard widgets in display order, including type, width, options, and resolved filter JSON.',
+    createDashboardWidget:
+        'Create a native home dashboard widget. Supports stat, list, balance, chart, width, canonical filter JSON, and background options.',
+    updateDashboardWidget:
+        'Edit a native home dashboard widget. Can change type, title, width, filter JSON, display options, and background.',
+    reorderDashboardWidgets:
+        'Reorder native home dashboard widgets by passing all widget ids in display order.',
+    archiveDashboardWidget: 'Archive/remove a native home dashboard widget.',
 } as const satisfies Record<keyof typeof toolSchemas, string>
 
 // Derived types

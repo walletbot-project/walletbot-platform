@@ -19,6 +19,14 @@ function newId(): string {
     return crypto.randomUUID()
 }
 
+function nativeDashboardOnly() {
+    return {
+        ok: false,
+        error: 'native_only',
+        message: 'Home dashboard filters and widgets are only implemented in the native app right now.',
+    }
+}
+
 export const toolExecutors = {
     // ───── Accounts ─────
     listAccounts: defineTool(toolSchemas.listAccounts, async (ctx, args) => {
@@ -106,6 +114,8 @@ export const toolExecutors = {
                 id: c.id,
                 name: c.name,
                 description: c.description,
+                color: c.color,
+                icon: c.icon,
             })),
         }
     }),
@@ -122,6 +132,8 @@ export const toolExecutors = {
                 id,
                 name: args.name,
                 description: args.description,
+                color: args.color,
+                icon: args.icon,
             })
             return { ok: true, id }
         },
@@ -135,6 +147,8 @@ export const toolExecutors = {
                 id: r.entity.id,
                 name: args.name,
                 description: args.description,
+                color: args.color,
+                icon: args.icon,
             })
             return { ok: true, id: r.entity.id }
         },
@@ -344,12 +358,11 @@ export const toolExecutors = {
         const toR = await resolveAccount(ctx, args.toAccountIdOrName)
         if (!toR.ok) return resolutionError('Destination account', toR)
 
-        let categoryId: string | undefined
-        if (args.categoryIdOrName) {
-            const catR = await resolveCategory(ctx, args.categoryIdOrName)
-            if (!catR.ok) return resolutionError('Category', catR)
-            categoryId = catR.entity.id
+        if (!args.categoryIdOrName) {
+            return { ok: false, error: 'Category is required' }
         }
+        const catR = await resolveCategory(ctx, args.categoryIdOrName)
+        if (!catR.ok) return resolutionError('Category', catR)
 
         const id = newId()
         await ctx.client.mutation(api.transactions.mutations.createTransfer, {
@@ -364,7 +377,7 @@ export const toolExecutors = {
                     ? parseAmountToCents(args.toAmount)
                     : undefined,
             exchangeRate: args.exchangeRate,
-            categoryId,
+            categoryId: catR.entity.id,
             date: parseOptionalDate(args.date),
             dateConfirmed: args.dateConfirmed,
         })
@@ -550,6 +563,39 @@ export const toolExecutors = {
                 })),
             }
         },
+    ),
+
+    // ───── Native home dashboard ─────
+    listSavedFilters: defineTool(toolSchemas.listSavedFilters, async () =>
+        nativeDashboardOnly(),
+    ),
+    createSavedFilter: defineTool(toolSchemas.createSavedFilter, async () =>
+        nativeDashboardOnly(),
+    ),
+    updateSavedFilter: defineTool(toolSchemas.updateSavedFilter, async () =>
+        nativeDashboardOnly(),
+    ),
+    archiveSavedFilter: defineTool(toolSchemas.archiveSavedFilter, async () =>
+        nativeDashboardOnly(),
+    ),
+    listDashboardWidgets: defineTool(toolSchemas.listDashboardWidgets, async () =>
+        nativeDashboardOnly(),
+    ),
+    createDashboardWidget: defineTool(
+        toolSchemas.createDashboardWidget,
+        async () => nativeDashboardOnly(),
+    ),
+    updateDashboardWidget: defineTool(
+        toolSchemas.updateDashboardWidget,
+        async () => nativeDashboardOnly(),
+    ),
+    reorderDashboardWidgets: defineTool(
+        toolSchemas.reorderDashboardWidgets,
+        async () => nativeDashboardOnly(),
+    ),
+    archiveDashboardWidget: defineTool(
+        toolSchemas.archiveDashboardWidget,
+        async () => nativeDashboardOnly(),
     ),
 } satisfies Record<ToolName, ToolExecutor>
 

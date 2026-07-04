@@ -1,6 +1,7 @@
 import 'package:app/components/categories_view.dart';
 import 'package:app/components/tags_view.dart';
-import 'package:app/database.dart';
+import 'package:app/data/data.dart';
+import 'package:app/screens/create_category.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -32,11 +33,20 @@ class _InsightsScreenState extends State<InsightsScreen>
   }
 
   Future<void> _handleAdd() async {
-    final db = context.read<AppDatabase>();
+    final repos = context.read<AppRepositories>();
     if (_tabController.index == 0) {
-      await showAddCategoryDialog(context, db);
+      // Pushed routes sit above the account-scoped providers; re-provide them
+      // so the create screen keeps using the active account's data layer.
+      await Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => Provider<AppRepositories>.value(
+            value: repos,
+            child: const CreateCategoryScreen(),
+          ),
+        ),
+      );
     } else {
-      await showAddTagDialog(context, db);
+      await showAddTagDialog(context, repos.tags);
     }
   }
 

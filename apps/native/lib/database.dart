@@ -7,6 +7,17 @@ import 'package:path_provider/path_provider.dart';
 
 part 'database.g.dart';
 
+// Accent defaults. Business rule: every account/category/tag always has a
+// color (and accounts/categories an icon). These are the DB-level fallbacks
+// applied when a writer omits them; they MIRROR the UI constants in
+// components/color_utils.dart and components/{account,category}_icons.dart —
+// keep them in sync. Color is a hex string; icon is a stable icon-name.
+const String kDefaultAccountColor = '#3B82F6';
+const String kDefaultAccountIcon = 'wallet';
+const String kDefaultCategoryColor = '#6366F1';
+const String kDefaultCategoryIcon = 'category';
+const String kDefaultTagColor = '#69F0AE';
+
 @TableIndex(name: 'accounts_archived', columns: {#archived})
 @TableIndex(name: 'accounts_updated_at', columns: {#updatedAt})
 @TableIndex.sql('''
@@ -18,15 +29,20 @@ class Accounts extends Table {
   TextColumn get name => text().named('name')();
   TextColumn get currency => text().named('currency')();
   TextColumn get description => text().named('description').nullable()();
-  TextColumn get color => text().named('color').nullable()(); // hex color code
-  TextColumn get icon => text().named('icon').nullable()(); // from defined list
+  // Always defined (business rule): non-null with a DB default.
+  TextColumn get color =>
+      text().named('color').withDefault(const Constant(kDefaultAccountColor))();
+  TextColumn get icon =>
+      text().named('icon').withDefault(const Constant(kDefaultAccountIcon))();
 
-  BoolColumn get archived => boolean().named('is_archived').withDefault(const Constant(false))();
+  BoolColumn get archived =>
+      boolean().named('is_archived').withDefault(const Constant(false))();
   Int64Column get createdAt => int64().named('created_at')();
   Int64Column get updatedAt => int64().named('updated_at')();
 
   // Sync
-  BoolColumn get dirty => boolean().named('dirty').withDefault(const Constant(false))();
+  BoolColumn get dirty =>
+      boolean().named('dirty').withDefault(const Constant(false))();
 
   @override
   Set<Column<Object>> get primaryKey => {id};
@@ -42,13 +58,21 @@ class Categories extends Table {
   TextColumn get id => text().named('id')();
   TextColumn get name => text().named('name')();
   TextColumn get description => text().named('description').nullable()();
+  // Always defined (business rule): non-null with a DB default.
+  TextColumn get color => text()
+      .named('color')
+      .withDefault(const Constant(kDefaultCategoryColor))();
+  TextColumn get icon =>
+      text().named('icon').withDefault(const Constant(kDefaultCategoryIcon))();
 
-  BoolColumn get archived => boolean().named('is_archived').withDefault(const Constant(false))();
+  BoolColumn get archived =>
+      boolean().named('is_archived').withDefault(const Constant(false))();
   Int64Column get createdAt => int64().named('created_at')();
   Int64Column get updatedAt => int64().named('updated_at')();
 
   // Sync
-  BoolColumn get dirty => boolean().named('dirty').withDefault(const Constant(false))();
+  BoolColumn get dirty =>
+      boolean().named('dirty').withDefault(const Constant(false))();
 
   @override
   Set<Column<Object>> get primaryKey => {id};
@@ -63,14 +87,19 @@ class Categories extends Table {
 @TableIndex(name: 'transactions_archived', columns: {#archived})
 @TableIndex(name: 'transactions_updated_at', columns: {#updatedAt})
 @TableIndex(name: 'transactions_account_id_date', columns: {#accountId, #date})
-@TableIndex(name: 'transactions_category_id_date', columns: {#categoryId, #date})
+@TableIndex(
+  name: 'transactions_category_id_date',
+  columns: {#categoryId, #date},
+)
 @TableIndex.sql('''
   CREATE INDEX transactions_needs_sync ON transactions (updated_at)
     WHERE dirty = 1;
 ''')
 class Transactions extends Table {
   TextColumn get id => text().named('id')();
-  TextColumn get type => text().named('type')(); //  "expense" | "income" | "transfer" | "balance_adjustment"
+  TextColumn get type => text().named(
+    'type',
+  )(); //  "expense" | "income" | "transfer" | "balance_adjustment"
   TextColumn get name => text().named('name')();
   TextColumn get description => text().named('description').nullable()();
   TextColumn get status => text().named('status')(); // "pending" | "cleared"
@@ -81,14 +110,22 @@ class Transactions extends Table {
   TextColumn get currency => text().named('currency')();
   BoolColumn get dateConfirmed => boolean()
       .named('date_confirmed')
-      .withDefault(const Constant(true))(); // si gaston registra el gasto no sabe si el día que se lo decis es el día que paso o no.
+      .withDefault(
+        const Constant(true),
+      )(); // si gaston registra el gasto no sabe si el día que se lo decis es el día que paso o no.
 
-  TextColumn get toAccountId => text().named('to_account_id').nullable()(); // for transfers
-  Int64Column get toAmount => int64().named('to_amount').nullable()(); // for transfers
-  TextColumn get toCurrency => text().named('to_currency').nullable()(); // for transfers
-  RealColumn get exchangeRate => real().named('exchange_rate').nullable()(); // for transfers
+  TextColumn get toAccountId =>
+      text().named('to_account_id').nullable()(); // for transfers
+  Int64Column get toAmount =>
+      int64().named('to_amount').nullable()(); // for transfers
+  TextColumn get toCurrency =>
+      text().named('to_currency').nullable()(); // for transfers
+  RealColumn get exchangeRate =>
+      real().named('exchange_rate').nullable()(); // for transfers
 
-  Int64Column get balanceAfter => int64().named('balance_after').nullable()(); // cents, for balance adjustments
+  Int64Column get balanceAfter => int64()
+      .named('balance_after')
+      .nullable()(); // cents, for balance adjustments
 
   BoolColumn get archived =>
       boolean().named('is_archived').withDefault(const Constant(false))();
@@ -96,7 +133,8 @@ class Transactions extends Table {
   Int64Column get updatedAt => int64().named('updated_at')();
 
   // Sync
-  BoolColumn get dirty => boolean().named('dirty').withDefault(const Constant(false))();
+  BoolColumn get dirty =>
+      boolean().named('dirty').withDefault(const Constant(false))();
 
   @override
   Set<Column<Object>> get primaryKey => {id};
@@ -114,14 +152,18 @@ class Tags extends Table {
   TextColumn get name => text().named('name')();
   TextColumn get description => text().named('description').nullable()();
   TextColumn get parentId => text().named('parent_id').nullable()();
-  TextColumn get color => text().named('color').nullable()(); // hex color code
+  // Always defined (business rule): non-null with a DB default.
+  TextColumn get color =>
+      text().named('color').withDefault(const Constant(kDefaultTagColor))();
 
-  BoolColumn get archived => boolean().named('is_archived').withDefault(const Constant(false))();
+  BoolColumn get archived =>
+      boolean().named('is_archived').withDefault(const Constant(false))();
   Int64Column get createdAt => int64().named('created_at')();
   Int64Column get updatedAt => int64().named('updated_at')();
 
   // Sync
-  BoolColumn get dirty => boolean().named('dirty').withDefault(const Constant(false))();
+  BoolColumn get dirty =>
+      boolean().named('dirty').withDefault(const Constant(false))();
 
   @override
   Set<Column<Object>> get primaryKey => {id};
@@ -143,7 +185,8 @@ class TransactionTags extends Table {
   Int64Column get updatedAt => int64().named('updated_at')();
 
   // Sync
-  BoolColumn get dirty => boolean().named('dirty').withDefault(const Constant(false))();
+  BoolColumn get dirty =>
+      boolean().named('dirty').withDefault(const Constant(false))();
 
   @override
   Set<Column<Object>> get primaryKey => {id};
@@ -154,11 +197,77 @@ class TransactionTags extends Table {
   ];
 }
 
+// A reusable, named slice of transactions (the "Saved View" primitive from
+// docs/home-dashboard.md). `config` is an opaque JSON string of the canonical
+// `{combinator, children}` condition tree (see
+// `TransactionFilter.toCanonicalJson`); the backend never parses it.
+@TableIndex(name: 'saved_filters_archived', columns: {#archived})
+@TableIndex(name: 'saved_filters_updated_at', columns: {#updatedAt})
+@TableIndex.sql('''
+  CREATE INDEX saved_filters_needs_sync ON saved_filters (updated_at)
+    WHERE dirty = 1;
+''')
+class SavedFilters extends Table {
+  TextColumn get id => text().named('id')();
+  TextColumn get name => text().named('name')();
+  TextColumn get config => text().named('config')(); // JSON canonical tree
+
+  BoolColumn get archived =>
+      boolean().named('is_archived').withDefault(const Constant(false))();
+  Int64Column get createdAt => int64().named('created_at')();
+  Int64Column get updatedAt => int64().named('updated_at')();
+
+  // Sync
+  BoolColumn get dirty =>
+      boolean().named('dirty').withDefault(const Constant(false))();
+
+  @override
+  Set<Column<Object>> get primaryKey => {id};
+}
+
+// One configured dashboard tile. `filterId` is a soft reference into
+// `saved_filters` (null for the balance card, which carries its currency in
+// `options`). `options` is an opaque JSON string (title, aggregation, limit,
+// currency); the backend never parses it.
+@TableIndex(name: 'dashboard_widgets_position', columns: {#position})
+@TableIndex(name: 'dashboard_widgets_archived', columns: {#archived})
+@TableIndex(name: 'dashboard_widgets_updated_at', columns: {#updatedAt})
+@TableIndex.sql('''
+  CREATE INDEX dashboard_widgets_needs_sync ON dashboard_widgets (updated_at)
+    WHERE dirty = 1;
+''')
+class DashboardWidgets extends Table {
+  TextColumn get id => text().named('id')();
+  TextColumn get type => text().named('type')(); // "stat" | "list" | "balance"
+  TextColumn get filterId => text().named('filter_id').nullable()();
+  IntColumn get position => integer().named('position')();
+  TextColumn get width => text().named('width')(); // "full" | "half" | "third"
+  TextColumn get options => text().named('options')(); // JSON display options
+
+  BoolColumn get archived =>
+      boolean().named('is_archived').withDefault(const Constant(false))();
+  Int64Column get createdAt => int64().named('created_at')();
+  Int64Column get updatedAt => int64().named('updated_at')();
+
+  // Sync
+  BoolColumn get dirty =>
+      boolean().named('dirty').withDefault(const Constant(false))();
+
+  @override
+  Set<Column<Object>> get primaryKey => {id};
+}
+
 // Singleton — tracks the highest server-side seq the client has pulled.
 class SyncState extends Table {
-  TextColumn get id => text().named('id').withDefault(const Constant('singleton'))();
-  Int64Column get lastServerSeq => int64().named('last_server_seq').withDefault(Constant(BigInt.zero))();
+  TextColumn get id =>
+      text().named('id').withDefault(const Constant('singleton'))();
+  Int64Column get lastServerSeq =>
+      int64().named('last_server_seq').withDefault(Constant(BigInt.zero))();
   Int64Column get lastSyncedAt => int64().named('last_synced_at').nullable()();
+  // One-time guard so the default dashboard is seeded at most once per device
+  // (see DashboardRepository.seedDefaultIfEmpty).
+  BoolColumn get dashboardSeeded =>
+      boolean().named('dashboard_seeded').withDefault(const Constant(false))();
 
   @override
   Set<Column<Object>> get primaryKey => {id};
@@ -180,15 +289,32 @@ class Tombstones extends Table {
   Int64Column get updatedAt => int64().named('updated_at')();
 
   // Sync
-  BoolColumn get dirty => boolean().named('dirty').withDefault(const Constant(false))();
+  BoolColumn get dirty =>
+      boolean().named('dirty').withDefault(const Constant(false))();
 
   @override
   Set<Column<Object>> get primaryKey => {entityTable, entityId};
 }
 
-@DriftDatabase(tables: [Accounts, Categories, Transactions, Tags, TransactionTags, SyncState, Tombstones])
+@DriftDatabase(
+  tables: [
+    Accounts,
+    Categories,
+    Transactions,
+    Tags,
+    TransactionTags,
+    SavedFilters,
+    DashboardWidgets,
+    SyncState,
+    Tombstones,
+  ],
+)
 class AppDatabase extends _$AppDatabase {
-  AppDatabase.forUser(String userId) : super(_openConnection(_dbNameFor(userId)));
+  AppDatabase.forUser(String userId)
+    : super(_openConnection(_dbNameFor(userId)));
+
+  /// Test-only constructor backed by an arbitrary executor (e.g.
+  /// `NativeDatabase.memory()`). Production code must use [AppDatabase.forUser].
   AppDatabase.forTesting(super.executor);
 
   @override
@@ -198,17 +324,22 @@ class AppDatabase extends _$AppDatabase {
   MigrationStrategy get migration => MigrationStrategy(
     onCreate: (m) async => m.createAll(),
     onUpgrade: (m, from, to) async {
-      switch ((from, to)) {
-        case (1, 3):
-        case (2, 3):
-          await _migrateToV3(m);
-          return;
-        default:
-          throw UnsupportedError(
-            'Unhandled SQLite migration path: v$from -> v$to. '
-            'Define an explicit upgrade path in AppDatabase.migration.',
-          );
+      if (to != schemaVersion || from >= to) {
+        throw UnsupportedError(
+          'Unhandled SQLite migration path: v$from -> v$to. '
+          'Define an explicit upgrade path in AppDatabase.migration.',
+        );
       }
+
+      if (from < 3) {
+        await _migrateToV3(m);
+        return;
+      }
+
+      throw UnsupportedError(
+        'Unhandled SQLite migration path: v$from -> v$to. '
+        'Define an explicit upgrade path in AppDatabase.migration.',
+      );
     },
   );
 
@@ -217,11 +348,16 @@ class AppDatabase extends _$AppDatabase {
   static QueryExecutor _openConnection(String name) {
     return driftDatabase(
       name: name,
-      native: const DriftNativeOptions(databaseDirectory: getApplicationSupportDirectory),
+      native: const DriftNativeOptions(
+        databaseDirectory: getApplicationSupportDirectory,
+      ),
     );
   }
 
   Future<void> _migrateToV3(Migrator m) async {
+    await _ensureDashboardSchema(m);
+    await _ensureAccentColumns(m);
+
     for (final tableName in const [
       'accounts',
       'categories',
@@ -237,6 +373,82 @@ class AppDatabase extends _$AppDatabase {
     }
   }
 
+  Future<void> _ensureDashboardSchema(Migrator m) async {
+    if (!await _tableExists('saved_filters')) {
+      await m.createTable(savedFilters);
+    }
+    if (!await _tableExists('dashboard_widgets')) {
+      await m.createTable(dashboardWidgets);
+    }
+
+    final syncStateColumns = await _columnNames('sync_state');
+    if (!syncStateColumns.contains('dashboard_seeded')) {
+      await m.addColumn(syncState, syncState.dashboardSeeded);
+    }
+  }
+
+  Future<void> _ensureAccentColumns(Migrator m) async {
+    await _addColumnIfMissing(
+      'accounts',
+      'color',
+      () => m.addColumn(accounts, accounts.color),
+    );
+    await _fillNullText('accounts', 'color', kDefaultAccountColor);
+
+    await _addColumnIfMissing(
+      'accounts',
+      'icon',
+      () => m.addColumn(accounts, accounts.icon),
+    );
+    await _fillNullText('accounts', 'icon', kDefaultAccountIcon);
+
+    await _addColumnIfMissing(
+      'categories',
+      'color',
+      () => m.addColumn(categories, categories.color),
+    );
+    await _fillNullText('categories', 'color', kDefaultCategoryColor);
+
+    await _addColumnIfMissing(
+      'categories',
+      'icon',
+      () => m.addColumn(categories, categories.icon),
+    );
+    await _fillNullText('categories', 'icon', kDefaultCategoryIcon);
+
+    await _addColumnIfMissing(
+      'tags',
+      'color',
+      () => m.addColumn(tags, tags.color),
+    );
+    await _fillNullText('tags', 'color', kDefaultTagColor);
+  }
+
+  Future<void> _addColumnIfMissing(
+    String tableName,
+    String columnName,
+    Future<void> Function() addColumn,
+  ) async {
+    final columns = await _columnNames(tableName);
+    if (!columns.contains(columnName)) {
+      await addColumn();
+    }
+  }
+
+  Future<void> _fillNullText(
+    String tableName,
+    String columnName,
+    String value,
+  ) async {
+    final columns = await _columnNames(tableName);
+    if (!columns.contains(columnName)) return;
+
+    await customStatement(
+      'UPDATE "$tableName" SET "$columnName" = ? WHERE "$columnName" IS NULL',
+      [value],
+    );
+  }
+
   Future<void> _renameArchivedColumnIfNeeded(String tableName) async {
     final columns = await _columnNames(tableName);
     if (!columns.contains('archived') || columns.contains('is_archived')) {
@@ -248,54 +460,17 @@ class AppDatabase extends _$AppDatabase {
     );
   }
 
+  Future<bool> _tableExists(String tableName) async {
+    final row = await customSelect(
+      "SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?",
+      variables: [Variable<String>(tableName)],
+    ).getSingleOrNull();
+    return row != null;
+  }
+
   Future<Set<String>> _columnNames(String tableName) async {
     final rows = await customSelect('PRAGMA table_info("$tableName")').get();
     return rows.map((row) => row.read<String>('name')).toSet();
-  }
-
-  Stream<List<Account>> watchAccounts() =>
-      (select(accounts)
-            ..where((a) => a.archived.equals(false))
-            ..orderBy([(a) => OrderingTerm(expression: a.createdAt)]))
-          .watch();
-
-  Future<void> insertAccount({required String id, required String name, required String currency}) {
-    final now = BigInt.from(DateTime.now().millisecondsSinceEpoch);
-    return into(
-      accounts,
-    ).insert(AccountsCompanion.insert(id: id, name: name, currency: currency, createdAt: now, updatedAt: now, dirty: const Value(true)));
-  }
-
-  Future<void> insertTransaction({
-    required String id,
-    required String type,
-    required String name,
-    required String status,
-    required BigInt date,
-    required String accountId,
-    required String categoryId,
-    required BigInt amount,
-    required String currency,
-    BigInt? balanceAfter,
-  }) {
-    final now = BigInt.from(DateTime.now().millisecondsSinceEpoch);
-    return into(transactions).insert(
-      TransactionsCompanion.insert(
-        id: id,
-        type: type,
-        name: name,
-        status: status,
-        date: date,
-        accountId: accountId,
-        categoryId: categoryId,
-        amount: amount,
-        currency: currency,
-        balanceAfter: balanceAfter != null ? Value(balanceAfter) : const Value.absent(),
-        createdAt: now,
-        updatedAt: now,
-        dirty: const Value(true),
-      ),
-    );
   }
 
   static Future<void> deleteForUser(String userId) async {

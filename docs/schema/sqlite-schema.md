@@ -14,7 +14,7 @@ Implementación:
 
 - `schemaVersion` actual en código: `3`
 - Hay `MigrationStrategy` implementada para upgrades desde bases viejas
-- La migración actual normaliza columnas `archived -> is_archived` cuando hace falta y agrega `transactions.date_confirmed`
+- La migración actual crea las tablas locales de dashboard si faltan, agrega `sync_state.dashboard_seeded`, normaliza columnas `archived -> is_archived`, completa defaults de acentos e incorpora `transactions.date_confirmed`
 
 Esto busca cerrar la divergencia entre instalaciones nuevas y bases ya existentes.
 
@@ -27,8 +27,8 @@ Columnas:
 - `name`
 - `currency`
 - `description?`
-- `color?`
-- `icon?`
+- `color`
+- `icon`
 - `is_archived`
 - `created_at`
 - `updated_at`
@@ -45,6 +45,8 @@ Columnas:
 - `id`
 - `name`
 - `description?`
+- `color`
+- `icon`
 - `is_archived`
 - `created_at`
 - `updated_at`
@@ -99,7 +101,7 @@ Columnas:
 - `name`
 - `description?`
 - `parent_id?`
-- `color?`
+- `color`
 - `is_archived`
 - `created_at`
 - `updated_at`
@@ -130,12 +132,49 @@ Columnas:
 Restricciones:
 - unique key: `(transaction_id, tag_id)`
 
+### `saved_filters`
+
+Columnas:
+- `id`
+- `name`
+- `config`
+- `is_archived`
+- `created_at`
+- `updated_at`
+- `dirty`
+
+Índices:
+- `saved_filters_archived`
+- `saved_filters_updated_at`
+- `saved_filters_needs_sync`
+
+### `dashboard_widgets`
+
+Columnas:
+- `id`
+- `type`
+- `filter_id?`
+- `position`
+- `width`
+- `options`
+- `is_archived`
+- `created_at`
+- `updated_at`
+- `dirty`
+
+Índices:
+- `dashboard_widgets_position`
+- `dashboard_widgets_archived`
+- `dashboard_widgets_updated_at`
+- `dashboard_widgets_needs_sync`
+
 ### `sync_state`
 
 Columnas:
 - `id`
 - `last_server_seq`
 - `last_synced_at?`
+- `dashboard_seeded`
 
 ### `tombstones`
 

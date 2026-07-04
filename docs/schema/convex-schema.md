@@ -15,8 +15,8 @@ Campos:
 - `name`
 - `currency`
 - `description?`
-- `color?`
-- `icon?`
+- `color`
+- `icon`
 - `isArchived`
 - `createdAt`
 - `updatedAt`
@@ -34,6 +34,8 @@ Campos:
 - `id`
 - `name`
 - `description?`
+- `color`
+- `icon`
 - `isArchived`
 - `createdAt`
 - `updatedAt`
@@ -87,7 +89,7 @@ Campos:
 - `name`
 - `description?`
 - `parentId?`
-- `color?`
+- `color`
 - `isArchived`
 - `createdAt`
 - `updatedAt`
@@ -117,6 +119,43 @@ Campos:
 - `by_user_transaction`
 - `by_user_tag`
 
+### `savedFilters`
+
+Campos:
+- `userId`
+- `id`
+- `name`
+- `config`
+- `isArchived`
+- `createdAt`
+- `updatedAt`
+- `seq`
+
+Índices:
+- `by_user_seq`
+- `by_user_id`
+- `by_user_archived`
+
+### `dashboardWidgets`
+
+Campos:
+- `userId`
+- `id`
+- `type`
+- `filterId?`
+- `position`
+- `width`
+- `options`
+- `isArchived`
+- `createdAt`
+- `updatedAt`
+- `seq`
+
+Índices:
+- `by_user_seq`
+- `by_user_id`
+- `by_user_archived`
+
 ### `syncCounters`
 
 Campos:
@@ -145,3 +184,4 @@ Campos:
 - El identificador estable entre cliente y servidor es `id`, no `_id`.
 - `seq` ordena cambios globalmente por usuario para sync.
 - `dateConfirmed` ya existe en backend y debe mantenerse alineado con SQLite.
+- `color`/`icon` de cuentas y categorías, y `color` de tags, son obligatorios; los writers aplican defaults.

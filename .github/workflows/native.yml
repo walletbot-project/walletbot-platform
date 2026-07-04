@@ -1,0 +1,31 @@
+name: Native
+
+on:
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  analyze-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: 3.41.6
+          cache: true
+
+      # .env is gitignored but declared as a Flutter asset — tests need it to exist.
+      - run: touch .env
+        working-directory: apps/native
+
+      - run: flutter pub get
+        working-directory: apps/native
+
+      - run: flutter analyze
+        working-directory: apps/native
+
+      - run: flutter test
+        working-directory: apps/native

@@ -53,18 +53,20 @@ class $AccountsTable extends Accounts with TableInfo<$AccountsTable, Account> {
   late final GeneratedColumn<String> color = GeneratedColumn<String>(
     'color',
     aliasedName,
-    true,
+    false,
     type: DriftSqlType.string,
     requiredDuringInsert: false,
+    defaultValue: const Constant(kDefaultAccountColor),
   );
   static const VerificationMeta _iconMeta = const VerificationMeta('icon');
   @override
   late final GeneratedColumn<String> icon = GeneratedColumn<String>(
     'icon',
     aliasedName,
-    true,
+    false,
     type: DriftSqlType.string,
     requiredDuringInsert: false,
+    defaultValue: const Constant(kDefaultAccountIcon),
   );
   static const VerificationMeta _archivedMeta = const VerificationMeta(
     'archived',
@@ -239,11 +241,11 @@ class $AccountsTable extends Accounts with TableInfo<$AccountsTable, Account> {
       color: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}color'],
-      ),
+      )!,
       icon: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}icon'],
-      ),
+      )!,
       archived: attachedDatabase.typeMapping.read(
         DriftSqlType.bool,
         data['${effectivePrefix}is_archived'],
@@ -274,8 +276,8 @@ class Account extends DataClass implements Insertable<Account> {
   final String name;
   final String currency;
   final String? description;
-  final String? color;
-  final String? icon;
+  final String color;
+  final String icon;
   final bool archived;
   final BigInt createdAt;
   final BigInt updatedAt;
@@ -285,8 +287,8 @@ class Account extends DataClass implements Insertable<Account> {
     required this.name,
     required this.currency,
     this.description,
-    this.color,
-    this.icon,
+    required this.color,
+    required this.icon,
     required this.archived,
     required this.createdAt,
     required this.updatedAt,
@@ -301,12 +303,8 @@ class Account extends DataClass implements Insertable<Account> {
     if (!nullToAbsent || description != null) {
       map['description'] = Variable<String>(description);
     }
-    if (!nullToAbsent || color != null) {
-      map['color'] = Variable<String>(color);
-    }
-    if (!nullToAbsent || icon != null) {
-      map['icon'] = Variable<String>(icon);
-    }
+    map['color'] = Variable<String>(color);
+    map['icon'] = Variable<String>(icon);
     map['is_archived'] = Variable<bool>(archived);
     map['created_at'] = Variable<BigInt>(createdAt);
     map['updated_at'] = Variable<BigInt>(updatedAt);
@@ -322,10 +320,8 @@ class Account extends DataClass implements Insertable<Account> {
       description: description == null && nullToAbsent
           ? const Value.absent()
           : Value(description),
-      color: color == null && nullToAbsent
-          ? const Value.absent()
-          : Value(color),
-      icon: icon == null && nullToAbsent ? const Value.absent() : Value(icon),
+      color: Value(color),
+      icon: Value(icon),
       archived: Value(archived),
       createdAt: Value(createdAt),
       updatedAt: Value(updatedAt),
@@ -343,8 +339,8 @@ class Account extends DataClass implements Insertable<Account> {
       name: serializer.fromJson<String>(json['name']),
       currency: serializer.fromJson<String>(json['currency']),
       description: serializer.fromJson<String?>(json['description']),
-      color: serializer.fromJson<String?>(json['color']),
-      icon: serializer.fromJson<String?>(json['icon']),
+      color: serializer.fromJson<String>(json['color']),
+      icon: serializer.fromJson<String>(json['icon']),
       archived: serializer.fromJson<bool>(json['archived']),
       createdAt: serializer.fromJson<BigInt>(json['createdAt']),
       updatedAt: serializer.fromJson<BigInt>(json['updatedAt']),
@@ -359,8 +355,8 @@ class Account extends DataClass implements Insertable<Account> {
       'name': serializer.toJson<String>(name),
       'currency': serializer.toJson<String>(currency),
       'description': serializer.toJson<String?>(description),
-      'color': serializer.toJson<String?>(color),
-      'icon': serializer.toJson<String?>(icon),
+      'color': serializer.toJson<String>(color),
+      'icon': serializer.toJson<String>(icon),
       'archived': serializer.toJson<bool>(archived),
       'createdAt': serializer.toJson<BigInt>(createdAt),
       'updatedAt': serializer.toJson<BigInt>(updatedAt),
@@ -373,8 +369,8 @@ class Account extends DataClass implements Insertable<Account> {
     String? name,
     String? currency,
     Value<String?> description = const Value.absent(),
-    Value<String?> color = const Value.absent(),
-    Value<String?> icon = const Value.absent(),
+    String? color,
+    String? icon,
     bool? archived,
     BigInt? createdAt,
     BigInt? updatedAt,
@@ -384,8 +380,8 @@ class Account extends DataClass implements Insertable<Account> {
     name: name ?? this.name,
     currency: currency ?? this.currency,
     description: description.present ? description.value : this.description,
-    color: color.present ? color.value : this.color,
-    icon: icon.present ? icon.value : this.icon,
+    color: color ?? this.color,
+    icon: icon ?? this.icon,
     archived: archived ?? this.archived,
     createdAt: createdAt ?? this.createdAt,
     updatedAt: updatedAt ?? this.updatedAt,
@@ -459,8 +455,8 @@ class AccountsCompanion extends UpdateCompanion<Account> {
   final Value<String> name;
   final Value<String> currency;
   final Value<String?> description;
-  final Value<String?> color;
-  final Value<String?> icon;
+  final Value<String> color;
+  final Value<String> icon;
   final Value<bool> archived;
   final Value<BigInt> createdAt;
   final Value<BigInt> updatedAt;
@@ -529,8 +525,8 @@ class AccountsCompanion extends UpdateCompanion<Account> {
     Value<String>? name,
     Value<String>? currency,
     Value<String?>? description,
-    Value<String?>? color,
-    Value<String?>? icon,
+    Value<String>? color,
+    Value<String>? icon,
     Value<bool>? archived,
     Value<BigInt>? createdAt,
     Value<BigInt>? updatedAt,
@@ -645,6 +641,26 @@ class $CategoriesTable extends Categories
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _colorMeta = const VerificationMeta('color');
+  @override
+  late final GeneratedColumn<String> color = GeneratedColumn<String>(
+    'color',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(kDefaultCategoryColor),
+  );
+  static const VerificationMeta _iconMeta = const VerificationMeta('icon');
+  @override
+  late final GeneratedColumn<String> icon = GeneratedColumn<String>(
+    'icon',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(kDefaultCategoryIcon),
+  );
   static const VerificationMeta _archivedMeta = const VerificationMeta(
     'archived',
   );
@@ -700,6 +716,8 @@ class $CategoriesTable extends Categories
     id,
     name,
     description,
+    color,
+    icon,
     archived,
     createdAt,
     updatedAt,
@@ -737,6 +755,18 @@ class $CategoriesTable extends Categories
           data['description']!,
           _descriptionMeta,
         ),
+      );
+    }
+    if (data.containsKey('color')) {
+      context.handle(
+        _colorMeta,
+        color.isAcceptableOrUnknown(data['color']!, _colorMeta),
+      );
+    }
+    if (data.containsKey('icon')) {
+      context.handle(
+        _iconMeta,
+        icon.isAcceptableOrUnknown(data['icon']!, _iconMeta),
       );
     }
     if (data.containsKey('is_archived')) {
@@ -788,6 +818,14 @@ class $CategoriesTable extends Categories
         DriftSqlType.string,
         data['${effectivePrefix}description'],
       ),
+      color: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}color'],
+      )!,
+      icon: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}icon'],
+      )!,
       archived: attachedDatabase.typeMapping.read(
         DriftSqlType.bool,
         data['${effectivePrefix}is_archived'],
@@ -817,6 +855,8 @@ class Category extends DataClass implements Insertable<Category> {
   final String id;
   final String name;
   final String? description;
+  final String color;
+  final String icon;
   final bool archived;
   final BigInt createdAt;
   final BigInt updatedAt;
@@ -825,6 +865,8 @@ class Category extends DataClass implements Insertable<Category> {
     required this.id,
     required this.name,
     this.description,
+    required this.color,
+    required this.icon,
     required this.archived,
     required this.createdAt,
     required this.updatedAt,
@@ -838,6 +880,8 @@ class Category extends DataClass implements Insertable<Category> {
     if (!nullToAbsent || description != null) {
       map['description'] = Variable<String>(description);
     }
+    map['color'] = Variable<String>(color);
+    map['icon'] = Variable<String>(icon);
     map['is_archived'] = Variable<bool>(archived);
     map['created_at'] = Variable<BigInt>(createdAt);
     map['updated_at'] = Variable<BigInt>(updatedAt);
@@ -852,6 +896,8 @@ class Category extends DataClass implements Insertable<Category> {
       description: description == null && nullToAbsent
           ? const Value.absent()
           : Value(description),
+      color: Value(color),
+      icon: Value(icon),
       archived: Value(archived),
       createdAt: Value(createdAt),
       updatedAt: Value(updatedAt),
@@ -868,6 +914,8 @@ class Category extends DataClass implements Insertable<Category> {
       id: serializer.fromJson<String>(json['id']),
       name: serializer.fromJson<String>(json['name']),
       description: serializer.fromJson<String?>(json['description']),
+      color: serializer.fromJson<String>(json['color']),
+      icon: serializer.fromJson<String>(json['icon']),
       archived: serializer.fromJson<bool>(json['archived']),
       createdAt: serializer.fromJson<BigInt>(json['createdAt']),
       updatedAt: serializer.fromJson<BigInt>(json['updatedAt']),
@@ -881,6 +929,8 @@ class Category extends DataClass implements Insertable<Category> {
       'id': serializer.toJson<String>(id),
       'name': serializer.toJson<String>(name),
       'description': serializer.toJson<String?>(description),
+      'color': serializer.toJson<String>(color),
+      'icon': serializer.toJson<String>(icon),
       'archived': serializer.toJson<bool>(archived),
       'createdAt': serializer.toJson<BigInt>(createdAt),
       'updatedAt': serializer.toJson<BigInt>(updatedAt),
@@ -892,6 +942,8 @@ class Category extends DataClass implements Insertable<Category> {
     String? id,
     String? name,
     Value<String?> description = const Value.absent(),
+    String? color,
+    String? icon,
     bool? archived,
     BigInt? createdAt,
     BigInt? updatedAt,
@@ -900,6 +952,8 @@ class Category extends DataClass implements Insertable<Category> {
     id: id ?? this.id,
     name: name ?? this.name,
     description: description.present ? description.value : this.description,
+    color: color ?? this.color,
+    icon: icon ?? this.icon,
     archived: archived ?? this.archived,
     createdAt: createdAt ?? this.createdAt,
     updatedAt: updatedAt ?? this.updatedAt,
@@ -912,6 +966,8 @@ class Category extends DataClass implements Insertable<Category> {
       description: data.description.present
           ? data.description.value
           : this.description,
+      color: data.color.present ? data.color.value : this.color,
+      icon: data.icon.present ? data.icon.value : this.icon,
       archived: data.archived.present ? data.archived.value : this.archived,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
@@ -925,6 +981,8 @@ class Category extends DataClass implements Insertable<Category> {
           ..write('id: $id, ')
           ..write('name: $name, ')
           ..write('description: $description, ')
+          ..write('color: $color, ')
+          ..write('icon: $icon, ')
           ..write('archived: $archived, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt, ')
@@ -934,8 +992,17 @@ class Category extends DataClass implements Insertable<Category> {
   }
 
   @override
-  int get hashCode =>
-      Object.hash(id, name, description, archived, createdAt, updatedAt, dirty);
+  int get hashCode => Object.hash(
+    id,
+    name,
+    description,
+    color,
+    icon,
+    archived,
+    createdAt,
+    updatedAt,
+    dirty,
+  );
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -943,6 +1010,8 @@ class Category extends DataClass implements Insertable<Category> {
           other.id == this.id &&
           other.name == this.name &&
           other.description == this.description &&
+          other.color == this.color &&
+          other.icon == this.icon &&
           other.archived == this.archived &&
           other.createdAt == this.createdAt &&
           other.updatedAt == this.updatedAt &&
@@ -953,6 +1022,8 @@ class CategoriesCompanion extends UpdateCompanion<Category> {
   final Value<String> id;
   final Value<String> name;
   final Value<String?> description;
+  final Value<String> color;
+  final Value<String> icon;
   final Value<bool> archived;
   final Value<BigInt> createdAt;
   final Value<BigInt> updatedAt;
@@ -962,6 +1033,8 @@ class CategoriesCompanion extends UpdateCompanion<Category> {
     this.id = const Value.absent(),
     this.name = const Value.absent(),
     this.description = const Value.absent(),
+    this.color = const Value.absent(),
+    this.icon = const Value.absent(),
     this.archived = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.updatedAt = const Value.absent(),
@@ -972,6 +1045,8 @@ class CategoriesCompanion extends UpdateCompanion<Category> {
     required String id,
     required String name,
     this.description = const Value.absent(),
+    this.color = const Value.absent(),
+    this.icon = const Value.absent(),
     this.archived = const Value.absent(),
     required BigInt createdAt,
     required BigInt updatedAt,
@@ -985,6 +1060,8 @@ class CategoriesCompanion extends UpdateCompanion<Category> {
     Expression<String>? id,
     Expression<String>? name,
     Expression<String>? description,
+    Expression<String>? color,
+    Expression<String>? icon,
     Expression<bool>? archived,
     Expression<BigInt>? createdAt,
     Expression<BigInt>? updatedAt,
@@ -995,6 +1072,8 @@ class CategoriesCompanion extends UpdateCompanion<Category> {
       if (id != null) 'id': id,
       if (name != null) 'name': name,
       if (description != null) 'description': description,
+      if (color != null) 'color': color,
+      if (icon != null) 'icon': icon,
       if (archived != null) 'is_archived': archived,
       if (createdAt != null) 'created_at': createdAt,
       if (updatedAt != null) 'updated_at': updatedAt,
@@ -1007,6 +1086,8 @@ class CategoriesCompanion extends UpdateCompanion<Category> {
     Value<String>? id,
     Value<String>? name,
     Value<String?>? description,
+    Value<String>? color,
+    Value<String>? icon,
     Value<bool>? archived,
     Value<BigInt>? createdAt,
     Value<BigInt>? updatedAt,
@@ -1017,6 +1098,8 @@ class CategoriesCompanion extends UpdateCompanion<Category> {
       id: id ?? this.id,
       name: name ?? this.name,
       description: description ?? this.description,
+      color: color ?? this.color,
+      icon: icon ?? this.icon,
       archived: archived ?? this.archived,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
@@ -1036,6 +1119,12 @@ class CategoriesCompanion extends UpdateCompanion<Category> {
     }
     if (description.present) {
       map['description'] = Variable<String>(description.value);
+    }
+    if (color.present) {
+      map['color'] = Variable<String>(color.value);
+    }
+    if (icon.present) {
+      map['icon'] = Variable<String>(icon.value);
     }
     if (archived.present) {
       map['is_archived'] = Variable<bool>(archived.value);
@@ -1061,6 +1150,8 @@ class CategoriesCompanion extends UpdateCompanion<Category> {
           ..write('id: $id, ')
           ..write('name: $name, ')
           ..write('description: $description, ')
+          ..write('color: $color, ')
+          ..write('icon: $icon, ')
           ..write('archived: $archived, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt, ')
@@ -2235,9 +2326,10 @@ class $TagsTable extends Tags with TableInfo<$TagsTable, Tag> {
   late final GeneratedColumn<String> color = GeneratedColumn<String>(
     'color',
     aliasedName,
-    true,
+    false,
     type: DriftSqlType.string,
     requiredDuringInsert: false,
+    defaultValue: const Constant(kDefaultTagColor),
   );
   static const VerificationMeta _archivedMeta = const VerificationMeta(
     'archived',
@@ -2403,7 +2495,7 @@ class $TagsTable extends Tags with TableInfo<$TagsTable, Tag> {
       color: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}color'],
-      ),
+      )!,
       archived: attachedDatabase.typeMapping.read(
         DriftSqlType.bool,
         data['${effectivePrefix}is_archived'],
@@ -2434,7 +2526,7 @@ class Tag extends DataClass implements Insertable<Tag> {
   final String name;
   final String? description;
   final String? parentId;
-  final String? color;
+  final String color;
   final bool archived;
   final BigInt createdAt;
   final BigInt updatedAt;
@@ -2444,7 +2536,7 @@ class Tag extends DataClass implements Insertable<Tag> {
     required this.name,
     this.description,
     this.parentId,
-    this.color,
+    required this.color,
     required this.archived,
     required this.createdAt,
     required this.updatedAt,
@@ -2461,9 +2553,7 @@ class Tag extends DataClass implements Insertable<Tag> {
     if (!nullToAbsent || parentId != null) {
       map['parent_id'] = Variable<String>(parentId);
     }
-    if (!nullToAbsent || color != null) {
-      map['color'] = Variable<String>(color);
-    }
+    map['color'] = Variable<String>(color);
     map['is_archived'] = Variable<bool>(archived);
     map['created_at'] = Variable<BigInt>(createdAt);
     map['updated_at'] = Variable<BigInt>(updatedAt);
@@ -2481,9 +2571,7 @@ class Tag extends DataClass implements Insertable<Tag> {
       parentId: parentId == null && nullToAbsent
           ? const Value.absent()
           : Value(parentId),
-      color: color == null && nullToAbsent
-          ? const Value.absent()
-          : Value(color),
+      color: Value(color),
       archived: Value(archived),
       createdAt: Value(createdAt),
       updatedAt: Value(updatedAt),
@@ -2501,7 +2589,7 @@ class Tag extends DataClass implements Insertable<Tag> {
       name: serializer.fromJson<String>(json['name']),
       description: serializer.fromJson<String?>(json['description']),
       parentId: serializer.fromJson<String?>(json['parentId']),
-      color: serializer.fromJson<String?>(json['color']),
+      color: serializer.fromJson<String>(json['color']),
       archived: serializer.fromJson<bool>(json['archived']),
       createdAt: serializer.fromJson<BigInt>(json['createdAt']),
       updatedAt: serializer.fromJson<BigInt>(json['updatedAt']),
@@ -2516,7 +2604,7 @@ class Tag extends DataClass implements Insertable<Tag> {
       'name': serializer.toJson<String>(name),
       'description': serializer.toJson<String?>(description),
       'parentId': serializer.toJson<String?>(parentId),
-      'color': serializer.toJson<String?>(color),
+      'color': serializer.toJson<String>(color),
       'archived': serializer.toJson<bool>(archived),
       'createdAt': serializer.toJson<BigInt>(createdAt),
       'updatedAt': serializer.toJson<BigInt>(updatedAt),
@@ -2529,7 +2617,7 @@ class Tag extends DataClass implements Insertable<Tag> {
     String? name,
     Value<String?> description = const Value.absent(),
     Value<String?> parentId = const Value.absent(),
-    Value<String?> color = const Value.absent(),
+    String? color,
     bool? archived,
     BigInt? createdAt,
     BigInt? updatedAt,
@@ -2539,7 +2627,7 @@ class Tag extends DataClass implements Insertable<Tag> {
     name: name ?? this.name,
     description: description.present ? description.value : this.description,
     parentId: parentId.present ? parentId.value : this.parentId,
-    color: color.present ? color.value : this.color,
+    color: color ?? this.color,
     archived: archived ?? this.archived,
     createdAt: createdAt ?? this.createdAt,
     updatedAt: updatedAt ?? this.updatedAt,
@@ -2609,7 +2697,7 @@ class TagsCompanion extends UpdateCompanion<Tag> {
   final Value<String> name;
   final Value<String?> description;
   final Value<String?> parentId;
-  final Value<String?> color;
+  final Value<String> color;
   final Value<bool> archived;
   final Value<BigInt> createdAt;
   final Value<BigInt> updatedAt;
@@ -2673,7 +2761,7 @@ class TagsCompanion extends UpdateCompanion<Tag> {
     Value<String>? name,
     Value<String?>? description,
     Value<String?>? parentId,
-    Value<String?>? color,
+    Value<String>? color,
     Value<bool>? archived,
     Value<BigInt>? createdAt,
     Value<BigInt>? updatedAt,
@@ -3164,6 +3252,1064 @@ class TransactionTagsCompanion extends UpdateCompanion<TransactionTag> {
   }
 }
 
+class $SavedFiltersTable extends SavedFilters
+    with TableInfo<$SavedFiltersTable, SavedFilter> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $SavedFiltersTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _nameMeta = const VerificationMeta('name');
+  @override
+  late final GeneratedColumn<String> name = GeneratedColumn<String>(
+    'name',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _configMeta = const VerificationMeta('config');
+  @override
+  late final GeneratedColumn<String> config = GeneratedColumn<String>(
+    'config',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _archivedMeta = const VerificationMeta(
+    'archived',
+  );
+  @override
+  late final GeneratedColumn<bool> archived = GeneratedColumn<bool>(
+    'is_archived',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("is_archived" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<BigInt> createdAt = GeneratedColumn<BigInt>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.bigInt,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
+    'updatedAt',
+  );
+  @override
+  late final GeneratedColumn<BigInt> updatedAt = GeneratedColumn<BigInt>(
+    'updated_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.bigInt,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _dirtyMeta = const VerificationMeta('dirty');
+  @override
+  late final GeneratedColumn<bool> dirty = GeneratedColumn<bool>(
+    'dirty',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("dirty" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    name,
+    config,
+    archived,
+    createdAt,
+    updatedAt,
+    dirty,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'saved_filters';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<SavedFilter> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('name')) {
+      context.handle(
+        _nameMeta,
+        name.isAcceptableOrUnknown(data['name']!, _nameMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_nameMeta);
+    }
+    if (data.containsKey('config')) {
+      context.handle(
+        _configMeta,
+        config.isAcceptableOrUnknown(data['config']!, _configMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_configMeta);
+    }
+    if (data.containsKey('is_archived')) {
+      context.handle(
+        _archivedMeta,
+        archived.isAcceptableOrUnknown(data['is_archived']!, _archivedMeta),
+      );
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_createdAtMeta);
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(
+        _updatedAtMeta,
+        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_updatedAtMeta);
+    }
+    if (data.containsKey('dirty')) {
+      context.handle(
+        _dirtyMeta,
+        dirty.isAcceptableOrUnknown(data['dirty']!, _dirtyMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  SavedFilter map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return SavedFilter(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      name: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}name'],
+      )!,
+      config: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}config'],
+      )!,
+      archived: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}is_archived'],
+      )!,
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.bigInt,
+        data['${effectivePrefix}created_at'],
+      )!,
+      updatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.bigInt,
+        data['${effectivePrefix}updated_at'],
+      )!,
+      dirty: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}dirty'],
+      )!,
+    );
+  }
+
+  @override
+  $SavedFiltersTable createAlias(String alias) {
+    return $SavedFiltersTable(attachedDatabase, alias);
+  }
+}
+
+class SavedFilter extends DataClass implements Insertable<SavedFilter> {
+  final String id;
+  final String name;
+  final String config;
+  final bool archived;
+  final BigInt createdAt;
+  final BigInt updatedAt;
+  final bool dirty;
+  const SavedFilter({
+    required this.id,
+    required this.name,
+    required this.config,
+    required this.archived,
+    required this.createdAt,
+    required this.updatedAt,
+    required this.dirty,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['name'] = Variable<String>(name);
+    map['config'] = Variable<String>(config);
+    map['is_archived'] = Variable<bool>(archived);
+    map['created_at'] = Variable<BigInt>(createdAt);
+    map['updated_at'] = Variable<BigInt>(updatedAt);
+    map['dirty'] = Variable<bool>(dirty);
+    return map;
+  }
+
+  SavedFiltersCompanion toCompanion(bool nullToAbsent) {
+    return SavedFiltersCompanion(
+      id: Value(id),
+      name: Value(name),
+      config: Value(config),
+      archived: Value(archived),
+      createdAt: Value(createdAt),
+      updatedAt: Value(updatedAt),
+      dirty: Value(dirty),
+    );
+  }
+
+  factory SavedFilter.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return SavedFilter(
+      id: serializer.fromJson<String>(json['id']),
+      name: serializer.fromJson<String>(json['name']),
+      config: serializer.fromJson<String>(json['config']),
+      archived: serializer.fromJson<bool>(json['archived']),
+      createdAt: serializer.fromJson<BigInt>(json['createdAt']),
+      updatedAt: serializer.fromJson<BigInt>(json['updatedAt']),
+      dirty: serializer.fromJson<bool>(json['dirty']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'name': serializer.toJson<String>(name),
+      'config': serializer.toJson<String>(config),
+      'archived': serializer.toJson<bool>(archived),
+      'createdAt': serializer.toJson<BigInt>(createdAt),
+      'updatedAt': serializer.toJson<BigInt>(updatedAt),
+      'dirty': serializer.toJson<bool>(dirty),
+    };
+  }
+
+  SavedFilter copyWith({
+    String? id,
+    String? name,
+    String? config,
+    bool? archived,
+    BigInt? createdAt,
+    BigInt? updatedAt,
+    bool? dirty,
+  }) => SavedFilter(
+    id: id ?? this.id,
+    name: name ?? this.name,
+    config: config ?? this.config,
+    archived: archived ?? this.archived,
+    createdAt: createdAt ?? this.createdAt,
+    updatedAt: updatedAt ?? this.updatedAt,
+    dirty: dirty ?? this.dirty,
+  );
+  SavedFilter copyWithCompanion(SavedFiltersCompanion data) {
+    return SavedFilter(
+      id: data.id.present ? data.id.value : this.id,
+      name: data.name.present ? data.name.value : this.name,
+      config: data.config.present ? data.config.value : this.config,
+      archived: data.archived.present ? data.archived.value : this.archived,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+      dirty: data.dirty.present ? data.dirty.value : this.dirty,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('SavedFilter(')
+          ..write('id: $id, ')
+          ..write('name: $name, ')
+          ..write('config: $config, ')
+          ..write('archived: $archived, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('dirty: $dirty')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode =>
+      Object.hash(id, name, config, archived, createdAt, updatedAt, dirty);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is SavedFilter &&
+          other.id == this.id &&
+          other.name == this.name &&
+          other.config == this.config &&
+          other.archived == this.archived &&
+          other.createdAt == this.createdAt &&
+          other.updatedAt == this.updatedAt &&
+          other.dirty == this.dirty);
+}
+
+class SavedFiltersCompanion extends UpdateCompanion<SavedFilter> {
+  final Value<String> id;
+  final Value<String> name;
+  final Value<String> config;
+  final Value<bool> archived;
+  final Value<BigInt> createdAt;
+  final Value<BigInt> updatedAt;
+  final Value<bool> dirty;
+  final Value<int> rowid;
+  const SavedFiltersCompanion({
+    this.id = const Value.absent(),
+    this.name = const Value.absent(),
+    this.config = const Value.absent(),
+    this.archived = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.dirty = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  SavedFiltersCompanion.insert({
+    required String id,
+    required String name,
+    required String config,
+    this.archived = const Value.absent(),
+    required BigInt createdAt,
+    required BigInt updatedAt,
+    this.dirty = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       name = Value(name),
+       config = Value(config),
+       createdAt = Value(createdAt),
+       updatedAt = Value(updatedAt);
+  static Insertable<SavedFilter> custom({
+    Expression<String>? id,
+    Expression<String>? name,
+    Expression<String>? config,
+    Expression<bool>? archived,
+    Expression<BigInt>? createdAt,
+    Expression<BigInt>? updatedAt,
+    Expression<bool>? dirty,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (name != null) 'name': name,
+      if (config != null) 'config': config,
+      if (archived != null) 'is_archived': archived,
+      if (createdAt != null) 'created_at': createdAt,
+      if (updatedAt != null) 'updated_at': updatedAt,
+      if (dirty != null) 'dirty': dirty,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  SavedFiltersCompanion copyWith({
+    Value<String>? id,
+    Value<String>? name,
+    Value<String>? config,
+    Value<bool>? archived,
+    Value<BigInt>? createdAt,
+    Value<BigInt>? updatedAt,
+    Value<bool>? dirty,
+    Value<int>? rowid,
+  }) {
+    return SavedFiltersCompanion(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      config: config ?? this.config,
+      archived: archived ?? this.archived,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      dirty: dirty ?? this.dirty,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (name.present) {
+      map['name'] = Variable<String>(name.value);
+    }
+    if (config.present) {
+      map['config'] = Variable<String>(config.value);
+    }
+    if (archived.present) {
+      map['is_archived'] = Variable<bool>(archived.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<BigInt>(createdAt.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<BigInt>(updatedAt.value);
+    }
+    if (dirty.present) {
+      map['dirty'] = Variable<bool>(dirty.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('SavedFiltersCompanion(')
+          ..write('id: $id, ')
+          ..write('name: $name, ')
+          ..write('config: $config, ')
+          ..write('archived: $archived, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('dirty: $dirty, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $DashboardWidgetsTable extends DashboardWidgets
+    with TableInfo<$DashboardWidgetsTable, DashboardWidget> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $DashboardWidgetsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _typeMeta = const VerificationMeta('type');
+  @override
+  late final GeneratedColumn<String> type = GeneratedColumn<String>(
+    'type',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _filterIdMeta = const VerificationMeta(
+    'filterId',
+  );
+  @override
+  late final GeneratedColumn<String> filterId = GeneratedColumn<String>(
+    'filter_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _positionMeta = const VerificationMeta(
+    'position',
+  );
+  @override
+  late final GeneratedColumn<int> position = GeneratedColumn<int>(
+    'position',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _widthMeta = const VerificationMeta('width');
+  @override
+  late final GeneratedColumn<String> width = GeneratedColumn<String>(
+    'width',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _optionsMeta = const VerificationMeta(
+    'options',
+  );
+  @override
+  late final GeneratedColumn<String> options = GeneratedColumn<String>(
+    'options',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _archivedMeta = const VerificationMeta(
+    'archived',
+  );
+  @override
+  late final GeneratedColumn<bool> archived = GeneratedColumn<bool>(
+    'is_archived',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("is_archived" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<BigInt> createdAt = GeneratedColumn<BigInt>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.bigInt,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
+    'updatedAt',
+  );
+  @override
+  late final GeneratedColumn<BigInt> updatedAt = GeneratedColumn<BigInt>(
+    'updated_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.bigInt,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _dirtyMeta = const VerificationMeta('dirty');
+  @override
+  late final GeneratedColumn<bool> dirty = GeneratedColumn<bool>(
+    'dirty',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("dirty" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    type,
+    filterId,
+    position,
+    width,
+    options,
+    archived,
+    createdAt,
+    updatedAt,
+    dirty,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'dashboard_widgets';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<DashboardWidget> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('type')) {
+      context.handle(
+        _typeMeta,
+        type.isAcceptableOrUnknown(data['type']!, _typeMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_typeMeta);
+    }
+    if (data.containsKey('filter_id')) {
+      context.handle(
+        _filterIdMeta,
+        filterId.isAcceptableOrUnknown(data['filter_id']!, _filterIdMeta),
+      );
+    }
+    if (data.containsKey('position')) {
+      context.handle(
+        _positionMeta,
+        position.isAcceptableOrUnknown(data['position']!, _positionMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_positionMeta);
+    }
+    if (data.containsKey('width')) {
+      context.handle(
+        _widthMeta,
+        width.isAcceptableOrUnknown(data['width']!, _widthMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_widthMeta);
+    }
+    if (data.containsKey('options')) {
+      context.handle(
+        _optionsMeta,
+        options.isAcceptableOrUnknown(data['options']!, _optionsMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_optionsMeta);
+    }
+    if (data.containsKey('is_archived')) {
+      context.handle(
+        _archivedMeta,
+        archived.isAcceptableOrUnknown(data['is_archived']!, _archivedMeta),
+      );
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_createdAtMeta);
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(
+        _updatedAtMeta,
+        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_updatedAtMeta);
+    }
+    if (data.containsKey('dirty')) {
+      context.handle(
+        _dirtyMeta,
+        dirty.isAcceptableOrUnknown(data['dirty']!, _dirtyMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  DashboardWidget map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return DashboardWidget(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      type: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}type'],
+      )!,
+      filterId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}filter_id'],
+      ),
+      position: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}position'],
+      )!,
+      width: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}width'],
+      )!,
+      options: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}options'],
+      )!,
+      archived: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}is_archived'],
+      )!,
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.bigInt,
+        data['${effectivePrefix}created_at'],
+      )!,
+      updatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.bigInt,
+        data['${effectivePrefix}updated_at'],
+      )!,
+      dirty: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}dirty'],
+      )!,
+    );
+  }
+
+  @override
+  $DashboardWidgetsTable createAlias(String alias) {
+    return $DashboardWidgetsTable(attachedDatabase, alias);
+  }
+}
+
+class DashboardWidget extends DataClass implements Insertable<DashboardWidget> {
+  final String id;
+  final String type;
+  final String? filterId;
+  final int position;
+  final String width;
+  final String options;
+  final bool archived;
+  final BigInt createdAt;
+  final BigInt updatedAt;
+  final bool dirty;
+  const DashboardWidget({
+    required this.id,
+    required this.type,
+    this.filterId,
+    required this.position,
+    required this.width,
+    required this.options,
+    required this.archived,
+    required this.createdAt,
+    required this.updatedAt,
+    required this.dirty,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['type'] = Variable<String>(type);
+    if (!nullToAbsent || filterId != null) {
+      map['filter_id'] = Variable<String>(filterId);
+    }
+    map['position'] = Variable<int>(position);
+    map['width'] = Variable<String>(width);
+    map['options'] = Variable<String>(options);
+    map['is_archived'] = Variable<bool>(archived);
+    map['created_at'] = Variable<BigInt>(createdAt);
+    map['updated_at'] = Variable<BigInt>(updatedAt);
+    map['dirty'] = Variable<bool>(dirty);
+    return map;
+  }
+
+  DashboardWidgetsCompanion toCompanion(bool nullToAbsent) {
+    return DashboardWidgetsCompanion(
+      id: Value(id),
+      type: Value(type),
+      filterId: filterId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(filterId),
+      position: Value(position),
+      width: Value(width),
+      options: Value(options),
+      archived: Value(archived),
+      createdAt: Value(createdAt),
+      updatedAt: Value(updatedAt),
+      dirty: Value(dirty),
+    );
+  }
+
+  factory DashboardWidget.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return DashboardWidget(
+      id: serializer.fromJson<String>(json['id']),
+      type: serializer.fromJson<String>(json['type']),
+      filterId: serializer.fromJson<String?>(json['filterId']),
+      position: serializer.fromJson<int>(json['position']),
+      width: serializer.fromJson<String>(json['width']),
+      options: serializer.fromJson<String>(json['options']),
+      archived: serializer.fromJson<bool>(json['archived']),
+      createdAt: serializer.fromJson<BigInt>(json['createdAt']),
+      updatedAt: serializer.fromJson<BigInt>(json['updatedAt']),
+      dirty: serializer.fromJson<bool>(json['dirty']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'type': serializer.toJson<String>(type),
+      'filterId': serializer.toJson<String?>(filterId),
+      'position': serializer.toJson<int>(position),
+      'width': serializer.toJson<String>(width),
+      'options': serializer.toJson<String>(options),
+      'archived': serializer.toJson<bool>(archived),
+      'createdAt': serializer.toJson<BigInt>(createdAt),
+      'updatedAt': serializer.toJson<BigInt>(updatedAt),
+      'dirty': serializer.toJson<bool>(dirty),
+    };
+  }
+
+  DashboardWidget copyWith({
+    String? id,
+    String? type,
+    Value<String?> filterId = const Value.absent(),
+    int? position,
+    String? width,
+    String? options,
+    bool? archived,
+    BigInt? createdAt,
+    BigInt? updatedAt,
+    bool? dirty,
+  }) => DashboardWidget(
+    id: id ?? this.id,
+    type: type ?? this.type,
+    filterId: filterId.present ? filterId.value : this.filterId,
+    position: position ?? this.position,
+    width: width ?? this.width,
+    options: options ?? this.options,
+    archived: archived ?? this.archived,
+    createdAt: createdAt ?? this.createdAt,
+    updatedAt: updatedAt ?? this.updatedAt,
+    dirty: dirty ?? this.dirty,
+  );
+  DashboardWidget copyWithCompanion(DashboardWidgetsCompanion data) {
+    return DashboardWidget(
+      id: data.id.present ? data.id.value : this.id,
+      type: data.type.present ? data.type.value : this.type,
+      filterId: data.filterId.present ? data.filterId.value : this.filterId,
+      position: data.position.present ? data.position.value : this.position,
+      width: data.width.present ? data.width.value : this.width,
+      options: data.options.present ? data.options.value : this.options,
+      archived: data.archived.present ? data.archived.value : this.archived,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+      dirty: data.dirty.present ? data.dirty.value : this.dirty,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('DashboardWidget(')
+          ..write('id: $id, ')
+          ..write('type: $type, ')
+          ..write('filterId: $filterId, ')
+          ..write('position: $position, ')
+          ..write('width: $width, ')
+          ..write('options: $options, ')
+          ..write('archived: $archived, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('dirty: $dirty')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    type,
+    filterId,
+    position,
+    width,
+    options,
+    archived,
+    createdAt,
+    updatedAt,
+    dirty,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is DashboardWidget &&
+          other.id == this.id &&
+          other.type == this.type &&
+          other.filterId == this.filterId &&
+          other.position == this.position &&
+          other.width == this.width &&
+          other.options == this.options &&
+          other.archived == this.archived &&
+          other.createdAt == this.createdAt &&
+          other.updatedAt == this.updatedAt &&
+          other.dirty == this.dirty);
+}
+
+class DashboardWidgetsCompanion extends UpdateCompanion<DashboardWidget> {
+  final Value<String> id;
+  final Value<String> type;
+  final Value<String?> filterId;
+  final Value<int> position;
+  final Value<String> width;
+  final Value<String> options;
+  final Value<bool> archived;
+  final Value<BigInt> createdAt;
+  final Value<BigInt> updatedAt;
+  final Value<bool> dirty;
+  final Value<int> rowid;
+  const DashboardWidgetsCompanion({
+    this.id = const Value.absent(),
+    this.type = const Value.absent(),
+    this.filterId = const Value.absent(),
+    this.position = const Value.absent(),
+    this.width = const Value.absent(),
+    this.options = const Value.absent(),
+    this.archived = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.dirty = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  DashboardWidgetsCompanion.insert({
+    required String id,
+    required String type,
+    this.filterId = const Value.absent(),
+    required int position,
+    required String width,
+    required String options,
+    this.archived = const Value.absent(),
+    required BigInt createdAt,
+    required BigInt updatedAt,
+    this.dirty = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       type = Value(type),
+       position = Value(position),
+       width = Value(width),
+       options = Value(options),
+       createdAt = Value(createdAt),
+       updatedAt = Value(updatedAt);
+  static Insertable<DashboardWidget> custom({
+    Expression<String>? id,
+    Expression<String>? type,
+    Expression<String>? filterId,
+    Expression<int>? position,
+    Expression<String>? width,
+    Expression<String>? options,
+    Expression<bool>? archived,
+    Expression<BigInt>? createdAt,
+    Expression<BigInt>? updatedAt,
+    Expression<bool>? dirty,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (type != null) 'type': type,
+      if (filterId != null) 'filter_id': filterId,
+      if (position != null) 'position': position,
+      if (width != null) 'width': width,
+      if (options != null) 'options': options,
+      if (archived != null) 'is_archived': archived,
+      if (createdAt != null) 'created_at': createdAt,
+      if (updatedAt != null) 'updated_at': updatedAt,
+      if (dirty != null) 'dirty': dirty,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  DashboardWidgetsCompanion copyWith({
+    Value<String>? id,
+    Value<String>? type,
+    Value<String?>? filterId,
+    Value<int>? position,
+    Value<String>? width,
+    Value<String>? options,
+    Value<bool>? archived,
+    Value<BigInt>? createdAt,
+    Value<BigInt>? updatedAt,
+    Value<bool>? dirty,
+    Value<int>? rowid,
+  }) {
+    return DashboardWidgetsCompanion(
+      id: id ?? this.id,
+      type: type ?? this.type,
+      filterId: filterId ?? this.filterId,
+      position: position ?? this.position,
+      width: width ?? this.width,
+      options: options ?? this.options,
+      archived: archived ?? this.archived,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      dirty: dirty ?? this.dirty,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (type.present) {
+      map['type'] = Variable<String>(type.value);
+    }
+    if (filterId.present) {
+      map['filter_id'] = Variable<String>(filterId.value);
+    }
+    if (position.present) {
+      map['position'] = Variable<int>(position.value);
+    }
+    if (width.present) {
+      map['width'] = Variable<String>(width.value);
+    }
+    if (options.present) {
+      map['options'] = Variable<String>(options.value);
+    }
+    if (archived.present) {
+      map['is_archived'] = Variable<bool>(archived.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<BigInt>(createdAt.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<BigInt>(updatedAt.value);
+    }
+    if (dirty.present) {
+      map['dirty'] = Variable<bool>(dirty.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('DashboardWidgetsCompanion(')
+          ..write('id: $id, ')
+          ..write('type: $type, ')
+          ..write('filterId: $filterId, ')
+          ..write('position: $position, ')
+          ..write('width: $width, ')
+          ..write('options: $options, ')
+          ..write('archived: $archived, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('dirty: $dirty, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 class $SyncStateTable extends SyncState
     with TableInfo<$SyncStateTable, SyncStateData> {
   @override
@@ -3203,8 +4349,28 @@ class $SyncStateTable extends SyncState
     type: DriftSqlType.bigInt,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _dashboardSeededMeta = const VerificationMeta(
+    'dashboardSeeded',
+  );
   @override
-  List<GeneratedColumn> get $columns => [id, lastServerSeq, lastSyncedAt];
+  late final GeneratedColumn<bool> dashboardSeeded = GeneratedColumn<bool>(
+    'dashboard_seeded',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("dashboard_seeded" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    lastServerSeq,
+    lastSyncedAt,
+    dashboardSeeded,
+  ];
   @override
   String get aliasedName => _alias ?? actualTableName;
   @override
@@ -3238,6 +4404,15 @@ class $SyncStateTable extends SyncState
         ),
       );
     }
+    if (data.containsKey('dashboard_seeded')) {
+      context.handle(
+        _dashboardSeededMeta,
+        dashboardSeeded.isAcceptableOrUnknown(
+          data['dashboard_seeded']!,
+          _dashboardSeededMeta,
+        ),
+      );
+    }
     return context;
   }
 
@@ -3259,6 +4434,10 @@ class $SyncStateTable extends SyncState
         DriftSqlType.bigInt,
         data['${effectivePrefix}last_synced_at'],
       ),
+      dashboardSeeded: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}dashboard_seeded'],
+      )!,
     );
   }
 
@@ -3272,10 +4451,12 @@ class SyncStateData extends DataClass implements Insertable<SyncStateData> {
   final String id;
   final BigInt lastServerSeq;
   final BigInt? lastSyncedAt;
+  final bool dashboardSeeded;
   const SyncStateData({
     required this.id,
     required this.lastServerSeq,
     this.lastSyncedAt,
+    required this.dashboardSeeded,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -3285,6 +4466,7 @@ class SyncStateData extends DataClass implements Insertable<SyncStateData> {
     if (!nullToAbsent || lastSyncedAt != null) {
       map['last_synced_at'] = Variable<BigInt>(lastSyncedAt);
     }
+    map['dashboard_seeded'] = Variable<bool>(dashboardSeeded);
     return map;
   }
 
@@ -3295,6 +4477,7 @@ class SyncStateData extends DataClass implements Insertable<SyncStateData> {
       lastSyncedAt: lastSyncedAt == null && nullToAbsent
           ? const Value.absent()
           : Value(lastSyncedAt),
+      dashboardSeeded: Value(dashboardSeeded),
     );
   }
 
@@ -3307,6 +4490,7 @@ class SyncStateData extends DataClass implements Insertable<SyncStateData> {
       id: serializer.fromJson<String>(json['id']),
       lastServerSeq: serializer.fromJson<BigInt>(json['lastServerSeq']),
       lastSyncedAt: serializer.fromJson<BigInt?>(json['lastSyncedAt']),
+      dashboardSeeded: serializer.fromJson<bool>(json['dashboardSeeded']),
     );
   }
   @override
@@ -3316,6 +4500,7 @@ class SyncStateData extends DataClass implements Insertable<SyncStateData> {
       'id': serializer.toJson<String>(id),
       'lastServerSeq': serializer.toJson<BigInt>(lastServerSeq),
       'lastSyncedAt': serializer.toJson<BigInt?>(lastSyncedAt),
+      'dashboardSeeded': serializer.toJson<bool>(dashboardSeeded),
     };
   }
 
@@ -3323,10 +4508,12 @@ class SyncStateData extends DataClass implements Insertable<SyncStateData> {
     String? id,
     BigInt? lastServerSeq,
     Value<BigInt?> lastSyncedAt = const Value.absent(),
+    bool? dashboardSeeded,
   }) => SyncStateData(
     id: id ?? this.id,
     lastServerSeq: lastServerSeq ?? this.lastServerSeq,
     lastSyncedAt: lastSyncedAt.present ? lastSyncedAt.value : this.lastSyncedAt,
+    dashboardSeeded: dashboardSeeded ?? this.dashboardSeeded,
   );
   SyncStateData copyWithCompanion(SyncStateCompanion data) {
     return SyncStateData(
@@ -3337,6 +4524,9 @@ class SyncStateData extends DataClass implements Insertable<SyncStateData> {
       lastSyncedAt: data.lastSyncedAt.present
           ? data.lastSyncedAt.value
           : this.lastSyncedAt,
+      dashboardSeeded: data.dashboardSeeded.present
+          ? data.dashboardSeeded.value
+          : this.dashboardSeeded,
     );
   }
 
@@ -3345,49 +4535,57 @@ class SyncStateData extends DataClass implements Insertable<SyncStateData> {
     return (StringBuffer('SyncStateData(')
           ..write('id: $id, ')
           ..write('lastServerSeq: $lastServerSeq, ')
-          ..write('lastSyncedAt: $lastSyncedAt')
+          ..write('lastSyncedAt: $lastSyncedAt, ')
+          ..write('dashboardSeeded: $dashboardSeeded')
           ..write(')'))
         .toString();
   }
 
   @override
-  int get hashCode => Object.hash(id, lastServerSeq, lastSyncedAt);
+  int get hashCode =>
+      Object.hash(id, lastServerSeq, lastSyncedAt, dashboardSeeded);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
       (other is SyncStateData &&
           other.id == this.id &&
           other.lastServerSeq == this.lastServerSeq &&
-          other.lastSyncedAt == this.lastSyncedAt);
+          other.lastSyncedAt == this.lastSyncedAt &&
+          other.dashboardSeeded == this.dashboardSeeded);
 }
 
 class SyncStateCompanion extends UpdateCompanion<SyncStateData> {
   final Value<String> id;
   final Value<BigInt> lastServerSeq;
   final Value<BigInt?> lastSyncedAt;
+  final Value<bool> dashboardSeeded;
   final Value<int> rowid;
   const SyncStateCompanion({
     this.id = const Value.absent(),
     this.lastServerSeq = const Value.absent(),
     this.lastSyncedAt = const Value.absent(),
+    this.dashboardSeeded = const Value.absent(),
     this.rowid = const Value.absent(),
   });
   SyncStateCompanion.insert({
     this.id = const Value.absent(),
     this.lastServerSeq = const Value.absent(),
     this.lastSyncedAt = const Value.absent(),
+    this.dashboardSeeded = const Value.absent(),
     this.rowid = const Value.absent(),
   });
   static Insertable<SyncStateData> custom({
     Expression<String>? id,
     Expression<BigInt>? lastServerSeq,
     Expression<BigInt>? lastSyncedAt,
+    Expression<bool>? dashboardSeeded,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
       if (lastServerSeq != null) 'last_server_seq': lastServerSeq,
       if (lastSyncedAt != null) 'last_synced_at': lastSyncedAt,
+      if (dashboardSeeded != null) 'dashboard_seeded': dashboardSeeded,
       if (rowid != null) 'rowid': rowid,
     });
   }
@@ -3396,12 +4594,14 @@ class SyncStateCompanion extends UpdateCompanion<SyncStateData> {
     Value<String>? id,
     Value<BigInt>? lastServerSeq,
     Value<BigInt?>? lastSyncedAt,
+    Value<bool>? dashboardSeeded,
     Value<int>? rowid,
   }) {
     return SyncStateCompanion(
       id: id ?? this.id,
       lastServerSeq: lastServerSeq ?? this.lastServerSeq,
       lastSyncedAt: lastSyncedAt ?? this.lastSyncedAt,
+      dashboardSeeded: dashboardSeeded ?? this.dashboardSeeded,
       rowid: rowid ?? this.rowid,
     );
   }
@@ -3418,6 +4618,9 @@ class SyncStateCompanion extends UpdateCompanion<SyncStateData> {
     if (lastSyncedAt.present) {
       map['last_synced_at'] = Variable<BigInt>(lastSyncedAt.value);
     }
+    if (dashboardSeeded.present) {
+      map['dashboard_seeded'] = Variable<bool>(dashboardSeeded.value);
+    }
     if (rowid.present) {
       map['rowid'] = Variable<int>(rowid.value);
     }
@@ -3430,6 +4633,7 @@ class SyncStateCompanion extends UpdateCompanion<SyncStateData> {
           ..write('id: $id, ')
           ..write('lastServerSeq: $lastServerSeq, ')
           ..write('lastSyncedAt: $lastSyncedAt, ')
+          ..write('dashboardSeeded: $dashboardSeeded, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
@@ -3871,6 +5075,10 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $TransactionTagsTable transactionTags = $TransactionTagsTable(
     this,
   );
+  late final $SavedFiltersTable savedFilters = $SavedFiltersTable(this);
+  late final $DashboardWidgetsTable dashboardWidgets = $DashboardWidgetsTable(
+    this,
+  );
   late final $SyncStateTable syncState = $SyncStateTable(this);
   late final $TombstonesTable tombstones = $TombstonesTable(this);
   late final Index accountsArchived = Index(
@@ -3973,6 +5181,34 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     'transaction_tags_needs_sync',
     'CREATE INDEX transaction_tags_needs_sync ON transaction_tags (updated_at) WHERE dirty = 1',
   );
+  late final Index savedFiltersArchived = Index(
+    'saved_filters_archived',
+    'CREATE INDEX saved_filters_archived ON saved_filters (is_archived)',
+  );
+  late final Index savedFiltersUpdatedAt = Index(
+    'saved_filters_updated_at',
+    'CREATE INDEX saved_filters_updated_at ON saved_filters (updated_at)',
+  );
+  late final Index savedFiltersNeedsSync = Index(
+    'saved_filters_needs_sync',
+    'CREATE INDEX saved_filters_needs_sync ON saved_filters (updated_at) WHERE dirty = 1',
+  );
+  late final Index dashboardWidgetsPosition = Index(
+    'dashboard_widgets_position',
+    'CREATE INDEX dashboard_widgets_position ON dashboard_widgets (position)',
+  );
+  late final Index dashboardWidgetsArchived = Index(
+    'dashboard_widgets_archived',
+    'CREATE INDEX dashboard_widgets_archived ON dashboard_widgets (is_archived)',
+  );
+  late final Index dashboardWidgetsUpdatedAt = Index(
+    'dashboard_widgets_updated_at',
+    'CREATE INDEX dashboard_widgets_updated_at ON dashboard_widgets (updated_at)',
+  );
+  late final Index dashboardWidgetsNeedsSync = Index(
+    'dashboard_widgets_needs_sync',
+    'CREATE INDEX dashboard_widgets_needs_sync ON dashboard_widgets (updated_at) WHERE dirty = 1',
+  );
   late final Index tombstonesEntityTable = Index(
     'tombstones_entity_table',
     'CREATE INDEX tombstones_entity_table ON tombstones (entity_table)',
@@ -3995,6 +5231,8 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     transactions,
     tags,
     transactionTags,
+    savedFilters,
+    dashboardWidgets,
     syncState,
     tombstones,
     accountsArchived,
@@ -4022,6 +5260,13 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     transactionTagsTagId,
     transactionTagsUpdatedAt,
     transactionTagsNeedsSync,
+    savedFiltersArchived,
+    savedFiltersUpdatedAt,
+    savedFiltersNeedsSync,
+    dashboardWidgetsPosition,
+    dashboardWidgetsArchived,
+    dashboardWidgetsUpdatedAt,
+    dashboardWidgetsNeedsSync,
     tombstonesEntityTable,
     tombstonesUpdatedAt,
     tombstonesNeedsSync,
@@ -4034,8 +5279,8 @@ typedef $$AccountsTableCreateCompanionBuilder =
       required String name,
       required String currency,
       Value<String?> description,
-      Value<String?> color,
-      Value<String?> icon,
+      Value<String> color,
+      Value<String> icon,
       Value<bool> archived,
       required BigInt createdAt,
       required BigInt updatedAt,
@@ -4048,8 +5293,8 @@ typedef $$AccountsTableUpdateCompanionBuilder =
       Value<String> name,
       Value<String> currency,
       Value<String?> description,
-      Value<String?> color,
-      Value<String?> icon,
+      Value<String> color,
+      Value<String> icon,
       Value<bool> archived,
       Value<BigInt> createdAt,
       Value<BigInt> updatedAt,
@@ -4251,8 +5496,8 @@ class $$AccountsTableTableManager
                 Value<String> name = const Value.absent(),
                 Value<String> currency = const Value.absent(),
                 Value<String?> description = const Value.absent(),
-                Value<String?> color = const Value.absent(),
-                Value<String?> icon = const Value.absent(),
+                Value<String> color = const Value.absent(),
+                Value<String> icon = const Value.absent(),
                 Value<bool> archived = const Value.absent(),
                 Value<BigInt> createdAt = const Value.absent(),
                 Value<BigInt> updatedAt = const Value.absent(),
@@ -4277,8 +5522,8 @@ class $$AccountsTableTableManager
                 required String name,
                 required String currency,
                 Value<String?> description = const Value.absent(),
-                Value<String?> color = const Value.absent(),
-                Value<String?> icon = const Value.absent(),
+                Value<String> color = const Value.absent(),
+                Value<String> icon = const Value.absent(),
                 Value<bool> archived = const Value.absent(),
                 required BigInt createdAt,
                 required BigInt updatedAt,
@@ -4324,6 +5569,8 @@ typedef $$CategoriesTableCreateCompanionBuilder =
       required String id,
       required String name,
       Value<String?> description,
+      Value<String> color,
+      Value<String> icon,
       Value<bool> archived,
       required BigInt createdAt,
       required BigInt updatedAt,
@@ -4335,6 +5582,8 @@ typedef $$CategoriesTableUpdateCompanionBuilder =
       Value<String> id,
       Value<String> name,
       Value<String?> description,
+      Value<String> color,
+      Value<String> icon,
       Value<bool> archived,
       Value<BigInt> createdAt,
       Value<BigInt> updatedAt,
@@ -4363,6 +5612,16 @@ class $$CategoriesTableFilterComposer
 
   ColumnFilters<String> get description => $composableBuilder(
     column: $table.description,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get color => $composableBuilder(
+    column: $table.color,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get icon => $composableBuilder(
+    column: $table.icon,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -4411,6 +5670,16 @@ class $$CategoriesTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get color => $composableBuilder(
+    column: $table.color,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get icon => $composableBuilder(
+    column: $table.icon,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<bool> get archived => $composableBuilder(
     column: $table.archived,
     builder: (column) => ColumnOrderings(column),
@@ -4451,6 +5720,12 @@ class $$CategoriesTableAnnotationComposer
     column: $table.description,
     builder: (column) => column,
   );
+
+  GeneratedColumn<String> get color =>
+      $composableBuilder(column: $table.color, builder: (column) => column);
+
+  GeneratedColumn<String> get icon =>
+      $composableBuilder(column: $table.icon, builder: (column) => column);
 
   GeneratedColumn<bool> get archived =>
       $composableBuilder(column: $table.archived, builder: (column) => column);
@@ -4496,6 +5771,8 @@ class $$CategoriesTableTableManager
                 Value<String> id = const Value.absent(),
                 Value<String> name = const Value.absent(),
                 Value<String?> description = const Value.absent(),
+                Value<String> color = const Value.absent(),
+                Value<String> icon = const Value.absent(),
                 Value<bool> archived = const Value.absent(),
                 Value<BigInt> createdAt = const Value.absent(),
                 Value<BigInt> updatedAt = const Value.absent(),
@@ -4505,6 +5782,8 @@ class $$CategoriesTableTableManager
                 id: id,
                 name: name,
                 description: description,
+                color: color,
+                icon: icon,
                 archived: archived,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
@@ -4516,6 +5795,8 @@ class $$CategoriesTableTableManager
                 required String id,
                 required String name,
                 Value<String?> description = const Value.absent(),
+                Value<String> color = const Value.absent(),
+                Value<String> icon = const Value.absent(),
                 Value<bool> archived = const Value.absent(),
                 required BigInt createdAt,
                 required BigInt updatedAt,
@@ -4525,6 +5806,8 @@ class $$CategoriesTableTableManager
                 id: id,
                 name: name,
                 description: description,
+                color: color,
+                icon: icon,
                 archived: archived,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
@@ -5058,7 +6341,7 @@ typedef $$TagsTableCreateCompanionBuilder =
       required String name,
       Value<String?> description,
       Value<String?> parentId,
-      Value<String?> color,
+      Value<String> color,
       Value<bool> archived,
       required BigInt createdAt,
       required BigInt updatedAt,
@@ -5071,7 +6354,7 @@ typedef $$TagsTableUpdateCompanionBuilder =
       Value<String> name,
       Value<String?> description,
       Value<String?> parentId,
-      Value<String?> color,
+      Value<String> color,
       Value<bool> archived,
       Value<BigInt> createdAt,
       Value<BigInt> updatedAt,
@@ -5258,7 +6541,7 @@ class $$TagsTableTableManager
                 Value<String> name = const Value.absent(),
                 Value<String?> description = const Value.absent(),
                 Value<String?> parentId = const Value.absent(),
-                Value<String?> color = const Value.absent(),
+                Value<String> color = const Value.absent(),
                 Value<bool> archived = const Value.absent(),
                 Value<BigInt> createdAt = const Value.absent(),
                 Value<BigInt> updatedAt = const Value.absent(),
@@ -5282,7 +6565,7 @@ class $$TagsTableTableManager
                 required String name,
                 Value<String?> description = const Value.absent(),
                 Value<String?> parentId = const Value.absent(),
-                Value<String?> color = const Value.absent(),
+                Value<String> color = const Value.absent(),
                 Value<bool> archived = const Value.absent(),
                 required BigInt createdAt,
                 required BigInt updatedAt,
@@ -5549,11 +6832,551 @@ typedef $$TransactionTagsTableProcessedTableManager =
       TransactionTag,
       PrefetchHooks Function()
     >;
+typedef $$SavedFiltersTableCreateCompanionBuilder =
+    SavedFiltersCompanion Function({
+      required String id,
+      required String name,
+      required String config,
+      Value<bool> archived,
+      required BigInt createdAt,
+      required BigInt updatedAt,
+      Value<bool> dirty,
+      Value<int> rowid,
+    });
+typedef $$SavedFiltersTableUpdateCompanionBuilder =
+    SavedFiltersCompanion Function({
+      Value<String> id,
+      Value<String> name,
+      Value<String> config,
+      Value<bool> archived,
+      Value<BigInt> createdAt,
+      Value<BigInt> updatedAt,
+      Value<bool> dirty,
+      Value<int> rowid,
+    });
+
+class $$SavedFiltersTableFilterComposer
+    extends Composer<_$AppDatabase, $SavedFiltersTable> {
+  $$SavedFiltersTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get config => $composableBuilder(
+    column: $table.config,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get archived => $composableBuilder(
+    column: $table.archived,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<BigInt> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<BigInt> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get dirty => $composableBuilder(
+    column: $table.dirty,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$SavedFiltersTableOrderingComposer
+    extends Composer<_$AppDatabase, $SavedFiltersTable> {
+  $$SavedFiltersTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get config => $composableBuilder(
+    column: $table.config,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get archived => $composableBuilder(
+    column: $table.archived,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<BigInt> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<BigInt> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get dirty => $composableBuilder(
+    column: $table.dirty,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$SavedFiltersTableAnnotationComposer
+    extends Composer<_$AppDatabase, $SavedFiltersTable> {
+  $$SavedFiltersTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get name =>
+      $composableBuilder(column: $table.name, builder: (column) => column);
+
+  GeneratedColumn<String> get config =>
+      $composableBuilder(column: $table.config, builder: (column) => column);
+
+  GeneratedColumn<bool> get archived =>
+      $composableBuilder(column: $table.archived, builder: (column) => column);
+
+  GeneratedColumn<BigInt> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  GeneratedColumn<BigInt> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+
+  GeneratedColumn<bool> get dirty =>
+      $composableBuilder(column: $table.dirty, builder: (column) => column);
+}
+
+class $$SavedFiltersTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $SavedFiltersTable,
+          SavedFilter,
+          $$SavedFiltersTableFilterComposer,
+          $$SavedFiltersTableOrderingComposer,
+          $$SavedFiltersTableAnnotationComposer,
+          $$SavedFiltersTableCreateCompanionBuilder,
+          $$SavedFiltersTableUpdateCompanionBuilder,
+          (
+            SavedFilter,
+            BaseReferences<_$AppDatabase, $SavedFiltersTable, SavedFilter>,
+          ),
+          SavedFilter,
+          PrefetchHooks Function()
+        > {
+  $$SavedFiltersTableTableManager(_$AppDatabase db, $SavedFiltersTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$SavedFiltersTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$SavedFiltersTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$SavedFiltersTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String> name = const Value.absent(),
+                Value<String> config = const Value.absent(),
+                Value<bool> archived = const Value.absent(),
+                Value<BigInt> createdAt = const Value.absent(),
+                Value<BigInt> updatedAt = const Value.absent(),
+                Value<bool> dirty = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => SavedFiltersCompanion(
+                id: id,
+                name: name,
+                config: config,
+                archived: archived,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                dirty: dirty,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                required String name,
+                required String config,
+                Value<bool> archived = const Value.absent(),
+                required BigInt createdAt,
+                required BigInt updatedAt,
+                Value<bool> dirty = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => SavedFiltersCompanion.insert(
+                id: id,
+                name: name,
+                config: config,
+                archived: archived,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                dirty: dirty,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$SavedFiltersTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $SavedFiltersTable,
+      SavedFilter,
+      $$SavedFiltersTableFilterComposer,
+      $$SavedFiltersTableOrderingComposer,
+      $$SavedFiltersTableAnnotationComposer,
+      $$SavedFiltersTableCreateCompanionBuilder,
+      $$SavedFiltersTableUpdateCompanionBuilder,
+      (
+        SavedFilter,
+        BaseReferences<_$AppDatabase, $SavedFiltersTable, SavedFilter>,
+      ),
+      SavedFilter,
+      PrefetchHooks Function()
+    >;
+typedef $$DashboardWidgetsTableCreateCompanionBuilder =
+    DashboardWidgetsCompanion Function({
+      required String id,
+      required String type,
+      Value<String?> filterId,
+      required int position,
+      required String width,
+      required String options,
+      Value<bool> archived,
+      required BigInt createdAt,
+      required BigInt updatedAt,
+      Value<bool> dirty,
+      Value<int> rowid,
+    });
+typedef $$DashboardWidgetsTableUpdateCompanionBuilder =
+    DashboardWidgetsCompanion Function({
+      Value<String> id,
+      Value<String> type,
+      Value<String?> filterId,
+      Value<int> position,
+      Value<String> width,
+      Value<String> options,
+      Value<bool> archived,
+      Value<BigInt> createdAt,
+      Value<BigInt> updatedAt,
+      Value<bool> dirty,
+      Value<int> rowid,
+    });
+
+class $$DashboardWidgetsTableFilterComposer
+    extends Composer<_$AppDatabase, $DashboardWidgetsTable> {
+  $$DashboardWidgetsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get type => $composableBuilder(
+    column: $table.type,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get filterId => $composableBuilder(
+    column: $table.filterId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get position => $composableBuilder(
+    column: $table.position,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get width => $composableBuilder(
+    column: $table.width,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get options => $composableBuilder(
+    column: $table.options,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get archived => $composableBuilder(
+    column: $table.archived,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<BigInt> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<BigInt> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get dirty => $composableBuilder(
+    column: $table.dirty,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$DashboardWidgetsTableOrderingComposer
+    extends Composer<_$AppDatabase, $DashboardWidgetsTable> {
+  $$DashboardWidgetsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get type => $composableBuilder(
+    column: $table.type,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get filterId => $composableBuilder(
+    column: $table.filterId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get position => $composableBuilder(
+    column: $table.position,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get width => $composableBuilder(
+    column: $table.width,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get options => $composableBuilder(
+    column: $table.options,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get archived => $composableBuilder(
+    column: $table.archived,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<BigInt> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<BigInt> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get dirty => $composableBuilder(
+    column: $table.dirty,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$DashboardWidgetsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $DashboardWidgetsTable> {
+  $$DashboardWidgetsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get type =>
+      $composableBuilder(column: $table.type, builder: (column) => column);
+
+  GeneratedColumn<String> get filterId =>
+      $composableBuilder(column: $table.filterId, builder: (column) => column);
+
+  GeneratedColumn<int> get position =>
+      $composableBuilder(column: $table.position, builder: (column) => column);
+
+  GeneratedColumn<String> get width =>
+      $composableBuilder(column: $table.width, builder: (column) => column);
+
+  GeneratedColumn<String> get options =>
+      $composableBuilder(column: $table.options, builder: (column) => column);
+
+  GeneratedColumn<bool> get archived =>
+      $composableBuilder(column: $table.archived, builder: (column) => column);
+
+  GeneratedColumn<BigInt> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  GeneratedColumn<BigInt> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+
+  GeneratedColumn<bool> get dirty =>
+      $composableBuilder(column: $table.dirty, builder: (column) => column);
+}
+
+class $$DashboardWidgetsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $DashboardWidgetsTable,
+          DashboardWidget,
+          $$DashboardWidgetsTableFilterComposer,
+          $$DashboardWidgetsTableOrderingComposer,
+          $$DashboardWidgetsTableAnnotationComposer,
+          $$DashboardWidgetsTableCreateCompanionBuilder,
+          $$DashboardWidgetsTableUpdateCompanionBuilder,
+          (
+            DashboardWidget,
+            BaseReferences<
+              _$AppDatabase,
+              $DashboardWidgetsTable,
+              DashboardWidget
+            >,
+          ),
+          DashboardWidget,
+          PrefetchHooks Function()
+        > {
+  $$DashboardWidgetsTableTableManager(
+    _$AppDatabase db,
+    $DashboardWidgetsTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$DashboardWidgetsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$DashboardWidgetsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$DashboardWidgetsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String> type = const Value.absent(),
+                Value<String?> filterId = const Value.absent(),
+                Value<int> position = const Value.absent(),
+                Value<String> width = const Value.absent(),
+                Value<String> options = const Value.absent(),
+                Value<bool> archived = const Value.absent(),
+                Value<BigInt> createdAt = const Value.absent(),
+                Value<BigInt> updatedAt = const Value.absent(),
+                Value<bool> dirty = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => DashboardWidgetsCompanion(
+                id: id,
+                type: type,
+                filterId: filterId,
+                position: position,
+                width: width,
+                options: options,
+                archived: archived,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                dirty: dirty,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                required String type,
+                Value<String?> filterId = const Value.absent(),
+                required int position,
+                required String width,
+                required String options,
+                Value<bool> archived = const Value.absent(),
+                required BigInt createdAt,
+                required BigInt updatedAt,
+                Value<bool> dirty = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => DashboardWidgetsCompanion.insert(
+                id: id,
+                type: type,
+                filterId: filterId,
+                position: position,
+                width: width,
+                options: options,
+                archived: archived,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                dirty: dirty,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$DashboardWidgetsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $DashboardWidgetsTable,
+      DashboardWidget,
+      $$DashboardWidgetsTableFilterComposer,
+      $$DashboardWidgetsTableOrderingComposer,
+      $$DashboardWidgetsTableAnnotationComposer,
+      $$DashboardWidgetsTableCreateCompanionBuilder,
+      $$DashboardWidgetsTableUpdateCompanionBuilder,
+      (
+        DashboardWidget,
+        BaseReferences<_$AppDatabase, $DashboardWidgetsTable, DashboardWidget>,
+      ),
+      DashboardWidget,
+      PrefetchHooks Function()
+    >;
 typedef $$SyncStateTableCreateCompanionBuilder =
     SyncStateCompanion Function({
       Value<String> id,
       Value<BigInt> lastServerSeq,
       Value<BigInt?> lastSyncedAt,
+      Value<bool> dashboardSeeded,
       Value<int> rowid,
     });
 typedef $$SyncStateTableUpdateCompanionBuilder =
@@ -5561,6 +7384,7 @@ typedef $$SyncStateTableUpdateCompanionBuilder =
       Value<String> id,
       Value<BigInt> lastServerSeq,
       Value<BigInt?> lastSyncedAt,
+      Value<bool> dashboardSeeded,
       Value<int> rowid,
     });
 
@@ -5585,6 +7409,11 @@ class $$SyncStateTableFilterComposer
 
   ColumnFilters<BigInt> get lastSyncedAt => $composableBuilder(
     column: $table.lastSyncedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get dashboardSeeded => $composableBuilder(
+    column: $table.dashboardSeeded,
     builder: (column) => ColumnFilters(column),
   );
 }
@@ -5612,6 +7441,11 @@ class $$SyncStateTableOrderingComposer
     column: $table.lastSyncedAt,
     builder: (column) => ColumnOrderings(column),
   );
+
+  ColumnOrderings<bool> get dashboardSeeded => $composableBuilder(
+    column: $table.dashboardSeeded,
+    builder: (column) => ColumnOrderings(column),
+  );
 }
 
 class $$SyncStateTableAnnotationComposer
@@ -5633,6 +7467,11 @@ class $$SyncStateTableAnnotationComposer
 
   GeneratedColumn<BigInt> get lastSyncedAt => $composableBuilder(
     column: $table.lastSyncedAt,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<bool> get dashboardSeeded => $composableBuilder(
+    column: $table.dashboardSeeded,
     builder: (column) => column,
   );
 }
@@ -5671,11 +7510,13 @@ class $$SyncStateTableTableManager
                 Value<String> id = const Value.absent(),
                 Value<BigInt> lastServerSeq = const Value.absent(),
                 Value<BigInt?> lastSyncedAt = const Value.absent(),
+                Value<bool> dashboardSeeded = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => SyncStateCompanion(
                 id: id,
                 lastServerSeq: lastServerSeq,
                 lastSyncedAt: lastSyncedAt,
+                dashboardSeeded: dashboardSeeded,
                 rowid: rowid,
               ),
           createCompanionCallback:
@@ -5683,11 +7524,13 @@ class $$SyncStateTableTableManager
                 Value<String> id = const Value.absent(),
                 Value<BigInt> lastServerSeq = const Value.absent(),
                 Value<BigInt?> lastSyncedAt = const Value.absent(),
+                Value<bool> dashboardSeeded = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => SyncStateCompanion.insert(
                 id: id,
                 lastServerSeq: lastServerSeq,
                 lastSyncedAt: lastSyncedAt,
+                dashboardSeeded: dashboardSeeded,
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0
@@ -5946,6 +7789,10 @@ class $AppDatabaseManager {
   $$TagsTableTableManager get tags => $$TagsTableTableManager(_db, _db.tags);
   $$TransactionTagsTableTableManager get transactionTags =>
       $$TransactionTagsTableTableManager(_db, _db.transactionTags);
+  $$SavedFiltersTableTableManager get savedFilters =>
+      $$SavedFiltersTableTableManager(_db, _db.savedFilters);
+  $$DashboardWidgetsTableTableManager get dashboardWidgets =>
+      $$DashboardWidgetsTableTableManager(_db, _db.dashboardWidgets);
   $$SyncStateTableTableManager get syncState =>
       $$SyncStateTableTableManager(_db, _db.syncState);
   $$TombstonesTableTableManager get tombstones =>

@@ -1,7 +1,7 @@
 import 'dart:io';
 
 import 'package:app/database.dart';
-import 'package:drift/drift.dart';
+import 'package:drift/drift.dart' hide isNotNull;
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
@@ -9,32 +9,38 @@ import 'package:sqlite3/sqlite3.dart';
 
 void main() {
   group('AppDatabase migrations', () {
-    test('migrates v1 transactions archived column and adds date_confirmed', () async {
-      final file = await _createLegacyDatabase(
-        userVersion: 1,
-        useArchivedEverywhere: false,
-      );
-      addTearDown(() async {
-        if (await file.exists()) {
-          await file.delete();
-        }
-      });
+    test(
+      'migrates v1 transactions archived column and adds date_confirmed',
+      () async {
+        final file = await _createLegacyDatabase(
+          userVersion: 1,
+          useArchivedEverywhere: false,
+        );
+        addTearDown(() async {
+          if (await file.exists()) {
+            await file.delete();
+          }
+        });
 
-      final db = AppDatabase.forTesting(NativeDatabase(file));
-      addTearDown(db.close);
+        final db = AppDatabase.forTesting(NativeDatabase(file));
+        addTearDown(db.close);
 
-      final rows = await db.customSelect(
-        'SELECT is_archived, date_confirmed FROM transactions WHERE id = ?',
-        variables: [Variable<String>('txn-v1')],
-      ).getSingle();
+        final rows = await db
+            .customSelect(
+              'SELECT is_archived, date_confirmed FROM transactions WHERE id = ?',
+              variables: [Variable<String>('txn-v1')],
+            )
+            .getSingle();
 
-      final transactionColumns = await _columnNames(db, 'transactions');
-      expect(transactionColumns.contains('archived'), isFalse);
-      expect(transactionColumns.contains('is_archived'), isTrue);
-      expect(transactionColumns.contains('date_confirmed'), isTrue);
-      expect(rows.read<int>('is_archived'), 1);
-      expect(rows.read<int>('date_confirmed'), 1);
-    });
+        final transactionColumns = await _columnNames(db, 'transactions');
+        expect(transactionColumns.contains('archived'), isFalse);
+        expect(transactionColumns.contains('is_archived'), isTrue);
+        expect(transactionColumns.contains('date_confirmed'), isTrue);
+        expect(rows.read<int>('is_archived'), 1);
+        expect(rows.read<int>('date_confirmed'), 1);
+        await _expectCurrentSchemaShape(db);
+      },
+    );
 
     test('migrates v2 archived columns back to is_archived', () async {
       final file = await _createLegacyDatabase(
@@ -50,24 +56,34 @@ void main() {
       final db = AppDatabase.forTesting(NativeDatabase(file));
       addTearDown(db.close);
 
-      for (final tableName in const ['accounts', 'categories', 'transactions', 'tags']) {
+      for (final tableName in const [
+        'accounts',
+        'categories',
+        'transactions',
+        'tags',
+      ]) {
         final columns = await _columnNames(db, tableName);
         expect(columns.contains('archived'), isFalse, reason: tableName);
         expect(columns.contains('is_archived'), isTrue, reason: tableName);
       }
 
-      final account = await db.customSelect(
-        'SELECT is_archived FROM accounts WHERE id = ?',
-        variables: [Variable<String>('acc-v2')],
-      ).getSingle();
-      final transaction = await db.customSelect(
-        'SELECT is_archived, date_confirmed FROM transactions WHERE id = ?',
-        variables: [Variable<String>('txn-v2')],
-      ).getSingle();
+      final account = await db
+          .customSelect(
+            'SELECT is_archived FROM accounts WHERE id = ?',
+            variables: [Variable<String>('acc-v2')],
+          )
+          .getSingle();
+      final transaction = await db
+          .customSelect(
+            'SELECT is_archived, date_confirmed FROM transactions WHERE id = ?',
+            variables: [Variable<String>('txn-v2')],
+          )
+          .getSingle();
 
       expect(account.read<int>('is_archived'), 1);
       expect(transaction.read<int>('is_archived'), 1);
       expect(transaction.read<int>('date_confirmed'), 1);
+      await _expectCurrentSchemaShape(db);
     });
   });
 }
@@ -76,7 +92,9 @@ Future<File> _createLegacyDatabase({
   required int userVersion,
   required bool useArchivedEverywhere,
 }) async {
-  final directory = await Directory.systemTemp.createTemp('walletbot_migration_test_');
+  final directory = await Directory.systemTemp.createTemp(
+    'walletbot_migration_test_',
+  );
   final file = File(p.join(directory.path, 'legacy.sqlite'));
   final db = sqlite3.open(file.path);
 
@@ -211,4 +229,40 @@ Future<File> _createLegacyDatabase({
 Future<Set<String>> _columnNames(AppDatabase db, String tableName) async {
   final rows = await db.customSelect('PRAGMA table_info("$tableName")').get();
   return rows.map((row) => row.read<String>('name')).toSet();
+}
+
+Future<void> _expectCurrentSchemaShape(AppDatabase db) async {
+  for (final tableName in const ['saved_filters', 'dashboard_widgets']) {
+    final table = await db
+        .customSelect(
+          "SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?",
+          variables: [Variable<String>(tableName)],
+        )
+        .getSingleOrNull();
+    expect(table, isNotNull, reason: '$tableName should exist');
+  }
+
+  final syncStateColumns = await _columnNames(db, 'sync_state');
+  expect(syncStateColumns.contains('dashboard_seeded'), isTrue);
+
+  final categoryColumns = await _columnNames(db, 'categories');
+  expect(categoryColumns.contains('color'), isTrue);
+  expect(categoryColumns.contains('icon'), isTrue);
+
+  final account = await db
+      .customSelect('SELECT color, icon FROM accounts LIMIT 1')
+      .getSingle();
+  expect(account.read<String>('color'), kDefaultAccountColor);
+  expect(account.read<String>('icon'), kDefaultAccountIcon);
+
+  final category = await db
+      .customSelect('SELECT color, icon FROM categories LIMIT 1')
+      .getSingle();
+  expect(category.read<String>('color'), kDefaultCategoryColor);
+  expect(category.read<String>('icon'), kDefaultCategoryIcon);
+
+  final tag = await db
+      .customSelect('SELECT color FROM tags LIMIT 1')
+      .getSingle();
+  expect(tag.read<String>('color'), kDefaultTagColor);
 }

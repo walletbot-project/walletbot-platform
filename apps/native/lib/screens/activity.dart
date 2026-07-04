@@ -1,12 +1,21 @@
 import 'package:app/components/transaction_filters_bar.dart';
 import 'package:app/components/transaction_row.dart';
+import 'package:app/data/data.dart';
 import 'package:app/database.dart';
-import 'package:drift/drift.dart' as drift;
+import 'package:app/shared/app_navigation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:app/screens/transaction_form.dart';
 
 class ActivityScreen extends StatefulWidget {
-  const ActivityScreen({super.key});
+  const ActivityScreen({
+    super.key,
+    this.initialFilter = const TransactionFilter(),
+    this.filterRevision = 0,
+  });
+
+  final TransactionFilter initialFilter;
+  final int filterRevision;
 
   @override
   State<ActivityScreen> createState() => _ActivityScreenState();
@@ -14,12 +23,21 @@ class ActivityScreen extends StatefulWidget {
 
 class _ActivityScreenState extends State<ActivityScreen> {
   static const _pageSize = 50;
-  static const _spanishWeekdays = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
+  static const _spanishWeekdays = [
+    'Lunes',
+    'Martes',
+    'Miércoles',
+    'Jueves',
+    'Viernes',
+    'Sábado',
+    'Domingo',
+  ];
 
   final _scrollController = ScrollController();
 
-  TransactionFilters _filters = const TransactionFilters();
-  String? _filterType;
+  AppNavigation? _nav;
+
+  TransactionFilter _filter = const TransactionFilter();
   int _limit = _pageSize;
 
   /// Tracks the size of the most recent rendered slice so the scroll listener
@@ -27,18 +45,68 @@ class _ActivityScreenState extends State<ActivityScreen> {
   /// (we've reached the end).
   int _lastRenderedCount = 0;
 
+  Future<void> _openTransactionForm() async {
+    // Pushed routes sit above the account-scoped providers; re-provide them
+    // so the new route keeps using the active account's data layer.
+    final repos = context.read<AppRepositories>();
+    final saved = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (_) => Provider<AppRepositories>.value(
+          value: repos,
+          child: const TransactionFormScreen(),
+        ),
+      ),
+    );
+    if (!mounted || saved != true) return;
+    context.read<AppNavigation>().index = AppNavigation.activityTab;
+  }
+
   @override
   void initState() {
     super.initState();
+    _filter = widget.initialFilter;
     _scrollController.addListener(_onScroll);
   }
 
   @override
+  void didUpdateWidget(ActivityScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.filterRevision == oldWidget.filterRevision) return;
+    _filter = widget.initialFilter;
+    _resetPagination();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Subscribe once to cross-tab navigation so another tab (the accounts
+    // "Ver todas" action) can hand us a filter to apply when it switches here.
+    final nav = context.read<AppNavigation>();
+    if (nav != _nav) {
+      _nav?.removeListener(_applyPendingFilter);
+      _nav = nav..addListener(_applyPendingFilter);
+      _applyPendingFilter();
+    }
+  }
+
+  @override
   void dispose() {
+    _nav?.removeListener(_applyPendingFilter);
     _scrollController
       ..removeListener(_onScroll)
       ..dispose();
     super.dispose();
+  }
+
+  /// Applies any filter staged by [AppNavigation] (e.g. from an account's
+  /// "Ver todas"), replacing the current filter and resetting pagination.
+  void _applyPendingFilter() {
+    final pending = _nav?.takePendingActivityFilter();
+    if (pending == null || !mounted) return;
+    setState(() {
+      _filter = pending;
+      _resetPagination();
+    });
   }
 
   void _onScroll() {
@@ -58,101 +126,79 @@ class _ActivityScreenState extends State<ActivityScreen> {
     }
   }
 
-  void _updateFilter(String? value) {
+  void _updateTypeChip(TxnType? value) {
     setState(() {
-      _filterType = value;
+      _filter = _filter.copyWith(types: value == null ? const {} : {value});
       _resetPagination();
     });
   }
 
-  void _onFiltersChanged(TransactionFilters next) {
+  void _onFiltersChanged(TransactionFilter next) {
     setState(() {
-      _filters = next;
+      _filter = next;
       _resetPagination();
     });
-  }
-
-  Stream<List<Transaction>> _watchTransactions(AppDatabase db) {
-    final query = db.select(db.transactions)..where((t) => t.archived.equals(false));
-
-    final type = _filterType;
-    if (type != null) {
-      query.where((t) => t.type.equals(type));
-    }
-
-    final search = _filters.searchQuery.trim();
-    if (search.isNotEmpty) {
-      final escaped = search.replaceAll('%', '%%').replaceAll('_', '__');
-      final pattern = '%${escaped.toLowerCase()}%';
-      query.where((t) => t.name.lower().like(pattern));
-    }
-
-    if (_filters.categoryIds.isNotEmpty) {
-      final ids = _filters.categoryIds.toList();
-      query.where((t) => t.categoryId.isIn(ids));
-    }
-
-    if (_filters.accountIds.isNotEmpty) {
-      final ids = _filters.accountIds.toList();
-      query.where((t) => t.accountId.isIn(ids));
-    }
-
-    if (_filters.dateFrom != null) {
-      final ms = BigInt.from(_filters.dateFrom!.millisecondsSinceEpoch);
-      query.where((t) => t.date.isBiggerOrEqualValue(ms));
-    }
-    if (_filters.dateTo != null) {
-      // Inclusive end of day.
-      final endOfDay = DateTime(_filters.dateTo!.year, _filters.dateTo!.month, _filters.dateTo!.day + 1);
-      final ms = BigInt.from(endOfDay.millisecondsSinceEpoch);
-      query.where((t) => t.date.isSmallerThanValue(ms));
-    }
-
-    if (_filters.tagIds.isNotEmpty) {
-      final tagIds = _filters.tagIds.toList();
-      final taggedTxnIds = db.selectOnly(db.transactionTags)
-        ..addColumns([db.transactionTags.transactionId])
-        ..where(db.transactionTags.tagId.isIn(tagIds));
-      query.where((t) => t.id.isInQuery(taggedTxnIds));
-    }
-
-    // Order strictly by creation time (newest first), regardless of the
-    // (possibly estimated) transaction date.
-    query
-      ..orderBy([(t) => drift.OrderingTerm.desc(t.createdAt)])
-      ..limit(_limit);
-    return query.watch();
   }
 
   @override
   Widget build(BuildContext context) {
-    final db = context.watch<AppDatabase>();
+    final repos = context.read<AppRepositories>();
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Actividad')),
+      appBar: AppBar(
+        title: const Text('Actividad'),
+        actions: [
+          IconButton(
+            tooltip: 'Anadir movimiento',
+            onPressed: _openTransactionForm,
+            icon: const Icon(Icons.add_rounded),
+          ),
+        ],
+      ),
       body: SafeArea(
         child: CustomScrollView(
           controller: _scrollController,
           slivers: [
             const SliverToBoxAdapter(child: SizedBox(height: 8)),
             SliverToBoxAdapter(
-              child: TransactionFiltersBar(filters: _filters, onChanged: _onFiltersChanged),
+              child: TransactionFiltersBar(
+                filter: _filter,
+                onChanged: _onFiltersChanged,
+              ),
             ),
             const SliverToBoxAdapter(child: SizedBox(height: 16)),
             SliverToBoxAdapter(
-              child: _FilterChips(selected: _filterType, onChanged: _updateFilter),
+              child: _FilterChips(
+                selected: _filter.types.length == 1
+                    ? _filter.types.single
+                    : null,
+                onChanged: _updateTypeChip,
+              ),
             ),
             StreamBuilder<List<Transaction>>(
-              stream: _watchTransactions(db),
+              stream: repos.transactions.watch(
+                _filter,
+                limit: _limit,
+                ordering: TxnOrdering.dateDesc,
+              ),
               builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
-                  return const SliverFillRemaining(hasScrollBody: false, child: Center(child: CircularProgressIndicator()));
+                if (snapshot.connectionState == ConnectionState.waiting &&
+                    !snapshot.hasData) {
+                  return const SliverFillRemaining(
+                    hasScrollBody: false,
+                    child: Center(child: CircularProgressIndicator()),
+                  );
                 }
                 if (snapshot.hasError) {
                   return SliverFillRemaining(
                     hasScrollBody: false,
                     child: Center(
-                      child: Padding(padding: const EdgeInsets.all(32), child: Text('Error al cargar transacciones: ${snapshot.error}')),
+                      child: Padding(
+                        padding: const EdgeInsets.all(32),
+                        child: Text(
+                          'Error al cargar transacciones: ${snapshot.error}',
+                        ),
+                      ),
                     ),
                   );
                 }
@@ -164,7 +210,10 @@ class _ActivityScreenState extends State<ActivityScreen> {
                   return const SliverFillRemaining(
                     hasScrollBody: false,
                     child: Center(
-                      child: Padding(padding: EdgeInsets.all(32), child: Text('No hay transacciones')),
+                      child: Padding(
+                        padding: EdgeInsets.all(32),
+                        child: Text('No hay transacciones'),
+                      ),
                     ),
                   );
                 }
@@ -172,7 +221,11 @@ class _ActivityScreenState extends State<ActivityScreen> {
                 final hasMore = items.length >= _limit;
                 final entries = _buildListEntries(items, hasMore: hasMore);
 
-                return SliverList.builder(itemCount: entries.length, itemBuilder: (context, index) => _buildEntry(context, entries[index]));
+                return SliverList.builder(
+                  itemCount: entries.length,
+                  itemBuilder: (context, index) =>
+                      _buildEntry(context, entries[index]),
+                );
               },
             ),
           ],
@@ -181,22 +234,35 @@ class _ActivityScreenState extends State<ActivityScreen> {
     );
   }
 
-  List<_ListEntry> _buildListEntries(List<Transaction> items, {required bool hasMore}) {
+  List<_ListEntry> _buildListEntries(
+    List<Transaction> items, {
+    required bool hasMore,
+  }) {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
     final entries = <_ListEntry>[];
 
     DateTime? currentDay;
     for (final t in items) {
-      // Group by creation time so the day headers stay contiguous with the
-      // creation-order sorting above.
-      final dt = DateTime.fromMillisecondsSinceEpoch(t.createdAt.toInt());
+      // Group by transaction date (matches web). The list is ordered by date
+      // desc above, so day headers stay contiguous.
+      final dt = DateTime.fromMillisecondsSinceEpoch(t.date.toInt());
       final day = DateTime(dt.year, dt.month, dt.day);
       if (currentDay == null || day != currentDay) {
         entries.add(_HeaderEntry(label: _sectionLabel(day, today)));
         currentDay = day;
       }
-      entries.add(_TxnEntry(transaction: t));
+      if (t.type == 'transfer') {
+        entries.addAll(_transferEntries(t));
+      } else {
+        entries.add(
+          _TxnEntry.fromTransaction(
+            t,
+            amountCents: _signedAmountCents(t),
+            description: _descriptionFor(t),
+          ),
+        );
+      }
     }
 
     if (hasMore) {
@@ -212,16 +278,26 @@ class _ActivityScreenState extends State<ActivityScreen> {
       case _HeaderEntry(:final label):
         return Padding(
           padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-          child: Text(label, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+          child: Text(
+            label,
+            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+          ),
         );
-      case _TxnEntry(:final transaction):
+      case _TxnEntry(
+        :final title,
+        :final amountCents,
+        :final currency,
+        :final dateConfirmed,
+        :final description,
+      ):
         return Padding(
           padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
           child: TransactionRow(
-            title: transaction.name,
-            amountCents: _signedAmountCents(transaction),
-            dateCheck: transaction.dateConfirmed,
-            description: _descriptionFor(transaction),
+            title: title,
+            amountCents: amountCents,
+            currency: currency,
+            dateCheck: dateConfirmed,
+            description: description,
           ),
         );
       case _LoadingEntry():
@@ -260,10 +336,43 @@ class _ActivityScreenState extends State<ActivityScreen> {
     }
   }
 
+  List<_TxnEntry> _transferEntries(Transaction t) {
+    final description = _descriptionFor(t);
+    final sourceAmount = -t.amount.toInt().abs();
+    final destinationAmount = (t.toAmount ?? t.amount).toInt().abs();
+    return [
+      _TxnEntry(
+        title: 'Transferencia enviada',
+        amountCents: sourceAmount,
+        currency: t.currency,
+        dateConfirmed: t.dateConfirmed,
+        description: description,
+      ),
+      _TxnEntry(
+        title: 'Transferencia recibida',
+        amountCents: destinationAmount,
+        currency: t.toCurrency ?? t.currency,
+        dateConfirmed: t.dateConfirmed,
+        description: description,
+      ),
+    ];
+  }
+
+  String? _joinDescriptions(String? first, String? second) {
+    final parts = [
+      if (first != null && first.isNotEmpty) first,
+      if (second != null && second.isNotEmpty) second,
+    ];
+    if (parts.isEmpty) return null;
+    return parts.join(' · ');
+  }
+
   String? _descriptionFor(Transaction t) {
-    if (t.dateConfirmed) return null;
+    final details = t.description;
+    if (t.dateConfirmed) return details;
     final dt = DateTime.fromMillisecondsSinceEpoch(t.date.toInt());
-    return '${_spanishWeekdays[dt.weekday - 1]} (estimado)';
+    final estimated = '${_spanishWeekdays[dt.weekday - 1]} (estimado)';
+    return _joinDescriptions(estimated, details);
   }
 }
 
@@ -277,8 +386,31 @@ class _HeaderEntry extends _ListEntry {
 }
 
 class _TxnEntry extends _ListEntry {
-  const _TxnEntry({required this.transaction});
-  final Transaction transaction;
+  const _TxnEntry({
+    required this.title,
+    required this.amountCents,
+    required this.currency,
+    required this.dateConfirmed,
+    this.description,
+  });
+
+  factory _TxnEntry.fromTransaction(
+    Transaction transaction, {
+    required int amountCents,
+    String? description,
+  }) => _TxnEntry(
+    title: transaction.name,
+    amountCents: amountCents,
+    currency: transaction.currency,
+    dateConfirmed: transaction.dateConfirmed,
+    description: description,
+  );
+
+  final String title;
+  final int amountCents;
+  final String currency;
+  final bool dateConfirmed;
+  final String? description;
 }
 
 class _LoadingEntry extends _ListEntry {
@@ -292,17 +424,17 @@ class _BottomSpaceEntry extends _ListEntry {
 class _FilterChips extends StatelessWidget {
   const _FilterChips({required this.selected, required this.onChanged});
 
-  final String? selected;
-  final ValueChanged<String?> onChanged;
+  final TxnType? selected;
+  final ValueChanged<TxnType?> onChanged;
 
   @override
   Widget build(BuildContext context) {
-    const options = <({String? value, String label})>[
+    const options = <({TxnType? value, String label})>[
       (value: null, label: 'Todos'),
-      (value: 'income', label: 'Ingresos'),
-      (value: 'expense', label: 'Gastos'),
-      (value: 'transfer', label: 'Transferencias'),
-      (value: 'balance_adjustment', label: 'Ajustes'),
+      (value: TxnType.income, label: 'Ingresos'),
+      (value: TxnType.expense, label: 'Gastos'),
+      (value: TxnType.transfer, label: 'Transferencias'),
+      (value: TxnType.balanceAdjustment, label: 'Ajustes'),
     ];
 
     return SizedBox(

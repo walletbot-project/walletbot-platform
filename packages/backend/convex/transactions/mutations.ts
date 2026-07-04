@@ -76,6 +76,12 @@ async function aggregateReplace(
     await inflowsByAccount.replace(ctx, oldDoc, newDoc)
 }
 
+function assertPositiveAmount(amount: bigint, label: string): void {
+    if (amount <= 0n) {
+        throw new Error(`${label} must be greater than 0`)
+    }
+}
+
 // ───── Creates ─────
 
 export const createExpense = mutation({
@@ -93,6 +99,7 @@ export const createExpense = mutation({
     handler: async (ctx, args) => {
         const userId = await requireAuth(ctx)
         await assertNoExistingId(ctx, userId, args.id)
+        assertPositiveAmount(args.amount, 'Amount')
 
         const account = await getAccount(ctx, userId, args.accountId)
         if (!account) throw new Error('Account not found')
@@ -140,6 +147,7 @@ export const createIncome = mutation({
     handler: async (ctx, args) => {
         const userId = await requireAuth(ctx)
         await assertNoExistingId(ctx, userId, args.id)
+        assertPositiveAmount(args.amount, 'Amount')
 
         const account = await getAccount(ctx, userId, args.accountId)
         if (!account) throw new Error('Account not found')
@@ -182,7 +190,7 @@ export const createTransfer = mutation({
         toAccountId: v.string(),
         toAmount: v.optional(v.int64()),
         exchangeRate: v.optional(v.number()),
-        categoryId: v.optional(v.string()),
+        categoryId: v.string(),
         date: v.optional(v.int64()),
         dateConfirmed: v.boolean(),
         status: v.optional(v.union(v.literal('pending'), v.literal('cleared'))),
@@ -190,6 +198,7 @@ export const createTransfer = mutation({
     handler: async (ctx, args) => {
         const userId = await requireAuth(ctx)
         await assertNoExistingId(ctx, userId, args.id)
+        assertPositiveAmount(args.amount, 'Amount')
 
         if (args.accountId === args.toAccountId) {
             throw new Error('Source and destination accounts must differ')
@@ -198,17 +207,8 @@ export const createTransfer = mutation({
         if (!fromAcc) throw new Error('Source account not found')
         const toAcc = await getAccount(ctx, userId, args.toAccountId)
         if (!toAcc) throw new Error('Destination account not found')
-
-        // Transfers may carry a category for reporting, but it's optional. When
-        // omitted we fall back to a synthetic id; the front-end uses categories
-        // for transfers in practice, so passing one is encouraged.
-        let categoryId = args.categoryId
-        if (categoryId) {
-            const cat = await getCategory(ctx, userId, categoryId)
-            if (!cat) throw new Error('Category not found')
-        } else {
-            categoryId = ''
-        }
+        const category = await getCategory(ctx, userId, args.categoryId)
+        if (!category) throw new Error('Category not found')
 
         const sameCurrency = fromAcc.currency === toAcc.currency
         const toAmount =
@@ -218,6 +218,7 @@ export const createTransfer = mutation({
                 'Cross-currency transfers require toAmount (or exchangeRate to derive it)',
             )
         }
+        assertPositiveAmount(toAmount, 'Destination amount')
 
         const seq = await nextSeq(ctx, userId)
         const now = BigInt(Date.now())
@@ -232,7 +233,7 @@ export const createTransfer = mutation({
             date: args.date ?? now,
             dateConfirmed: args.dateConfirmed,
             accountId: args.accountId,
-            categoryId,
+            categoryId: args.categoryId,
             amount: args.amount,
             currency: fromAcc.currency,
             toAccountId: args.toAccountId,

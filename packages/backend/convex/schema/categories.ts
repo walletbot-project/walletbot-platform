@@ -6,6 +6,8 @@ export const categories = defineTable({
     id: v.string(), // client-side uuid
     name: v.string(),
     description: v.optional(v.string()),
+    color: v.string(), // hex; always set (default applied on write)
+    icon: v.string(), // icon name; always set (default applied on write)
     isArchived: v.boolean(),
     createdAt: v.int64(),
     updatedAt: v.int64(),

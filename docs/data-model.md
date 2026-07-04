@@ -364,8 +364,8 @@ id             string             — uuid
 name           string
 currency       string             — moneda fija
 description?   string
-color?         string             — hex
-icon?          string             — de lista predefinida
+color          string             — hex, con default
+icon           string             — de lista predefinida, con default
 archived       boolean
 createdAt      int64
 updatedAt      int64
@@ -383,6 +383,8 @@ userId         string
 id             string             — uuid
 name           string
 description?   string
+color          string             — hex, con default
+icon           string             — de lista predefinida, con default
 archived       boolean
 createdAt      int64
 updatedAt      int64
@@ -416,6 +418,7 @@ toCurrency?     string             — moneda destino (transferencias)
 exchangeRate?   number             — float (transferencias con conversión)
 
 balanceAfter?   int64              — centavos (ajustes de balance)
+dateConfirmed   boolean            — confianza en la fecha
 
 archived        boolean
 createdAt       int64
@@ -443,7 +446,7 @@ id             string             — uuid
 name           string
 description?   string
 parentId?      string             — uuid de tag padre (jerarquía opcional)
-color?         string             — hex
+color          string             — hex, con default
 archived       boolean
 createdAt      int64
 updatedAt      int64
@@ -525,6 +528,47 @@ El servidor **no** hace cascade automático: si el cliente olvida emitir los
 tombstones de los joins, esas filas quedan huérfanas en server hasta que
 otro dispositivo las limpie. El cliente es responsable de la coherencia
 referencial al borrar.
+
+---
+
+### `savedFilters`
+
+Vistas guardadas de movimientos. `config` es JSON opaco para el backend.
+
+```text
+userId         string
+id             string             — uuid
+name           string
+config         string             — JSON canónico del filtro
+archived       boolean
+createdAt      int64
+updatedAt      int64
+seq            int64
+```
+
+Índices: `by_user_seq`, `by_user_id`, `by_user_archived`
+
+---
+
+### `dashboardWidgets`
+
+Widgets configurados del home dashboard. `options` es JSON opaco para el backend.
+
+```text
+userId         string
+id             string             — uuid
+type           string             — "stat" | "list" | "balance"
+filterId?      string             — uuid de saved filter
+position       number
+width          string             — "full" | "half" | "third"
+options        string             — JSON de presentación
+archived       boolean
+createdAt      int64
+updatedAt      int64
+seq            int64
+```
+
+Índices: `by_user_seq`, `by_user_id`, `by_user_archived`
 
 ---
 

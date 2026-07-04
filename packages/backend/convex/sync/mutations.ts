@@ -11,8 +11,8 @@ const accountUpsert = v.object({
     name: v.string(),
     currency: v.string(),
     description: v.optional(v.string()),
-    color: v.optional(v.string()),
-    icon: v.optional(v.string()),
+    color: v.string(),
+    icon: v.string(),
     isArchived: v.boolean(),
     createdAt: v.int64(),
     updatedAt: v.int64(),
@@ -22,6 +22,8 @@ const categoryUpsert = v.object({
     id: v.string(),
     name: v.string(),
     description: v.optional(v.string()),
+    color: v.string(),
+    icon: v.string(),
     isArchived: v.boolean(),
     createdAt: v.int64(),
     updatedAt: v.int64(),
@@ -32,7 +34,7 @@ const tagUpsert = v.object({
     name: v.string(),
     description: v.optional(v.string()),
     parentId: v.optional(v.string()),
-    color: v.optional(v.string()),
+    color: v.string(),
     isArchived: v.boolean(),
     createdAt: v.int64(),
     updatedAt: v.int64(),
@@ -75,6 +77,27 @@ const transactionTagUpsert = v.object({
     updatedAt: v.int64(),
 })
 
+const savedFilterUpsert = v.object({
+    id: v.string(),
+    name: v.string(),
+    config: v.string(),
+    isArchived: v.boolean(),
+    createdAt: v.int64(),
+    updatedAt: v.int64(),
+})
+
+const dashboardWidgetUpsert = v.object({
+    id: v.string(),
+    type: v.string(),
+    filterId: v.optional(v.string()),
+    position: v.number(),
+    width: v.string(),
+    options: v.string(),
+    isArchived: v.boolean(),
+    createdAt: v.int64(),
+    updatedAt: v.int64(),
+})
+
 const tombstoneArg = v.object({
     tableName: syncedTable,
     entityId: v.string(),
@@ -95,8 +118,8 @@ type AccountUpsert = {
     name: string
     currency: string
     description?: string
-    color?: string
-    icon?: string
+    color: string
+    icon: string
     isArchived: boolean
     createdAt: bigint
     updatedAt: bigint
@@ -105,6 +128,8 @@ type CategoryUpsert = {
     id: string
     name: string
     description?: string
+    color: string
+    icon: string
     isArchived: boolean
     createdAt: bigint
     updatedAt: bigint
@@ -114,7 +139,7 @@ type TagUpsert = {
     name: string
     description?: string
     parentId?: string
-    color?: string
+    color: string
     isArchived: boolean
     createdAt: bigint
     updatedAt: bigint
@@ -147,16 +172,39 @@ type TransactionTagUpsert = {
     createdAt: bigint
     updatedAt: bigint
 }
+type SavedFilterUpsert = {
+    id: string
+    name: string
+    config: string
+    isArchived: boolean
+    createdAt: bigint
+    updatedAt: bigint
+}
+type DashboardWidgetUpsert = {
+    id: string
+    type: string
+    filterId?: string
+    position: number
+    width: string
+    options: string
+    isArchived: boolean
+    createdAt: bigint
+    updatedAt: bigint
+}
+
+type SyncedTableName =
+    | 'accounts'
+    | 'categories'
+    | 'transactions'
+    | 'tags'
+    | 'transactionTags'
+    | 'savedFilters'
+    | 'dashboardWidgets'
 
 async function clearTombstone(
     ctx: MutationCtx,
     userId: string,
-    tableName:
-        | 'accounts'
-        | 'categories'
-        | 'transactions'
-        | 'tags'
-        | 'transactionTags',
+    tableName: SyncedTableName,
     entityId: string,
 ): Promise<void> {
     const existing = await ctx.db
@@ -226,6 +274,8 @@ async function applyCategoryUpsert(
         id: payload.id,
         name: payload.name,
         description: payload.description,
+        color: payload.color,
+        icon: payload.icon,
         isArchived: payload.isArchived,
         createdAt: payload.createdAt,
         updatedAt: payload.updatedAt,
@@ -481,17 +531,78 @@ async function applyTransactionTagUpsert(
     await clearTombstone(ctx, userId, 'transactionTags', payload.id)
 }
 
+async function applySavedFilterUpsert(
+    ctx: MutationCtx,
+    userId: string,
+    seq: bigint,
+    payload: SavedFilterUpsert,
+): Promise<void> {
+    const existing = await ctx.db
+        .query('savedFilters')
+        .withIndex('by_user_id', (q) =>
+            q.eq('userId', userId).eq('id', payload.id),
+        )
+        .unique()
+    const doc: Omit<Doc<'savedFilters'>, '_id' | '_creationTime'> = {
+        userId,
+        id: payload.id,
+        name: payload.name,
+        config: payload.config,
+        isArchived: payload.isArchived,
+        createdAt: payload.createdAt,
+        updatedAt: payload.updatedAt,
+        seq,
+    }
+    if (existing) {
+        await ctx.db.replace(existing._id, doc)
+    } else {
+        await ctx.db.insert('savedFilters', doc)
+    }
+    await clearTombstone(ctx, userId, 'savedFilters', payload.id)
+}
+
+async function applyDashboardWidgetUpsert(
+    ctx: MutationCtx,
+    userId: string,
+    seq: bigint,
+    payload: DashboardWidgetUpsert,
+): Promise<void> {
+    // `filterId` is a soft reference — not FK-validated. A widget may arrive in
+    // a later chunk than its filter, or reference a filter the user deleted;
+    // the client degrades to the match-all filter in that case.
+    const existing = await ctx.db
+        .query('dashboardWidgets')
+        .withIndex('by_user_id', (q) =>
+            q.eq('userId', userId).eq('id', payload.id),
+        )
+        .unique()
+    const doc: Omit<Doc<'dashboardWidgets'>, '_id' | '_creationTime'> = {
+        userId,
+        id: payload.id,
+        type: payload.type,
+        filterId: payload.filterId,
+        position: payload.position,
+        width: payload.width,
+        options: payload.options,
+        isArchived: payload.isArchived,
+        createdAt: payload.createdAt,
+        updatedAt: payload.updatedAt,
+        seq,
+    }
+    if (existing) {
+        await ctx.db.replace(existing._id, doc)
+    } else {
+        await ctx.db.insert('dashboardWidgets', doc)
+    }
+    await clearTombstone(ctx, userId, 'dashboardWidgets', payload.id)
+}
+
 async function applyTombstone(
     ctx: MutationCtx,
     userId: string,
     seq: bigint,
     args: {
-        tableName:
-            | 'accounts'
-            | 'categories'
-            | 'transactions'
-            | 'tags'
-            | 'transactionTags'
+        tableName: SyncedTableName
         entityId: string
         deletedAt: bigint
     },
@@ -552,6 +663,26 @@ async function applyTombstone(
             if (row) await ctx.db.delete(row._id)
             break
         }
+        case 'savedFilters': {
+            const row = await ctx.db
+                .query('savedFilters')
+                .withIndex('by_user_id', (q) =>
+                    q.eq('userId', userId).eq('id', args.entityId),
+                )
+                .unique()
+            if (row) await ctx.db.delete(row._id)
+            break
+        }
+        case 'dashboardWidgets': {
+            const row = await ctx.db
+                .query('dashboardWidgets')
+                .withIndex('by_user_id', (q) =>
+                    q.eq('userId', userId).eq('id', args.entityId),
+                )
+                .unique()
+            if (row) await ctx.db.delete(row._id)
+            break
+        }
     }
 
     // Upsert the tombstone with the new seq.
@@ -589,6 +720,8 @@ export const push = mutation({
             tags: v.optional(v.array(tagUpsert)),
             transactions: v.optional(v.array(transactionUpsert)),
             transactionTags: v.optional(v.array(transactionTagUpsert)),
+            savedFilters: v.optional(v.array(savedFilterUpsert)),
+            dashboardWidgets: v.optional(v.array(dashboardWidgetUpsert)),
         }),
         tombstones: v.optional(v.array(tombstoneArg)),
     },
@@ -634,6 +767,14 @@ export const push = mutation({
         for (const u of args.upserts.transactionTags ?? []) {
             await applyTransactionTagUpsert(ctx, userId, newSeq, u)
         }
+        // Saved filters before widgets (a widget's filterId soft-references a
+        // saved filter).
+        for (const u of args.upserts.savedFilters ?? []) {
+            await applySavedFilterUpsert(ctx, userId, newSeq, u)
+        }
+        for (const u of args.upserts.dashboardWidgets ?? []) {
+            await applyDashboardWidgetUpsert(ctx, userId, newSeq, u)
+        }
 
         // 4) Apply tombstones. transactionTags first so transactions can be
         //    safely deleted without orphaning joins.
@@ -644,6 +785,9 @@ export const push = mutation({
             tags: 2,
             categories: 3,
             accounts: 4,
+            // Widgets before their saved filters (reverse of upsert order).
+            dashboardWidgets: 5,
+            savedFilters: 6,
         }
         const sortedTombs = [...tombs].sort(
             (a, b) => order[a.tableName] - order[b.tableName],

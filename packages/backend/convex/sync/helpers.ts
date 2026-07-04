@@ -28,6 +28,8 @@ export async function writeTombstone(
             | 'transactions'
             | 'tags'
             | 'transactionTags'
+            | 'savedFilters'
+            | 'dashboardWidgets'
         entityId: string
         seq: bigint
     },

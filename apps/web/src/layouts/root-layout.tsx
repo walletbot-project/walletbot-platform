@@ -1,5 +1,6 @@
 import {
     BarChart3,
+    Bot,
     Home,
     Landmark,
     List,
@@ -14,6 +15,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import {
     DropdownMenu,
     DropdownMenuContent,
+    DropdownMenuGroup,
     DropdownMenuItem,
     DropdownMenuLabel,
     DropdownMenuSeparator,
@@ -35,7 +37,6 @@ import {
     SidebarTrigger,
 } from '@/components/ui/sidebar'
 import { useAuth, useUser } from '@/hooks/use-auth'
-import { cn } from '@/lib/utils'
 
 const NAV_ITEMS = [
     { to: '/', label: 'Home', icon: Home, end: true },
@@ -57,7 +58,11 @@ export function RootLayout() {
         NAV_ITEMS.find((item) =>
             pathMatches(location.pathname, item.to, item.end),
         )?.label ??
-        (location.pathname.startsWith('/add') ? 'Add' : 'Wallet Bot')
+        (location.pathname.startsWith('/add/manual')
+            ? 'Añadir manualmente'
+            : location.pathname.startsWith('/add')
+              ? 'Añadir con Gasti'
+              : 'Wallet Bot')
 
     const initials = (user.name || user.email)
         .split(' ')
@@ -126,19 +131,30 @@ export function RootLayout() {
                             <SidebarMenu>
                                 <SidebarMenuItem>
                                     <SidebarMenuButton
-                                        tooltip="Add"
+                                        tooltip="Añadir con Gasti"
                                         isActive={pathMatches(
                                             location.pathname,
                                             '/add',
-                                            false,
-                                        )}
-                                        className={cn(
-                                            'bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground data-[active=true]:bg-primary data-[active=true]:text-primary-foreground',
+                                            true,
                                         )}
                                         render={<NavLink to="/add" />}
                                     >
+                                        <Bot className="size-4" />
+                                        <span>Añadir con Gasti</span>
+                                    </SidebarMenuButton>
+                                </SidebarMenuItem>
+                                <SidebarMenuItem>
+                                    <SidebarMenuButton
+                                        tooltip="Añadir manualmente"
+                                        isActive={pathMatches(
+                                            location.pathname,
+                                            '/add/manual',
+                                            false,
+                                        )}
+                                        render={<NavLink to="/add/manual" />}
+                                    >
                                         <Plus className="size-4" />
-                                        <span>Add</span>
+                                        <span>Añadir manualmente</span>
                                     </SidebarMenuButton>
                                 </SidebarMenuItem>
                             </SidebarMenu>
@@ -182,9 +198,11 @@ export function RootLayout() {
                                     side="top"
                                     className="w-56"
                                 >
-                                    <DropdownMenuLabel>
-                                        {user.name || user.email}
-                                    </DropdownMenuLabel>
+                                    <DropdownMenuGroup>
+                                        <DropdownMenuLabel>
+                                            {user.name || user.email}
+                                        </DropdownMenuLabel>
+                                    </DropdownMenuGroup>
                                     <DropdownMenuSeparator />
                                     <DropdownMenuItem disabled>
                                         <RefreshCw className="size-4" />

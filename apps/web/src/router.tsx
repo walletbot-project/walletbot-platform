@@ -20,7 +20,11 @@ export const router = createBrowserRouter([
                         children: [
                             {
                                 path: '/login',
-                                element: <Login />,
+                                element: <Login mode="sign-in" />,
+                            },
+                            {
+                                path: '/signup',
+                                element: <Login mode="sign-up" />,
                             },
                         ],
                     },
@@ -62,6 +66,13 @@ export const router = createBrowserRouter([
                                 lazy: () =>
                                     import('@/pages/add').then((m) => ({
                                         Component: m.Add,
+                                    })),
+                            },
+                            {
+                                path: '/add/manual',
+                                lazy: () =>
+                                    import('@/pages/add-manual').then((m) => ({
+                                        Component: m.AddManual,
                                     })),
                             },
                             {

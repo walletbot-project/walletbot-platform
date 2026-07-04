@@ -7,7 +7,7 @@ export const tags = defineTable({
     name: v.string(),
     description: v.optional(v.string()),
     parentId: v.optional(v.string()), // uuid of parent tag
-    color: v.optional(v.string()), // hex
+    color: v.string(), // hex; always set (default applied on write)
     isArchived: v.boolean(),
     createdAt: v.int64(),
     updatedAt: v.int64(),
