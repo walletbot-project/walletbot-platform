@@ -317,6 +317,12 @@ class AppDatabase extends _$AppDatabase {
   /// `NativeDatabase.memory()`). Production code must use [AppDatabase.forUser].
   AppDatabase.forTesting(super.executor);
 
+  /// Opens the underlying SQLite connection immediately, running any pending
+  /// migrations before the app starts using repositories, screens, or sync.
+  Future<void> ensureReady() async {
+    await customSelect('SELECT 1').getSingleOrNull();
+  }
+
   @override
   int get schemaVersion => 3;
 
