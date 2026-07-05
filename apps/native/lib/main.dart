@@ -67,12 +67,15 @@ class _AuthGate extends StatelessWidget {
   Widget build(BuildContext context) {
     final active = context.watch<AuthController>().activeAccount;
     if (active == null) return const LoginScreen();
-    return _AccountDatabaseScope(accountId: active.id);
+    return _AccountDatabaseScope(
+      key: ValueKey(active.id),
+      accountId: active.id,
+    );
   }
 }
 
 class _AccountDatabaseScope extends StatefulWidget {
-  const _AccountDatabaseScope({required this.accountId});
+  const _AccountDatabaseScope({super.key, required this.accountId});
 
   final String accountId;
 
