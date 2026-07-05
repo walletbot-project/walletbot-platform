@@ -356,7 +356,6 @@ class AppDatabase extends _$AppDatabase {
 
   Future<void> _migrateToV3(Migrator m) async {
     await _ensureDashboardSchema(m);
-    await _ensureAccentColumns(m);
 
     for (final tableName in const [
       'accounts',
@@ -366,6 +365,8 @@ class AppDatabase extends _$AppDatabase {
     ]) {
       await _renameArchivedColumnIfNeeded(tableName);
     }
+
+    await _ensureAccentColumns(m);
 
     final transactionColumns = await _columnNames('transactions');
     if (!transactionColumns.contains('date_confirmed')) {
@@ -422,6 +423,10 @@ class AppDatabase extends _$AppDatabase {
       () => m.addColumn(tags, tags.color),
     );
     await _fillNullText('tags', 'color', kDefaultTagColor);
+
+    await m.alterTable(TableMigration(accounts));
+    await m.alterTable(TableMigration(categories));
+    await m.alterTable(TableMigration(tags));
   }
 
   Future<void> _addColumnIfMissing(

@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:app/data/app_repositories.dart';
 import 'package:app/database.dart';
 import 'package:drift/drift.dart' hide isNotNull;
 import 'package:drift/native.dart';
@@ -265,4 +266,61 @@ Future<void> _expectCurrentSchemaShape(AppDatabase db) async {
       .customSelect('SELECT color FROM tags LIMIT 1')
       .getSingle();
   expect(tag.read<String>('color'), kDefaultTagColor);
+
+  await _expectTextColumnDefault(db, 'accounts', 'color', kDefaultAccountColor);
+  await _expectTextColumnDefault(db, 'accounts', 'icon', kDefaultAccountIcon);
+  await _expectTextColumnDefault(
+    db,
+    'categories',
+    'color',
+    kDefaultCategoryColor,
+  );
+  await _expectTextColumnDefault(
+    db,
+    'categories',
+    'icon',
+    kDefaultCategoryIcon,
+  );
+  await _expectTextColumnDefault(db, 'tags', 'color', kDefaultTagColor);
+
+  final repos = AppRepositories(db);
+  final newAccountId = await repos.accounts.create(
+    name: 'Nueva cuenta',
+    currency: 'ARS',
+  );
+  final newCategoryId = await repos.categories.create(name: 'Nueva categoria');
+  final newTagId = await repos.tags.create(name: 'Nuevo tag');
+
+  final newAccount = (await repos.accounts.getById(newAccountId))!;
+  expect(newAccount.color, kDefaultAccountColor);
+  expect(newAccount.icon, kDefaultAccountIcon);
+
+  final newCategory = (await repos.categories.getById(newCategoryId))!;
+  expect(newCategory.color, kDefaultCategoryColor);
+  expect(newCategory.icon, kDefaultCategoryIcon);
+
+  final newTag = (await repos.tags.getById(newTagId))!;
+  expect(newTag.color, kDefaultTagColor);
+}
+
+Future<void> _expectTextColumnDefault(
+  AppDatabase db,
+  String tableName,
+  String columnName,
+  String defaultValue,
+) async {
+  final row = await db
+      .customSelect('PRAGMA table_info("$tableName")')
+      .get()
+      .then(
+        (rows) =>
+            rows.singleWhere((row) => row.read<String>('name') == columnName),
+      );
+
+  expect(row.read<int>('notnull'), 1, reason: '$tableName.$columnName');
+  expect(
+    row.readNullable<String>('dflt_value'),
+    "'$defaultValue'",
+    reason: '$tableName.$columnName',
+  );
 }
