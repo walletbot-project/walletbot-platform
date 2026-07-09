@@ -39,14 +39,10 @@ class TransactionRowEmoji extends StatelessWidget {
     final amountColor = isPositive
         ? Colors.green.shade600
         : theme.colorScheme.onSurface;
-    TransactionRowEmojiVisualIdentity? accountIdentity;
     TransactionRowEmojiVisualIdentity? timeIdentity;
     final detailIdentities = <TransactionRowEmojiVisualIdentity>[];
     for (final identity in visualIdentities) {
-      if (identity.type == TransactionRowEmojiVisualIdentityType.account &&
-          accountIdentity == null) {
-        accountIdentity = identity;
-      } else if (identity.type == TransactionRowEmojiVisualIdentityType.time &&
+      if (identity.type == TransactionRowEmojiVisualIdentityType.time &&
           timeIdentity == null) {
         timeIdentity = identity;
       } else {
@@ -59,19 +55,14 @@ class TransactionRowEmoji extends StatelessWidget {
         horizontal: contained ? 16 : 0,
         vertical: contained ? 14 : 11,
       ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (accountIdentity == null)
-            const SizedBox(width: 32, height: 32)
-          else
-            _IdentityIcon(identity: accountIdentity, size: 32, iconSize: 19),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Text(
                   title,
                   style: const TextStyle(
                     fontSize: 16,
@@ -80,21 +71,41 @@ class TransactionRowEmoji extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
-                if (description != null && description!.isNotEmpty) ...[
-                  const SizedBox(height: 2),
-                  Text(
-                    description!,
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: theme.colorScheme.onSurfaceVariant,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ],
-                if (detailIdentities.isNotEmpty) ...[
-                  const SizedBox(height: 6),
-                  Wrap(
+              ),
+              const SizedBox(width: 12),
+              Text(
+                currency == null
+                    ? _formatSignedAmount(amountCents, currencySymbol)
+                    : formatMoney(amountCents, currency!),
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  color: amountColor,
+                ),
+              ),
+            ],
+          ),
+          if (description != null && description!.isNotEmpty) ...[
+            const SizedBox(height: 2),
+            Text(
+              description!,
+              style: TextStyle(
+                fontSize: 13,
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
+          if (detailIdentities.isNotEmpty ||
+              timeIdentity != null ||
+              !dateCheck) ...[
+            const SizedBox(height: 6),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Expanded(
+                  child: Wrap(
                     spacing: 6,
                     runSpacing: 4,
                     children: [
@@ -102,45 +113,29 @@ class TransactionRowEmoji extends StatelessWidget {
                         _IdentityIcon(identity: identity),
                     ],
                   ),
+                ),
+                if (!dateCheck || timeIdentity != null) ...[
+                  const SizedBox(width: 12),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (!dateCheck) const _DateCheckIcon(size: 14),
+                      if (!dateCheck && timeIdentity != null)
+                        const SizedBox(width: 4),
+                      if (timeIdentity != null)
+                        _IdentityIcon(
+                          identity: timeIdentity,
+                          size: 18,
+                          iconSize: 14,
+                        ),
+                    ],
+                  ),
                 ],
               ],
             ),
-          ),
-          const SizedBox(width: 12),
-          Text(
-            currency == null
-                ? _formatSignedAmount(amountCents, currencySymbol)
-                : formatMoney(amountCents, currency!),
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w600,
-              color: amountColor,
-            ),
-          ),
+          ],
         ],
       ),
-    );
-    final content = Stack(
-      clipBehavior: Clip.none,
-      children: [
-        rowContent,
-        Positioned(
-          top: contained ? 7 : 0,
-          right: contained ? 8 : 0,
-          child: IgnorePointer(
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (!dateCheck) _DateCheckIcon(size: 14),
-                if (timeIdentity != null) ...[
-                  if (!dateCheck) const SizedBox(width: 4),
-                  _IdentityIcon(identity: timeIdentity, size: 16, iconSize: 13),
-                ],
-              ],
-            ),
-          ),
-        ),
-      ],
     );
 
     if (!contained) {
@@ -149,7 +144,7 @@ class TransactionRowEmoji extends StatelessWidget {
         child: InkWell(
           onTap: onTap,
           borderRadius: BorderRadius.circular(8),
-          child: content,
+          child: rowContent,
         ),
       );
     }
@@ -161,7 +156,7 @@ class TransactionRowEmoji extends StatelessWidget {
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(12),
-        child: content,
+        child: rowContent,
       ),
     );
   }

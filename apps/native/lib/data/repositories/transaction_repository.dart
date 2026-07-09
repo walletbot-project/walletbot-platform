@@ -71,6 +71,42 @@ class TransactionRepository extends RepositoryBase {
     return joins.map((j) => j.tagId).toList();
   }
 
+  /// Replays the local ledger for [accountId] and returns the balance
+  /// immediately before and after [transactionId].
+  Future<AccountBalanceAroundTransaction?> balanceAroundTransaction({
+    required String transactionId,
+    required String accountId,
+  }) async {
+    final rows =
+        await (db.select(db.transactions)
+              ..where((t) => t.archived.equals(false))
+              ..where(
+                (t) =>
+                    t.accountId.equals(accountId) |
+                    (t.type.equals('transfer') &
+                        t.toAccountId.equals(accountId)),
+              ))
+            .get();
+
+    rows.sort((a, b) {
+      final dateCompare = a.date.compareTo(b.date);
+      if (dateCompare != 0) return dateCompare;
+      final createdCompare = a.createdAt.compareTo(b.createdAt);
+      if (createdCompare != 0) return createdCompare;
+      return a.id.compareTo(b.id);
+    });
+
+    var running = BigInt.zero;
+    for (final row in rows) {
+      final before = running;
+      running += _accountDelta(row, accountId);
+      if (row.id == transactionId) {
+        return AccountBalanceAroundTransaction(before: before, after: running);
+      }
+    }
+    return null;
+  }
+
   // ───── Writes ─────
 
   /// Creates an expense (insert + tag attach in one transaction) and returns
@@ -363,6 +399,26 @@ class TransactionRepository extends RepositoryBase {
     return removed;
   }
 
+  BigInt _accountDelta(Transaction t, String accountId) {
+    var delta = BigInt.zero;
+    if (t.accountId == accountId) {
+      switch (t.type) {
+        case 'expense':
+        case 'transfer':
+          delta -= t.amount;
+          break;
+        case 'income':
+        case 'balance_adjustment':
+          delta += t.amount;
+          break;
+      }
+    }
+    if (t.type == 'transfer' && t.toAccountId == accountId) {
+      delta += t.toAmount ?? t.amount;
+    }
+    return delta;
+  }
+
   /// Join ids are deterministic (`txnId__tagId`) so an untag → retag
   /// round-trip recreates the same id with a newer `updatedAt`, letting the
   /// merge drop the older tombstone.
@@ -397,4 +453,14 @@ class TransactionRepository extends RepositoryBase {
     }
     return added;
   }
+}
+
+class AccountBalanceAroundTransaction {
+  const AccountBalanceAroundTransaction({
+    required this.before,
+    required this.after,
+  });
+
+  final BigInt before;
+  final BigInt after;
 }

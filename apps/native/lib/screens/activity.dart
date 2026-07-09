@@ -3,12 +3,14 @@ import 'package:app/components/category_icons.dart';
 import 'package:app/components/color_utils.dart';
 import 'package:app/components/transaction_filters_bar.dart';
 import 'package:app/components/transaction_row_emoji.dart';
+import 'package:app/components/transaction_time_mock.dart';
 import 'package:app/data/data.dart';
 import 'package:app/database.dart';
 import 'package:app/shared/app_navigation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:app/screens/transaction_form.dart';
+import 'package:app/screens/transaction_details_sheet.dart';
 
 class ActivityScreen extends StatefulWidget {
   const ActivityScreen({
@@ -62,6 +64,17 @@ class _ActivityScreenState extends State<ActivityScreen> {
     );
     if (!mounted || saved != true) return;
     context.read<AppNavigation>().index = AppNavigation.activityTab;
+  }
+
+  void _openTransactionDetails(String transactionId) {
+    final repos = context.read<AppRepositories>();
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (_) =>
+          TransactionDetailsSheet(transactionId: transactionId, repos: repos),
+    );
   }
 
   @override
@@ -330,6 +343,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
           ),
         );
       case _TxnEntry(
+        :final transactionId,
         :final title,
         :final amountCents,
         :final currency,
@@ -346,6 +360,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
             dateCheck: dateConfirmed,
             description: description,
             visualIdentities: visualIdentities,
+            onTap: () => _openTransactionDetails(transactionId),
           ),
         );
       case _LoadingEntry():
@@ -394,6 +409,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
     final destinationAmount = (t.toAmount ?? t.amount).toInt().abs();
     return [
       _TxnEntry(
+        transactionId: t.id,
         title: 'Transferencia enviada',
         amountCents: sourceAmount,
         currency: t.currency,
@@ -407,6 +423,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
         ),
       ),
       _TxnEntry(
+        transactionId: t.id,
         title: 'Transferencia recibida',
         amountCents: destinationAmount,
         currency: t.toCurrency ?? t.currency,
@@ -464,33 +481,13 @@ class _ActivityScreenState extends State<ActivityScreen> {
   TransactionRowEmojiVisualIdentity _timeVisualIdentityFor(
     Transaction transaction,
   ) {
-    final hour = _mockTransactionHour(transaction);
-    final timeIcon = _timeIconFor(hour);
+    final hour = mockTransactionHour(transaction.id);
     return TransactionRowEmojiVisualIdentity(
       type: TransactionRowEmojiVisualIdentityType.time,
-      label: 'Hora mock: ${hour.toString().padLeft(2, '0')}:00',
-      icon: timeIcon,
+      label: 'Hora mock: ${formatMockTransactionHour(hour)}',
+      icon: transactionTimeIconForHour(hour),
       color: Colors.transparent,
     );
-  }
-
-  int _mockTransactionHour(Transaction transaction) {
-    const mockHours = [22, 9, 16];
-    final hash = transaction.id.codeUnits.fold<int>(
-      0,
-      (value, unit) => value + unit,
-    );
-    return mockHours[hash % mockHours.length];
-  }
-
-  IconData _timeIconFor(int hour) {
-    if (hour >= 20 || hour <= 5) {
-      return Icons.bedtime_outlined;
-    }
-    if (hour >= 6 && hour <= 12) {
-      return Icons.wb_twilight_outlined;
-    }
-    return Icons.wb_sunny_outlined;
   }
 
   String? _descriptionFor(Transaction t) {
@@ -509,6 +506,7 @@ class _HeaderEntry extends _ListEntry {
 
 class _TxnEntry extends _ListEntry {
   const _TxnEntry({
+    required this.transactionId,
     required this.title,
     required this.amountCents,
     required this.currency,
@@ -523,6 +521,7 @@ class _TxnEntry extends _ListEntry {
     required List<TransactionRowEmojiVisualIdentity> visualIdentities,
     String? description,
   }) => _TxnEntry(
+    transactionId: transaction.id,
     title: transaction.name,
     amountCents: amountCents,
     currency: transaction.currency,
@@ -531,6 +530,7 @@ class _TxnEntry extends _ListEntry {
     visualIdentities: visualIdentities,
   );
 
+  final String transactionId;
   final String title;
   final int amountCents;
   final String currency;
