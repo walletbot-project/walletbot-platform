@@ -1,5 +1,8 @@
+import 'package:app/components/account_icons.dart';
+import 'package:app/components/category_icons.dart';
+import 'package:app/components/color_utils.dart';
 import 'package:app/components/transaction_filters_bar.dart';
-import 'package:app/components/transaction_row.dart';
+import 'package:app/components/transaction_row_2.dart';
 import 'package:app/data/data.dart';
 import 'package:app/database.dart';
 import 'package:app/shared/app_navigation.dart';
@@ -175,7 +178,32 @@ class _ActivityScreenState extends State<ActivityScreen> {
                 onChanged: _updateTypeChip,
               ),
             ),
-            StreamBuilder<List<Transaction>>(
+            _buildTransactionsSliver(repos),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTransactionsSliver(AppRepositories repos) {
+    return StreamBuilder<List<Account>>(
+      stream: repos.accounts.watchAll(includeArchived: true),
+      builder: (context, accountsSnapshot) {
+        final accountsById = {
+          for (final account in accountsSnapshot.data ?? const <Account>[])
+            account.id: account,
+        };
+
+        return StreamBuilder<List<Category>>(
+          stream: repos.categories.watchAll(includeArchived: true),
+          builder: (context, categoriesSnapshot) {
+            final categoriesById = {
+              for (final category
+                  in categoriesSnapshot.data ?? const <Category>[])
+                category.id: category,
+            };
+
+            return StreamBuilder<List<Transaction>>(
               stream: repos.transactions.watch(
                 _filter,
                 limit: _limit,
@@ -219,7 +247,12 @@ class _ActivityScreenState extends State<ActivityScreen> {
                 }
 
                 final hasMore = items.length >= _limit;
-                final entries = _buildListEntries(items, hasMore: hasMore);
+                final entries = _buildListEntries(
+                  items,
+                  hasMore: hasMore,
+                  accountsById: accountsById,
+                  categoriesById: categoriesById,
+                );
 
                 return SliverList.builder(
                   itemCount: entries.length,
@@ -227,16 +260,18 @@ class _ActivityScreenState extends State<ActivityScreen> {
                       _buildEntry(context, entries[index]),
                 );
               },
-            ),
-          ],
-        ),
-      ),
+            );
+          },
+        );
+      },
     );
   }
 
   List<_ListEntry> _buildListEntries(
     List<Transaction> items, {
     required bool hasMore,
+    required Map<String, Account> accountsById,
+    required Map<String, Category> categoriesById,
   }) {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
@@ -253,13 +288,24 @@ class _ActivityScreenState extends State<ActivityScreen> {
         currentDay = day;
       }
       if (t.type == 'transfer') {
-        entries.addAll(_transferEntries(t));
+        entries.addAll(
+          _transferEntries(
+            t,
+            accountsById: accountsById,
+            categoriesById: categoriesById,
+          ),
+        );
       } else {
         entries.add(
           _TxnEntry.fromTransaction(
             t,
             amountCents: _signedAmountCents(t),
             description: _descriptionFor(t),
+            visualIdentities: _visualIdentitiesFor(
+              t,
+              accountsById: accountsById,
+              categoriesById: categoriesById,
+            ),
           ),
         );
       }
@@ -289,15 +335,17 @@ class _ActivityScreenState extends State<ActivityScreen> {
         :final currency,
         :final dateConfirmed,
         :final description,
+        :final visualIdentities,
       ):
         return Padding(
           padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
-          child: TransactionRow(
+          child: TransactionRow2(
             title: title,
             amountCents: amountCents,
             currency: currency,
             dateCheck: dateConfirmed,
             description: description,
+            visualIdentities: visualIdentities,
           ),
         );
       case _LoadingEntry():
@@ -319,7 +367,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
         '${day.month.toString().padLeft(2, '0')}/${day.year}';
   }
 
-  /// Signed cents to pass to [TransactionRow]: positive renders green, negative
+  /// Signed cents to pass to [TransactionRow2]: positive renders green, negative
   /// renders in the default text color.
   int _signedAmountCents(Transaction t) {
     final amount = t.amount.toInt();
@@ -336,7 +384,11 @@ class _ActivityScreenState extends State<ActivityScreen> {
     }
   }
 
-  List<_TxnEntry> _transferEntries(Transaction t) {
+  List<_TxnEntry> _transferEntries(
+    Transaction t, {
+    required Map<String, Account> accountsById,
+    required Map<String, Category> categoriesById,
+  }) {
     final description = _descriptionFor(t);
     final sourceAmount = -t.amount.toInt().abs();
     final destinationAmount = (t.toAmount ?? t.amount).toInt().abs();
@@ -347,6 +399,12 @@ class _ActivityScreenState extends State<ActivityScreen> {
         currency: t.currency,
         dateConfirmed: t.dateConfirmed,
         description: description,
+        visualIdentities: _visualIdentitiesFor(
+          t,
+          accountId: t.accountId,
+          accountsById: accountsById,
+          categoriesById: categoriesById,
+        ),
       ),
       _TxnEntry(
         title: 'Transferencia recibida',
@@ -354,25 +412,55 @@ class _ActivityScreenState extends State<ActivityScreen> {
         currency: t.toCurrency ?? t.currency,
         dateConfirmed: t.dateConfirmed,
         description: description,
+        visualIdentities: _visualIdentitiesFor(
+          t,
+          accountId: t.toAccountId ?? t.accountId,
+          accountsById: accountsById,
+          categoriesById: categoriesById,
+        ),
       ),
     ];
   }
 
-  String? _joinDescriptions(String? first, String? second) {
-    final parts = [
-      if (first != null && first.isNotEmpty) first,
-      if (second != null && second.isNotEmpty) second,
-    ];
-    if (parts.isEmpty) return null;
-    return parts.join(' · ');
+  List<TransactionRowVisualIdentity> _visualIdentitiesFor(
+    Transaction transaction, {
+    required Map<String, Account> accountsById,
+    required Map<String, Category> categoriesById,
+    String? accountId,
+  }) {
+    final identities = <TransactionRowVisualIdentity>[];
+    final account = accountsById[accountId ?? transaction.accountId];
+    if (account != null) {
+      identities.add(
+        TransactionRowVisualIdentity(
+          type: TransactionRowVisualIdentityType.account,
+          label: 'Cuenta: ${account.name}',
+          icon: accountIconFromName(account.icon),
+          color: colorFromHex(account.color, fallback: accountDefaultColor),
+        ),
+      );
+    }
+
+    final categoryId = transaction.categoryId;
+    if (categoryId.isNotEmpty) {
+      final category = categoriesById[categoryId];
+      if (category != null) {
+        identities.add(
+          TransactionRowVisualIdentity(
+            type: TransactionRowVisualIdentityType.category,
+            label: 'Categoria: ${category.name}',
+            icon: categoryIconFromName(category.icon),
+            color: colorFromHex(category.color, fallback: categoryDefaultColor),
+          ),
+        );
+      }
+    }
+
+    return identities;
   }
 
   String? _descriptionFor(Transaction t) {
-    final details = t.description;
-    if (t.dateConfirmed) return details;
-    final dt = DateTime.fromMillisecondsSinceEpoch(t.date.toInt());
-    final estimated = '${_spanishWeekdays[dt.weekday - 1]} (estimado)';
-    return _joinDescriptions(estimated, details);
+    return t.description;
   }
 }
 
@@ -391,12 +479,14 @@ class _TxnEntry extends _ListEntry {
     required this.amountCents,
     required this.currency,
     required this.dateConfirmed,
+    required this.visualIdentities,
     this.description,
   });
 
   factory _TxnEntry.fromTransaction(
     Transaction transaction, {
     required int amountCents,
+    required List<TransactionRowVisualIdentity> visualIdentities,
     String? description,
   }) => _TxnEntry(
     title: transaction.name,
@@ -404,6 +494,7 @@ class _TxnEntry extends _ListEntry {
     currency: transaction.currency,
     dateConfirmed: transaction.dateConfirmed,
     description: description,
+    visualIdentities: visualIdentities,
   );
 
   final String title;
@@ -411,6 +502,7 @@ class _TxnEntry extends _ListEntry {
   final String currency;
   final bool dateConfirmed;
   final String? description;
+  final List<TransactionRowVisualIdentity> visualIdentities;
 }
 
 class _LoadingEntry extends _ListEntry {

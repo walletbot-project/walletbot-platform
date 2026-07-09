@@ -17,6 +17,15 @@ class AccountRepository extends RepositoryBase {
             ..orderBy([(a) => OrderingTerm(expression: a.createdAt)]))
           .watch();
 
+  /// Live list, active-only by default. Insertion order.
+  Stream<List<Account>> watchAll({bool includeArchived = false}) {
+    final query = db.select(db.accounts);
+    if (!includeArchived) {
+      query.where((a) => a.archived.equals(false));
+    }
+    return query.watch();
+  }
+
   /// One-shot list, active-only by default. Insertion order, no sorting.
   Future<List<Account>> listAll({bool includeArchived = false}) {
     final query = db.select(db.accounts);
