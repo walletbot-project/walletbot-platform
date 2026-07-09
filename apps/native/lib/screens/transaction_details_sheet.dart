@@ -446,7 +446,13 @@ class _TransactionDetailsSheetState extends State<TransactionDetailsSheet> {
   }
 
   Widget _buildDetails(BuildContext context, Transaction transaction) {
-    final hour = mockTransactionHour(transaction.id);
+    final colors = Theme.of(context).colorScheme;
+    final time = mockTransactionTime(
+      transactionId: transaction.id,
+      createdAt: transaction.createdAt,
+    );
+    final attentionBackground = _attentionBackground(colors);
+    final attentionColor = _attentionColor(colors);
     final description = transaction.description;
     return Column(
       children: [
@@ -472,18 +478,38 @@ class _TransactionDetailsSheetState extends State<TransactionDetailsSheet> {
         ),
         const SizedBox(height: kGroupSpacing),
         _DetailCard(
-          icon: Icons.calendar_month_rounded,
-          label: 'Fecha',
+          icon: transaction.dateConfirmed
+              ? Icons.calendar_month_rounded
+              : Icons.help_outline_rounded,
+          iconColor: transaction.dateConfirmed ? null : attentionColor,
+          backgroundColor: transaction.dateConfirmed
+              ? null
+              : attentionBackground,
+          label: transaction.dateConfirmed ? 'Fecha' : 'Fecha estimada',
           trailing: _editing
               ? TextButton(onPressed: _pickDate, child: const Text('Cambiar'))
               : null,
-          child: Text(_formatDate(_selectedDate)),
+          child: Text(
+            transaction.dateConfirmed
+                ? _formatDate(_selectedDate)
+                : '${_formatDate(_selectedDate)} · asumida por carga',
+          ),
         ),
         const SizedBox(height: kGroupSpacing),
         _DetailCard(
-          icon: transactionTimeIconForHour(hour),
-          label: 'Horario',
-          child: Text('${formatMockTransactionHour(hour)} (mock)'),
+          icon: time.icon,
+          iconColor: time.isEstimatedAtLoad ? attentionColor : null,
+          backgroundColor: time.isTentativeRange || time.isEstimatedAtLoad
+              ? attentionBackground
+              : null,
+          label: time.isEstimatedAtLoad
+              ? 'Horario estimado'
+              : 'Rango horario tentativo',
+          child: Text(
+            time.isEstimatedAtLoad
+                ? '${formatMockTransactionHour(time.hour)} · asumido al momento de carga'
+                : '${time.rangeLabel} · ${time.rangeText}',
+          ),
         ),
         const SizedBox(height: 12),
         if (_account != null)
@@ -596,6 +622,17 @@ class _TransactionDetailsSheetState extends State<TransactionDetailsSheet> {
       context,
     ).showSnackBar(SnackBar(content: Text(message)));
   }
+
+  Color _attentionBackground(ColorScheme colors) {
+    return Color.alphaBlend(
+      Colors.orange.withValues(alpha: 0.18),
+      colors.surfaceContainerHigh,
+    );
+  }
+
+  Color _attentionColor(ColorScheme colors) {
+    return Colors.orange.shade800;
+  }
 }
 
 class _AccountDetailCard extends StatelessWidget {
@@ -663,6 +700,7 @@ class _DetailCard extends StatelessWidget {
     required this.icon,
     required this.label,
     required this.child,
+    this.backgroundColor,
     this.iconColor,
     this.trailing,
   });
@@ -670,6 +708,7 @@ class _DetailCard extends StatelessWidget {
   final IconData icon;
   final String label;
   final Widget child;
+  final Color? backgroundColor;
   final Color? iconColor;
   final Widget? trailing;
 
@@ -677,8 +716,10 @@ class _DetailCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
-    return GroupedCard(
+    return Material(
+      color: backgroundColor ?? colors.surfaceContainerHigh,
       borderRadius: BorderRadius.circular(kGroupOuterRadius),
+      clipBehavior: Clip.antiAlias,
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Row(

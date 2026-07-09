@@ -481,11 +481,16 @@ class _ActivityScreenState extends State<ActivityScreen> {
   TransactionRowEmojiVisualIdentity _timeVisualIdentityFor(
     Transaction transaction,
   ) {
-    final hour = mockTransactionHour(transaction.id);
+    final time = mockTransactionTime(
+      transactionId: transaction.id,
+      createdAt: transaction.createdAt,
+    );
     return TransactionRowEmojiVisualIdentity(
       type: TransactionRowEmojiVisualIdentityType.time,
-      label: 'Hora mock: ${formatMockTransactionHour(hour)}',
-      icon: transactionTimeIconForHour(hour),
+      label: time.isEstimatedAtLoad
+          ? 'Horario estimado: ${formatMockTransactionHour(time.hour)}'
+          : 'Rango horario tentativo: ${time.rangeLabel}',
+      icon: time.icon,
       color: Colors.transparent,
     );
   }
