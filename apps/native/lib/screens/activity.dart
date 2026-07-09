@@ -66,14 +66,19 @@ class _ActivityScreenState extends State<ActivityScreen> {
     context.read<AppNavigation>().index = AppNavigation.activityTab;
   }
 
-  void _openTransactionDetails(String transactionId) {
+  void _openTransactionDetails(
+    String transactionId, {
+    TransactionDetailTransferSide? transferSide,
+  }) {
     final repos = context.read<AppRepositories>();
-    showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      showDragHandle: true,
-      builder: (_) =>
-          TransactionDetailsSheet(transactionId: transactionId, repos: repos),
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => TransactionDetailsScreen(
+          transactionId: transactionId,
+          repos: repos,
+          transferSide: transferSide,
+        ),
+      ),
     );
   }
 
@@ -350,6 +355,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
         :final dateConfirmed,
         :final description,
         :final visualIdentities,
+        :final transferSide,
       ):
         return Padding(
           padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
@@ -360,7 +366,10 @@ class _ActivityScreenState extends State<ActivityScreen> {
             dateCheck: dateConfirmed,
             description: description,
             visualIdentities: visualIdentities,
-            onTap: () => _openTransactionDetails(transactionId),
+            onTap: () => _openTransactionDetails(
+              transactionId,
+              transferSide: transferSide,
+            ),
           ),
         );
       case _LoadingEntry():
@@ -415,6 +424,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
         currency: t.currency,
         dateConfirmed: t.dateConfirmed,
         description: description,
+        transferSide: TransactionDetailTransferSide.source,
         visualIdentities: _visualIdentitiesFor(
           t,
           accountId: t.accountId,
@@ -429,6 +439,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
         currency: t.toCurrency ?? t.currency,
         dateConfirmed: t.dateConfirmed,
         description: description,
+        transferSide: TransactionDetailTransferSide.destination,
         visualIdentities: _visualIdentitiesFor(
           t,
           accountId: t.toAccountId ?? t.accountId,
@@ -516,6 +527,7 @@ class _TxnEntry extends _ListEntry {
     required this.currency,
     required this.dateConfirmed,
     required this.visualIdentities,
+    this.transferSide,
     this.description,
   });
 
@@ -532,6 +544,7 @@ class _TxnEntry extends _ListEntry {
     dateConfirmed: transaction.dateConfirmed,
     description: description,
     visualIdentities: visualIdentities,
+    transferSide: null,
   );
 
   final String transactionId;
@@ -541,6 +554,7 @@ class _TxnEntry extends _ListEntry {
   final bool dateConfirmed;
   final String? description;
   final List<TransactionRowEmojiVisualIdentity> visualIdentities;
+  final TransactionDetailTransferSide? transferSide;
 }
 
 class _LoadingEntry extends _ListEntry {

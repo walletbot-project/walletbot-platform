@@ -9,22 +9,26 @@ import 'package:app/shared/money.dart';
 import 'package:drift/drift.dart' show Value;
 import 'package:flutter/material.dart';
 
-class TransactionDetailsSheet extends StatefulWidget {
-  const TransactionDetailsSheet({
+enum TransactionDetailTransferSide { source, destination }
+
+class TransactionDetailsScreen extends StatefulWidget {
+  const TransactionDetailsScreen({
     super.key,
     required this.transactionId,
     required this.repos,
+    this.transferSide,
   });
 
   final String transactionId;
   final AppRepositories repos;
+  final TransactionDetailTransferSide? transferSide;
 
   @override
-  State<TransactionDetailsSheet> createState() =>
-      _TransactionDetailsSheetState();
+  State<TransactionDetailsScreen> createState() =>
+      _TransactionDetailsScreenState();
 }
 
-class _TransactionDetailsSheetState extends State<TransactionDetailsSheet> {
+class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
   final _nameController = TextEditingController();
   final _descriptionController = TextEditingController();
   final _amountController = TextEditingController();
@@ -34,8 +38,11 @@ class _TransactionDetailsSheetState extends State<TransactionDetailsSheet> {
   List<Category> _categories = const [];
   List<Tag> _tags = const [];
   Set<String> _selectedTagIds = const {};
+  Account? _selectedAccount;
+  Account? _selectedDestinationAccount;
   Category? _selectedCategory;
   DateTime _selectedDate = DateTime.now();
+  Map<String, AccountBalanceAroundTransaction?> _balances = const {};
 
   bool _loading = true;
   bool _editing = false;
@@ -83,31 +90,67 @@ class _TransactionDetailsSheetState extends State<TransactionDetailsSheet> {
     if (transaction != null) {
       _nameController.text = transaction.name;
       _descriptionController.text = transaction.description ?? '';
-      _amountController.text = _formatAmountInput(transaction.amount);
+      _amountController.text = _formatAmountInput(
+        _amountFieldValue(transaction),
+      );
       _selectedDate = DateTime.fromMillisecondsSinceEpoch(
         transaction.date.toInt(),
       );
+      _selectedAccount = accounts
+          .where((account) => account.id == transaction.accountId)
+          .firstOrNull;
+      _selectedDestinationAccount = transaction.toAccountId == null
+          ? null
+          : accounts
+                .where((account) => account.id == transaction.toAccountId)
+                .firstOrNull;
       _selectedCategory = categories
           .where((category) => category.id == transaction.categoryId)
           .firstOrNull;
+    } else {
+      _selectedAccount = null;
+      _selectedDestinationAccount = null;
+      _selectedCategory = null;
     }
+
+    _balances = await _loadBalances(transaction);
+    if (!mounted) return;
+
     setState(() => _loading = false);
+  }
+
+  Future<Map<String, AccountBalanceAroundTransaction?>> _loadBalances(
+    Transaction? transaction,
+  ) async {
+    if (transaction == null) return const {};
+    final accountIds = <String>{
+      if (_selectedAccount != null) _selectedAccount!.id,
+      if (transaction.type == 'transfer' && _selectedDestinationAccount != null)
+        _selectedDestinationAccount!.id,
+    };
+    final entries = await Future.wait(
+      accountIds.map((accountId) async {
+        final balance = await widget.repos.transactions
+            .balanceAroundTransaction(
+              transactionId: transaction.id,
+              accountId: accountId,
+            );
+        return MapEntry(accountId, balance);
+      }),
+    );
+    return Map.fromEntries(entries);
   }
 
   Account? get _account {
     final transaction = _transaction;
     if (transaction == null) return null;
-    return _accounts
-        .where((account) => account.id == transaction.accountId)
-        .firstOrNull;
+    return _selectedAccount;
   }
 
   Account? get _destinationAccount {
     final transaction = _transaction;
-    if (transaction?.toAccountId == null) return null;
-    return _accounts
-        .where((account) => account.id == transaction!.toAccountId)
-        .firstOrNull;
+    if (transaction?.type != 'transfer') return null;
+    return _selectedDestinationAccount;
   }
 
   List<Tag> get _selectedTags => [
@@ -122,7 +165,11 @@ class _TransactionDetailsSheetState extends State<TransactionDetailsSheet> {
 
   bool get _canEditAmount {
     final type = _transaction?.type;
-    return type == 'income' || type == 'expense';
+    return type == 'income' || type == 'expense' || type == 'transfer';
+  }
+
+  bool get _canEditAccount {
+    return _transaction?.type != 'balance_adjustment';
   }
 
   Future<void> _toggleEditing() async {
@@ -143,7 +190,26 @@ class _TransactionDetailsSheetState extends State<TransactionDetailsSheet> {
       return;
     }
 
-    BigInt? amount;
+    final selectedAccount = _selectedAccount;
+    if (selectedAccount == null) {
+      _showSnack('Elegí una cuenta');
+      return;
+    }
+
+    Account? selectedDestinationAccount;
+    if (transaction.type == 'transfer') {
+      selectedDestinationAccount = _selectedDestinationAccount;
+      if (selectedDestinationAccount == null) {
+        _showSnack('Elegí una cuenta destino');
+        return;
+      }
+      if (selectedDestinationAccount.id == selectedAccount.id) {
+        _showSnack('La cuenta origen y destino deben ser distintas');
+        return;
+      }
+    }
+
+    BigInt? parsedAmount;
     if (_canEditAmount) {
       final parsed = double.tryParse(
         _amountController.text.trim().replaceAll(',', '.'),
@@ -152,7 +218,42 @@ class _TransactionDetailsSheetState extends State<TransactionDetailsSheet> {
         _showSnack('El monto no es válido');
         return;
       }
-      amount = BigInt.from((parsed.abs() * 100).round());
+      parsedAmount = BigInt.from((parsed.abs() * 100).round());
+    }
+
+    var amount = const Value<BigInt>.absent();
+    var toAmount = const Value<BigInt?>.absent();
+    var exchangeRate = const Value<double?>.absent();
+    if (parsedAmount != null) {
+      if (transaction.type == 'transfer') {
+        final destinationSide =
+            widget.transferSide == TransactionDetailTransferSide.destination;
+        final sameCurrency =
+            selectedDestinationAccount!.currency == selectedAccount.currency;
+        if (destinationSide) {
+          toAmount = Value<BigInt?>(parsedAmount);
+          if (sameCurrency) {
+            amount = Value(parsedAmount);
+          }
+        } else {
+          amount = Value(parsedAmount);
+          if (sameCurrency) {
+            toAmount = Value<BigInt?>(parsedAmount);
+          }
+        }
+
+        final sourceAmount = amount.present ? amount.value : transaction.amount;
+        final destinationAmount = toAmount.present
+            ? toAmount.value ?? transaction.toAmount ?? transaction.amount
+            : transaction.toAmount ?? transaction.amount;
+        exchangeRate = sameCurrency || sourceAmount == BigInt.zero
+            ? const Value<double?>(null)
+            : Value<double?>(
+                destinationAmount.toDouble() / sourceAmount.toDouble(),
+              );
+      } else {
+        amount = Value(parsedAmount);
+      }
     }
 
     setState(() => _saving = true);
@@ -162,7 +263,17 @@ class _TransactionDetailsSheetState extends State<TransactionDetailsSheet> {
         name: Value(name),
         description: Value(_emptyToNull(_descriptionController.text)),
         date: Value(BigInt.from(_selectedDate.millisecondsSinceEpoch)),
-        amount: amount == null ? const Value.absent() : Value(amount),
+        accountId: Value(selectedAccount.id),
+        currency: Value(selectedAccount.currency),
+        amount: amount,
+        toAccountId: transaction.type == 'transfer'
+            ? Value(selectedDestinationAccount!.id)
+            : const Value.absent(),
+        toAmount: toAmount,
+        toCurrency: transaction.type == 'transfer'
+            ? Value(selectedDestinationAccount!.currency)
+            : const Value.absent(),
+        exchangeRate: exchangeRate,
         categoryId: _selectedCategory == null
             ? const Value.absent()
             : Value(_selectedCategory!.id),
@@ -254,6 +365,74 @@ class _TransactionDetailsSheetState extends State<TransactionDetailsSheet> {
     });
   }
 
+  Future<void> _pickAccount({required bool destination}) async {
+    final otherAccountId = destination
+        ? _selectedAccount?.id
+        : _selectedDestinationAccount?.id;
+    final availableAccounts = [
+      for (final account in _accounts)
+        if (!account.archived && account.id != otherAccountId) account,
+    ];
+    if (availableAccounts.isEmpty) {
+      _showSnack('No hay otra cuenta disponible');
+      return;
+    }
+
+    final currentAccount = destination
+        ? _selectedDestinationAccount
+        : _selectedAccount;
+    final picked = await showModalBottomSheet<Account>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) {
+        return SafeArea(
+          child: ListView(
+            shrinkWrap: true,
+            children: [
+              for (final account in availableAccounts)
+                ListTile(
+                  leading: _EntityCircleIcon(
+                    icon: accountIconFromName(account.icon),
+                    color: colorFromHex(
+                      account.color,
+                      fallback: accountDefaultColor,
+                    ),
+                  ),
+                  title: Text(account.name),
+                  subtitle: Text(account.currency),
+                  trailing: account.id == currentAccount?.id
+                      ? const Icon(Icons.check_circle_rounded)
+                      : null,
+                  onTap: () => Navigator.of(context).pop(account),
+                ),
+            ],
+          ),
+        );
+      },
+    );
+    if (picked == null || !mounted) return;
+    setState(() {
+      if (destination) {
+        _selectedDestinationAccount = picked;
+      } else {
+        _selectedAccount = picked;
+      }
+    });
+    await _loadBalanceFor(picked.id);
+  }
+
+  Future<void> _loadBalanceFor(String accountId) async {
+    if (_balances.containsKey(accountId)) return;
+    final transaction = _transaction;
+    if (transaction == null) return;
+    final balance = await widget.repos.transactions.balanceAroundTransaction(
+      transactionId: transaction.id,
+      accountId: accountId,
+    );
+    if (!mounted) return;
+    setState(() => _balances = {..._balances, accountId: balance});
+  }
+
   Future<void> _pickCategory() async {
     final activeCategories = [
       for (final category in _categories)
@@ -318,39 +497,61 @@ class _TransactionDetailsSheetState extends State<TransactionDetailsSheet> {
 
   @override
   Widget build(BuildContext context) {
+    final transaction = _transaction;
+    final title = _editing ? 'Editar actividad' : 'Detalle';
+
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(title),
+        actions: [
+          if (_saving)
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 16),
+              child: Center(
+                child: SizedBox.square(
+                  dimension: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+              ),
+            )
+          else
+            IconButton(
+              tooltip: _editing ? 'Guardar' : 'Editar',
+              onPressed: _loading || transaction == null
+                  ? null
+                  : _toggleEditing,
+              icon: Icon(_editing ? Icons.check_rounded : Icons.edit_outlined),
+            ),
+          IconButton(
+            tooltip: 'Eliminar',
+            onPressed: _loading || transaction == null || _saving
+                ? null
+                : _confirmDelete,
+            icon: const Icon(Icons.delete_outline),
+          ),
+        ],
+      ),
+      body: SafeArea(child: _buildBody(context)),
+    );
+  }
+
+  Widget _buildBody(BuildContext context) {
     if (_loading) {
-      return const SizedBox(
-        height: 260,
-        child: Center(child: CircularProgressIndicator()),
-      );
+      return const Center(child: CircularProgressIndicator());
     }
 
     final transaction = _transaction;
     if (transaction == null) {
-      return const SizedBox(
-        height: 260,
-        child: Center(child: Text('La actividad ya no existe')),
-      );
+      return const Center(child: Text('La actividad ya no existe'));
     }
 
-    return DraggableScrollableSheet(
-      expand: false,
-      initialChildSize: 0.72,
-      minChildSize: 0.4,
-      maxChildSize: 0.95,
-      builder: (context, scrollController) {
-        return ListView(
-          controller: scrollController,
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
-          children: [
-            _buildHero(context, transaction),
-            const SizedBox(height: 12),
-            _buildActions(context),
-            const SizedBox(height: 20),
-            _buildDetails(context, transaction),
-          ],
-        );
-      },
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+      children: [
+        _buildHero(context, transaction),
+        const SizedBox(height: 20),
+        _buildDetails(context, transaction),
+      ],
     );
   }
 
@@ -358,6 +559,7 @@ class _TransactionDetailsSheetState extends State<TransactionDetailsSheet> {
     final colors = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
     final signedAmount = _signedAmountCents(transaction);
+    final displayCurrency = _displayCurrency(transaction);
 
     return GroupedCard(
       borderRadius: BorderRadius.circular(kGroupOuterRadius),
@@ -391,13 +593,13 @@ class _TransactionDetailsSheetState extends State<TransactionDetailsSheet> {
                 ),
                 decoration: InputDecoration(
                   labelText: 'Monto',
-                  prefixText: currencyPrefix(transaction.currency),
+                  prefixText: currencyPrefix(_amountFieldCurrency(transaction)),
                   border: const OutlineInputBorder(),
                 ),
               )
             else
               Text(
-                formatMoney(signedAmount, transaction.currency),
+                formatMoney(signedAmount, displayCurrency),
                 style: textTheme.displaySmall?.copyWith(
                   color: signedAmount > 0
                       ? Colors.green.shade600
@@ -408,7 +610,7 @@ class _TransactionDetailsSheetState extends State<TransactionDetailsSheet> {
             if (!_canEditAmount && _editing) ...[
               const SizedBox(height: 8),
               Text(
-                'El monto de transferencias y ajustes se edita desde el flujo dedicado.',
+                'El monto de ajustes de saldo y balances iniciales no son editables.',
                 style: textTheme.bodySmall?.copyWith(
                   color: colors.onSurfaceVariant,
                 ),
@@ -417,31 +619,6 @@ class _TransactionDetailsSheetState extends State<TransactionDetailsSheet> {
           ],
         ),
       ),
-    );
-  }
-
-  Widget _buildActions(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    return Row(
-      children: [
-        Expanded(
-          child: FilledButton.icon(
-            onPressed: _saving ? null : _toggleEditing,
-            icon: Icon(_editing ? Icons.check_rounded : Icons.edit_outlined),
-            label: Text(_editing ? 'Listo' : 'Editar'),
-          ),
-        ),
-        const SizedBox(width: 8),
-        IconButton.filledTonal(
-          onPressed: _saving ? null : _confirmDelete,
-          style: IconButton.styleFrom(
-            backgroundColor: colors.errorContainer,
-            foregroundColor: colors.onErrorContainer,
-          ),
-          tooltip: 'Eliminar',
-          icon: const Icon(Icons.delete_outline),
-        ),
-      ],
     );
   }
 
@@ -508,16 +685,26 @@ class _TransactionDetailsSheetState extends State<TransactionDetailsSheet> {
           _AccountDetailCard(
             label: transaction.type == 'transfer' ? 'Cuenta origen' : 'Cuenta',
             account: _account!,
-            transactionId: transaction.id,
-            repos: widget.repos,
+            balance: _balances[_account!.id],
+            trailing: _editing && _canEditAccount
+                ? TextButton(
+                    onPressed: () => _pickAccount(destination: false),
+                    child: const Text('Cambiar'),
+                  )
+                : null,
           ),
         if (_destinationAccount != null) ...[
           const SizedBox(height: kGroupSpacing),
           _AccountDetailCard(
             label: 'Cuenta destino',
             account: _destinationAccount!,
-            transactionId: transaction.id,
-            repos: widget.repos,
+            balance: _balances[_destinationAccount!.id],
+            trailing: _editing && _canEditAccount
+                ? TextButton(
+                    onPressed: () => _pickAccount(destination: true),
+                    child: const Text('Cambiar'),
+                  )
+                : null,
           ),
         ],
         const SizedBox(height: 12),
@@ -530,10 +717,15 @@ class _TransactionDetailsSheetState extends State<TransactionDetailsSheet> {
 
   Widget _buildCategoryCard() {
     final category = _selectedCategory;
+    final color = category == null
+        ? null
+        : colorFromHex(category.color, fallback: categoryDefaultColor);
     return _DetailCard(
       icon: category == null
           ? Icons.category_outlined
           : categoryIconFromName(category.icon),
+      iconColor: color,
+      iconBackgroundColor: color?.withValues(alpha: 0.16),
       label: 'Categoría',
       trailing: _editing
           ? TextButton(
@@ -585,13 +777,45 @@ class _TransactionDetailsSheetState extends State<TransactionDetailsSheet> {
       case 'expense':
         return -amount.abs();
       case 'income':
-      case 'transfer':
         return amount.abs();
+      case 'transfer':
+        return switch (widget.transferSide) {
+          TransactionDetailTransferSide.source => -amount.abs(),
+          TransactionDetailTransferSide.destination =>
+            (t.toAmount ?? t.amount).toInt().abs(),
+          null => amount.abs(),
+        };
       case 'balance_adjustment':
         return amount;
       default:
         return amount;
     }
+  }
+
+  String _displayCurrency(Transaction t) {
+    if (t.type == 'transfer' &&
+        widget.transferSide == TransactionDetailTransferSide.destination) {
+      return t.toCurrency ?? t.currency;
+    }
+    return t.currency;
+  }
+
+  BigInt _amountFieldValue(Transaction t) {
+    if (t.type == 'transfer' &&
+        widget.transferSide == TransactionDetailTransferSide.destination) {
+      return t.toAmount ?? t.amount;
+    }
+    return t.amount;
+  }
+
+  String _amountFieldCurrency(Transaction t) {
+    if (t.type == 'transfer' &&
+        widget.transferSide == TransactionDetailTransferSide.destination) {
+      return _selectedDestinationAccount?.currency ??
+          t.toCurrency ??
+          t.currency;
+    }
+    return _selectedAccount?.currency ?? t.currency;
   }
 
   String _formatAmountInput(BigInt amount) {
@@ -631,56 +855,50 @@ class _AccountDetailCard extends StatelessWidget {
   const _AccountDetailCard({
     required this.label,
     required this.account,
-    required this.transactionId,
-    required this.repos,
+    required this.balance,
+    this.trailing,
   });
 
   final String label;
   final Account account;
-  final String transactionId;
-  final AppRepositories repos;
+  final AccountBalanceAroundTransaction? balance;
+  final Widget? trailing;
 
   @override
   Widget build(BuildContext context) {
     final color = colorFromHex(account.color, fallback: accountDefaultColor);
+    final balance = this.balance;
     return _DetailCard(
       icon: accountIconFromName(account.icon),
       iconColor: color,
+      iconBackgroundColor: color.withValues(alpha: 0.16),
       label: label,
+      trailing: trailing,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(account.name),
           const SizedBox(height: 8),
-          FutureBuilder<AccountBalanceAroundTransaction?>(
-            future: repos.transactions.balanceAroundTransaction(
-              transactionId: transactionId,
-              accountId: account.id,
+          if (balance == null)
+            Text(
+              'Saldo no disponible',
+              style: TextStyle(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+            )
+          else
+            Wrap(
+              spacing: 12,
+              runSpacing: 4,
+              children: [
+                Text(
+                  'Antes: ${formatMoney(balance.before.toInt(), account.currency)}',
+                ),
+                Text(
+                  'Después: ${formatMoney(balance.after.toInt(), account.currency)}',
+                ),
+              ],
             ),
-            builder: (context, snapshot) {
-              final balance = snapshot.data;
-              if (balance == null) {
-                return Text(
-                  'Saldo no disponible',
-                  style: TextStyle(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  ),
-                );
-              }
-              return Wrap(
-                spacing: 12,
-                runSpacing: 4,
-                children: [
-                  Text(
-                    'Antes: ${formatMoney(balance.before.toInt(), account.currency)}',
-                  ),
-                  Text(
-                    'Después: ${formatMoney(balance.after.toInt(), account.currency)}',
-                  ),
-                ],
-              );
-            },
-          ),
         ],
       ),
     );
@@ -694,6 +912,7 @@ class _DetailCard extends StatelessWidget {
     required this.child,
     this.backgroundColor,
     this.iconColor,
+    this.iconBackgroundColor,
     this.trailing,
   });
 
@@ -702,6 +921,7 @@ class _DetailCard extends StatelessWidget {
   final Widget child;
   final Color? backgroundColor;
   final Color? iconColor;
+  final Color? iconBackgroundColor;
   final Widget? trailing;
 
   @override
@@ -717,7 +937,11 @@ class _DetailCard extends StatelessWidget {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Icon(icon, color: iconColor ?? colors.onSurfaceVariant),
+            _DetailIcon(
+              icon: icon,
+              color: iconColor ?? colors.onSurfaceVariant,
+              backgroundColor: iconBackgroundColor,
+            ),
             const SizedBox(width: 12),
             Expanded(
               child: Column(
@@ -744,6 +968,55 @@ class _DetailCard extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _EntityCircleIcon extends StatelessWidget {
+  const _EntityCircleIcon({required this.icon, required this.color});
+
+  final IconData icon;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 32,
+      height: 32,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.16),
+        shape: BoxShape.circle,
+      ),
+      child: Icon(icon, size: 18, color: color),
+    );
+  }
+}
+
+class _DetailIcon extends StatelessWidget {
+  const _DetailIcon({
+    required this.icon,
+    required this.color,
+    this.backgroundColor,
+  });
+
+  final IconData icon;
+  final Color color;
+  final Color? backgroundColor;
+
+  @override
+  Widget build(BuildContext context) {
+    final backgroundColor = this.backgroundColor;
+    if (backgroundColor == null) {
+      return Icon(icon, color: color);
+    }
+
+    return Container(
+      width: 36,
+      height: 36,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(color: backgroundColor, shape: BoxShape.circle),
+      child: Icon(icon, size: 20, color: color),
     );
   }
 }
