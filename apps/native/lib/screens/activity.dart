@@ -2,7 +2,7 @@ import 'package:app/components/account_icons.dart';
 import 'package:app/components/category_icons.dart';
 import 'package:app/components/color_utils.dart';
 import 'package:app/components/transaction_filters_bar.dart';
-import 'package:app/components/transaction_row_2.dart';
+import 'package:app/components/transaction_row_emoji.dart';
 import 'package:app/data/data.dart';
 import 'package:app/database.dart';
 import 'package:app/shared/app_navigation.dart';
@@ -339,7 +339,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
       ):
         return Padding(
           padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
-          child: TransactionRow2(
+          child: TransactionRowEmoji(
             title: title,
             amountCents: amountCents,
             currency: currency,
@@ -367,7 +367,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
         '${day.month.toString().padLeft(2, '0')}/${day.year}';
   }
 
-  /// Signed cents to pass to [TransactionRow2]: positive renders green, negative
+  /// Signed cents to pass to [TransactionRowEmoji]: positive renders green, negative
   /// renders in the default text color.
   int _signedAmountCents(Transaction t) {
     final amount = t.amount.toInt();
@@ -422,18 +422,18 @@ class _ActivityScreenState extends State<ActivityScreen> {
     ];
   }
 
-  List<TransactionRowVisualIdentity> _visualIdentitiesFor(
+  List<TransactionRowEmojiVisualIdentity> _visualIdentitiesFor(
     Transaction transaction, {
     required Map<String, Account> accountsById,
     required Map<String, Category> categoriesById,
     String? accountId,
   }) {
-    final identities = <TransactionRowVisualIdentity>[];
+    final identities = <TransactionRowEmojiVisualIdentity>[];
     final account = accountsById[accountId ?? transaction.accountId];
     if (account != null) {
       identities.add(
-        TransactionRowVisualIdentity(
-          type: TransactionRowVisualIdentityType.account,
+        TransactionRowEmojiVisualIdentity(
+          type: TransactionRowEmojiVisualIdentityType.account,
           label: 'Cuenta: ${account.name}',
           icon: accountIconFromName(account.icon),
           color: colorFromHex(account.color, fallback: accountDefaultColor),
@@ -446,8 +446,8 @@ class _ActivityScreenState extends State<ActivityScreen> {
       final category = categoriesById[categoryId];
       if (category != null) {
         identities.add(
-          TransactionRowVisualIdentity(
-            type: TransactionRowVisualIdentityType.category,
+          TransactionRowEmojiVisualIdentity(
+            type: TransactionRowEmojiVisualIdentityType.category,
             label: 'Categoria: ${category.name}',
             icon: categoryIconFromName(category.icon),
             color: colorFromHex(category.color, fallback: categoryDefaultColor),
@@ -456,7 +456,41 @@ class _ActivityScreenState extends State<ActivityScreen> {
       }
     }
 
+    identities.add(_timeVisualIdentityFor(transaction));
+
     return identities;
+  }
+
+  TransactionRowEmojiVisualIdentity _timeVisualIdentityFor(
+    Transaction transaction,
+  ) {
+    final hour = _mockTransactionHour(transaction);
+    final timeIcon = _timeIconFor(hour);
+    return TransactionRowEmojiVisualIdentity(
+      type: TransactionRowEmojiVisualIdentityType.time,
+      label: 'Hora mock: ${hour.toString().padLeft(2, '0')}:00',
+      icon: timeIcon,
+      color: Colors.transparent,
+    );
+  }
+
+  int _mockTransactionHour(Transaction transaction) {
+    const mockHours = [22, 9, 16];
+    final hash = transaction.id.codeUnits.fold<int>(
+      0,
+      (value, unit) => value + unit,
+    );
+    return mockHours[hash % mockHours.length];
+  }
+
+  IconData _timeIconFor(int hour) {
+    if (hour >= 20 || hour <= 5) {
+      return Icons.bedtime_outlined;
+    }
+    if (hour >= 6 && hour <= 12) {
+      return Icons.wb_twilight_outlined;
+    }
+    return Icons.wb_sunny_outlined;
   }
 
   String? _descriptionFor(Transaction t) {
@@ -486,7 +520,7 @@ class _TxnEntry extends _ListEntry {
   factory _TxnEntry.fromTransaction(
     Transaction transaction, {
     required int amountCents,
-    required List<TransactionRowVisualIdentity> visualIdentities,
+    required List<TransactionRowEmojiVisualIdentity> visualIdentities,
     String? description,
   }) => _TxnEntry(
     title: transaction.name,
@@ -502,7 +536,7 @@ class _TxnEntry extends _ListEntry {
   final String currency;
   final bool dateConfirmed;
   final String? description;
-  final List<TransactionRowVisualIdentity> visualIdentities;
+  final List<TransactionRowEmojiVisualIdentity> visualIdentities;
 }
 
 class _LoadingEntry extends _ListEntry {

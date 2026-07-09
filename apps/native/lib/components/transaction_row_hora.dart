@@ -1,8 +1,8 @@
 import 'package:app/shared/money.dart';
 import 'package:flutter/material.dart';
 
-class TransactionRow2 extends StatelessWidget {
-  const TransactionRow2({
+class TransactionRowHora extends StatelessWidget {
+  const TransactionRowHora({
     super.key,
     required this.title,
     required this.amountCents,
@@ -27,7 +27,7 @@ class TransactionRow2 extends StatelessWidget {
 
   final String? description;
   final String? currency;
-  final List<TransactionRowVisualIdentity> visualIdentities;
+  final List<TransactionRowHoraVisualIdentity> visualIdentities;
   final String currencySymbol;
   final VoidCallback? onTap;
   final bool contained;
@@ -39,10 +39,10 @@ class TransactionRow2 extends StatelessWidget {
     final amountColor = isPositive
         ? Colors.green.shade600
         : theme.colorScheme.onSurface;
-    TransactionRowVisualIdentity? accountIdentity;
-    final detailIdentities = <TransactionRowVisualIdentity>[];
+    TransactionRowHoraVisualIdentity? accountIdentity;
+    final detailIdentities = <TransactionRowHoraVisualIdentity>[];
     for (final identity in visualIdentities) {
-      if (identity.type == TransactionRowVisualIdentityType.account &&
+      if (identity.type == TransactionRowHoraVisualIdentityType.account &&
           accountIdentity == null) {
         accountIdentity = identity;
       } else {
@@ -154,21 +154,21 @@ class TransactionRow2 extends StatelessWidget {
   }
 }
 
-class TransactionRowVisualIdentity {
-  const TransactionRowVisualIdentity({
+class TransactionRowHoraVisualIdentity {
+  const TransactionRowHoraVisualIdentity({
     required this.type,
     required this.label,
     required this.icon,
     required this.color,
   });
 
-  final TransactionRowVisualIdentityType type;
+  final TransactionRowHoraVisualIdentityType type;
   final String label;
   final IconData icon;
   final Color color;
 }
 
-enum TransactionRowVisualIdentityType { account, category }
+enum TransactionRowHoraVisualIdentityType { account, category }
 
 class _IdentityIcon extends StatelessWidget {
   const _IdentityIcon({
@@ -177,7 +177,7 @@ class _IdentityIcon extends StatelessWidget {
     this.iconSize = 15,
   });
 
-  final TransactionRowVisualIdentity identity;
+  final TransactionRowHoraVisualIdentity identity;
   final double size;
   final double iconSize;
 
