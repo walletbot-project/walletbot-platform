@@ -168,12 +168,14 @@ class TransactionRowEmojiVisualIdentity {
     required this.label,
     required this.icon,
     required this.color,
+    this.attention = false,
   });
 
   final TransactionRowEmojiVisualIdentityType type;
   final String label;
   final IconData icon;
   final Color color;
+  final bool attention;
 }
 
 enum TransactionRowEmojiVisualIdentityType { account, category, time }
@@ -192,12 +194,27 @@ class _IdentityIcon extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (identity.type == TransactionRowEmojiVisualIdentityType.time) {
+      final color = identity.attention
+          ? Colors.amber.shade700
+          : Theme.of(context).colorScheme.onSurfaceVariant;
       return Tooltip(
         message: identity.label,
-        child: SizedBox(
-          width: size,
-          height: size,
-          child: Center(child: Icon(identity.icon, size: iconSize + 2)),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (identity.attention) ...[
+              Icon(identity.icon, size: iconSize + 1, color: color),
+              const SizedBox(width: 3),
+            ],
+            Text(
+              identity.label,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+                color: color,
+              ),
+            ),
+          ],
         ),
       );
     }

@@ -487,11 +487,10 @@ class _ActivityScreenState extends State<ActivityScreen> {
     );
     return TransactionRowEmojiVisualIdentity(
       type: TransactionRowEmojiVisualIdentityType.time,
-      label: time.isEstimatedAtLoad
-          ? 'Horario estimado: ${formatMockTransactionHour(time.hour)}'
-          : 'Rango horario tentativo: ${time.rangeLabel}',
+      label: time.rowText,
       icon: time.icon,
       color: Colors.transparent,
+      attention: time.needsAttention,
     );
   }
 

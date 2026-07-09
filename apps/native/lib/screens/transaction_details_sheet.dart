@@ -498,18 +498,10 @@ class _TransactionDetailsSheetState extends State<TransactionDetailsSheet> {
         const SizedBox(height: kGroupSpacing),
         _DetailCard(
           icon: time.icon,
-          iconColor: time.isEstimatedAtLoad ? attentionColor : null,
-          backgroundColor: time.isTentativeRange || time.isEstimatedAtLoad
-              ? attentionBackground
-              : null,
-          label: time.isEstimatedAtLoad
-              ? 'Horario estimado'
-              : 'Rango horario tentativo',
-          child: Text(
-            time.isEstimatedAtLoad
-                ? '${formatMockTransactionHour(time.hour)} · asumido al momento de carga'
-                : '${time.rangeLabel} · ${time.rangeText}',
-          ),
+          iconColor: time.needsAttention ? attentionColor : null,
+          backgroundColor: time.needsAttention ? attentionBackground : null,
+          label: time.detailLabel,
+          child: Text(time.detailText),
         ),
         const SizedBox(height: 12),
         if (_account != null)
