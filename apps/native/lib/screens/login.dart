@@ -1,3 +1,4 @@
+import 'package:app/app_config/app_config_banner_list.dart';
 import 'package:app/auth/auth_controller.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
@@ -154,6 +155,10 @@ class _LoginScreenState extends State<LoginScreen> {
                           children: [
                             const _HeroHeader(),
                             const SizedBox(height: 22),
+                            const AppConfigBannerList(
+                              placement: 'auth',
+                              bottomSpacing: 14,
+                            ),
                             _PathPicker(
                               selected: _path,
                               enabled: !_submitting,

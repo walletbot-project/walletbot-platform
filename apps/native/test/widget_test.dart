@@ -1,7 +1,15 @@
+import 'package:app/app_config/app_config_controller.dart';
+import 'package:app/app_config/client_info.dart';
 import 'package:app/auth/auth_controller.dart';
 import 'package:app/main.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
+
+const _testClientInfo = ClientInfo(
+  platform: 'unknown',
+  appVersion: '0.0.0',
+  deviceId: 'test-device',
+);
 
 void main() {
   testWidgets('shows login when no account is active', (
@@ -16,7 +24,15 @@ void main() {
     // widget tests, so we render with a freshly constructed (empty)
     // controller, which is equivalent to load() with empty storage.
 
-    await tester.pumpWidget(MyApp(auth: auth));
+    // AppConfigController is constructed but never loaded here (no network);
+    // banner state stays empty.
+    await tester.pumpWidget(
+      MyApp(
+        auth: auth,
+        appConfig: AppConfigController(),
+        clientInfo: _testClientInfo,
+      ),
+    );
     await tester.pump();
 
     expect(find.text('Sin cuenta'), findsWidgets);
@@ -29,7 +45,15 @@ void main() {
 
     final auth = AuthController();
 
-    await tester.pumpWidget(MyApp(auth: auth));
+    // AppConfigController is constructed but never loaded here (no network);
+    // banner state stays empty.
+    await tester.pumpWidget(
+      MyApp(
+        auth: auth,
+        appConfig: AppConfigController(),
+        clientInfo: _testClientInfo,
+      ),
+    );
     await tester.pump();
 
     await tester.tap(find.text('Sin cuenta').first);
