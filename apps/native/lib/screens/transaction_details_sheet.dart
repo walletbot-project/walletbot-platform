@@ -547,52 +547,178 @@ class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-      children: [
-        _buildHero(context, transaction),
-        const SizedBox(height: 20),
-        _buildDetails(context, transaction),
-      ],
+      children: [_buildReceipt(context, transaction)],
     );
   }
 
-  Widget _buildHero(BuildContext context, Transaction transaction) {
+  /// Single "comprobante"-style card: a header with the category icon, name and
+  /// amount, a perforated separator, and a stack of label/value receipt rows.
+  Widget _buildReceipt(BuildContext context, Transaction transaction) {
     final colors = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
     final signedAmount = _signedAmountCents(transaction);
     final displayCurrency = _displayCurrency(transaction);
+    final category = _selectedCategory;
+    final categoryColor = category == null
+        ? colors.onSurfaceVariant
+        : colorFromHex(category.color, fallback: categoryDefaultColor);
+    final categoryIcon = category == null
+        ? Icons.receipt_long_rounded
+        : categoryIconFromName(category.icon);
+    final time = mockTransactionTime(
+      transactionId: transaction.id,
+      createdAt: transaction.createdAt,
+    );
+    final description = transaction.description;
 
-    return GroupedCard(
+    final rows = <Widget>[
+      _ReceiptRow(
+        icon: Icons.notes_rounded,
+        label: 'Descripción',
+        stacked: true,
+        value: _editing
+            ? TextField(
+                controller: _descriptionController,
+                minLines: 1,
+                maxLines: 3,
+                textCapitalization: TextCapitalization.sentences,
+                decoration: const InputDecoration(
+                  border: OutlineInputBorder(),
+                  hintText: 'Sin descripción',
+                ),
+              )
+            : Text(
+                description == null || description.isEmpty
+                    ? 'Sin descripción'
+                    : description,
+                style: description == null || description.isEmpty
+                    ? TextStyle(color: colors.onSurfaceVariant)
+                    : null,
+              ),
+      ),
+      _ReceiptRow(
+        icon: transaction.dateConfirmed
+            ? Icons.calendar_month_rounded
+            : Icons.help_outline_rounded,
+        attention: !transaction.dateConfirmed,
+        label: transaction.dateConfirmed ? 'Fecha' : 'Fecha estimada',
+        trailing: _editing
+            ? TextButton(onPressed: _pickDate, child: const Text('Cambiar'))
+            : null,
+        value: Text(
+          transaction.dateConfirmed
+              ? _formatDate(_selectedDate)
+              : '${_formatDate(_selectedDate)} · asumida por carga',
+        ),
+      ),
+      _ReceiptRow(
+        icon: time.icon,
+        attention: time.needsAttention,
+        label: time.detailLabel,
+        value: Text(time.detailText),
+      ),
+      if (_account != null)
+        _accountReceiptRow(
+          label: transaction.type == 'transfer' ? 'Cuenta origen' : 'Cuenta',
+          account: _account!,
+          balance: _balances[_account!.id],
+          trailing: _editing && _canEditAccount
+              ? TextButton(
+                  onPressed: () => _pickAccount(destination: false),
+                  child: const Text('Cambiar'),
+                )
+              : null,
+        ),
+      if (_destinationAccount != null)
+        _accountReceiptRow(
+          label: 'Cuenta destino',
+          account: _destinationAccount!,
+          balance: _balances[_destinationAccount!.id],
+          trailing: _editing && _canEditAccount
+              ? TextButton(
+                  onPressed: () => _pickAccount(destination: true),
+                  child: const Text('Cambiar'),
+                )
+              : null,
+        ),
+      _ReceiptRow(
+        icon: categoryIcon,
+        iconColor: category == null ? null : categoryColor,
+        label: 'Categoría',
+        trailing: _editing
+            ? TextButton(
+                onPressed: _categories.any((category) => !category.archived)
+                    ? _pickCategory
+                    : null,
+                child: const Text('Cambiar'),
+              )
+            : null,
+        value: Text(
+          category?.name ?? 'Sin categoría',
+          style: category == null
+              ? TextStyle(color: colors.onSurfaceVariant)
+              : null,
+        ),
+      ),
+      _tagsReceiptRow(),
+    ];
+
+    return Material(
+      color: colors.surface,
+      elevation: 1,
       borderRadius: BorderRadius.circular(kGroupOuterRadius),
+      clipBehavior: Clip.antiAlias,
       child: Padding(
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.fromLTRB(24, 28, 24, 24),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            Center(
+              child: Container(
+                width: 64,
+                height: 64,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: categoryColor.withValues(alpha: 0.16),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(categoryIcon, size: 30, color: categoryColor),
+              ),
+            ),
+            const SizedBox(height: 16),
             if (_editing)
               TextField(
                 controller: _nameController,
+                textAlign: TextAlign.center,
                 textCapitalization: TextCapitalization.sentences,
+                style: textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
                 decoration: const InputDecoration(
-                  labelText: 'Nombre',
-                  border: OutlineInputBorder(),
+                  hintText: 'Nombre',
+                  border: InputBorder.none,
                 ),
               )
             else
               Text(
                 transaction.name,
-                style: textTheme.headlineSmall?.copyWith(
+                textAlign: TextAlign.center,
+                style: textTheme.titleLarge?.copyWith(
                   fontWeight: FontWeight.w700,
                 ),
               ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 8),
             if (_editing && _canEditAmount)
               TextField(
                 controller: _amountController,
+                textAlign: TextAlign.center,
                 keyboardType: const TextInputType.numberWithOptions(
                   decimal: true,
                 ),
+                style: textTheme.headlineMedium?.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
                 decoration: InputDecoration(
-                  labelText: 'Monto',
                   prefixText: currencyPrefix(_amountFieldCurrency(transaction)),
                   border: const OutlineInputBorder(),
                 ),
@@ -600,7 +726,8 @@ class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
             else
               Text(
                 formatMoney(signedAmount, displayCurrency),
-                style: textTheme.displaySmall?.copyWith(
+                textAlign: TextAlign.center,
+                style: textTheme.headlineMedium?.copyWith(
                   color: signedAmount > 0
                       ? Colors.green.shade600
                       : colors.onSurface,
@@ -611,10 +738,17 @@ class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
               const SizedBox(height: 8),
               Text(
                 'El monto de ajustes de saldo y balances iniciales no son editables.',
+                textAlign: TextAlign.center,
                 style: textTheme.bodySmall?.copyWith(
                   color: colors.onSurfaceVariant,
                 ),
               ),
+            ],
+            const SizedBox(height: 20),
+            const _ReceiptDivider(),
+            for (var i = 0; i < rows.length; i++) ...[
+              if (i > 0) Divider(height: 1, color: colors.outlineVariant),
+              rows[i],
             ],
           ],
         ),
@@ -622,150 +756,88 @@ class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
     );
   }
 
-  Widget _buildDetails(BuildContext context, Transaction transaction) {
-    final colors = Theme.of(context).colorScheme;
-    final time = mockTransactionTime(
-      transactionId: transaction.id,
-      createdAt: transaction.createdAt,
-    );
-    final attentionBackground = _attentionBackground(colors);
-    final attentionColor = _attentionColor(colors);
-    final description = transaction.description;
-    return Column(
-      children: [
-        _DetailCard(
-          icon: Icons.notes_rounded,
-          label: 'Descripción',
-          child: _editing
-              ? TextField(
-                  controller: _descriptionController,
-                  minLines: 1,
-                  maxLines: 3,
-                  textCapitalization: TextCapitalization.sentences,
-                  decoration: const InputDecoration(
-                    border: OutlineInputBorder(),
-                    hintText: 'Sin descripción',
-                  ),
-                )
-              : Text(
-                  description == null || description.isEmpty
-                      ? 'Sin descripción'
-                      : description,
-                ),
-        ),
-        const SizedBox(height: kGroupSpacing),
-        _DetailCard(
-          icon: transaction.dateConfirmed
-              ? Icons.calendar_month_rounded
-              : Icons.help_outline_rounded,
-          iconColor: transaction.dateConfirmed ? null : attentionColor,
-          backgroundColor: transaction.dateConfirmed
-              ? null
-              : attentionBackground,
-          label: transaction.dateConfirmed ? 'Fecha' : 'Fecha estimada',
-          trailing: _editing
-              ? TextButton(onPressed: _pickDate, child: const Text('Cambiar'))
-              : null,
-          child: Text(
-            transaction.dateConfirmed
-                ? _formatDate(_selectedDate)
-                : '${_formatDate(_selectedDate)} · asumida por carga',
-          ),
-        ),
-        const SizedBox(height: kGroupSpacing),
-        _DetailCard(
-          icon: time.icon,
-          iconColor: time.needsAttention ? attentionColor : null,
-          backgroundColor: time.needsAttention ? attentionBackground : null,
-          label: time.detailLabel,
-          child: Text(time.detailText),
-        ),
-        const SizedBox(height: 12),
-        if (_account != null)
-          _AccountDetailCard(
-            label: transaction.type == 'transfer' ? 'Cuenta origen' : 'Cuenta',
-            account: _account!,
-            balance: _balances[_account!.id],
-            trailing: _editing && _canEditAccount
-                ? TextButton(
-                    onPressed: () => _pickAccount(destination: false),
-                    child: const Text('Cambiar'),
-                  )
-                : null,
-          ),
-        if (_destinationAccount != null) ...[
-          const SizedBox(height: kGroupSpacing),
-          _AccountDetailCard(
-            label: 'Cuenta destino',
-            account: _destinationAccount!,
-            balance: _balances[_destinationAccount!.id],
-            trailing: _editing && _canEditAccount
-                ? TextButton(
-                    onPressed: () => _pickAccount(destination: true),
-                    child: const Text('Cambiar'),
-                  )
-                : null,
-          ),
-        ],
-        const SizedBox(height: 12),
-        _buildCategoryCard(),
-        const SizedBox(height: kGroupSpacing),
-        _buildTagsCard(),
-      ],
-    );
-  }
-
-  Widget _buildCategoryCard() {
-    final category = _selectedCategory;
-    final color = category == null
-        ? null
-        : colorFromHex(category.color, fallback: categoryDefaultColor);
-    return _DetailCard(
-      icon: category == null
-          ? Icons.category_outlined
-          : categoryIconFromName(category.icon),
+  _ReceiptRow _accountReceiptRow({
+    required String label,
+    required Account account,
+    required AccountBalanceAroundTransaction? balance,
+    Widget? trailing,
+  }) {
+    final color = colorFromHex(account.color, fallback: accountDefaultColor);
+    return _ReceiptRow(
+      icon: accountIconFromName(account.icon),
       iconColor: color,
-      iconBackgroundColor: color?.withValues(alpha: 0.16),
-      label: 'Categoría',
-      trailing: _editing
-          ? TextButton(
-              onPressed: _categories.any((category) => !category.archived)
-                  ? _pickCategory
-                  : null,
-              child: const Text('Cambiar'),
-            )
-          : null,
-      child: Text(category?.name ?? 'Sin categoría'),
+      label: label,
+      trailing: trailing,
+      stacked: true,
+      value: Builder(
+        builder: (context) {
+          final colors = Theme.of(context).colorScheme;
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(account.name),
+              const SizedBox(height: 4),
+              if (balance == null)
+                Text(
+                  'Saldo no disponible',
+                  style: TextStyle(color: colors.onSurfaceVariant),
+                )
+              else
+                Text(
+                  'Antes: ${formatMoney(balance.before.toInt(), account.currency)}'
+                  '  ·  Después: ${formatMoney(balance.after.toInt(), account.currency)}',
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: colors.onSurfaceVariant,
+                  ),
+                ),
+            ],
+          );
+        },
+      ),
     );
   }
 
-  Widget _buildTagsCard() {
+  _ReceiptRow _tagsReceiptRow() {
     final selectedTags = _selectedTags;
-    return _DetailCard(
+    return _ReceiptRow(
       icon: Icons.sell_outlined,
       label: 'Tags',
+      stacked: true,
       trailing: _editing
           ? TextButton(onPressed: _pickTag, child: const Text('Agregar'))
           : null,
-      child: selectedTags.isEmpty
-          ? const Text('Sin tags')
+      value: selectedTags.isEmpty
+          ? Builder(
+              builder: (context) => Text(
+                'Sin tags',
+                style: TextStyle(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+              ),
+            )
           : Wrap(
               spacing: 8,
               runSpacing: 8,
               children: [
                 for (final tag in selectedTags)
-                  InputChip(
-                    label: Text(tag.name),
-                    backgroundColor: colorFromHex(tag.color),
-                    side: BorderSide(color: colorFromHex(tag.color)),
-                    onDeleted: _editing
-                        ? () => setState(
-                            () =>
-                                _selectedTagIds = {..._selectedTagIds}
-                                  ..remove(tag.id),
-                          )
-                        : null,
-                  ),
+                  if (_editing)
+                    InputChip(
+                      avatar: const CircleAvatar(backgroundColor: Colors.white),
+                      label: Text(tag.name),
+                      backgroundColor: colorFromHex(tag.color),
+                      onDeleted: () => setState(
+                        () =>
+                            _selectedTagIds = {..._selectedTagIds}
+                              ..remove(tag.id),
+                      ),
+                    )
+                  else
+                    Chip(
+                      avatar: const CircleAvatar(backgroundColor: Colors.white),
+                      label: Text(tag.name),
+                      backgroundColor: colorFromHex(tag.color),
+                    ),
               ],
             ),
     );
@@ -838,135 +910,139 @@ class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
       context,
     ).showSnackBar(SnackBar(content: Text(message)));
   }
-
-  Color _attentionBackground(ColorScheme colors) {
-    return Color.alphaBlend(
-      Colors.orange.withValues(alpha: 0.18),
-      colors.surfaceContainerHigh,
-    );
-  }
-
-  Color _attentionColor(ColorScheme colors) {
-    return Colors.orange.shade800;
-  }
 }
 
-class _AccountDetailCard extends StatelessWidget {
-  const _AccountDetailCard({
-    required this.label,
-    required this.account,
-    required this.balance,
-    this.trailing,
-  });
-
-  final String label;
-  final Account account;
-  final AccountBalanceAroundTransaction? balance;
-  final Widget? trailing;
+/// A perforated separator that gives the card its "comprobante" feel.
+class _ReceiptDivider extends StatelessWidget {
+  const _ReceiptDivider();
 
   @override
   Widget build(BuildContext context) {
-    final color = colorFromHex(account.color, fallback: accountDefaultColor);
-    final balance = this.balance;
-    return _DetailCard(
-      icon: accountIconFromName(account.icon),
-      iconColor: color,
-      iconBackgroundColor: color.withValues(alpha: 0.16),
-      label: label,
-      trailing: trailing,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(account.name),
-          const SizedBox(height: 8),
-          if (balance == null)
-            Text(
-              'Saldo no disponible',
-              style: TextStyle(
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
-              ),
-            )
-          else
-            Wrap(
-              spacing: 12,
-              runSpacing: 4,
-              children: [
-                Text(
-                  'Antes: ${formatMoney(balance.before.toInt(), account.currency)}',
-                ),
-                Text(
-                  'Después: ${formatMoney(balance.after.toInt(), account.currency)}',
-                ),
-              ],
-            ),
-        ],
+    return SizedBox(
+      height: 1,
+      child: CustomPaint(
+        size: Size.infinite,
+        painter: _DashedLinePainter(
+          color: Theme.of(context).colorScheme.outlineVariant,
+        ),
       ),
     );
   }
 }
 
-class _DetailCard extends StatelessWidget {
-  const _DetailCard({
+class _DashedLinePainter extends CustomPainter {
+  const _DashedLinePainter({required this.color});
+
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    const dashWidth = 5.0;
+    const dashSpace = 4.0;
+    final paint = Paint()
+      ..color = color
+      ..strokeWidth = 1;
+    var x = 0.0;
+    while (x < size.width) {
+      canvas.drawLine(Offset(x, 0), Offset(x + dashWidth, 0), paint);
+      x += dashWidth + dashSpace;
+    }
+  }
+
+  @override
+  bool shouldRepaint(_DashedLinePainter oldDelegate) =>
+      oldDelegate.color != color;
+}
+
+/// A single line item inside the receipt card: a leading icon and label on the
+/// left, its value on the right (or stacked below for longer content).
+class _ReceiptRow extends StatelessWidget {
+  const _ReceiptRow({
     required this.icon,
     required this.label,
-    required this.child,
-    this.backgroundColor,
+    required this.value,
     this.iconColor,
-    this.iconBackgroundColor,
     this.trailing,
+    this.stacked = false,
+    this.attention = false,
   });
 
   final IconData icon;
   final String label;
-  final Widget child;
-  final Color? backgroundColor;
+  final Widget value;
   final Color? iconColor;
-  final Color? iconBackgroundColor;
   final Widget? trailing;
+  final bool stacked;
+  final bool attention;
 
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
-    return Material(
-      color: backgroundColor ?? colors.surfaceContainerHigh,
-      borderRadius: BorderRadius.circular(kGroupOuterRadius),
-      clipBehavior: Clip.antiAlias,
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Row(
+    final labelColor = attention
+        ? Colors.orange.shade800
+        : colors.onSurfaceVariant;
+    final resolvedIconColor = iconColor ?? labelColor;
+
+    final labelRow = Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 18, color: resolvedIconColor),
+        const SizedBox(width: 8),
+        Flexible(
+          child: Text(
+            label,
+            style: textTheme.labelLarge?.copyWith(color: labelColor),
+          ),
+        ),
+      ],
+    );
+
+    final styledValue = DefaultTextStyle.merge(
+      style: textTheme.bodyMedium!.copyWith(fontWeight: FontWeight.w500),
+      child: value,
+    );
+
+    if (stacked) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 14),
+        child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _DetailIcon(
-              icon: icon,
-              color: iconColor ?? colors.onSurfaceVariant,
-              backgroundColor: iconBackgroundColor,
+            Row(
+              children: [
+                Expanded(child: labelRow),
+                ?trailing,
+              ],
             ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          label,
-                          style: textTheme.labelLarge?.copyWith(
-                            color: colors.onSurfaceVariant,
-                          ),
-                        ),
-                      ),
-                      if (trailing != null) trailing!,
-                    ],
-                  ),
-                  const SizedBox(height: 6),
-                  child,
-                ],
-              ),
-            ),
+            const SizedBox(height: 8),
+            styledValue,
           ],
         ),
+      );
+    }
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 14),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          labelRow,
+          const SizedBox(width: 12),
+          Expanded(
+            child: Align(
+              alignment: Alignment.centerRight,
+              child: DefaultTextStyle.merge(
+                textAlign: TextAlign.end,
+                style: textTheme.bodyMedium!.copyWith(
+                  fontWeight: FontWeight.w500,
+                ),
+                child: value,
+              ),
+            ),
+          ),
+          ?trailing,
+        ],
       ),
     );
   }
@@ -989,34 +1065,6 @@ class _EntityCircleIcon extends StatelessWidget {
         shape: BoxShape.circle,
       ),
       child: Icon(icon, size: 18, color: color),
-    );
-  }
-}
-
-class _DetailIcon extends StatelessWidget {
-  const _DetailIcon({
-    required this.icon,
-    required this.color,
-    this.backgroundColor,
-  });
-
-  final IconData icon;
-  final Color color;
-  final Color? backgroundColor;
-
-  @override
-  Widget build(BuildContext context) {
-    final backgroundColor = this.backgroundColor;
-    if (backgroundColor == null) {
-      return Icon(icon, color: color);
-    }
-
-    return Container(
-      width: 36,
-      height: 36,
-      alignment: Alignment.center,
-      decoration: BoxDecoration(color: backgroundColor, shape: BoxShape.circle),
-      child: Icon(icon, size: 20, color: color),
     );
   }
 }
