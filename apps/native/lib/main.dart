@@ -185,12 +185,15 @@ class _AppMainState extends State<AppMain> {
           final accountId = context.read<AuthController>().activeAccount?.id;
           Navigator.of(context).push(
             MaterialPageRoute(
-              builder: (_) => PopOnAccountSwitch(
-                accountId: accountId,
-                child: VoiceScreen(
-                  commandFactory: GeminiVoiceExpenseCommandFactory(
-                    repositories: repositories,
-                    convexSiteUrl: AppConfig.convexSiteUrl,
+              builder: (_) => Provider<AppRepositories>.value(
+                value: repositories,
+                child: PopOnAccountSwitch(
+                  accountId: accountId,
+                  child: VoiceScreen(
+                    commandFactory: GeminiVoiceExpenseCommandFactory(
+                      repositories: repositories,
+                      convexSiteUrl: AppConfig.convexSiteUrl,
+                    ),
                   ),
                 ),
               ),

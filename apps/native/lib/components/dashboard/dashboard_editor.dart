@@ -118,6 +118,9 @@ class _DashboardEditorState extends State<DashboardEditor> {
       physics: const NeverScrollableScrollPhysics(),
       buildDefaultDragHandles: false,
       itemCount: _ordered.length,
+      // Flutter 3.41 (the CI SDK) still requires onReorder. Newer SDKs mark it
+      // deprecated in favor of onReorderItem, which is unavailable in 3.41.
+      // ignore: deprecated_member_use
       onReorder: _onReorder,
       itemBuilder: (context, index) {
         final row = _ordered[index];

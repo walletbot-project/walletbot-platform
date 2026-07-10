@@ -413,6 +413,7 @@ toCurrency?     string             — moneda destino (transferencias)
 exchangeRate?   number             — float (transferencias con conversión)
 
 balanceAfter?   int64              — centavos (ajustes de balance)
+
 archived        boolean
 createdAt       int64
 updatedAt       int64

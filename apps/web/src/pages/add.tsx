@@ -17,6 +17,7 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import { type ChatMessage, useVoice } from '@/hooks/use-voice'
 import { cn } from '@/lib/utils'
+import { ActionWidget } from '@/pages/add-action-widget'
 
 // Helpers
 
@@ -251,6 +252,8 @@ function MessageView({ message }: { message: ChatMessage }) {
             return <ToolCard message={message} />
         case 'system':
             return <SystemLine message={message} />
+        case 'action-result':
+            return <ActionWidget message={message} />
     }
 }
 
