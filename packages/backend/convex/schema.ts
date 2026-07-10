@@ -5,6 +5,7 @@ import { dashboardWidgets, savedFilters } from './schema/dashboard'
 import { refreshTokens } from './schema/refreshTokens'
 import { syncCounters, tombstones } from './schema/sync'
 import { tags } from './schema/tags'
+import { telemetryEvents } from './schema/telemetry'
 import { transactions } from './schema/transactions'
 import { transactionTags } from './schema/transactionTags'
 
@@ -16,6 +17,7 @@ export default defineSchema({
     savedFilters,
     syncCounters,
     tags,
+    telemetryEvents,
     tombstones,
     transactionTags,
     transactions,

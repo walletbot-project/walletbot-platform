@@ -13,6 +13,7 @@ import 'package:app/screens/login.dart';
 import 'package:app/screens/voice.dart';
 import 'package:app/shared/app_navigation.dart';
 import 'package:app/sync/sync_engine.dart';
+import 'package:app/telemetry/telemetry_client.dart';
 import 'package:app/voice/gemini_voice_expense_command.dart';
 import 'package:convex_flutter/convex_flutter.dart';
 import 'package:flutter/material.dart';
@@ -37,27 +38,68 @@ Future<void> main() async {
 
   final auth = AuthController();
   await auth.load();
-  runApp(MyApp(auth: auth));
+  final telemetry = TelemetryClient(
+    accessTokenProvider: auth.fetchAccessTokenForHttp,
+  );
+  runApp(MyApp(auth: auth, telemetry: telemetry));
 }
 
 class MyApp extends StatelessWidget {
-  const MyApp({super.key, required this.auth});
+  const MyApp({super.key, required this.auth, TelemetryClient? telemetry})
+    : _telemetry = telemetry;
 
   final AuthController auth;
+  final TelemetryClient? _telemetry;
 
   @override
   Widget build(BuildContext context) {
-    return ChangeNotifierProvider<AuthController>.value(
-      value: auth,
-      child: MaterialApp(
-        title: 'Wallet Bot',
-        theme: ThemeData(
-          colorScheme: ColorScheme.fromSeed(seedColor: Colors.greenAccent),
+    final telemetry = _telemetry;
+    return MultiProvider(
+      providers: [
+        ChangeNotifierProvider<AuthController>.value(value: auth),
+        if (telemetry != null)
+          Provider<TelemetryClient>(
+            create: (_) => telemetry,
+            dispose: (_, client) => client.dispose(),
+          ),
+      ],
+      child: _TelemetryStarter(
+        child: MaterialApp(
+          title: 'Wallet Bot',
+          theme: ThemeData(
+            colorScheme: ColorScheme.fromSeed(seedColor: Colors.greenAccent),
+          ),
+          home: const _AuthGate(),
         ),
-        home: const _AuthGate(),
       ),
     );
   }
+}
+
+class _TelemetryStarter extends StatefulWidget {
+  const _TelemetryStarter({required this.child});
+
+  final Widget child;
+
+  @override
+  State<_TelemetryStarter> createState() => _TelemetryStarterState();
+}
+
+class _TelemetryStarterState extends State<_TelemetryStarter> {
+  bool _sent = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_sent) return;
+    final telemetry = context.read<TelemetryClient?>();
+    if (telemetry == null) return;
+    _sent = true;
+    unawaited(telemetry.track('app.started'));
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.child;
 }
 
 class _AuthGate extends StatelessWidget {
