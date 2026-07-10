@@ -1,6 +1,7 @@
 import 'package:app/auth/account.dart';
 import 'package:app/auth/auth_controller.dart';
 import 'package:app/auth/pop_on_account_switch.dart';
+import 'package:app/app_config/app_config_banner_list.dart';
 import 'package:app/components/dashboard/add_widget_sheet.dart';
 import 'package:app/components/dashboard/dashboard_section.dart';
 import 'package:app/components/dashboard/default_dashboard.dart';
@@ -225,6 +226,7 @@ class _HomeScreenState extends State<HomeScreen> {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
+          const AppConfigBannerList(placement: 'home', bottomSpacing: 16),
           DashboardSection(
             editing: _editing,
             onStartEditing: () => setState(() => _editing = true),
