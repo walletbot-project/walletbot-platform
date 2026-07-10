@@ -366,15 +366,6 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
       final result = await _executors.execute(name, args);
       _events.add(VoiceToolResultEvent(id: id, name: name, result: result));
 
-      if (editableToolNames.contains(name) &&
-          result['ok'] == true &&
-          result['id'] is String) {
-        _events.add(VoiceActionResultEvent(
-          toolName: name,
-          entityId: result['id'] as String,
-        ));
-      }
-
       responses.add({
         if (id.isNotEmpty) 'id': id,
         'name': name,

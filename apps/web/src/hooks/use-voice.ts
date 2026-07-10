@@ -4,6 +4,7 @@ import {
     type Session,
 } from '@google/genai'
 import { api } from '@wallet-bot/backend/api'
+import type { ToolName } from '@wallet-bot/shared'
 import { useConvex } from 'convex/react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { executeToolCall } from '@/lib/agent-tools'
@@ -69,8 +70,13 @@ export const EDITABLE_TOOL_NAMES = [
     'addTransfer',
     'addBalanceAdjustment',
     'createAccount',
+    'updateAccount',
     'createCategory',
-] as const
+    'updateCategory',
+    'createTag',
+    'updateTag',
+    'updateTransaction',
+] as const satisfies readonly ToolName[]
 
 export type EditableToolName = (typeof EDITABLE_TOOL_NAMES)[number]
 
@@ -117,7 +123,6 @@ export type ChatMessage =
           at: Date
           toolName: EditableToolName
           entityId: string
-          toolArgs: Record<string, unknown>
       }
 
 // Hook
@@ -321,6 +326,7 @@ export function useVoice(opts: UseVoiceOpts) {
                 )
                 if (
                     toolMsg &&
+                    toolMsg.status === 'pending' &&
                     isEditableTool(toolMsg.name) &&
                     result.ok === true &&
                     typeof result.id === 'string'
@@ -333,7 +339,6 @@ export function useVoice(opts: UseVoiceOpts) {
                             at: new Date(),
                             toolName: toolMsg.name,
                             entityId: result.id,
-                            toolArgs: toolMsg.args,
                         },
                     ]
                 }

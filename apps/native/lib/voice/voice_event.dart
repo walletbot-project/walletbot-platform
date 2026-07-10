@@ -1,13 +1,3 @@
-/// Tool names whose results produce an editable action card in the chat UI.
-const Set<String> editableToolNames = {
-  'addExpense',
-  'addIncome',
-  'addTransfer',
-  'addBalanceAdjustment',
-  'createAccount',
-  'createCategory',
-};
-
 /// Structured events emitted by a [VoiceExpenseCommand] for the UI to render
 /// as a chat conversation. Each event is one observable moment in the
 /// session — speech delta, tool call, lifecycle change, or system notice.
@@ -95,12 +85,4 @@ class VoiceToolResultEvent extends VoiceEvent {
 class VoiceToolCancelledEvent extends VoiceEvent {
   VoiceToolCancelledEvent(this.ids);
   final List<String> ids;
-}
-
-/// Emitted after a successful write tool call whose entity can be edited
-/// inline from the chat UI.
-class VoiceActionResultEvent extends VoiceEvent {
-  VoiceActionResultEvent({required this.toolName, required this.entityId});
-  final String toolName;
-  final String entityId;
 }
