@@ -4,19 +4,21 @@
 schema. `apps/native/drift_schemas/` stores the versioned snapshots used to
 test it.
 
-## Current baseline
+## Current schema
 
-The complete current schema is `v1`. This is an intentional pre-release reset:
-existing development installations are not supported and must clear app data
-or reinstall. No public release may rely on an older local schema.
+The complete current schema is `v3`. The app must preserve local data when
+opening databases from historical development versions that can be identified
+and migrated safely.
 
-The v1 snapshot becomes immutable when the first public native build ships.
-After that point, deleting local data is not a migration strategy.
+Known upgrade paths from `v1` and `v2` are handled by `AppDatabase.migration`.
+Unsupported paths must fail explicitly instead of guessing or silently dropping
+data. Deleting local data is not a migration strategy.
 
-## Before the first public release
+## Updating the schema
 
-Schema corrections may remain in `v1`, but every correction must regenerate
-the snapshot and test helper:
+Every schema correction must bump `AppDatabase.schemaVersion`, implement the
+upgrade path from the previous supported version, and regenerate the snapshot
+and test helper:
 
 ```bash
 cd apps/native
@@ -27,8 +29,6 @@ flutter test test/database_migration_test.dart
 ```
 
 Generated JSON and Dart files must not be edited by hand.
-
-## After the first public release
 
 For every schema change:
 

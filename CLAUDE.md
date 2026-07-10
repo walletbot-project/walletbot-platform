@@ -45,13 +45,11 @@ Wallet Bot — app for keeping track of personal expenses
 - After implementing a feature, review `docs/riesgos.md` and decide whether
   the feature mitigates an existing risk, changes its probability or impact, or
   introduces a new risk that should be added.
-- The current native SQLite schema is the pre-release `v1` baseline. Until the
-  first public build, schema edits may update that baseline but must regenerate
-  `apps/native/drift_schemas/` and its generated test helpers.
-- After the first public native release, never rewrite or reuse a Drift schema
-  version. Every schema change must increment `schemaVersion`, implement an
-  explicit data-preserving `onUpgrade` path, export a new schema snapshot, and
-  add schema plus data-integrity migration tests. Follow `docs/schema/README.md`.
+- The current native SQLite schema is `v3`. Do not reset the baseline or ask
+  testers to reinstall as a substitute for migrations. Every schema change must
+  increment `schemaVersion`, implement an explicit data-preserving `onUpgrade`
+  path, export a new schema snapshot, and add schema plus data-integrity
+  migration tests. Follow `docs/schema/README.md`.
 - After all steps of any task run a CLAUDE.md rules check
 - Always report violations
 

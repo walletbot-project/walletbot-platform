@@ -16,7 +16,7 @@
 - etc. -->
 
 <!-- SQLite / Drift checklist (delete when not applicable):
-- Bump AppDatabase.schemaVersion for every post-release schema change
+- Bump AppDatabase.schemaVersion for every schema change
 - Add an explicit onUpgrade path that preserves existing local data
 - Regenerate drift_schemas/ and test/generated_migrations/
 - Add migration schema + data-integrity tests
