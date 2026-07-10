@@ -1,0 +1,2 @@
+apps/native/drift_schemas/** linguist-generated=true
+apps/native/test/generated_migrations/** linguist-generated=true

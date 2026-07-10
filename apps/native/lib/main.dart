@@ -67,83 +67,13 @@ class _AuthGate extends StatelessWidget {
   Widget build(BuildContext context) {
     final active = context.watch<AuthController>().activeAccount;
     if (active == null) return const LoginScreen();
-    return _AccountDatabaseScope(
-      key: ValueKey(active.id),
-      accountId: active.id,
-    );
-  }
-}
-
-class _AccountDatabaseScope extends StatefulWidget {
-  const _AccountDatabaseScope({super.key, required this.accountId});
-
-  final String accountId;
-
-  @override
-  State<_AccountDatabaseScope> createState() => _AccountDatabaseScopeState();
-}
-
-class _AccountDatabaseScopeState extends State<_AccountDatabaseScope> {
-  late final AppDatabase _db;
-  late final Future<void> _openDb;
-  bool _reportedOpenError = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _db = AppDatabase.forUser(widget.accountId);
-    _openDb = _db.ensureReady();
-  }
-
-  @override
-  void dispose() {
-    unawaited(_db.close());
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return FutureBuilder<void>(
-      future: _openDb,
-      builder: (context, snapshot) {
-        if (snapshot.hasError) {
-          final error = snapshot.error!;
-          if (!_reportedOpenError) {
-            _reportedOpenError = true;
-            FlutterError.reportError(
-              FlutterErrorDetails(
-                exception: error,
-                stack: snapshot.stackTrace,
-                library: 'walletbot startup',
-                context: ErrorDescription('opening the local account database'),
-              ),
-            );
-          }
-          return _FatalStartupError(error: error);
-        }
-
-        if (snapshot.connectionState != ConnectionState.done) {
-          return const Scaffold(
-            body: Center(child: CircularProgressIndicator()),
-          );
-        }
-
-        return _AccountProviders(db: _db);
-      },
-    );
-  }
-}
-
-class _AccountProviders extends StatelessWidget {
-  const _AccountProviders({required this.db});
-
-  final AppDatabase db;
-
-  @override
-  Widget build(BuildContext context) {
     return MultiProvider(
+      key: ValueKey(active.id),
       providers: [
-        Provider<AppDatabase>.value(value: db),
+        Provider<AppDatabase>(
+          create: (_) => AppDatabase.forUser(active.id),
+          dispose: (_, db) => db.close(),
+        ),
         // The app-facing data layer: all reads/writes from screens and the
         // voice agent go through this. Scoped to the account subtree so it is
         // recreated together with the database on account switch.
@@ -164,56 +94,6 @@ class _AccountProviders extends StatelessWidget {
         ),
       ],
       child: const _SyncStarter(child: AppMain()),
-    );
-  }
-}
-
-class _FatalStartupError extends StatelessWidget {
-  const _FatalStartupError({required this.error});
-
-  final Object error;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Scaffold(
-      backgroundColor: theme.colorScheme.errorContainer,
-      body: SafeArea(
-        child: Center(
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 560),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Icon(
-                    Icons.error_outline_rounded,
-                    size: 48,
-                    color: theme.colorScheme.onErrorContainer,
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    'No se pudo abrir la base local',
-                    style: theme.textTheme.headlineSmall?.copyWith(
-                      color: theme.colorScheme.onErrorContainer,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  SelectableText(
-                    '$error',
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      color: theme.colorScheme.onErrorContainer,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
     );
   }
 }

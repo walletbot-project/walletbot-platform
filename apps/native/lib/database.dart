@@ -31,9 +31,9 @@ class Accounts extends Table {
   TextColumn get description => text().named('description').nullable()();
   // Always defined (business rule): non-null with a DB default.
   TextColumn get color =>
-      text().named('color').withDefault(const Constant(kDefaultAccountColor))();
+      text().named('color').withDefault(const Constant('#3B82F6'))();
   TextColumn get icon =>
-      text().named('icon').withDefault(const Constant(kDefaultAccountIcon))();
+      text().named('icon').withDefault(const Constant('wallet'))();
 
   BoolColumn get archived =>
       boolean().named('is_archived').withDefault(const Constant(false))();
@@ -59,11 +59,10 @@ class Categories extends Table {
   TextColumn get name => text().named('name')();
   TextColumn get description => text().named('description').nullable()();
   // Always defined (business rule): non-null with a DB default.
-  TextColumn get color => text()
-      .named('color')
-      .withDefault(const Constant(kDefaultCategoryColor))();
+  TextColumn get color =>
+      text().named('color').withDefault(const Constant('#6366F1'))();
   TextColumn get icon =>
-      text().named('icon').withDefault(const Constant(kDefaultCategoryIcon))();
+      text().named('icon').withDefault(const Constant('category'))();
 
   BoolColumn get archived =>
       boolean().named('is_archived').withDefault(const Constant(false))();
@@ -154,7 +153,7 @@ class Tags extends Table {
   TextColumn get parentId => text().named('parent_id').nullable()();
   // Always defined (business rule): non-null with a DB default.
   TextColumn get color =>
-      text().named('color').withDefault(const Constant(kDefaultTagColor))();
+      text().named('color').withDefault(const Constant('#69F0AE'))();
 
   BoolColumn get archived =>
       boolean().named('is_archived').withDefault(const Constant(false))();
@@ -317,36 +316,16 @@ class AppDatabase extends _$AppDatabase {
   /// `NativeDatabase.memory()`). Production code must use [AppDatabase.forUser].
   AppDatabase.forTesting(super.executor);
 
-  /// Opens the underlying SQLite connection immediately, running any pending
-  /// migrations before the app starts using repositories, screens, or sync.
-  Future<void> ensureReady() async {
-    await customSelect('SELECT 1').getSingleOrNull();
-  }
-
   @override
-  int get schemaVersion => 3;
+  int get schemaVersion => 1;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
-    onCreate: (m) async => m.createAll(),
-    onUpgrade: (m, from, to) async {
-      if (to != schemaVersion || from >= to) {
-        throw UnsupportedError(
-          'Unhandled SQLite migration path: v$from -> v$to. '
-          'Define an explicit upgrade path in AppDatabase.migration.',
-        );
-      }
-
-      if (from < 3) {
-        await _migrateToV3(m);
-        return;
-      }
-
-      throw UnsupportedError(
-        'Unhandled SQLite migration path: v$from -> v$to. '
-        'Define an explicit upgrade path in AppDatabase.migration.',
-      );
-    },
+    onCreate: (m) => m.createAll(),
+    onUpgrade: (_, from, to) => throw UnsupportedError(
+      'No SQLite migration is registered for v$from -> v$to. '
+      'Add and test the migration before bumping schemaVersion.',
+    ),
   );
 
   static String _dbNameFor(String userId) => 'app_database_$userId';
@@ -358,130 +337,6 @@ class AppDatabase extends _$AppDatabase {
         databaseDirectory: getApplicationSupportDirectory,
       ),
     );
-  }
-
-  Future<void> _migrateToV3(Migrator m) async {
-    await _ensureDashboardSchema(m);
-
-    for (final tableName in const [
-      'accounts',
-      'categories',
-      'transactions',
-      'tags',
-    ]) {
-      await _renameArchivedColumnIfNeeded(tableName);
-    }
-
-    await _ensureAccentColumns(m);
-
-    final transactionColumns = await _columnNames('transactions');
-    if (!transactionColumns.contains('date_confirmed')) {
-      await m.addColumn(transactions, transactions.dateConfirmed);
-    }
-  }
-
-  Future<void> _ensureDashboardSchema(Migrator m) async {
-    if (!await _tableExists('saved_filters')) {
-      await m.createTable(savedFilters);
-    }
-    if (!await _tableExists('dashboard_widgets')) {
-      await m.createTable(dashboardWidgets);
-    }
-
-    final syncStateColumns = await _columnNames('sync_state');
-    if (!syncStateColumns.contains('dashboard_seeded')) {
-      await m.addColumn(syncState, syncState.dashboardSeeded);
-    }
-  }
-
-  Future<void> _ensureAccentColumns(Migrator m) async {
-    await _addColumnIfMissing(
-      'accounts',
-      'color',
-      () => m.addColumn(accounts, accounts.color),
-    );
-    await _fillNullText('accounts', 'color', kDefaultAccountColor);
-
-    await _addColumnIfMissing(
-      'accounts',
-      'icon',
-      () => m.addColumn(accounts, accounts.icon),
-    );
-    await _fillNullText('accounts', 'icon', kDefaultAccountIcon);
-
-    await _addColumnIfMissing(
-      'categories',
-      'color',
-      () => m.addColumn(categories, categories.color),
-    );
-    await _fillNullText('categories', 'color', kDefaultCategoryColor);
-
-    await _addColumnIfMissing(
-      'categories',
-      'icon',
-      () => m.addColumn(categories, categories.icon),
-    );
-    await _fillNullText('categories', 'icon', kDefaultCategoryIcon);
-
-    await _addColumnIfMissing(
-      'tags',
-      'color',
-      () => m.addColumn(tags, tags.color),
-    );
-    await _fillNullText('tags', 'color', kDefaultTagColor);
-
-    await m.alterTable(TableMigration(accounts));
-    await m.alterTable(TableMigration(categories));
-    await m.alterTable(TableMigration(tags));
-  }
-
-  Future<void> _addColumnIfMissing(
-    String tableName,
-    String columnName,
-    Future<void> Function() addColumn,
-  ) async {
-    final columns = await _columnNames(tableName);
-    if (!columns.contains(columnName)) {
-      await addColumn();
-    }
-  }
-
-  Future<void> _fillNullText(
-    String tableName,
-    String columnName,
-    String value,
-  ) async {
-    final columns = await _columnNames(tableName);
-    if (!columns.contains(columnName)) return;
-
-    await customStatement(
-      'UPDATE "$tableName" SET "$columnName" = ? WHERE "$columnName" IS NULL',
-      [value],
-    );
-  }
-
-  Future<void> _renameArchivedColumnIfNeeded(String tableName) async {
-    final columns = await _columnNames(tableName);
-    if (!columns.contains('archived') || columns.contains('is_archived')) {
-      return;
-    }
-
-    await customStatement(
-      'ALTER TABLE "$tableName" RENAME COLUMN "archived" TO "is_archived"',
-    );
-  }
-
-  Future<bool> _tableExists(String tableName) async {
-    final row = await customSelect(
-      "SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?",
-      variables: [Variable<String>(tableName)],
-    ).getSingleOrNull();
-    return row != null;
-  }
-
-  Future<Set<String>> _columnNames(String tableName) async {
-    final rows = await customSelect('PRAGMA table_info("$tableName")').get();
-    return rows.map((row) => row.read<String>('name')).toSet();
   }
 
   static Future<void> deleteForUser(String userId) async {

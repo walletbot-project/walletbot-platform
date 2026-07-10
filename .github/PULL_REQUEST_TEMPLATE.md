@@ -15,11 +15,11 @@
 - Dependencies to install
 - etc. -->
 
-<!-- Schema / migration checklist (delete items that do not apply):
-- If Convex schema changed, update docs/schema/convex-schema.md
-- If SQLite/Drift schema changed, bump schemaVersion and define an explicit migration path
-- If any persisted schema changed, add/update docs/schema/migrations/*
-- If a backfill is required, document it here and in the migration doc
+<!-- SQLite / Drift checklist (delete when not applicable):
+- Bump AppDatabase.schemaVersion for every post-release schema change
+- Add an explicit onUpgrade path that preserves existing local data
+- Regenerate drift_schemas/ and test/generated_migrations/
+- Add migration schema + data-integrity tests
 -->
 
 ## Acceptance Tests
