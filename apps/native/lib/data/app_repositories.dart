@@ -2,6 +2,8 @@ import '../database.dart';
 import 'entity_resolver.dart';
 import 'repositories/account_repository.dart';
 import 'repositories/category_repository.dart';
+import 'repositories/dashboard_repository.dart';
+import 'repositories/saved_filter_repository.dart';
 import 'repositories/summary_repository.dart';
 import 'repositories/tag_repository.dart';
 import 'repositories/transaction_repository.dart';
@@ -21,6 +23,8 @@ class AppRepositories {
       tags = TagRepository(db),
       transactions = TransactionRepository(db),
       summaries = SummaryRepository(db),
+      savedFilters = SavedFilterRepository(db),
+      dashboard = DashboardRepository(db),
       resolver = EntityResolver(db);
 
   final AccountRepository accounts;
@@ -28,5 +32,7 @@ class AppRepositories {
   final TagRepository tags;
   final TransactionRepository transactions;
   final SummaryRepository summaries;
+  final SavedFilterRepository savedFilters;
+  final DashboardRepository dashboard;
   final EntityResolver resolver;
 }

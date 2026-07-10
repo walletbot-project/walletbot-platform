@@ -99,6 +99,8 @@ class SyncEngine extends ChangeNotifier {
             _db.tags,
             _db.transactions,
             _db.transactionTags,
+            _db.savedFilters,
+            _db.dashboardWidgets,
             _db.tombstones,
           ]),
         )
@@ -323,6 +325,24 @@ class SyncEngine extends ChangeNotifier {
     chunk.tags.addAll(dirtyTags);
     if (chunk.size >= pushChunkLimit) return chunk;
 
+    // Dashboard layout: saved filters before widgets (a widget's `filterId`
+    // soft-references a saved filter), mirroring accounts → transactions.
+    final dirtySavedFilters =
+        await (_db.select(_db.savedFilters)
+              ..where((f) => f.dirty.equals(true))
+              ..limit(pushChunkLimit - chunk.size))
+            .get();
+    chunk.savedFilters.addAll(dirtySavedFilters);
+    if (chunk.size >= pushChunkLimit) return chunk;
+
+    final dirtyDashboardWidgets =
+        await (_db.select(_db.dashboardWidgets)
+              ..where((w) => w.dirty.equals(true))
+              ..limit(pushChunkLimit - chunk.size))
+            .get();
+    chunk.dashboardWidgets.addAll(dirtyDashboardWidgets);
+    if (chunk.size >= pushChunkLimit) return chunk;
+
     final dirtyTxns =
         await (_db.select(_db.transactions)
               ..where((t) => t.dirty.equals(true))
@@ -382,6 +402,14 @@ class SyncEngine extends ChangeNotifier {
           'categories': chunk.categories.map(_serializeCategory).toList(),
         if (chunk.tags.isNotEmpty)
           'tags': chunk.tags.map(_serializeTag).toList(),
+        if (chunk.savedFilters.isNotEmpty)
+          'savedFilters': chunk.savedFilters
+              .map(_serializeSavedFilter)
+              .toList(),
+        if (chunk.dashboardWidgets.isNotEmpty)
+          'dashboardWidgets': chunk.dashboardWidgets
+              .map(_serializeDashboardWidget)
+              .toList(),
         if (chunk.transactions.isNotEmpty)
           'transactions': chunk.transactions
               .map(_serializeTransaction)
@@ -445,6 +473,26 @@ class SyncEngine extends ChangeNotifier {
         if (cur != null && cur.updatedAt == tg.updatedAt) {
           await (_db.update(_db.tags)..where((row) => row.id.equals(tg.id)))
               .write(const TagsCompanion(dirty: Value(false)));
+        }
+      }
+      for (final f in chunk.savedFilters) {
+        final cur = await (_db.select(
+          _db.savedFilters,
+        )..where((row) => row.id.equals(f.id))).getSingleOrNull();
+        if (cur != null && cur.updatedAt == f.updatedAt) {
+          await (_db.update(_db.savedFilters)
+                ..where((row) => row.id.equals(f.id)))
+              .write(const SavedFiltersCompanion(dirty: Value(false)));
+        }
+      }
+      for (final w in chunk.dashboardWidgets) {
+        final cur = await (_db.select(
+          _db.dashboardWidgets,
+        )..where((row) => row.id.equals(w.id))).getSingleOrNull();
+        if (cur != null && cur.updatedAt == w.updatedAt) {
+          await (_db.update(_db.dashboardWidgets)
+                ..where((row) => row.id.equals(w.id)))
+              .write(const DashboardWidgetsCompanion(dirty: Value(false)));
         }
       }
       for (final t in chunk.transactions) {
@@ -529,6 +577,27 @@ class SyncEngine extends ChangeNotifier {
     'updatedAt': row.updatedAt,
   };
 
+  Map<String, Object?> _serializeSavedFilter(SavedFilter row) => {
+    'id': row.id,
+    'name': row.name,
+    'config': row.config,
+    'isArchived': row.archived,
+    'createdAt': row.createdAt,
+    'updatedAt': row.updatedAt,
+  };
+
+  Map<String, Object?> _serializeDashboardWidget(DashboardWidget row) => {
+    'id': row.id,
+    'type': row.type,
+    if (row.filterId != null) 'filterId': row.filterId,
+    'position': row.position,
+    'width': row.width,
+    'options': row.options,
+    'isArchived': row.archived,
+    'createdAt': row.createdAt,
+    'updatedAt': row.updatedAt,
+  };
+
   Map<String, Object?> _serializeTransaction(Transaction row) => {
     'id': row.id,
     'type': row.type,
@@ -573,6 +642,8 @@ class _Chunk {
   final List<Account> accounts = [];
   final List<Category> categories = [];
   final List<Tag> tags = [];
+  final List<SavedFilter> savedFilters = [];
+  final List<DashboardWidget> dashboardWidgets = [];
   final List<Transaction> transactions = [];
   final List<TransactionTag> transactionTags = [];
   final List<Tombstone> tombstones = [];
@@ -581,6 +652,8 @@ class _Chunk {
       accounts.length +
       categories.length +
       tags.length +
+      savedFilters.length +
+      dashboardWidgets.length +
       transactions.length +
       transactionTags.length +
       tombstones.length;

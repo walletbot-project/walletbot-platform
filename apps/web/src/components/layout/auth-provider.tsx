@@ -1,11 +1,12 @@
 import { useCallback, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useCachedSession } from '@/hooks/use-cached-session'
 import { authClient } from '@/lib/auth-client'
 import { AuthContext } from '@/lib/auth-context'
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
     const navigate = useNavigate()
-    const { data: session } = authClient.useSession()
+    const { session } = useCachedSession()
 
     const signOut = useCallback(async () => {
         await authClient.signOut()

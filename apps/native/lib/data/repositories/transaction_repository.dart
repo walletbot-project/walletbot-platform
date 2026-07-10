@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:drift/drift.dart';
 
 import '../../database.dart';
@@ -25,33 +23,7 @@ class TransactionRepository extends RepositoryBase {
     TransactionFilter filter, {
     int? limit,
     TxnOrdering ordering = TxnOrdering.createdAtDesc,
-  }) {
-    if (filter.tagIds.isEmpty || !filter.includeSubtags) {
-      final groups = expandTagGroups(filter, const []);
-      return buildTransactionQuery(
-        db,
-        filter,
-        tagGroups: groups,
-        limit: limit,
-        ordering: ordering,
-      ).watch();
-    }
-    final tagsStream = (db.select(
-      db.tags,
-    )..where((t) => t.archived.equals(false))).watch();
-    final groupsStream = tagsStream
-        .map((tags) => expandTagGroups(filter, tags))
-        .distinct(_tagGroupsEqual);
-    return _switchMap(groupsStream, (groups) {
-      return buildTransactionQuery(
-        db,
-        filter,
-        tagGroups: groups,
-        limit: limit,
-        ordering: ordering,
-      ).watch();
-    });
-  }
+  }) => watchFilteredTransactions(db, filter, limit: limit, ordering: ordering);
 
   /// One-shot variant of [watch], used by the agent tools.
   /// [exactFromMs]/[exactToInclusiveMs] add precise inclusive timestamp
@@ -65,10 +37,11 @@ class TransactionRepository extends RepositoryBase {
     BigInt? exactToInclusiveMs,
   }) async {
     List<Set<String>> groups;
-    if (filter.tagIds.isEmpty || !filter.includeSubtags) {
+    List<Tag> tags = const [];
+    if (!filter.rootGroup.containsSubtagExpansion) {
       groups = expandTagGroups(filter, const []);
     } else {
-      final tags = await (db.select(
+      tags = await (db.select(
         db.tags,
       )..where((t) => t.archived.equals(false))).get();
       groups = expandTagGroups(filter, tags);
@@ -77,6 +50,7 @@ class TransactionRepository extends RepositoryBase {
       db,
       filter,
       tagGroups: groups,
+      activeTags: tags,
       limit: limit,
       ordering: ordering,
       exactFromMs: exactFromMs,
@@ -423,44 +397,4 @@ class TransactionRepository extends RepositoryBase {
     }
     return added;
   }
-}
-
-bool _tagGroupsEqual(List<Set<String>> a, List<Set<String>> b) {
-  if (a.length != b.length) return false;
-  for (var i = 0; i < a.length; i++) {
-    if (a[i].length != b[i].length || !a[i].containsAll(b[i])) return false;
-  }
-  return true;
-}
-
-/// Minimal switchMap: each outer event cancels the previous inner
-/// subscription before subscribing to the new inner stream.
-Stream<T> _switchMap<S, T>(
-  Stream<S> source,
-  Stream<T> Function(S value) mapper,
-) {
-  late StreamController<T> controller;
-  StreamSubscription<S>? outer;
-  StreamSubscription<T>? inner;
-  controller = StreamController<T>(
-    onListen: () {
-      outer = source.listen(
-        (value) {
-          inner?.cancel();
-          inner = mapper(
-            value,
-          ).listen(controller.add, onError: controller.addError);
-        },
-        onError: controller.addError,
-        // Drift watch streams only complete when the database closes; at that
-        // point the inner stream is closing too.
-        onDone: () => controller.close(),
-      );
-    },
-    onCancel: () async {
-      await inner?.cancel();
-      await outer?.cancel();
-    },
-  );
-  return controller.stream;
 }

@@ -53,7 +53,7 @@ class AuthController extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<UserAccount> signInWithGoogle() async {
+  Future<UserAccount> signInWithGoogle({bool rejectExisting = false}) async {
     final googleAccount = await GoogleSignIn.instance.authenticate();
     final idToken = googleAccount.authentication.idToken;
     if (idToken == null) {
@@ -61,37 +61,56 @@ class AuthController extends ChangeNotifier {
     }
 
     final body = await _postJson('/auth/google', {'idToken': idToken});
-    final userJson = body['user'] as Map<String, Object?>?;
-    if (userJson == null) {
-      throw StateError('Sign-in response missing user');
-    }
-
-    final account = UserAccount(
-      id: userJson['id'] as String,
-      type: AccountType.remote,
-      name: userJson['name'] as String?,
-      email: userJson['email'] as String?,
-      picture: userJson['image'] as String?,
-      // Wire format kept as `refreshToken` for backward compat with the
-      // backend response.
-      sessionToken: body['refreshToken'] as String,
+    return _saveRemoteAccountFromAuthResponse(
+      body,
+      rejectExisting: rejectExisting,
     );
-
-    _accounts = [
-      for (final a in _accounts)
-        if (a.id != account.id) a,
-      account,
-    ];
-    _activeId = account.id;
-    await _persist();
-    await _attachAuthForActive();
-    notifyListeners();
-    return account;
   }
 
-  Future<UserAccount> addLocal({String? name}) async {
+  Future<UserAccount> signInWithEmail({
+    required String email,
+    required String password,
+    bool rejectExisting = false,
+  }) async {
+    final body = await _postJson('/auth/email/sign-in', {
+      'email': email,
+      'password': password,
+    });
+    return _saveRemoteAccountFromAuthResponse(
+      body,
+      rejectExisting: rejectExisting,
+    );
+  }
+
+  Future<UserAccount> signUpWithEmail({
+    required String name,
+    required String email,
+    required String password,
+    bool rejectExisting = false,
+  }) async {
+    final body = await _postJson('/auth/email/sign-up', {
+      'name': name,
+      'email': email,
+      'password': password,
+    });
+    return _saveRemoteAccountFromAuthResponse(
+      body,
+      rejectExisting: rejectExisting,
+    );
+  }
+
+  Future<UserAccount> addLocal({required String name}) async {
+    final trimmedName = name.trim();
+    if (trimmedName.isEmpty) {
+      throw ArgumentError.value(name, 'name', 'Local accounts require a name');
+    }
+
     final id = 'local_${DateTime.now().microsecondsSinceEpoch}';
-    final account = UserAccount(id: id, type: AccountType.local, name: name);
+    final account = UserAccount(
+      id: id,
+      type: AccountType.local,
+      name: trimmedName,
+    );
     _accounts = [..._accounts, account];
     _activeId = id;
     await _persist();
@@ -167,6 +186,45 @@ class AuthController extends ChangeNotifier {
   // ---------------------------------------------------------------------------
   // Internals
   // ---------------------------------------------------------------------------
+
+  Future<UserAccount> _saveRemoteAccountFromAuthResponse(
+    Map<String, Object?> body, {
+    bool rejectExisting = false,
+  }) async {
+    final userJson = body['user'] as Map<String, Object?>?;
+    if (userJson == null) {
+      throw StateError('Sign-in response missing user');
+    }
+
+    final account = UserAccount(
+      id: userJson['id'] as String,
+      type: AccountType.remote,
+      name: userJson['name'] as String?,
+      email: userJson['email'] as String?,
+      picture: userJson['image'] as String?,
+      // Wire format kept as `refreshToken` for backward compat with the
+      // backend response.
+      sessionToken: body['refreshToken'] as String,
+    );
+
+    // When the user is explicitly adding an account (vs. re-authenticating an
+    // existing one), signing into an account already on the device is a no-op
+    // that would silently switch to it. Surface it as an error instead.
+    if (rejectExisting && _accounts.any((a) => a.id == account.id)) {
+      throw AccountAlreadyAddedError(account.email);
+    }
+
+    _accounts = [
+      for (final a in _accounts)
+        if (a.id != account.id) a,
+      account,
+    ];
+    _activeId = account.id;
+    await _persist();
+    await _attachAuthForActive();
+    notifyListeners();
+    return account;
+  }
 
   Future<void> _attachAuthForActive() async {
     await _detachAuth();
@@ -268,6 +326,16 @@ class AuthController extends ChangeNotifier {
     });
     return write;
   }
+}
+
+/// Thrown when the user tries to add an account that is already on the device.
+class AccountAlreadyAddedError implements Exception {
+  AccountAlreadyAddedError(this.email);
+
+  final String? email;
+
+  @override
+  String toString() => 'Account already added: ${email ?? '(unknown email)'}';
 }
 
 class _AuthHttpError implements Exception {

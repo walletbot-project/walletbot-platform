@@ -8,7 +8,14 @@ import 'package:provider/provider.dart';
 import 'package:app/screens/transaction_form.dart';
 
 class ActivityScreen extends StatefulWidget {
-  const ActivityScreen({super.key});
+  const ActivityScreen({
+    super.key,
+    this.initialFilter = const TransactionFilter(),
+    this.filterRevision = 0,
+  });
+
+  final TransactionFilter initialFilter;
+  final int filterRevision;
 
   @override
   State<ActivityScreen> createState() => _ActivityScreenState();
@@ -57,7 +64,16 @@ class _ActivityScreenState extends State<ActivityScreen> {
   @override
   void initState() {
     super.initState();
+    _filter = widget.initialFilter;
     _scrollController.addListener(_onScroll);
+  }
+
+  @override
+  void didUpdateWidget(ActivityScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.filterRevision == oldWidget.filterRevision) return;
+    _filter = widget.initialFilter;
+    _resetPagination();
   }
 
   @override
@@ -160,7 +176,11 @@ class _ActivityScreenState extends State<ActivityScreen> {
               ),
             ),
             StreamBuilder<List<Transaction>>(
-              stream: repos.transactions.watch(_filter, limit: _limit),
+              stream: repos.transactions.watch(
+                _filter,
+                limit: _limit,
+                ordering: TxnOrdering.dateDesc,
+              ),
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting &&
                     !snapshot.hasData) {
@@ -224,9 +244,9 @@ class _ActivityScreenState extends State<ActivityScreen> {
 
     DateTime? currentDay;
     for (final t in items) {
-      // Group by creation time so the day headers stay contiguous with the
-      // creation-order sorting above.
-      final dt = DateTime.fromMillisecondsSinceEpoch(t.createdAt.toInt());
+      // Group by transaction date (matches web). The list is ordered by date
+      // desc above, so day headers stay contiguous.
+      final dt = DateTime.fromMillisecondsSinceEpoch(t.date.toInt());
       final day = DateTime(dt.year, dt.month, dt.day);
       if (currentDay == null || day != currentDay) {
         entries.add(_HeaderEntry(label: _sectionLabel(day, today)));

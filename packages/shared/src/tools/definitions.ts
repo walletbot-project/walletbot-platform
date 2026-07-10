@@ -15,6 +15,11 @@ import { z } from 'zod'
 
 const transactionType = z.enum(['expense', 'income', 'transfer'])
 const transactionStatus = z.enum(['pending', 'cleared'])
+const dashboardWidgetType = z.enum(['stat', 'list', 'balance', 'chart'])
+const dashboardWidth = z.enum(['full', 'two_thirds', 'half', 'third'])
+const statAggregation = z.enum(['sum', 'net', 'count'])
+const breakdownGroupBy = z.enum(['category', 'account', 'month'])
+const breakdownChartKind = z.enum(['pie', 'bar', 'line'])
 
 const idOrName = z.string().describe('UUID or human name of the entity')
 const optionalIdOrName = idOrName.optional()
@@ -30,6 +35,25 @@ const tagList = z
     .array(idOrName)
     .describe(
         'Tag UUIDs or names. Created on the fly if names are unknown? No — must exist.',
+    )
+const canonicalFilterJson = z
+    .string()
+    .describe(
+        'Canonical saved-filter JSON string: { "combinator": "and"|"or", "not"?: boolean, "children": [...] }. Use fields type, status, date, account, category, tag, currency, amount, text. Omit or use an empty group for all transactions.',
+    )
+const dashboardBackground = z
+    .object({
+        mode: z.enum(['none', 'fixed', 'value']),
+        fixedColor: z.string().optional().describe('Hex color, e.g. #C8F2D8'),
+        low: z.number().optional(),
+        high: z.number().optional(),
+        lowColor: z.string().optional(),
+        betweenColor: z.string().optional(),
+        highColor: z.string().optional(),
+    })
+    .optional()
+    .describe(
+        'Optional widget background. fixed uses fixedColor. value compares the displayed widget value against low/high and uses lowColor/betweenColor/highColor.',
     )
 
 export const toolSchemas = {
@@ -246,5 +270,54 @@ export const toolSchemas = {
     summarizeByAccount: z.object({
         dateFrom: isoOrNaturalDate,
         dateTo: isoOrNaturalDate,
+    }),
+
+    // ───── Dashboard saved filters ─────
+    listSavedFilters: z.object({}),
+    createSavedFilter: z.object({
+        name: z.string(),
+        filterConfigJson: canonicalFilterJson,
+    }),
+    updateSavedFilter: z.object({
+        id: z.string(),
+        name: z.string().optional(),
+        filterConfigJson: canonicalFilterJson.optional(),
+    }),
+    archiveSavedFilter: z.object({
+        id: z.string(),
+    }),
+
+    // ───── Home dashboard widgets (native-only v1) ─────
+    listDashboardWidgets: z.object({}),
+    createDashboardWidget: z.object({
+        type: dashboardWidgetType,
+        title: z.string(),
+        width: dashboardWidth.optional(),
+        filterConfigJson: canonicalFilterJson.optional(),
+        aggregation: statAggregation.optional(),
+        limit: z.number().int().optional(),
+        currency: z.string().optional(),
+        groupBy: breakdownGroupBy.optional(),
+        chartKind: breakdownChartKind.optional(),
+        background: dashboardBackground,
+    }),
+    updateDashboardWidget: z.object({
+        id: z.string(),
+        type: dashboardWidgetType.optional(),
+        title: z.string().optional(),
+        width: dashboardWidth.optional(),
+        filterConfigJson: canonicalFilterJson.optional(),
+        aggregation: statAggregation.optional(),
+        limit: z.number().int().optional(),
+        currency: z.string().optional(),
+        groupBy: breakdownGroupBy.optional(),
+        chartKind: breakdownChartKind.optional(),
+        background: dashboardBackground,
+    }),
+    reorderDashboardWidgets: z.object({
+        ids: z.array(z.string()).describe('Dashboard widget ids in display order.'),
+    }),
+    archiveDashboardWidget: z.object({
+        id: z.string(),
     }),
 } satisfies Record<string, z.ZodType>
