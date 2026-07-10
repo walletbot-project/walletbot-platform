@@ -8,6 +8,7 @@ import 'package:record/record.dart';
 
 import '../voice/voice_event.dart';
 import '../voice/voice_expense_command.dart';
+import 'voice_action_widget.dart';
 
 /// Whether the model should respond with audio (TTS) when the user starts
 /// the session by sending a text message. Hardcoded for now; future work will
@@ -516,8 +517,21 @@ class _VoiceScreenState extends State<VoiceScreen> {
   }) {
     final tool = id.isNotEmpty ? _toolsById[id] : null;
     if (tool != null) {
+      final wasPending = tool.status == _ToolStatus.pending;
       tool.result = result;
       tool.status = _ToolStatus.completed;
+      if (wasPending &&
+          isPreviewableTool(tool.name) &&
+          result['ok'] == true &&
+          result['id'] is String) {
+        _items.add(
+          _ActionResultItem(
+            at: DateTime.now(),
+            toolName: tool.name,
+            entityId: result['id'] as String,
+          ),
+        );
+      }
     } else {
       _addSystem(
         'Tool response with no matching call: $result',
@@ -698,6 +712,17 @@ class _SystemItem extends _ChatItem {
   final _SystemKind kind;
 }
 
+class _ActionResultItem extends _ChatItem {
+  _ActionResultItem({
+    required super.at,
+    required this.toolName,
+    required this.entityId,
+  });
+
+  final String toolName;
+  final String entityId;
+}
+
 enum _SystemKind { info, success, error }
 
 enum _StatusLevel { disconnected, connecting, connected }
@@ -718,6 +743,10 @@ class _ChatItemView extends StatelessWidget {
       _AgentBubbleItem() => _AgentBubble(item: item),
       _ToolItem() => _ToolCard(item: item),
       _SystemItem() => _SystemLine(item: item),
+      _ActionResultItem() => VoiceActionWidget(
+        toolName: item.toolName,
+        entityId: item.entityId,
+      ),
     };
   }
 }
