@@ -12,6 +12,7 @@ import 'package:app/screens/home.dart';
 import 'package:app/screens/insights.dart';
 import 'package:app/screens/login.dart';
 import 'package:app/screens/voice.dart';
+import 'package:app/settings/display_settings.dart';
 import 'package:app/shared/app_navigation.dart';
 import 'package:app/sync/sync_engine.dart';
 import 'package:app/voice/gemini_voice_expense_command.dart';
@@ -37,32 +38,54 @@ Future<void> main() async {
   );
 
   final auth = AuthController();
+  final displaySettings = DisplaySettingsController();
+  await displaySettings.load();
   await auth.load();
-  runApp(MyApp(auth: auth));
+  runApp(MyApp(auth: auth, displaySettings: displaySettings));
 }
 
 class MyApp extends StatelessWidget {
-  const MyApp({super.key, required this.auth, this.locale});
+  const MyApp({
+    super.key,
+    required this.auth,
+    required this.displaySettings,
+    this.locale,
+  });
 
   final AuthController auth;
+  final DisplaySettingsController displaySettings;
   final Locale? locale;
 
   @override
   Widget build(BuildContext context) {
-    return ChangeNotifierProvider<AuthController>.value(
-      value: auth,
-      child: MaterialApp(
-        locale: locale,
-        onGenerateTitle: (context) => context.l10n.appTitle,
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
-        supportedLocales: AppLocalizations.supportedLocales,
-        theme: ThemeData(
-          colorScheme: ColorScheme.fromSeed(seedColor: Colors.greenAccent),
+    return MultiProvider(
+      providers: [
+        ChangeNotifierProvider<AuthController>.value(value: auth),
+        ChangeNotifierProvider<DisplaySettingsController>.value(
+          value: displaySettings,
         ),
-        home: const _AuthGate(),
+      ],
+      child: Consumer<DisplaySettingsController>(
+        builder: (context, settings, _) => MaterialApp(
+          locale: locale ?? settings.locale,
+          onGenerateTitle: (context) => context.l10n.appTitle,
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          theme: _theme(Brightness.light),
+          darkTheme: _theme(Brightness.dark),
+          themeMode: settings.themeMode,
+          home: const _AuthGate(),
+        ),
       ),
     );
   }
+
+  ThemeData _theme(Brightness brightness) => ThemeData(
+    colorScheme: ColorScheme.fromSeed(
+      seedColor: Colors.greenAccent,
+      brightness: brightness,
+    ),
+  );
 }
 
 class _AuthGate extends StatelessWidget {

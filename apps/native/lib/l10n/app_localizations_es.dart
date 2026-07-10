@@ -222,6 +222,42 @@ class AppLocalizationsEs extends AppLocalizations {
   String get yourAccounts => 'Tus cuentas';
 
   @override
+  String get settings => 'Configuración';
+
+  @override
+  String get language => 'Idioma';
+
+  @override
+  String get languageDescription =>
+      'Elegí el idioma que se usa en toda la aplicación.';
+
+  @override
+  String get systemDefault => 'Predeterminado del sistema';
+
+  @override
+  String get english => 'Inglés';
+
+  @override
+  String get spanish => 'Español';
+
+  @override
+  String get theme => 'Tema';
+
+  @override
+  String get themeDescription =>
+      'Elegí cómo se ve la aplicación en este dispositivo.';
+
+  @override
+  String get lightTheme => 'Claro';
+
+  @override
+  String get darkTheme => 'Oscuro';
+
+  @override
+  String get settingsSaveFailed =>
+      'No se pudo guardar la configuración. Intentá de nuevo.';
+
+  @override
   String get noName => 'Sin nombre';
 
   @override

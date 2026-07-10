@@ -7,6 +7,7 @@ import 'package:app/components/dashboard/default_dashboard.dart';
 import 'package:app/data/data.dart';
 import 'package:app/l10n/l10n.dart';
 import 'package:app/screens/login.dart';
+import 'package:app/screens/settings.dart';
 import 'package:app/screens/transaction_form.dart';
 import 'package:app/shared/app_navigation.dart';
 import 'package:app/sync/sync_status_pill.dart';
@@ -114,6 +115,16 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                     );
                   },
+                ),
+                const Divider(),
+                ListTile(
+                  leading: const Icon(Icons.settings_rounded),
+                  title: Text(context.l10n.settings),
+                  onTap: () => Navigator.of(dialogContext).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => const SettingsScreen(),
+                    ),
+                  ),
                 ),
               ],
             ),

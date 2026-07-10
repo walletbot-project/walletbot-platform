@@ -1,0 +1,86 @@
+import 'package:app/l10n/l10n.dart';
+import 'package:app/screens/settings.dart';
+import 'package:app/settings/display_settings.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:provider/provider.dart';
+
+import '../helpers/memory_display_settings_store.dart';
+
+void main() {
+  testWidgets('changes the app language immediately', (tester) async {
+    final settings = DisplaySettingsController(
+      store: MemoryDisplaySettingsStore(),
+    );
+    await tester.pumpWidget(_SettingsTestApp(settings: settings));
+
+    expect(find.text('Settings'), findsWidgets);
+    expect(find.text('Language'), findsOneWidget);
+
+    await tester.tap(find.text('Language'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Spanish'));
+    await tester.pumpAndSettle();
+
+    expect(settings.language, DisplayLanguage.spanish);
+    expect(find.text('Configuración'), findsWidgets);
+    expect(find.text('Español'), findsOneWidget);
+  });
+
+  testWidgets('changes the app theme immediately', (tester) async {
+    final settings = DisplaySettingsController(
+      store: MemoryDisplaySettingsStore(),
+    );
+    await tester.pumpWidget(_SettingsTestApp(settings: settings));
+
+    expect(
+      Theme.of(tester.element(find.byType(SettingsScreen))).brightness,
+      Brightness.light,
+    );
+
+    await tester.tap(find.text('Theme'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Dark'));
+    await tester.pumpAndSettle();
+
+    expect(settings.theme, DisplayTheme.dark);
+    expect(
+      Theme.of(tester.element(find.byType(SettingsScreen))).brightness,
+      Brightness.dark,
+    );
+  });
+}
+
+class _SettingsTestApp extends StatelessWidget {
+  const _SettingsTestApp({required this.settings});
+
+  final DisplaySettingsController settings;
+
+  @override
+  Widget build(BuildContext context) {
+    return ChangeNotifierProvider.value(
+      value: settings,
+      child: Consumer<DisplaySettingsController>(
+        builder: (context, value, _) => MaterialApp(
+          locale: value.locale,
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          theme: ThemeData(
+            colorScheme: ColorScheme.fromSeed(
+              seedColor: Colors.greenAccent,
+              brightness: Brightness.light,
+            ),
+          ),
+          darkTheme: ThemeData(
+            colorScheme: ColorScheme.fromSeed(
+              seedColor: Colors.greenAccent,
+              brightness: Brightness.dark,
+            ),
+          ),
+          themeMode: value.themeMode,
+          home: const SettingsScreen(),
+        ),
+      ),
+    );
+  }
+}

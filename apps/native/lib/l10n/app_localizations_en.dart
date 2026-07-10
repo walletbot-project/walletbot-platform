@@ -221,6 +221,40 @@ class AppLocalizationsEn extends AppLocalizations {
   String get yourAccounts => 'Your accounts';
 
   @override
+  String get settings => 'Settings';
+
+  @override
+  String get language => 'Language';
+
+  @override
+  String get languageDescription =>
+      'Choose the language used throughout the app.';
+
+  @override
+  String get systemDefault => 'System default';
+
+  @override
+  String get english => 'English';
+
+  @override
+  String get spanish => 'Spanish';
+
+  @override
+  String get theme => 'Theme';
+
+  @override
+  String get themeDescription => 'Choose how the app looks on this device.';
+
+  @override
+  String get lightTheme => 'Light';
+
+  @override
+  String get darkTheme => 'Dark';
+
+  @override
+  String get settingsSaveFailed => 'Could not save the setting. Try again.';
+
+  @override
   String get noName => 'No name';
 
   @override
