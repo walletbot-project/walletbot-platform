@@ -11,10 +11,15 @@ String currencyPrefix(String code) => switch (code) {
   _ => '$code ',
 };
 
-/// Formats signed cents as currency in es-AR style ('.' thousands, ',' decimals).
-String formatMoney(int cents, String currency, {int decimalDigits = 2}) {
+/// Formats signed cents as currency using the active UI locale.
+String formatMoney(
+  int cents,
+  String currency, {
+  String? locale,
+  int decimalDigits = 2,
+}) {
   return NumberFormat.currency(
-    locale: 'es_AR',
+    locale: locale,
     symbol: currencyPrefix(currency),
     decimalDigits: decimalDigits,
   ).format(cents / 100);
@@ -56,16 +61,8 @@ int signedDisplayCents(String type, BigInt amount) {
 /// Formats absolute cents with thousands grouping: `123456` → `1,234.56`.
 /// Sign and currency-symbol layout are the caller's concern (the transaction
 /// row and the summary card place them differently).
-String formatCentsUnsigned(int absCents) {
-  final whole = absCents ~/ 100;
-  final fraction = (absCents % 100).toString().padLeft(2, '0');
-  final digits = whole.toString();
-  final buffer = StringBuffer();
-  for (var i = 0; i < digits.length; i++) {
-    if (i > 0 && (digits.length - i) % 3 == 0) {
-      buffer.write(',');
-    }
-    buffer.write(digits[i]);
-  }
-  return '$buffer.$fraction';
-}
+String formatCentsUnsigned(int absCents, {String? locale}) =>
+    NumberFormat.decimalPatternDigits(
+      locale: locale,
+      decimalDigits: 2,
+    ).format(absCents / 100);

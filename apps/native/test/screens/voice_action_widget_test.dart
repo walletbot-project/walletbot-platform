@@ -1,5 +1,6 @@
 import 'package:app/data/data.dart';
 import 'package:app/database.dart';
+import 'package:app/l10n/l10n.dart';
 import 'package:app/screens/voice_action_widget.dart';
 import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
@@ -48,6 +49,9 @@ void main() {
       Provider<AppRepositories>.value(
         value: repos,
         child: MaterialApp(
+          locale: const Locale('es'),
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
           home: Scaffold(
             body: VoiceActionWidget(
               toolName: 'updateAccount',

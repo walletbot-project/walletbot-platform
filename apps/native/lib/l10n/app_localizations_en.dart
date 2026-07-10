@@ -1,0 +1,1218 @@
+// ignore: unused_import
+import 'package:intl/intl.dart' as intl;
+import 'app_localizations.dart';
+
+// ignore_for_file: type=lint
+
+/// The translations for English (`en`).
+class AppLocalizationsEn extends AppLocalizations {
+  AppLocalizationsEn([String locale = 'en']) : super(locale);
+
+  @override
+  String get appTitle => 'Wallet Bot';
+
+  @override
+  String get home => 'Home';
+
+  @override
+  String get activity => 'Activity';
+
+  @override
+  String get accounts => 'Accounts';
+
+  @override
+  String get insights => 'Insights';
+
+  @override
+  String get categories => 'Categories';
+
+  @override
+  String get tags => 'Tags';
+
+  @override
+  String get cancel => 'Cancel';
+
+  @override
+  String get apply => 'Apply';
+
+  @override
+  String get save => 'Save';
+
+  @override
+  String get add => 'Add';
+
+  @override
+  String get create => 'Create';
+
+  @override
+  String get delete => 'Delete';
+
+  @override
+  String get remove => 'Remove';
+
+  @override
+  String get edit => 'Edit';
+
+  @override
+  String get done => 'Done';
+
+  @override
+  String get retry => 'Retry';
+
+  @override
+  String get reconnect => 'Reconnect';
+
+  @override
+  String get clear => 'Clear';
+
+  @override
+  String get select => 'Select';
+
+  @override
+  String get any => 'Any';
+
+  @override
+  String get all => 'All';
+
+  @override
+  String get viewAll => 'View all';
+
+  @override
+  String get name => 'Name';
+
+  @override
+  String get nameRequiredLabel => 'Name *';
+
+  @override
+  String get enterName => 'Enter a name';
+
+  @override
+  String get description => 'Description';
+
+  @override
+  String get descriptionOptional => 'Description (optional)';
+
+  @override
+  String get noDescription => 'No description';
+
+  @override
+  String get color => 'Color';
+
+  @override
+  String get icon => 'Icon';
+
+  @override
+  String get iconAndColor => 'Icon and color';
+
+  @override
+  String get chooseColor => 'Choose a color';
+
+  @override
+  String get chooseIcon => 'Choose an icon';
+
+  @override
+  String get currency => 'Currency';
+
+  @override
+  String get amount => 'Amount';
+
+  @override
+  String get date => 'Date';
+
+  @override
+  String get category => 'Category';
+
+  @override
+  String get account => 'Account';
+
+  @override
+  String get status => 'Status';
+
+  @override
+  String get type => 'Type';
+
+  @override
+  String get text => 'Text';
+
+  @override
+  String get minimum => 'Min';
+
+  @override
+  String get maximum => 'Max';
+
+  @override
+  String get error => 'Error';
+
+  @override
+  String get optional => 'Optional';
+
+  @override
+  String get search => 'Search';
+
+  @override
+  String get loadingFailed => 'Could not load';
+
+  @override
+  String get voiceCommands => 'Voice commands';
+
+  @override
+  String get syncPaused => 'Sync paused — sign in again to reconnect';
+
+  @override
+  String reconnectFailed(Object error) {
+    return 'Could not reconnect: $error';
+  }
+
+  @override
+  String get sync => 'Sync';
+
+  @override
+  String get syncing => 'Syncing…';
+
+  @override
+  String get synced => 'Synced';
+
+  @override
+  String get syncError => 'Sync error';
+
+  @override
+  String get tapToSync => 'Tap to sync';
+
+  @override
+  String get syncInProgress => 'Sync in progress';
+
+  @override
+  String get syncedTapAgain => 'Synced. Tap to sync again.';
+
+  @override
+  String lastSynced(String time) {
+    return 'Last synced $time ago. Tap to sync again.';
+  }
+
+  @override
+  String get syncErrorRetry => 'Sync error. Tap to retry.';
+
+  @override
+  String syncErrorDetails(Object error) {
+    return 'Sync error: $error. Tap to retry.';
+  }
+
+  @override
+  String durationSeconds(int count) {
+    return '${count}s';
+  }
+
+  @override
+  String durationMinutes(int count) {
+    return '${count}m';
+  }
+
+  @override
+  String durationHours(int count) {
+    return '${count}h';
+  }
+
+  @override
+  String durationDays(int count) {
+    return '${count}d';
+  }
+
+  @override
+  String get yourAccounts => 'Your accounts';
+
+  @override
+  String get noName => 'No name';
+
+  @override
+  String get localAccount => 'Local account';
+
+  @override
+  String get syncedAccount => 'Synced account';
+
+  @override
+  String get removeAccount => 'Remove account';
+
+  @override
+  String get addAccount => 'Add account';
+
+  @override
+  String get thisAccount => 'this account';
+
+  @override
+  String removeAccountConfirmation(String name) {
+    return 'The data for “$name” will be removed from this device. This action cannot be undone.';
+  }
+
+  @override
+  String removeAccountFailed(Object error) {
+    return 'Could not remove the account: $error';
+  }
+
+  @override
+  String get addWidget => 'Add widget';
+
+  @override
+  String get editWidget => 'Edit widget';
+
+  @override
+  String get editDashboard => 'Edit dashboard';
+
+  @override
+  String get actions => 'Actions';
+
+  @override
+  String get addManually => 'Add manually';
+
+  @override
+  String get addTransaction => 'Add transaction';
+
+  @override
+  String transactionsLoadFailed(Object error) {
+    return 'Could not load transactions: $error';
+  }
+
+  @override
+  String get noTransactions => 'No transactions';
+
+  @override
+  String get noTransactionsYet => 'No transactions yet';
+
+  @override
+  String get today => 'Today';
+
+  @override
+  String get yesterday => 'Yesterday';
+
+  @override
+  String estimated(String date) {
+    return '$date (estimated)';
+  }
+
+  @override
+  String get transferSent => 'Transfer sent';
+
+  @override
+  String get transferReceived => 'Transfer received';
+
+  @override
+  String get income => 'Income';
+
+  @override
+  String get incomes => 'Income';
+
+  @override
+  String get expense => 'Expense';
+
+  @override
+  String get expenses => 'Expenses';
+
+  @override
+  String get transfer => 'Transfer';
+
+  @override
+  String get transfers => 'Transfers';
+
+  @override
+  String get balanceAdjustment => 'Balance adjustment';
+
+  @override
+  String get balanceAdjustments => 'Adjustments';
+
+  @override
+  String get pending => 'Pending';
+
+  @override
+  String get cleared => 'Cleared';
+
+  @override
+  String get thisWeek => 'This week';
+
+  @override
+  String get thisMonth => 'This month';
+
+  @override
+  String get lastMonth => 'Last month';
+
+  @override
+  String get thisYear => 'This year';
+
+  @override
+  String get source => 'Source';
+
+  @override
+  String get destination => 'Destination';
+
+  @override
+  String get either => 'Either';
+
+  @override
+  String get matchAny => 'Any';
+
+  @override
+  String get matchAll => 'All';
+
+  @override
+  String get newAccount => 'New account';
+
+  @override
+  String get newCategory => 'New category';
+
+  @override
+  String get newTag => 'New tag';
+
+  @override
+  String get noAccountsTitle => 'You don\'t have any accounts yet';
+
+  @override
+  String get noAccountsBody =>
+      'Create your first account to start tracking your expenses.';
+
+  @override
+  String get createAccount => 'Create account';
+
+  @override
+  String get accountsLoadFailed => 'Could not load accounts';
+
+  @override
+  String get nameCannotBeEmpty => 'The name cannot be empty';
+
+  @override
+  String get accountSaveFailed => 'Could not save the account';
+
+  @override
+  String get adjustBalance => 'Adjust balance';
+
+  @override
+  String get adjustBalanceFailed => 'Could not adjust the balance';
+
+  @override
+  String get deleteAccount => 'Delete account';
+
+  @override
+  String deleteAccountConfirmation(String name) {
+    return 'Are you sure you want to delete “$name”? It will no longer appear in your accounts.';
+  }
+
+  @override
+  String get deleteAccountFailed => 'Could not delete the account';
+
+  @override
+  String get balance => 'Balance';
+
+  @override
+  String get lastTransactions => 'Latest transactions';
+
+  @override
+  String get transactionsCouldNotLoad => 'Could not load the transactions';
+
+  @override
+  String get initialBalanceOptional => 'Initial balance (optional)';
+
+  @override
+  String get enterValidAmount => 'Enter a valid amount';
+
+  @override
+  String get accountCreateFailed => 'Could not create the account';
+
+  @override
+  String get suggestions => 'Suggestions';
+
+  @override
+  String get accountNameExample => 'E.g. Cash, Main bank…';
+
+  @override
+  String get categoryNameExample => 'E.g. Groceries, Transport…';
+
+  @override
+  String get chooseCurrency => 'Choose a currency';
+
+  @override
+  String get searchCurrency => 'Search currencies…';
+
+  @override
+  String get mostUsed => 'Most used';
+
+  @override
+  String get cash => 'Cash';
+
+  @override
+  String get bank => 'Bank';
+
+  @override
+  String get card => 'Card';
+
+  @override
+  String get groceries => 'Groceries';
+
+  @override
+  String get transport => 'Transport';
+
+  @override
+  String get services => 'Services';
+
+  @override
+  String get createCategory => 'Create category';
+
+  @override
+  String get categoryCreateFailed => 'Could not create the category';
+
+  @override
+  String get categoriesLoadFailed => 'Could not load categories';
+
+  @override
+  String get noCategoriesTitle => 'You don\'t have any categories yet';
+
+  @override
+  String get noCategoriesBody =>
+      'Create a category to organize your transactions.';
+
+  @override
+  String get deleteCategory => 'Delete category';
+
+  @override
+  String deleteCategoryConfirmation(String name) {
+    return 'Are you sure you want to delete “$name”? It will no longer appear in your categories.';
+  }
+
+  @override
+  String get deleteCategoryFailed => 'Could not delete the category';
+
+  @override
+  String get categorySaveFailed => 'Could not save the category';
+
+  @override
+  String get latestMovements => 'Latest movements';
+
+  @override
+  String get movementsLoadFailed => 'Could not load movements';
+
+  @override
+  String get noMovementsYet => 'No movements yet';
+
+  @override
+  String movementCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count movements',
+      one: '1 movement',
+      zero: 'No movements',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get tagsLoadFailed => 'Could not load tags.';
+
+  @override
+  String get noTagsYet => 'No tags yet.';
+
+  @override
+  String get deleteTag => 'Delete tag';
+
+  @override
+  String deleteTagConfirmation(String name) {
+    return 'Are you sure you want to delete “$name”? It will no longer appear in your tags.';
+  }
+
+  @override
+  String get deleteTagWithChildren => 'Delete tag with subtags';
+
+  @override
+  String deleteTagWithChildrenPrompt(String name, int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count subtags',
+      one: '1 subtag',
+    );
+    String _temp1 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'them',
+      one: 'it',
+    );
+    return '“$name” has $_temp0. What should happen to $_temp1?';
+  }
+
+  @override
+  String get keepSubtags => 'Keep subtags';
+
+  @override
+  String get deleteEverything => 'Delete everything';
+
+  @override
+  String get spentThisMonth => 'SPENT THIS MONTH';
+
+  @override
+  String get noSpendingThisMonth => 'No spending this month';
+
+  @override
+  String otherCurrencies(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count other currencies',
+      one: '1 other currency',
+    );
+    return '+ $_temp0';
+  }
+
+  @override
+  String get createSubtag => 'Create subtag';
+
+  @override
+  String get parentTag => 'Parent tag';
+
+  @override
+  String get chooseParentTag => 'Choose the parent tag';
+
+  @override
+  String get noParentTag => 'No parent tag';
+
+  @override
+  String insideTag(String name) {
+    return 'Inside $name';
+  }
+
+  @override
+  String get searchHint => 'Search by name or description…';
+
+  @override
+  String get filters => 'Filters';
+
+  @override
+  String get simple => 'Simple';
+
+  @override
+  String get advanced => 'Advanced';
+
+  @override
+  String get customRange => 'Custom range';
+
+  @override
+  String get noAccountsYet => 'No accounts yet.';
+
+  @override
+  String get transferDirection => 'Direction (for transfers)';
+
+  @override
+  String get noCategoriesYet => 'No categories yet.';
+
+  @override
+  String get noCurrenciesYet => 'No currencies yet.';
+
+  @override
+  String get selectCurrencyForAmount =>
+      'Select a currency to filter by amount.';
+
+  @override
+  String get subtags => 'Subtags';
+
+  @override
+  String get showLess => 'Show less';
+
+  @override
+  String showMore(int count) {
+    return 'Show $count more';
+  }
+
+  @override
+  String get advancedFilterNotice => 'This filter uses advanced rules.';
+
+  @override
+  String get advancedFilterWarning =>
+      'The simple view cannot edit OR, NOT, or nested groups without changing the filter\'s meaning.';
+
+  @override
+  String get editAdvanced => 'Edit advanced';
+
+  @override
+  String get createSimpleFilter => 'Create simple filter';
+
+  @override
+  String get deleteGroup => 'Delete group';
+
+  @override
+  String get addConditionToStart => 'Add a condition to get started.';
+
+  @override
+  String get condition => 'Condition';
+
+  @override
+  String get group => 'Group';
+
+  @override
+  String get field => 'Field';
+
+  @override
+  String get operator => 'Operator';
+
+  @override
+  String get operatorIncludes => 'includes';
+
+  @override
+  String get operatorExcludes => 'excludes';
+
+  @override
+  String get operatorRelative => 'relative';
+
+  @override
+  String get operatorBetween => 'between';
+
+  @override
+  String get operatorGreaterEqual => 'greater than or equal to';
+
+  @override
+  String get operatorLessEqual => 'less than or equal to';
+
+  @override
+  String get operatorContains => 'contains';
+
+  @override
+  String get operatorNotContains => 'does not contain';
+
+  @override
+  String get filterAnd => 'AND';
+
+  @override
+  String get filterOr => 'OR';
+
+  @override
+  String get filterNot => 'NOT';
+
+  @override
+  String get deleteCondition => 'Delete condition';
+
+  @override
+  String get direction => 'Direction';
+
+  @override
+  String get match => 'Match';
+
+  @override
+  String get includeSubtags => 'Include subtags';
+
+  @override
+  String get unsupportedField => 'Unsupported field.';
+
+  @override
+  String get chooseRange => 'Choose range';
+
+  @override
+  String filterOptionsLoadFailed(Object error) {
+    return 'Could not load filter options.\n$error';
+  }
+
+  @override
+  String get newTransaction => 'Add transaction';
+
+  @override
+  String get noTagsAvailable => 'No tags available';
+
+  @override
+  String tagCreateFailed(Object error) {
+    return 'Could not create the tag: $error';
+  }
+
+  @override
+  String colorFor(String name) {
+    return 'Color for “$name”';
+  }
+
+  @override
+  String get selectAccount => 'Select an account';
+
+  @override
+  String get selectCategory => 'Select a category';
+
+  @override
+  String get selectDestinationAccount => 'Select a destination account';
+
+  @override
+  String get differentTransferAccounts =>
+      'Source and destination must be different accounts';
+
+  @override
+  String recordFailed(Object error) {
+    return 'Could not save the transaction: $error';
+  }
+
+  @override
+  String get title => 'Title';
+
+  @override
+  String get titleRequired => 'A title is required';
+
+  @override
+  String get addTag => 'Add tag';
+
+  @override
+  String get record => 'Save transaction';
+
+  @override
+  String get recurringExpense => 'Recurring expense';
+
+  @override
+  String get leaves => 'Leaves';
+
+  @override
+  String get enters => 'Enters';
+
+  @override
+  String get required => 'Required';
+
+  @override
+  String get greaterThanZero => 'Greater than 0';
+
+  @override
+  String get amountRequired => 'Amount is required';
+
+  @override
+  String get amountGreaterThanZero => 'Amount must be greater than 0';
+
+  @override
+  String get loginIntro => 'Get started with sync or a local account.';
+
+  @override
+  String get withAccount => 'With account';
+
+  @override
+  String get withoutAccount => 'Local account';
+
+  @override
+  String get withAccountDescription =>
+      'Use email or Google to sync your expenses.';
+
+  @override
+  String get localAccountDescription =>
+      'Add a name before opening this space on your device.';
+
+  @override
+  String get email => 'Email';
+
+  @override
+  String get password => 'Password';
+
+  @override
+  String get enterYourName => 'Enter your name';
+
+  @override
+  String get enterEmail => 'Enter your email';
+
+  @override
+  String get enterValidEmail => 'Enter a valid email';
+
+  @override
+  String get enterPassword => 'Enter your password';
+
+  @override
+  String get passwordMinLength => 'Use at least 8 characters';
+
+  @override
+  String get or => 'or';
+
+  @override
+  String get continueWithGoogle => 'Continue with Google';
+
+  @override
+  String get continueLocally => 'Continue locally';
+
+  @override
+  String get needAccountSignUp => 'Need an account? Sign up';
+
+  @override
+  String get haveAccountSignIn => 'Already have an account? Sign in';
+
+  @override
+  String get signIn => 'Sign in';
+
+  @override
+  String get signUp => 'Sign up';
+
+  @override
+  String get signInAction => 'sign in';
+
+  @override
+  String get signUpAction => 'create the account';
+
+  @override
+  String get accountAlreadyAdded =>
+      'You already added an account with that email';
+
+  @override
+  String get emailSignInFailedGoogleHint =>
+      'Sign-in failed. If you registered with Google, use “Continue with Google”.';
+
+  @override
+  String emailAuthFailed(String action, Object error) {
+    return 'Could not $action: $error';
+  }
+
+  @override
+  String localAccountFailed(Object error) {
+    return 'Could not continue locally: $error';
+  }
+
+  @override
+  String googleSignInFailed(Object error) {
+    return 'Could not sign in with Google: $error';
+  }
+
+  @override
+  String get close => 'Close';
+
+  @override
+  String get newCategoryTooltip => 'New category';
+
+  @override
+  String get newTagTooltip => 'New tag';
+
+  @override
+  String get addScreen => 'Add screen';
+
+  @override
+  String get dashboardEmpty =>
+      'Your dashboard is empty. Add a widget to get started.';
+
+  @override
+  String get dashboardLoadFailed => 'Could not load the dashboard.';
+
+  @override
+  String get removeWidget => 'Remove widget';
+
+  @override
+  String removeWidgetConfirmation(String title) {
+    return 'Remove “$title” from the dashboard?';
+  }
+
+  @override
+  String dashboardUpdateFailed(Object error) {
+    return 'Could not update the dashboard: $error';
+  }
+
+  @override
+  String widgetRemoveFailed(Object error) {
+    return 'Could not remove the widget: $error';
+  }
+
+  @override
+  String get valueWidget => 'Value';
+
+  @override
+  String get listWidget => 'List';
+
+  @override
+  String get balanceWidget => 'Balance';
+
+  @override
+  String get chartWidget => 'Chart';
+
+  @override
+  String get widget => 'Widget';
+
+  @override
+  String get moveLeft => 'Move left';
+
+  @override
+  String get moveUp => 'Move up';
+
+  @override
+  String get moveDown => 'Move down';
+
+  @override
+  String get moveRight => 'Move right';
+
+  @override
+  String get chartLoadFailed => 'Could not load the chart.';
+
+  @override
+  String get chartNoData => 'No data to show yet.';
+
+  @override
+  String get uncategorized => 'Uncategorized';
+
+  @override
+  String get unknownAccount => 'Unknown account';
+
+  @override
+  String get enterWidgetTitle => 'Enter a title';
+
+  @override
+  String get selectWidgetCurrency => 'Select a currency';
+
+  @override
+  String widgetSaveFailed(Object error) {
+    return 'Could not save the widget: $error';
+  }
+
+  @override
+  String get widgetType => 'Type';
+
+  @override
+  String get widgetTitle => 'Title';
+
+  @override
+  String get background => 'Background';
+
+  @override
+  String get low => 'Low';
+
+  @override
+  String get high => 'High';
+
+  @override
+  String get belowLow => 'Below low';
+
+  @override
+  String get betweenLowHigh => 'Between low and high';
+
+  @override
+  String get aboveHigh => 'Above high';
+
+  @override
+  String get aggregation => 'Aggregation';
+
+  @override
+  String get transactionCount => 'Number of transactions';
+
+  @override
+  String get groupBy => 'Group by';
+
+  @override
+  String get chartType => 'Chart type';
+
+  @override
+  String get noAccountsUseArs => 'There are no accounts yet; ARS will be used.';
+
+  @override
+  String get noColor => 'No color';
+
+  @override
+  String get editFilter => 'Edit filter';
+
+  @override
+  String get removeFilter => 'Remove filter';
+
+  @override
+  String get configureFilter => 'Configure filter';
+
+  @override
+  String get addWidgetAction => 'Add';
+
+  @override
+  String get saveWidgetAction => 'Save';
+
+  @override
+  String get widgetTypeStat => 'Value';
+
+  @override
+  String get widgetTypeList => 'Transactions';
+
+  @override
+  String get widgetTypeBalance => 'Balance';
+
+  @override
+  String get widgetTypeChart => 'Chart';
+
+  @override
+  String get aggregationSum => 'Sum';
+
+  @override
+  String get aggregationNet => 'Net';
+
+  @override
+  String get aggregationCount => 'Count';
+
+  @override
+  String get groupCategory => 'Category';
+
+  @override
+  String get groupAccount => 'Account';
+
+  @override
+  String get groupMonth => 'Month';
+
+  @override
+  String get chartPie => 'Pie';
+
+  @override
+  String get chartBar => 'Bar';
+
+  @override
+  String get chartLine => 'Line';
+
+  @override
+  String get defaultExpensesMonth => 'Monthly expenses';
+
+  @override
+  String get defaultIncomeMonth => 'Monthly income';
+
+  @override
+  String get defaultMovementsMonth => 'Monthly transactions';
+
+  @override
+  String get defaultTotalBalanceArs => 'Total balance (ARS)';
+
+  @override
+  String get defaultMovements => 'Transactions';
+
+  @override
+  String get defaultRecentMovements => 'Recent transactions';
+
+  @override
+  String get liveVoice => 'Live Voice';
+
+  @override
+  String get endSession => 'End session';
+
+  @override
+  String get you => 'You';
+
+  @override
+  String get agentInterrupted => 'Agent interrupted';
+
+  @override
+  String get interrupted => '(interrupted)';
+
+  @override
+  String voiceRuntimeError(Object error) {
+    return 'Voice error: $error';
+  }
+
+  @override
+  String get toolRunning => 'Running';
+
+  @override
+  String get toolDone => 'Done';
+
+  @override
+  String get toolCancelled => 'Cancelled';
+
+  @override
+  String get tool => 'Tool';
+
+  @override
+  String get arguments => 'arguments';
+
+  @override
+  String get result => 'result';
+
+  @override
+  String get connected => 'connected';
+
+  @override
+  String get connecting => 'connecting';
+
+  @override
+  String get idle => 'idle';
+
+  @override
+  String get connectingPrompt => 'Connecting…';
+
+  @override
+  String get voiceStartPrompt => 'Tap the mic to start a conversation';
+
+  @override
+  String get typeMessage => 'Type a message…';
+
+  @override
+  String get microphonePermissionDenied => 'Microphone permission denied';
+
+  @override
+  String get recorderPermissionFailed =>
+      'Could not check microphone permission';
+
+  @override
+  String get pcmUnsupported =>
+      'PCM 16-bit streaming is not supported on this device';
+
+  @override
+  String voiceStartFailed(Object error) {
+    return 'Failed to start: $error';
+  }
+
+  @override
+  String microphoneOpenFailed(Object error) {
+    return 'Failed to open the microphone: $error';
+  }
+
+  @override
+  String audioStreamFailed(Object error) {
+    return 'Audio stream error: $error';
+  }
+
+  @override
+  String voiceStopFailed(Object error) {
+    return 'Failed to stop cleanly: $error';
+  }
+
+  @override
+  String toolResponseUnmatched(Object result) {
+    return 'Tool response with no matching call: $result';
+  }
+
+  @override
+  String toolCallsCancelled(String ids) {
+    return 'Tool calls cancelled: $ids';
+  }
+
+  @override
+  String get deletedAccount => 'Deleted account';
+
+  @override
+  String transactionSaved(String type, String updated, String date) {
+    String _temp0 = intl.Intl.selectLogic(updated, {
+      'true': 'updated',
+      'other': 'recorded',
+    });
+    return '$type $_temp0 · $date';
+  }
+
+  @override
+  String editTransactionType(String type) {
+    return 'Edit $type';
+  }
+
+  @override
+  String get chooseCategory => 'Choose a category';
+
+  @override
+  String get transactionSaveFailed => 'Could not save the transaction';
+
+  @override
+  String get accountCreated => 'Account created';
+
+  @override
+  String get accountUpdated => 'Account updated';
+
+  @override
+  String get categoryCreated => 'Category created';
+
+  @override
+  String get categoryUpdated => 'Category updated';
+
+  @override
+  String get tagCreated => 'Tag created';
+
+  @override
+  String get tagUpdated => 'Tag updated';
+
+  @override
+  String get editAccount => 'Edit account';
+
+  @override
+  String get editCategory => 'Edit category';
+
+  @override
+  String get editTag => 'Edit tag';
+
+  @override
+  String get tagSaveFailed => 'Could not save the tag';
+
+  @override
+  String get actionLoadFailed => 'Could not load the action';
+
+  @override
+  String get tapToRetry => 'Tap to try again';
+}

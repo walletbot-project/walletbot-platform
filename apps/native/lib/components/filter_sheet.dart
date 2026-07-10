@@ -1,5 +1,6 @@
 import 'package:app/data/data.dart';
 import 'package:app/database.dart';
+import 'package:app/l10n/l10n.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart' show ReadContext;
 
@@ -354,7 +355,9 @@ class _FilterSheetState extends State<FilterSheet> {
                         child: Padding(
                           padding: const EdgeInsets.all(24),
                           child: Text(
-                            'No se pudieron cargar las opciones de filtro.\n${snapshot.error}',
+                            context.l10n.filterOptionsLoadFailed(
+                              snapshot.error!,
+                            ),
                             textAlign: TextAlign.center,
                           ),
                         ),
@@ -377,14 +380,14 @@ class _FilterSheetState extends State<FilterSheet> {
                       Expanded(
                         child: OutlinedButton(
                           onPressed: () => Navigator.of(context).pop(),
-                          child: const Text('Cancelar'),
+                          child: Text(context.l10n.cancel),
                         ),
                       ),
                       const SizedBox(width: 12),
                       Expanded(
                         child: FilledButton(
                           onPressed: _apply,
-                          child: const Text('Aplicar'),
+                          child: Text(context.l10n.apply),
                         ),
                       ),
                     ],
@@ -429,14 +432,14 @@ class _FilterSheetState extends State<FilterSheet> {
         SizedBox(height: 16),
         if (_shows(FilterSection.type))
           _Section(
-            title: 'Tipo',
+            title: context.l10n.type,
             child: Wrap(
               spacing: 8,
               runSpacing: 4,
               children: [
                 for (final type in TxnType.values)
                   FilterChip(
-                    label: Text(type.label),
+                    label: Text(context.l10n.txnType(type)),
                     selected: _types.contains(type),
                     onSelected: (selected) => setState(() {
                       if (selected) {
@@ -451,7 +454,7 @@ class _FilterSheetState extends State<FilterSheet> {
           ),
         if (_shows(FilterSection.date))
           _Section(
-            title: 'Fecha',
+            title: context.l10n.date,
             child: Wrap(
               spacing: 8,
               runSpacing: 4,
@@ -459,7 +462,7 @@ class _FilterSheetState extends State<FilterSheet> {
               children: [
                 for (final preset in DatePreset.values)
                   ChoiceChip(
-                    label: Text(preset.label),
+                    label: Text(context.l10n.datePreset(preset)),
                     selected: _dateRange == null && _datePreset == preset,
                     onSelected: (_) => setState(() {
                       _dateRange = null;
@@ -475,7 +478,7 @@ class _FilterSheetState extends State<FilterSheet> {
                 else
                   ActionChip(
                     avatar: const Icon(Icons.date_range, size: 18),
-                    label: const Text('Rango personalizado'),
+                    label: Text(context.l10n.customRange),
                     onPressed: _pickDateRange,
                   ),
               ],
@@ -483,12 +486,12 @@ class _FilterSheetState extends State<FilterSheet> {
           ),
         if (_shows(FilterSection.accounts))
           _Section(
-            title: 'Cuentas',
+            title: context.l10n.accounts,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 if (options.accounts.isEmpty)
-                  const _EmptyHint('No hay cuentas todavía.')
+                  _EmptyHint(context.l10n.noAccountsYet)
                 else
                   _ExpandableChips(
                     chips: [
@@ -508,13 +511,16 @@ class _FilterSheetState extends State<FilterSheet> {
                   ),
                 if (_accountIds.isNotEmpty) ...[
                   const SizedBox(height: 12),
-                  _SubLabel('Dirección (para transferencias)'),
+                  _SubLabel(context.l10n.transferDirection),
                   const SizedBox(height: 4),
                   SegmentedButton<AccountDirection>(
                     showSelectedIcon: false,
                     segments: [
                       for (final dir in AccountDirection.values)
-                        ButtonSegment(value: dir, label: Text(dir.label)),
+                        ButtonSegment(
+                          value: dir,
+                          label: Text(context.l10n.accountDirection(dir)),
+                        ),
                     ],
                     selected: {_accountDirection},
                     onSelectionChanged: (selection) =>
@@ -526,9 +532,9 @@ class _FilterSheetState extends State<FilterSheet> {
           ),
         if (_shows(FilterSection.categories))
           _Section(
-            title: 'Categorías',
+            title: context.l10n.categories,
             child: options.categories.isEmpty
-                ? const _EmptyHint('No hay categorías todavía.')
+                ? _EmptyHint(context.l10n.noCategoriesYet)
                 : _ExpandableChips(
                     chips: [
                       for (final category in options.categories)
@@ -549,18 +555,18 @@ class _FilterSheetState extends State<FilterSheet> {
         if (_shows(FilterSection.tags)) ..._buildTagSections(options),
         if (_shows(FilterSection.status))
           _Section(
-            title: 'Estado',
+            title: context.l10n.status,
             child: Wrap(
               spacing: 8,
               children: [
                 ChoiceChip(
-                  label: const Text('Cualquiera'),
+                  label: Text(context.l10n.any),
                   selected: _status == null,
                   onSelected: (_) => setState(() => _status = null),
                 ),
                 for (final status in TxnStatus.values)
                   ChoiceChip(
-                    label: Text(status.label),
+                    label: Text(context.l10n.txnStatus(status)),
                     selected: _status == status,
                     onSelected: (_) => setState(() => _status = status),
                   ),
@@ -569,9 +575,9 @@ class _FilterSheetState extends State<FilterSheet> {
           ),
         if (_shows(FilterSection.currency))
           _Section(
-            title: 'Moneda',
+            title: context.l10n.currency,
             child: options.currencies.isEmpty
-                ? const _EmptyHint('No hay monedas todavía.')
+                ? _EmptyHint(context.l10n.noCurrenciesYet)
                 : Wrap(
                     spacing: 8,
                     runSpacing: 4,
@@ -589,14 +595,12 @@ class _FilterSheetState extends State<FilterSheet> {
           ),
         if (_shows(FilterSection.amount))
           _Section(
-            title: 'Monto',
+            title: context.l10n.amount,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 if (!hasCurrency)
-                  const _EmptyHint(
-                    'Seleccioná una moneda para filtrar por monto.',
-                  )
+                  _EmptyHint(context.l10n.selectCurrencyForAmount)
                 else
                   Row(
                     children: [
@@ -607,7 +611,7 @@ class _FilterSheetState extends State<FilterSheet> {
                             decimal: true,
                           ),
                           decoration: InputDecoration(
-                            labelText: 'Mín',
+                            labelText: context.l10n.minimum,
                             prefixText: '$_currency ',
                             border: const OutlineInputBorder(),
                             isDense: true,
@@ -622,7 +626,7 @@ class _FilterSheetState extends State<FilterSheet> {
                             decimal: true,
                           ),
                           decoration: InputDecoration(
-                            labelText: 'Máx',
+                            labelText: context.l10n.maximum,
                             prefixText: '$_currency ',
                             border: const OutlineInputBorder(),
                             isDense: true,
@@ -636,13 +640,13 @@ class _FilterSheetState extends State<FilterSheet> {
           ),
         if (_shows(FilterSection.text))
           _Section(
-            title: 'Texto',
+            title: context.l10n.text,
             child: TextField(
               controller: _searchController,
-              decoration: const InputDecoration(
-                hintText: 'Buscar nombre o descripción…',
-                prefixIcon: Icon(Icons.search),
-                border: OutlineInputBorder(),
+              decoration: InputDecoration(
+                hintText: context.l10n.searchHint,
+                prefixIcon: const Icon(Icons.search),
+                border: const OutlineInputBorder(),
                 isDense: true,
               ),
             ),
@@ -671,14 +675,14 @@ class _FilterSheetState extends State<FilterSheet> {
 
     return [
       _Section(
-        title: 'Tags',
+        title: context.l10n.tags,
         child: topLevel.isEmpty
-            ? const _EmptyHint('No hay tags todavía.')
+            ? _EmptyHint(context.l10n.noTagsYet)
             : _ExpandableChips(chips: [for (final tag in topLevel) chip(tag)]),
       ),
       if (subtags.isNotEmpty)
         _Section(
-          title: 'Subetiquetas',
+          title: context.l10n.subtags,
           child: _ExpandableChips(
             chips: [for (final tag in subtags) chip(tag)],
           ),
@@ -686,11 +690,8 @@ class _FilterSheetState extends State<FilterSheet> {
     ];
   }
 
-  String _formatRange(DateTimeRange range) {
-    String fmt(DateTime d) =>
-        '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
-    return '${fmt(range.start)} → ${fmt(range.end)}';
-  }
+  String _formatRange(DateTimeRange range) =>
+      formatDateRange(range.start, range.end, context.localeName);
 
   Widget _buildAdvancedForm(
     ScrollController scrollController,
@@ -735,7 +736,7 @@ class _Header extends StatelessWidget {
         children: [
           Expanded(
             child: Text(
-              'Filtros',
+              context.l10n.filters,
               style: theme.textTheme.titleLarge?.copyWith(
                 fontWeight: FontWeight.w700,
               ),
@@ -751,14 +752,14 @@ class _Header extends StatelessWidget {
                   EdgeInsets.symmetric(horizontal: 10),
                 ),
               ),
-              segments: const [
+              segments: [
                 ButtonSegment(
                   value: _FilterEditorMode.simple,
-                  label: Text('Simple'),
+                  label: Text(context.l10n.simple),
                 ),
                 ButtonSegment(
                   value: _FilterEditorMode.advanced,
-                  label: Text('Avanzado'),
+                  label: Text(context.l10n.advanced),
                 ),
               ],
               selected: {mode},
@@ -767,7 +768,7 @@ class _Header extends StatelessWidget {
               },
             ),
           IconButton(
-            tooltip: 'Limpiar',
+            tooltip: context.l10n.clear,
             icon: const Icon(Icons.restart_alt_rounded),
             onPressed: onReset,
           ),
@@ -820,8 +821,10 @@ class _ExpandableChipsState extends State<_ExpandableChips> {
               onPressed: () => setState(() => _expanded = !_expanded),
               child: Text(
                 _expanded
-                    ? 'Ver menos'
-                    : 'Ver más (${chips.length - _chipCollapseThreshold})',
+                    ? context.l10n.showLess
+                    : context.l10n.showMore(
+                        chips.length - _chipCollapseThreshold,
+                      ),
               ),
             ),
           ),
@@ -907,12 +910,12 @@ class _AdvancedOnlyMessage extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Este filtro usa reglas avanzadas.',
+              context.l10n.advancedFilterNotice,
               style: Theme.of(context).textTheme.titleMedium,
             ),
             const SizedBox(height: 8),
             Text(
-              'La vista simple no puede editar OR, NOT o grupos anidados sin cambiar el significado del filtro.',
+              context.l10n.advancedFilterWarning,
               style: Theme.of(
                 context,
               ).textTheme.bodyMedium?.copyWith(color: scheme.onSurfaceVariant),
@@ -924,11 +927,11 @@ class _AdvancedOnlyMessage extends StatelessWidget {
               children: [
                 FilledButton(
                   onPressed: onEditAdvanced,
-                  child: const Text('Editar avanzado'),
+                  child: Text(context.l10n.editAdvanced),
                 ),
                 TextButton(
                   onPressed: onReplaceSimple,
-                  child: const Text('Crear filtro simple'),
+                  child: Text(context.l10n.createSimpleFilter),
                 ),
               ],
             ),
@@ -974,9 +977,15 @@ class _GroupEditor extends StatelessWidget {
               children: [
                 SegmentedButton<String>(
                   showSelectedIcon: false,
-                  segments: const [
-                    ButtonSegment(value: 'and', label: Text('AND')),
-                    ButtonSegment(value: 'or', label: Text('OR')),
+                  segments: [
+                    ButtonSegment(
+                      value: 'and',
+                      label: Text(context.l10n.filterAnd),
+                    ),
+                    ButtonSegment(
+                      value: 'or',
+                      label: Text(context.l10n.filterOr),
+                    ),
                   ],
                   selected: {group.combinator == 'or' ? 'or' : 'and'},
                   onSelectionChanged: (selection) =>
@@ -984,14 +993,14 @@ class _GroupEditor extends StatelessWidget {
                 ),
                 const SizedBox(width: 8),
                 FilterChip(
-                  label: const Text('NOT'),
+                  label: Text(context.l10n.filterNot),
                   selected: group.not,
                   onSelected: (value) => onChanged(group.copyWith(not: value)),
                 ),
                 const Spacer(),
                 if (onRemove != null)
                   IconButton(
-                    tooltip: 'Eliminar grupo',
+                    tooltip: context.l10n.deleteGroup,
                     icon: const Icon(Icons.delete_outline),
                     onPressed: onRemove,
                   ),
@@ -999,9 +1008,9 @@ class _GroupEditor extends StatelessWidget {
             ),
             const SizedBox(height: 12),
             if (group.children.isEmpty)
-              const Padding(
-                padding: EdgeInsets.only(bottom: 8),
-                child: _EmptyHint('Agregá una condición para empezar.'),
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: _EmptyHint(context.l10n.addConditionToStart),
               )
             else
               for (var i = 0; i < group.children.length; i++) ...[
@@ -1016,13 +1025,13 @@ class _GroupEditor extends StatelessWidget {
                 OutlinedButton.icon(
                   onPressed: () => _addChild(_defaultCondition('type')),
                   icon: const Icon(Icons.add),
-                  label: const Text('Condición'),
+                  label: Text(context.l10n.condition),
                 ),
                 if (depth < maxDepth)
                   OutlinedButton.icon(
                     onPressed: () => _addChild(const FilterGroup()),
                     icon: const Icon(Icons.account_tree_outlined),
-                    label: const Text('Grupo'),
+                    label: Text(context.l10n.group),
                   ),
               ],
             ),
@@ -1086,6 +1095,7 @@ class _ConditionEditor extends StatelessWidget {
     final operator = operators.contains(condition.operator)
         ? condition.operator
         : operators.first;
+    final fieldLabels = _fieldLabels(context.l10n);
     return DecoratedBox(
       decoration: BoxDecoration(
         color: scheme.surface,
@@ -1100,16 +1110,16 @@ class _ConditionEditor extends StatelessWidget {
               children: [
                 Expanded(
                   child: DropdownButtonFormField<String>(
-                    initialValue: _fieldLabels.containsKey(condition.field)
+                    initialValue: fieldLabels.containsKey(condition.field)
                         ? condition.field
                         : 'type',
-                    decoration: const InputDecoration(
-                      labelText: 'Campo',
+                    decoration: InputDecoration(
+                      labelText: context.l10n.field,
                       isDense: true,
-                      border: OutlineInputBorder(),
+                      border: const OutlineInputBorder(),
                     ),
                     items: [
-                      for (final entry in _fieldLabels.entries)
+                      for (final entry in fieldLabels.entries)
                         DropdownMenuItem(
                           value: entry.key,
                           child: Text(entry.value),
@@ -1125,16 +1135,16 @@ class _ConditionEditor extends StatelessWidget {
                 Expanded(
                   child: DropdownButtonFormField<String>(
                     initialValue: operator,
-                    decoration: const InputDecoration(
-                      labelText: 'Operador',
+                    decoration: InputDecoration(
+                      labelText: context.l10n.operator,
                       isDense: true,
-                      border: OutlineInputBorder(),
+                      border: const OutlineInputBorder(),
                     ),
                     items: [
                       for (final op in operators)
                         DropdownMenuItem(
                           value: op,
-                          child: Text(_operatorLabel(op)),
+                          child: Text(_operatorLabel(context.l10n, op)),
                         ),
                     ],
                     onChanged: (op) {
@@ -1144,7 +1154,7 @@ class _ConditionEditor extends StatelessWidget {
                   ),
                 ),
                 IconButton(
-                  tooltip: 'Eliminar condición',
+                  tooltip: context.l10n.deleteCondition,
                   icon: const Icon(Icons.delete_outline),
                   onPressed: onRemove,
                 ),
@@ -1163,12 +1173,14 @@ class _ConditionEditor extends StatelessWidget {
       case 'type':
         return _enumChips(
           values: TxnType.values,
+          labelFor: context.l10n.txnType,
           selected: _asStringSet(current.value),
           onChanged: (ids) => onChanged(current.copyWith(value: ids.toList())),
         );
       case 'status':
         return _enumChips(
           values: TxnStatus.values,
+          labelFor: context.l10n.txnStatus,
           selected: _asStringSet(current.value),
           onChanged: (ids) => onChanged(current.copyWith(value: ids.toList())),
         );
@@ -1179,18 +1191,21 @@ class _ConditionEditor extends StatelessWidget {
             _entityChips(
               items: [for (final a in options.accounts) (a.id, a.name)],
               selected: _asStringSet(current.value),
-              emptyText: 'No hay cuentas todavía.',
+              emptyText: context.l10n.noAccountsYet,
               onChanged: (ids) =>
                   onChanged(current.copyWith(value: ids.toList())),
             ),
             const SizedBox(height: 12),
-            _SubLabel('Dirección'),
+            _SubLabel(context.l10n.direction),
             const SizedBox(height: 4),
             SegmentedButton<AccountDirection>(
               showSelectedIcon: false,
               segments: [
                 for (final dir in AccountDirection.values)
-                  ButtonSegment(value: dir, label: Text(dir.label)),
+                  ButtonSegment(
+                    value: dir,
+                    label: Text(context.l10n.accountDirection(dir)),
+                  ),
               ],
               selected: {current.direction},
               onSelectionChanged: (selection) =>
@@ -1202,7 +1217,7 @@ class _ConditionEditor extends StatelessWidget {
         return _entityChips(
           items: [for (final c in options.categories) (c.id, c.name)],
           selected: _asStringSet(current.value),
-          emptyText: 'No hay categorías todavía.',
+          emptyText: context.l10n.noCategoriesYet,
           onChanged: (ids) => onChanged(current.copyWith(value: ids.toList())),
         );
       case 'tag':
@@ -1212,20 +1227,23 @@ class _ConditionEditor extends StatelessWidget {
             _entityChips(
               items: [for (final t in options.tags) (t.id, t.name)],
               selected: _asStringSet(current.value),
-              emptyText: 'No hay tags todavía.',
+              emptyText: context.l10n.noTagsYet,
               onChanged: (ids) =>
                   onChanged(current.copyWith(value: ids.toList())),
             ),
             const SizedBox(height: 12),
             Row(
               children: [
-                _SubLabel('Coincidencia'),
+                _SubLabel(context.l10n.match),
                 const SizedBox(width: 12),
                 SegmentedButton<TagMatch>(
                   showSelectedIcon: false,
                   segments: [
                     for (final match in TagMatch.values)
-                      ButtonSegment(value: match, label: Text(match.label)),
+                      ButtonSegment(
+                        value: match,
+                        label: Text(context.l10n.tagMatch(match)),
+                      ),
                   ],
                   selected: {current.match},
                   onSelectionChanged: (selection) =>
@@ -1235,7 +1253,7 @@ class _ConditionEditor extends StatelessWidget {
             ),
             SwitchListTile(
               contentPadding: EdgeInsets.zero,
-              title: const Text('Incluir subetiquetas'),
+              title: Text(context.l10n.includeSubtags),
               value: current.includeSubtags,
               onChanged: (value) =>
                   onChanged(current.copyWith(includeSubtags: value)),
@@ -1246,27 +1264,27 @@ class _ConditionEditor extends StatelessWidget {
         return _entityChips(
           items: [for (final c in options.currencies) (c, c)],
           selected: _asStringSet(current.value),
-          emptyText: 'No hay monedas todavía.',
+          emptyText: context.l10n.noCurrenciesYet,
           single: true,
           onChanged: (ids) => onChanged(current.copyWith(value: ids.toList())),
         );
       case 'date':
         return _dateValueEditor(context, current);
       case 'amount':
-        return _amountValueEditor(current);
+        return _amountValueEditor(context, current);
       case 'text':
         return TextFormField(
           key: ValueKey('text-${current.value}'),
           initialValue: current.value is String ? current.value as String : '',
-          decoration: const InputDecoration(
-            hintText: 'Buscar nombre o descripción…',
-            border: OutlineInputBorder(),
+          decoration: InputDecoration(
+            hintText: context.l10n.searchHint,
+            border: const OutlineInputBorder(),
             isDense: true,
           ),
           onChanged: (value) => onChanged(current.copyWith(value: value)),
         );
       default:
-        return const _EmptyHint('Campo no soportado.');
+        return _EmptyHint(context.l10n.unsupportedField);
     }
   }
 
@@ -1279,7 +1297,7 @@ class _ConditionEditor extends StatelessWidget {
         children: [
           for (final preset in DatePreset.values)
             ChoiceChip(
-              label: Text(preset.label),
+              label: Text(context.l10n.datePreset(preset)),
               selected: selected == preset.wire,
               onSelected: (_) =>
                   onChanged(current.copyWith(value: preset.wire)),
@@ -1296,12 +1314,14 @@ class _ConditionEditor extends StatelessWidget {
         if (range != null)
           InputChip(
             avatar: const Icon(Icons.event, size: 18),
-            label: Text(_formatAdvancedRange(range)),
+            label: Text(
+              formatDateRange(range.start, range.end, context.localeName),
+            ),
             onDeleted: () => onChanged(_defaultCondition('date')),
           ),
         ActionChip(
           avatar: const Icon(Icons.date_range, size: 18),
-          label: const Text('Elegir rango'),
+          label: Text(context.l10n.chooseRange),
           onPressed: () async {
             final now = DateTime.now();
             final picked = await showDateRangePicker(
@@ -1325,7 +1345,7 @@ class _ConditionEditor extends StatelessWidget {
     );
   }
 
-  Widget _amountValueEditor(FilterCondition current) {
+  Widget _amountValueEditor(BuildContext context, FilterCondition current) {
     final values = _amountMap(current.value);
     final minText = _advancedCentsToText(values.min);
     final maxText = _advancedCentsToText(values.max);
@@ -1345,25 +1365,25 @@ class _ConditionEditor extends StatelessWidget {
     }
 
     if (current.operator == '>=') {
-      return field('Mín', minText, (min) {
+      return field(context.l10n.minimum, minText, (min) {
         onChanged(current.copyWith(value: {'min': min, 'max': null}));
       });
     }
     if (current.operator == '<=') {
-      return field('Máx', maxText, (max) {
+      return field(context.l10n.maximum, maxText, (max) {
         onChanged(current.copyWith(value: {'min': null, 'max': max}));
       });
     }
     return Row(
       children: [
         Expanded(
-          child: field('Mín', minText, (min) {
+          child: field(context.l10n.minimum, minText, (min) {
             onChanged(current.copyWith(value: {'min': min, 'max': values.max}));
           }),
         ),
         const SizedBox(width: 12),
         Expanded(
-          child: field('Máx', maxText, (max) {
+          child: field(context.l10n.maximum, maxText, (max) {
             onChanged(current.copyWith(value: {'min': values.min, 'max': max}));
           }),
         ),
@@ -1371,8 +1391,9 @@ class _ConditionEditor extends StatelessWidget {
     );
   }
 
-  Widget _enumChips<T extends WireLabeled>({
+  Widget _enumChips<T extends WireValue>({
     required List<T> values,
+    required String Function(T) labelFor,
     required Set<String> selected,
     required ValueChanged<Set<String>> onChanged,
   }) {
@@ -1382,7 +1403,7 @@ class _ConditionEditor extends StatelessWidget {
       children: [
         for (final item in values)
           FilterChip(
-            label: Text(item.label),
+            label: Text(labelFor(item)),
             selected: selected.contains(item.wire),
             onSelected: (_) => onChanged(_toggle(selected, item.wire)),
           ),
@@ -1419,16 +1440,16 @@ class _ConditionEditor extends StatelessWidget {
   }
 }
 
-const _fieldLabels = <String, String>{
-  'type': 'Tipo',
-  'status': 'Estado',
-  'date': 'Fecha',
-  'account': 'Cuenta',
-  'category': 'Categoría',
-  'tag': 'Tag',
-  'currency': 'Moneda',
-  'amount': 'Monto',
-  'text': 'Texto',
+Map<String, String> _fieldLabels(AppLocalizations l10n) => {
+  'type': l10n.type,
+  'status': l10n.status,
+  'date': l10n.date,
+  'account': l10n.account,
+  'category': l10n.category,
+  'tag': l10n.tags,
+  'currency': l10n.currency,
+  'amount': l10n.amount,
+  'text': l10n.text,
 };
 
 FilterCondition _defaultCondition(String field) {
@@ -1504,24 +1525,24 @@ List<String> _operatorsFor(String field) {
   }
 }
 
-String _operatorLabel(String operator) {
+String _operatorLabel(AppLocalizations l10n, String operator) {
   switch (operator) {
     case 'in':
-      return 'incluye';
+      return l10n.operatorIncludes;
     case 'not in':
-      return 'excluye';
+      return l10n.operatorExcludes;
     case 'relative':
-      return 'relativa';
+      return l10n.operatorRelative;
     case 'between':
-      return 'entre';
+      return l10n.operatorBetween;
     case '>=':
-      return 'mayor o igual';
+      return l10n.operatorGreaterEqual;
     case '<=':
-      return 'menor o igual';
+      return l10n.operatorLessEqual;
     case 'contains':
-      return 'contiene';
+      return l10n.operatorContains;
     case 'not contains':
-      return 'no contiene';
+      return l10n.operatorNotContains;
     default:
       return operator;
   }
@@ -1569,10 +1590,4 @@ int? _advancedTextToCents(String raw) {
   final parsed = double.tryParse(trimmed);
   if (parsed == null) return null;
   return (parsed * 100).round();
-}
-
-String _formatAdvancedRange(DateTimeRange range) {
-  String fmt(DateTime d) =>
-      '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
-  return '${fmt(range.start)} → ${fmt(range.end)}';
 }

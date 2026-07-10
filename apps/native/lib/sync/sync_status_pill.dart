@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import 'package:app/l10n/l10n.dart';
+
 import 'sync_engine.dart';
 import 'sync_status.dart';
 
@@ -20,28 +22,28 @@ class SyncStatusPill extends StatelessWidget {
     final (icon, label, color) = switch (status) {
       SyncStatus.idle => (
         Icons.cloud_outlined,
-        'Sync',
+        context.l10n.sync,
         Theme.of(context).colorScheme.onSurfaceVariant,
       ),
       SyncStatus.syncing => (
         Icons.sync_rounded,
-        'Syncing…',
+        context.l10n.syncing,
         Theme.of(context).colorScheme.primary,
       ),
       SyncStatus.synced => (
         Icons.cloud_done_rounded,
-        'Synced',
+        context.l10n.synced,
         Theme.of(context).colorScheme.primary,
       ),
       SyncStatus.error => (
         Icons.cloud_off_rounded,
-        'Sync error',
+        context.l10n.syncError,
         Theme.of(context).colorScheme.error,
       ),
     };
 
     return Tooltip(
-      message: _tooltipFor(status, engine),
+      message: _tooltipFor(context, status, engine),
       child: InkWell(
         onTap: status == SyncStatus.syncing
             ? null
@@ -79,29 +81,33 @@ class SyncStatusPill extends StatelessWidget {
     );
   }
 
-  String _tooltipFor(SyncStatus status, SyncEngine engine) {
+  String _tooltipFor(
+    BuildContext context,
+    SyncStatus status,
+    SyncEngine engine,
+  ) {
     switch (status) {
       case SyncStatus.idle:
-        return 'Tap to sync';
+        return context.l10n.tapToSync;
       case SyncStatus.syncing:
-        return 'Sync in progress';
+        return context.l10n.syncInProgress;
       case SyncStatus.synced:
         final last = engine.lastSyncedAt;
-        if (last == null) return 'Synced. Tap to sync again.';
+        if (last == null) return context.l10n.syncedTapAgain;
         final ago = DateTime.now().difference(last);
-        return 'Last synced ${_formatAgo(ago)} ago. Tap to sync again.';
+        return context.l10n.lastSynced(_formatAgo(context, ago));
       case SyncStatus.error:
         final err = engine.lastError;
         return err == null
-            ? 'Sync error. Tap to retry.'
-            : 'Sync error: $err. Tap to retry.';
+            ? context.l10n.syncErrorRetry
+            : context.l10n.syncErrorDetails(err);
     }
   }
 
-  String _formatAgo(Duration d) {
-    if (d.inSeconds < 60) return '${d.inSeconds}s';
-    if (d.inMinutes < 60) return '${d.inMinutes}m';
-    if (d.inHours < 24) return '${d.inHours}h';
-    return '${d.inDays}d';
+  String _formatAgo(BuildContext context, Duration d) {
+    if (d.inSeconds < 60) return context.l10n.durationSeconds(d.inSeconds);
+    if (d.inMinutes < 60) return context.l10n.durationMinutes(d.inMinutes);
+    if (d.inHours < 24) return context.l10n.durationHours(d.inHours);
+    return context.l10n.durationDays(d.inDays);
   }
 }

@@ -1,6 +1,7 @@
 import 'package:app/components/filter_sheet.dart';
 import 'package:app/data/data.dart';
 import 'package:app/database.dart';
+import 'package:app/l10n/l10n.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -91,7 +92,7 @@ class _TransactionFiltersBarState extends State<TransactionFiltersBar> {
                   onChanged: (value) =>
                       widget.onChanged(widget.filter.copyWith(search: value)),
                   decoration: InputDecoration(
-                    hintText: 'Buscar',
+                    hintText: context.l10n.search,
                     prefixIcon: const Icon(Icons.search_rounded),
                     filled: true,
                     fillColor: theme.colorScheme.surfaceContainerHighest,
@@ -194,14 +195,16 @@ class _ActiveFilterChips extends StatelessWidget {
     if (range != null) {
       chips.add(
         InputChip(
-          label: Text(_formatDateRange(range.start, range.end)),
+          label: Text(
+            formatDateRange(range.start, range.end, context.localeName),
+          ),
           onDeleted: () => onChanged(filter.copyWith(clearDateRange: true)),
         ),
       );
     } else if (filter.datePreset != null) {
       chips.add(
         InputChip(
-          label: Text(filter.datePreset!.label),
+          label: Text(context.l10n.datePreset(filter.datePreset!)),
           onDeleted: () => onChanged(filter.copyWith(clearDatePreset: true)),
         ),
       );
@@ -216,7 +219,7 @@ class _ActiveFilterChips extends StatelessWidget {
             (Account a) => a.id,
             (Account a) => a.name,
           ),
-          fallback: 'cuentas',
+          fallback: context.l10n.accounts.toLowerCase(),
           onDeleted: () => onChanged(filter.copyWith(accountIds: const {})),
         ),
       );
@@ -231,7 +234,7 @@ class _ActiveFilterChips extends StatelessWidget {
             (Category c) => c.id,
             (Category c) => c.name,
           ),
-          fallback: 'categorías',
+          fallback: context.l10n.categories.toLowerCase(),
           onDeleted: () => onChanged(filter.copyWith(categoryIds: const {})),
         ),
       );
@@ -246,7 +249,7 @@ class _ActiveFilterChips extends StatelessWidget {
             (Tag t) => t.id,
             (Tag t) => t.name,
           ),
-          fallback: 'tags',
+          fallback: context.l10n.tags.toLowerCase(),
           onDeleted: () => onChanged(filter.copyWith(tagIds: const {})),
         ),
       );
@@ -304,10 +307,4 @@ class _NamedFilterChip extends StatelessWidget {
       },
     );
   }
-}
-
-String _formatDateRange(DateTime from, DateTime to) {
-  String fmt(DateTime d) =>
-      '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year}';
-  return '${fmt(from)} – ${fmt(to)}';
 }

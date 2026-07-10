@@ -5,6 +5,7 @@ import 'package:app/auth/pop_on_account_switch.dart';
 import 'package:app/config.dart';
 import 'package:app/data/data.dart';
 import 'package:app/database.dart';
+import 'package:app/l10n/l10n.dart';
 import 'package:app/screens/accounts.dart';
 import 'package:app/screens/activity.dart';
 import 'package:app/screens/home.dart';
@@ -41,16 +42,20 @@ Future<void> main() async {
 }
 
 class MyApp extends StatelessWidget {
-  const MyApp({super.key, required this.auth});
+  const MyApp({super.key, required this.auth, this.locale});
 
   final AuthController auth;
+  final Locale? locale;
 
   @override
   Widget build(BuildContext context) {
     return ChangeNotifierProvider<AuthController>.value(
       value: auth,
       child: MaterialApp(
-        title: 'Wallet Bot',
+        locale: locale,
+        onGenerateTitle: (context) => context.l10n.appTitle,
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
         theme: ThemeData(
           colorScheme: ColorScheme.fromSeed(seedColor: Colors.greenAccent),
         ),
@@ -200,7 +205,7 @@ class _AppMainState extends State<AppMain> {
             ),
           );
         },
-        tooltip: 'Voice commands',
+        tooltip: context.l10n.voiceCommands,
         child: const Text('🤖'),
       ),
       bottomNavigationBar: NavigationBar(
@@ -208,18 +213,21 @@ class _AppMainState extends State<AppMain> {
         onDestinationSelected: (value) =>
             context.read<AppNavigation>().index = value,
         destinations: [
-          NavigationDestination(icon: Icon(Icons.home_rounded), label: "Home"),
           NavigationDestination(
-            icon: Icon(Icons.calendar_view_month_rounded),
-            label: "Actividad",
+            icon: const Icon(Icons.home_rounded),
+            label: context.l10n.home,
           ),
           NavigationDestination(
-            icon: Icon(Icons.account_balance_rounded),
-            label: "Cuentas",
+            icon: const Icon(Icons.calendar_view_month_rounded),
+            label: context.l10n.activity,
           ),
           NavigationDestination(
-            icon: Icon(Icons.stacked_line_chart_rounded),
-            label: "Insights",
+            icon: const Icon(Icons.account_balance_rounded),
+            label: context.l10n.accounts,
+          ),
+          NavigationDestination(
+            icon: const Icon(Icons.stacked_line_chart_rounded),
+            label: context.l10n.insights,
           ),
         ],
       ),
@@ -249,29 +257,30 @@ class _ReauthBanner extends StatelessWidget {
               const SizedBox(width: 12),
               Expanded(
                 child: Text(
-                  'Sync paused — sign in again to reconnect',
+                  context.l10n.syncPaused,
                   style: TextStyle(color: theme.colorScheme.onErrorContainer),
                 ),
               ),
               TextButton(
                 onPressed: () async {
                   final messenger = ScaffoldMessenger.of(context);
+                  final l10n = context.l10n;
                   try {
                     await context.read<AuthController>().signInWithGoogle();
                   } on GoogleSignInException catch (e) {
                     // Dismissing the Google sheet isn't a failure to report.
                     if (e.code != GoogleSignInExceptionCode.canceled) {
                       messenger.showSnackBar(
-                        SnackBar(content: Text('No se pudo reconectar: $e')),
+                        SnackBar(content: Text(l10n.reconnectFailed(e))),
                       );
                     }
                   } catch (e) {
                     messenger.showSnackBar(
-                      SnackBar(content: Text('Reconnect failed: $e')),
+                      SnackBar(content: Text(l10n.reconnectFailed(e))),
                     );
                   }
                 },
-                child: const Text('Reconnect'),
+                child: Text(context.l10n.reconnect),
               ),
             ],
           ),
