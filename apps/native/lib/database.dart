@@ -11,7 +11,10 @@ part 'database.g.dart';
 // color (and accounts/categories an icon). These are the DB-level fallbacks
 // applied when a writer omits them; they MIRROR the UI constants in
 // components/color_utils.dart and components/{account,category}_icons.dart —
-// keep them in sync. Color is a hex string; icon is a stable icon-name.
+// keep them in sync. Table declarations intentionally repeat these values as
+// literals so drift_dev can export self-contained migration helpers; the schema
+// test verifies that both representations stay aligned. Color is a hex string;
+// icon is a stable icon-name.
 const String kDefaultAccountColor = '#3B82F6';
 const String kDefaultAccountIcon = 'wallet';
 const String kDefaultCategoryColor = '#6366F1';

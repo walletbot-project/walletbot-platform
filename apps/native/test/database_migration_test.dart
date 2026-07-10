@@ -13,7 +13,7 @@ void main() {
     verifier = SchemaVerifier(GeneratedHelper());
   });
 
-  test('fresh database matches the published v1 schema snapshot', () async {
+  test('fresh database matches the versioned v1 schema snapshot', () async {
     final db = AppDatabase.forTesting(NativeDatabase.memory());
     addTearDown(db.close);
 
