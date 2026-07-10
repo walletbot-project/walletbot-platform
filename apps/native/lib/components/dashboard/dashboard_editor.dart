@@ -64,8 +64,10 @@ class _DashboardEditorState extends State<DashboardEditor> {
 
   Future<void> _onReorder(int oldIndex, int newIndex) async {
     setState(() {
+      var target = newIndex;
+      if (target > oldIndex) target -= 1;
       final row = _ordered.removeAt(oldIndex);
-      _ordered.insert(newIndex, row);
+      _ordered.insert(target, row);
     });
     await widget.repos.dashboard.reorder(_ordered.map((w) => w.id).toList());
   }
@@ -116,7 +118,10 @@ class _DashboardEditorState extends State<DashboardEditor> {
       physics: const NeverScrollableScrollPhysics(),
       buildDefaultDragHandles: false,
       itemCount: _ordered.length,
-      onReorderItem: _onReorder,
+      // Flutter 3.41 (the CI SDK) still requires onReorder. Newer SDKs mark it
+      // deprecated in favor of onReorderItem, which is unavailable in 3.41.
+      // ignore: deprecated_member_use
+      onReorder: _onReorder,
       itemBuilder: (context, index) {
         final row = _ordered[index];
         return _EditTile(
