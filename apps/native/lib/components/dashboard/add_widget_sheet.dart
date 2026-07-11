@@ -394,7 +394,7 @@ class _WidgetSheetState extends State<_WidgetSheet> {
       existing.id,
       type: Value(_type.wire),
       filterId: Value(filterId),
-      options: Value(encodeWidgetOptions(options)),
+      options: Value(mergeWidgetOptions(existing.options, options)),
     );
   }
 

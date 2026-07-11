@@ -4,6 +4,18 @@ import '../../database.dart';
 import '../ids.dart';
 import 'repository_base.dart';
 
+typedef DashboardLayoutEntry = ({
+  String id,
+  String options,
+  int position,
+  String width,
+});
+typedef DashboardLayoutExpectation = ({
+  String options,
+  String width,
+  BigInt updatedAt,
+});
+
 /// Reads and writes for the persisted home dashboard layout
 /// (docs/home-dashboard.md). Each row is one tile; `options` is an opaque JSON
 /// string of display options and `filterId` is a soft reference into
@@ -116,25 +128,63 @@ class DashboardRepository extends RepositoryBase {
   /// `{row, col}`), its row-major `position`, and its `width`. Every row bumps
   /// `updatedAt` + re-dirties. Writing every visible widget on each move keeps
   /// `position` consistent and migrates legacy (coord-less) rows on first edit.
-  Future<void> applyLayout(
-    List<({String id, String options, int position, String width})> entries,
-  ) async {
+  Future<void> applyLayout(List<DashboardLayoutEntry> entries) async {
     final now = currentMs;
     await db.transaction(() async {
-      for (final entry in entries) {
-        await (db.update(
-          db.dashboardWidgets,
-        )..where((w) => w.id.equals(entry.id))).write(
-          DashboardWidgetsCompanion(
-            options: Value(entry.options),
-            position: Value(entry.position),
-            width: Value(entry.width),
-            updatedAt: Value(now),
-            dirty: const Value(true),
-          ),
-        );
-      }
+      await _writeLayoutEntries(entries, now);
     });
+  }
+
+  /// Applies a repair snapshot only if the active dashboard still exactly
+  /// matches what the caller validated. Sync may merge a fresher snapshot while
+  /// a post-frame repair is waiting; in that case this compare-and-write safely
+  /// no-ops instead of overwriting it.
+  Future<bool> applyLayoutIfUnchanged(
+    List<DashboardLayoutEntry> entries,
+    Map<String, DashboardLayoutExpectation> expected,
+  ) async {
+    final now = currentMs;
+    return db.transaction(() async {
+      final current = await (db.select(
+        db.dashboardWidgets,
+      )..where((w) => w.archived.equals(false))).get();
+      if (current.length != expected.length ||
+          entries.length != expected.length) {
+        return false;
+      }
+      for (final row in current) {
+        final snapshot = expected[row.id];
+        if (snapshot == null ||
+            snapshot.options != row.options ||
+            snapshot.width != row.width ||
+            snapshot.updatedAt != row.updatedAt) {
+          return false;
+        }
+      }
+      if (entries.any((entry) => !expected.containsKey(entry.id))) return false;
+
+      await _writeLayoutEntries(entries, now);
+      return true;
+    });
+  }
+
+  Future<void> _writeLayoutEntries(
+    List<DashboardLayoutEntry> entries,
+    BigInt now,
+  ) async {
+    for (final entry in entries) {
+      await (db.update(
+        db.dashboardWidgets,
+      )..where((w) => w.id.equals(entry.id))).write(
+        DashboardWidgetsCompanion(
+          options: Value(entry.options),
+          position: Value(entry.position),
+          width: Value(entry.width),
+          updatedAt: Value(now),
+          dirty: const Value(true),
+        ),
+      );
+    }
   }
 
   /// Soft delete: `archived = true` + tombstone, atomically.
@@ -160,31 +210,46 @@ class DashboardRepository extends RepositoryBase {
   /// seeded before; either way the one-time guard is then set so a default the
   /// user later deletes is never resurrected.
   ///
-  /// Offline-first: a brand-new offline user still gets a dashboard; a device
-  /// joining an existing account finds the table non-empty (after pull) and
-  /// skips seeding.
-  Future<void> seedDefaultIfEmpty(Future<void> Function() writeSeed) async {
-    final state = await (db.select(
-      db.syncState,
-    )..where((s) => s.id.equals('singleton'))).getSingleOrNull();
-    if (state?.dashboardSeeded ?? false) return;
+  /// [respectDeleteHistory] is used for remote accounts after their initial
+  /// pull. A dashboard-widget tombstone means the empty dashboard may be an
+  /// intentional user choice, so defaults must not be recreated on this device.
+  Future<void> seedDefaultIfEmpty(
+    Future<void> Function() writeSeed, {
+    bool respectDeleteHistory = false,
+  }) async {
+    await db.transaction(() async {
+      final state = await (db.select(
+        db.syncState,
+      )..where((s) => s.id.equals('singleton'))).getSingleOrNull();
+      if (state?.dashboardSeeded ?? false) return;
 
-    final existing = await (db.select(db.dashboardWidgets)..limit(1)).get();
-    if (existing.isEmpty) {
-      await db.transaction(writeSeed);
-    }
+      final existing = await (db.select(db.dashboardWidgets)..limit(1)).get();
+      var wasDeleted = false;
+      if (respectDeleteHistory && existing.isEmpty) {
+        final tombstones =
+            await (db.select(db.tombstones)
+                  ..where((t) => t.entityTable.equals('dashboardWidgets'))
+                  ..limit(1))
+                .get();
+        wasDeleted = tombstones.isNotEmpty;
+      }
+      if (existing.isEmpty && !wasDeleted) {
+        await writeSeed();
+      }
 
-    // Mark seeded regardless, so we don't resurrect user-deleted defaults.
-    await db
-        .into(db.syncState)
-        .insert(
-          SyncStateCompanion.insert(
-            id: const Value('singleton'),
-            dashboardSeeded: const Value(true),
-          ),
-          onConflict: DoUpdate(
-            (_) => const SyncStateCompanion(dashboardSeeded: Value(true)),
-          ),
-        );
+      // Mark attempted regardless, so deleted defaults cannot be resurrected
+      // later on this device.
+      await db
+          .into(db.syncState)
+          .insert(
+            SyncStateCompanion.insert(
+              id: const Value('singleton'),
+              dashboardSeeded: const Value(true),
+            ),
+            onConflict: DoUpdate(
+              (_) => const SyncStateCompanion(dashboardSeeded: Value(true)),
+            ),
+          );
+    });
   }
 }

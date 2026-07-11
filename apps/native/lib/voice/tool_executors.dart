@@ -993,7 +993,9 @@ class ToolExecutors {
           : const Value.absent(),
       filterId: Value(filterId),
       width: width != null ? Value(width.wire) : const Value.absent(),
-      options: Value(encodeWidgetOptions(optionsResult.options)),
+      options: Value(
+        mergeWidgetOptions(existing.options, optionsResult.options),
+      ),
     );
     return {'ok': true, 'id': id, 'filterId': filterId};
   }
