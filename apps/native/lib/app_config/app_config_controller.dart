@@ -186,6 +186,16 @@ class AppConfigController extends ChangeNotifier {
     final normalized = _normalizeLocaleTag(locale);
     if (normalized == _locale) return false;
     _locale = normalized;
+    // Server banners are localized response data. Never keep the previous
+    // locale's copy visible while the replacement request is offline or in
+    // flight. Version state itself is locale-neutral, so retain its local
+    // fallback and let the widget render that fallback in the new locale.
+    _deviceBanners = _localVersionFallback();
+    _accountBanners = const [];
+    _accountScopeKey = null;
+    _accountBannersScope = null;
+    _accountFetchInFlight = null;
+    notifyListeners();
     return true;
   }
 
@@ -358,6 +368,15 @@ class AppConfigController extends ChangeNotifier {
     if (legacyBanner != null) return [legacyBanner];
 
     if (!allowVersionFallback) return const [];
+    if (!_supported) return [AppConfigBanner.hardVersionFallback()];
+    if (_updateAvailable) {
+      final fallback = AppConfigBanner.softVersionFallback(_updateUrl);
+      if (fallback != null) return [fallback];
+    }
+    return const [];
+  }
+
+  List<AppConfigBanner> _localVersionFallback() {
     if (!_supported) return [AppConfigBanner.hardVersionFallback()];
     if (_updateAvailable) {
       final fallback = AppConfigBanner.softVersionFallback(_updateUrl);

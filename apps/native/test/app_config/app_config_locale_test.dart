@@ -95,4 +95,50 @@ void main() {
 
     expect(accountLocales, ['es-AR', 'en-US']);
   });
+
+  test('changing locale drops stale localized server banners', () async {
+    FlutterSecureStorage.setMockInitialValues({});
+    var requestCount = 0;
+    final client = MockClient((request) async {
+      requestCount++;
+      if (requestCount > 1) return http.Response('', 503);
+      return http.Response(
+        jsonEncode({
+          'supported': true,
+          'updateAvailable': false,
+          'banners': [
+            {
+              'key': 'localized-notice',
+              'index': 0,
+              'placements': ['home'],
+              'tone': 'info',
+              'title': 'Aviso en español',
+              'messageMarkdown': 'Contenido en español',
+              'actions': <Object?>[],
+            },
+          ],
+        }),
+        200,
+      );
+    });
+    final controller = AppConfigController(
+      clientInfo: const ClientInfo(
+        platform: 'android',
+        appVersion: '0.1.0',
+        deviceId: 'test-device',
+      ),
+      httpClient: client,
+      locale: 'es-AR',
+    );
+    addTearDown(controller.dispose);
+
+    await controller.load();
+    expect(controller.banners.single.title, 'Aviso en español');
+
+    expect(controller.updateLocale('en-US'), isTrue);
+    expect(controller.banners, isEmpty);
+    await controller.load();
+
+    expect(controller.banners, isEmpty);
+  });
 }
