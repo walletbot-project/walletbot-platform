@@ -261,7 +261,7 @@ class AppLocalizationsEs extends AppLocalizations {
   String get noName => 'Sin nombre';
 
   @override
-  String get localAccount => 'Sin cuenta';
+  String get localAccount => 'Cuenta local';
 
   @override
   String get syncedAccount => 'Cuenta sincronizada';
@@ -816,7 +816,7 @@ class AppLocalizationsEs extends AppLocalizations {
   String get withAccount => 'Con cuenta';
 
   @override
-  String get withoutAccount => 'Sin cuenta';
+  String get withoutAccount => 'Cuenta local';
 
   @override
   String get withAccountDescription =>

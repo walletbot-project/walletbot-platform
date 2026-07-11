@@ -22,6 +22,13 @@ void main() {
     expect(es.datePreset(DatePreset.thisMonth), 'Este mes');
   });
 
+  test('Spanish local-account labels describe an on-device account', () {
+    final es = AppLocalizationsEs();
+
+    expect(es.localAccount, 'Cuenta local');
+    expect(es.withoutAccount, 'Cuenta local');
+  });
+
   test('existing default dashboard titles follow the active locale', () {
     final en = AppLocalizationsEn();
     final es = AppLocalizationsEs();

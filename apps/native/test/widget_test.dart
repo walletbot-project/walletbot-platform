@@ -31,7 +31,7 @@ void main() {
     );
     await tester.pump();
 
-    expect(find.text('Sin cuenta'), findsWidgets);
+    expect(find.text('Cuenta local'), findsWidgets);
   });
 
   testWidgets('requires a name before continuing without an account', (
@@ -52,7 +52,7 @@ void main() {
     );
     await tester.pump();
 
-    await tester.tap(find.text('Sin cuenta').first);
+    await tester.tap(find.text('Cuenta local').first);
     await tester.pumpAndSettle();
 
     expect(find.text('Nombre'), findsOneWidget);

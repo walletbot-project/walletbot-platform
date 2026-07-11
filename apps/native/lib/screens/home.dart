@@ -39,10 +39,9 @@ class _HomeScreenState extends State<HomeScreen> {
   /// updates reactively once the rows land.
   void _maybeSeedDashboard() {
     final repos = context.read<AppRepositories>();
+    final l10n = context.l10n;
     repos.dashboard
-        .seedDefaultIfEmpty(
-          () => writeDefaultDashboardSeed(repos, context.l10n),
-        )
+        .seedDefaultIfEmpty(() => writeDefaultDashboardSeed(repos, l10n))
         .catchError((Object e, StackTrace st) {
           debugPrint('home: default dashboard seed failed: $e');
         });
