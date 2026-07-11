@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:convex_flutter/convex_flutter.dart';
 import 'package:flutter/foundation.dart';
 
+import '../database.dart';
 import '../sync/wire.dart';
 import 'voice_session_repository.dart';
 
@@ -60,7 +61,23 @@ class VoiceSessionRemoteSync {
   Future<void> _drain() async {
     while (!_disposed) {
       final pending = await _repository.unsyncedEvents(limit: batchSize);
-      if (pending.isEmpty) return;
+      if (pending.isEmpty) {
+        final sessions = await _repository.unsyncedSessions(limit: batchSize);
+        if (sessions.isEmpty) return;
+        for (final session in sessions) {
+          await _client.mutation(
+            name: 'v1/voice/sessions:appendEvents',
+            args:
+                (prepareArgValue({
+                      'session': _sessionPayload(session),
+                      'events': <Object?>[],
+                    })
+                    as Map<String, Object?>),
+          );
+          await _repository.markSessionSynced(session.id);
+        }
+        continue;
+      }
       final sessionId = pending.first.sessionId;
       final events = pending
           .where((event) => event.sessionId == sessionId)
@@ -77,15 +94,7 @@ class VoiceSessionRemoteSync {
         name: 'v1/voice/sessions:appendEvents',
         args:
             (prepareArgValue({
-                  'session': {
-                    'id': session.id,
-                    'model': session.model,
-                    'status': session.status,
-                    'startedAt': session.startedAt,
-                    'updatedAt': session.updatedAt,
-                    if (session.endedAt != null) 'endedAt': session.endedAt,
-                    'endedExplicitly': session.endedExplicitly,
-                  },
+                  'session': {..._sessionPayload(session)},
                   'events': events
                       .map(
                         (event) => {
@@ -118,6 +127,16 @@ class VoiceSessionRemoteSync {
       }
     }
   }
+
+  Map<String, Object?> _sessionPayload(VoiceSession session) => {
+    'id': session.id,
+    'model': session.model,
+    'status': session.status,
+    'startedAt': session.startedAt,
+    'updatedAt': session.updatedAt,
+    if (session.endedAt != null) 'endedAt': session.endedAt,
+    'endedExplicitly': session.endedExplicitly,
+  };
 
   Future<void> dispose() async {
     _timer?.cancel();

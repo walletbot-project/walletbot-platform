@@ -94,6 +94,7 @@ void main() {
   test('remote sessions use an outbox while local sessions do not', () async {
     final remote = VoiceSessionRepository(db, remoteEnabled: true);
     final session = await remote.openOrCreate(model: 'test-live-model');
+    expect(await remote.unsyncedSessions(), [session]);
     await remote.appendEvent(
       sessionId: session.id,
       occurredAt: DateTime.now(),
@@ -104,4 +105,60 @@ void main() {
     );
     expect(await remote.unsyncedEvents(), hasLength(1));
   });
+
+  test('backdated events do not move session updatedAt backwards', () async {
+    final repository = VoiceSessionRepository(db);
+    final session = await repository.openOrCreate(model: 'test-live-model');
+
+    await repository.appendEvent(
+      sessionId: session.id,
+      occurredAt: DateTime.utc(2000),
+      type: 'historical_event',
+      direction: 'local',
+    );
+
+    final updated = await repository.getSession(session.id);
+    expect(updated, isNotNull);
+    expect(
+      updated!.updatedAt.compareTo(session.updatedAt),
+      greaterThanOrEqualTo(0),
+    );
+  });
+
+  test(
+    'resume and expiration changes return remote sessions to outbox',
+    () async {
+      final repository = VoiceSessionRepository(db, remoteEnabled: true);
+      final resumable = await repository.openOrCreate(model: 'test-live-model');
+      await repository.updateResumeHandle(
+        sessionId: resumable.id,
+        handle: 'fresh-handle',
+        at: DateTime.now(),
+      );
+      await repository.markSessionSynced(resumable.id);
+
+      final resumed = await repository.openOrCreate(model: 'test-live-model');
+      expect(resumed.id, resumable.id);
+      expect(resumed.remoteSynced, isFalse);
+
+      await repository.updateResumeHandle(
+        sessionId: resumed.id,
+        handle: 'expired-handle',
+        at: DateTime.now().subtract(const Duration(hours: 3)),
+      );
+      await repository.markSessionSynced(resumed.id);
+
+      final replacement = await repository.openOrCreate(
+        model: 'test-live-model',
+      );
+      final expired = await repository.getSession(resumed.id);
+      expect(replacement.id, isNot(resumed.id));
+      expect(expired?.status, 'expired');
+      expect(expired?.remoteSynced, isFalse);
+      expect(
+        (await repository.unsyncedSessions()).map((session) => session.id),
+        containsAll([expired!.id, replacement.id]),
+      );
+    },
+  );
 }

@@ -129,6 +129,7 @@ class _AuthGate extends StatelessWidget {
         ),
         if (active.type == AccountType.remote)
           Provider<VoiceSessionRemoteSync>(
+            lazy: false,
             create: (ctx) {
               final sync = VoiceSessionRemoteSync(
                 repository: ctx.read<VoiceSessionRepository>(),

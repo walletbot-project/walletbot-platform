@@ -80,6 +80,8 @@ class _VoiceScreenState extends State<VoiceScreen> {
       _command = active;
       _commandEventsSubscription = active.events.listen(_onVoiceEvent);
       _isConnected = active.isConnected;
+      _isReconnecting = !active.isConnected;
+      if (_isReconnecting) _showConnectionNotice();
       active.recordClientEvent('screen_attached');
     }
   }
@@ -468,6 +470,9 @@ class _VoiceScreenState extends State<VoiceScreen> {
         case VoiceUsageMetadataEvent():
           break;
         case VoiceUserTranscriptDelta(:final text):
+          // A typed turn disables playback for its reply. Voice input starts a
+          // new audio turn, so subsequent agent audio must be audible again.
+          _command?.setAudioPlaybackEnabled(true);
           _appendUser(text);
         case VoiceAgentTranscriptDelta(:final text):
           _appendAgent(text);

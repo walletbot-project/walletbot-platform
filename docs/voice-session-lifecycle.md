@@ -52,7 +52,11 @@ una política explícita rompería la expectativa de export completo.
 Sólo las cuentas remotas replican sesiones. La réplica usa un outbox separado
 del sync financiero, en lotes idempotentes de hasta 50 eventos:
 
+- el outbox comienza a drenarse al adjuntar la cuenta remota, sin esperar a que
+  el usuario abra la pantalla de voz;
 - se envían todos los eventos semánticos y los mensajes crudos saneados;
+- los cambios de metadata de una sesión se envían incluso cuando no hay eventos
+  nuevos pendientes;
 - para PCM se envían MIME y cantidad de bytes, no el binario;
 - un fallo no bloquea la conversación: los eventos quedan pendientes y se
   reintentan;

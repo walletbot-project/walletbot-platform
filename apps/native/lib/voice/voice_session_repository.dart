@@ -48,6 +48,9 @@ class VoiceSessionRepository {
             VoiceSessionsCompanion(
               status: const Value('active'),
               updatedAt: Value(BigInt.from(now.millisecondsSinceEpoch)),
+              remoteSynced: remoteEnabled
+                  ? const Value(false)
+                  : const Value.absent(),
             ),
           );
           return (db.select(
@@ -62,6 +65,9 @@ class VoiceSessionRepository {
             status: const Value('expired'),
             endedAt: Value(BigInt.from(now.millisecondsSinceEpoch)),
             updatedAt: Value(BigInt.from(now.millisecondsSinceEpoch)),
+            remoteSynced: remoteEnabled
+                ? const Value(false)
+                : const Value.absent(),
           ),
         );
       }
@@ -99,6 +105,7 @@ class VoiceSessionRepository {
     String? binaryMimeType,
   }) => _serial(() async {
     final sequence = await _takeSequence(sessionId);
+    final updatedAt = await _monotonicUpdatedAt(sessionId, occurredAt);
     await db
         .into(db.voiceSessionEvents)
         .insert(
@@ -121,7 +128,7 @@ class VoiceSessionRepository {
       db.voiceSessions,
     )..where((row) => row.id.equals(sessionId))).write(
       VoiceSessionsCompanion(
-        updatedAt: Value(BigInt.from(occurredAt.millisecondsSinceEpoch)),
+        updatedAt: Value(updatedAt),
         remoteSynced: remoteEnabled ? const Value(false) : const Value.absent(),
       ),
     );
@@ -132,13 +139,14 @@ class VoiceSessionRepository {
     required String handle,
     required DateTime at,
   }) => _serial(() async {
+    final updatedAt = await _monotonicUpdatedAt(sessionId, at);
     await (db.update(
       db.voiceSessions,
     )..where((row) => row.id.equals(sessionId))).write(
       VoiceSessionsCompanion(
         resumeHandle: Value(handle),
         resumeHandleUpdatedAt: Value(BigInt.from(at.millisecondsSinceEpoch)),
-        updatedAt: Value(BigInt.from(at.millisecondsSinceEpoch)),
+        updatedAt: Value(updatedAt),
         remoteSynced: remoteEnabled ? const Value(false) : const Value.absent(),
       ),
     );
@@ -179,6 +187,13 @@ class VoiceSessionRepository {
               (row) => OrderingTerm.asc(row.occurredAt),
               (row) => OrderingTerm.asc(row.sequence),
             ])
+            ..limit(limit))
+          .get();
+
+  Future<List<VoiceSession>> unsyncedSessions({int limit = 50}) =>
+      (db.select(db.voiceSessions)
+            ..where((row) => row.remoteSynced.equals(false))
+            ..orderBy([(row) => OrderingTerm.asc(row.updatedAt)])
             ..limit(limit))
           .get();
 
@@ -345,6 +360,20 @@ class VoiceSessionRepository {
             .getSingleOrNull();
     final next = (last?.sequence ?? -1) + 1;
     _nextSequences[sessionId] = next + 1;
+    return next;
+  }
+
+  Future<BigInt> _monotonicUpdatedAt(
+    String sessionId,
+    DateTime occurredAt,
+  ) async {
+    final now = BigInt.from(DateTime.now().millisecondsSinceEpoch);
+    final occurred = BigInt.from(occurredAt.millisecondsSinceEpoch);
+    var next = occurred > now ? occurred : now;
+    final session = await getSession(sessionId);
+    if (session != null && session.updatedAt > next) {
+      next = session.updatedAt;
+    }
     return next;
   }
 

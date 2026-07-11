@@ -81,11 +81,13 @@ Gemini Live ↔ native app → local Drift outbox
                   Convex voiceSessions + voiceSessionEvents
 ```
 
-`VoiceSessionRemoteSync` schedules a batch approximately one second after a
-local write. It sends the session snapshot and its unsynced events through the
-authenticated Convex client. Failed batches remain in the local outbox and are
-retried after five seconds; failures never block the Live conversation or the
-local export.
+`VoiceSessionRemoteSync` starts as soon as a remote account is attached and
+schedules a batch approximately one second after each local write. It sends the
+session snapshot and its unsynced events through the authenticated Convex
+client. A changed session with no pending events is sent with an empty event
+array, so lifecycle-only updates cannot remain stranded in the outbox. Failed
+batches remain local and are retried after five seconds; failures never block
+the Live conversation or the local export.
 
 The `appendEvents` mutation derives `userId` from the authenticated server
 identity. It upserts the session by `(userId, sessionId)` and inserts each event
