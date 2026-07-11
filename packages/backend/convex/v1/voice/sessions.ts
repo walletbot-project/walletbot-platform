@@ -1,6 +1,6 @@
 import { v } from 'convex/values'
-import { mutation } from '../_generated/server'
-import { requireAuth } from '../users/helpers'
+import { mutation } from '../../_generated/server'
+import { requireAuth } from '../../users/helpers'
 
 const sessionArg = v.object({
     id: v.string(),
@@ -25,8 +25,8 @@ const eventArg = v.object({
     binaryMimeType: v.optional(v.string()),
 })
 
-/// Idempotent append endpoint used by the native outbox. Audio bytes remain on
-/// device; their size/type travel with the complete semantic/protocol log.
+/// V1 append-only voice history replication contract. Audio bytes remain on
+/// device; their size/type travel with the semantic and protocol event log.
 export const appendEvents = mutation({
     args: {
         session: sessionArg,

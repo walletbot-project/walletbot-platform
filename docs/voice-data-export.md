@@ -65,12 +65,18 @@ obtains an authenticated ephemeral token from the backend and then communicates
 directly with Gemini Live over WebSocket. Incoming and outgoing Live events are
 recorded locally before any server replication is attempted.
 
+The client-facing contracts are explicitly V1:
+
+- Convex action `v1/live/actions:requestLiveToken`;
+- HTTP token endpoint `POST /v1/live/token`;
+- Convex mutation `v1/voice/sessions:appendEvents`.
+
 For remote WalletBot accounts, the history then follows this flow:
 
 ```text
 Gemini Live ↔ native app → local Drift outbox
                               ↓ batches of up to 50 events
-                    voice/sessions:appendEvents
+                  v1/voice/sessions:appendEvents
                               ↓ authenticated mutation
                   Convex voiceSessions + voiceSessionEvents
 ```

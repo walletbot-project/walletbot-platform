@@ -74,7 +74,7 @@ class VoiceSessionRemoteSync {
       }
 
       await _client.mutation(
-        name: 'voice/sessions:appendEvents',
+        name: 'v1/voice/sessions:appendEvents',
         args:
             (prepareArgValue({
                   'session': {

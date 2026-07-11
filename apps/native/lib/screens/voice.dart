@@ -44,10 +44,12 @@ class _VoiceScreenState extends State<VoiceScreen> {
 
   _UserBubbleItem? _pendingUser;
   _AgentBubbleItem? _pendingAgent;
+  _SystemItem? _connectionNotice;
 
   String? _pendingTextSend;
   bool _isStarting = false;
   bool _isConnected = false;
+  bool _isReconnecting = false;
   bool _micActive = false;
   bool _userMicOn = false;
   double _level = 0;
@@ -173,6 +175,7 @@ class _VoiceScreenState extends State<VoiceScreen> {
     _toolsById.clear();
     _pendingUser = null;
     _pendingAgent = null;
+    _connectionNotice = null;
   }
 
   void _handleVoiceLongPressEnd() {
@@ -394,7 +397,9 @@ class _VoiceScreenState extends State<VoiceScreen> {
     setState(() {
       _isConnected = false;
       _isStarting = false;
+      _isReconnecting = false;
       _pendingTextSend = null;
+      _clearConnectionNotice();
       _finalisePending();
     });
   }
@@ -427,18 +432,34 @@ class _VoiceScreenState extends State<VoiceScreen> {
     if (!mounted) return;
     setState(() {
       switch (event) {
-        case VoiceConnectingEvent():
-          break;
+        case VoiceConnectingEvent(:final message):
+          _isReconnecting = true;
+          if (message.startsWith('Reconnecting')) {
+            _showConnectionNotice();
+          }
         case VoiceConnectedEvent():
           _isConnected = true;
+          _isReconnecting = false;
+          _clearConnectionNotice();
           _flushPendingText();
         case VoiceDisconnectedEvent():
           _isConnected = false;
+          _isReconnecting = _command?.isActive ?? false;
           _pendingTextSend = null;
           _finalisePending();
-        case VoiceErrorEvent(:final message):
+          if (_isReconnecting) {
+            _showConnectionNotice();
+          } else {
+            _clearConnectionNotice();
+          }
+        case VoiceErrorEvent(:final message, :final isTransient):
           _pendingTextSend = null;
-          _addSystem(message, kind: _SystemKind.error);
+          if (isTransient) {
+            _isReconnecting = true;
+            _showConnectionNotice();
+          } else {
+            _addSystem(message, kind: _SystemKind.error);
+          }
         case VoiceSystemEvent():
           break;
         case VoiceClientActionEvent():
@@ -469,6 +490,24 @@ class _VoiceScreenState extends State<VoiceScreen> {
 
   void _addSystem(String message, {required _SystemKind kind}) {
     _items.add(_SystemItem(at: DateTime.now(), message: message, kind: kind));
+  }
+
+  void _showConnectionNotice() {
+    if (_connectionNotice != null) return;
+    final notice = _SystemItem(
+      at: DateTime.now(),
+      message: 'Connection lost. Reconnecting automatically…',
+      kind: _SystemKind.info,
+    );
+    _connectionNotice = notice;
+    _items.add(notice);
+  }
+
+  void _clearConnectionNotice() {
+    final notice = _connectionNotice;
+    if (notice == null) return;
+    _items.remove(notice);
+    _connectionNotice = null;
   }
 
   void _addSystemSetState(String message, {required _SystemKind kind}) {
@@ -634,7 +673,7 @@ class _VoiceScreenState extends State<VoiceScreen> {
     final theme = Theme.of(context);
     final status = _isConnected
         ? _StatusLevel.connected
-        : _isStarting
+        : _isStarting || _isReconnecting
         ? _StatusLevel.connecting
         : _StatusLevel.disconnected;
 

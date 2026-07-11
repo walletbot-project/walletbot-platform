@@ -23,8 +23,13 @@ class VoiceDisconnectedEvent extends VoiceEvent {
 }
 
 class VoiceErrorEvent extends VoiceEvent {
-  VoiceErrorEvent(this.message);
+  VoiceErrorEvent(this.message, {this.isTransient = false});
   final String message;
+
+  /// Whether the operation can recover without user action. Transient errors
+  /// remain available to persistence/export consumers, while the UI may
+  /// collapse repeated retries into one connection-state notice.
+  final bool isTransient;
 }
 
 // -- Generic system notice (informational) -----------------------------------

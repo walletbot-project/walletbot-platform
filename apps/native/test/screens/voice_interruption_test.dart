@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:app/screens/voice.dart';
@@ -24,6 +25,53 @@ void main() {
     expect(command.clientActions, contains('screen_detached'));
     expect(command.audioStreamEnded, isTrue);
   });
+
+  testWidgets(
+    'repeated transient connection errors render as one friendly notice',
+    (tester) async {
+      final command = _ActiveVoiceCommand();
+      await tester.pumpWidget(
+        MaterialApp(
+          home: VoiceScreen(
+            commandFactory: _ActiveVoiceCommandFactory(command),
+          ),
+        ),
+      );
+
+      command.emit(
+        VoiceErrorEvent(
+          'WebSocket error: SocketException: Failed host lookup',
+          isTransient: true,
+        ),
+      );
+      command.emit(VoiceDisconnectedEvent());
+      command.emit(VoiceConnectingEvent('Reconnecting to Gemini Live in 1s'));
+      command.emit(
+        VoiceErrorEvent(
+          'Reconnect failed: Gemini disconnected before setup completed',
+          isTransient: true,
+        ),
+      );
+      command.emit(VoiceConnectingEvent('Reconnecting to Gemini Live in 2s'));
+      await tester.pump();
+
+      expect(
+        find.text('Connection lost. Reconnecting automatically…'),
+        findsOneWidget,
+      );
+      expect(find.textContaining('WebSocket error'), findsNothing);
+      expect(find.textContaining('Reconnect failed'), findsNothing);
+      expect(find.text('connecting'), findsOneWidget);
+
+      command.emit(VoiceConnectedEvent());
+      await tester.pump();
+
+      expect(
+        find.text('Connection lost. Reconnecting automatically…'),
+        findsNothing,
+      );
+    },
+  );
 }
 
 class _ActiveVoiceCommandFactory implements VoiceExpenseCommandFactory {
@@ -38,12 +86,15 @@ class _ActiveVoiceCommandFactory implements VoiceExpenseCommandFactory {
 }
 
 class _ActiveVoiceCommand implements VoiceExpenseCommand {
+  final _events = StreamController<VoiceEvent>.broadcast();
   final List<String> interruptionReasons = [];
   final List<String> clientActions = [];
   bool audioStreamEnded = false;
 
   @override
-  Stream<VoiceEvent> get events => const Stream.empty();
+  Stream<VoiceEvent> get events => _events.stream;
+
+  void emit(VoiceEvent event) => _events.add(event);
 
   @override
   bool get isActive => true;

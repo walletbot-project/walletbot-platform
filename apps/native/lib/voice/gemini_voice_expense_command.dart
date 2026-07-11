@@ -207,7 +207,7 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
       (message) => _handleServerMessage(message, generation),
       onError: (Object error, StackTrace stackTrace) {
         if (generation != _connectionGeneration || !isActive) return;
-        _emit(VoiceErrorEvent('WebSocket error: $error'));
+        _emit(VoiceErrorEvent('WebSocket error: $error', isTransient: true));
         _persistProtocolEvent(
           type: 'websocket_error',
           direction: 'server',
@@ -270,7 +270,7 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
     if (useAuthenticatedTokenAction) {
       try {
         final raw = await convexClient.action(
-          name: 'live/actions:requestLiveToken',
+          name: 'v1/live/actions:requestLiveToken',
           args: const {},
         );
         final decoded = decodeConvexResponse(raw);
@@ -288,7 +288,7 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
       if (credential == null || credential.isEmpty) return '';
       final base = Uri.parse(convexSiteUrl);
       final response = await http.post(
-        base.replace(path: '/api/live/token'),
+        base.replace(path: '/v1/live/token'),
         headers: {'Authorization': 'Bearer $credential'},
       );
       if (response.statusCode < 200 || response.statusCode >= 300) {
@@ -734,7 +734,7 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
       if (!isActive) return;
       unawaited(
         _reconnectNow('socket_closed').catchError((Object error) {
-          _emit(VoiceErrorEvent('Reconnect failed: $error'));
+          _emit(VoiceErrorEvent('Reconnect failed: $error', isTransient: true));
           _scheduleReconnect();
         }),
       );
@@ -815,9 +815,11 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
       'server',
       {'code': ?code, 'reason': ?reason},
     ),
-    VoiceErrorEvent(:final message) => _VoiceEventRecord('error', 'local', {
-      'message': message,
-    }),
+    VoiceErrorEvent(:final message, :final isTransient) => _VoiceEventRecord(
+      'error',
+      'local',
+      {'message': message, 'isTransient': isTransient},
+    ),
     VoiceSystemEvent(:final message) => _VoiceEventRecord('system', 'local', {
       'message': message,
     }),

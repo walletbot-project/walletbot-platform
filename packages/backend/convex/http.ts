@@ -20,34 +20,36 @@ registerAuthNativeRoutes(http)
 // - `/v1/account-config` = account layer (remote session token or local label)
 registerConfigRoutes(http)
 
-http.route({
-    path: '/api/live/token',
-    method: 'POST',
-    handler: httpAction(async (ctx, req) => {
-        const authorization = req.headers.get('authorization')
-        const secret = authorization?.startsWith('Bearer ')
-            ? authorization.slice('Bearer '.length)
-            : null
-        if (!secret) {
-            return jsonResponse({ error: 'unauthenticated' }, { status: 401 })
-        }
-        const validation = await ctx.runMutation(
-            internal.authNative.mutations.validateSessionToken,
-            { tokenHash: await hashSessionSecret(secret) },
+const liveTokenHandler = httpAction(async (ctx, req) => {
+    const authorization = req.headers.get('authorization')
+    const secret = authorization?.startsWith('Bearer ')
+        ? authorization.slice('Bearer '.length)
+        : null
+    if (!secret) {
+        return jsonResponse({ error: 'unauthenticated' }, { status: 401 })
+    }
+    const validation = await ctx.runMutation(
+        internal.authNative.mutations.validateSessionToken,
+        { tokenHash: await hashSessionSecret(secret) },
+    )
+    if (!validation.ok) {
+        return jsonResponse(
+            { error: 'invalid_session', reason: validation.reason },
+            { status: 401 },
         )
-        if (!validation.ok) {
-            return jsonResponse(
-                { error: 'invalid_session', reason: validation.reason },
-                { status: 401 },
-            )
-        }
-        const result = await ctx.runAction(
-            internal.live.actions.requestLiveTokenForHttp,
-            {},
-        )
+    }
+    const result = await ctx.runAction(
+        internal.v1.live.actions.requestLiveTokenForHttp,
+        {},
+    )
 
-        return jsonResponse(result)
-    }),
+    return jsonResponse(result)
+})
+
+http.route({
+    path: '/v1/live/token',
+    method: 'POST',
+    handler: liveTokenHandler,
 })
 
 export default http
