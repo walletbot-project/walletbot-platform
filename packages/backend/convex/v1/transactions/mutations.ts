@@ -1,10 +1,10 @@
 import { v } from 'convex/values'
-import type { Doc, Id } from '../_generated/dataModel'
-import type { MutationCtx } from '../_generated/server'
-import { mutation } from '../_generated/server'
-import { inflowsByAccount, outflowsByAccount } from '../aggregates'
-import { nextSeq, writeTombstone } from '../sync/helpers'
-import { requireAuth } from '../users/helpers'
+import type { Doc, Id } from '../../_generated/dataModel'
+import type { MutationCtx } from '../../_generated/server'
+import { mutation } from '../../_generated/server'
+import { inflowsByAccount, outflowsByAccount } from '../../aggregates'
+import { nextSeq, writeTombstone } from '../../sync/helpers'
+import { requireAuth } from '../../users/helpers'
 import { computeAccountBalance } from './queries'
 
 // ───── Helpers ─────

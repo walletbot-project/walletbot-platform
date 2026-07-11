@@ -1,6 +1,6 @@
 import { v } from 'convex/values'
-import { query } from '../_generated/server'
-import { requireAuth } from '../users/helpers'
+import { query } from '../../_generated/server'
+import { requireAuth } from '../../users/helpers'
 
 export const listActive = query({
     args: {},

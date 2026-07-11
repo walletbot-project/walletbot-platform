@@ -21,7 +21,7 @@ export function AccountTile({
     color,
     onClick,
 }: AccountTileProps) {
-    const balance = useQuery(api.transactions.queries.balance, {
+    const balance = useQuery(api.v1.transactions.queries.balance, {
         accountId: id,
     })
     const accent = normalizeColor(color, ACCOUNT_DEFAULT_COLOR)

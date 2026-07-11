@@ -45,19 +45,19 @@ export function AccountDetailsSheet({
     onOpenChange: (open: boolean) => void
 }) {
     const navigate = useNavigate()
-    const updateAccount = useMutation(api.accounts.mutations.update)
-    const archiveAccount = useMutation(api.accounts.mutations.archive)
+    const updateAccount = useMutation(api.v1.accounts.mutations.update)
+    const archiveAccount = useMutation(api.v1.accounts.mutations.archive)
     const createBalanceAdjustment = useMutation(
-        api.transactions.mutations.createBalanceAdjustment,
+        api.v1.transactions.mutations.createBalanceAdjustment,
     )
 
     const accountId = account?.id ?? ''
     const balance = useQuery(
-        api.transactions.queries.balance,
+        api.v1.transactions.queries.balance,
         account ? { accountId } : 'skip',
     )
     const recent = useQuery(
-        api.accounts.queries.recentTransactions,
+        api.v1.accounts.queries.recentTransactions,
         account ? { id: accountId, limit: 5 } : 'skip',
     )
 
