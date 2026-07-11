@@ -165,9 +165,17 @@ also offers up/down/left/right arrows for one-cell nudges and the
 The layout engine (`dashboard_layout.dart`) is pure Dart: it resolves stored
 coordinates into placements (falling back to the legacy auto-flow for any widget
 that predates manual placement, so old dashboards upgrade cleanly) and computes
-moves, fits, swaps, row inserts, and empty-row collapse. The first manual move
-persists coordinates for every widget. `position` is still written (row-major)
-so the non-editing read order and the legacy fallback stay stable.
+moves, fits, swaps, row inserts, and empty-row collapse. The view coordinator
+persists resolved coordinates for every widget once hydration is safe.
+`position` is still written (row-major) so the non-editing read order and the
+legacy fallback stay stable.
+
+Persisted coordinates are treated as untrusted sync input. The resolver checks
+that every widget has an integer non-negative coordinate, stays within the
+6-unit grid, and does not overlap another widget. An invalid or mixed snapshot
+renders immediately through the deterministic legacy auto-flow; after remote
+hydration completes, `DashboardSection` compare-and-writes that safe layout in
+one local transaction so a concurrent fresher merge cannot be overwritten.
 
 ---
 
@@ -294,7 +302,10 @@ unchanged — only advanced (disjunctive) filters take the anchor+predicate path
 > layout and sync through the existing `SyncEngine` ↔ Convex `sync/` pipeline
 > (LWW, tombstones, per-user `seq`). The default dashboard auto-seeds once per
 > device with **deterministic ids** (so concurrent fresh-device seeds converge
-> instead of duplicating), guarded by `syncState.dashboardSeeded`. Editing lives
+> instead of duplicating), guarded by `syncState.dashboardSeeded`. Local-only
+> accounts seed immediately. Remote accounts wait until their initial pull has
+> completed; pulled dashboard tombstones suppress seeding so an intentionally
+> emptied dashboard is not resurrected. Editing lives
 > in `apps/native/lib/components/dashboard/` (`dashboard_editor.dart`,
 > `add_widget_sheet.dart`) and reuses `showFilterSheet`
 > (`apps/native/lib/components/filter_sheet.dart`).

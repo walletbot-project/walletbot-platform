@@ -11,6 +11,8 @@ import 'package:app/screens/login.dart';
 import 'package:app/screens/settings.dart';
 import 'package:app/screens/transaction_form.dart';
 import 'package:app/shared/app_navigation.dart';
+import 'package:app/sync/sync_engine.dart';
+import 'package:app/sync/sync_status.dart';
 import 'package:app/sync/sync_status_pill.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -25,27 +27,79 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  bool _seedRequested = false;
+  bool _seedInFlight = false;
+  bool _seedFinished = false;
+  bool _remoteSeedScheduled = false;
+  SyncEngine? _syncEngine;
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    if (_seedRequested) return;
-    _seedRequested = true;
-    _maybeSeedDashboard();
+    final active = context.read<AuthController>().activeAccount;
+    if (active?.type == AccountType.local) {
+      _detachSyncListener();
+      _maybeSeedDashboard(respectDeleteHistory: false);
+      return;
+    }
+
+    final engine = context.read<SyncEngine>();
+    if (!identical(_syncEngine, engine)) {
+      _detachSyncListener();
+      _syncEngine = engine..addListener(_onSyncChanged);
+    }
+    _onSyncChanged();
   }
 
-  /// Seeds the default dashboard once per device (the repository enforces the
-  /// empty-table + one-time guard). Fire-and-forget: the dashboard stream
-  /// updates reactively once the rows land.
-  void _maybeSeedDashboard() {
+  /// Remote dashboards must finish their first pull before the local empty-table
+  /// check. Otherwise defaults and an existing remote layout are merged into one
+  /// invalid grid. Local-only accounts can seed immediately.
+  void _onSyncChanged() {
+    if (_syncEngine?.status != SyncStatus.synced ||
+        _seedFinished ||
+        _seedInFlight ||
+        _remoteSeedScheduled) {
+      return;
+    }
+    // SyncStatus.synced is published just before the cycle's in-flight future
+    // clears. Wait until the next frame so seed writes are observed as new local
+    // work and schedule their own push.
+    _remoteSeedScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _remoteSeedScheduled = false;
+      if (!mounted || _syncEngine?.status != SyncStatus.synced) return;
+      _maybeSeedDashboard(respectDeleteHistory: true);
+    });
+  }
+
+  void _maybeSeedDashboard({required bool respectDeleteHistory}) {
+    if (_seedFinished || _seedInFlight) return;
+    _seedInFlight = true;
     final repos = context.read<AppRepositories>();
     final l10n = context.l10n;
     repos.dashboard
-        .seedDefaultIfEmpty(() => writeDefaultDashboardSeed(repos, l10n))
+        .seedDefaultIfEmpty(
+          () => writeDefaultDashboardSeed(repos, l10n),
+          respectDeleteHistory: respectDeleteHistory,
+        )
+        .then((_) {
+          _seedInFlight = false;
+          _seedFinished = true;
+        })
         .catchError((Object e, StackTrace st) {
+          _seedInFlight = false;
           debugPrint('home: default dashboard seed failed: $e');
         });
+  }
+
+  void _detachSyncListener() {
+    _syncEngine?.removeListener(_onSyncChanged);
+    _syncEngine = null;
+  }
+
+  @override
+  void dispose() {
+    _detachSyncListener();
+    super.dispose();
   }
 
   void showUserMenu() {

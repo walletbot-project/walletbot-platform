@@ -166,7 +166,8 @@ DashboardWidgetSpec? dashboardSpecFromRow(
   if (type == null) return null;
   final width = DashboardWidth.fromWire(row.width);
   final options = _decodeOptions(row.options);
-  final title = options['title'] as String? ?? '';
+  final rawTitle = options['title'];
+  final title = rawTitle is String ? rawTitle : '';
   final background = DashboardBackgroundStyle.fromJson(options['background']);
 
   switch (type) {
@@ -179,30 +180,36 @@ DashboardWidgetSpec? dashboardSpecFromRow(
         width: width ?? DashboardWidth.third,
       );
     case WidgetType.list:
+      final rawLimit = options['limit'];
       return TransactionListWidgetSpec(
         title: title,
         filter: dashboardFilterFromRow(row, filtersById),
-        limit: (options['limit'] as num?)?.toInt() ?? 5,
+        limit: rawLimit is num && rawLimit.isFinite && rawLimit > 0
+            ? rawLimit.toInt()
+            : 5,
         background: background,
         width: width ?? DashboardWidth.full,
       );
     case WidgetType.balance:
+      final rawCurrency = options['currency'];
       return BalanceCardWidgetSpec(
         title: title,
-        currency: options['currency'] as String? ?? '',
+        currency: rawCurrency is String ? rawCurrency : '',
         background: background,
         width: width ?? DashboardWidth.half,
       );
     case WidgetType.chart:
+      final rawGroupBy = options['groupBy'];
+      final rawChartKind = options['chartKind'];
       return ChartWidgetSpec(
         title: title,
         filter: dashboardFilterFromRow(row, filtersById),
         groupBy:
-            BreakdownGroupBy.fromWire(options['groupBy'] as String? ?? '') ??
+            BreakdownGroupBy.fromWire(rawGroupBy is String ? rawGroupBy : '') ??
             BreakdownGroupBy.category,
         chartKind:
             BreakdownChartKind.fromWire(
-              options['chartKind'] as String? ?? '',
+              rawChartKind is String ? rawChartKind : '',
             ) ??
             BreakdownChartKind.pie,
         background: background,
@@ -215,14 +222,48 @@ DashboardWidgetSpec? dashboardSpecFromRow(
 /// `dashboard_widgets.options`. Drops null entries so the stored shape stays
 /// minimal per type.
 String encodeWidgetOptions(Map<String, Object?> options) {
-  options.removeWhere((_, value) => value == null);
-  return jsonEncode(options);
+  final encoded = {...options}..removeWhere((_, value) => value == null);
+  return jsonEncode(encoded);
 }
 
 Map<String, Object?> _decodeOptions(String raw) {
   if (raw.isEmpty) return const {};
-  final decoded = jsonDecode(raw);
-  return decoded is Map<String, Object?> ? decoded : const {};
+  try {
+    final decoded = jsonDecode(raw);
+    return decoded is Map
+        ? Map<String, Object?>.from(decoded)
+        : const <String, Object?>{};
+  } on FormatException {
+    return const {};
+  }
+}
+
+/// Merges widget option changes into the existing opaque JSON object.
+///
+/// Layout and forward-compatible keys must survive content-only edits made by
+/// the sheet or the voice agent. Invalid legacy JSON degrades to an empty object
+/// and becomes valid again on the next write.
+String mergeWidgetOptions(
+  String existingOptions,
+  Map<String, Object?> changes,
+) {
+  final merged = {..._decodeOptions(existingOptions)};
+  // These keys are owned by the content editor. Remove the old type's shape
+  // first so changing type or clearing a background does not retain stale
+  // values, while layout and unknown forward-compatible keys survive.
+  for (final key in const {
+    'title',
+    'aggregation',
+    'limit',
+    'currency',
+    'groupBy',
+    'chartKind',
+    'background',
+  }) {
+    merged.remove(key);
+  }
+  merged.addAll(changes);
+  return encodeWidgetOptions(merged);
 }
 
 /// A widget's manual placement on the dashboard grid: which [row] it sits on
@@ -246,8 +287,17 @@ DashboardLayoutCoord? dashboardLayoutFromOptions(String optionsJson) {
   if (layout is! Map) return null;
   final row = layout['row'];
   final col = layout['col'];
-  if (row is! num || col is! num) return null;
-  return DashboardLayoutCoord(row: row.toInt(), col: col.toInt());
+  if (row is! num || col is! num || !row.isFinite || !col.isFinite) return null;
+  final rowInt = row.toInt();
+  final colInt = col.toInt();
+  if (row != rowInt ||
+      col != colInt ||
+      rowInt < 0 ||
+      colInt < 0 ||
+      colInt >= dashboardGridUnits) {
+    return null;
+  }
+  return DashboardLayoutCoord(row: rowInt, col: colInt);
 }
 
 /// Returns a copy of [optionsJson] with the manual [coord] written under the
@@ -268,9 +318,15 @@ TransactionFilter dashboardFilterFromRow(
   if (filterId == null) return const TransactionFilter();
   final filter = filtersById[filterId];
   if (filter == null) return const TransactionFilter();
-  final decoded = jsonDecode(filter.config);
-  if (decoded is! Map<String, Object?>) return const TransactionFilter();
-  return TransactionFilter.fromCanonicalJson(decoded);
+  try {
+    final decoded = jsonDecode(filter.config);
+    if (decoded is! Map) return const TransactionFilter();
+    return TransactionFilter.fromCanonicalJson(
+      Map<String, Object?>.from(decoded),
+    );
+  } on Object {
+    return const TransactionFilter();
+  }
 }
 
 StatAggregation _statAggregationFromName(Object? name) {
