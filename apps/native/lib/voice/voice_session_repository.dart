@@ -37,11 +37,14 @@ class VoiceSessionRepository {
       if (active != null) {
         final updatedAt = await _nextUpdatedAt(active.id, now);
         final handleAt = active.resumeHandleUpdatedAt?.toInt();
+        final handleAge = handleAt == null
+            ? null
+            : now.difference(DateTime.fromMillisecondsSinceEpoch(handleAt));
         final canResume =
             active.resumeHandle != null &&
-            handleAt != null &&
-            now.difference(DateTime.fromMillisecondsSinceEpoch(handleAt)) <
-                _resumeHandleLifetime;
+            handleAge != null &&
+            !handleAge.isNegative &&
+            handleAge < _resumeHandleLifetime;
         if (canResume) {
           await (db.update(
             db.voiceSessions,

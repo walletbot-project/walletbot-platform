@@ -222,4 +222,20 @@ void main() {
       ['before_export', 'after_export_started'],
     );
   });
+
+  test('future-dated resume handles expire instead of being reused', () async {
+    final repository = VoiceSessionRepository(db);
+    final original = await repository.openOrCreate(model: 'test-live-model');
+    await repository.updateResumeHandle(
+      sessionId: original.id,
+      handle: 'future-handle',
+      at: DateTime.now().add(const Duration(hours: 3)),
+    );
+
+    final replacement = await repository.openOrCreate(model: 'test-live-model');
+    final expired = await repository.getSession(original.id);
+
+    expect(replacement.id, isNot(original.id));
+    expect(expired?.status, 'expired');
+  });
 }
