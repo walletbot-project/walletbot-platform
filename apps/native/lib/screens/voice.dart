@@ -73,14 +73,32 @@ class _VoiceScreenState extends State<VoiceScreen> {
   void initState() {
     super.initState();
     _textController.addListener(_onTextChanged);
+    final active = widget.commandFactory.activeCommand;
+    if (active != null && active.isActive) {
+      _command = active;
+      _commandEventsSubscription = active.events.listen(_onVoiceEvent);
+      _isConnected = active.isConnected;
+      active.recordClientEvent('screen_attached');
+    }
   }
 
   @override
   void dispose() {
+    _command?.recordClientEvent('screen_detached', {
+      'micMuted': true,
+      'sessionKeptActive': identical(
+        widget.commandFactory.activeCommand,
+        _command,
+      ),
+    });
+    unawaited(_command?.interruptAgentResponse(reason: 'screen_detached'));
+    unawaited(_command?.endAudioStream());
     unawaited(_audioSubscription?.cancel());
     unawaited(_amplitudeSubscription?.cancel());
     unawaited(_commandEventsSubscription?.cancel());
-    unawaited(_command?.dispose());
+    if (!identical(widget.commandFactory.activeCommand, _command)) {
+      unawaited(_command?.dispose());
+    }
     unawaited(_recorder.dispose());
     _scrollController.dispose();
     _textController.removeListener(_onTextChanged);
@@ -103,6 +121,7 @@ class _VoiceScreenState extends State<VoiceScreen> {
       // server still has buffered audio for this turn. Flush it so the
       // next utterance starts clean once the user goes back to voice.
       unawaited(_command?.endAudioStream());
+      _recordMuteEvent('text_composing');
     }
   }
 
@@ -124,6 +143,7 @@ class _VoiceScreenState extends State<VoiceScreen> {
       _userMicOn = !wasOn;
       if (!_userMicOn) _level = 0;
     });
+    _recordMuteEvent(wasOn ? 'tap_mute' : 'tap_unmute');
     if (wasOn) {
       // Mic just went from on → off mid-turn: flush whatever the server
       // has buffered so the next utterance starts clean.
@@ -145,6 +165,7 @@ class _VoiceScreenState extends State<VoiceScreen> {
     setState(() {
       _userMicOn = true;
     });
+    _recordMuteEvent('long_press_start');
   }
 
   void _resetChatLog() {
@@ -161,6 +182,7 @@ class _VoiceScreenState extends State<VoiceScreen> {
       _userMicOn = false;
       _level = 0;
     });
+    _recordMuteEvent('long_press_end');
     if (wasOn) {
       unawaited(_command?.endAudioStream());
     }
@@ -226,9 +248,14 @@ class _VoiceScreenState extends State<VoiceScreen> {
     };
 
     try {
-      _command = widget.commandFactory.create();
-      _commandEventsSubscription = _command?.events.listen(_onVoiceEvent);
+      final command = widget.commandFactory.create();
+      if (!identical(_command, command)) {
+        await _commandEventsSubscription?.cancel();
+        _command = command;
+        _commandEventsSubscription = command.events.listen(_onVoiceEvent);
+      }
       await _command?.start(respondWithAudio: respondWithAudio);
+      _command?.recordClientEvent('screen_attached', {'startMode': mode.name});
     } catch (error) {
       _addSystemSetState('Failed to start: $error', kind: _SystemKind.error);
       await _stop();
@@ -312,6 +339,7 @@ class _VoiceScreenState extends State<VoiceScreen> {
           _micActive = true;
           if (turnOn) _userMicOn = true;
         });
+        _recordMuteEvent('mic_capture_started');
       }
     } catch (error) {
       _addSystemSetState('Failed to open mic: $error', kind: _SystemKind.error);
@@ -335,6 +363,7 @@ class _VoiceScreenState extends State<VoiceScreen> {
 
     // Mic is going away entirely — flush any buffered audio on the server.
     await _command?.endAudioStream();
+    _command?.recordClientEvent('mic_capture_stopped', {'muted': true});
 
     if (!mounted) return;
     setState(() {
@@ -370,6 +399,16 @@ class _VoiceScreenState extends State<VoiceScreen> {
     });
   }
 
+  void _recordMuteEvent(String reason) {
+    _command?.recordClientEvent('mute_changed', {
+      'muted': _isMicEffectivelyMuted,
+      'reason': reason,
+      'micCaptureActive': _micActive,
+      'userMicOn': _userMicOn,
+      'textComposing': _isTextComposing,
+    });
+  }
+
   void _handleAudioChunk(Uint8List chunk) {
     if (!mounted) return;
     if (!_isMicEffectivelyMuted) {
@@ -402,9 +441,12 @@ class _VoiceScreenState extends State<VoiceScreen> {
           _addSystem(message, kind: _SystemKind.error);
         case VoiceSystemEvent():
           break;
+        case VoiceClientActionEvent():
+        case VoiceSessionResumptionEvent():
+        case VoiceGoAwayEvent():
+        case VoiceUsageMetadataEvent():
+          break;
         case VoiceUserTranscriptDelta(:final text):
-          // Voice input confirmed by server transcription → next reply is audio.
-          _command?.setAudioPlaybackEnabled(true);
           _appendUser(text);
         case VoiceAgentTranscriptDelta(:final text):
           _appendAgent(text);

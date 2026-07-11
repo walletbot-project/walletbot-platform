@@ -7,7 +7,9 @@ import { TOOL_DEFINITIONS } from '@wallet-bot/shared'
 import { action, internalAction } from '../_generated/server'
 
 const MODEL = 'gemini-3.1-flash-live-preview'
-const TOKEN_TTL_MS = 30 * 60 * 1000 // 30 minutes
+// AuthToken.expireTime must be less than 20 hours in the future. Leave a small
+// safety margin for clock/network skew while using the maximum useful window.
+const TOKEN_TTL_MS = (20 * 60 - 5) * 60 * 1000
 const VOICE_NAME = 'Kore'
 
 const SYSTEM_INSTRUCTION = `You are WalletBot, a calm and trustworthy personal finance assistant. You help the user track their money — recording expenses, income, and transfers — through natural voice conversation.
@@ -149,6 +151,8 @@ async function createLiveToken() {
                     },
                     inputAudioTranscription: {},
                     outputAudioTranscription: {},
+                    sessionResumption: {},
+                    contextWindowCompression: { slidingWindow: {} },
                 },
             },
             httpOptions: {

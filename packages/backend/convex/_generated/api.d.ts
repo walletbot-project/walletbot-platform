@@ -32,6 +32,7 @@ import type * as schema_sync from "../schema/sync.js";
 import type * as schema_tags from "../schema/tags.js";
 import type * as schema_transactionTags from "../schema/transactionTags.js";
 import type * as schema_transactions from "../schema/transactions.js";
+import type * as schema_voice from "../schema/voice.js";
 import type * as sync_helpers from "../sync/helpers.js";
 import type * as sync_mutations from "../sync/mutations.js";
 import type * as sync_queries from "../sync/queries.js";
@@ -42,6 +43,7 @@ import type * as transactions_backfill from "../transactions/backfill.js";
 import type * as transactions_mutations from "../transactions/mutations.js";
 import type * as transactions_queries from "../transactions/queries.js";
 import type * as users_helpers from "../users/helpers.js";
+import type * as voice_sessions from "../voice/sessions.js";
 
 import type {
   ApiFromModules,
@@ -74,6 +76,7 @@ declare const fullApi: ApiFromModules<{
   "schema/tags": typeof schema_tags;
   "schema/transactionTags": typeof schema_transactionTags;
   "schema/transactions": typeof schema_transactions;
+  "schema/voice": typeof schema_voice;
   "sync/helpers": typeof sync_helpers;
   "sync/mutations": typeof sync_mutations;
   "sync/queries": typeof sync_queries;
@@ -84,6 +87,7 @@ declare const fullApi: ApiFromModules<{
   "transactions/mutations": typeof transactions_mutations;
   "transactions/queries": typeof transactions_queries;
   "users/helpers": typeof users_helpers;
+  "voice/sessions": typeof voice_sessions;
 }>;
 
 /**

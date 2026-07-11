@@ -4,6 +4,7 @@ import 'package:app/app_config/app_config_controller.dart';
 import 'package:app/app_config/bootstrap.dart';
 import 'package:app/app_config/client_info.dart';
 import 'package:app/auth/auth_controller.dart';
+import 'package:app/auth/account.dart';
 import 'package:app/auth/pop_on_account_switch.dart';
 import 'package:app/config.dart';
 import 'package:app/data/data.dart';
@@ -17,6 +18,8 @@ import 'package:app/screens/voice.dart';
 import 'package:app/shared/app_navigation.dart';
 import 'package:app/sync/sync_engine.dart';
 import 'package:app/voice/gemini_voice_expense_command.dart';
+import 'package:app/voice/voice_session_remote_sync.dart';
+import 'package:app/voice/voice_session_repository.dart';
 import 'package:convex_flutter/convex_flutter.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -117,6 +120,36 @@ class _AuthGate extends StatelessWidget {
         // recreated together with the database on account switch.
         Provider<AppRepositories>(
           create: (ctx) => AppRepositories(ctx.read<AppDatabase>()),
+        ),
+        Provider<VoiceSessionRepository>(
+          create: (ctx) => VoiceSessionRepository(
+            ctx.read<AppDatabase>(),
+            remoteEnabled: active.type == AccountType.remote,
+          ),
+        ),
+        if (active.type == AccountType.remote)
+          Provider<VoiceSessionRemoteSync>(
+            create: (ctx) {
+              final sync = VoiceSessionRemoteSync(
+                repository: ctx.read<VoiceSessionRepository>(),
+              );
+              sync.schedule(delay: Duration.zero);
+              return sync;
+            },
+            dispose: (_, sync) => unawaited(sync.dispose()),
+          ),
+        Provider<GeminiVoiceExpenseCommandFactory>(
+          create: (ctx) => GeminiVoiceExpenseCommandFactory(
+            repositories: ctx.read<AppRepositories>(),
+            sessionRepository: ctx.read<VoiceSessionRepository>(),
+            remoteSync: active.type == AccountType.remote
+                ? ctx.read<VoiceSessionRemoteSync>()
+                : null,
+            useAuthenticatedTokenAction: active.type == AccountType.remote,
+            sessionToken: active.sessionToken,
+            convexSiteUrl: AppConfig.convexSiteUrl,
+          ),
+          dispose: (_, factory) => unawaited(factory.dispose()),
         ),
         // Drives the bottom-nav tab selection and lets one tab hand a filter to
         // another (e.g. an account's "Ver todas" opens Activity filtered to it).
@@ -229,6 +262,8 @@ class _AppMainState extends State<AppMain> {
           // here, and dismiss the route if the account changes while open so
           // the agent can never write to a closed/foreign database.
           final repositories = context.read<AppRepositories>();
+          final commandFactory = context
+              .read<GeminiVoiceExpenseCommandFactory>();
           final accountId = context.read<AuthController>().activeAccount?.id;
           Navigator.of(context).push(
             MaterialPageRoute(
@@ -236,12 +271,7 @@ class _AppMainState extends State<AppMain> {
                 value: repositories,
                 child: PopOnAccountSwitch(
                   accountId: accountId,
-                  child: VoiceScreen(
-                    commandFactory: GeminiVoiceExpenseCommandFactory(
-                      repositories: repositories,
-                      convexSiteUrl: AppConfig.convexSiteUrl,
-                    ),
-                  ),
+                  child: VoiceScreen(commandFactory: commandFactory),
                 ),
               ),
             ),

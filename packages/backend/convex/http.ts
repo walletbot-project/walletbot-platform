@@ -3,7 +3,9 @@ import { internal } from './_generated/api'
 import { httpAction } from './_generated/server'
 import { authComponent, createAuth } from './auth'
 import { registerAuthNativeRoutes } from './authNative/http'
+import { hashSessionSecret } from './authNative/utils'
 import { registerConfigRoutes } from './config/http'
+import { jsonResponse } from './httpHelpers'
 
 const http = httpRouter()
 
@@ -21,19 +23,30 @@ registerConfigRoutes(http)
 http.route({
     path: '/api/live/token',
     method: 'POST',
-    handler: httpAction(async (ctx) => {
+    handler: httpAction(async (ctx, req) => {
+        const authorization = req.headers.get('authorization')
+        const secret = authorization?.startsWith('Bearer ')
+            ? authorization.slice('Bearer '.length)
+            : null
+        if (!secret) {
+            return jsonResponse({ error: 'unauthenticated' }, { status: 401 })
+        }
+        const validation = await ctx.runMutation(
+            internal.authNative.mutations.validateSessionToken,
+            { tokenHash: await hashSessionSecret(secret) },
+        )
+        if (!validation.ok) {
+            return jsonResponse(
+                { error: 'invalid_session', reason: validation.reason },
+                { status: 401 },
+            )
+        }
         const result = await ctx.runAction(
             internal.live.actions.requestLiveTokenForHttp,
             {},
         )
 
-        return new Response(JSON.stringify(result), {
-            status: 200,
-            headers: {
-                'content-type': 'application/json',
-                'access-control-allow-origin': '*',
-            },
-        })
+        return jsonResponse(result)
     }),
 })
 

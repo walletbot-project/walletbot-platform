@@ -20,6 +20,8 @@ class MainActivity : FlutterActivity() {
     private var audioTrack: AudioTrack? = null
     private var audioThread: HandlerThread? = null
     private var audioHandler: Handler? = null
+    @Volatile
+    private var playbackGeneration: Int = 0
     private var previousAudioMode: Int = AudioManager.MODE_NORMAL
     private var previousSpeakerphoneOn: Boolean = false
     private var audioModeChanged: Boolean = false
@@ -69,9 +71,12 @@ class MainActivity : FlutterActivity() {
             return
         }
 
+        val generation = playbackGeneration
         handler.post {
+            if (generation != playbackGeneration) return@post
             var offset = 0
             while (offset < bytes.size) {
+                if (generation != playbackGeneration) break
                 val written = track.write(bytes, offset, bytes.size - offset)
                 if (written <= 0) break
                 offset += written
@@ -82,7 +87,14 @@ class MainActivity : FlutterActivity() {
 
     private fun handleInterrupt(result: MethodChannel.Result) {
         try {
-            audioHandler?.post {
+            // Invalidate both the currently-running write loop and every
+            // queued enqueue Runnable before flushing AudioTrack. Without
+            // this, stale Runnables execute after flush() and refill the
+            // native buffer, so an interrupted agent keeps speaking.
+            playbackGeneration += 1
+            val handler = audioHandler
+            handler?.removeCallbacksAndMessages(null)
+            handler?.postAtFrontOfQueue {
                 audioTrack?.pause()
                 audioTrack?.flush()
                 audioTrack?.play()
@@ -142,6 +154,8 @@ class MainActivity : FlutterActivity() {
     }
 
     private fun stopPlayback() {
+        playbackGeneration += 1
+        audioHandler?.removeCallbacksAndMessages(null)
         val track = audioTrack
         audioTrack = null
 
