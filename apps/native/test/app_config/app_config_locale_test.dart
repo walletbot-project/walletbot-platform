@@ -55,6 +55,12 @@ void main() {
     );
     expect(deviceRequest.url.queryParameters['locale'], 'es-AR');
     expect(deviceRequest.headers['accept-language'], 'es-AR');
+    expect(
+      await const FlutterSecureStorage().read(
+        key: 'native_config_verdict_es-AR',
+      ),
+      isNotNull,
+    );
 
     final accountRequest = requests.singleWhere(
       (request) => request.method == 'POST',

@@ -167,6 +167,7 @@ class AppConfigController extends ChangeNotifier {
   String? _accountFetchInFlight;
   int _deviceRequestGeneration = 0;
   int _accountRequestGeneration = 0;
+  Future<void> _cacheWriteChain = Future.value();
 
   bool get loaded => _loaded;
   bool get supported => _supported;
@@ -325,13 +326,11 @@ class AppConfigController extends ChangeNotifier {
         _applyVerdict(verdict);
         // Cache the verdict for this build only. A previous build's verdict
         // says nothing about whether the current build is supported.
-        await _storage.write(
-          key: _configCacheKey,
-          value: jsonEncode({
-            'appVersion': appVersion,
-            'locale': locale,
-            'verdict': verdict,
-          }),
+        await _cacheVerdict(
+          appVersion: appVersion,
+          locale: locale,
+          verdict: verdict,
+          requestGeneration: requestGeneration,
         );
         notifyListeners();
         return;
@@ -349,7 +348,9 @@ class AppConfigController extends ChangeNotifier {
     int requestGeneration,
   ) async {
     try {
-      final cached = await _storage.read(key: _configCacheKey);
+      final cached =
+          await _storage.read(key: _configCacheKeyFor(locale)) ??
+          await _storage.read(key: _configCacheKey);
       if (cached == null || cached.isEmpty) return;
       final env = jsonDecode(cached) as Map<String, Object?>;
       if (env['appVersion'] != appVersion) return;
@@ -360,6 +361,33 @@ class AppConfigController extends ChangeNotifier {
     } catch (e) {
       debugPrint('config: restore cached verdict failed: $e');
     }
+  }
+
+  Future<void> _cacheVerdict({
+    required String appVersion,
+    required String locale,
+    required Map<String, Object?> verdict,
+    required int requestGeneration,
+  }) async {
+    final previousWrite = _cacheWriteChain;
+    final write = () async {
+      // Serialize writes so an older same-locale write cannot finish after a
+      // newer one. A failed prior write must not poison the queue.
+      try {
+        await previousWrite;
+      } catch (_) {}
+      if (requestGeneration != _deviceRequestGeneration) return;
+      await _storage.write(
+        key: _configCacheKeyFor(locale),
+        value: jsonEncode({
+          'appVersion': appVersion,
+          'locale': locale,
+          'verdict': verdict,
+        }),
+      );
+    }();
+    _cacheWriteChain = write;
+    await write;
   }
 
   void _applyVerdict(Map<String, Object?> data) {
@@ -446,3 +474,5 @@ String _normalizeLocaleTag(String locale) {
   final normalized = locale.trim().replaceAll('_', '-');
   return normalized.isEmpty ? 'en' : normalized;
 }
+
+String _configCacheKeyFor(String locale) => '${_configCacheKey}_$locale';
