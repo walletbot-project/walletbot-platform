@@ -3,6 +3,7 @@ import type { Doc } from '../_generated/dataModel'
 import type { MutationCtx } from '../_generated/server'
 import { mutation } from '../_generated/server'
 import { inflowsByAccount, outflowsByAccount } from '../aggregates'
+import { CLIENT_OUTDATED, isClientSupported } from '../config/helpers'
 import { syncedTable } from '../schema/sync'
 import { requireAuth } from '../users/helpers'
 
@@ -724,9 +725,19 @@ export const push = mutation({
             dashboardWidgets: v.optional(v.array(dashboardWidgetUpsert)),
         }),
         tombstones: v.optional(v.array(tombstoneArg)),
+        platform: v.string(),
+        appVersion: v.string(),
     },
     handler: async (ctx, args) => {
         const userId = await requireAuth(ctx)
+
+        // Reject clients below the platform floor before touching any data —
+        // this is the write path that would otherwise diverge an incompatible
+        // client's rows under LWW (docs/riesgos.md R-008). Fails open for a
+        // client that can't report its version (unknown → supported).
+        if (!isClientSupported(args.platform, args.appVersion)) {
+            return { ok: false as const, error: CLIENT_OUTDATED }
+        }
 
         // 1) CAS
         const counterRow = await ctx.db

@@ -1,3 +1,5 @@
+import 'package:app/app_config/app_config_controller.dart';
+import 'package:app/app_config/client_info.dart';
 import 'package:app/auth/auth_controller.dart';
 import 'package:app/main.dart';
 import 'package:app/settings/display_settings.dart';
@@ -6,6 +8,12 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'helpers/memory_display_settings_store.dart';
+
+const _testClientInfo = ClientInfo(
+  platform: 'unknown',
+  appVersion: '0.0.0',
+  deviceId: 'test-device',
+);
 
 void main() {
   testWidgets('shows login when no account is active', (
@@ -20,12 +28,16 @@ void main() {
     // widget tests, so we render with a freshly constructed (empty)
     // controller, which is equivalent to load() with empty storage.
 
+    // AppConfigController is constructed but never loaded here (no network);
+    // banner state stays empty.
     await tester.pumpWidget(
       MyApp(
         auth: auth,
         displaySettings: DisplaySettingsController(
           store: MemoryDisplaySettingsStore(),
         ),
+        appConfig: AppConfigController(),
+        clientInfo: _testClientInfo,
         locale: const Locale('es'),
       ),
     );
@@ -41,12 +53,16 @@ void main() {
 
     final auth = AuthController();
 
+    // AppConfigController is constructed but never loaded here (no network);
+    // banner state stays empty.
     await tester.pumpWidget(
       MyApp(
         auth: auth,
         displaySettings: DisplaySettingsController(
           store: MemoryDisplaySettingsStore(),
         ),
+        appConfig: AppConfigController(),
+        clientInfo: _testClientInfo,
         locale: const Locale('es'),
       ),
     );
@@ -74,6 +90,8 @@ void main() {
         displaySettings: DisplaySettingsController(
           store: MemoryDisplaySettingsStore(),
         ),
+        appConfig: AppConfigController(),
+        clientInfo: _testClientInfo,
         locale: const Locale('en'),
       ),
     );

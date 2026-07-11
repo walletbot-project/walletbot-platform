@@ -560,6 +560,42 @@ abstract class AppLocalizations {
   /// **'Could not save the setting. Try again.'**
   String get settingsSaveFailed;
 
+  /// No description provided for @updateRequiredTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Update required'**
+  String get updateRequiredTitle;
+
+  /// No description provided for @updateRequiredMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Update the app to continue syncing your data.'**
+  String get updateRequiredMessage;
+
+  /// No description provided for @updateAvailableTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'New version available'**
+  String get updateAvailableTitle;
+
+  /// No description provided for @updateAvailableMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Update when you can to receive **the latest improvements**.'**
+  String get updateAvailableMessage;
+
+  /// No description provided for @updateApp.
+  ///
+  /// In en, this message translates to:
+  /// **'Update'**
+  String get updateApp;
+
+  /// No description provided for @openLinkFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not open the link'**
+  String get openLinkFailed;
+
   /// No description provided for @noName.
   ///
   /// In en, this message translates to:

@@ -2,6 +2,7 @@ import { v } from 'convex/values'
 import type { Doc } from '../_generated/dataModel'
 import type { QueryCtx } from '../_generated/server'
 import { query } from '../_generated/server'
+import { CLIENT_OUTDATED, isClientSupported } from '../config/helpers'
 import { syncedTable } from '../schema/sync'
 import { requireAuth } from '../users/helpers'
 
@@ -216,9 +217,17 @@ export const pull = query({
     args: {
         since: v.int64(),
         limit: v.optional(v.number()),
+        platform: v.string(),
+        appVersion: v.string(),
     },
     handler: async (ctx, args) => {
         const userId = await requireAuth(ctx)
+        // Reject clients below the platform floor before returning any data —
+        // "old clients fail closed on sync" (CLAUDE.md). Fails open for a client
+        // that can't report its version (unknown → supported, see config helpers).
+        if (!isClientSupported(args.platform, args.appVersion)) {
+            return { ok: false as const, error: CLIENT_OUTDATED }
+        }
         const limit = Math.min(
             Math.max(1, Math.floor(args.limit ?? DEFAULT_LIMIT)),
             MAX_LIMIT,

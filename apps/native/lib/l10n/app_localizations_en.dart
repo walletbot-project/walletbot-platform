@@ -255,6 +255,26 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settingsSaveFailed => 'Could not save the setting. Try again.';
 
   @override
+  String get updateRequiredTitle => 'Update required';
+
+  @override
+  String get updateRequiredMessage =>
+      'Update the app to continue syncing your data.';
+
+  @override
+  String get updateAvailableTitle => 'New version available';
+
+  @override
+  String get updateAvailableMessage =>
+      'Update when you can to receive **the latest improvements**.';
+
+  @override
+  String get updateApp => 'Update';
+
+  @override
+  String get openLinkFailed => 'Could not open the link';
+
+  @override
   String get noName => 'No name';
 
   @override

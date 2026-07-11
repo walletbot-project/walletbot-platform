@@ -258,6 +258,26 @@ class AppLocalizationsEs extends AppLocalizations {
       'No se pudo guardar la configuración. Intentá de nuevo.';
 
   @override
+  String get updateRequiredTitle => 'Actualización obligatoria';
+
+  @override
+  String get updateRequiredMessage =>
+      'Actualizá la aplicación para seguir sincronizando tus datos.';
+
+  @override
+  String get updateAvailableTitle => 'Nueva versión disponible';
+
+  @override
+  String get updateAvailableMessage =>
+      'Actualizá cuando puedas para recibir **las últimas mejoras**.';
+
+  @override
+  String get updateApp => 'Actualizar';
+
+  @override
+  String get openLinkFailed => 'No se pudo abrir el enlace';
+
+  @override
   String get noName => 'Sin nombre';
 
   @override

@@ -1,5 +1,8 @@
 import 'dart:async';
 
+import 'package:app/app_config/app_config_controller.dart';
+import 'package:app/app_config/bootstrap.dart';
+import 'package:app/app_config/client_info.dart';
 import 'package:app/auth/auth_controller.dart';
 import 'package:app/auth/pop_on_account_switch.dart';
 import 'package:app/config.dart';
@@ -18,6 +21,7 @@ import 'package:app/sync/sync_engine.dart';
 import 'package:app/voice/gemini_voice_expense_command.dart';
 import 'package:convex_flutter/convex_flutter.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:provider/provider.dart';
 
@@ -26,10 +30,16 @@ Future<void> main() async {
 
   await loadAppConfig();
 
+  const storage = FlutterSecureStorage();
+
+  // L0: resolve the backend URL before the WS client is initialized. Fails
+  // open — keeps the bundled/cached URL on any error.
+  await resolveBackendConfig(storage);
+
   await ConvexClient.initialize(
     ConvexConfig(
       deploymentUrl: AppConfig.convexUrl,
-      clientId: 'wallet-bot-flutter-1.0',
+      clientId: 'wallet-bot-flutter',
     ),
   );
 
@@ -37,37 +47,111 @@ Future<void> main() async {
     serverClientId: AppConfig.googleServerClientId,
   );
 
+  // Platform + app version, resolved once and shared by the config controller
+  // and the sync engine so both gates identify the client the same way.
+  final clientInfo = await ClientInfo.resolve(storage: storage);
+
   final auth = AuthController();
   final displaySettings = DisplaySettingsController();
   await displaySettings.load();
   await auth.load();
-  runApp(MyApp(auth: auth, displaySettings: displaySettings));
+
+  // Native version verdict. Loaded in the background; sync waits for `loaded`,
+  // while an offline start resolves fast from cache/bundled defaults.
+  final appConfig = AppConfigController(
+    clientInfo: clientInfo,
+    storage: storage,
+    locale: _resolvedLocaleTag(displaySettings),
+  );
+  unawaited(appConfig.load());
+  auth.addListener(() {
+    unawaited(appConfig.loadAccount(auth.activeAccount));
+  });
+  unawaited(appConfig.loadAccount(auth.activeAccount));
+
+  runApp(
+    MyApp(
+      auth: auth,
+      displaySettings: displaySettings,
+      appConfig: appConfig,
+      clientInfo: clientInfo,
+    ),
+  );
 }
 
-class MyApp extends StatelessWidget {
+String _resolvedLocaleTag(DisplaySettingsController settings) =>
+    (settings.locale ?? WidgetsBinding.instance.platformDispatcher.locale)
+        .toLanguageTag();
+
+class MyApp extends StatefulWidget {
   const MyApp({
     super.key,
     required this.auth,
     required this.displaySettings,
+    required this.appConfig,
+    required this.clientInfo,
     this.locale,
   });
 
   final AuthController auth;
   final DisplaySettingsController displaySettings;
   final Locale? locale;
+  final AppConfigController appConfig;
+  final ClientInfo clientInfo;
+
+  @override
+  State<MyApp> createState() => _MyAppState();
+}
+
+class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    widget.displaySettings.addListener(_refreshConfigLocale);
+  }
+
+  @override
+  void didChangeLocales(List<Locale>? locales) {
+    if (widget.displaySettings.language != DisplayLanguage.system) return;
+    _refreshConfigLocale(
+      systemLocale: locales == null || locales.isEmpty ? null : locales.first,
+    );
+  }
+
+  void _refreshConfigLocale({Locale? systemLocale}) {
+    final locale =
+        widget.displaySettings.locale ??
+        systemLocale ??
+        WidgetsBinding.instance.platformDispatcher.locale;
+    if (!widget.appConfig.updateLocale(locale.toLanguageTag())) return;
+    unawaited(widget.appConfig.load());
+    unawaited(widget.appConfig.loadAccount(widget.auth.activeAccount));
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    widget.displaySettings.removeListener(_refreshConfigLocale);
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: [
-        ChangeNotifierProvider<AuthController>.value(value: auth),
+        ChangeNotifierProvider<AuthController>.value(value: widget.auth),
         ChangeNotifierProvider<DisplaySettingsController>.value(
-          value: displaySettings,
+          value: widget.displaySettings,
         ),
+        ChangeNotifierProvider<AppConfigController>.value(
+          value: widget.appConfig,
+        ),
+        Provider<ClientInfo>.value(value: widget.clientInfo),
       ],
       child: Consumer<DisplaySettingsController>(
         builder: (context, settings, _) => MaterialApp(
-          locale: locale ?? settings.locale,
+          locale: widget.locale ?? settings.locale,
           onGenerateTitle: (context) => context.l10n.appTitle,
           localizationsDelegates: AppLocalizations.localizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
@@ -118,6 +202,12 @@ class _AuthGate extends StatelessWidget {
           create: (ctx) => SyncEngine(
             db: ctx.read<AppDatabase>(),
             client: ConvexClient.instance,
+            clientInfo: ctx.read<ClientInfo>(),
+            // Backstop for the client-side gate: if the server rejects this
+            // client as outdated, reflect it so the hard update banner shows
+            // and sync stays gated off.
+            onClientOutdated: () =>
+                ctx.read<AppConfigController>().markUnsupported(),
           ),
         ),
       ],
@@ -142,11 +232,14 @@ class _SyncStarterState extends State<_SyncStarter> {
   @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthController>();
+    final config = context.watch<AppConfigController>();
     final active = auth.activeAccount;
     if (!_kicked &&
         active != null &&
         active.sessionToken != null &&
-        auth.convexAuthenticated) {
+        auth.convexAuthenticated &&
+        config.loaded &&
+        config.syncAllowed) {
       _kicked = true;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
