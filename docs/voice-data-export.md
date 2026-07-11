@@ -90,9 +90,12 @@ batches remain local and are retried after five seconds; failures never block
 the Live conversation or the local export.
 
 The `appendEvents` mutation derives `userId` from the authenticated server
-identity. It upserts the session by `(userId, sessionId)` and inserts each event
-only if `(userId, eventId)` does not already exist, making retries idempotent.
-After a successful mutation, the native rows are marked `remoteSynced`.
+identity and rejects requests whose original account owner does not match that
+user. This prevents an in-flight outbox request from crossing account boundaries
+during an account switch. It upserts the session by `(userId, sessionId)` and
+inserts each event only if `(userId, eventId)` does not already exist, making
+retries idempotent. After a successful mutation, the native session is marked
+`remoteSynced` only if its `updatedAt` still matches the uploaded snapshot.
 
 Convex stores data in two isolated tables:
 

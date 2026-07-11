@@ -57,6 +57,10 @@ del sync financiero, en lotes idempotentes de hasta 50 eventos:
 - se envían todos los eventos semánticos y los mensajes crudos saneados;
 - los cambios de metadata de una sesión se envían incluso cuando no hay eventos
   nuevos pendientes;
+- cada request queda ligado al id de la cuenta que originó el outbox y el
+  servidor rechaza cualquier mismatch con el usuario autenticado;
+- el ack de una sesión sólo limpia el outbox si no hubo otro write desde que se
+  tomó el snapshot enviado;
 - para PCM se envían MIME y cantidad de bytes, no el binario;
 - un fallo no bloquea la conversación: los eventos quedan pendientes y se
   reintentan;

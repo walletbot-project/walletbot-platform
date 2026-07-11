@@ -133,6 +133,7 @@ class _AuthGate extends StatelessWidget {
             create: (ctx) {
               final sync = VoiceSessionRemoteSync(
                 repository: ctx.read<VoiceSessionRepository>(),
+                ownerId: active.id,
               );
               sync.schedule(delay: Duration.zero);
               return sync;

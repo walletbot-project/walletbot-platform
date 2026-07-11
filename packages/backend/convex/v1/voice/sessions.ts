@@ -29,11 +29,17 @@ const eventArg = v.object({
 /// device; their size/type travel with the semantic and protocol event log.
 export const appendEvents = mutation({
     args: {
+        ownerId: v.string(),
         session: sessionArg,
         events: v.array(eventArg),
     },
     handler: async (ctx, args) => {
         const userId = await requireAuth(ctx)
+        if (args.ownerId !== userId) {
+            throw new Error(
+                'Voice session owner does not match authenticated user',
+            )
+        }
         const existingSession = await ctx.db
             .query('voiceSessions')
             .withIndex('by_userId_and_sessionId', (q) =>

@@ -15,6 +15,7 @@ import 'voice_session_repository.dart';
 class VoiceSessionRemoteSync {
   VoiceSessionRemoteSync({
     required VoiceSessionRepository repository,
+    required this.ownerId,
     ConvexClient? client,
     this.batchSize = 50,
   }) : _repository = repository,
@@ -22,6 +23,7 @@ class VoiceSessionRemoteSync {
 
   final VoiceSessionRepository _repository;
   final ConvexClient _client;
+  final String ownerId;
   final int batchSize;
   Timer? _timer;
   Future<void>? _inFlight;
@@ -69,12 +71,16 @@ class VoiceSessionRemoteSync {
             name: 'v1/voice/sessions:appendEvents',
             args:
                 (prepareArgValue({
+                      'ownerId': ownerId,
                       'session': _sessionPayload(session),
                       'events': <Object?>[],
                     })
                     as Map<String, Object?>),
           );
-          await _repository.markSessionSynced(session.id);
+          await _repository.markSessionSyncedIfUnchanged(
+            session.id,
+            session.updatedAt,
+          );
         }
         continue;
       }
@@ -94,6 +100,7 @@ class VoiceSessionRemoteSync {
         name: 'v1/voice/sessions:appendEvents',
         args:
             (prepareArgValue({
+                  'ownerId': ownerId,
                   'session': {..._sessionPayload(session)},
                   'events': events
                       .map(
@@ -123,7 +130,10 @@ class VoiceSessionRemoteSync {
         events.map((event) => event.id).toList(growable: false),
       );
       if (!await _repository.hasUnsyncedEvents(sessionId)) {
-        await _repository.markSessionSynced(sessionId);
+        await _repository.markSessionSyncedIfUnchanged(
+          sessionId,
+          session.updatedAt,
+        );
       }
     }
   }
@@ -139,11 +149,17 @@ class VoiceSessionRemoteSync {
   };
 
   Future<void> dispose() async {
+    if (_disposed) return;
+    _disposed = true;
+    _trailing = false;
     _timer?.cancel();
+    _timer = null;
+    final inFlight = _inFlight;
+    if (inFlight == null) return;
     try {
-      await flush();
-    } finally {
-      _disposed = true;
+      await inFlight;
+    } catch (_) {
+      // flush() already logged the failure; local outbox rows remain pending.
     }
   }
 

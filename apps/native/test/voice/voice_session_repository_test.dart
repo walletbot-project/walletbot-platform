@@ -135,7 +135,11 @@ void main() {
         handle: 'fresh-handle',
         at: DateTime.now(),
       );
-      await repository.markSessionSynced(resumable.id);
+      final fresh = await repository.getSession(resumable.id);
+      await repository.markSessionSyncedIfUnchanged(
+        resumable.id,
+        fresh!.updatedAt,
+      );
 
       final resumed = await repository.openOrCreate(model: 'test-live-model');
       expect(resumed.id, resumable.id);
@@ -146,7 +150,11 @@ void main() {
         handle: 'expired-handle',
         at: DateTime.now().subtract(const Duration(hours: 3)),
       );
-      await repository.markSessionSynced(resumed.id);
+      final stale = await repository.getSession(resumed.id);
+      await repository.markSessionSyncedIfUnchanged(
+        resumed.id,
+        stale!.updatedAt,
+      );
 
       final replacement = await repository.openOrCreate(
         model: 'test-live-model',
@@ -161,4 +169,27 @@ void main() {
       );
     },
   );
+
+  test('stale sync acknowledgement preserves a newer session update', () async {
+    final repository = VoiceSessionRepository(db, remoteEnabled: true);
+    final original = await repository.openOrCreate(model: 'test-live-model');
+
+    await repository.markStatus(original.id, 'connecting');
+    final snapshot = await repository.getSession(original.id);
+    expect(snapshot, isNotNull);
+
+    await repository.markStatus(original.id, 'active');
+    expect(
+      await repository.markSessionSyncedIfUnchanged(
+        original.id,
+        snapshot!.updatedAt,
+      ),
+      isFalse,
+    );
+
+    final current = await repository.getSession(original.id);
+    expect(current?.status, 'active');
+    expect(current?.remoteSynced, isFalse);
+    expect(current!.updatedAt, greaterThan(snapshot.updatedAt));
+  });
 }

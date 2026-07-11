@@ -35,6 +35,7 @@ class VoiceSessionRepository {
               .getSingleOrNull();
 
       if (active != null) {
+        final updatedAt = await _nextUpdatedAt(active.id, now);
         final handleAt = active.resumeHandleUpdatedAt?.toInt();
         final canResume =
             active.resumeHandle != null &&
@@ -47,7 +48,7 @@ class VoiceSessionRepository {
           )..where((row) => row.id.equals(active.id))).write(
             VoiceSessionsCompanion(
               status: const Value('active'),
-              updatedAt: Value(BigInt.from(now.millisecondsSinceEpoch)),
+              updatedAt: Value(updatedAt),
               remoteSynced: remoteEnabled
                   ? const Value(false)
                   : const Value.absent(),
@@ -64,7 +65,7 @@ class VoiceSessionRepository {
           VoiceSessionsCompanion(
             status: const Value('expired'),
             endedAt: Value(BigInt.from(now.millisecondsSinceEpoch)),
-            updatedAt: Value(BigInt.from(now.millisecondsSinceEpoch)),
+            updatedAt: Value(updatedAt),
             remoteSynced: remoteEnabled
                 ? const Value(false)
                 : const Value.absent(),
@@ -105,7 +106,7 @@ class VoiceSessionRepository {
     String? binaryMimeType,
   }) => _serial(() async {
     final sequence = await _takeSequence(sessionId);
-    final updatedAt = await _monotonicUpdatedAt(sessionId, occurredAt);
+    final updatedAt = await _nextUpdatedAt(sessionId, occurredAt);
     await db
         .into(db.voiceSessionEvents)
         .insert(
@@ -139,7 +140,7 @@ class VoiceSessionRepository {
     required String handle,
     required DateTime at,
   }) => _serial(() async {
-    final updatedAt = await _monotonicUpdatedAt(sessionId, at);
+    final updatedAt = await _nextUpdatedAt(sessionId, at);
     await (db.update(
       db.voiceSessions,
     )..where((row) => row.id.equals(sessionId))).write(
@@ -154,27 +155,29 @@ class VoiceSessionRepository {
 
   Future<void> markStatus(String sessionId, String status) => _serial(() async {
     final now = DateTime.now();
+    final updatedAt = await _nextUpdatedAt(sessionId, now);
     await (db.update(
       db.voiceSessions,
     )..where((row) => row.id.equals(sessionId))).write(
       VoiceSessionsCompanion(
         status: Value(status),
-        updatedAt: Value(BigInt.from(now.millisecondsSinceEpoch)),
+        updatedAt: Value(updatedAt),
         remoteSynced: remoteEnabled ? const Value(false) : const Value.absent(),
       ),
     );
   });
 
   Future<void> endExplicitly(String sessionId) => _serial(() async {
-    final now = BigInt.from(DateTime.now().millisecondsSinceEpoch);
+    final now = DateTime.now();
+    final updatedAt = await _nextUpdatedAt(sessionId, now);
     await (db.update(
       db.voiceSessions,
     )..where((row) => row.id.equals(sessionId))).write(
       VoiceSessionsCompanion(
         status: const Value('ended'),
-        endedAt: Value(now),
+        endedAt: Value(BigInt.from(now.millisecondsSinceEpoch)),
         endedExplicitly: const Value(true),
-        updatedAt: Value(now),
+        updatedAt: Value(updatedAt),
         remoteSynced: remoteEnabled ? const Value(false) : const Value.absent(),
       ),
     );
@@ -221,10 +224,19 @@ class VoiceSessionRepository {
         .write(const VoiceSessionEventsCompanion(remoteSynced: Value(true)));
   });
 
-  Future<void> markSessionSynced(String sessionId) => _serial(() async {
-    await (db.update(db.voiceSessions)
-          ..where((row) => row.id.equals(sessionId)))
-        .write(const VoiceSessionsCompanion(remoteSynced: Value(true)));
+  Future<bool> markSessionSyncedIfUnchanged(
+    String sessionId,
+    BigInt expectedUpdatedAt,
+  ) => _serial(() async {
+    final updated =
+        await (db.update(db.voiceSessions)..where(
+              (row) =>
+                  row.id.equals(sessionId) &
+                  row.updatedAt.equals(expectedUpdatedAt) &
+                  row.remoteSynced.equals(false),
+            ))
+            .write(const VoiceSessionsCompanion(remoteSynced: Value(true)));
+    return updated == 1;
   });
 
   /// Complete machine-readable export. Binary PCM is base64 encoded so the
@@ -363,16 +375,13 @@ class VoiceSessionRepository {
     return next;
   }
 
-  Future<BigInt> _monotonicUpdatedAt(
-    String sessionId,
-    DateTime occurredAt,
-  ) async {
+  Future<BigInt> _nextUpdatedAt(String sessionId, DateTime occurredAt) async {
     final now = BigInt.from(DateTime.now().millisecondsSinceEpoch);
     final occurred = BigInt.from(occurredAt.millisecondsSinceEpoch);
     var next = occurred > now ? occurred : now;
     final session = await getSession(sessionId);
-    if (session != null && session.updatedAt > next) {
-      next = session.updatedAt;
+    if (session != null && session.updatedAt >= next) {
+      next = session.updatedAt + BigInt.one;
     }
     return next;
   }
