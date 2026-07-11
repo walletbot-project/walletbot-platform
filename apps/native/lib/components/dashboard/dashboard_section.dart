@@ -47,6 +47,8 @@ class _DashboardSectionState extends State<DashboardSection> {
   final _pendingLayout = <String, ({String options, String width})>{};
   int? _repairScheduledFor;
   bool _repairInFlight = false;
+  bool _repairEnabled = false;
+  List<DashboardWidget>? _queuedRepairSnapshot;
   String? _selectedId;
 
   @override
@@ -158,7 +160,18 @@ class _DashboardSectionState extends State<DashboardSection> {
     List<DashboardWidget> widgets, {
     required bool enabled,
   }) {
-    if (!enabled || widgets.isEmpty || _repairInFlight) return;
+    _repairEnabled = enabled;
+    if (!enabled || widgets.isEmpty) {
+      _repairScheduledFor = null;
+      _queuedRepairSnapshot = null;
+      return;
+    }
+    if (_repairInFlight) {
+      // Re-check the newest stream value after the active compare-and-write.
+      // It may be the snapshot that made that write correctly return false.
+      _queuedRepairSnapshot = List.unmodifiable(widgets);
+      return;
+    }
     final resolution = resolvePlacementSnapshot(_placementInputs(widgets));
     if (!resolution.needsRepair) {
       _repairScheduledFor = null;
@@ -176,9 +189,12 @@ class _DashboardSectionState extends State<DashboardSection> {
     if (_repairScheduledFor == fingerprint) return;
     _repairScheduledFor = fingerprint;
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || _repairScheduledFor != fingerprint) return;
+      if (!mounted || !_repairEnabled || _repairScheduledFor != fingerprint) {
+        return;
+      }
       unawaited(_repairLayout(widgets, resolution, fingerprint));
     });
+    WidgetsBinding.instance.ensureVisualUpdate();
   }
 
   Future<void> _repairLayout(
@@ -188,6 +204,7 @@ class _DashboardSectionState extends State<DashboardSection> {
   ) async {
     if (_repairInFlight) return;
     _repairInFlight = true;
+    _queuedRepairSnapshot = null;
     final normalized = DashboardGridLayout.fromPlacements(
       resolution.placements,
     ).placements;
@@ -231,6 +248,11 @@ class _DashboardSectionState extends State<DashboardSection> {
     } finally {
       _repairInFlight = false;
       if (_repairScheduledFor == fingerprint) _repairScheduledFor = null;
+      final queued = _queuedRepairSnapshot;
+      _queuedRepairSnapshot = null;
+      if (mounted && queued != null) {
+        _scheduleLayoutRepair(queued, enabled: _repairEnabled);
+      }
     }
   }
 
