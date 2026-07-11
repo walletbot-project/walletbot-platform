@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:app/l10n/l10n.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:record/record.dart';
@@ -31,6 +32,8 @@ class VoiceScreen extends StatefulWidget {
 }
 
 class _VoiceScreenState extends State<VoiceScreen> {
+  static const _liveEdgeTolerance = 1.0;
+
   final AudioRecorder _recorder = AudioRecorder();
   final ScrollController _scrollController = ScrollController();
   final TextEditingController _textController = TextEditingController();
@@ -45,12 +48,15 @@ class _VoiceScreenState extends State<VoiceScreen> {
 
   _UserBubbleItem? _pendingUser;
   _AgentBubbleItem? _pendingAgent;
+  _SystemItem? _connectionNotice;
 
   String? _pendingTextSend;
   bool _isStarting = false;
   bool _isConnected = false;
+  bool _isReconnecting = false;
   bool _micActive = false;
   bool _userMicOn = false;
+  bool _isBrowsingHistory = false;
   double _level = 0;
 
   bool get _isTextComposing => _textController.text.trim().isNotEmpty;
@@ -74,14 +80,39 @@ class _VoiceScreenState extends State<VoiceScreen> {
   void initState() {
     super.initState();
     _textController.addListener(_onTextChanged);
+    final active = widget.commandFactory.activeCommand;
+    if (active != null && active.isActive) {
+      _command = active;
+      _commandEventsSubscription = active.events.listen(_onVoiceEvent);
+      _isConnected = active.isConnected;
+      _isReconnecting = !active.isConnected;
+      active.recordClientEvent('screen_attached');
+    }
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_isReconnecting) _showConnectionNotice();
   }
 
   @override
   void dispose() {
+    _command?.recordClientEvent('screen_detached', {
+      'micMuted': true,
+      'sessionKeptActive': identical(
+        widget.commandFactory.activeCommand,
+        _command,
+      ),
+    });
+    unawaited(_command?.interruptAgentResponse(reason: 'screen_detached'));
+    unawaited(_command?.endAudioStream());
     unawaited(_audioSubscription?.cancel());
     unawaited(_amplitudeSubscription?.cancel());
     unawaited(_commandEventsSubscription?.cancel());
-    unawaited(_command?.dispose());
+    if (!identical(widget.commandFactory.activeCommand, _command)) {
+      unawaited(_command?.dispose());
+    }
     unawaited(_recorder.dispose());
     _scrollController.dispose();
     _textController.removeListener(_onTextChanged);
@@ -104,6 +135,7 @@ class _VoiceScreenState extends State<VoiceScreen> {
       // server still has buffered audio for this turn. Flush it so the
       // next utterance starts clean once the user goes back to voice.
       unawaited(_command?.endAudioStream());
+      _recordMuteEvent('text_composing');
     }
   }
 
@@ -125,6 +157,7 @@ class _VoiceScreenState extends State<VoiceScreen> {
       _userMicOn = !wasOn;
       if (!_userMicOn) _level = 0;
     });
+    _recordMuteEvent(wasOn ? 'tap_mute' : 'tap_unmute');
     if (wasOn) {
       // Mic just went from on → off mid-turn: flush whatever the server
       // has buffered so the next utterance starts clean.
@@ -146,6 +179,7 @@ class _VoiceScreenState extends State<VoiceScreen> {
     setState(() {
       _userMicOn = true;
     });
+    _recordMuteEvent('long_press_start');
   }
 
   void _resetChatLog() {
@@ -153,6 +187,8 @@ class _VoiceScreenState extends State<VoiceScreen> {
     _toolsById.clear();
     _pendingUser = null;
     _pendingAgent = null;
+    _connectionNotice = null;
+    _isBrowsingHistory = false;
   }
 
   void _handleVoiceLongPressEnd() {
@@ -162,6 +198,7 @@ class _VoiceScreenState extends State<VoiceScreen> {
       _userMicOn = false;
       _level = 0;
     });
+    _recordMuteEvent('long_press_end');
     if (wasOn) {
       unawaited(_command?.endAudioStream());
     }
@@ -200,7 +237,7 @@ class _VoiceScreenState extends State<VoiceScreen> {
     }
 
     _textController.clear();
-    _scrollToBottom();
+    _scrollToBottom(force: true);
   }
 
   void _flushPendingText() {
@@ -228,9 +265,14 @@ class _VoiceScreenState extends State<VoiceScreen> {
     };
 
     try {
-      _command = widget.commandFactory.create();
-      _commandEventsSubscription = _command?.events.listen(_onVoiceEvent);
+      final command = widget.commandFactory.create();
+      if (!identical(_command, command)) {
+        await _commandEventsSubscription?.cancel();
+        _command = command;
+        _commandEventsSubscription = command.events.listen(_onVoiceEvent);
+      }
       await _command?.start(respondWithAudio: respondWithAudio);
+      _command?.recordClientEvent('screen_attached', {'startMode': mode.name});
     } catch (error) {
       _addSystemSetState(l10n.voiceStartFailed(error), kind: _SystemKind.error);
       await _stop();
@@ -312,6 +354,7 @@ class _VoiceScreenState extends State<VoiceScreen> {
           _micActive = true;
           if (turnOn) _userMicOn = true;
         });
+        _recordMuteEvent('mic_capture_started');
       }
     } catch (error) {
       _addSystemSetState(
@@ -338,6 +381,7 @@ class _VoiceScreenState extends State<VoiceScreen> {
 
     // Mic is going away entirely — flush any buffered audio on the server.
     await _command?.endAudioStream();
+    _command?.recordClientEvent('mic_capture_stopped', {'muted': true});
 
     if (!mounted) return;
     setState(() {
@@ -366,8 +410,20 @@ class _VoiceScreenState extends State<VoiceScreen> {
     setState(() {
       _isConnected = false;
       _isStarting = false;
+      _isReconnecting = false;
       _pendingTextSend = null;
+      _clearConnectionNotice();
       _finalisePending();
+    });
+  }
+
+  void _recordMuteEvent(String reason) {
+    _command?.recordClientEvent('mute_changed', {
+      'muted': _isMicEffectivelyMuted,
+      'reason': reason,
+      'micCaptureActive': _micActive,
+      'userMicOn': _userMicOn,
+      'textComposing': _isTextComposing,
     });
   }
 
@@ -387,50 +443,107 @@ class _VoiceScreenState extends State<VoiceScreen> {
 
   void _onVoiceEvent(VoiceEvent event) {
     if (!mounted) return;
+    var conversationChanged = false;
     setState(() {
       switch (event) {
-        case VoiceConnectingEvent():
-          break;
+        case VoiceConnectingEvent(:final message):
+          _isReconnecting = true;
+          if (message.startsWith('Reconnecting')) {
+            _showConnectionNotice();
+            conversationChanged = true;
+          }
         case VoiceConnectedEvent():
           _isConnected = true;
+          _isReconnecting = false;
+          conversationChanged = _connectionNotice != null;
+          _clearConnectionNotice();
           _flushPendingText();
         case VoiceDisconnectedEvent():
+          conversationChanged = true;
           _isConnected = false;
+          _isReconnecting = _command?.isActive ?? false;
           _pendingTextSend = null;
           _finalisePending();
-        case VoiceErrorEvent(:final message):
+          if (_isReconnecting) {
+            _showConnectionNotice();
+          } else {
+            _clearConnectionNotice();
+          }
+        case VoiceErrorEvent(:final message, :final isTransient):
+          conversationChanged = true;
           _pendingTextSend = null;
-          _addSystem(
-            context.l10n.voiceRuntimeError(message),
-            kind: _SystemKind.error,
-          );
+          if (isTransient) {
+            _isReconnecting = true;
+            _showConnectionNotice();
+          } else {
+            _addSystem(
+              context.l10n.voiceRuntimeError(message),
+              kind: _SystemKind.error,
+            );
+          }
         case VoiceSystemEvent():
           break;
+        case VoiceClientActionEvent():
+        case VoiceSessionResumptionEvent():
+        case VoiceGoAwayEvent():
+        case VoiceUsageMetadataEvent():
+          break;
         case VoiceUserTranscriptDelta(:final text):
-          // Voice input confirmed by server transcription → next reply is audio.
+          conversationChanged = true;
+          // A typed turn disables playback for its reply. Voice input starts a
+          // new audio turn, so subsequent agent audio must be audible again.
           _command?.setAudioPlaybackEnabled(true);
           _appendUser(text);
         case VoiceAgentTranscriptDelta(:final text):
+          conversationChanged = true;
           _appendAgent(text);
         case VoiceAgentTurnComplete():
+          conversationChanged = true;
           _finalisePendingAgent();
         case VoiceAgentInterruptedEvent():
+          conversationChanged = true;
           _markAgentInterrupted();
         case VoiceToolCallEvent(:final id, :final name, :final args):
+          conversationChanged = true;
           _addToolCall(id: id, name: name, args: args);
         case VoiceToolResultEvent(:final id, :final result):
+          conversationChanged = true;
           _completeToolCall(id: id, result: result);
         case VoiceToolCancelledEvent(:final ids):
+          conversationChanged = true;
           _cancelToolCalls(ids);
       }
     });
-    _scrollToBottom();
+    if (conversationChanged) _scrollToBottom();
   }
 
   // -- Chat item management -------------------------------------------------
 
   void _addSystem(String message, {required _SystemKind kind}) {
     _items.add(_SystemItem(at: DateTime.now(), message: message, kind: kind));
+  }
+
+  void _showConnectionNotice() {
+    final message = context.l10n.connectionLostReconnecting;
+    final existing = _connectionNotice;
+    if (existing != null) {
+      existing.message = message;
+      return;
+    }
+    final notice = _SystemItem(
+      at: DateTime.now(),
+      message: message,
+      kind: _SystemKind.info,
+    );
+    _connectionNotice = notice;
+    _items.add(notice);
+  }
+
+  void _clearConnectionNotice() {
+    final notice = _connectionNotice;
+    if (notice == null) return;
+    _items.remove(notice);
+    _connectionNotice = null;
   }
 
   void _addSystemSetState(String message, {required _SystemKind kind}) {
@@ -557,10 +670,22 @@ class _VoiceScreenState extends State<VoiceScreen> {
     );
   }
 
-  void _scrollToBottom() {
-    if (!_scrollController.hasClients) return;
+  bool _handleUserScroll(UserScrollNotification notification) {
+    if (notification.metrics.axis != Axis.vertical) return false;
+    final atLiveEdge = notification.metrics.extentAfter <= _liveEdgeTolerance;
+    if (notification.direction == ScrollDirection.forward) {
+      _isBrowsingHistory = true;
+    } else if (atLiveEdge) {
+      _isBrowsingHistory = false;
+    }
+    return false;
+  }
+
+  void _scrollToBottom({bool force = false}) {
+    if (force) _isBrowsingHistory = false;
+    if (_isBrowsingHistory || !_scrollController.hasClients) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!_scrollController.hasClients) return;
+      if (_isBrowsingHistory || !_scrollController.hasClients) return;
       _scrollController.animateTo(
         _scrollController.position.maxScrollExtent,
         duration: const Duration(milliseconds: 200),
@@ -596,7 +721,7 @@ class _VoiceScreenState extends State<VoiceScreen> {
     final theme = Theme.of(context);
     final status = _isConnected
         ? _StatusLevel.connected
-        : _isStarting
+        : _isStarting || _isReconnecting
         ? _StatusLevel.connecting
         : _StatusLevel.disconnected;
 
@@ -626,20 +751,23 @@ class _VoiceScreenState extends State<VoiceScreen> {
           Expanded(
             child: _items.isEmpty
                 ? _EmptyState(isStarting: _isStarting)
-                : ListView.builder(
-                    controller: _scrollController,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 16,
+                : NotificationListener<UserScrollNotification>(
+                    onNotification: _handleUserScroll,
+                    child: ListView.builder(
+                      controller: _scrollController,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 16,
+                      ),
+                      itemCount: _items.length,
+                      itemBuilder: (context, i) {
+                        final item = _items[i];
+                        return Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 6),
+                          child: _ChatItemView(item: item),
+                        );
+                      },
                     ),
-                    itemCount: _items.length,
-                    itemBuilder: (context, i) {
-                      final item = _items[i];
-                      return Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 6),
-                        child: _ChatItemView(item: item),
-                      );
-                    },
                   ),
           ),
           _ControlBar(
@@ -712,7 +840,7 @@ enum _ToolStatus { pending, completed, cancelled }
 
 class _SystemItem extends _ChatItem {
   _SystemItem({required super.at, required this.message, required this.kind});
-  final String message;
+  String message;
   final _SystemKind kind;
 }
 

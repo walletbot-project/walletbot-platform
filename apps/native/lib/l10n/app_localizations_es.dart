@@ -1166,6 +1166,10 @@ class AppLocalizationsEs extends AppLocalizations {
   String get idle => 'inactivo';
 
   @override
+  String get connectionLostReconnecting =>
+      'Se perdió la conexión. Reconectando automáticamente…';
+
+  @override
   String get connectingPrompt => 'Conectando…';
 
   @override

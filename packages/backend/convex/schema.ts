@@ -7,6 +7,7 @@ import { syncCounters, tombstones } from './schema/sync'
 import { tags } from './schema/tags'
 import { transactions } from './schema/transactions'
 import { transactionTags } from './schema/transactionTags'
+import { voiceSessionEvents, voiceSessions } from './schema/voice'
 
 export default defineSchema({
     accounts,
@@ -19,4 +20,6 @@ export default defineSchema({
     tombstones,
     transactionTags,
     transactions,
+    voiceSessionEvents,
+    voiceSessions,
 })

@@ -382,6 +382,7 @@
   "connected": "connected",
   "connecting": "connecting",
   "idle": "idle",
+  "connectionLostReconnecting": "Connection lost. Reconnecting automatically…",
   "connectingPrompt": "Connecting…",
   "voiceStartPrompt": "Tap the mic to start a conversation",
   "typeMessage": "Type a message…",

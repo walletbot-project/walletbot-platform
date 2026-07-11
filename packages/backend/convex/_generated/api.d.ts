@@ -23,7 +23,7 @@ import type * as config_utils from "../config/utils.js";
 import type * as crons from "../crons.js";
 import type * as http from "../http.js";
 import type * as httpHelpers from "../httpHelpers.js";
-import type * as live_actions from "../live/actions.js";
+import type * as live_createToken from "../live/createToken.js";
 import type * as schema_accounts from "../schema/accounts.js";
 import type * as schema_categories from "../schema/categories.js";
 import type * as schema_dashboard from "../schema/dashboard.js";
@@ -32,6 +32,7 @@ import type * as schema_sync from "../schema/sync.js";
 import type * as schema_tags from "../schema/tags.js";
 import type * as schema_transactionTags from "../schema/transactionTags.js";
 import type * as schema_transactions from "../schema/transactions.js";
+import type * as schema_voice from "../schema/voice.js";
 import type * as sync_helpers from "../sync/helpers.js";
 import type * as sync_mutations from "../sync/mutations.js";
 import type * as sync_queries from "../sync/queries.js";
@@ -42,6 +43,8 @@ import type * as transactions_backfill from "../transactions/backfill.js";
 import type * as transactions_mutations from "../transactions/mutations.js";
 import type * as transactions_queries from "../transactions/queries.js";
 import type * as users_helpers from "../users/helpers.js";
+import type * as v1_live_actions from "../v1/live/actions.js";
+import type * as v1_voice_sessions from "../v1/voice/sessions.js";
 
 import type {
   ApiFromModules,
@@ -65,7 +68,7 @@ declare const fullApi: ApiFromModules<{
   crons: typeof crons;
   http: typeof http;
   httpHelpers: typeof httpHelpers;
-  "live/actions": typeof live_actions;
+  "live/createToken": typeof live_createToken;
   "schema/accounts": typeof schema_accounts;
   "schema/categories": typeof schema_categories;
   "schema/dashboard": typeof schema_dashboard;
@@ -74,6 +77,7 @@ declare const fullApi: ApiFromModules<{
   "schema/tags": typeof schema_tags;
   "schema/transactionTags": typeof schema_transactionTags;
   "schema/transactions": typeof schema_transactions;
+  "schema/voice": typeof schema_voice;
   "sync/helpers": typeof sync_helpers;
   "sync/mutations": typeof sync_mutations;
   "sync/queries": typeof sync_queries;
@@ -84,6 +88,8 @@ declare const fullApi: ApiFromModules<{
   "transactions/mutations": typeof transactions_mutations;
   "transactions/queries": typeof transactions_queries;
   "users/helpers": typeof users_helpers;
+  "v1/live/actions": typeof v1_live_actions;
+  "v1/voice/sessions": typeof v1_voice_sessions;
 }>;
 
 /**

@@ -351,6 +351,7 @@
   "connected": "conectado",
   "connecting": "conectando",
   "idle": "inactivo",
+  "connectionLostReconnecting": "Se perdió la conexión. Reconectando automáticamente…",
   "connectingPrompt": "Conectando…",
   "voiceStartPrompt": "Tocá el micrófono para iniciar una conversación",
   "typeMessage": "Escribí un mensaje…",

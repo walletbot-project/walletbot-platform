@@ -2204,6 +2204,12 @@ abstract class AppLocalizations {
   /// **'idle'**
   String get idle;
 
+  /// No description provided for @connectionLostReconnecting.
+  ///
+  /// In en, this message translates to:
+  /// **'Connection lost. Reconnecting automatically…'**
+  String get connectionLostReconnecting;
+
   /// No description provided for @connectingPrompt.
   ///
   /// In en, this message translates to:

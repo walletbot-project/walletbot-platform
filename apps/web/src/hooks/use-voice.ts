@@ -472,7 +472,7 @@ export function useVoice(opts: UseVoiceOpts) {
             await refreshDevicesRef.current()
 
             const { token, model } = await convex.action(
-                api.live.actions.requestLiveToken,
+                api.v1.live.actions.requestLiveToken,
                 {},
             )
             addSystem(`Token received for ${model}`, 'info')
