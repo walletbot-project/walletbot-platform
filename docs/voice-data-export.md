@@ -17,9 +17,11 @@ final historyJson = await repository.exportAllSessionsJson();
 final historyFile = await repository.exportAllSessionsFile();
 ```
 
-Unless a directory is supplied, files are written to the app support
-directory under `exports/`. Before reading, the repository flushes pending
-local writes so the artifact includes all events recorded up to that point.
+Unless a directory is supplied, files are written to the app support directory
+under `exports/`. Export reads are serialized with local writes and run inside
+a database transaction, so session metadata and events form one deterministic
+point-in-time snapshot. Writes requested after the export starts remain queued
+for the next snapshot.
 
 ## Contents
 

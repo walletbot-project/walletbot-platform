@@ -109,7 +109,10 @@ class _AuthGate extends StatelessWidget {
     final active = context.watch<AuthController>().activeAccount;
     if (active == null) return const LoginScreen();
     return MultiProvider(
-      key: ValueKey(active.id),
+      // Recreate account-scoped services when re-auth replaces the account
+      // object, so factories never retain an obsolete session token. ObjectKey
+      // avoids embedding the secret itself in diagnostic key output.
+      key: ObjectKey(active),
       providers: [
         Provider<AppDatabase>(
           create: (_) => AppDatabase.forUser(active.id),

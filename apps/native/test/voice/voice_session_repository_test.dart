@@ -192,4 +192,34 @@ void main() {
     expect(current?.remoteSynced, isFalse);
     expect(current!.updatedAt, greaterThan(snapshot.updatedAt));
   });
+
+  test('export is a serialized point-in-time snapshot', () async {
+    final repository = VoiceSessionRepository(db);
+    final session = await repository.openOrCreate(model: 'test-live-model');
+    await repository.appendEvent(
+      sessionId: session.id,
+      occurredAt: DateTime.now(),
+      type: 'before_export',
+      direction: 'local',
+    );
+
+    final exportFuture = repository.exportSessionJson(session.id);
+    final laterWrite = repository.appendEvent(
+      sessionId: session.id,
+      occurredAt: DateTime.now(),
+      type: 'after_export_started',
+      direction: 'local',
+    );
+    final exported = jsonDecode(await exportFuture) as Map<String, dynamic>;
+    await laterWrite;
+
+    final events = exported['events'] as List<dynamic>;
+    expect(events.map((event) => event['type']), ['before_export']);
+    expect(
+      (jsonDecode(await repository.exportSessionJson(session.id))['events']
+              as List<dynamic>)
+          .map((event) => event['type']),
+      ['before_export', 'after_export_started'],
+    );
+  });
 }

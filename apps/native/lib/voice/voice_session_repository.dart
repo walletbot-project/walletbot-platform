@@ -241,64 +241,18 @@ class VoiceSessionRepository {
 
   /// Complete machine-readable export. Binary PCM is base64 encoded so the
   /// resulting JSON is self-contained and lossless.
-  Future<String> exportSessionJson(String sessionId) async {
-    await flush();
-    final session = await getSession(sessionId);
-    if (session == null) throw StateError('Unknown voice session: $sessionId');
-    final events =
-        await (db.select(db.voiceSessionEvents)
-              ..where((row) => row.sessionId.equals(sessionId))
-              ..orderBy([(row) => OrderingTerm.asc(row.sequence)]))
-            .get();
-
-    Object? decode(String? value) => value == null ? null : jsonDecode(value);
-    String iso(BigInt value) => DateTime.fromMillisecondsSinceEpoch(
-      value.toInt(),
-      isUtc: true,
-    ).toIso8601String();
-
-    return const JsonEncoder.withIndent('  ').convert({
-      'format': 'walletbot.voice-session',
-      'version': 1,
-      'exportedAt': DateTime.now().toUtc().toIso8601String(),
-      'session': {
-        'id': session.id,
-        'model': session.model,
-        'status': session.status,
-        'startedAt': iso(session.startedAt),
-        'updatedAt': iso(session.updatedAt),
-        if (session.endedAt != null) 'endedAt': iso(session.endedAt!),
-        'endedExplicitly': session.endedExplicitly,
-        if (session.resumeHandle != null) 'resumeHandle': session.resumeHandle,
-        if (session.resumeHandleUpdatedAt != null)
-          'resumeHandleUpdatedAt': iso(session.resumeHandleUpdatedAt!),
-        'remoteEnabled': session.remoteEnabled,
-        'remoteSynced': session.remoteSynced,
-      },
-      'events': events
-          .map(
-            (event) => {
-              'id': event.id,
-              'sequence': event.sequence,
-              'occurredAt': iso(event.occurredAt),
-              'type': event.type,
-              'direction': event.direction,
-              if (event.modality != null) 'modality': event.modality,
-              'payload': decode(event.payloadJson),
-              if (event.rawJson != null) 'raw': decode(event.rawJson),
-              if (event.binaryMimeType != null)
-                'binary': {
-                  'mimeType': event.binaryMimeType,
-                  'byteLength': event.binaryData?.length ?? 0,
-                  'encoding': 'base64',
-                  'data': base64Encode(event.binaryData ?? Uint8List(0)),
-                },
-              'remoteSynced': event.remoteSynced,
-            },
-          )
-          .toList(growable: false),
-    });
-  }
+  Future<String> exportSessionJson(String sessionId) => _serial(
+    () => db.transaction(() async {
+      final snapshot = await _readSessionSnapshot(sessionId);
+      return const JsonEncoder.withIndent('  ').convert({
+        'format': 'walletbot.voice-session',
+        'version': 1,
+        'exportedAt': DateTime.now().toUtc().toIso8601String(),
+        'session': _exportSession(snapshot.session),
+        'events': snapshot.events.map(_exportEvent).toList(growable: false),
+      });
+    }),
+  );
 
   Future<File> exportSessionFile(
     String sessionId, {
@@ -317,28 +271,27 @@ class VoiceSessionRepository {
 
   /// Exports every locally retained session. This deliberately has no
   /// pagination because the resulting artifact must contain the full history.
-  Future<String> exportAllSessionsJson() async {
-    await flush();
-    final sessions = await (db.select(
-      db.voiceSessions,
-    )..orderBy([(row) => OrderingTerm.asc(row.startedAt)])).get();
-    final exported = <Object?>[];
-    for (final session in sessions) {
-      final envelope =
-          jsonDecode(await exportSessionJson(session.id))
-              as Map<String, dynamic>;
-      exported.add({
-        ...envelope['session'] as Map<String, dynamic>,
-        'events': envelope['events'],
+  Future<String> exportAllSessionsJson() => _serial(
+    () => db.transaction(() async {
+      final sessions = await (db.select(
+        db.voiceSessions,
+      )..orderBy([(row) => OrderingTerm.asc(row.startedAt)])).get();
+      final exported = <Object?>[];
+      for (final session in sessions) {
+        final events = await _eventsForSession(session.id);
+        exported.add({
+          ..._exportSession(session),
+          'events': events.map(_exportEvent).toList(growable: false),
+        });
+      }
+      return const JsonEncoder.withIndent('  ').convert({
+        'format': 'walletbot.voice-history',
+        'version': 1,
+        'exportedAt': DateTime.now().toUtc().toIso8601String(),
+        'sessions': exported,
       });
-    }
-    return const JsonEncoder.withIndent('  ').convert({
-      'format': 'walletbot.voice-history',
-      'version': 1,
-      'exportedAt': DateTime.now().toUtc().toIso8601String(),
-      'sessions': exported,
-    });
-  }
+    }),
+  );
 
   Future<File> exportAllSessionsFile({Directory? directory}) async {
     final target =
@@ -355,6 +308,58 @@ class VoiceSessionRepository {
     await file.writeAsString(await exportAllSessionsJson(), flush: true);
     return file;
   }
+
+  Future<({VoiceSession session, List<VoiceSessionEvent> events})>
+  _readSessionSnapshot(String sessionId) async {
+    final session = await getSession(sessionId);
+    if (session == null) throw StateError('Unknown voice session: $sessionId');
+    return (session: session, events: await _eventsForSession(sessionId));
+  }
+
+  Future<List<VoiceSessionEvent>> _eventsForSession(String sessionId) =>
+      (db.select(db.voiceSessionEvents)
+            ..where((row) => row.sessionId.equals(sessionId))
+            ..orderBy([(row) => OrderingTerm.asc(row.sequence)]))
+          .get();
+
+  Map<String, Object?> _exportSession(VoiceSession session) => {
+    'id': session.id,
+    'model': session.model,
+    'status': session.status,
+    'startedAt': _iso(session.startedAt),
+    'updatedAt': _iso(session.updatedAt),
+    if (session.endedAt != null) 'endedAt': _iso(session.endedAt!),
+    'endedExplicitly': session.endedExplicitly,
+    if (session.resumeHandle != null) 'resumeHandle': session.resumeHandle,
+    if (session.resumeHandleUpdatedAt != null)
+      'resumeHandleUpdatedAt': _iso(session.resumeHandleUpdatedAt!),
+    'remoteEnabled': session.remoteEnabled,
+    'remoteSynced': session.remoteSynced,
+  };
+
+  Map<String, Object?> _exportEvent(VoiceSessionEvent event) => {
+    'id': event.id,
+    'sequence': event.sequence,
+    'occurredAt': _iso(event.occurredAt),
+    'type': event.type,
+    'direction': event.direction,
+    if (event.modality != null) 'modality': event.modality,
+    'payload': jsonDecode(event.payloadJson),
+    if (event.rawJson != null) 'raw': jsonDecode(event.rawJson!),
+    if (event.binaryMimeType != null)
+      'binary': {
+        'mimeType': event.binaryMimeType,
+        'byteLength': event.binaryData?.length ?? 0,
+        'encoding': 'base64',
+        'data': base64Encode(event.binaryData ?? Uint8List(0)),
+      },
+    'remoteSynced': event.remoteSynced,
+  };
+
+  String _iso(BigInt value) => DateTime.fromMillisecondsSinceEpoch(
+    value.toInt(),
+    isUtc: true,
+  ).toIso8601String();
 
   Future<void> flush() => _writeTail;
 
