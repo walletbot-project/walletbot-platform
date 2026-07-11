@@ -94,11 +94,15 @@ class MainActivity : FlutterActivity() {
             playbackGeneration += 1
             val handler = audioHandler
             handler?.removeCallbacksAndMessages(null)
-            handler?.postAtFrontOfQueue {
-                audioTrack?.pause()
-                audioTrack?.flush()
-                audioTrack?.play()
-            }
+
+            // Do not post this onto audioHandler: its thread may currently be
+            // blocked inside AudioTrack.write() for the generated PCM chunk.
+            // AudioTrack's control methods are thread-safe, and pause() makes
+            // that blocking write return so flush() can discard both the
+            // hardware buffer and the partially written chunk immediately.
+            audioTrack?.pause()
+            audioTrack?.flush()
+            audioTrack?.play()
             result.success(null)
         } catch (error: Exception) {
             result.error("pcm_interrupt_failed", error.message, null)
@@ -124,7 +128,11 @@ class MainActivity : FlutterActivity() {
             AudioFormat.CHANNEL_OUT_MONO,
             AudioFormat.ENCODING_PCM_16BIT,
         )
-        val bufferSize = maxOf(minBufferSize, sampleRate)
+        // 16-bit mono uses two bytes per sample. `sampleRate` bytes buffered
+        // half a second of speech at 24 kHz, which made interruptions sound
+        // late even after generation had stopped. Keep only ~100 ms beyond
+        // the platform minimum.
+        val bufferSize = maxOf(minBufferSize, sampleRate / 5)
 
         val track = AudioTrack.Builder()
             .setAudioAttributes(
