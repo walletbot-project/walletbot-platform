@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:app/l10n/l10n.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:record/record.dart';
@@ -31,6 +32,8 @@ class VoiceScreen extends StatefulWidget {
 }
 
 class _VoiceScreenState extends State<VoiceScreen> {
+  static const _liveEdgeTolerance = 1.0;
+
   final AudioRecorder _recorder = AudioRecorder();
   final ScrollController _scrollController = ScrollController();
   final TextEditingController _textController = TextEditingController();
@@ -53,6 +56,7 @@ class _VoiceScreenState extends State<VoiceScreen> {
   bool _isReconnecting = false;
   bool _micActive = false;
   bool _userMicOn = false;
+  bool _isBrowsingHistory = false;
   double _level = 0;
 
   bool get _isTextComposing => _textController.text.trim().isNotEmpty;
@@ -184,6 +188,7 @@ class _VoiceScreenState extends State<VoiceScreen> {
     _pendingUser = null;
     _pendingAgent = null;
     _connectionNotice = null;
+    _isBrowsingHistory = false;
   }
 
   void _handleVoiceLongPressEnd() {
@@ -232,7 +237,7 @@ class _VoiceScreenState extends State<VoiceScreen> {
     }
 
     _textController.clear();
-    _scrollToBottom();
+    _scrollToBottom(force: true);
   }
 
   void _flushPendingText() {
@@ -438,19 +443,23 @@ class _VoiceScreenState extends State<VoiceScreen> {
 
   void _onVoiceEvent(VoiceEvent event) {
     if (!mounted) return;
+    var conversationChanged = false;
     setState(() {
       switch (event) {
         case VoiceConnectingEvent(:final message):
           _isReconnecting = true;
           if (message.startsWith('Reconnecting')) {
             _showConnectionNotice();
+            conversationChanged = true;
           }
         case VoiceConnectedEvent():
           _isConnected = true;
           _isReconnecting = false;
+          conversationChanged = _connectionNotice != null;
           _clearConnectionNotice();
           _flushPendingText();
         case VoiceDisconnectedEvent():
+          conversationChanged = true;
           _isConnected = false;
           _isReconnecting = _command?.isActive ?? false;
           _pendingTextSend = null;
@@ -461,6 +470,7 @@ class _VoiceScreenState extends State<VoiceScreen> {
             _clearConnectionNotice();
           }
         case VoiceErrorEvent(:final message, :final isTransient):
+          conversationChanged = true;
           _pendingTextSend = null;
           if (isTransient) {
             _isReconnecting = true;
@@ -479,25 +489,32 @@ class _VoiceScreenState extends State<VoiceScreen> {
         case VoiceUsageMetadataEvent():
           break;
         case VoiceUserTranscriptDelta(:final text):
+          conversationChanged = true;
           // A typed turn disables playback for its reply. Voice input starts a
           // new audio turn, so subsequent agent audio must be audible again.
           _command?.setAudioPlaybackEnabled(true);
           _appendUser(text);
         case VoiceAgentTranscriptDelta(:final text):
+          conversationChanged = true;
           _appendAgent(text);
         case VoiceAgentTurnComplete():
+          conversationChanged = true;
           _finalisePendingAgent();
         case VoiceAgentInterruptedEvent():
+          conversationChanged = true;
           _markAgentInterrupted();
         case VoiceToolCallEvent(:final id, :final name, :final args):
+          conversationChanged = true;
           _addToolCall(id: id, name: name, args: args);
         case VoiceToolResultEvent(:final id, :final result):
+          conversationChanged = true;
           _completeToolCall(id: id, result: result);
         case VoiceToolCancelledEvent(:final ids):
+          conversationChanged = true;
           _cancelToolCalls(ids);
       }
     });
-    _scrollToBottom();
+    if (conversationChanged) _scrollToBottom();
   }
 
   // -- Chat item management -------------------------------------------------
@@ -653,10 +670,22 @@ class _VoiceScreenState extends State<VoiceScreen> {
     );
   }
 
-  void _scrollToBottom() {
-    if (!_scrollController.hasClients) return;
+  bool _handleUserScroll(UserScrollNotification notification) {
+    if (notification.metrics.axis != Axis.vertical) return false;
+    final atLiveEdge = notification.metrics.extentAfter <= _liveEdgeTolerance;
+    if (notification.direction == ScrollDirection.forward) {
+      _isBrowsingHistory = true;
+    } else if (atLiveEdge) {
+      _isBrowsingHistory = false;
+    }
+    return false;
+  }
+
+  void _scrollToBottom({bool force = false}) {
+    if (force) _isBrowsingHistory = false;
+    if (_isBrowsingHistory || !_scrollController.hasClients) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!_scrollController.hasClients) return;
+      if (_isBrowsingHistory || !_scrollController.hasClients) return;
       _scrollController.animateTo(
         _scrollController.position.maxScrollExtent,
         duration: const Duration(milliseconds: 200),
@@ -722,20 +751,23 @@ class _VoiceScreenState extends State<VoiceScreen> {
           Expanded(
             child: _items.isEmpty
                 ? _EmptyState(isStarting: _isStarting)
-                : ListView.builder(
-                    controller: _scrollController,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 16,
+                : NotificationListener<UserScrollNotification>(
+                    onNotification: _handleUserScroll,
+                    child: ListView.builder(
+                      controller: _scrollController,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 16,
+                      ),
+                      itemCount: _items.length,
+                      itemBuilder: (context, i) {
+                        final item = _items[i];
+                        return Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 6),
+                          child: _ChatItemView(item: item),
+                        );
+                      },
                     ),
-                    itemCount: _items.length,
-                    itemBuilder: (context, i) {
-                      final item = _items[i];
-                      return Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 6),
-                        child: _ChatItemView(item: item),
-                      );
-                    },
                   ),
           ),
           _ControlBar(

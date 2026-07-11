@@ -101,6 +101,58 @@ void main() {
     await tester.pump();
     expect(command.audioPlaybackStates, [false, true]);
   });
+
+  testWidgets('incoming events do not pull the user away from chat history', (
+    tester,
+  ) async {
+    final command = _ActiveVoiceCommand();
+    await tester.pumpWidget(_voiceApp(command));
+
+    for (var i = 0; i < 24; i++) {
+      command.emit(
+        VoiceAgentTranscriptDelta(
+          'Response $i with enough detail to make the conversation scroll.',
+        ),
+      );
+      command.emit(VoiceAgentTurnComplete());
+    }
+    await tester.pump();
+    command.emit(VoiceAgentTranscriptDelta('Latest response.'));
+    command.emit(VoiceAgentTurnComplete());
+    await tester.pumpAndSettle();
+
+    final listFinder = find.byType(ListView);
+    final controller = tester.widget<ListView>(listFinder).controller!;
+    expect(controller.position.maxScrollExtent, greaterThan(0));
+    await tester.drag(listFinder, const Offset(0, -10000));
+    await tester.pumpAndSettle();
+    expect(controller.offset, closeTo(controller.position.maxScrollExtent, 1));
+
+    await tester.drag(listFinder, const Offset(0, 40));
+    await tester.pumpAndSettle();
+    final historyOffset = controller.offset;
+    expect(historyOffset, lessThan(controller.position.maxScrollExtent));
+
+    command.emit(VoiceUsageMetadataEvent(const {'totalTokenCount': 42}));
+    command.emit(VoiceClientActionEvent('background_heartbeat'));
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(controller.offset, closeTo(historyOffset, 1));
+
+    command.emit(VoiceAgentTranscriptDelta('A new response arrived.'));
+    command.emit(VoiceAgentTurnComplete());
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(controller.offset, closeTo(historyOffset, 1));
+
+    await tester.drag(listFinder, const Offset(0, -10000));
+    await tester.pumpAndSettle();
+    command.emit(VoiceAgentTranscriptDelta('Following live messages again.'));
+    command.emit(VoiceAgentTurnComplete());
+    await tester.pumpAndSettle();
+
+    expect(controller.offset, closeTo(controller.position.maxScrollExtent, 1));
+  });
 }
 
 Widget _voiceApp(
