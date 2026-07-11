@@ -8,6 +8,51 @@ import 'package:provider/provider.dart';
 import '../helpers/memory_display_settings_store.dart';
 
 void main() {
+  testWidgets('shows the settings title in the app bar', (tester) async {
+    final settings = DisplaySettingsController(
+      store: MemoryDisplaySettingsStore(),
+    );
+    await tester.pumpWidget(_SettingsTestApp(settings: settings));
+
+    final appBar = tester.widget<AppBar>(find.byType(AppBar));
+    expect(appBar.title, isA<Text>());
+    expect((appBar.title! as Text).data, 'Settings');
+    expect(find.byType(SliverAppBar), findsNothing);
+  });
+
+  testWidgets('orders language choices alphabetically in English', (
+    tester,
+  ) async {
+    final settings = DisplaySettingsController(
+      store: MemoryDisplaySettingsStore(),
+    );
+    await tester.pumpWidget(_SettingsTestApp(settings: settings));
+
+    await tester.tap(find.text('Language'));
+    await tester.pumpAndSettle();
+
+    _expectVerticalOrder(tester, ['English', 'Spanish', 'System default']);
+  });
+
+  testWidgets('orders language choices alphabetically in Spanish', (
+    tester,
+  ) async {
+    final settings = DisplaySettingsController(
+      store: MemoryDisplaySettingsStore(),
+    );
+    await settings.setLanguage(DisplayLanguage.spanish);
+    await tester.pumpWidget(_SettingsTestApp(settings: settings));
+
+    await tester.tap(find.text('Idioma'));
+    await tester.pumpAndSettle();
+
+    _expectVerticalOrder(tester, [
+      'Español',
+      'Inglés',
+      'Predeterminado del sistema',
+    ]);
+  });
+
   testWidgets('changes the app language immediately', (tester) async {
     final settings = DisplaySettingsController(
       store: MemoryDisplaySettingsStore(),
@@ -49,6 +94,20 @@ void main() {
       Brightness.dark,
     );
   });
+}
+
+void _expectVerticalOrder(WidgetTester tester, List<String> labels) {
+  final sheet = find.byType(BottomSheet);
+  final positions = labels
+      .map(
+        (label) => tester.getTopLeft(
+          find.descendant(of: sheet, matching: find.text(label)),
+        ),
+      )
+      .map((offset) => offset.dy)
+      .toList();
+
+  expect(positions, orderedEquals([...positions]..sort()));
 }
 
 class _SettingsTestApp extends StatelessWidget {

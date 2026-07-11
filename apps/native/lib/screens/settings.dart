@@ -12,30 +12,24 @@ class SettingsScreen extends StatelessWidget {
     final settings = context.watch<DisplaySettingsController>();
 
     return Scaffold(
-      body: CustomScrollView(
-        slivers: [
-          SliverAppBar.large(title: Text(context.l10n.settings)),
-          SliverPadding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
-            sliver: SliverList.list(
-              children: [
-                _PreferenceTile(
-                  icon: Icons.language_rounded,
-                  title: context.l10n.language,
-                  value: _languageLabel(context, settings.language),
-                  borderRadius: groupedRadius(0, 2),
-                  onTap: () => _showLanguageChoices(context, settings),
-                ),
-                const SizedBox(height: kGroupSpacing),
-                _PreferenceTile(
-                  icon: Icons.palette_outlined,
-                  title: context.l10n.theme,
-                  value: _themeLabel(context, settings.theme),
-                  borderRadius: groupedRadius(1, 2),
-                  onTap: () => _showThemeChoices(context, settings),
-                ),
-              ],
-            ),
+      appBar: AppBar(title: Text(context.l10n.settings)),
+      body: ListView(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
+        children: [
+          _PreferenceTile(
+            icon: Icons.language_rounded,
+            title: context.l10n.language,
+            value: _languageLabel(context, settings.language),
+            borderRadius: groupedRadius(0, 2),
+            onTap: () => _showLanguageChoices(context, settings),
+          ),
+          const SizedBox(height: kGroupSpacing),
+          _PreferenceTile(
+            icon: Icons.palette_outlined,
+            title: context.l10n.theme,
+            value: _themeLabel(context, settings.theme),
+            borderRadius: groupedRadius(1, 2),
+            onTap: () => _showThemeChoices(context, settings),
           ),
         ],
       ),
@@ -70,7 +64,7 @@ class SettingsScreen extends StatelessWidget {
             icon: Icons.language_rounded,
             label: context.l10n.spanish,
           ),
-        ],
+        ]..sort((a, b) => a.label.compareTo(b.label)),
         onSelected: (language) async {
           final saved = await _setLanguage(context, settings, language);
           if (saved && sheetContext.mounted) Navigator.pop(sheetContext);
