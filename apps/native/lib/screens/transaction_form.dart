@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:app/components/color_utils.dart';
 import 'package:app/data/data.dart';
 import 'package:app/database.dart';
+import 'package:app/l10n/l10n.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -151,7 +152,12 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
 
     if (type == TransactionFormType.transfer) {
       for (final category in categories) {
-        if (category.name.toLowerCase() == 'transferencia') return category;
+        final name = category.name.toLowerCase();
+        if (name == context.l10n.transfer.toLowerCase() ||
+            name == 'transferencia' ||
+            name == 'transfer') {
+          return category;
+        }
       }
     }
 
@@ -187,7 +193,7 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
             children: [
               ListTile(
                 leading: const Icon(Icons.add_circle_outline_rounded),
-                title: const Text('Nueva cuenta'),
+                title: Text(context.l10n.newAccount),
                 onTap: () async {
                   final created = await _createMockAccountDialog();
                   if (!context.mounted) return;
@@ -234,7 +240,7 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
             children: [
               ListTile(
                 leading: const Icon(Icons.add_circle_outline_rounded),
-                title: const Text('Nueva categoria'),
+                title: Text(context.l10n.newCategory),
                 onTap: () async {
                   final created = await _createMockCategoryDialog();
                   if (!context.mounted) return;
@@ -287,7 +293,7 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
     } catch (error) {
       if (!mounted) return null;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('No se pudo crear la etiqueta: $error')),
+        SnackBar(content: Text(context.l10n.tagCreateFailed(error))),
       );
       return null;
     }
@@ -325,7 +331,7 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
             children: [
               ListTile(
                 leading: const Icon(Icons.add_circle_outline_rounded),
-                title: const Text('Nueva etiqueta'),
+                title: Text(context.l10n.newTag),
                 onTap: () async {
                   final created = await _createMockTagDialog();
                   if (!context.mounted) return;
@@ -333,7 +339,7 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
                 },
               ),
               if (availableTags.isEmpty)
-                const ListTile(title: Text('No hay etiquetas disponibles')),
+                ListTile(title: Text(context.l10n.noTagsAvailable)),
               for (final tag in availableTags)
                 ListTile(
                   leading: CircleAvatar(
@@ -384,7 +390,7 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
                   ),
                 },
                 child: AlertDialog(
-                  title: Text('Color de "$name"'),
+                  title: Text(context.l10n.colorFor(name)),
                   content: _TagColorPicker(
                     selected: selectedColor,
                     onChanged: (color) =>
@@ -393,11 +399,11 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
                   actions: [
                     TextButton(
                       onPressed: () => Navigator.pop(context),
-                      child: const Text('Cancelar'),
+                      child: Text(context.l10n.cancel),
                     ),
                     TextButton(
                       onPressed: () => Navigator.pop(context, selectedColor),
-                      child: const Text('Crear'),
+                      child: Text(context.l10n.create),
                     ),
                   ],
                 ),
@@ -419,26 +425,27 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
     if (account == null) {
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(const SnackBar(content: Text('Selecciona una cuenta')));
+      ).showSnackBar(SnackBar(content: Text(context.l10n.selectAccount)));
       return;
     }
     final category = _selectedCategory;
     if (category == null) {
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(const SnackBar(content: Text('Selecciona una categoria')));
+      ).showSnackBar(SnackBar(content: Text(context.l10n.selectCategory)));
       return;
     }
     final destinationAccount = _selectedDestinationAccount;
     if (_type == TransactionFormType.transfer) {
       if (destinationAccount == null) {
-        setState(() => _transferAccountError = 'Selecciona una cuenta destino');
+        setState(
+          () => _transferAccountError = context.l10n.selectDestinationAccount,
+        );
         return;
       }
       if (destinationAccount.id == account.id) {
         setState(
-          () => _transferAccountError =
-              'Origen y destino deben ser cuentas distintas',
+          () => _transferAccountError = context.l10n.differentTransferAccounts,
         );
         return;
       }
@@ -494,7 +501,7 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
           await repos.transactions.addTransfer(
             fromAccountId: account.id,
             toAccountId: destinationAccount!.id,
-            name: 'Transferencia',
+            name: context.l10n.transfer,
             amountCents: amount,
             currency: account.currency,
             toAmountCents: _amountToCents(
@@ -515,7 +522,7 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
       if (!mounted) return;
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text('No se pudo anotar: $error')));
+      ).showSnackBar(SnackBar(content: Text(context.l10n.recordFailed(error))));
       setState(() => _isSaving = false);
     }
   }
@@ -545,7 +552,7 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
             padding: const EdgeInsets.fromLTRB(24, 48, 24, 32),
             children: [
               Text(
-                'Anadir movimiento',
+                context.l10n.newTransaction,
                 textAlign: TextAlign.center,
                 style: Theme.of(context).textTheme.displaySmall?.copyWith(
                   color: Colors.black,
@@ -555,18 +562,18 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
               const SizedBox(height: 28),
               Center(
                 child: SegmentedButton<TransactionFormType>(
-                  segments: const [
+                  segments: [
                     ButtonSegment(
                       value: TransactionFormType.income,
-                      label: Text('Ingreso'),
+                      label: Text(context.l10n.income),
                     ),
                     ButtonSegment(
                       value: TransactionFormType.expense,
-                      label: Text('Gasto'),
+                      label: Text(context.l10n.expense),
                     ),
                     ButtonSegment(
                       value: TransactionFormType.transfer,
-                      label: Text('Transferencia'),
+                      label: Text(context.l10n.transfer),
                     ),
                   ],
                   selected: {_type},
@@ -622,10 +629,11 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          _SectionLabel('Cuenta'),
+                          _SectionLabel(context.l10n.account),
                           const SizedBox(height: 10),
                           _PickerChip(
-                            label: _selectedAccount?.name ?? 'Seleccionar',
+                            label:
+                                _selectedAccount?.name ?? context.l10n.select,
                             onPressed: _isSaving ? null : () => _pickAccount(),
                           ),
                         ],
@@ -645,8 +653,8 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
                 ),
               const SizedBox(height: 24),
               _ReadonlyField(
-                label: 'Fecha',
-                value: _formatDate(_selectedDate),
+                label: context.l10n.date,
+                value: _formatDate(context, _selectedDate),
                 icon: Icons.calendar_month_rounded,
                 onTap: _isSaving ? null : _pickDate,
                 onClear: _isSaving
@@ -658,7 +666,7 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
                 _AmountField(
                   key: ValueKey('amount-${_type.name}'),
                   controller: _amountController,
-                  label: 'Monto',
+                  label: context.l10n.amount,
                   enabled: !_isSaving,
                 ),
                 const SizedBox(height: 18),
@@ -668,7 +676,7 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
                   autovalidateMode: AutovalidateMode.onUserInteraction,
                   textCapitalization: TextCapitalization.sentences,
                   decoration: InputDecoration(
-                    labelText: 'Titulo',
+                    labelText: context.l10n.title,
                     border: const OutlineInputBorder(),
                     suffixIcon: IconButton(
                       onPressed: _isSaving ? null : _titleController.clear,
@@ -677,7 +685,7 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
                   ),
                   validator: (value) {
                     if ((value ?? '').trim().isEmpty) {
-                      return 'Titulo es obligatorio';
+                      return context.l10n.titleRequired;
                     }
                     return null;
                   },
@@ -691,7 +699,7 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
                 maxLines: 3,
                 textCapitalization: TextCapitalization.sentences,
                 decoration: InputDecoration(
-                  labelText: 'Descripcion',
+                  labelText: context.l10n.description,
                   border: const OutlineInputBorder(),
                   suffixIcon: IconButton(
                     onPressed: _isSaving ? null : _descriptionController.clear,
@@ -700,17 +708,17 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
                 ),
               ),
               const SizedBox(height: 28),
-              const _SectionLabel('Categoria'),
+              _SectionLabel(context.l10n.category),
               const SizedBox(height: 10),
               _PickerChip(
-                label: _selectedCategory?.name ?? 'Seleccionar',
+                label: _selectedCategory?.name ?? context.l10n.select,
                 onPressed: _isSaving ? null : _pickCategory,
               ),
               const SizedBox(height: 24),
-              const _SectionLabel('Etiquetas'),
+              _SectionLabel(context.l10n.tags),
               const SizedBox(height: 10),
               _PickerChip(
-                label: 'Agregar etiqueta',
+                label: context.l10n.addTag,
                 onPressed: _isSaving ? null : _pickTag,
               ),
               if (_tags.isNotEmpty) ...[
@@ -740,7 +748,7 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
                           ? null
                           : () => Navigator.pop(context),
                       icon: const Icon(Icons.close_rounded),
-                      label: const Text('Cancelar'),
+                      label: Text(context.l10n.cancel),
                       style: FilledButton.styleFrom(
                         padding: const EdgeInsets.symmetric(vertical: 16),
                         backgroundColor: const Color(0xFFF0C9CE),
@@ -758,7 +766,7 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
                               child: CircularProgressIndicator(strokeWidth: 2),
                             )
                           : const Icon(Icons.check_rounded),
-                      label: const Text('Anotar'),
+                      label: Text(context.l10n.record),
                       style: FilledButton.styleFrom(
                         padding: const EdgeInsets.symmetric(vertical: 16),
                         backgroundColor: const Color(0xFF21C4B6),
@@ -879,7 +887,7 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
         return StatefulBuilder(
           builder: (context, setDialogState) {
             return AlertDialog(
-              title: const Text('Nueva cuenta'),
+              title: Text(context.l10n.newAccount),
               content: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -901,12 +909,14 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
                         Navigator.pop(context, created);
                       }
                     },
-                    decoration: const InputDecoration(labelText: 'Nombre'),
+                    decoration: InputDecoration(labelText: context.l10n.name),
                   ),
                   const SizedBox(height: 12),
                   DropdownButtonFormField<String>(
                     initialValue: currency,
-                    decoration: const InputDecoration(labelText: 'Moneda'),
+                    decoration: InputDecoration(
+                      labelText: context.l10n.currency,
+                    ),
                     items: _mockCurrencyOptions
                         .map(
                           (option) => DropdownMenuItem<String>(
@@ -925,7 +935,7 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
               actions: [
                 TextButton(
                   onPressed: () => Navigator.pop(context),
-                  child: const Text('Cancelar'),
+                  child: Text(context.l10n.cancel),
                 ),
                 TextButton(
                   onPressed: saving
@@ -943,7 +953,7 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
                             Navigator.pop(context, created);
                           }
                         },
-                  child: const Text('Crear'),
+                  child: Text(context.l10n.create),
                 ),
               ],
             );
@@ -962,7 +972,7 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
       builder: (context) {
         return StatefulBuilder(
           builder: (context, setDialogState) => AlertDialog(
-            title: const Text('Nueva categoria'),
+            title: Text(context.l10n.newCategory),
             content: TextField(
               controller: controller,
               autofocus: true,
@@ -980,12 +990,12 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
                   Navigator.pop(context, created);
                 }
               },
-              decoration: const InputDecoration(labelText: 'Nombre'),
+              decoration: InputDecoration(labelText: context.l10n.name),
             ),
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(context),
-                child: const Text('Cancelar'),
+                child: Text(context.l10n.cancel),
               ),
               TextButton(
                 onPressed: saving
@@ -1002,7 +1012,7 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
                           Navigator.pop(context, created);
                         }
                       },
-                child: const Text('Crear'),
+                child: Text(context.l10n.create),
               ),
             ],
           ),
@@ -1042,7 +1052,7 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
       if (!mounted) return null;
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text(error.toString())));
+      ).showSnackBar(SnackBar(content: Text(context.l10n.accountCreateFailed)));
       return null;
     }
   }
@@ -1062,9 +1072,9 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
       return category;
     } catch (error) {
       if (!mounted) return null;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(error.toString())));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(context.l10n.categoryCreateFailed)),
+      );
       return null;
     }
   }
@@ -1090,7 +1100,7 @@ class _RecurringExpenseControl extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           Text(
-            'Gasto recurrente',
+            context.l10n.recurringExpense,
             textAlign: TextAlign.center,
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
               color: Colors.black,
@@ -1151,7 +1161,7 @@ class _TransferBlock extends StatelessWidget {
           children: [
             Expanded(
               child: _TransferSide(
-                label: 'Sale',
+                label: context.l10n.leaves,
                 account: sourceAccount,
                 amountController: amountController,
                 enabled: enabled,
@@ -1172,7 +1182,7 @@ class _TransferBlock extends StatelessWidget {
             ),
             Expanded(
               child: _TransferSide(
-                label: 'Entra',
+                label: context.l10n.enters,
                 account: destinationAccount,
                 amountController: destinationAmountController,
                 enabled: enabled,
@@ -1253,9 +1263,11 @@ class _TransferSide extends StatelessWidget {
           onChanged: onAmountChanged,
           validator: (value) {
             final text = value?.trim() ?? '';
-            if (text.isEmpty) return 'Obligatorio';
+            if (text.isEmpty) return context.l10n.required;
             final amount = _parseAmount(text);
-            if (amount == null || amount <= 0) return 'Mayor a 0';
+            if (amount == null || amount <= 0) {
+              return context.l10n.greaterThanZero;
+            }
             return null;
           },
         ),
@@ -1263,7 +1275,7 @@ class _TransferSide extends StatelessWidget {
         Center(
           child: _PickerChip(
             label: account == null
-                ? 'Seleccionar'
+                ? context.l10n.select
                 : '${account!.name} ${account!.currency}',
             onPressed: enabled ? onPickAccount : null,
           ),
@@ -1303,10 +1315,10 @@ class _AmountField extends StatelessWidget {
       ),
       validator: (value) {
         final text = value?.trim() ?? '';
-        if (text.isEmpty) return 'Monto es obligatorio';
+        if (text.isEmpty) return context.l10n.amountRequired;
         final amount = _parseAmount(text);
         if (amount == null || amount <= 0) {
-          return 'Monto debe ser mayor a 0';
+          return context.l10n.amountGreaterThanZero;
         }
         return null;
       },
@@ -1476,23 +1488,23 @@ class _CreateTagDialogState extends State<_CreateTagDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: const Text('Nueva etiqueta'),
+      title: Text(context.l10n.newTag),
       content: TextField(
         controller: _controller,
         autofocus: true,
         textInputAction: TextInputAction.done,
         textCapitalization: TextCapitalization.none,
         onSubmitted: (_) => unawaited(_submit()),
-        decoration: const InputDecoration(labelText: 'Nombre'),
+        decoration: InputDecoration(labelText: context.l10n.name),
       ),
       actions: [
         TextButton(
           onPressed: _saving ? null : () => Navigator.pop(context),
-          child: const Text('Cancelar'),
+          child: Text(context.l10n.cancel),
         ),
         TextButton(
           onPressed: _saving ? null : () => unawaited(_submit()),
-          child: const Text('Crear'),
+          child: Text(context.l10n.create),
         ),
       ],
     );
@@ -1527,10 +1539,10 @@ String? _emptyToNull(String value) {
   return trimmed.isEmpty ? null : trimmed;
 }
 
-String _formatDate(DateTime date) {
+String _formatDate(BuildContext context, DateTime date) {
   final now = DateTime.now();
   if (date.year == now.year && date.month == now.month && date.day == now.day) {
-    return 'Hoy';
+    return context.l10n.today;
   }
-  return '${date.day}/${date.month}/${date.year}';
+  return formatNumericDate(date, context.localeName);
 }

@@ -9,6 +9,8 @@ import 'package:http/http.dart' as http;
 
 const _configCacheKey = 'native_config_verdict';
 
+enum AppConfigBannerFallback { hardVersionUpdate, softVersionUpdate }
+
 @immutable
 class AppConfigBannerAction {
   const AppConfigBannerAction({required this.label, required this.url});
@@ -36,6 +38,7 @@ class AppConfigBanner {
     required this.title,
     required this.messageMarkdown,
     required this.actions,
+    this.fallback,
   });
 
   final String key;
@@ -45,6 +48,7 @@ class AppConfigBanner {
   final String title;
   final String messageMarkdown;
   final List<AppConfigBannerAction> actions;
+  final AppConfigBannerFallback? fallback;
 
   bool showsIn(String placement) => placements.contains(placement);
 
@@ -56,6 +60,7 @@ class AppConfigBanner {
     title: 'Actualizacion requerida',
     messageMarkdown: 'Actualiza la app para seguir sincronizando tus datos.',
     actions: [],
+    fallback: AppConfigBannerFallback.hardVersionUpdate,
   );
 
   static AppConfigBanner? softVersionFallback(String? updateUrl) {
@@ -71,6 +76,7 @@ class AppConfigBanner {
       messageMarkdown:
           'Actualiza cuando puedas para recibir **las ultimas mejoras**.',
       actions: actions,
+      fallback: AppConfigBannerFallback.softVersionUpdate,
     );
   }
 
@@ -129,6 +135,7 @@ class AppConfigController extends ChangeNotifier {
     ClientInfo? clientInfo,
     FlutterSecureStorage? storage,
     http.Client? httpClient,
+    String locale = 'en',
   }) : _clientInfo =
            clientInfo ??
            const ClientInfo(
@@ -137,11 +144,13 @@ class AppConfigController extends ChangeNotifier {
              deviceId: 'unknown',
            ),
        _storage = storage ?? const FlutterSecureStorage(),
-       _http = httpClient ?? http.Client();
+       _http = httpClient ?? http.Client(),
+       _locale = _normalizeLocaleTag(locale);
 
   final ClientInfo _clientInfo;
   final FlutterSecureStorage _storage;
   final http.Client _http;
+  String _locale;
 
   bool _loaded = false;
   bool _supported = true; // fail open
@@ -156,11 +165,15 @@ class AppConfigController extends ChangeNotifier {
   // refresh, reauth) for the same account.
   String? _accountBannersScope;
   String? _accountFetchInFlight;
+  int _deviceRequestGeneration = 0;
+  int _accountRequestGeneration = 0;
+  Future<void> _cacheWriteChain = Future.value();
 
   bool get loaded => _loaded;
   bool get supported => _supported;
   bool get updateAvailable => _updateAvailable;
   String? get updateUrl => _updateUrl;
+  String get locale => _locale;
   List<AppConfigBanner> get banners => _mergeBanners(
     deviceBanners: _deviceBanners,
     accountBanners: _accountBanners,
@@ -172,12 +185,34 @@ class AppConfigController extends ChangeNotifier {
   /// A hard update prompt: sync is gated off, but local/offline use continues.
   bool get updateRequired => !_supported;
 
+  bool updateLocale(String locale) {
+    final normalized = _normalizeLocaleTag(locale);
+    if (normalized == _locale) return false;
+    _locale = normalized;
+    // Server banners are localized response data. Never keep the previous
+    // locale's copy visible while the replacement request is offline or in
+    // flight. Version state itself is locale-neutral, so retain its local
+    // fallback and let the widget render that fallback in the new locale.
+    _deviceBanners = _localVersionFallback();
+    _accountBanners = const [];
+    _accountScopeKey = null;
+    _accountBannersScope = null;
+    _accountFetchInFlight = null;
+    _deviceRequestGeneration++;
+    _accountRequestGeneration++;
+    notifyListeners();
+    return true;
+  }
+
   Future<void> load() async {
     final platform = _clientInfo.platform;
     final appVersion = _clientInfo.appVersion;
     final deviceId = _clientInfo.deviceId;
+    final locale = _locale;
+    final requestGeneration = ++_deviceRequestGeneration;
 
-    await _restoreCachedVerdict(appVersion);
+    await _restoreCachedVerdict(appVersion, locale, requestGeneration);
+    if (requestGeneration != _deviceRequestGeneration) return;
     _loaded = true;
     notifyListeners();
 
@@ -185,6 +220,8 @@ class AppConfigController extends ChangeNotifier {
       platform: platform,
       appVersion: appVersion,
       deviceId: deviceId,
+      locale: locale,
+      requestGeneration: requestGeneration,
     );
   }
 
@@ -202,28 +239,35 @@ class AppConfigController extends ChangeNotifier {
     // already in flight. A scope change clears both markers above, so switching
     // accounts still refetches. Failures leave the markers unset, so a transient
     // error is retried on the next notification.
-    if (_accountBannersScope == scopeKey ||
-        _accountFetchInFlight == scopeKey) {
+    if (_accountBannersScope == scopeKey || _accountFetchInFlight == scopeKey) {
       return;
     }
     _accountFetchInFlight = scopeKey;
+    final requestGeneration = ++_accountRequestGeneration;
 
     final uri = Uri.parse('${AppConfig.convexSiteUrl}/v1/account-config');
     try {
       final resp = await _http
           .post(
             uri,
-            headers: {'Content-Type': 'application/json'},
+            headers: {
+              'Content-Type': 'application/json',
+              'Accept-Language': _locale,
+            },
             body: jsonEncode({
               'platform': _clientInfo.platform,
               'appVersion': _clientInfo.appVersion,
               'deviceId': _clientInfo.deviceId,
+              'locale': _locale,
               'account': _accountPayload(account),
             }),
           )
           .timeout(const Duration(seconds: 5));
 
-      if (_accountScopeKey != scopeKey) return;
+      if (_accountRequestGeneration != requestGeneration ||
+          _accountScopeKey != scopeKey) {
+        return;
+      }
       if (resp.statusCode >= 200 && resp.statusCode < 300) {
         final data = jsonDecode(resp.body) as Map<String, Object?>;
         _accountBanners = _parseBanners(data, allowVersionFallback: false);
@@ -235,7 +279,10 @@ class AppConfigController extends ChangeNotifier {
     } catch (e) {
       debugPrint('config: account fetch failed: $e');
     } finally {
-      if (_accountFetchInFlight == scopeKey) _accountFetchInFlight = null;
+      if (_accountRequestGeneration == requestGeneration &&
+          _accountFetchInFlight == scopeKey) {
+        _accountFetchInFlight = null;
+      }
     }
   }
 
@@ -258,24 +305,32 @@ class AppConfigController extends ChangeNotifier {
     required String platform,
     required String appVersion,
     required String deviceId,
+    required String locale,
+    required int requestGeneration,
   }) async {
     final uri = Uri.parse('${AppConfig.convexSiteUrl}/v1/config').replace(
       queryParameters: {
         'platform': platform,
         'appVersion': appVersion,
         'deviceId': deviceId,
+        'locale': locale,
       },
     );
     try {
-      final resp = await _http.get(uri).timeout(const Duration(seconds: 5));
+      final resp = await _http
+          .get(uri, headers: {'Accept-Language': locale})
+          .timeout(const Duration(seconds: 5));
+      if (requestGeneration != _deviceRequestGeneration) return;
       if (resp.statusCode >= 200 && resp.statusCode < 300) {
         final verdict = jsonDecode(resp.body) as Map<String, Object?>;
         _applyVerdict(verdict);
         // Cache the verdict for this build only. A previous build's verdict
         // says nothing about whether the current build is supported.
-        await _storage.write(
-          key: _configCacheKey,
-          value: jsonEncode({'appVersion': appVersion, 'verdict': verdict}),
+        await _cacheVerdict(
+          appVersion: appVersion,
+          locale: locale,
+          verdict: verdict,
+          requestGeneration: requestGeneration,
         );
         notifyListeners();
         return;
@@ -287,17 +342,52 @@ class AppConfigController extends ChangeNotifier {
     // Keep whatever the cache restored, or the fail-open defaults.
   }
 
-  Future<void> _restoreCachedVerdict(String appVersion) async {
+  Future<void> _restoreCachedVerdict(
+    String appVersion,
+    String locale,
+    int requestGeneration,
+  ) async {
     try {
-      final cached = await _storage.read(key: _configCacheKey);
+      final cached =
+          await _storage.read(key: _configCacheKeyFor(locale)) ??
+          await _storage.read(key: _configCacheKey);
       if (cached == null || cached.isEmpty) return;
       final env = jsonDecode(cached) as Map<String, Object?>;
       if (env['appVersion'] != appVersion) return;
+      if (env['locale'] != locale) return;
       final verdict = env['verdict'];
+      if (requestGeneration != _deviceRequestGeneration) return;
       if (verdict is Map<String, Object?>) _applyVerdict(verdict);
     } catch (e) {
       debugPrint('config: restore cached verdict failed: $e');
     }
+  }
+
+  Future<void> _cacheVerdict({
+    required String appVersion,
+    required String locale,
+    required Map<String, Object?> verdict,
+    required int requestGeneration,
+  }) async {
+    final previousWrite = _cacheWriteChain;
+    final write = () async {
+      // Serialize writes so an older same-locale write cannot finish after a
+      // newer one. A failed prior write must not poison the queue.
+      try {
+        await previousWrite;
+      } catch (_) {}
+      if (requestGeneration != _deviceRequestGeneration) return;
+      await _storage.write(
+        key: _configCacheKeyFor(locale),
+        value: jsonEncode({
+          'appVersion': appVersion,
+          'locale': locale,
+          'verdict': verdict,
+        }),
+      );
+    }();
+    _cacheWriteChain = write;
+    await write;
   }
 
   void _applyVerdict(Map<String, Object?> data) {
@@ -332,6 +422,15 @@ class AppConfigController extends ChangeNotifier {
     return const [];
   }
 
+  List<AppConfigBanner> _localVersionFallback() {
+    if (!_supported) return [AppConfigBanner.hardVersionFallback()];
+    if (_updateAvailable) {
+      final fallback = AppConfigBanner.softVersionFallback(_updateUrl);
+      if (fallback != null) return [fallback];
+    }
+    return const [];
+  }
+
   Map<String, Object?> _accountPayload(UserAccount account) {
     if (account.type == AccountType.remote) {
       return {'type': 'remote', 'token': account.sessionToken};
@@ -341,7 +440,7 @@ class AppConfigController extends ChangeNotifier {
 
   String? _scopeKey(UserAccount? account) {
     if (account == null) return null;
-    return '${account.type.name}:${account.id}';
+    return '$_locale:${account.type.name}:${account.id}';
   }
 
   List<AppConfigBanner> _mergeBanners({
@@ -370,3 +469,10 @@ class AppConfigController extends ChangeNotifier {
     super.dispose();
   }
 }
+
+String _normalizeLocaleTag(String locale) {
+  final normalized = locale.trim().replaceAll('_', '-');
+  return normalized.isEmpty ? 'en' : normalized;
+}
+
+String _configCacheKeyFor(String locale) => '${_configCacheKey}_$locale';

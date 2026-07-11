@@ -3,9 +3,9 @@ import { compareVersions } from './utils'
 type NativeVersionConfig = {
     minSupportedVersion: string
     latestVersion: string
-    banners: ConfigBanner[]
-    softVersionBanner: ConfigBanner
-    hardVersionBanner: ConfigBanner
+    banners: LocalizedConfigBanner[]
+    softVersionBanner: LocalizedConfigBanner
+    hardVersionBanner: LocalizedConfigBanner
 }
 
 type ConfigBannerAction = {
@@ -25,6 +25,9 @@ type ConfigBanner = {
     messageMarkdown: string
     actions: ConfigBannerAction[]
 }
+
+export type ConfigLocale = 'en' | 'es'
+type LocalizedConfigBanner = Record<ConfigLocale, ConfigBanner>
 
 export const PLATFORM_ANDROID = 'android' as const
 export const PLATFORM_IOS = 'ios' as const
@@ -80,25 +83,49 @@ const MACOS_LATEST_VERSION = BASE_LATEST_VERSION
 const ANDROID_PLAY_STORE_URL =
     'https://play.google.com/store/apps/details?id=live.walletbot.app'
 
-const BASE_SOFT_VERSION_BANNER: ConfigBanner = {
-    key: 'soft-version-update',
-    index: 100,
-    placements: ['home', 'auth'],
-    tone: 'info',
-    title: 'Nueva version disponible',
-    messageMarkdown:
-        'Actualiza cuando puedas para recibir **las ultimas mejoras**.',
-    actions: [],
+const BASE_SOFT_VERSION_BANNER: LocalizedConfigBanner = {
+    en: {
+        key: 'soft-version-update',
+        index: 100,
+        placements: ['home', 'auth'],
+        tone: 'info',
+        title: 'New version available',
+        messageMarkdown:
+            'Update when you can to receive **the latest improvements**.',
+        actions: [],
+    },
+    es: {
+        key: 'soft-version-update',
+        index: 100,
+        placements: ['home', 'auth'],
+        tone: 'info',
+        title: 'Nueva versión disponible',
+        messageMarkdown:
+            'Actualizá cuando puedas para recibir **las últimas mejoras**.',
+        actions: [],
+    },
 }
 
-const BASE_HARD_VERSION_BANNER: ConfigBanner = {
-    key: 'hard-version-update',
-    index: 0,
-    placements: ['home', 'auth'],
-    tone: 'critical',
-    title: 'Actualizacion requerida',
-    messageMarkdown: 'Actualiza la app para seguir sincronizando tus datos.',
-    actions: [],
+const BASE_HARD_VERSION_BANNER: LocalizedConfigBanner = {
+    en: {
+        key: 'hard-version-update',
+        index: 0,
+        placements: ['home', 'auth'],
+        tone: 'critical',
+        title: 'Update required',
+        messageMarkdown: 'Update the app to continue syncing your data.',
+        actions: [],
+    },
+    es: {
+        key: 'hard-version-update',
+        index: 0,
+        placements: ['home', 'auth'],
+        tone: 'critical',
+        title: 'Actualización obligatoria',
+        messageMarkdown:
+            'Actualizá la aplicación para seguir sincronizando tus datos.',
+        actions: [],
+    },
 }
 
 const DEFAULT_CONFIG: NativeVersionConfig = {
@@ -117,16 +144,32 @@ const CONFIG_BY_PLATFORM: Record<NativePlatform, NativeVersionConfig> = {
         latestVersion: ANDROID_LATEST_VERSION,
         banners: [],
         softVersionBanner: {
-            ...BASE_SOFT_VERSION_BANNER,
-            actions: [
-                { label: 'Abrir Play Store', url: ANDROID_PLAY_STORE_URL },
-            ],
+            en: {
+                ...BASE_SOFT_VERSION_BANNER.en,
+                actions: [
+                    { label: 'Open Play Store', url: ANDROID_PLAY_STORE_URL },
+                ],
+            },
+            es: {
+                ...BASE_SOFT_VERSION_BANNER.es,
+                actions: [
+                    { label: 'Abrir Play Store', url: ANDROID_PLAY_STORE_URL },
+                ],
+            },
         },
         hardVersionBanner: {
-            ...BASE_HARD_VERSION_BANNER,
-            actions: [
-                { label: 'Abrir Play Store', url: ANDROID_PLAY_STORE_URL },
-            ],
+            en: {
+                ...BASE_HARD_VERSION_BANNER.en,
+                actions: [
+                    { label: 'Open Play Store', url: ANDROID_PLAY_STORE_URL },
+                ],
+            },
+            es: {
+                ...BASE_HARD_VERSION_BANNER.es,
+                actions: [
+                    { label: 'Abrir Play Store', url: ANDROID_PLAY_STORE_URL },
+                ],
+            },
         },
     },
     // TODO: iOS/macOS have no distribution URL yet, so their version banners
@@ -169,12 +212,22 @@ export const CLIENT_OUTDATED = 'client_outdated' as const
 const configForPlatform = (platform: string): NativeVersionConfig =>
     isNativePlatform(platform) ? CONFIG_BY_PLATFORM[platform] : DEFAULT_CONFIG
 
+export const resolveConfigLocale = (
+    locale: string | undefined,
+): ConfigLocale =>
+    locale?.trim().toLowerCase().replace('_', '-').startsWith('es')
+        ? 'es'
+        : 'en'
+
 export function resolveConfigVerdict(args: {
     platform: string
     appVersion: string
     deviceId: string
+    locale?: string
 }): ConfigVerdict {
     const config = configForPlatform(args.platform)
+    const locale = resolveConfigLocale(args.locale)
+    const configuredBanners = config.banners.map((banner) => banner[locale])
 
     // Fail open for a client that can't report its version: treat it as
     // supported and up to date so a transient PackageInfo failure never locks
@@ -187,7 +240,7 @@ export function resolveConfigVerdict(args: {
             minSupportedVersion: config.minSupportedVersion,
             latestVersion: config.latestVersion,
             updateUrl: null,
-            banners: sortBanners(config.banners),
+            banners: sortBanners(configuredBanners),
         }
     }
 
@@ -196,14 +249,14 @@ export function resolveConfigVerdict(args: {
     const updateAvailable =
         compareVersions(args.appVersion, config.latestVersion) < 0
     const versionBanner = !supported
-        ? config.hardVersionBanner
+        ? config.hardVersionBanner[locale]
         : updateAvailable
-          ? config.softVersionBanner
+          ? config.softVersionBanner[locale]
           : null
     const banners =
         versionBanner === null
-            ? config.banners
-            : [versionBanner, ...config.banners]
+            ? configuredBanners
+            : [versionBanner, ...configuredBanners]
     const updateUrl = versionBanner?.actions[0]?.url ?? null
 
     return {
@@ -221,6 +274,7 @@ export function resolveAccountConfig(args: {
     platform: string
     appVersion: string
     deviceId: string
+    locale?: string
     account: AccountConfigAccount
 }): AccountConfigVerdict {
     // Keep this account layer intentionally boring for now. It exists so we can

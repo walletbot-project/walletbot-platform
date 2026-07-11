@@ -1,4 +1,5 @@
 import 'package:app/app_config/app_config_controller.dart';
+import 'package:app/l10n/l10n.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'package:provider/provider.dart';
@@ -57,7 +58,7 @@ class _AppConfigBannerCard extends StatelessWidget {
   void _showActionError(BuildContext context) {
     ScaffoldMessenger.of(
       context,
-    ).showSnackBar(const SnackBar(content: Text('No se pudo abrir el enlace')));
+    ).showSnackBar(SnackBar(content: Text(context.l10n.openLinkFailed)));
   }
 
   @override
@@ -65,6 +66,20 @@ class _AppConfigBannerCard extends StatelessWidget {
     final theme = Theme.of(context);
     final colors = theme.colorScheme;
     final palette = _BannerPalette.forTone(colors, banner.tone);
+    final title = switch (banner.fallback) {
+      AppConfigBannerFallback.hardVersionUpdate =>
+        context.l10n.updateRequiredTitle,
+      AppConfigBannerFallback.softVersionUpdate =>
+        context.l10n.updateAvailableTitle,
+      null => banner.title,
+    };
+    final message = switch (banner.fallback) {
+      AppConfigBannerFallback.hardVersionUpdate =>
+        context.l10n.updateRequiredMessage,
+      AppConfigBannerFallback.softVersionUpdate =>
+        context.l10n.updateAvailableMessage,
+      null => banner.messageMarkdown,
+    };
 
     return DecoratedBox(
       decoration: BoxDecoration(
@@ -92,7 +107,7 @@ class _AppConfigBannerCard extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    banner.title,
+                    title,
                     style: theme.textTheme.titleSmall?.copyWith(
                       color: palette.foreground,
                       fontWeight: FontWeight.w900,
@@ -100,7 +115,7 @@ class _AppConfigBannerCard extends StatelessWidget {
                   ),
                   const SizedBox(height: 6),
                   MarkdownBody(
-                    data: banner.messageMarkdown,
+                    data: message,
                     onTapLink: (_, href, _) {
                       if (href == null) return;
                       _openAction(
@@ -138,7 +153,12 @@ class _AppConfigBannerCard extends StatelessWidget {
                           FilledButton.tonalIcon(
                             onPressed: () => _openAction(context, action),
                             icon: const Icon(Icons.open_in_new_rounded),
-                            label: Text(action.label),
+                            label: Text(
+                              banner.fallback ==
+                                      AppConfigBannerFallback.softVersionUpdate
+                                  ? context.l10n.updateApp
+                                  : action.label,
+                            ),
                           ),
                       ],
                     ),

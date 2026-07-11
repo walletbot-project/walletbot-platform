@@ -1,4 +1,5 @@
 import 'package:app/shared/money.dart';
+import 'package:app/l10n/l10n.dart';
 import 'package:flutter/material.dart';
 
 class ActivitySummaryCard extends StatelessWidget {
@@ -38,22 +39,34 @@ class ActivitySummaryCard extends StatelessWidget {
         children: [
           Expanded(
             child: _SummaryColumn(
-              label: 'Ingresos',
-              value: _formatAmount(incomeCents.abs(), currencySymbol),
+              label: context.l10n.incomes,
+              value: _formatAmount(
+                incomeCents.abs(),
+                currencySymbol,
+                context.localeName,
+              ),
               valueColor: Colors.green.shade600,
             ),
           ),
           Expanded(
             child: _SummaryColumn(
-              label: 'Gastos',
-              value: _formatAmount(expensesCents.abs(), currencySymbol),
+              label: context.l10n.expenses,
+              value: _formatAmount(
+                expensesCents.abs(),
+                currencySymbol,
+                context.localeName,
+              ),
               valueColor: Colors.red.shade600,
             ),
           ),
           Expanded(
             child: _SummaryColumn(
-              label: 'Balance',
-              value: _formatAmount(balanceCents, currencySymbol),
+              label: context.l10n.balance,
+              value: _formatAmount(
+                balanceCents,
+                currencySymbol,
+                context.localeName,
+              ),
               valueColor: scheme.onSurface,
             ),
           ),
@@ -97,7 +110,8 @@ class _SummaryColumn extends StatelessWidget {
   }
 }
 
-String _formatAmount(int cents, String currencySymbol) {
+String _formatAmount(int cents, String currencySymbol, String locale) {
   final sign = cents < 0 ? '-' : '';
-  return '$sign$currencySymbol${formatCentsUnsigned(cents.abs())}';
+  return '$sign$currencySymbol'
+      '${formatCentsUnsigned(cents.abs(), locale: locale)}';
 }
