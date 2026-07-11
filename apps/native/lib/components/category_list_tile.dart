@@ -1,5 +1,6 @@
 import 'package:app/components/grouped_card.dart';
 import 'package:flutter/material.dart';
+import 'package:app/l10n/l10n.dart';
 
 /// A single category rendered as a Material 3 expressive card-like list tile:
 /// accent icon avatar, name, a movement-count subtitle, and a trailing chevron.
@@ -57,7 +58,7 @@ class CategoryListTile extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                   ),
                   Text(
-                    '$usageCount movimientos',
+                    context.l10n.movementCount(usageCount),
                     style: textTheme.bodySmall?.copyWith(
                       color: colors.onSurfaceVariant,
                     ),

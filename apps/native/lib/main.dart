@@ -9,12 +9,14 @@ import 'package:app/auth/pop_on_account_switch.dart';
 import 'package:app/config.dart';
 import 'package:app/data/data.dart';
 import 'package:app/database.dart';
+import 'package:app/l10n/l10n.dart';
 import 'package:app/screens/accounts.dart';
 import 'package:app/screens/activity.dart';
 import 'package:app/screens/home.dart';
 import 'package:app/screens/insights.dart';
 import 'package:app/screens/login.dart';
 import 'package:app/screens/voice.dart';
+import 'package:app/settings/display_settings.dart';
 import 'package:app/shared/app_navigation.dart';
 import 'package:app/sync/sync_engine.dart';
 import 'package:app/voice/gemini_voice_expense_command.dart';
@@ -53,6 +55,8 @@ Future<void> main() async {
   final clientInfo = await ClientInfo.resolve(storage: storage);
 
   final auth = AuthController();
+  final displaySettings = DisplaySettingsController();
+  await displaySettings.load();
   await auth.load();
 
   // Native version verdict. Loaded in the background; sync waits for `loaded`,
@@ -60,6 +64,7 @@ Future<void> main() async {
   final appConfig = AppConfigController(
     clientInfo: clientInfo,
     storage: storage,
+    locale: _resolvedLocaleTag(displaySettings),
   );
   unawaited(appConfig.load());
   auth.addListener(() {
@@ -67,38 +72,107 @@ Future<void> main() async {
   });
   unawaited(appConfig.loadAccount(auth.activeAccount));
 
-  runApp(MyApp(auth: auth, appConfig: appConfig, clientInfo: clientInfo));
+  runApp(
+    MyApp(
+      auth: auth,
+      displaySettings: displaySettings,
+      appConfig: appConfig,
+      clientInfo: clientInfo,
+    ),
+  );
 }
 
-class MyApp extends StatelessWidget {
+String _resolvedLocaleTag(DisplaySettingsController settings) =>
+    (settings.locale ?? WidgetsBinding.instance.platformDispatcher.locale)
+        .toLanguageTag();
+
+class MyApp extends StatefulWidget {
   const MyApp({
     super.key,
     required this.auth,
+    required this.displaySettings,
     required this.appConfig,
     required this.clientInfo,
+    this.locale,
   });
 
   final AuthController auth;
+  final DisplaySettingsController displaySettings;
+  final Locale? locale;
   final AppConfigController appConfig;
   final ClientInfo clientInfo;
+
+  @override
+  State<MyApp> createState() => _MyAppState();
+}
+
+class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    widget.displaySettings.addListener(_refreshConfigLocale);
+  }
+
+  @override
+  void didChangeLocales(List<Locale>? locales) {
+    if (widget.displaySettings.language != DisplayLanguage.system) return;
+    _refreshConfigLocale(
+      systemLocale: locales == null || locales.isEmpty ? null : locales.first,
+    );
+  }
+
+  void _refreshConfigLocale({Locale? systemLocale}) {
+    final locale =
+        widget.displaySettings.locale ??
+        systemLocale ??
+        WidgetsBinding.instance.platformDispatcher.locale;
+    if (!widget.appConfig.updateLocale(locale.toLanguageTag())) return;
+    unawaited(widget.appConfig.load());
+    unawaited(widget.appConfig.loadAccount(widget.auth.activeAccount));
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    widget.displaySettings.removeListener(_refreshConfigLocale);
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: [
-        ChangeNotifierProvider<AuthController>.value(value: auth),
-        ChangeNotifierProvider<AppConfigController>.value(value: appConfig),
-        Provider<ClientInfo>.value(value: clientInfo),
-      ],
-      child: MaterialApp(
-        title: 'Wallet Bot',
-        theme: ThemeData(
-          colorScheme: ColorScheme.fromSeed(seedColor: Colors.greenAccent),
+        ChangeNotifierProvider<AuthController>.value(value: widget.auth),
+        ChangeNotifierProvider<DisplaySettingsController>.value(
+          value: widget.displaySettings,
         ),
-        home: const _AuthGate(),
+        ChangeNotifierProvider<AppConfigController>.value(
+          value: widget.appConfig,
+        ),
+        Provider<ClientInfo>.value(value: widget.clientInfo),
+      ],
+      child: Consumer<DisplaySettingsController>(
+        builder: (context, settings, _) => MaterialApp(
+          locale: widget.locale ?? settings.locale,
+          onGenerateTitle: (context) => context.l10n.appTitle,
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          theme: _theme(Brightness.light),
+          darkTheme: _theme(Brightness.dark),
+          themeMode: settings.themeMode,
+          home: const _AuthGate(),
+        ),
       ),
     );
   }
+
+  ThemeData _theme(Brightness brightness) => ThemeData(
+    colorScheme: ColorScheme.fromSeed(
+      seedColor: Colors.greenAccent,
+      brightness: brightness,
+    ),
+  );
 }
 
 class _AuthGate extends StatelessWidget {
@@ -282,7 +356,7 @@ class _AppMainState extends State<AppMain> {
             ),
           );
         },
-        tooltip: 'Voice commands',
+        tooltip: context.l10n.voiceCommands,
         child: const Text('🤖'),
       ),
       bottomNavigationBar: NavigationBar(
@@ -290,18 +364,21 @@ class _AppMainState extends State<AppMain> {
         onDestinationSelected: (value) =>
             context.read<AppNavigation>().index = value,
         destinations: [
-          NavigationDestination(icon: Icon(Icons.home_rounded), label: "Home"),
           NavigationDestination(
-            icon: Icon(Icons.calendar_view_month_rounded),
-            label: "Actividad",
+            icon: const Icon(Icons.home_rounded),
+            label: context.l10n.home,
           ),
           NavigationDestination(
-            icon: Icon(Icons.account_balance_rounded),
-            label: "Cuentas",
+            icon: const Icon(Icons.calendar_view_month_rounded),
+            label: context.l10n.activity,
           ),
           NavigationDestination(
-            icon: Icon(Icons.stacked_line_chart_rounded),
-            label: "Insights",
+            icon: const Icon(Icons.account_balance_rounded),
+            label: context.l10n.accounts,
+          ),
+          NavigationDestination(
+            icon: const Icon(Icons.stacked_line_chart_rounded),
+            label: context.l10n.insights,
           ),
         ],
       ),
@@ -331,29 +408,30 @@ class _ReauthBanner extends StatelessWidget {
               const SizedBox(width: 12),
               Expanded(
                 child: Text(
-                  'Sync paused — sign in again to reconnect',
+                  context.l10n.syncPaused,
                   style: TextStyle(color: theme.colorScheme.onErrorContainer),
                 ),
               ),
               TextButton(
                 onPressed: () async {
                   final messenger = ScaffoldMessenger.of(context);
+                  final l10n = context.l10n;
                   try {
                     await context.read<AuthController>().signInWithGoogle();
                   } on GoogleSignInException catch (e) {
                     // Dismissing the Google sheet isn't a failure to report.
                     if (e.code != GoogleSignInExceptionCode.canceled) {
                       messenger.showSnackBar(
-                        SnackBar(content: Text('No se pudo reconectar: $e')),
+                        SnackBar(content: Text(l10n.reconnectFailed(e))),
                       );
                     }
                   } catch (e) {
                     messenger.showSnackBar(
-                      SnackBar(content: Text('Reconnect failed: $e')),
+                      SnackBar(content: Text(l10n.reconnectFailed(e))),
                     );
                   }
                 },
-                child: const Text('Reconnect'),
+                child: Text(context.l10n.reconnect),
               ),
             ],
           ),

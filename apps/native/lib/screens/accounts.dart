@@ -7,6 +7,7 @@ import 'package:app/components/icon_picker.dart';
 import 'package:app/components/transaction_row.dart';
 import 'package:app/data/data.dart';
 import 'package:app/database.dart';
+import 'package:app/l10n/l10n.dart';
 import 'package:app/screens/create_account.dart';
 import 'package:app/shared/app_navigation.dart';
 import 'package:app/shared/money.dart';
@@ -14,23 +15,6 @@ import 'package:drift/drift.dart' show Value;
 import 'package:flutter/material.dart';
 import 'package:m3e_buttons/m3e_buttons.dart';
 import 'package:provider/provider.dart';
-
-/// Short Spanish month labels for the compact transaction dates shown in the
-/// account sheet (e.g. `27 may`).
-const _shortMonths = [
-  'ene',
-  'feb',
-  'mar',
-  'abr',
-  'may',
-  'jun',
-  'jul',
-  'ago',
-  'sep',
-  'oct',
-  'nov',
-  'dic',
-];
 
 class AccountsScreen extends StatelessWidget {
   const AccountsScreen({super.key});
@@ -69,10 +53,10 @@ class AccountsScreen extends StatelessWidget {
     final repos = context.read<AppRepositories>();
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Cuentas'),
+        title: Text(context.l10n.accounts),
         actions: [
           IconButton(
-            tooltip: 'Nueva cuenta',
+            tooltip: context.l10n.newAccount,
             onPressed: () => _openCreate(context),
             icon: const Icon(Icons.add),
           ),
@@ -165,12 +149,12 @@ class _EmptyBody extends StatelessWidget {
           ),
           const SizedBox(height: 16),
           Text(
-            'No tenés cuentas aún',
+            context.l10n.noAccountsTitle,
             style: Theme.of(context).textTheme.titleMedium,
           ),
           const SizedBox(height: 8),
           Text(
-            'Creá tu primera cuenta para empezar a registrar tus gastos.',
+            context.l10n.noAccountsBody,
             textAlign: TextAlign.center,
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
               color: Theme.of(context).colorScheme.onSurfaceVariant,
@@ -180,7 +164,7 @@ class _EmptyBody extends StatelessWidget {
           FilledButton.icon(
             onPressed: onCreateTap,
             icon: const Icon(Icons.add),
-            label: const Text('Crear cuenta'),
+            label: Text(context.l10n.createAccount),
           ),
         ],
       ),
@@ -204,7 +188,7 @@ class _ErrorBody extends StatelessWidget {
           Icon(Icons.error_outline_rounded, size: 64, color: colors.error),
           const SizedBox(height: 16),
           Text(
-            'No se pudieron cargar las cuentas',
+            context.l10n.accountsLoadFailed,
             style: Theme.of(context).textTheme.titleMedium,
             textAlign: TextAlign.center,
           ),
@@ -297,7 +281,7 @@ class _AccountDetailsSheetState extends State<AccountDetailsSheet> {
   Future<void> _saveIdentity() async {
     final name = _nameController.text.trim();
     if (name.isEmpty) {
-      _showSnack('El nombre no puede estar vacío');
+      _showSnack(context.l10n.nameCannotBeEmpty);
       return;
     }
 
@@ -313,13 +297,14 @@ class _AccountDetailsSheetState extends State<AccountDetailsSheet> {
       setState(() => _editing = false);
     } catch (e, st) {
       debugPrint('Error updating account: $e\n$st');
-      _showSnack('No se pudo guardar la cuenta');
+      _showSnack(context.l10n.accountSaveFailed);
     } finally {
       if (mounted) setState(() => _saving = false);
     }
   }
 
   Future<void> _adjustBalance() async {
+    final l10n = context.l10n;
     final current = await widget.repos.accounts.getBalanceCents(_accountId);
     if (!mounted) return;
 
@@ -330,7 +315,7 @@ class _AccountDetailsSheetState extends State<AccountDetailsSheet> {
         // TextFormField with initialValue owns and disposes its own controller —
         // a manually-disposed local controller crashes when the dialog closes.
         return AlertDialog(
-          title: const Text('Ajustar saldo'),
+          title: Text(context.l10n.adjustBalance),
           content: TextFormField(
             initialValue: text,
             autofocus: true,
@@ -347,7 +332,7 @@ class _AccountDetailsSheetState extends State<AccountDetailsSheet> {
           actions: [
             TextButton(
               onPressed: () => Navigator.of(dialogContext).pop(),
-              child: const Text('Cancelar'),
+              child: Text(context.l10n.cancel),
             ),
             TextButton(
               onPressed: () {
@@ -356,7 +341,7 @@ class _AccountDetailsSheetState extends State<AccountDetailsSheet> {
                   dialogContext,
                 ).pop(value == null ? null : (value * 100).round());
               },
-              child: const Text('Guardar'),
+              child: Text(context.l10n.save),
             ),
           ],
         );
@@ -373,7 +358,7 @@ class _AccountDetailsSheetState extends State<AccountDetailsSheet> {
       );
     } catch (e, st) {
       debugPrint('Error adjusting balance: $e\n$st');
-      _showSnack('No se pudo ajustar el saldo');
+      _showSnack(l10n.adjustBalanceFailed);
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -385,20 +370,19 @@ class _AccountDetailsSheetState extends State<AccountDetailsSheet> {
       builder: (dialogContext) {
         final colors = Theme.of(dialogContext).colorScheme;
         return AlertDialog(
-          title: const Text('Eliminar cuenta'),
+          title: Text(context.l10n.deleteAccount),
           content: Text(
-            '¿Seguro que querés eliminar "${_nameController.text.trim()}"? '
-            'Dejará de aparecer en tus cuentas.',
+            context.l10n.deleteAccountConfirmation(_nameController.text.trim()),
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(dialogContext).pop(false),
-              child: const Text('Cancelar'),
+              child: Text(context.l10n.cancel),
             ),
             TextButton(
               onPressed: () => Navigator.of(dialogContext).pop(true),
               style: TextButton.styleFrom(foregroundColor: colors.error),
-              child: const Text('Eliminar'),
+              child: Text(context.l10n.delete),
             ),
           ],
         );
@@ -414,7 +398,7 @@ class _AccountDetailsSheetState extends State<AccountDetailsSheet> {
     } catch (e, st) {
       debugPrint('Error archiving account: $e\n$st');
       if (mounted) setState(() => _saving = false);
-      _showSnack('No se pudo eliminar la cuenta');
+      _showSnack(context.l10n.deleteAccountFailed);
     }
   }
 
@@ -465,10 +449,10 @@ class _AccountDetailsSheetState extends State<AccountDetailsSheet> {
         controller: _nameController,
         style: style,
         textCapitalization: TextCapitalization.sentences,
-        decoration: const InputDecoration(
+        decoration: InputDecoration(
           isDense: true,
-          labelText: 'Nombre',
-          border: OutlineInputBorder(),
+          labelText: context.l10n.name,
+          border: const OutlineInputBorder(),
         ),
         onChanged: (_) => setState(() {}),
       );
@@ -565,7 +549,7 @@ class _AccountDetailsSheetState extends State<AccountDetailsSheet> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'SALDO',
+                        context.l10n.balance.toUpperCase(),
                         style: textTheme.labelMedium?.copyWith(
                           color: colors.onSurfaceVariant,
                           letterSpacing: 0.8,
@@ -579,7 +563,11 @@ class _AccountDetailsSheetState extends State<AccountDetailsSheet> {
                         builder: (context, snapshot) {
                           final cents = (snapshot.data ?? BigInt.zero).toInt();
                           return Text(
-                            formatMoney(cents, _currency),
+                            formatMoney(
+                              cents,
+                              _currency,
+                              locale: context.localeName,
+                            ),
                             style: textTheme.displaySmall?.copyWith(
                               fontWeight: FontWeight.w600,
                               color: cents < 0 ? colors.error : null,
@@ -629,7 +617,7 @@ class _AccountDetailsSheetState extends State<AccountDetailsSheet> {
             onPressed: _saving ? null : _adjustBalance,
             size: M3EButtonSize.md,
             icon: const Icon(Icons.tune_rounded),
-            label: const Text('Ajustar saldo'),
+            label: Text(context.l10n.adjustBalance),
           ),
         ),
         const SizedBox(width: 8),
@@ -637,16 +625,16 @@ class _AccountDetailsSheetState extends State<AccountDetailsSheet> {
           onPressed: _saving ? null : _toggleEditing,
           style: _editing ? M3EButtonStyle.filled : M3EButtonStyle.tonal,
           size: M3EButtonSize.md,
-          tooltip: _editing ? 'Listo' : 'Editar',
-          semanticLabel: _editing ? 'Listo' : 'Editar',
+          tooltip: _editing ? context.l10n.done : context.l10n.edit,
+          semanticLabel: _editing ? context.l10n.done : context.l10n.edit,
           child: Icon(_editing ? Icons.check_rounded : Icons.edit_outlined),
         ),
         const SizedBox(width: 8),
         M3EButton(
           onPressed: _saving ? null : _confirmDelete,
           size: M3EButtonSize.md,
-          tooltip: 'Eliminar',
-          semanticLabel: 'Eliminar',
+          tooltip: context.l10n.delete,
+          semanticLabel: context.l10n.delete,
           decoration: M3EButtonDecoration.styleFrom(
             backgroundColor: colors.errorContainer,
             foregroundColor: colors.onErrorContainer,
@@ -664,11 +652,14 @@ class _AccountDetailsSheetState extends State<AccountDetailsSheet> {
     return Row(
       children: [
         Expanded(
-          child: Text('Últimas transacciones', style: textTheme.titleMedium),
+          child: Text(
+            context.l10n.lastTransactions,
+            style: textTheme.titleMedium,
+          ),
         ),
         TextButton(
           onPressed: _openAllTransactions,
-          child: const Text('Ver todas'),
+          child: Text(context.l10n.viewAll),
         ),
       ],
     );
@@ -688,7 +679,7 @@ class _AccountDetailsSheetState extends State<AccountDetailsSheet> {
           return Padding(
             padding: const EdgeInsets.symmetric(vertical: 16),
             child: Text(
-              'No se pudieron cargar las transacciones',
+              context.l10n.transactionsCouldNotLoad,
               style: TextStyle(
                 color: Theme.of(context).colorScheme.onSurfaceVariant,
               ),
@@ -707,7 +698,7 @@ class _AccountDetailsSheetState extends State<AccountDetailsSheet> {
           return Padding(
             padding: const EdgeInsets.symmetric(vertical: 16),
             child: Text(
-              'Sin transacciones todavía',
+              context.l10n.noTransactionsYet,
               style: TextStyle(
                 color: Theme.of(context).colorScheme.onSurfaceVariant,
               ),
@@ -722,7 +713,7 @@ class _AccountDetailsSheetState extends State<AccountDetailsSheet> {
                 title: txs[i].name,
                 amountCents: _signedAmountCents(txs[i]),
                 dateCheck: txs[i].dateConfirmed,
-                description: _shortDate(txs[i].date),
+                description: _shortDate(context, txs[i].date),
                 currencySymbol: symbol,
                 onTap: () {},
               ),
@@ -750,7 +741,7 @@ int _signedAmountCents(Transaction t) {
 }
 
 /// Compact `day month` label, e.g. `27 may`.
-String _shortDate(BigInt dateMs) {
+String _shortDate(BuildContext context, BigInt dateMs) {
   final dt = DateTime.fromMillisecondsSinceEpoch(dateMs.toInt());
-  return '${dt.day} ${_shortMonths[dt.month - 1]}';
+  return formatShortDate(dt, context.localeName);
 }

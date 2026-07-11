@@ -5,6 +5,7 @@ import 'package:app/components/dashboard/dashboard_view.dart';
 import 'package:app/data/data.dart';
 import 'package:app/data/queries/stream_utils.dart';
 import 'package:app/database.dart';
+import 'package:app/l10n/l10n.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -62,7 +63,7 @@ class _DashboardSectionState extends State<DashboardSection> {
         final theme = Theme.of(context);
         if (snapshot.hasError) {
           return Text(
-            'No se pudo cargar el tablero.',
+            context.l10n.dashboardLoadFailed,
             style: theme.textTheme.bodyMedium?.copyWith(
               color: theme.colorScheme.error,
             ),
@@ -79,7 +80,7 @@ class _DashboardSectionState extends State<DashboardSection> {
         _syncOrdered(widgets);
         if (widgets.isEmpty) {
           return Text(
-            'Tu tablero está vacío. Agregá un widget para empezar.',
+            context.l10n.dashboardEmpty,
             style: theme.textTheme.bodyMedium?.copyWith(
               color: theme.colorScheme.onSurfaceVariant,
             ),
@@ -288,7 +289,7 @@ class _DashboardSectionState extends State<DashboardSection> {
           ..addAll(previousPending);
       });
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('No se pudo actualizar el tablero: $error')),
+        SnackBar(content: Text(context.l10n.dashboardUpdateFailed(error))),
       );
     }
   }
@@ -308,19 +309,20 @@ class _DashboardSectionState extends State<DashboardSection> {
 
   Future<void> _deleteItem(DashboardViewItem item) async {
     final dashboard = context.read<AppRepositories>().dashboard;
+    final l10n = context.l10n;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Quitar widget'),
-        content: Text('¿Quitar "${_titleOf(item.row)}" del tablero?'),
+        title: Text(l10n.removeWidget),
+        content: Text(l10n.removeWidgetConfirmation(_titleOf(item.row))),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Cancelar'),
+            child: Text(l10n.cancel),
           ),
           FilledButton(
             onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('Quitar'),
+            child: Text(l10n.remove),
           ),
         ],
       ),
@@ -340,9 +342,9 @@ class _DashboardSectionState extends State<DashboardSection> {
       if (!mounted) return;
       _pendingDeletes.remove(item.row.id);
       setState(() => _ordered = previous);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('No se pudo quitar el widget: $error')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(l10n.widgetRemoveFailed(error))));
     }
   }
 
@@ -363,20 +365,13 @@ class _DashboardSectionState extends State<DashboardSection> {
       StatWidgetSpec(:final title) ||
       TransactionListWidgetSpec(:final title) ||
       BalanceCardWidgetSpec(:final title) ||
-      ChartWidgetSpec(
-        :final title,
-      ) => title.isEmpty ? _typeLabelOf(row) : title,
+      ChartWidgetSpec(:final title) =>
+        title.isEmpty ? _typeLabelOf(row) : context.l10n.dashboardTitle(title),
       null => _typeLabelOf(row),
     };
   }
 
   String _typeLabelOf(DashboardWidget row) {
-    return switch (WidgetType.fromWire(row.type)) {
-      WidgetType.stat => 'Valor',
-      WidgetType.list => 'Lista',
-      WidgetType.balance => 'Saldo',
-      WidgetType.chart => 'Gráfico',
-      null => 'Widget',
-    };
+    return context.l10n.dashboardFallbackType(WidgetType.fromWire(row.type));
   }
 }

@@ -9,6 +9,7 @@ type AccountConfigBody = {
     platform?: unknown
     appVersion?: unknown
     deviceId?: unknown
+    locale?: unknown
     account?: unknown
 }
 
@@ -28,7 +29,7 @@ const parseJsonBody = async <T>(req: Request): Promise<T | null> => {
 const asString = (value: unknown, fallback: string): string =>
     typeof value === 'string' && value.length > 0 ? value : fallback
 
-// GET /v1/config?platform=ios&appVersion=1.2.0&deviceId=<stable-install-id>
+// GET /v1/config?platform=ios&appVersion=1.2.0&deviceId=<id>&locale=es-AR
 //
 // Unauthenticated client-version gate (L1). Returns a `ConfigVerdict`. Clients
 // must treat a network/parse failure as "supported" and fall back to their
@@ -38,11 +39,16 @@ const getConfig = httpAction(async (_ctx, req) => {
     const platform = url.searchParams.get('platform') ?? 'unknown'
     const appVersion = url.searchParams.get('appVersion') ?? '0.0.0'
     const deviceId = url.searchParams.get('deviceId') ?? 'unknown'
+    const locale =
+        url.searchParams.get('locale') ??
+        req.headers.get('accept-language') ??
+        'en'
 
     const verdict = resolveConfigVerdict({
         platform,
         appVersion,
         deviceId,
+        locale,
     })
     return jsonResponse(verdict)
 })
@@ -78,12 +84,17 @@ const postAccountConfig = httpAction(async (ctx, req) => {
     const platform = asString(body?.platform, 'unknown')
     const appVersion = asString(body?.appVersion, '0.0.0')
     const deviceId = asString(body?.deviceId, 'unknown')
+    const locale = asString(
+        body?.locale,
+        req.headers.get('accept-language') ?? 'en',
+    )
     const account = await accountFromBody(ctx, body?.account)
 
     const verdict = resolveAccountConfig({
         platform,
         appVersion,
         deviceId,
+        locale,
         account,
     })
     return jsonResponse(verdict)

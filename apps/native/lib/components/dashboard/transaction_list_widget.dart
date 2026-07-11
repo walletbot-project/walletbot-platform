@@ -4,6 +4,7 @@ import 'package:app/components/transaction_row.dart';
 import 'package:app/data/data.dart';
 import 'package:app/database.dart';
 import 'package:app/shared/money.dart';
+import 'package:app/l10n/l10n.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -24,7 +25,7 @@ class TransactionListWidget extends StatelessWidget {
       builder: (context, snapshot) {
         final items = snapshot.data ?? const <Transaction>[];
         return DashboardCell(
-          title: spec.title,
+          title: context.l10n.dashboardTitle(spec.title),
           icon: Icons.receipt_long_outlined,
           minHeight: 160,
           backgroundColor: spec.background.resolve(
@@ -48,7 +49,7 @@ class _TransactionListContent extends StatelessWidget {
     final theme = Theme.of(context);
     if (snapshot.hasError) {
       return Text(
-        'No se pudieron cargar los movimientos.',
+        context.l10n.movementsLoadFailed,
         style: theme.textTheme.bodySmall?.copyWith(
           color: theme.colorScheme.error,
         ),
@@ -64,7 +65,7 @@ class _TransactionListContent extends StatelessWidget {
 
     if (items.isEmpty) {
       return Text(
-        'No hay movimientos todavía.',
+        context.l10n.noMovementsYet,
         style: theme.textTheme.bodyMedium?.copyWith(
           color: theme.colorScheme.onSurfaceVariant,
         ),

@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:app/l10n/l10n.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:record/record.dart';
 
@@ -81,9 +82,14 @@ class _VoiceScreenState extends State<VoiceScreen> {
       _commandEventsSubscription = active.events.listen(_onVoiceEvent);
       _isConnected = active.isConnected;
       _isReconnecting = !active.isConnected;
-      if (_isReconnecting) _showConnectionNotice();
       active.recordClientEvent('screen_attached');
     }
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_isReconnecting) _showConnectionNotice();
   }
 
   @override
@@ -240,6 +246,7 @@ class _VoiceScreenState extends State<VoiceScreen> {
 
   Future<void> _startSession({required _SessionMode mode}) async {
     if (_isStarting || _isConnected) return;
+    final l10n = context.l10n;
 
     setState(() {
       _isStarting = true;
@@ -262,7 +269,7 @@ class _VoiceScreenState extends State<VoiceScreen> {
       await _command?.start(respondWithAudio: respondWithAudio);
       _command?.recordClientEvent('screen_attached', {'startMode': mode.name});
     } catch (error) {
-      _addSystemSetState('Failed to start: $error', kind: _SystemKind.error);
+      _addSystemSetState(l10n.voiceStartFailed(error), kind: _SystemKind.error);
       await _stop();
       return;
     }
@@ -285,12 +292,13 @@ class _VoiceScreenState extends State<VoiceScreen> {
       }
       return;
     }
+    final l10n = context.l10n;
 
     try {
       final permission = await Permission.microphone.request();
       if (!permission.isGranted) {
         _addSystemSetState(
-          'Microphone permission denied',
+          l10n.microphonePermissionDenied,
           kind: _SystemKind.error,
         );
         return;
@@ -301,7 +309,7 @@ class _VoiceScreenState extends State<VoiceScreen> {
       );
       if (!hasRecorderPermission) {
         _addSystemSetState(
-          'Recorder permission check failed',
+          l10n.recorderPermissionFailed,
           kind: _SystemKind.error,
         );
         return;
@@ -311,10 +319,7 @@ class _VoiceScreenState extends State<VoiceScreen> {
         AudioEncoder.pcm16bits,
       );
       if (!supportsPcm) {
-        _addSystemSetState(
-          'PCM 16-bit streaming is not supported on this device',
-          kind: _SystemKind.error,
-        );
+        _addSystemSetState(l10n.pcmUnsupported, kind: _SystemKind.error);
         return;
       }
 
@@ -323,7 +328,7 @@ class _VoiceScreenState extends State<VoiceScreen> {
         _handleAudioChunk,
         onError: (Object error) {
           _addSystemSetState(
-            'Audio stream error: $error',
+            l10n.audioStreamFailed(error),
             kind: _SystemKind.error,
           );
           unawaited(_stopMicCapture());
@@ -347,7 +352,10 @@ class _VoiceScreenState extends State<VoiceScreen> {
         _recordMuteEvent('mic_capture_started');
       }
     } catch (error) {
-      _addSystemSetState('Failed to open mic: $error', kind: _SystemKind.error);
+      _addSystemSetState(
+        l10n.microphoneOpenFailed(error),
+        kind: _SystemKind.error,
+      );
       await _stopMicCapture();
     }
   }
@@ -379,15 +387,13 @@ class _VoiceScreenState extends State<VoiceScreen> {
   }
 
   Future<void> _stop() async {
+    final l10n = context.l10n;
     await _stopMicCapture();
 
     try {
       await _command?.stop();
     } catch (error) {
-      _addSystemSetState(
-        'Failed to stop cleanly: $error',
-        kind: _SystemKind.error,
-      );
+      _addSystemSetState(l10n.voiceStopFailed(error), kind: _SystemKind.error);
     } finally {
       await _commandEventsSubscription?.cancel();
       _commandEventsSubscription = null;
@@ -460,7 +466,10 @@ class _VoiceScreenState extends State<VoiceScreen> {
             _isReconnecting = true;
             _showConnectionNotice();
           } else {
-            _addSystem(message, kind: _SystemKind.error);
+            _addSystem(
+              context.l10n.voiceRuntimeError(message),
+              kind: _SystemKind.error,
+            );
           }
         case VoiceSystemEvent():
           break;
@@ -498,10 +507,15 @@ class _VoiceScreenState extends State<VoiceScreen> {
   }
 
   void _showConnectionNotice() {
-    if (_connectionNotice != null) return;
+    final message = context.l10n.connectionLostReconnecting;
+    final existing = _connectionNotice;
+    if (existing != null) {
+      existing.message = message;
+      return;
+    }
     final notice = _SystemItem(
       at: DateTime.now(),
-      message: 'Connection lost. Reconnecting automatically…',
+      message: message,
       kind: _SystemKind.info,
     );
     _connectionNotice = notice;
@@ -580,7 +594,7 @@ class _VoiceScreenState extends State<VoiceScreen> {
       p.isFinal = true;
       _pendingAgent = null;
     } else {
-      _addSystem('Agent interrupted', kind: _SystemKind.info);
+      _addSystem(context.l10n.agentInterrupted, kind: _SystemKind.info);
     }
   }
 
@@ -620,7 +634,7 @@ class _VoiceScreenState extends State<VoiceScreen> {
       }
     } else {
       _addSystem(
-        'Tool response with no matching call: $result',
+        context.l10n.toolResponseUnmatched(result),
         kind: _SystemKind.info,
       );
     }
@@ -634,7 +648,7 @@ class _VoiceScreenState extends State<VoiceScreen> {
       }
     }
     _addSystem(
-      'Tool calls cancelled: ${ids.join(', ')}',
+      context.l10n.toolCallsCancelled(ids.join(', ')),
       kind: _SystemKind.info,
     );
   }
@@ -684,7 +698,7 @@ class _VoiceScreenState extends State<VoiceScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Live Voice'),
+        title: Text(context.l10n.liveVoice),
         actions: [
           Padding(
             padding: EdgeInsets.only(right: _isConnected ? 4 : 12),
@@ -695,7 +709,7 @@ class _VoiceScreenState extends State<VoiceScreen> {
                         Icons.call_end_rounded,
                         color: theme.colorScheme.error,
                       ),
-                      tooltip: 'End session',
+                      tooltip: context.l10n.endSession,
                       onPressed: () => unawaited(_stop()),
                     )
                   : _StatusChip(level: status),
@@ -794,7 +808,7 @@ enum _ToolStatus { pending, completed, cancelled }
 
 class _SystemItem extends _ChatItem {
   _SystemItem({required super.at, required this.message, required this.kind});
-  final String message;
+  String message;
   final _SystemKind kind;
 }
 
@@ -854,7 +868,7 @@ class _UserBubble extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
-            _RoleLabel(label: 'You', time: item.at, alignEnd: true),
+            _RoleLabel(label: context.l10n.you, time: item.at, alignEnd: true),
             const SizedBox(height: 4),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
@@ -966,7 +980,7 @@ class _AgentBubble extends StatelessWidget {
                         if (item.wasInterrupted) ...[
                           const SizedBox(height: 6),
                           Text(
-                            '(interrupted)',
+                            context.l10n.interrupted,
                             style: TextStyle(
                               fontSize: 12,
                               fontStyle: FontStyle.italic,
@@ -998,17 +1012,17 @@ class _ToolCard extends StatelessWidget {
       _ToolStatus.pending => (
         Icons.hourglass_top_rounded,
         theme.colorScheme.tertiary,
-        'Running',
+        context.l10n.toolRunning,
       ),
       _ToolStatus.completed => (
         Icons.check_circle_rounded,
         theme.colorScheme.primary,
-        'Done',
+        context.l10n.toolDone,
       ),
       _ToolStatus.cancelled => (
         Icons.cancel_rounded,
         theme.colorScheme.error,
-        'Cancelled',
+        context.l10n.toolCancelled,
       ),
     };
 
@@ -1033,7 +1047,7 @@ class _ToolCard extends StatelessWidget {
                   Icon(icon, size: 16, color: color),
                   const SizedBox(width: 6),
                   Text(
-                    'Tool',
+                    context.l10n.tool,
                     style: theme.textTheme.labelSmall?.copyWith(
                       color: theme.colorScheme.onSurfaceVariant,
                       letterSpacing: 0.4,
@@ -1057,11 +1071,11 @@ class _ToolCard extends StatelessWidget {
               ),
               if (item.args.isNotEmpty) ...[
                 const SizedBox(height: 8),
-                _KvBlock(label: 'args', data: item.args),
+                _KvBlock(label: context.l10n.arguments, data: item.args),
               ],
               if (item.result != null) ...[
                 const SizedBox(height: 6),
-                _KvBlock(label: 'result', data: item.result!),
+                _KvBlock(label: context.l10n.result, data: item.result!),
               ],
             ],
           ),
@@ -1257,9 +1271,18 @@ class _StatusChip extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final (color, label) = switch (level) {
-      _StatusLevel.connected => (theme.colorScheme.primary, 'connected'),
-      _StatusLevel.connecting => (theme.colorScheme.tertiary, 'connecting'),
-      _StatusLevel.disconnected => (theme.colorScheme.outline, 'idle'),
+      _StatusLevel.connected => (
+        theme.colorScheme.primary,
+        context.l10n.connected,
+      ),
+      _StatusLevel.connecting => (
+        theme.colorScheme.tertiary,
+        context.l10n.connecting,
+      ),
+      _StatusLevel.disconnected => (
+        theme.colorScheme.outline,
+        context.l10n.idle,
+      ),
     };
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
@@ -1308,7 +1331,9 @@ class _EmptyState extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           Text(
-            isStarting ? 'Connecting…' : 'Tap the mic to start a conversation',
+            isStarting
+                ? context.l10n.connectingPrompt
+                : context.l10n.voiceStartPrompt,
             style: theme.textTheme.bodyMedium?.copyWith(
               color: theme.colorScheme.onSurfaceVariant,
             ),
@@ -1431,11 +1456,11 @@ class _TextComposer extends StatelessWidget {
         onSubmitted: (_) {
           if (controller.text.trim().isNotEmpty) onSend();
         },
-        decoration: const InputDecoration(
-          hintText: 'Type a message…',
+        decoration: InputDecoration(
+          hintText: context.l10n.typeMessage,
           border: InputBorder.none,
           isDense: true,
-          contentPadding: EdgeInsets.symmetric(vertical: 12),
+          contentPadding: const EdgeInsets.symmetric(vertical: 12),
         ),
       ),
     );

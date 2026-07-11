@@ -1,5 +1,6 @@
 import 'package:app/components/color_utils.dart';
 import 'package:flutter/material.dart';
+import 'package:app/l10n/l10n.dart';
 
 /// A reusable swatch grid for picking an accent color. Renders the options from
 /// [color_utils] (or a custom [options] palette) and highlights the [selected]
@@ -60,7 +61,7 @@ Future<Color?> showColorPickerDialog(
     context: context,
     builder: (dialogContext) {
       return AlertDialog(
-        title: const Text('Elegir color'),
+        title: Text(context.l10n.chooseColor),
         content: ColorPicker(
           selected: selected,
           options: options,

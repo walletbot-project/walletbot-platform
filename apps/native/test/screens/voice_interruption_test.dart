@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:typed_data';
 
+import 'package:app/l10n/l10n.dart';
 import 'package:app/screens/voice.dart';
 import 'package:app/voice/voice_event.dart';
 import 'package:app/voice/voice_expense_command.dart';
@@ -12,11 +13,7 @@ void main() {
     tester,
   ) async {
     final command = _ActiveVoiceCommand();
-    await tester.pumpWidget(
-      MaterialApp(
-        home: VoiceScreen(commandFactory: _ActiveVoiceCommandFactory(command)),
-      ),
-    );
+    await tester.pumpWidget(_voiceApp(command));
 
     await tester.pumpWidget(const MaterialApp(home: SizedBox()));
     await tester.pump();
@@ -30,13 +27,7 @@ void main() {
     'repeated transient connection errors render as one friendly notice',
     (tester) async {
       final command = _ActiveVoiceCommand();
-      await tester.pumpWidget(
-        MaterialApp(
-          home: VoiceScreen(
-            commandFactory: _ActiveVoiceCommandFactory(command),
-          ),
-        ),
-      );
+      await tester.pumpWidget(_voiceApp(command));
 
       command.emit(
         VoiceErrorEvent(
@@ -77,15 +68,20 @@ void main() {
     tester,
   ) async {
     final command = _ActiveVoiceCommand(connected: false);
-    await tester.pumpWidget(
-      MaterialApp(
-        home: VoiceScreen(commandFactory: _ActiveVoiceCommandFactory(command)),
-      ),
-    );
+    await tester.pumpWidget(_voiceApp(command));
 
     expect(find.text('connecting'), findsOneWidget);
     expect(
       find.text('Connection lost. Reconnecting automatically…'),
+      findsOneWidget,
+    );
+
+    await tester.pumpWidget(_voiceApp(command, locale: const Locale('es')));
+    await tester.pump();
+
+    expect(find.text('conectando'), findsOneWidget);
+    expect(
+      find.text('Se perdió la conexión. Reconectando automáticamente…'),
       findsOneWidget,
     );
   });
@@ -94,11 +90,7 @@ void main() {
     tester,
   ) async {
     final command = _ActiveVoiceCommand();
-    await tester.pumpWidget(
-      MaterialApp(
-        home: VoiceScreen(commandFactory: _ActiveVoiceCommandFactory(command)),
-      ),
-    );
+    await tester.pumpWidget(_voiceApp(command));
 
     await tester.enterText(find.byType(TextField), 'typed message');
     await tester.testTextInput.receiveAction(TextInputAction.send);
@@ -110,6 +102,16 @@ void main() {
     expect(command.audioPlaybackStates, [false, true]);
   });
 }
+
+Widget _voiceApp(
+  _ActiveVoiceCommand command, {
+  Locale locale = const Locale('en'),
+}) => MaterialApp(
+  locale: locale,
+  localizationsDelegates: AppLocalizations.localizationsDelegates,
+  supportedLocales: AppLocalizations.supportedLocales,
+  home: VoiceScreen(commandFactory: _ActiveVoiceCommandFactory(command)),
+);
 
 class _ActiveVoiceCommandFactory implements VoiceExpenseCommandFactory {
   _ActiveVoiceCommandFactory(this.command);

@@ -2,6 +2,7 @@ import 'package:app/components/dashboard/dashboard_cell.dart';
 import 'package:app/components/dashboard/dashboard_models.dart';
 import 'package:app/data/data.dart';
 import 'package:app/shared/money.dart';
+import 'package:app/l10n/l10n.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -21,7 +22,7 @@ class StatWidget extends StatelessWidget {
       builder: (context, snapshot) {
         final value = snapshot.data;
         return DashboardCell(
-          title: spec.title,
+          title: context.l10n.dashboardTitle(spec.title),
           icon: _iconFor(spec.aggregation),
           minHeight: 128,
           backgroundColor: spec.background.resolve(_styleValue(value)),
@@ -29,7 +30,7 @@ class StatWidget extends StatelessWidget {
             snapshot: snapshot,
             text: value == null
                 ? '—'
-                : _formatValue(value, spec.filter.currency),
+                : _formatValue(value, spec.filter.currency, context.localeName),
           ),
         );
       },
@@ -46,7 +47,7 @@ class StatWidget extends StatelessWidget {
 
   /// Counts render as a bare integer; monetary aggregations prefix the currency
   /// code and carry a sign only when net flow is negative.
-  String _formatValue(StatValue value, String? currency) {
+  String _formatValue(StatValue value, String? currency, String locale) {
     if (value.aggregation == StatAggregation.count) {
       return '${value.count}';
     }
@@ -54,7 +55,7 @@ class StatWidget extends StatelessWidget {
     final sign = value.aggregation == StatAggregation.net && cents < BigInt.zero
         ? '-'
         : '';
-    final amount = formatCentsUnsigned(cents.abs().toInt());
+    final amount = formatCentsUnsigned(cents.abs().toInt(), locale: locale);
     return currency == null ? '$sign$amount' : '$sign$currency $amount';
   }
 
@@ -78,7 +79,7 @@ class _StatValueText extends StatelessWidget {
     final theme = Theme.of(context);
     if (snapshot.hasError) {
       return Text(
-        'Error',
+        context.l10n.error,
         style: theme.textTheme.bodySmall?.copyWith(
           color: theme.colorScheme.error,
         ),

@@ -5,6 +5,8 @@ import 'package:app/components/color_utils.dart';
 import 'package:app/components/icon_picker.dart';
 import 'package:app/data/data.dart';
 import 'package:app/database.dart';
+import 'package:app/l10n/l10n.dart';
+import 'package:app/shared/money.dart';
 import 'package:drift/drift.dart' show Value;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -164,25 +166,35 @@ class _TxnActionWidgetState extends State<_TxnActionWidget> {
         transaction.type == 'transfer' &&
             transaction.toAmount != null &&
             transaction.toCurrency != null
-        ? '${_formatAmount(transaction.amount, transaction.currency)} → '
-              '${_formatAmount(transaction.toAmount!, transaction.toCurrency!)}'
+        ? '${_formatAmount(transaction.amount, transaction.currency, context.localeName)} → '
+              '${_formatAmount(transaction.toAmount!, transaction.toCurrency!, context.localeName)}'
         : transaction.type == 'balance_adjustment' &&
               transaction.balanceAfter != null
-        ? _formatAmount(transaction.balanceAfter!, transaction.currency)
-        : _formatAmount(transaction.amount, transaction.currency);
+        ? _formatAmount(
+            transaction.balanceAfter!,
+            transaction.currency,
+            context.localeName,
+          )
+        : _formatAmount(
+            transaction.amount,
+            transaction.currency,
+            context.localeName,
+          );
     final location = transaction.type == 'transfer'
-        ? '${_account?.name ?? 'Cuenta eliminada'} → '
-              '${_toAccount?.name ?? 'Cuenta eliminada'}'
-        : (_account?.name ?? 'Cuenta eliminada');
+        ? '${_account?.name ?? context.l10n.deletedAccount} → '
+              '${_toAccount?.name ?? context.l10n.deletedAccount}'
+        : (_account?.name ?? context.l10n.deletedAccount);
 
     return _ActionCard(
       icon: icon,
       iconColor: color,
       title: transaction.name,
       subtitle: '$amountLabel · $location',
-      trailing:
-          '$typeLabel ${widget.wasUpdated ? 'actualizado' : 'registrado'} · '
-          '${_formatDate(transaction.date)}',
+      trailing: context.l10n.transactionSaved(
+        typeLabel,
+        widget.wasUpdated.toString(),
+        _formatDate(transaction.date, context.localeName),
+      ),
       onEdit: _openEdit,
     );
   }
@@ -294,7 +306,7 @@ class _TxnEditSheetState extends State<_TxnEditSheet> {
     } catch (error, stackTrace) {
       debugPrint('Error updating voice transaction: $error\n$stackTrace');
       if (!mounted) return;
-      _showSnack(context, 'No se pudo guardar la transacción');
+      _showSnack(context, context.l10n.transactionSaveFailed);
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -304,29 +316,31 @@ class _TxnEditSheetState extends State<_TxnEditSheet> {
   Widget build(BuildContext context) {
     return _EditSheetScaffold(
       formKey: _formKey,
-      title: 'Editar ${_txnTypeName(_transaction.type)}',
+      title: context.l10n.editTransactionType(
+        _txnTypeName(_transaction.type, context.l10n),
+      ),
       saving: _saving,
       onSave: _submit,
       children: [
         TextFormField(
           controller: _nameController,
           textCapitalization: TextCapitalization.sentences,
-          decoration: const InputDecoration(
-            labelText: 'Nombre',
-            border: OutlineInputBorder(),
+          decoration: InputDecoration(
+            labelText: context.l10n.name,
+            border: const OutlineInputBorder(),
           ),
-          validator: _requiredName,
+          validator: (value) => _requiredName(context.l10n, value),
         ),
         if (_showAmount) ...[
           const SizedBox(height: 12),
           TextFormField(
             controller: _amountController,
             decoration: InputDecoration(
-              labelText: 'Monto (${_transaction.currency})',
+              labelText: '${context.l10n.amount} (${_transaction.currency})',
               border: const OutlineInputBorder(),
             ),
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            validator: _positiveAmount,
+            validator: (value) => _positiveAmount(context.l10n, value),
           ),
         ],
         if (_showDate) ...[
@@ -335,12 +349,12 @@ class _TxnEditSheetState extends State<_TxnEditSheet> {
             onTap: _pickDate,
             borderRadius: BorderRadius.circular(4),
             child: InputDecorator(
-              decoration: const InputDecoration(
-                labelText: 'Fecha',
-                border: OutlineInputBorder(),
-                suffixIcon: Icon(Icons.calendar_today_outlined),
+              decoration: InputDecoration(
+                labelText: context.l10n.date,
+                border: const OutlineInputBorder(),
+                suffixIcon: const Icon(Icons.calendar_today_outlined),
               ),
-              child: Text(_formatDateFromDt(_date)),
+              child: Text(_formatDateFromDt(_date, context.localeName)),
             ),
           ),
         ],
@@ -348,9 +362,9 @@ class _TxnEditSheetState extends State<_TxnEditSheet> {
           const SizedBox(height: 12),
           DropdownButtonFormField<String>(
             initialValue: _categoryId,
-            decoration: const InputDecoration(
-              labelText: 'Categoría',
-              border: OutlineInputBorder(),
+            decoration: InputDecoration(
+              labelText: context.l10n.category,
+              border: const OutlineInputBorder(),
             ),
             items: widget.categories
                 .map(
@@ -361,25 +375,32 @@ class _TxnEditSheetState extends State<_TxnEditSheet> {
                 )
                 .toList(),
             onChanged: (value) => setState(() => _categoryId = value),
-            validator: (value) => value == null ? 'Elegí una categoría' : null,
+            validator: (value) =>
+                value == null ? context.l10n.chooseCategory : null,
           ),
         ],
         const SizedBox(height: 12),
         TextFormField(
           controller: _descriptionController,
           textCapitalization: TextCapitalization.sentences,
-          decoration: const InputDecoration(
-            labelText: 'Descripción (opcional)',
-            border: OutlineInputBorder(),
+          decoration: InputDecoration(
+            labelText: context.l10n.descriptionOptional,
+            border: const OutlineInputBorder(),
           ),
           maxLines: 3,
         ),
         if (_showStatus) ...[
           const SizedBox(height: 12),
           SegmentedButton<String>(
-            segments: const [
-              ButtonSegment(value: 'cleared', label: Text('Liquidado')),
-              ButtonSegment(value: 'pending', label: Text('Pendiente')),
+            segments: [
+              ButtonSegment(
+                value: 'cleared',
+                label: Text(context.l10n.cleared),
+              ),
+              ButtonSegment(
+                value: 'pending',
+                label: Text(context.l10n.pending),
+              ),
             ],
             selected: {_status},
             onSelectionChanged: (selection) {
@@ -475,7 +496,9 @@ class _AccountActionWidgetState extends State<_AccountActionWidget> {
       iconColor: accent,
       title: account.name,
       subtitle: account.currency,
-      trailing: 'Cuenta ${widget.wasUpdated ? 'actualizada' : 'creada'}',
+      trailing: widget.wasUpdated
+          ? context.l10n.accountUpdated
+          : context.l10n.accountCreated,
       onEdit: _openEdit,
     );
   }
@@ -555,7 +578,7 @@ class _AccountEditSheetState extends State<_AccountEditSheet> {
       Navigator.of(context).pop();
     } catch (error, stackTrace) {
       debugPrint('Error updating voice account: $error\n$stackTrace');
-      if (mounted) _showSnack(context, 'No se pudo guardar la cuenta');
+      if (mounted) _showSnack(context, context.l10n.accountSaveFailed);
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -565,7 +588,7 @@ class _AccountEditSheetState extends State<_AccountEditSheet> {
   Widget build(BuildContext context) {
     return _EditSheetScaffold(
       formKey: _formKey,
-      title: 'Editar cuenta',
+      title: context.l10n.editAccount,
       saving: _saving,
       onSave: _submit,
       children: [
@@ -573,30 +596,30 @@ class _AccountEditSheetState extends State<_AccountEditSheet> {
           controller: _nameController,
           autofocus: true,
           textCapitalization: TextCapitalization.sentences,
-          decoration: const InputDecoration(
-            labelText: 'Nombre',
-            border: OutlineInputBorder(),
+          decoration: InputDecoration(
+            labelText: context.l10n.name,
+            border: const OutlineInputBorder(),
           ),
-          validator: _requiredName,
+          validator: (value) => _requiredName(context.l10n, value),
         ),
         const SizedBox(height: 12),
         TextFormField(
           controller: _descriptionController,
           textCapitalization: TextCapitalization.sentences,
-          decoration: const InputDecoration(
-            labelText: 'Descripción (opcional)',
-            border: OutlineInputBorder(),
+          decoration: InputDecoration(
+            labelText: context.l10n.descriptionOptional,
+            border: const OutlineInputBorder(),
           ),
           maxLines: 3,
         ),
         const SizedBox(height: 12),
         _AppearanceTile(
-          label: 'Color',
+          label: context.l10n.color,
           leading: CircleAvatar(backgroundColor: _color, radius: 12),
           onTap: _pickColor,
         ),
         _AppearanceTile(
-          label: 'Ícono',
+          label: context.l10n.icon,
           leading: Icon(_icon, color: _color),
           onTap: _pickIcon,
         ),
@@ -687,8 +710,10 @@ class _CategoryActionWidgetState extends State<_CategoryActionWidget> {
       icon: categoryIconFromName(category.icon),
       iconColor: accent,
       title: category.name,
-      subtitle: category.description ?? 'Sin descripción',
-      trailing: 'Categoría ${widget.wasUpdated ? 'actualizada' : 'creada'}',
+      subtitle: category.description ?? context.l10n.noDescription,
+      trailing: widget.wasUpdated
+          ? context.l10n.categoryUpdated
+          : context.l10n.categoryCreated,
       onEdit: _openEdit,
     );
   }
@@ -771,7 +796,7 @@ class _CategoryEditSheetState extends State<_CategoryEditSheet> {
       Navigator.of(context).pop();
     } catch (error, stackTrace) {
       debugPrint('Error updating voice category: $error\n$stackTrace');
-      if (mounted) _showSnack(context, 'No se pudo guardar la categoría');
+      if (mounted) _showSnack(context, context.l10n.categorySaveFailed);
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -781,7 +806,7 @@ class _CategoryEditSheetState extends State<_CategoryEditSheet> {
   Widget build(BuildContext context) {
     return _EditSheetScaffold(
       formKey: _formKey,
-      title: 'Editar categoría',
+      title: context.l10n.editCategory,
       saving: _saving,
       onSave: _submit,
       children: [
@@ -789,30 +814,30 @@ class _CategoryEditSheetState extends State<_CategoryEditSheet> {
           controller: _nameController,
           autofocus: true,
           textCapitalization: TextCapitalization.sentences,
-          decoration: const InputDecoration(
-            labelText: 'Nombre',
-            border: OutlineInputBorder(),
+          decoration: InputDecoration(
+            labelText: context.l10n.name,
+            border: const OutlineInputBorder(),
           ),
-          validator: _requiredName,
+          validator: (value) => _requiredName(context.l10n, value),
         ),
         const SizedBox(height: 12),
         TextFormField(
           controller: _descriptionController,
           textCapitalization: TextCapitalization.sentences,
-          decoration: const InputDecoration(
-            labelText: 'Descripción (opcional)',
-            border: OutlineInputBorder(),
+          decoration: InputDecoration(
+            labelText: context.l10n.descriptionOptional,
+            border: const OutlineInputBorder(),
           ),
           maxLines: 3,
         ),
         const SizedBox(height: 12),
         _AppearanceTile(
-          label: 'Color',
+          label: context.l10n.color,
           leading: CircleAvatar(backgroundColor: _color, radius: 12),
           onTap: _pickColor,
         ),
         _AppearanceTile(
-          label: 'Ícono',
+          label: context.l10n.icon,
           leading: Icon(_icon, color: _color),
           onTap: _pickIcon,
         ),
@@ -908,8 +933,12 @@ class _TagActionWidgetState extends State<_TagActionWidget> {
       icon: Icons.label_rounded,
       iconColor: accent,
       title: tag.name,
-      subtitle: parentName == null ? 'Sin tag padre' : 'Dentro de $parentName',
-      trailing: 'Tag ${widget.wasUpdated ? 'actualizado' : 'creado'}',
+      subtitle: parentName == null
+          ? context.l10n.noParentTag
+          : context.l10n.insideTag(parentName),
+      trailing: widget.wasUpdated
+          ? context.l10n.tagUpdated
+          : context.l10n.tagCreated,
       onEdit: _openEdit,
     );
   }
@@ -985,7 +1014,7 @@ class _TagEditSheetState extends State<_TagEditSheet> {
       Navigator.of(context).pop();
     } catch (error, stackTrace) {
       debugPrint('Error updating voice tag: $error\n$stackTrace');
-      if (mounted) _showSnack(context, 'No se pudo guardar el tag');
+      if (mounted) _showSnack(context, context.l10n.tagSaveFailed);
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -1001,7 +1030,7 @@ class _TagEditSheetState extends State<_TagEditSheet> {
 
     return _EditSheetScaffold(
       formKey: _formKey,
-      title: 'Editar tag',
+      title: context.l10n.editTag,
       saving: _saving,
       onSave: _submit,
       children: [
@@ -1009,23 +1038,23 @@ class _TagEditSheetState extends State<_TagEditSheet> {
           controller: _nameController,
           autofocus: true,
           textCapitalization: TextCapitalization.sentences,
-          decoration: const InputDecoration(
-            labelText: 'Nombre',
-            border: OutlineInputBorder(),
+          decoration: InputDecoration(
+            labelText: context.l10n.name,
+            border: const OutlineInputBorder(),
           ),
-          validator: _requiredName,
+          validator: (value) => _requiredName(context.l10n, value),
         ),
         const SizedBox(height: 12),
         DropdownButtonFormField<String?>(
           initialValue: _parentId,
-          decoration: const InputDecoration(
-            labelText: 'Tag padre',
-            border: OutlineInputBorder(),
+          decoration: InputDecoration(
+            labelText: context.l10n.parentTag,
+            border: const OutlineInputBorder(),
           ),
           items: [
-            const DropdownMenuItem<String?>(
+            DropdownMenuItem<String?>(
               value: null,
-              child: Text('Sin tag padre'),
+              child: Text(context.l10n.noParentTag),
             ),
             ...parentOptions.map(
               (tag) => DropdownMenuItem<String?>(
@@ -1040,15 +1069,15 @@ class _TagEditSheetState extends State<_TagEditSheet> {
         TextFormField(
           controller: _descriptionController,
           textCapitalization: TextCapitalization.sentences,
-          decoration: const InputDecoration(
-            labelText: 'Descripción (opcional)',
-            border: OutlineInputBorder(),
+          decoration: InputDecoration(
+            labelText: context.l10n.descriptionOptional,
+            border: const OutlineInputBorder(),
           ),
           maxLines: 3,
         ),
         const SizedBox(height: 12),
         _AppearanceTile(
-          label: 'Color',
+          label: context.l10n.color,
           leading: CircleAvatar(backgroundColor: _color, radius: 12),
           onTap: _pickColor,
         ),
@@ -1131,7 +1160,7 @@ class _EditSheetScaffold extends StatelessWidget {
                             dimension: 20,
                             child: CircularProgressIndicator(strokeWidth: 2),
                           )
-                        : const Text('Guardar'),
+                        : Text(context.l10n.save),
                   ),
                 ),
               ],
@@ -1245,7 +1274,7 @@ class _ActionCard extends StatelessWidget {
               const SizedBox(width: 8),
               IconButton.filledTonal(
                 onPressed: onEdit,
-                tooltip: 'Editar',
+                tooltip: context.l10n.edit,
                 icon: const Icon(Icons.edit_outlined, size: 18),
               ),
             ],
@@ -1345,8 +1374,8 @@ class _ActionErrorCard extends StatelessWidget {
     return _ActionCard(
       icon: Icons.error_outline_rounded,
       iconColor: colors.error,
-      title: 'No se pudo cargar la acción',
-      subtitle: 'Tocá para volver a intentar',
+      title: context.l10n.actionLoadFailed,
+      subtitle: context.l10n.tapToRetry,
       trailing: '',
       onEdit: onRetry,
     );
@@ -1360,28 +1389,44 @@ class _ActionErrorCard extends StatelessWidget {
 (IconData, Color, String) _txnTypeConfig(String type, BuildContext context) {
   final colors = Theme.of(context).colorScheme;
   return switch (type) {
-    'expense' => (Icons.arrow_downward_rounded, colors.error, 'Gasto'),
-    'income' => (Icons.arrow_upward_rounded, Colors.green.shade600, 'Ingreso'),
-    'transfer' => (Icons.swap_horiz_rounded, colors.primary, 'Transferencia'),
-    _ => (Icons.tune_rounded, Colors.amber.shade700, 'Ajuste de saldo'),
+    'expense' => (
+      Icons.arrow_downward_rounded,
+      colors.error,
+      context.l10n.expense,
+    ),
+    'income' => (
+      Icons.arrow_upward_rounded,
+      Colors.green.shade600,
+      context.l10n.income,
+    ),
+    'transfer' => (
+      Icons.swap_horiz_rounded,
+      colors.primary,
+      context.l10n.transfer,
+    ),
+    _ => (
+      Icons.tune_rounded,
+      Colors.amber.shade700,
+      context.l10n.balanceAdjustment,
+    ),
   };
 }
 
-String _txnTypeName(String type) => switch (type) {
-  'expense' => 'gasto',
-  'income' => 'ingreso',
-  'transfer' => 'transferencia',
-  _ => 'ajuste',
+String _txnTypeName(String type, AppLocalizations l10n) => switch (type) {
+  'expense' => l10n.expense,
+  'income' => l10n.income,
+  'transfer' => l10n.transfer,
+  _ => l10n.balanceAdjustment,
 };
 
-String? _requiredName(String? value) =>
-    value == null || value.trim().isEmpty ? 'Ingresá un nombre' : null;
+String? _requiredName(AppLocalizations l10n, String? value) =>
+    value == null || value.trim().isEmpty ? l10n.enterName : null;
 
-String? _positiveAmount(String? value) {
-  if (value == null || value.trim().isEmpty) return 'Ingresá el monto';
+String? _positiveAmount(AppLocalizations l10n, String? value) {
+  if (value == null || value.trim().isEmpty) return l10n.amountRequired;
   final cents = _tryDecimalToCents(value);
   if (cents == null || cents <= BigInt.zero) {
-    return 'Ingresá un monto mayor a cero';
+    return l10n.amountGreaterThanZero;
   }
   return null;
 }
@@ -1406,17 +1451,16 @@ String _centsToDecimal(BigInt cents) {
       '${(absolute % BigInt.from(100)).toString().padLeft(2, '0')}';
 }
 
-String _formatAmount(BigInt cents, String currency) =>
-    '$currency ${_centsToDecimal(cents)}';
+String _formatAmount(BigInt cents, String currency, String locale) =>
+    formatMoney(cents.toInt(), currency, locale: locale);
 
-String _formatDate(BigInt epochMs) =>
-    _formatDateFromDt(DateTime.fromMillisecondsSinceEpoch(epochMs.toInt()));
+String _formatDate(BigInt epochMs, String locale) => _formatDateFromDt(
+  DateTime.fromMillisecondsSinceEpoch(epochMs.toInt()),
+  locale,
+);
 
-String _formatDateFromDt(DateTime date) {
-  final day = date.day.toString().padLeft(2, '0');
-  final month = date.month.toString().padLeft(2, '0');
-  return '$day/$month/${date.year}';
-}
+String _formatDateFromDt(DateTime date, String locale) =>
+    formatNumericDate(date, locale);
 
 bool _sameCalendarDate(DateTime left, DateTime right) =>
     left.year == right.year &&
