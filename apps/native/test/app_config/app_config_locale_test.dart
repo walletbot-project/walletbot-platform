@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:app/app_config/app_config_controller.dart';
@@ -141,4 +142,63 @@ void main() {
 
     expect(controller.banners, isEmpty);
   });
+
+  test(
+    'an old account response cannot overwrite a newer locale request',
+    () async {
+      FlutterSecureStorage.setMockInitialValues({});
+      final responses = <Completer<http.Response>>[];
+      final client = MockClient((request) {
+        final response = Completer<http.Response>();
+        responses.add(response);
+        return response.future;
+      });
+      final controller = AppConfigController(
+        clientInfo: const ClientInfo(
+          platform: 'android',
+          appVersion: '0.1.0',
+          deviceId: 'test-device',
+        ),
+        httpClient: client,
+        locale: 'en-US',
+      );
+      addTearDown(controller.dispose);
+      const account = UserAccount(
+        id: 'local-1',
+        type: AccountType.local,
+        name: 'Local',
+      );
+
+      final oldRequest = controller.loadAccount(account);
+      await Future<void>.delayed(Duration.zero);
+      controller.updateLocale('es-AR');
+      controller.updateLocale('en-US');
+      final newRequest = controller.loadAccount(account);
+      await Future<void>.delayed(Duration.zero);
+
+      responses[1].complete(_accountBannerResponse('New response'));
+      await newRequest;
+      responses[0].complete(_accountBannerResponse('Old response'));
+      await oldRequest;
+
+      expect(controller.banners.single.title, 'New response');
+    },
+  );
 }
+
+http.Response _accountBannerResponse(String title) => http.Response(
+  jsonEncode({
+    'banners': [
+      {
+        'key': 'account-notice',
+        'index': 0,
+        'placements': ['home'],
+        'tone': 'info',
+        'title': title,
+        'messageMarkdown': title,
+        'actions': <Object?>[],
+      },
+    ],
+  }),
+  200,
+);

@@ -165,6 +165,8 @@ class AppConfigController extends ChangeNotifier {
   // refresh, reauth) for the same account.
   String? _accountBannersScope;
   String? _accountFetchInFlight;
+  int _deviceRequestGeneration = 0;
+  int _accountRequestGeneration = 0;
 
   bool get loaded => _loaded;
   bool get supported => _supported;
@@ -195,6 +197,8 @@ class AppConfigController extends ChangeNotifier {
     _accountScopeKey = null;
     _accountBannersScope = null;
     _accountFetchInFlight = null;
+    _deviceRequestGeneration++;
+    _accountRequestGeneration++;
     notifyListeners();
     return true;
   }
@@ -204,9 +208,10 @@ class AppConfigController extends ChangeNotifier {
     final appVersion = _clientInfo.appVersion;
     final deviceId = _clientInfo.deviceId;
     final locale = _locale;
+    final requestGeneration = ++_deviceRequestGeneration;
 
-    await _restoreCachedVerdict(appVersion, locale);
-    if (locale != _locale) return;
+    await _restoreCachedVerdict(appVersion, locale, requestGeneration);
+    if (requestGeneration != _deviceRequestGeneration) return;
     _loaded = true;
     notifyListeners();
 
@@ -215,6 +220,7 @@ class AppConfigController extends ChangeNotifier {
       appVersion: appVersion,
       deviceId: deviceId,
       locale: locale,
+      requestGeneration: requestGeneration,
     );
   }
 
@@ -236,6 +242,7 @@ class AppConfigController extends ChangeNotifier {
       return;
     }
     _accountFetchInFlight = scopeKey;
+    final requestGeneration = ++_accountRequestGeneration;
 
     final uri = Uri.parse('${AppConfig.convexSiteUrl}/v1/account-config');
     try {
@@ -256,7 +263,10 @@ class AppConfigController extends ChangeNotifier {
           )
           .timeout(const Duration(seconds: 5));
 
-      if (_accountScopeKey != scopeKey) return;
+      if (_accountRequestGeneration != requestGeneration ||
+          _accountScopeKey != scopeKey) {
+        return;
+      }
       if (resp.statusCode >= 200 && resp.statusCode < 300) {
         final data = jsonDecode(resp.body) as Map<String, Object?>;
         _accountBanners = _parseBanners(data, allowVersionFallback: false);
@@ -268,7 +278,10 @@ class AppConfigController extends ChangeNotifier {
     } catch (e) {
       debugPrint('config: account fetch failed: $e');
     } finally {
-      if (_accountFetchInFlight == scopeKey) _accountFetchInFlight = null;
+      if (_accountRequestGeneration == requestGeneration &&
+          _accountFetchInFlight == scopeKey) {
+        _accountFetchInFlight = null;
+      }
     }
   }
 
@@ -292,6 +305,7 @@ class AppConfigController extends ChangeNotifier {
     required String appVersion,
     required String deviceId,
     required String locale,
+    required int requestGeneration,
   }) async {
     final uri = Uri.parse('${AppConfig.convexSiteUrl}/v1/config').replace(
       queryParameters: {
@@ -305,7 +319,7 @@ class AppConfigController extends ChangeNotifier {
       final resp = await _http
           .get(uri, headers: {'Accept-Language': locale})
           .timeout(const Duration(seconds: 5));
-      if (locale != _locale) return;
+      if (requestGeneration != _deviceRequestGeneration) return;
       if (resp.statusCode >= 200 && resp.statusCode < 300) {
         final verdict = jsonDecode(resp.body) as Map<String, Object?>;
         _applyVerdict(verdict);
@@ -329,7 +343,11 @@ class AppConfigController extends ChangeNotifier {
     // Keep whatever the cache restored, or the fail-open defaults.
   }
 
-  Future<void> _restoreCachedVerdict(String appVersion, String locale) async {
+  Future<void> _restoreCachedVerdict(
+    String appVersion,
+    String locale,
+    int requestGeneration,
+  ) async {
     try {
       final cached = await _storage.read(key: _configCacheKey);
       if (cached == null || cached.isEmpty) return;
@@ -337,7 +355,7 @@ class AppConfigController extends ChangeNotifier {
       if (env['appVersion'] != appVersion) return;
       if (env['locale'] != locale) return;
       final verdict = env['verdict'];
-      if (locale != _locale) return;
+      if (requestGeneration != _deviceRequestGeneration) return;
       if (verdict is Map<String, Object?>) _applyVerdict(verdict);
     } catch (e) {
       debugPrint('config: restore cached verdict failed: $e');
