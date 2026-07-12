@@ -49,17 +49,10 @@ class TransactionTimeMock {
 
   String get detailLabel {
     if (isKnown) return 'Horario';
-    if (isApproximate) return 'Horario aproximado';
     return 'Horario estimado';
   }
 
-  String get detailText {
-    if (isKnown) return rowText;
-    if (isApproximate) {
-      return '$rowText · aproximado: $approximationLabel';
-    }
-    return '$rowText · asumido al momento de carga';
-  }
+  String get detailText => rowText;
 }
 
 TransactionTimeMock mockTransactionTime({

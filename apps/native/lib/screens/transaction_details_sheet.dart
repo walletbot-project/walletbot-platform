@@ -605,11 +605,7 @@ class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
         trailing: _editing
             ? TextButton(onPressed: _pickDate, child: const Text('Cambiar'))
             : null,
-        value: Text(
-          transaction.dateConfirmed
-              ? _formatDate(_selectedDate)
-              : '${_formatDate(_selectedDate)} · asumida por carga',
-        ),
+        value: Text(_formatDate(_selectedDate)),
       ),
       _ReceiptRow(
         icon: time.icon,

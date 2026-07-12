@@ -119,7 +119,7 @@ class TransactionRow extends StatelessWidget {
                   Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      if (!dateCheck) const _DateCheckIcon(size: 14),
+                      if (!dateCheck) const _DateCheckIcon(size: 15),
                       if (!dateCheck && timeIdentity != null)
                         const SizedBox(width: 4),
                       if (timeIdentity != null)
