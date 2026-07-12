@@ -2,7 +2,7 @@ import 'package:app/components/account_icons.dart';
 import 'package:app/components/category_icons.dart';
 import 'package:app/components/color_utils.dart';
 import 'package:app/components/transaction_filters_bar.dart';
-import 'package:app/components/transaction_row_emoji.dart';
+import 'package:app/components/transaction_row.dart';
 import 'package:app/components/transaction_time_mock.dart';
 import 'package:app/data/data.dart';
 import 'package:app/database.dart';
@@ -350,7 +350,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
       ):
         return Padding(
           padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
-          child: TransactionRowEmoji(
+          child: TransactionRow(
             title: title,
             amountCents: amountCents,
             currency: currency,
@@ -383,7 +383,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
     return formatNumericDate(day, context.localeName);
   }
 
-  /// Signed cents to pass to [TransactionRowEmoji]: positive renders green, negative
+  /// Signed cents to pass to [TransactionRow]: positive renders green, negative
   /// renders in the default text color.
   int _signedAmountCents(Transaction t) {
     final amount = t.amount.toInt();
@@ -442,18 +442,18 @@ class _ActivityScreenState extends State<ActivityScreen> {
     ];
   }
 
-  List<TransactionRowEmojiVisualIdentity> _visualIdentitiesFor(
+  List<TransactionRowVisualIdentity> _visualIdentitiesFor(
     Transaction transaction, {
     required Map<String, Account> accountsById,
     required Map<String, Category> categoriesById,
     String? accountId,
   }) {
-    final identities = <TransactionRowEmojiVisualIdentity>[];
+    final identities = <TransactionRowVisualIdentity>[];
     final account = accountsById[accountId ?? transaction.accountId];
     if (account != null) {
       identities.add(
-        TransactionRowEmojiVisualIdentity(
-          type: TransactionRowEmojiVisualIdentityType.account,
+        TransactionRowVisualIdentity(
+          type: TransactionRowVisualIdentityType.account,
           label: 'Cuenta: ${account.name}',
           icon: accountIconFromName(account.icon),
           color: colorFromHex(account.color, fallback: accountDefaultColor),
@@ -466,8 +466,8 @@ class _ActivityScreenState extends State<ActivityScreen> {
       final category = categoriesById[categoryId];
       if (category != null) {
         identities.add(
-          TransactionRowEmojiVisualIdentity(
-            type: TransactionRowEmojiVisualIdentityType.category,
+          TransactionRowVisualIdentity(
+            type: TransactionRowVisualIdentityType.category,
             label: 'Categoria: ${category.name}',
             icon: categoryIconFromName(category.icon),
             color: colorFromHex(category.color, fallback: categoryDefaultColor),
@@ -481,15 +481,13 @@ class _ActivityScreenState extends State<ActivityScreen> {
     return identities;
   }
 
-  TransactionRowEmojiVisualIdentity _timeVisualIdentityFor(
-    Transaction transaction,
-  ) {
+  TransactionRowVisualIdentity _timeVisualIdentityFor(Transaction transaction) {
     final time = mockTransactionTime(
       transactionId: transaction.id,
       createdAt: transaction.createdAt,
     );
-    return TransactionRowEmojiVisualIdentity(
-      type: TransactionRowEmojiVisualIdentityType.time,
+    return TransactionRowVisualIdentity(
+      type: TransactionRowVisualIdentityType.time,
       label: time.rowText,
       icon: time.icon,
       color: Colors.transparent,
@@ -541,7 +539,7 @@ class _TxnEntry extends _ListEntry {
   factory _TxnEntry.fromTransaction(
     Transaction transaction, {
     required int amountCents,
-    required List<TransactionRowEmojiVisualIdentity> visualIdentities,
+    required List<TransactionRowVisualIdentity> visualIdentities,
     String? description,
   }) => _TxnEntry(
     transactionId: transaction.id,
@@ -560,7 +558,7 @@ class _TxnEntry extends _ListEntry {
   final String currency;
   final bool dateConfirmed;
   final String? description;
-  final List<TransactionRowEmojiVisualIdentity> visualIdentities;
+  final List<TransactionRowVisualIdentity> visualIdentities;
   final TransactionDetailTransferSide? transferSide;
 }
 
