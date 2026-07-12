@@ -662,6 +662,7 @@ class SyncEngine extends ChangeNotifier {
     'status': row.status,
     'date': row.date,
     'dateConfirmed': row.dateConfirmed,
+    'timeStatus': row.timeStatus.name,
     'accountId': row.accountId,
     'categoryId': row.categoryId,
     'amount': row.amount,

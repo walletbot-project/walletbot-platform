@@ -122,6 +122,7 @@ class TransactionRepository extends RepositoryBase {
     String status = 'cleared',
     BigInt? dateMs,
     bool dateConfirmed = true,
+    TransactionTimeStatus timeStatus = TransactionTimeStatus.none,
     List<String> tagIds = const [],
   }) => _addSimple(
     type: 'expense',
@@ -134,6 +135,7 @@ class TransactionRepository extends RepositoryBase {
     status: status,
     dateMs: dateMs,
     dateConfirmed: dateConfirmed,
+    timeStatus: timeStatus,
     tagIds: tagIds,
   );
 
@@ -148,6 +150,7 @@ class TransactionRepository extends RepositoryBase {
     String status = 'cleared',
     BigInt? dateMs,
     bool dateConfirmed = true,
+    TransactionTimeStatus timeStatus = TransactionTimeStatus.none,
     List<String> tagIds = const [],
   }) => _addSimple(
     type: 'income',
@@ -160,6 +163,7 @@ class TransactionRepository extends RepositoryBase {
     status: status,
     dateMs: dateMs,
     dateConfirmed: dateConfirmed,
+    timeStatus: timeStatus,
     tagIds: tagIds,
   );
 
@@ -174,6 +178,7 @@ class TransactionRepository extends RepositoryBase {
     required String status,
     required BigInt? dateMs,
     required bool dateConfirmed,
+    required TransactionTimeStatus timeStatus,
     required List<String> tagIds,
   }) async {
     final id = newUuid();
@@ -188,7 +193,12 @@ class TransactionRepository extends RepositoryBase {
               name: name,
               description: Value(description),
               status: status,
-              date: dateMs ?? now,
+              date: _resolveTransactionDate(
+                dateMs: dateMs,
+                timeStatus: timeStatus,
+                loadedAtMs: now,
+              ),
+              timeStatus: Value(timeStatus),
               accountId: accountId,
               categoryId: categoryId,
               amount: amountCents,
@@ -224,6 +234,7 @@ class TransactionRepository extends RepositoryBase {
     String status = 'cleared',
     BigInt? dateMs,
     bool dateConfirmed = true,
+    TransactionTimeStatus timeStatus = TransactionTimeStatus.none,
     List<String> tagIds = const [],
   }) async {
     if (fromAccountId == toAccountId) {
@@ -241,7 +252,12 @@ class TransactionRepository extends RepositoryBase {
               name: name,
               description: Value(description),
               status: status,
-              date: dateMs ?? now,
+              date: _resolveTransactionDate(
+                dateMs: dateMs,
+                timeStatus: timeStatus,
+                loadedAtMs: now,
+              ),
+              timeStatus: Value(timeStatus),
               accountId: fromAccountId,
               categoryId: categoryId,
               amount: amountCents,
@@ -272,6 +288,7 @@ class TransactionRepository extends RepositoryBase {
     String? description,
     BigInt? dateMs,
     bool dateConfirmed = true,
+    TransactionTimeStatus timeStatus = TransactionTimeStatus.none,
   }) async {
     final id = newUuid();
     final now = currentMs;
@@ -290,7 +307,12 @@ class TransactionRepository extends RepositoryBase {
               name: name,
               description: Value(description),
               status: 'cleared',
-              date: dateMs ?? now,
+              date: _resolveTransactionDate(
+                dateMs: dateMs,
+                timeStatus: timeStatus,
+                loadedAtMs: now,
+              ),
+              timeStatus: Value(timeStatus),
               accountId: accountId,
               categoryId: '',
               amount: amount,
@@ -314,6 +336,7 @@ class TransactionRepository extends RepositoryBase {
     Value<String?> description = const Value.absent(),
     Value<BigInt> date = const Value.absent(),
     Value<bool> dateConfirmed = const Value.absent(),
+    Value<TransactionTimeStatus> timeStatus = const Value.absent(),
     Value<String> accountId = const Value.absent(),
     Value<BigInt> amount = const Value.absent(),
     Value<String> currency = const Value.absent(),
@@ -324,12 +347,28 @@ class TransactionRepository extends RepositoryBase {
     Value<double?> exchangeRate = const Value.absent(),
     Value<String> status = const Value.absent(),
   }) async {
+    var resolvedDate = date;
+    if (date.present) {
+      final existing = await getById(id);
+      if (existing == null) return;
+      resolvedDate = Value(
+        _resolveTransactionDate(
+          dateMs: date.value,
+          timeStatus: timeStatus.present
+              ? timeStatus.value
+              : existing.timeStatus,
+          loadedAtMs: existing.createdAt,
+        ),
+      );
+    }
+
     await (db.update(db.transactions)..where((t) => t.id.equals(id))).write(
       TransactionsCompanion(
         name: name,
         description: description,
-        date: date,
+        date: resolvedDate,
         dateConfirmed: dateConfirmed,
+        timeStatus: timeStatus,
         accountId: accountId,
         amount: amount,
         currency: currency,
@@ -465,6 +504,35 @@ class TransactionRepository extends RepositoryBase {
     }
     return added;
   }
+}
+
+BigInt _resolveTransactionDate({
+  required BigInt? dateMs,
+  required TransactionTimeStatus timeStatus,
+  required BigInt loadedAtMs,
+}) {
+  if (timeStatus != TransactionTimeStatus.none) {
+    if (dateMs == null) {
+      throw ArgumentError('A date with a time is required for $timeStatus');
+    }
+    return dateMs;
+  }
+
+  if (dateMs == null) return loadedAtMs;
+
+  final selectedDate = DateTime.fromMillisecondsSinceEpoch(dateMs.toInt());
+  final loadedAt = DateTime.fromMillisecondsSinceEpoch(loadedAtMs.toInt());
+  return BigInt.from(
+    DateTime(
+      selectedDate.year,
+      selectedDate.month,
+      selectedDate.day,
+      loadedAt.hour,
+      loadedAt.minute,
+      loadedAt.second,
+      loadedAt.millisecond,
+    ).millisecondsSinceEpoch,
+  );
 }
 
 class AccountBalanceAroundTransaction {

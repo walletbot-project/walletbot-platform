@@ -1,5 +1,5 @@
 import { api } from '@wallet-bot/backend/api'
-import { parseAmountToCents, parseOptionalDate } from '@wallet-bot/shared'
+import { parseAmountToCents, parseTransactionDate } from '@wallet-bot/shared'
 import { useMutation, useQuery } from 'convex/react'
 import { Check, Loader2, Plus, Repeat2, X } from 'lucide-react'
 import { type FormEvent, type ReactNode, useEffect, useState } from 'react'
@@ -473,7 +473,7 @@ export function AddManual() {
             return
         }
 
-        const sourceDate = parseOptionalDate(date)
+        const sourceDate = parseTransactionDate(date, 'none')
         const trimmedDescription = description.trim() || undefined
 
         if (type === 'transfer') {
@@ -505,6 +505,7 @@ export function AddManual() {
                     categoryId,
                     date: sourceDate,
                     dateConfirmed: true,
+                    timeStatus: 'none',
                 })
             } else if (type === 'expense') {
                 await createExpense({
@@ -516,6 +517,7 @@ export function AddManual() {
                     categoryId,
                     date: sourceDate,
                     dateConfirmed: true,
+                    timeStatus: 'none',
                 })
             } else {
                 const parsedDestinationAmount =
@@ -545,6 +547,7 @@ export function AddManual() {
                     categoryId,
                     date: sourceDate,
                     dateConfirmed: true,
+                    timeStatus: 'none',
                 })
             }
 

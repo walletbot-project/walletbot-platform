@@ -60,6 +60,40 @@ export function parseOptionalDate(
     return parseNaturalDate(input, now)
 }
 
+export type TransactionTimeStatus = 'confirmed' | 'approximation' | 'none'
+
+/**
+ * Resolves the timestamp persisted for a transaction under the time-status
+ * contract. Exact and approximate times are supplied by the agent. When no
+ * time clue exists, preserve the requested calendar day but use the load
+ * clock, including seconds and milliseconds.
+ */
+export function parseTransactionDate(
+    input: string | undefined,
+    timeStatus: TransactionTimeStatus,
+    now: Date = new Date(),
+): bigint {
+    const parsed =
+        input === undefined ? undefined : parseNaturalDate(input, now)
+    if (timeStatus !== 'none') {
+        if (parsed === undefined) {
+            throw new Error(`date is required when timeStatus is ${timeStatus}`)
+        }
+        return parsed
+    }
+
+    if (parsed === undefined) return BigInt(now.getTime())
+
+    const selectedDate = new Date(Number(parsed))
+    selectedDate.setHours(
+        now.getHours(),
+        now.getMinutes(),
+        now.getSeconds(),
+        now.getMilliseconds(),
+    )
+    return BigInt(selectedDate.getTime())
+}
+
 /** Case-insensitive name match. Used by entity resolvers. */
 export function normalizeName(name: string): string {
     return name.trim().toLocaleLowerCase()

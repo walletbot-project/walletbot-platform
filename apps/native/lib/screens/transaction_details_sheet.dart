@@ -258,11 +258,21 @@ class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
 
     setState(() => _saving = true);
     try {
+      final originalDate = DateTime.fromMillisecondsSinceEpoch(
+        transaction.date.toInt(),
+      );
+      final dateChanged = !_sameCalendarDate(originalDate, _selectedDate);
       await widget.repos.transactions.update(
         transaction.id,
         name: Value(name),
         description: Value(_emptyToNull(_descriptionController.text)),
-        date: Value(BigInt.from(_selectedDate.millisecondsSinceEpoch)),
+        date: dateChanged
+            ? Value(BigInt.from(_selectedDate.millisecondsSinceEpoch))
+            : const Value.absent(),
+        dateConfirmed: dateChanged ? const Value(true) : const Value.absent(),
+        timeStatus: dateChanged
+            ? const Value(TransactionTimeStatus.none)
+            : const Value.absent(),
         accountId: Value(selectedAccount.id),
         currency: Value(selectedAccount.currency),
         amount: amount,
@@ -1064,3 +1074,8 @@ class _EntityCircleIcon extends StatelessWidget {
     );
   }
 }
+
+bool _sameCalendarDate(DateTime left, DateTime right) =>
+    left.year == right.year &&
+    left.month == right.month &&
+    left.day == right.day;

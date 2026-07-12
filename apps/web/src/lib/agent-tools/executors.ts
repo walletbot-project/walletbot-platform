@@ -3,6 +3,7 @@ import type { ToolName } from '@wallet-bot/shared'
 import {
     parseAmountToCents,
     parseOptionalDate,
+    parseTransactionDate,
     toolSchemas,
 } from '@wallet-bot/shared'
 import {
@@ -318,6 +319,7 @@ export const toolExecutors = {
         if (!catR.ok) return resolutionError('Category', catR)
 
         const id = newId()
+        const date = parseTransactionDate(args.date, args.timeStatus)
         await ctx.client.mutation(api.transactions.mutations.createExpense, {
             id,
             name: args.name,
@@ -325,12 +327,13 @@ export const toolExecutors = {
             amount: parseAmountToCents(args.amount),
             accountId: accR.entity.id,
             categoryId: catR.entity.id,
-            date: parseOptionalDate(args.date),
+            date,
             dateConfirmed: args.dateConfirmed,
+            timeStatus: args.timeStatus,
             status: args.status,
         })
         await attachTags(ctx, id, args.tagIdsOrNames)
-        return { ok: true, id }
+        return { ok: true, id, date: Number(date), timeStatus: args.timeStatus }
     }),
     addIncome: defineTool(toolSchemas.addIncome, async (ctx, args) => {
         const accR = await resolveAccount(ctx, args.accountIdOrName)
@@ -339,6 +342,7 @@ export const toolExecutors = {
         if (!catR.ok) return resolutionError('Category', catR)
 
         const id = newId()
+        const date = parseTransactionDate(args.date, args.timeStatus)
         await ctx.client.mutation(api.transactions.mutations.createIncome, {
             id,
             name: args.name,
@@ -346,12 +350,13 @@ export const toolExecutors = {
             amount: parseAmountToCents(args.amount),
             accountId: accR.entity.id,
             categoryId: catR.entity.id,
-            date: parseOptionalDate(args.date),
+            date,
             dateConfirmed: args.dateConfirmed,
+            timeStatus: args.timeStatus,
             status: args.status,
         })
         await attachTags(ctx, id, args.tagIdsOrNames)
-        return { ok: true, id }
+        return { ok: true, id, date: Number(date), timeStatus: args.timeStatus }
     }),
     addTransfer: defineTool(toolSchemas.addTransfer, async (ctx, args) => {
         const fromR = await resolveAccount(ctx, args.fromAccountIdOrName)
@@ -366,6 +371,7 @@ export const toolExecutors = {
         if (!catR.ok) return resolutionError('Category', catR)
 
         const id = newId()
+        const date = parseTransactionDate(args.date, args.timeStatus)
         await ctx.client.mutation(api.transactions.mutations.createTransfer, {
             id,
             name: args.name,
@@ -379,11 +385,12 @@ export const toolExecutors = {
                     : undefined,
             exchangeRate: args.exchangeRate,
             categoryId: catR.entity.id,
-            date: parseOptionalDate(args.date),
+            date,
             dateConfirmed: args.dateConfirmed,
+            timeStatus: args.timeStatus,
         })
         await attachTags(ctx, id, args.tagIdsOrNames)
-        return { ok: true, id }
+        return { ok: true, id, date: Number(date), timeStatus: args.timeStatus }
     }),
     addBalanceAdjustment: defineTool(
         toolSchemas.addBalanceAdjustment,
@@ -391,6 +398,7 @@ export const toolExecutors = {
             const accR = await resolveAccount(ctx, args.accountIdOrName)
             if (!accR.ok) return resolutionError('Account', accR)
             const id = newId()
+            const date = parseTransactionDate(args.date, args.timeStatus)
             await ctx.client.mutation(
                 api.transactions.mutations.createBalanceAdjustment,
                 {
@@ -399,11 +407,17 @@ export const toolExecutors = {
                     balanceAfter: parseAmountToCents(args.balanceAfter),
                     name: args.name,
                     description: args.description,
-                    date: parseOptionalDate(args.date),
+                    date,
                     dateConfirmed: args.dateConfirmed,
+                    timeStatus: args.timeStatus,
                 },
             )
-            return { ok: true, id }
+            return {
+                ok: true,
+                id,
+                date: Number(date),
+                timeStatus: args.timeStatus,
+            }
         },
     ),
     updateTransaction: defineTool(
@@ -415,12 +429,17 @@ export const toolExecutors = {
                 if (!r.ok) return resolutionError('Category', r)
                 categoryId = r.entity.id
             }
+            const date =
+                args.date === undefined
+                    ? undefined
+                    : parseTransactionDate(args.date, args.timeStatus ?? 'none')
             await ctx.client.mutation(api.transactions.mutations.update, {
                 id: args.id,
                 name: args.name,
                 description: args.description,
-                date: parseOptionalDate(args.date),
+                date,
                 dateConfirmed: args.dateConfirmed,
+                timeStatus: args.timeStatus,
                 amount:
                     args.amount !== undefined
                         ? parseAmountToCents(args.amount)
@@ -428,7 +447,14 @@ export const toolExecutors = {
                 categoryId,
                 status: args.status,
             })
-            return { ok: true, id: args.id }
+            return {
+                ok: true,
+                id: args.id,
+                ...(date === undefined ? {} : { date: Number(date) }),
+                ...(args.timeStatus === undefined
+                    ? {}
+                    : { timeStatus: args.timeStatus }),
+            }
         },
     ),
     deleteTransaction: defineTool(
@@ -608,6 +634,8 @@ type TxnLite = {
     type: 'expense' | 'income' | 'transfer' | 'balance_adjustment'
     name: string
     date: bigint
+    dateConfirmed?: boolean
+    timeStatus?: 'confirmed' | 'approximation' | 'none'
     accountId: string
     categoryId: string
     amount: bigint
@@ -625,6 +653,8 @@ function serializeTransaction(t: TxnLite) {
         type: t.type,
         name: t.name,
         date: Number(t.date),
+        dateConfirmed: t.dateConfirmed,
+        timeStatus: t.timeStatus ?? 'none',
         accountId: t.accountId,
         categoryId: t.categoryId,
         amount: Number(t.amount) / 100,

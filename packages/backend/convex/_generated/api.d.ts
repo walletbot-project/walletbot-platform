@@ -24,6 +24,7 @@ import type * as crons from "../crons.js";
 import type * as http from "../http.js";
 import type * as httpHelpers from "../httpHelpers.js";
 import type * as live_createToken from "../live/createToken.js";
+import type * as migrations from "../migrations.js";
 import type * as schema_accounts from "../schema/accounts.js";
 import type * as schema_categories from "../schema/categories.js";
 import type * as schema_dashboard from "../schema/dashboard.js";
@@ -69,6 +70,7 @@ declare const fullApi: ApiFromModules<{
   http: typeof http;
   httpHelpers: typeof httpHelpers;
   "live/createToken": typeof live_createToken;
+  migrations: typeof migrations;
   "schema/accounts": typeof schema_accounts;
   "schema/categories": typeof schema_categories;
   "schema/dashboard": typeof schema_dashboard;
@@ -120,6 +122,7 @@ export declare const internal: FilterApi<
 
 export declare const components: {
   betterAuth: import("@convex-dev/better-auth/_generated/component.js").ComponentApi<"betterAuth">;
+  migrations: import("@convex-dev/migrations/_generated/component.js").ComponentApi<"migrations">;
   outflowsByAccount: import("@convex-dev/aggregate/_generated/component.js").ComponentApi<"outflowsByAccount">;
   inflowsByAccount: import("@convex-dev/aggregate/_generated/component.js").ComponentApi<"inflowsByAccount">;
 };

@@ -92,6 +92,31 @@ void main() {
     expect(res, {'ok': true, 'id': 'missing'});
   });
 
+  test('transaction tools persist and return date with timeStatus', () async {
+    await tools.execute('createAccount', {'name': 'Cash', 'currency': 'ARS'});
+    await tools.execute('createCategory', {'name': 'Food'});
+
+    const exactDate = '2026-07-12T14:30:00';
+    final result = await tools.execute('addExpense', {
+      'accountIdOrName': 'Cash',
+      'categoryIdOrName': 'Food',
+      'name': 'Coffee',
+      'amount': 5,
+      'date': exactDate,
+      'dateConfirmed': true,
+      'timeStatus': 'confirmed',
+    });
+
+    expect(result['ok'], isTrue);
+    expect(result['timeStatus'], 'confirmed');
+    final row = (await repos.transactions.getById(result['id'] as String))!;
+    expect(row.timeStatus, TransactionTimeStatus.confirmed);
+    expect(
+      row.date,
+      BigInt.from(DateTime.parse(exactDate).millisecondsSinceEpoch),
+    );
+  });
+
   test('tag/untag returns added/removed/missing', () async {
     await tools.execute('createAccount', {'name': 'Cash', 'currency': 'ARS'});
     await tools.execute('createCategory', {'name': 'Food'});

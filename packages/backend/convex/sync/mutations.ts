@@ -56,6 +56,13 @@ const transactionUpsert = v.object({
     // Optional for backward-compat: older clients don't send it. Defaults to
     // true on insert (matches the column default).
     dateConfirmed: v.optional(v.boolean()),
+    timeStatus: v.optional(
+        v.union(
+            v.literal('confirmed'),
+            v.literal('approximation'),
+            v.literal('none'),
+        ),
+    ),
     accountId: v.string(),
     categoryId: v.string(),
     amount: v.int64(),
@@ -153,6 +160,7 @@ type TransactionUpsert = {
     status: 'pending' | 'cleared'
     date: bigint
     dateConfirmed?: boolean
+    timeStatus?: 'confirmed' | 'approximation' | 'none'
     accountId: string
     categoryId: string
     amount: bigint
@@ -437,6 +445,7 @@ async function applyTransactionUpsert(
         status: payload.status,
         date: payload.date,
         dateConfirmed: payload.dateConfirmed ?? true,
+        timeStatus: payload.timeStatus ?? existing?.timeStatus ?? 'none',
         accountId: payload.accountId,
         categoryId: payload.categoryId,
         amount: payload.amount,

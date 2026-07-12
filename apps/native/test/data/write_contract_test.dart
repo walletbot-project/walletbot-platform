@@ -197,6 +197,85 @@ void main() {
       expect(join.dirty, isTrue);
     });
 
+    test('timeStatus none keeps the day and uses the load clock', () async {
+      final requestedDay = DateTime(2024, 3, 8);
+      final id = await repos.transactions.addExpense(
+        accountId: accountId,
+        categoryId: categoryId,
+        name: 'Sandwich',
+        amountCents: BigInt.from(1500),
+        currency: 'ARS',
+        dateMs: BigInt.from(requestedDay.millisecondsSinceEpoch),
+      );
+
+      final row = (await repos.transactions.getById(id))!;
+      final storedDate = DateTime.fromMillisecondsSinceEpoch(row.date.toInt());
+      final loadedAt = DateTime.fromMillisecondsSinceEpoch(
+        row.createdAt.toInt(),
+      );
+      expect(row.timeStatus, TransactionTimeStatus.none);
+      expect(
+        (storedDate.year, storedDate.month, storedDate.day),
+        (requestedDay.year, requestedDay.month, requestedDay.day),
+      );
+      expect(
+        (
+          storedDate.hour,
+          storedDate.minute,
+          storedDate.second,
+          storedDate.millisecond,
+        ),
+        (loadedAt.hour, loadedAt.minute, loadedAt.second, loadedAt.millisecond),
+      );
+    });
+
+    test('confirmed and approximation preserve their supplied hour', () async {
+      final confirmedDate = DateTime(2024, 3, 8, 14, 35);
+      final confirmedId = await repos.transactions.addExpense(
+        accountId: accountId,
+        categoryId: categoryId,
+        name: 'Coffee',
+        amountCents: BigInt.from(500),
+        currency: 'ARS',
+        dateMs: BigInt.from(confirmedDate.millisecondsSinceEpoch),
+        timeStatus: TransactionTimeStatus.confirmed,
+      );
+      final confirmed = (await repos.transactions.getById(confirmedId))!;
+      expect(confirmed.timeStatus, TransactionTimeStatus.confirmed);
+      expect(confirmed.date, BigInt.from(confirmedDate.millisecondsSinceEpoch));
+
+      final approximateDate = DateTime(2024, 3, 8, 13);
+      final approximateId = await repos.transactions.addExpense(
+        accountId: accountId,
+        categoryId: categoryId,
+        name: 'Lunch',
+        amountCents: BigInt.from(1200),
+        currency: 'ARS',
+        dateMs: BigInt.from(approximateDate.millisecondsSinceEpoch),
+        timeStatus: TransactionTimeStatus.approximation,
+      );
+      final approximate = (await repos.transactions.getById(approximateId))!;
+      expect(approximate.timeStatus, TransactionTimeStatus.approximation);
+      expect(
+        approximate.date,
+        BigInt.from(approximateDate.millisecondsSinceEpoch),
+      );
+    });
+
+    test('confirmed and approximation require a supplied hour', () async {
+      await expectLater(
+        repos.transactions.addExpense(
+          accountId: accountId,
+          categoryId: categoryId,
+          name: 'Coffee',
+          amountCents: BigInt.from(500),
+          currency: 'ARS',
+          timeStatus: TransactionTimeStatus.confirmed,
+        ),
+        throwsArgumentError,
+      );
+    });
+
     test('addTransfer rejects same-account transfers', () async {
       expect(
         () => repos.transactions.addTransfer(

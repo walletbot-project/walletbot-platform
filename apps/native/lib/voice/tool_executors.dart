@@ -557,6 +557,15 @@ class ToolExecutors {
     return false;
   }
 
+  TransactionTimeStatus _timeStatusOf(Map<String, dynamic> args) {
+    return switch (args['timeStatus']) {
+      'confirmed' => TransactionTimeStatus.confirmed,
+      'approximation' => TransactionTimeStatus.approximation,
+      'none' || null => TransactionTimeStatus.none,
+      final value => throw ArgumentError('Invalid timeStatus: $value'),
+    };
+  }
+
   /// Resolves the loosely typed `tagIdsOrNames` argument to tag ids,
   /// silently skipping anything unresolvable (original attach behavior).
   Future<List<String>> _resolveTagIds(dynamic raw) async {
@@ -591,9 +600,10 @@ class ToolExecutors {
       status: (args['status'] as String?) ?? 'cleared',
       dateMs: parseOptionalDate(args['date'] as String?),
       dateConfirmed: _dateConfirmedOf(args),
+      timeStatus: _timeStatusOf(args),
       tagIds: await _resolveTagIds(args['tagIdsOrNames']),
     );
-    return {'ok': true, 'id': id};
+    return _transactionWriteResult(id);
   }
 
   Future<Map<String, dynamic>> _addIncome(Map<String, dynamic> args) async {
@@ -616,9 +626,10 @@ class ToolExecutors {
       status: (args['status'] as String?) ?? 'cleared',
       dateMs: parseOptionalDate(args['date'] as String?),
       dateConfirmed: _dateConfirmedOf(args),
+      timeStatus: _timeStatusOf(args),
       tagIds: await _resolveTagIds(args['tagIdsOrNames']),
     );
-    return {'ok': true, 'id': id};
+    return _transactionWriteResult(id);
   }
 
   Future<Map<String, dynamic>> _addTransfer(Map<String, dynamic> args) async {
@@ -675,9 +686,10 @@ class ToolExecutors {
       description: args['description'] as String?,
       dateMs: parseOptionalDate(args['date'] as String?),
       dateConfirmed: _dateConfirmedOf(args),
+      timeStatus: _timeStatusOf(args),
       tagIds: await _resolveTagIds(args['tagIdsOrNames']),
     );
-    return {'ok': true, 'id': id};
+    return _transactionWriteResult(id);
   }
 
   Future<Map<String, dynamic>> _addBalanceAdjustment(
@@ -696,8 +708,9 @@ class ToolExecutors {
       description: args['description'] as String?,
       dateMs: parseOptionalDate(args['date'] as String?),
       dateConfirmed: _dateConfirmedOf(args),
+      timeStatus: _timeStatusOf(args),
     );
-    return {'ok': true, 'id': id};
+    return _transactionWriteResult(id);
   }
 
   Future<Map<String, dynamic>> _updateTransaction(
@@ -730,6 +743,9 @@ class ToolExecutors {
       dateConfirmed: args.containsKey('dateConfirmed')
           ? Value(_dateConfirmedOf(args))
           : const Value.absent(),
+      timeStatus: args.containsKey('timeStatus')
+          ? Value(_timeStatusOf(args))
+          : const Value.absent(),
       amount: args['amount'] != null
           ? Value(parseAmountToCents(args['amount'] as num))
           : const Value.absent(),
@@ -738,7 +754,7 @@ class ToolExecutors {
           ? Value(args['status'] as String)
           : const Value.absent(),
     );
-    return {'ok': true, 'id': id};
+    return _transactionWriteResult(id);
   }
 
   Future<Map<String, dynamic>> _deleteTransaction(
@@ -748,6 +764,19 @@ class ToolExecutors {
     // Idempotent: deleting a missing transaction still reports ok.
     await repos.transactions.delete(id);
     return {'ok': true, 'id': id};
+  }
+
+  Future<Map<String, dynamic>> _transactionWriteResult(String id) async {
+    final transaction = await repos.transactions.getById(id);
+    if (transaction == null) {
+      return {'ok': true, 'id': id};
+    }
+    return {
+      'ok': true,
+      'id': id,
+      'date': transaction.date.toString(),
+      'timeStatus': transaction.timeStatus.name,
+    };
   }
 
   Future<Map<String, dynamic>> _tagTransaction(
@@ -1260,6 +1289,8 @@ class ToolExecutors {
       'type': t.type,
       'name': t.name,
       'date': t.date.toString(),
+      'dateConfirmed': t.dateConfirmed,
+      'timeStatus': t.timeStatus.name,
       'accountId': t.accountId,
       'categoryId': t.categoryId,
       'amount': centsToDouble(t.amount),

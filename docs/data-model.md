@@ -401,6 +401,9 @@ name            string
 description?    string
 status          "pending" | "cleared"
 date            int64              — ms epoch
+dateConfirmed   boolean            — confianza sobre el día calendario
+timeStatus      "confirmed" | "approximation" | "none"
+                                    — origen/confianza de la hora en date
 
 accountId       string             — uuid de la cuenta origen / principal
 amount          int64              — centavos
@@ -419,6 +422,15 @@ createdAt       int64
 updatedAt       int64
 seq             int64
 ```
+
+La hora incluida en `date` sigue este contrato:
+
+- `confirmed`: el usuario indicó una hora exacta y `date` la conserva.
+- `approximation`: el usuario indicó un rango o evento (mañana, almuerzo,
+  tarde, cena, etc.) y `date` contiene la hora representativa estimada.
+- `none`: no hubo indicios horarios; `date` conserva el día de la transacción
+  y usa el reloj de `createdAt`. Durante el rollout, filas históricas sin
+  `timeStatus` se interpretan como `none`.
 
 Índices:
 - `by_user_seq`

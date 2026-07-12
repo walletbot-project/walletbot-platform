@@ -9,6 +9,24 @@ import { computeAccountBalance } from './queries'
 
 // ───── Helpers ─────
 
+const transactionTimeStatus = v.union(
+    v.literal('confirmed'),
+    v.literal('approximation'),
+    v.literal('none'),
+)
+type TransactionTimeStatus = 'confirmed' | 'approximation' | 'none'
+
+function resolveTimeStatus(
+    status: TransactionTimeStatus | undefined,
+    date: bigint | undefined,
+): TransactionTimeStatus {
+    const resolved = status ?? 'none'
+    if (resolved !== 'none' && date === undefined) {
+        throw new Error(`date is required when timeStatus is ${resolved}`)
+    }
+    return resolved
+}
+
 async function getAccount(
     ctx: MutationCtx,
     userId: string,
@@ -94,6 +112,7 @@ export const createExpense = mutation({
         categoryId: v.string(),
         date: v.optional(v.int64()),
         dateConfirmed: v.boolean(),
+        timeStatus: v.optional(transactionTimeStatus),
         status: v.optional(v.union(v.literal('pending'), v.literal('cleared'))),
     },
     handler: async (ctx, args) => {
@@ -108,6 +127,7 @@ export const createExpense = mutation({
 
         const seq = await nextSeq(ctx, userId)
         const now = BigInt(Date.now())
+        const timeStatus = resolveTimeStatus(args.timeStatus, args.date)
 
         const inserted = await ctx.db.insert('transactions', {
             userId,
@@ -118,6 +138,7 @@ export const createExpense = mutation({
             status: args.status ?? 'cleared',
             date: args.date ?? now,
             dateConfirmed: args.dateConfirmed,
+            timeStatus,
             accountId: args.accountId,
             categoryId: args.categoryId,
             amount: args.amount,
@@ -142,6 +163,7 @@ export const createIncome = mutation({
         categoryId: v.string(),
         date: v.optional(v.int64()),
         dateConfirmed: v.boolean(),
+        timeStatus: v.optional(transactionTimeStatus),
         status: v.optional(v.union(v.literal('pending'), v.literal('cleared'))),
     },
     handler: async (ctx, args) => {
@@ -156,6 +178,7 @@ export const createIncome = mutation({
 
         const seq = await nextSeq(ctx, userId)
         const now = BigInt(Date.now())
+        const timeStatus = resolveTimeStatus(args.timeStatus, args.date)
 
         const inserted = await ctx.db.insert('transactions', {
             userId,
@@ -166,6 +189,7 @@ export const createIncome = mutation({
             status: args.status ?? 'cleared',
             date: args.date ?? now,
             dateConfirmed: args.dateConfirmed,
+            timeStatus,
             accountId: args.accountId,
             categoryId: args.categoryId,
             amount: args.amount,
@@ -193,6 +217,7 @@ export const createTransfer = mutation({
         categoryId: v.string(),
         date: v.optional(v.int64()),
         dateConfirmed: v.boolean(),
+        timeStatus: v.optional(transactionTimeStatus),
         status: v.optional(v.union(v.literal('pending'), v.literal('cleared'))),
     },
     handler: async (ctx, args) => {
@@ -222,6 +247,7 @@ export const createTransfer = mutation({
 
         const seq = await nextSeq(ctx, userId)
         const now = BigInt(Date.now())
+        const timeStatus = resolveTimeStatus(args.timeStatus, args.date)
 
         const inserted = await ctx.db.insert('transactions', {
             userId,
@@ -232,6 +258,7 @@ export const createTransfer = mutation({
             status: args.status ?? 'cleared',
             date: args.date ?? now,
             dateConfirmed: args.dateConfirmed,
+            timeStatus,
             accountId: args.accountId,
             categoryId: args.categoryId,
             amount: args.amount,
@@ -259,6 +286,7 @@ export const createBalanceAdjustment = mutation({
         description: v.optional(v.string()),
         date: v.optional(v.int64()),
         dateConfirmed: v.boolean(),
+        timeStatus: v.optional(transactionTimeStatus),
     },
     handler: async (ctx, args) => {
         const userId = await requireAuth(ctx)
@@ -280,6 +308,7 @@ export const createBalanceAdjustment = mutation({
 
         const seq = await nextSeq(ctx, userId)
         const now = BigInt(Date.now())
+        const timeStatus = resolveTimeStatus(args.timeStatus, args.date)
 
         const inserted = await ctx.db.insert('transactions', {
             userId,
@@ -290,6 +319,7 @@ export const createBalanceAdjustment = mutation({
             status: 'cleared',
             date: args.date ?? now,
             dateConfirmed: args.dateConfirmed,
+            timeStatus,
             accountId: args.accountId,
             categoryId: '',
             amount,
@@ -314,6 +344,7 @@ export const update = mutation({
         description: v.optional(v.string()),
         date: v.optional(v.int64()),
         dateConfirmed: v.optional(v.boolean()),
+        timeStatus: v.optional(transactionTimeStatus),
         amount: v.optional(v.int64()),
         categoryId: v.optional(v.string()),
         status: v.optional(v.union(v.literal('pending'), v.literal('cleared'))),
@@ -336,6 +367,7 @@ export const update = mutation({
             description?: string
             date?: bigint
             dateConfirmed?: boolean
+            timeStatus?: TransactionTimeStatus
             amount?: bigint
             categoryId?: string
             status?: 'pending' | 'cleared'
@@ -345,6 +377,14 @@ export const update = mutation({
         if (args.date !== undefined) patch.date = args.date
         if (args.dateConfirmed !== undefined)
             patch.dateConfirmed = args.dateConfirmed
+        if (args.timeStatus !== undefined) {
+            if (args.timeStatus !== 'none' && args.date === undefined) {
+                throw new Error(
+                    `date is required when timeStatus is ${args.timeStatus}`,
+                )
+            }
+            patch.timeStatus = args.timeStatus
+        }
         if (args.amount !== undefined) patch.amount = args.amount
         if (args.categoryId !== undefined) patch.categoryId = args.categoryId
         if (args.status !== undefined) patch.status = args.status

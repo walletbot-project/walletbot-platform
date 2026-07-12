@@ -285,11 +285,14 @@ class _TxnEditSheetState extends State<_TxnEditSheet> {
         _transaction.id,
         name: Value(_nameController.text.trim()),
         description: Value(description.isEmpty ? null : description),
-        date: _showDate
+        date: _showDate && dateChanged
             ? Value(BigInt.from(_date.millisecondsSinceEpoch))
             : const Value.absent(),
         dateConfirmed: _showDate && dateChanged
             ? const Value(true)
+            : const Value.absent(),
+        timeStatus: _showDate && dateChanged
+            ? const Value(TransactionTimeStatus.none)
             : const Value.absent(),
         amount: _showAmount
             ? Value(_decimalToCents(_amountController.text))

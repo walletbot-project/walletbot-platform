@@ -215,14 +215,16 @@ function TxnEditContent({
         }
 
         const originalDate = epochToDateStr(txn.date)
+        const dateChanged = showDate && date !== originalDate
         const nextDescription = description.trim()
         setSaving(true)
         const promise = updateTxn({
             id: txn.id,
             name: name.trim(),
             amount: parsedAmount ?? undefined,
-            date: showDate ? dateStrToEpoch(date) : undefined,
-            dateConfirmed: showDate && date !== originalDate ? true : undefined,
+            date: dateChanged ? dateStrToEpoch(date) : undefined,
+            dateConfirmed: dateChanged ? true : undefined,
+            timeStatus: dateChanged ? 'none' : undefined,
             categoryId: showCategory ? categoryId : undefined,
             description:
                 nextDescription !== (txn.description ?? '')
@@ -999,7 +1001,15 @@ function epochToDDMMYYYY(epoch: bigint): string {
 }
 
 function dateStrToEpoch(value: string): bigint {
-    return BigInt(new Date(`${value}T00:00:00`).getTime())
+    const selectedDate = new Date(`${value}T00:00:00`)
+    const loadedAt = new Date()
+    selectedDate.setHours(
+        loadedAt.getHours(),
+        loadedAt.getMinutes(),
+        loadedAt.getSeconds(),
+        loadedAt.getMilliseconds(),
+    )
+    return BigInt(selectedDate.getTime())
 }
 
 function centsToDecimalStr(cents: bigint): string {
