@@ -42,11 +42,16 @@ class SummaryRepository extends RepositoryBase {
     TransactionFilter filter,
     BreakdownGroupBy groupBy, {
     DateTime? now,
+    String missingCategoryLabel = '',
+    String missingAccountLabel = '',
+    String Function(DateTime date)? monthLabel,
   }) {
     final rows = watchFilteredTransactions(db, filter, now: now);
     switch (groupBy) {
       case BreakdownGroupBy.month:
-        return rows.map((r) => aggregateBreakdown(r, groupBy));
+        return rows.map(
+          (r) => aggregateBreakdown(r, groupBy, monthLabel: monthLabel),
+        );
       case BreakdownGroupBy.category:
         final categories = (db.select(
           db.categories,
@@ -62,6 +67,7 @@ class SummaryRepository extends RepositoryBase {
             labels: <String, ({String label, String? colorHex})>{
               for (final c in cats) c.id: (label: c.name, colorHex: null),
             },
+            missingCategoryLabel: missingCategoryLabel,
           ),
         );
       case BreakdownGroupBy.account:
@@ -77,6 +83,7 @@ class SummaryRepository extends RepositoryBase {
             labels: {
               for (final a in accs) a.id: (label: a.name, colorHex: a.color),
             },
+            missingAccountLabel: missingAccountLabel,
           ),
         );
     }

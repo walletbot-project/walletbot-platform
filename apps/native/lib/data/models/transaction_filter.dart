@@ -2,16 +2,13 @@ import 'package:flutter/material.dart' show DateTimeRange;
 
 import '../../shared/dates.dart';
 
-/// Common shape for the filter dimension enums: a stored/query `wire` value and
-/// a Spanish UI `label`. Lets [TransactionFilter.fromCanonicalJson] look any of
-/// them up by wire value generically.
-abstract interface class WireLabeled {
+/// Common shape for filter dimension enums stored by their `wire` value.
+abstract interface class WireValue {
   String get wire;
-  String get label;
 }
 
-/// Finds the enum value whose [WireLabeled.wire] matches [wire], or null.
-T? _enumByWire<T extends WireLabeled>(List<T> values, String wire) {
+/// Finds the enum value whose [WireValue.wire] matches [wire], or null.
+T? _enumByWire<T extends WireValue>(List<T> values, String wire) {
   for (final value in values) {
     if (value.wire == wire) return value;
   }
@@ -20,76 +17,66 @@ T? _enumByWire<T extends WireLabeled>(List<T> values, String wire) {
 
 /// Transaction type dimension. `wire` matches the value stored in
 /// `transactions.type`; `label` is shown in the UI.
-enum TxnType implements WireLabeled {
-  expense('expense', 'Gastos'),
-  income('income', 'Ingresos'),
-  transfer('transfer', 'Transferencias'),
-  balanceAdjustment('balance_adjustment', 'Ajustes');
+enum TxnType implements WireValue {
+  expense('expense'),
+  income('income'),
+  transfer('transfer'),
+  balanceAdjustment('balance_adjustment');
 
-  const TxnType(this.wire, this.label);
+  const TxnType(this.wire);
 
   @override
   final String wire;
-  @override
-  final String label;
 }
 
 /// Status dimension. Absence (null on the filter) means "any".
-enum TxnStatus implements WireLabeled {
-  pending('pending', 'Pendiente'),
-  cleared('cleared', 'Confirmado');
+enum TxnStatus implements WireValue {
+  pending('pending'),
+  cleared('cleared');
 
-  const TxnStatus(this.wire, this.label);
+  const TxnStatus(this.wire);
 
   @override
   final String wire;
-  @override
-  final String label;
 }
 
 /// Relative date presets, resolved at render time so "this month" rolls
 /// forward instead of freezing (see docs/home-dashboard.md).
-enum DatePreset implements WireLabeled {
-  today('today', 'Hoy'),
-  thisWeek('this_week', 'Esta semana'),
-  thisMonth('this_month', 'Este mes'),
-  lastMonth('last_month', 'Mes pasado'),
-  thisYear('this_year', 'Este año');
+enum DatePreset implements WireValue {
+  today('today'),
+  thisWeek('this_week'),
+  thisMonth('this_month'),
+  lastMonth('last_month'),
+  thisYear('this_year');
 
-  const DatePreset(this.wire, this.label);
+  const DatePreset(this.wire);
 
   @override
   final String wire;
-  @override
-  final String label;
 }
 
 /// Transfers have a source (`accountId`) and destination (`toAccountId`); the
 /// account filter carries which side to match.
-enum AccountDirection implements WireLabeled {
-  source('source', 'Origen'),
-  destination('destination', 'Destino'),
-  either('either', 'Cualquiera');
+enum AccountDirection implements WireValue {
+  source('source'),
+  destination('destination'),
+  either('either');
 
-  const AccountDirection(this.wire, this.label);
+  const AccountDirection(this.wire);
 
   @override
   final String wire;
-  @override
-  final String label;
 }
 
 /// Whether a transaction must carry *any* of the selected tags or *all* of them.
-enum TagMatch implements WireLabeled {
-  any('any', 'Cualquiera'),
-  all('all', 'Todas');
+enum TagMatch implements WireValue {
+  any('any'),
+  all('all');
 
-  const TagMatch(this.wire, this.label);
+  const TagMatch(this.wire);
 
   @override
   final String wire;
-  @override
-  final String label;
 }
 
 /// Resolved date window for queries: `date >= fromMs && date < toExclusiveMs`.
@@ -412,7 +399,7 @@ class TransactionFilter {
 
   /// Resolves the date dimension to an absolute window at query time.
   /// [dateRange] bounds are day-precision: the end day is inclusive. Weeks
-  /// start on Monday (the app's Spanish locale convention).
+  /// start on Monday (ISO week convention).
   DateWindow? resolveDateWindow({DateTime? now}) {
     final range = dateRange;
     if (range != null) {

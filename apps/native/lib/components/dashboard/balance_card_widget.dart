@@ -2,6 +2,7 @@ import 'package:app/components/dashboard/dashboard_cell.dart';
 import 'package:app/components/dashboard/dashboard_models.dart';
 import 'package:app/data/data.dart';
 import 'package:app/shared/money.dart';
+import 'package:app/l10n/l10n.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -22,7 +23,7 @@ class BalanceCardWidget extends StatelessWidget {
       builder: (context, snapshot) {
         final cents = snapshot.data;
         return DashboardCell(
-          title: spec.title,
+          title: context.l10n.dashboardTitle(spec.title),
           icon: Icons.account_balance_wallet_outlined,
           minHeight: 128,
           trailing: _CurrencyPill(currency: spec.currency),
@@ -31,16 +32,19 @@ class BalanceCardWidget extends StatelessWidget {
           ),
           child: _BalanceValueText(
             snapshot: snapshot,
-            text: cents == null ? '—' : _formatBalance(cents, spec.currency),
+            text: cents == null
+                ? '—'
+                : _formatBalance(cents, spec.currency, context.localeName),
           ),
         );
       },
     );
   }
 
-  String _formatBalance(BigInt cents, String currency) {
+  String _formatBalance(BigInt cents, String currency, String locale) {
     final sign = cents < BigInt.zero ? '-' : '';
-    return '$sign$currency ${formatCentsUnsigned(cents.abs().toInt())}';
+    return '$sign$currency '
+        '${formatCentsUnsigned(cents.abs().toInt(), locale: locale)}';
   }
 }
 
@@ -55,7 +59,7 @@ class _BalanceValueText extends StatelessWidget {
     final theme = Theme.of(context);
     if (snapshot.hasError) {
       return Text(
-        'Error',
+        context.l10n.error,
         style: theme.textTheme.bodySmall?.copyWith(
           color: theme.colorScheme.error,
         ),

@@ -6,6 +6,7 @@ import 'package:app/components/transaction_row_emoji.dart';
 import 'package:app/components/transaction_time_mock.dart';
 import 'package:app/data/data.dart';
 import 'package:app/database.dart';
+import 'package:app/l10n/l10n.dart';
 import 'package:app/shared/app_navigation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -28,16 +29,6 @@ class ActivityScreen extends StatefulWidget {
 
 class _ActivityScreenState extends State<ActivityScreen> {
   static const _pageSize = 50;
-  static const _spanishWeekdays = [
-    'Lunes',
-    'Martes',
-    'Miércoles',
-    'Jueves',
-    'Viernes',
-    'Sábado',
-    'Domingo',
-  ];
-
   final _scrollController = ScrollController();
 
   AppNavigation? _nav;
@@ -167,10 +158,10 @@ class _ActivityScreenState extends State<ActivityScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Actividad'),
+        title: Text(context.l10n.activity),
         actions: [
           IconButton(
-            tooltip: 'Anadir movimiento',
+            tooltip: context.l10n.addTransaction,
             onPressed: _openTransactionForm,
             icon: const Icon(Icons.add_rounded),
           ),
@@ -242,7 +233,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
                       child: Padding(
                         padding: const EdgeInsets.all(32),
                         child: Text(
-                          'Error al cargar transacciones: ${snapshot.error}',
+                          context.l10n.transactionsLoadFailed(snapshot.error!),
                         ),
                       ),
                     ),
@@ -253,12 +244,12 @@ class _ActivityScreenState extends State<ActivityScreen> {
                 _lastRenderedCount = items.length;
 
                 if (items.isEmpty) {
-                  return const SliverFillRemaining(
+                  return SliverFillRemaining(
                     hasScrollBody: false,
                     child: Center(
                       child: Padding(
-                        padding: EdgeInsets.all(32),
-                        child: Text('No hay transacciones'),
+                        padding: const EdgeInsets.all(32),
+                        child: Text(context.l10n.noTransactions),
                       ),
                     ),
                   );
@@ -384,11 +375,12 @@ class _ActivityScreenState extends State<ActivityScreen> {
 
   String _sectionLabel(DateTime day, DateTime today) {
     final diff = today.difference(day).inDays;
-    if (diff == 0) return 'Hoy';
-    if (diff == 1) return 'Ayer';
-    if (diff > 1 && diff < 7) return _spanishWeekdays[day.weekday - 1];
-    return '${day.day.toString().padLeft(2, '0')}/'
-        '${day.month.toString().padLeft(2, '0')}/${day.year}';
+    if (diff == 0) return context.l10n.today;
+    if (diff == 1) return context.l10n.yesterday;
+    if (diff > 1 && diff < 7) {
+      return formatWeekday(day, context.localeName);
+    }
+    return formatNumericDate(day, context.localeName);
   }
 
   /// Signed cents to pass to [TransactionRowEmoji]: positive renders green, negative
@@ -419,7 +411,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
     return [
       _TxnEntry(
         transactionId: t.id,
-        title: 'Transferencia enviada',
+        title: context.l10n.transferSent,
         amountCents: sourceAmount,
         currency: t.currency,
         dateConfirmed: t.dateConfirmed,
@@ -434,7 +426,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
       ),
       _TxnEntry(
         transactionId: t.id,
-        title: 'Transferencia recibida',
+        title: context.l10n.transferReceived,
         amountCents: destinationAmount,
         currency: t.toCurrency ?? t.currency,
         dateConfirmed: t.dateConfirmed,
@@ -505,8 +497,23 @@ class _ActivityScreenState extends State<ActivityScreen> {
     );
   }
 
+  String? _joinDescriptions(String? first, String? second) {
+    final parts = [
+      if (first != null && first.isNotEmpty) first,
+      if (second != null && second.isNotEmpty) second,
+    ];
+    if (parts.isEmpty) return null;
+    return parts.join(' · ');
+  }
+
   String? _descriptionFor(Transaction t) {
-    return t.description;
+    final details = t.description;
+    if (t.dateConfirmed) return details;
+    final dt = DateTime.fromMillisecondsSinceEpoch(t.date.toInt());
+    final estimated = context.l10n.estimated(
+      formatWeekday(dt, context.localeName),
+    );
+    return _joinDescriptions(estimated, details);
   }
 }
 
@@ -573,12 +580,15 @@ class _FilterChips extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const options = <({TxnType? value, String label})>[
-      (value: null, label: 'Todos'),
-      (value: TxnType.income, label: 'Ingresos'),
-      (value: TxnType.expense, label: 'Gastos'),
-      (value: TxnType.transfer, label: 'Transferencias'),
-      (value: TxnType.balanceAdjustment, label: 'Ajustes'),
+    final options = <({TxnType? value, String label})>[
+      (value: null, label: context.l10n.all),
+      (value: TxnType.income, label: context.l10n.incomes),
+      (value: TxnType.expense, label: context.l10n.expenses),
+      (value: TxnType.transfer, label: context.l10n.transfers),
+      (
+        value: TxnType.balanceAdjustment,
+        label: context.l10n.balanceAdjustments,
+      ),
     ];
 
     return SizedBox(

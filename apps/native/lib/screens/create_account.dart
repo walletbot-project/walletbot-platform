@@ -3,72 +3,74 @@ import 'package:app/components/color_picker.dart';
 import 'package:app/components/color_utils.dart';
 import 'package:app/components/icon_picker.dart';
 import 'package:app/data/data.dart';
+import 'package:app/l10n/l10n.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-// (ISO code, Spanish name) — sorted alphabetically by code
+// ISO 4217 codes — language-neutral and sorted alphabetically.
 const _currencies = [
-  ('AED', 'Dírham emiratí'),
-  ('ARS', 'Peso argentino'),
-  ('AUD', 'Dólar australiano'),
-  ('BOB', 'Boliviano'),
-  ('BRL', 'Real brasileño'),
-  ('CAD', 'Dólar canadiense'),
-  ('CHF', 'Franco suizo'),
-  ('CLP', 'Peso chileno'),
-  ('CNY', 'Yuan chino'),
-  ('COP', 'Peso colombiano'),
-  ('CRC', 'Colón costarricense'),
-  ('CUP', 'Peso cubano'),
-  ('DKK', 'Corona danesa'),
-  ('DOP', 'Peso dominicano'),
-  ('EGP', 'Libra egipcia'),
-  ('EUR', 'Euro'),
-  ('GBP', 'Libra esterlina'),
-  ('GTQ', 'Quetzal guatemalteco'),
-  ('HKD', 'Dólar de Hong Kong'),
-  ('HNL', 'Lempira hondureño'),
-  ('HUF', 'Forinto húngaro'),
-  ('IDR', 'Rupia indonesia'),
-  ('ILS', 'Séquel israelí'),
-  ('INR', 'Rupia india'),
-  ('JPY', 'Yen japonés'),
-  ('KRW', 'Won surcoreano'),
-  ('MXN', 'Peso mexicano'),
-  ('MYR', 'Ringgit malayo'),
-  ('NGN', 'Naira nigeriana'),
-  ('NIO', 'Córdoba nicaragüense'),
-  ('NOK', 'Corona noruega'),
-  ('NZD', 'Dólar neozelandés'),
-  ('PAB', 'Balboa panameño'),
-  ('PEN', 'Sol peruano'),
-  ('PHP', 'Peso filipino'),
-  ('PKR', 'Rupia pakistaní'),
-  ('PLN', 'Esloti polaco'),
-  ('PYG', 'Guaraní paraguayo'),
-  ('RON', 'Leu rumano'),
-  ('RUB', 'Rublo ruso'),
-  ('SAR', 'Riyal saudí'),
-  ('SEK', 'Corona sueca'),
-  ('SGD', 'Dólar singapurense'),
-  ('THB', 'Baht tailandés'),
-  ('TRY', 'Lira turca'),
-  ('TWD', 'Nuevo dólar taiwanés'),
-  ('UAH', 'Grivna ucraniana'),
-  ('USD', 'Dólar estadounidense'),
-  ('UYU', 'Peso uruguayo'),
-  ('VES', 'Bolívar venezolano'),
-  ('VND', 'Dong vietnamita'),
-  ('ZAR', 'Rand sudafricano'),
+  'AED',
+  'ARS',
+  'AUD',
+  'BOB',
+  'BRL',
+  'CAD',
+  'CHF',
+  'CLP',
+  'CNY',
+  'COP',
+  'CRC',
+  'CUP',
+  'DKK',
+  'DOP',
+  'EGP',
+  'EUR',
+  'GBP',
+  'GTQ',
+  'HKD',
+  'HNL',
+  'HUF',
+  'IDR',
+  'ILS',
+  'INR',
+  'JPY',
+  'KRW',
+  'MXN',
+  'MYR',
+  'NGN',
+  'NIO',
+  'NOK',
+  'NZD',
+  'PAB',
+  'PEN',
+  'PHP',
+  'PKR',
+  'PLN',
+  'PYG',
+  'RON',
+  'RUB',
+  'SAR',
+  'SEK',
+  'SGD',
+  'THB',
+  'TRY',
+  'TWD',
+  'UAH',
+  'USD',
+  'UYU',
+  'VES',
+  'VND',
+  'ZAR',
 ];
 
 const _suggestedCurrencies = ['ARS', 'USD', 'EUR', 'BRL'];
 
-const _nameSuggestions = [
-  (label: 'Efectivo', icon: Icons.payments_rounded),
-  (label: 'Banco', icon: Icons.account_balance_rounded),
-  (label: 'Tarjeta', icon: Icons.credit_card_rounded),
-];
+List<({String label, IconData icon})> _nameSuggestions(AppLocalizations l10n) =>
+    [
+      (label: l10n.cash, icon: Icons.payments_rounded),
+      (label: l10n.bank, icon: Icons.account_balance_rounded),
+      (label: l10n.card, icon: Icons.credit_card_rounded),
+    ];
 
 class CreateAccountScreen extends StatefulWidget {
   const CreateAccountScreen({super.key});
@@ -144,7 +146,7 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
       debugPrint('Error creating account: $e\n$st');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Error al crear la cuenta')),
+          SnackBar(content: Text(context.l10n.accountCreateFailed)),
         );
       }
     } finally {
@@ -155,18 +157,21 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Nueva cuenta')),
+      appBar: AppBar(title: Text(context.l10n.newAccount)),
       body: Form(
         key: _formKey,
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
-            Text('Sugerencias', style: Theme.of(context).textTheme.labelLarge),
+            Text(
+              context.l10n.suggestions,
+              style: Theme.of(context).textTheme.labelLarge,
+            ),
             const SizedBox(height: 8),
             Wrap(
               spacing: 8,
               children: [
-                for (final s in _nameSuggestions)
+                for (final s in _nameSuggestions(context.l10n))
                   ActionChip(
                     avatar: Icon(s.icon),
                     label: Text(s.label),
@@ -179,17 +184,18 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
               controller: _nameController,
               autofocus: true,
               textCapitalization: TextCapitalization.sentences,
-              decoration: const InputDecoration(
-                labelText: 'Nombre *',
-                hintText: 'Ej: Efectivo, Banco Nación…',
-                border: OutlineInputBorder(),
+              decoration: InputDecoration(
+                labelText: context.l10n.nameRequiredLabel,
+                hintText: context.l10n.accountNameExample,
+                border: const OutlineInputBorder(),
               ),
-              validator: (v) =>
-                  (v == null || v.trim().isEmpty) ? 'Ingresá un nombre' : null,
+              validator: (v) => (v == null || v.trim().isEmpty)
+                  ? context.l10n.enterName
+                  : null,
             ),
             const SizedBox(height: 24),
             Text(
-              'Ícono y color',
+              context.l10n.iconAndColor,
               style: Theme.of(context).textTheme.labelLarge,
             ),
             const SizedBox(height: 12),
@@ -227,10 +233,10 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
               onTap: _pickCurrency,
               borderRadius: BorderRadius.circular(4),
               child: InputDecorator(
-                decoration: const InputDecoration(
-                  labelText: 'Moneda',
-                  border: OutlineInputBorder(),
-                  suffixIcon: Icon(Icons.arrow_drop_down),
+                decoration: InputDecoration(
+                  labelText: context.l10n.currency,
+                  border: const OutlineInputBorder(),
+                  suffixIcon: const Icon(Icons.arrow_drop_down),
                 ),
                 child: Text(_currency),
               ),
@@ -242,7 +248,7 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                 decimal: true,
               ),
               decoration: InputDecoration(
-                labelText: 'Balance inicial (opcional)',
+                labelText: context.l10n.initialBalanceOptional,
                 hintText: '0.00',
                 prefixText: '$_currency ',
                 border: const OutlineInputBorder(),
@@ -251,7 +257,7 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                 if (v == null || v.trim().isEmpty) return null;
                 final parsed = double.tryParse(v.trim().replaceAll(',', '.'));
                 if (parsed == null || parsed < 0) {
-                  return 'Ingresá un monto válido';
+                  return context.l10n.enterValidAmount;
                 }
                 return null;
               },
@@ -264,7 +270,7 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                       dimension: 20,
                       child: CircularProgressIndicator(strokeWidth: 2),
                     )
-                  : const Text('Crear cuenta'),
+                  : Text(context.l10n.createAccount),
             ),
           ],
         ),
@@ -292,15 +298,10 @@ class _CurrencyPickerState extends State<_CurrencyPicker> {
     super.dispose();
   }
 
-  List<(String, String)> get _filtered {
+  List<String> get _filtered {
     if (_query.isEmpty) return _currencies;
     final q = _query.toLowerCase();
-    return _currencies
-        .where(
-          (c) =>
-              c.$1.toLowerCase().contains(q) || c.$2.toLowerCase().contains(q),
-        )
-        .toList();
+    return _currencies.where((code) => code.toLowerCase().contains(q)).toList();
   }
 
   @override
@@ -318,16 +319,16 @@ class _CurrencyPickerState extends State<_CurrencyPicker> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Elegí una moneda',
+              context.l10n.chooseCurrency,
               style: Theme.of(context).textTheme.titleMedium,
             ),
             const SizedBox(height: 12),
             TextField(
               controller: _searchController,
-              decoration: const InputDecoration(
-                hintText: 'Buscar moneda…',
-                prefixIcon: Icon(Icons.search),
-                border: OutlineInputBorder(),
+              decoration: InputDecoration(
+                hintText: context.l10n.searchCurrency,
+                prefixIcon: const Icon(Icons.search),
+                border: const OutlineInputBorder(),
                 isDense: true,
               ),
               onChanged: (v) => setState(() => _query = v),
@@ -335,7 +336,7 @@ class _CurrencyPickerState extends State<_CurrencyPicker> {
             if (_query.isEmpty) ...[
               const SizedBox(height: 16),
               Text(
-                'Más usadas',
+                context.l10n.mostUsed,
                 style: Theme.of(context).textTheme.labelMedium?.copyWith(
                   color: Theme.of(context).colorScheme.onSurfaceVariant,
                 ),
@@ -360,11 +361,10 @@ class _CurrencyPickerState extends State<_CurrencyPicker> {
                 controller: scrollController,
                 itemCount: filtered.length,
                 itemBuilder: (context, i) {
-                  final (code, name) = filtered[i];
+                  final code = filtered[i];
                   return ListTile(
                     dense: true,
                     title: Text(code),
-                    subtitle: Text(name),
                     selected: widget.selected == code,
                     onTap: () => Navigator.of(context).pop(code),
                   );

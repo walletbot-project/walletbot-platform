@@ -1,4 +1,6 @@
+import 'package:app/app_config/app_config_banner_list.dart';
 import 'package:app/auth/auth_controller.dart';
+import 'package:app/l10n/l10n.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:google_sign_in/google_sign_in.dart';
@@ -47,6 +49,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
     setState(() => _submitting = true);
     final messenger = ScaffoldMessenger.of(context);
+    final l10n = context.l10n;
     final auth = context.read<AuthController>();
     final email = _emailController.text.trim();
     final password = _passwordController.text;
@@ -67,19 +70,14 @@ class _LoginScreenState extends State<LoginScreen> {
         );
       }
     } on AccountAlreadyAddedError {
-      messenger.showSnackBar(
-        const SnackBar(
-          content: Text('Ya tenés una cuenta agregada con ese correo'),
-        ),
-      );
+      messenger.showSnackBar(SnackBar(content: Text(l10n.accountAlreadyAdded)));
     } catch (e) {
       // Generic, account-independent hint: many failed sign-ins are users who
       // actually registered with Google. Avoids leaking whether the email
       // exists or which provider it uses.
       final message = _emailMode == _EmailAuthMode.signIn
-          ? 'No se pudo iniciar sesión. Si te registraste con Google, '
-                'usá "Continuar con Google".'
-          : 'No se pudo ${_emailMode.actionLabel}: $e';
+          ? l10n.emailSignInFailedGoogleHint
+          : l10n.emailAuthFailed(_emailMode.actionLabel(l10n), e);
       messenger.showSnackBar(SnackBar(content: Text(message)));
     } finally {
       if (mounted) setState(() => _submitting = false);
@@ -91,13 +89,14 @@ class _LoginScreenState extends State<LoginScreen> {
 
     setState(() => _submitting = true);
     final messenger = ScaffoldMessenger.of(context);
+    final l10n = context.l10n;
     try {
       await context.read<AuthController>().addLocal(
         name: _localNameController.text.trim(),
       );
     } catch (e) {
       messenger.showSnackBar(
-        SnackBar(content: Text('No se pudo continuar sin cuenta: $e')),
+        SnackBar(content: Text(l10n.localAccountFailed(e))),
       );
     } finally {
       if (mounted) setState(() => _submitting = false);
@@ -107,6 +106,7 @@ class _LoginScreenState extends State<LoginScreen> {
   Future<void> _signInWithGoogle() async {
     setState(() => _submitting = true);
     final messenger = ScaffoldMessenger.of(context);
+    final l10n = context.l10n;
     try {
       await context.read<AuthController>().signInWithGoogle(
         rejectExisting: widget.canDismiss,
@@ -115,18 +115,14 @@ class _LoginScreenState extends State<LoginScreen> {
       // The user dismissing the Google sheet isn't an error worth surfacing.
       if (e.code != GoogleSignInExceptionCode.canceled) {
         messenger.showSnackBar(
-          SnackBar(content: Text('No se pudo iniciar sesión con Google: $e')),
+          SnackBar(content: Text(l10n.googleSignInFailed(e))),
         );
       }
     } on AccountAlreadyAddedError {
-      messenger.showSnackBar(
-        const SnackBar(
-          content: Text('Ya tenés una cuenta agregada con ese correo'),
-        ),
-      );
+      messenger.showSnackBar(SnackBar(content: Text(l10n.accountAlreadyAdded)));
     } catch (e) {
       messenger.showSnackBar(
-        SnackBar(content: Text('No se pudo iniciar sesión con Google: $e')),
+        SnackBar(content: Text(l10n.googleSignInFailed(e))),
       );
     } finally {
       if (mounted) setState(() => _submitting = false);
@@ -154,6 +150,10 @@ class _LoginScreenState extends State<LoginScreen> {
                           children: [
                             const _HeroHeader(),
                             const SizedBox(height: 22),
+                            const AppConfigBannerList(
+                              placement: 'auth',
+                              bottomSpacing: 14,
+                            ),
                             _PathPicker(
                               selected: _path,
                               enabled: !_submitting,
@@ -192,7 +192,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     top: 0,
                     right: 0,
                     child: IconButton(
-                      tooltip: 'Cerrar',
+                      tooltip: context.l10n.close,
                       onPressed: _submitting
                           ? null
                           : () => Navigator.of(context).pop(),
@@ -343,7 +343,7 @@ class _HeroHeader extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Wallet Bot',
+                    context.l10n.appTitle,
                     style: theme.textTheme.headlineMedium?.copyWith(
                       fontWeight: FontWeight.w900,
                       height: 0.96,
@@ -351,7 +351,7 @@ class _HeroHeader extends StatelessWidget {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    'Empezá con sincronización o sin cuenta.',
+                    context.l10n.loginIntro,
                     style: theme.textTheme.bodyMedium?.copyWith(
                       color: colors.onSurfaceVariant,
                       fontWeight: FontWeight.w600,
@@ -395,7 +395,7 @@ class _PathPicker extends StatelessWidget {
             Expanded(
               child: _PathSegment(
                 icon: Icons.cloud_done_rounded,
-                label: 'Con cuenta',
+                label: context.l10n.withAccount,
                 selected: selected == _LoginPath.remote,
                 enabled: enabled,
                 onTap: () => onChanged(_LoginPath.remote),
@@ -404,7 +404,7 @@ class _PathPicker extends StatelessWidget {
             Expanded(
               child: _PathSegment(
                 icon: Icons.phone_iphone_rounded,
-                label: 'Sin cuenta',
+                label: context.l10n.withoutAccount,
                 selected: selected == _LoginPath.local,
                 enabled: enabled,
                 onTap: () => onChanged(_LoginPath.local),
@@ -542,8 +542,8 @@ class _RemoteLoginPanel extends StatelessWidget {
         children: [
           _PanelTitle(
             icon: Icons.sync_rounded,
-            title: 'Con cuenta',
-            subtitle: 'Usá correo o Google para sincronizar tus gastos.',
+            title: context.l10n.withAccount,
+            subtitle: context.l10n.withAccountDescription,
           ),
           const SizedBox(height: 18),
           Form(
@@ -560,13 +560,13 @@ class _RemoteLoginPanel extends StatelessWidget {
                           child: _LoginTextField(
                             controller: nameController,
                             enabled: !submitting,
-                            label: 'Nombre',
+                            label: context.l10n.name,
                             icon: Icons.badge_outlined,
                             textInputAction: TextInputAction.next,
                             autofillHints: const [AutofillHints.name],
                             validator: (value) {
                               if ((value ?? '').trim().isEmpty) {
-                                return 'Ingresá tu nombre';
+                                return context.l10n.enterYourName;
                               }
                               return null;
                             },
@@ -577,15 +577,17 @@ class _RemoteLoginPanel extends StatelessWidget {
                 _LoginTextField(
                   controller: emailController,
                   enabled: !submitting,
-                  label: 'Correo',
+                  label: context.l10n.email,
                   icon: Icons.alternate_email_rounded,
                   keyboardType: TextInputType.emailAddress,
                   textInputAction: TextInputAction.next,
                   autofillHints: const [AutofillHints.email],
                   validator: (value) {
                     final email = value?.trim() ?? '';
-                    if (email.isEmpty) return 'Ingresá tu correo';
-                    if (!email.contains('@')) return 'Ingresá un correo válido';
+                    if (email.isEmpty) return context.l10n.enterEmail;
+                    if (!email.contains('@')) {
+                      return context.l10n.enterValidEmail;
+                    }
                     return null;
                   },
                 ),
@@ -593,7 +595,7 @@ class _RemoteLoginPanel extends StatelessWidget {
                 _LoginTextField(
                   controller: passwordController,
                   enabled: !submitting,
-                  label: 'Contraseña',
+                  label: context.l10n.password,
                   icon: Icons.lock_outline_rounded,
                   obscureText: true,
                   textInputAction: TextInputAction.done,
@@ -605,15 +607,17 @@ class _RemoteLoginPanel extends StatelessWidget {
                   onSubmitted: (_) => onSubmit(),
                   validator: (value) {
                     final password = value ?? '';
-                    if (password.isEmpty) return 'Ingresá tu contraseña';
-                    if (password.length < 8) return 'Usá al menos 8 caracteres';
+                    if (password.isEmpty) return context.l10n.enterPassword;
+                    if (password.length < 8) {
+                      return context.l10n.passwordMinLength;
+                    }
                     return null;
                   },
                 ),
                 const SizedBox(height: 16),
                 _PrimaryActionButton(
                   submitting: submitting,
-                  label: mode.primaryButtonLabel,
+                  label: mode.primaryButtonLabel(context.l10n),
                   onPressed: onSubmit,
                 ),
                 const SizedBox(height: 10),
@@ -634,7 +638,7 @@ class _RemoteLoginPanel extends StatelessWidget {
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 12),
                 child: Text(
-                  'o',
+                  context.l10n.or,
                   style: theme.textTheme.labelMedium?.copyWith(
                     color: colors.onSurfaceVariant,
                     fontWeight: FontWeight.w700,
@@ -661,7 +665,7 @@ class _RemoteLoginPanel extends StatelessWidget {
                 width: 20,
                 height: 20,
               ),
-              label: const Text('Continuar con Google'),
+              label: Text(context.l10n.continueWithGoogle),
             ),
           ),
         ],
@@ -691,24 +695,23 @@ class _LocalLoginPanel extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            const _PanelTitle(
+            _PanelTitle(
               icon: Icons.phone_iphone_rounded,
-              title: 'Sin cuenta',
-              subtitle:
-                  'Agregá un nombre antes de abrir este espacio del dispositivo.',
+              title: context.l10n.withoutAccount,
+              subtitle: context.l10n.localAccountDescription,
             ),
             const SizedBox(height: 18),
             _LoginTextField(
               controller: nameController,
               enabled: !submitting,
-              label: 'Nombre',
+              label: context.l10n.name,
               icon: Icons.drive_file_rename_outline_rounded,
               textInputAction: TextInputAction.done,
               autofillHints: const [AutofillHints.name],
               onSubmitted: (_) => onSubmit(),
               validator: (value) {
                 if ((value ?? '').trim().isEmpty) {
-                  return 'Ingresá un nombre';
+                  return context.l10n.enterName;
                 }
                 return null;
               },
@@ -716,7 +719,7 @@ class _LocalLoginPanel extends StatelessWidget {
             const SizedBox(height: 16),
             _PrimaryActionButton(
               submitting: submitting,
-              label: 'Continuar sin cuenta',
+              label: context.l10n.continueLocally,
               onPressed: onSubmit,
             ),
           ],
@@ -825,8 +828,8 @@ class _EmailModeToggleButton extends StatelessWidget {
         ? _EmailAuthMode.signUp
         : _EmailAuthMode.signIn;
     final label = mode == _EmailAuthMode.signIn
-        ? '¿Necesitás una cuenta? Registrate'
-        : '¿Ya tenés cuenta? Iniciá sesión';
+        ? context.l10n.needAccountSignUp
+        : context.l10n.haveAccountSignIn;
 
     return TextButton(
       onPressed: enabled ? () => onChanged(targetMode) : null,
@@ -942,17 +945,17 @@ class _PrimaryActionButton extends StatelessWidget {
 }
 
 extension on _EmailAuthMode {
-  String get primaryButtonLabel {
+  String primaryButtonLabel(AppLocalizations l10n) {
     return switch (this) {
-      _EmailAuthMode.signIn => 'Iniciar sesión',
-      _EmailAuthMode.signUp => 'Registrarme',
+      _EmailAuthMode.signIn => l10n.signIn,
+      _EmailAuthMode.signUp => l10n.signUp,
     };
   }
 
-  String get actionLabel {
+  String actionLabel(AppLocalizations l10n) {
     return switch (this) {
-      _EmailAuthMode.signIn => 'iniciar sesión',
-      _EmailAuthMode.signUp => 'crear la cuenta',
+      _EmailAuthMode.signIn => l10n.signInAction,
+      _EmailAuthMode.signUp => l10n.signUpAction,
     };
   }
 }

@@ -4,6 +4,7 @@ import 'package:app/components/dashboard/add_widget_sheet.dart';
 import 'package:app/components/dashboard/dashboard_models.dart';
 import 'package:app/data/data.dart';
 import 'package:app/database.dart';
+import 'package:app/l10n/l10n.dart';
 import 'package:drift/drift.dart' show Value;
 import 'package:flutter/material.dart';
 
@@ -84,19 +85,20 @@ class _DashboardEditorState extends State<DashboardEditor> {
 
   Future<void> _delete(DashboardWidget row) async {
     final messenger = ScaffoldMessenger.of(context);
+    final l10n = context.l10n;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Quitar widget'),
-        content: Text('¿Quitar "${_titleOf(row)}" del tablero?'),
+        title: Text(l10n.removeWidget),
+        content: Text(l10n.removeWidgetConfirmation(_titleOf(row))),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Cancelar'),
+            child: Text(l10n.cancel),
           ),
           FilledButton(
             onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('Quitar'),
+            child: Text(l10n.remove),
           ),
         ],
       ),
@@ -106,7 +108,7 @@ class _DashboardEditorState extends State<DashboardEditor> {
       await widget.repos.dashboard.archive(row.id);
     } catch (error) {
       messenger.showSnackBar(
-        SnackBar(content: Text('No se pudo quitar el widget: $error')),
+        SnackBar(content: Text(l10n.widgetRemoveFailed(error))),
       );
     }
   }
@@ -118,6 +120,9 @@ class _DashboardEditorState extends State<DashboardEditor> {
       physics: const NeverScrollableScrollPhysics(),
       buildDefaultDragHandles: false,
       itemCount: _ordered.length,
+      // Flutter 3.41 (the CI SDK) still requires onReorder. Newer SDKs mark it
+      // deprecated in favor of onReorderItem, which is unavailable in 3.41.
+      // ignore: deprecated_member_use
       onReorder: _onReorder,
       itemBuilder: (context, index) {
         final row = _ordered[index];
@@ -139,19 +144,13 @@ class _DashboardEditorState extends State<DashboardEditor> {
     final decoded = jsonDecode(row.options);
     if (decoded is Map && decoded['title'] is String) {
       final title = decoded['title'] as String;
-      if (title.isNotEmpty) return title;
+      if (title.isNotEmpty) return context.l10n.dashboardTitle(title);
     }
     return _typeLabelOf(row);
   }
 
   String _typeLabelOf(DashboardWidget row) {
-    return switch (WidgetType.fromWire(row.type)) {
-      WidgetType.stat => 'Valor',
-      WidgetType.list => 'Lista',
-      WidgetType.balance => 'Saldo',
-      WidgetType.chart => 'Gráfico',
-      null => 'Widget',
-    };
+    return context.l10n.dashboardFallbackType(WidgetType.fromWire(row.type));
   }
 }
 
@@ -241,12 +240,12 @@ class _EditTile extends StatelessWidget {
               ),
             ),
             IconButton(
-              tooltip: 'Editar',
+              tooltip: context.l10n.edit,
               icon: const Icon(Icons.edit_outlined),
               onPressed: onEdit,
             ),
             IconButton(
-              tooltip: 'Quitar',
+              tooltip: context.l10n.remove,
               icon: Icon(Icons.delete_outline, color: theme.colorScheme.error),
               onPressed: onDelete,
             ),

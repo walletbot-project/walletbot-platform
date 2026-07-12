@@ -23,7 +23,8 @@ function nativeDashboardOnly() {
     return {
         ok: false,
         error: 'native_only',
-        message: 'Home dashboard filters and widgets are only implemented in the native app right now.',
+        message:
+            'Home dashboard filters and widgets are only implemented in the native app right now.',
     }
 }
 
@@ -578,8 +579,9 @@ export const toolExecutors = {
     archiveSavedFilter: defineTool(toolSchemas.archiveSavedFilter, async () =>
         nativeDashboardOnly(),
     ),
-    listDashboardWidgets: defineTool(toolSchemas.listDashboardWidgets, async () =>
-        nativeDashboardOnly(),
+    listDashboardWidgets: defineTool(
+        toolSchemas.listDashboardWidgets,
+        async () => nativeDashboardOnly(),
     ),
     createDashboardWidget: defineTool(
         toolSchemas.createDashboardWidget,

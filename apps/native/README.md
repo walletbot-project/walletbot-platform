@@ -9,6 +9,21 @@ flutter pub get
 flutter run
 ```
 
+## Localization
+
+The app uses Flutter's built-in `gen-l10n` workflow. English is the template
+locale and Spanish is also supported; the device locale is selected
+automatically.
+
+- Add or update messages in `lib/l10n/app_en.arb` and `app_es.arb`.
+- Use `context.l10n.<message>` in widgets and the localized helpers in
+  `lib/l10n/l10n.dart` for model labels, dates, and dashboard defaults.
+- Regenerate after changing ARB files with `flutter gen-l10n`.
+- Run `flutter analyze` and `flutter test` before committing.
+
+Android resource strings and iOS `InfoPlist.strings` cover OS-owned surfaces
+such as the app name and microphone permission prompt.
+
 ## Android signing
 
 Debug builds use the system debug keystore (`~/.android/debug.keystore`). Release builds use a project-local keystore.

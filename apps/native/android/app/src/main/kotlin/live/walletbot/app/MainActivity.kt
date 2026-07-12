@@ -20,6 +20,8 @@ class MainActivity : FlutterActivity() {
     private var audioTrack: AudioTrack? = null
     private var audioThread: HandlerThread? = null
     private var audioHandler: Handler? = null
+    @Volatile
+    private var playbackGeneration: Int = 0
     private var previousAudioMode: Int = AudioManager.MODE_NORMAL
     private var previousSpeakerphoneOn: Boolean = false
     private var audioModeChanged: Boolean = false
@@ -69,9 +71,12 @@ class MainActivity : FlutterActivity() {
             return
         }
 
+        val generation = playbackGeneration
         handler.post {
+            if (generation != playbackGeneration) return@post
             var offset = 0
             while (offset < bytes.size) {
+                if (generation != playbackGeneration) break
                 val written = track.write(bytes, offset, bytes.size - offset)
                 if (written <= 0) break
                 offset += written
@@ -82,11 +87,22 @@ class MainActivity : FlutterActivity() {
 
     private fun handleInterrupt(result: MethodChannel.Result) {
         try {
-            audioHandler?.post {
-                audioTrack?.pause()
-                audioTrack?.flush()
-                audioTrack?.play()
-            }
+            // Invalidate both the currently-running write loop and every
+            // queued enqueue Runnable before flushing AudioTrack. Without
+            // this, stale Runnables execute after flush() and refill the
+            // native buffer, so an interrupted agent keeps speaking.
+            playbackGeneration += 1
+            val handler = audioHandler
+            handler?.removeCallbacksAndMessages(null)
+
+            // Do not post this onto audioHandler: its thread may currently be
+            // blocked inside AudioTrack.write() for the generated PCM chunk.
+            // AudioTrack's control methods are thread-safe, and pause() makes
+            // that blocking write return so flush() can discard both the
+            // hardware buffer and the partially written chunk immediately.
+            audioTrack?.pause()
+            audioTrack?.flush()
+            audioTrack?.play()
             result.success(null)
         } catch (error: Exception) {
             result.error("pcm_interrupt_failed", error.message, null)
@@ -112,7 +128,11 @@ class MainActivity : FlutterActivity() {
             AudioFormat.CHANNEL_OUT_MONO,
             AudioFormat.ENCODING_PCM_16BIT,
         )
-        val bufferSize = maxOf(minBufferSize, sampleRate)
+        // 16-bit mono uses two bytes per sample. `sampleRate` bytes buffered
+        // half a second of speech at 24 kHz, which made interruptions sound
+        // late even after generation had stopped. Keep only ~100 ms beyond
+        // the platform minimum.
+        val bufferSize = maxOf(minBufferSize, sampleRate / 5)
 
         val track = AudioTrack.Builder()
             .setAudioAttributes(
@@ -142,6 +162,8 @@ class MainActivity : FlutterActivity() {
     }
 
     private fun stopPlayback() {
+        playbackGeneration += 1
+        audioHandler?.removeCallbacksAndMessages(null)
         val track = audioTrack
         audioTrack = null
 

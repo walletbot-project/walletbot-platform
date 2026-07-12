@@ -5,6 +5,7 @@ import 'package:app/components/dashboard/dashboard_models.dart';
 import 'package:app/components/dashboard/stat_widget.dart';
 import 'package:app/components/dashboard/transaction_list_widget.dart';
 import 'package:app/database.dart';
+import 'package:app/l10n/l10n.dart';
 import 'package:flutter/material.dart';
 
 class DashboardViewItem {
@@ -737,7 +738,10 @@ class _DashboardDragPreview extends StatelessWidget {
       StatWidgetSpec(:final title) ||
       TransactionListWidgetSpec(:final title) ||
       BalanceCardWidgetSpec(:final title) ||
-      ChartWidgetSpec(:final title) => title.isEmpty ? 'Widget' : title,
+      ChartWidgetSpec(:final title) =>
+        title.isEmpty
+            ? context.l10n.widget
+            : context.l10n.dashboardTitle(title),
     };
     final icon = switch (spec) {
       StatWidgetSpec() => Icons.calculate_outlined,
@@ -853,13 +857,13 @@ class _DashboardFloatingMenu extends StatelessWidget {
                   ),
                 const SizedBox(width: 4),
                 IconButton(
-                  tooltip: 'Editar',
+                  tooltip: context.l10n.edit,
                   visualDensity: VisualDensity.compact,
                   icon: const Icon(Icons.tune_rounded, size: 20),
                   onPressed: onEdit,
                 ),
                 IconButton(
-                  tooltip: 'Quitar',
+                  tooltip: context.l10n.remove,
                   visualDensity: VisualDensity.compact,
                   icon: Icon(
                     Icons.delete_outline_rounded,
@@ -877,7 +881,7 @@ class _DashboardFloatingMenu extends StatelessWidget {
                 children: [
                   _MoveButton(
                     icon: Icons.arrow_back_rounded,
-                    tooltip: 'Mover a la izquierda',
+                    tooltip: context.l10n.moveLeft,
                     onPressed:
                         enabledDirections.contains(DashboardMoveDirection.left)
                         ? () => onMove!(DashboardMoveDirection.left)
@@ -885,7 +889,7 @@ class _DashboardFloatingMenu extends StatelessWidget {
                   ),
                   _MoveButton(
                     icon: Icons.arrow_upward_rounded,
-                    tooltip: 'Mover hacia arriba',
+                    tooltip: context.l10n.moveUp,
                     onPressed:
                         enabledDirections.contains(DashboardMoveDirection.up)
                         ? () => onMove!(DashboardMoveDirection.up)
@@ -893,7 +897,7 @@ class _DashboardFloatingMenu extends StatelessWidget {
                   ),
                   _MoveButton(
                     icon: Icons.arrow_downward_rounded,
-                    tooltip: 'Mover hacia abajo',
+                    tooltip: context.l10n.moveDown,
                     onPressed:
                         enabledDirections.contains(DashboardMoveDirection.down)
                         ? () => onMove!(DashboardMoveDirection.down)
@@ -901,7 +905,7 @@ class _DashboardFloatingMenu extends StatelessWidget {
                   ),
                   _MoveButton(
                     icon: Icons.arrow_forward_rounded,
-                    tooltip: 'Mover a la derecha',
+                    tooltip: context.l10n.moveRight,
                     onPressed:
                         enabledDirections.contains(DashboardMoveDirection.right)
                         ? () => onMove!(DashboardMoveDirection.right)

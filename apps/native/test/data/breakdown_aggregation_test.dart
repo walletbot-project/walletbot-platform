@@ -145,8 +145,8 @@ void main() {
     expect(slices, hasLength(2));
     // Chronological, not by magnitude.
     expect(slices.first.key, '2026-01');
-    expect(slices.first.label, 'ene 2026');
+    expect(slices.first.label, '2026-01');
     expect(slices[1].key, '2026-03');
-    expect(slices[1].label, 'mar 2026');
+    expect(slices[1].label, '2026-03');
   });
 }

@@ -296,6 +296,60 @@ class Tombstones extends Table {
   Set<Column<Object>> get primaryKey => {entityTable, entityId};
 }
 
+// Append-only log for Gemini Live conversations. These tables deliberately do
+// not participate in the financial entity sync: voice traffic is high churn,
+// has different retention/privacy characteristics, and is replicated through
+// its own bounded event batches.
+@TableIndex(name: 'voice_sessions_status', columns: {#status})
+@TableIndex(name: 'voice_sessions_updated_at', columns: {#updatedAt})
+class VoiceSessions extends Table {
+  TextColumn get id => text().named('id')();
+  TextColumn get model => text().named('model')();
+  TextColumn get status => text().named('status')();
+  Int64Column get startedAt => int64().named('started_at')();
+  Int64Column get updatedAt => int64().named('updated_at')();
+  Int64Column get endedAt => int64().named('ended_at').nullable()();
+  BoolColumn get endedExplicitly =>
+      boolean().named('ended_explicitly').withDefault(const Constant(false))();
+  TextColumn get resumeHandle => text().named('resume_handle').nullable()();
+  Int64Column get resumeHandleUpdatedAt =>
+      int64().named('resume_handle_updated_at').nullable()();
+  BoolColumn get remoteEnabled =>
+      boolean().named('remote_enabled').withDefault(const Constant(false))();
+  BoolColumn get remoteSynced =>
+      boolean().named('remote_synced').withDefault(const Constant(false))();
+
+  @override
+  Set<Column<Object>> get primaryKey => {id};
+}
+
+@TableIndex(name: 'voice_events_session_id', columns: {#sessionId})
+@TableIndex(name: 'voice_events_remote_synced', columns: {#remoteSynced})
+class VoiceSessionEvents extends Table {
+  TextColumn get id => text().named('id')();
+  TextColumn get sessionId => text().named('session_id')();
+  IntColumn get sequence => integer().named('sequence')();
+  Int64Column get occurredAt => int64().named('occurred_at')();
+  TextColumn get type => text().named('type')();
+  TextColumn get direction => text().named('direction')();
+  TextColumn get modality => text().named('modality').nullable()();
+  TextColumn get payloadJson => text().named('payload_json')();
+  TextColumn get rawJson => text().named('raw_json').nullable()();
+  BlobColumn get binaryData => blob().named('binary_data').nullable()();
+  TextColumn get binaryMimeType =>
+      text().named('binary_mime_type').nullable()();
+  BoolColumn get remoteSynced =>
+      boolean().named('remote_synced').withDefault(const Constant(false))();
+
+  @override
+  Set<Column<Object>> get primaryKey => {id};
+
+  @override
+  List<Set<Column>> get uniqueKeys => [
+    {sessionId, sequence},
+  ];
+}
+
 @DriftDatabase(
   tables: [
     Accounts,
@@ -307,6 +361,8 @@ class Tombstones extends Table {
     DashboardWidgets,
     SyncState,
     Tombstones,
+    VoiceSessions,
+    VoiceSessionEvents,
   ],
 )
 class AppDatabase extends _$AppDatabase {
@@ -318,7 +374,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.executor);
 
   @override
-  int get schemaVersion => 2;
+  int get schemaVersion => 3;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -330,6 +386,10 @@ class AppDatabase extends _$AppDatabase {
         await m.createTable(savedFilters);
         await m.createTable(dashboardWidgets);
         await m.addColumn(syncState, syncState.dashboardSeeded);
+      }
+      if (from < 3) {
+        await m.createTable(voiceSessions);
+        await m.createTable(voiceSessionEvents);
       }
     },
   );
