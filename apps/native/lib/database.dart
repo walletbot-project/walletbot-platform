@@ -314,16 +314,13 @@ class Tombstones extends Table {
 )
 class AppDatabase extends _$AppDatabase {
   AppDatabase.forUser(String userId)
-    : _debugName = _dbNameFor(userId),
-      super(_openConnection(_dbNameFor(userId))) {
-    debugPrint('sqlite: constructing db userId=$userId name=$_debugName');
+    : super(_openConnection(_dbNameFor(userId))) {
+    debugPrint('sqlite: constructing user database');
   }
 
   /// Test-only constructor backed by an arbitrary executor (e.g.
   /// `NativeDatabase.memory()`). Production code must use [AppDatabase.forUser].
-  AppDatabase.forTesting(super.executor) : _debugName = 'test';
-
-  final String _debugName;
+  AppDatabase.forTesting(super.executor);
 
   @override
   int get schemaVersion => 1;
@@ -340,7 +337,7 @@ class AppDatabase extends _$AppDatabase {
     beforeOpen: (details) async {
       final userVersion = await customSelect('PRAGMA user_version').getSingle();
       debugPrint(
-        'sqlite: opening name=$_debugName versionBefore=${details.versionBefore} '
+        'sqlite: opening user database versionBefore=${details.versionBefore} '
         'versionNow=${details.versionNow} wasCreated=${details.wasCreated} '
         'hadUpgrade=${details.hadUpgrade} pragmaUserVersionBeforeFinalize='
         '${userVersion.read<int>('user_version')}',
