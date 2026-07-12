@@ -1044,8 +1044,8 @@ class Tombstones extends Table with TableInfo {
   bool get dontWriteConstraints => true;
 }
 
-class DatabaseAtV3 extends GeneratedDatabase {
-  DatabaseAtV3(QueryExecutor e) : super(e);
+class DatabaseAtV1 extends GeneratedDatabase {
+  DatabaseAtV1(QueryExecutor e) : super(e);
   late final Accounts accounts = Accounts(this);
   late final Categories categories = Categories(this);
   late final Transactions transactions = Transactions(this);
@@ -1246,5 +1246,5 @@ class DatabaseAtV3 extends GeneratedDatabase {
     tombstonesNeedsSync,
   ];
   @override
-  int get schemaVersion => 3;
+  int get schemaVersion => 1;
 }

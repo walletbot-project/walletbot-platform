@@ -326,24 +326,12 @@ class AppDatabase extends _$AppDatabase {
   final String _debugName;
 
   @override
-  int get schemaVersion => 3;
+  int get schemaVersion => 1;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
     onCreate: (m) async => m.createAll(),
     onUpgrade: (m, from, to) async {
-      if (to != schemaVersion || from >= to) {
-        throw UnsupportedError(
-          'Unhandled SQLite migration path: v$from -> v$to. '
-          'Define an explicit upgrade path in AppDatabase.migration.',
-        );
-      }
-
-      if (from < 3) {
-        await _migrateToV3(m);
-        return;
-      }
-
       throw UnsupportedError(
         'Unhandled SQLite migration path: v$from -> v$to. '
         'Define an explicit upgrade path in AppDatabase.migration.',
@@ -369,125 +357,6 @@ class AppDatabase extends _$AppDatabase {
         databaseDirectory: getApplicationSupportDirectory,
       ),
     );
-  }
-
-  Future<void> _migrateToV3(Migrator m) async {
-    await _ensureDashboardSchema(m);
-
-    for (final tableName in const [
-      'accounts',
-      'categories',
-      'transactions',
-      'tags',
-      'saved_filters',
-      'dashboard_widgets',
-    ]) {
-      await _renameArchivedColumnIfNeeded(tableName);
-    }
-
-    await _ensureAccentColumns(m);
-
-    final transactionColumns = await _columnNames('transactions');
-    if (!transactionColumns.contains('date_confirmed')) {
-      await m.addColumn(transactions, transactions.dateConfirmed);
-    }
-  }
-
-  Future<void> _ensureDashboardSchema(Migrator m) async {
-    if (!await _tableExists('saved_filters')) {
-      await m.createTable(savedFilters);
-    }
-    if (!await _tableExists('dashboard_widgets')) {
-      await m.createTable(dashboardWidgets);
-    }
-
-    final syncStateColumns = await _columnNames('sync_state');
-    if (!syncStateColumns.contains('dashboard_seeded')) {
-      await m.addColumn(syncState, syncState.dashboardSeeded);
-    }
-  }
-
-  Future<void> _ensureAccentColumns(Migrator m) async {
-    await _addColumnIfMissing(
-      'accounts',
-      'color',
-      () => m.addColumn(accounts, accounts.color),
-    );
-    await _fillNullText('accounts', 'color', kDefaultAccountColor);
-
-    await _addColumnIfMissing(
-      'accounts',
-      'icon',
-      () => m.addColumn(accounts, accounts.icon),
-    );
-    await _fillNullText('accounts', 'icon', kDefaultAccountIcon);
-
-    await _addColumnIfMissing(
-      'categories',
-      'color',
-      () => m.addColumn(categories, categories.color),
-    );
-    await _fillNullText('categories', 'color', kDefaultCategoryColor);
-
-    await _addColumnIfMissing(
-      'categories',
-      'icon',
-      () => m.addColumn(categories, categories.icon),
-    );
-    await _fillNullText('categories', 'icon', kDefaultCategoryIcon);
-
-    await _addColumnIfMissing(
-      'tags',
-      'color',
-      () => m.addColumn(tags, tags.color),
-    );
-    await _fillNullText('tags', 'color', kDefaultTagColor);
-  }
-
-  Future<void> _addColumnIfMissing(
-    String tableName,
-    String columnName,
-    Future<void> Function() addColumn,
-  ) async {
-    final columns = await _columnNames(tableName);
-    if (!columns.contains(columnName)) {
-      await addColumn();
-    }
-  }
-
-  Future<void> _fillNullText(
-    String tableName,
-    String columnName,
-    String value,
-  ) async {
-    await customStatement(
-      'UPDATE "$tableName" SET "$columnName" = ? WHERE "$columnName" IS NULL',
-      [value],
-    );
-  }
-
-  Future<void> _renameArchivedColumnIfNeeded(String tableName) async {
-    final columns = await _columnNames(tableName);
-    if (!columns.contains('archived') || columns.contains('is_archived')) {
-      return;
-    }
-
-    await customStatement(
-      'ALTER TABLE "$tableName" RENAME COLUMN "archived" TO "is_archived"',
-    );
-  }
-
-  Future<bool> _tableExists(String tableName) async {
-    final row = await customSelect(
-      "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?",
-      variables: [Variable.withString(tableName)],
-    ).getSingleOrNull();
-    return row != null;
-  }
-
-  Future<Set<String>> _columnNames(String tableName) async {
-    final rows = await customSelect('PRAGMA table_info("$tableName")').get();
-    return rows.map((row) => row.read<String>('name')).toSet();
   }
 
   static Future<void> deleteForUser(String userId) async {

@@ -18,7 +18,8 @@
 <!-- SQLite / Drift checklist (delete when not applicable):
 - Bump AppDatabase.schemaVersion for every schema change
 - Add an explicit onUpgrade path that preserves existing local data
-- Regenerate drift_schemas/ and test/generated_migrations/
+- Run dart run drift_dev make-migrations
+- Regenerate test/generated_migrations/ from drift_schemas/app_database/
 - Add migration schema + data-integrity tests
 -->
 
