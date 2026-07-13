@@ -2,8 +2,10 @@ import 'package:app/components/account_icons.dart';
 import 'package:app/components/category_icons.dart';
 import 'package:app/components/color_utils.dart';
 import 'package:app/components/grouped_card.dart';
+import 'package:app/components/readable_time_picker.dart';
 import 'package:app/data/data.dart';
 import 'package:app/database.dart';
+import 'package:app/l10n/l10n.dart';
 import 'package:app/shared/money.dart';
 import 'package:drift/drift.dart' show Value;
 import 'package:flutter/material.dart';
@@ -372,6 +374,8 @@ class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
       initialDate: _selectedDate,
       firstDate: DateTime(2000),
       lastDate: DateTime(2100),
+      cancelText: context.l10n.cancel,
+      confirmText: context.l10n.accept,
     );
     if (picked == null || !mounted) return;
     setState(() {
@@ -387,7 +391,7 @@ class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
   }
 
   Future<void> _pickTime() async {
-    final picked = await showTimePicker(
+    final picked = await showReadableTimePicker(
       context: context,
       initialTime: TimeOfDay.fromDateTime(_selectedDate),
     );

@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:app/components/color_utils.dart';
+import 'package:app/components/readable_time_picker.dart';
 import 'package:app/data/data.dart';
 import 'package:app/database.dart';
 import 'package:app/l10n/l10n.dart';
@@ -173,6 +174,8 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
       initialDate: _selectedDate,
       firstDate: DateTime(2000),
       lastDate: DateTime(2100),
+      cancelText: context.l10n.cancel,
+      confirmText: context.l10n.accept,
     );
     if (picked == null || !mounted) return;
     setState(() => _selectedDate = picked);
@@ -181,7 +184,7 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
   Future<void> _pickTime() async {
     await _commitInlineEditing();
     if (!mounted) return;
-    final picked = await showTimePicker(
+    final picked = await showReadableTimePicker(
       context: context,
       initialTime: _selectedTime ?? TimeOfDay.now(),
     );
