@@ -538,23 +538,13 @@ class ToolExecutors {
 
   // ───── Transaction writes ─────
 
-  // The agent sets `dateConfirmed` when the date is certain (explicit date,
-  // "today"/"yesterday") and false when it inferred or defaulted it.
-  //
-  // Gemini's function-call args don't guarantee a typed JSON boolean: depending
-  // on the model it arrives as a real bool, the string "true"/"false", or a
-  // number (1/0). We coerce all of those here. A truly unparseable value falls
-  // back to false (conservative: treat the date as unconfirmed).
+  // A supplied date is explicit (including deterministic relative phrases).
+  // When date is omitted, the executor defaults the day to today and marks it
+  // unconfirmed. This prevents a mistaken model boolean from overriding the
+  // actual tool payload.
   bool _dateConfirmedOf(Map<String, dynamic> args) {
-    final raw = args['dateConfirmed'];
-    if (raw is bool) return raw;
-    if (raw is num) return raw != 0;
-    if (raw is String) {
-      final normalized = raw.trim().toLowerCase();
-      if (normalized == 'true') return true;
-      if (normalized == 'false') return false;
-    }
-    return false;
+    final date = args['date'];
+    return date is String && date.trim().isNotEmpty;
   }
 
   TransactionTimeStatus _timeStatusOf(Map<String, dynamic> args) {
@@ -564,6 +554,14 @@ class ToolExecutors {
       'none' || null => TransactionTimeStatus.none,
       final value => throw ArgumentError('Invalid timeStatus: $value'),
     };
+  }
+
+  BigInt _transactionDateOf(Map<String, dynamic> args) {
+    return parseTransactionDate(
+      args['date'] as String?,
+      timeStatus: _timeStatusOf(args),
+      time: args['time'] as String?,
+    );
   }
 
   /// Resolves the loosely typed `tagIdsOrNames` argument to tag ids,
@@ -598,7 +596,7 @@ class ToolExecutors {
       currency: acc.currency,
       description: args['description'] as String?,
       status: (args['status'] as String?) ?? 'cleared',
-      dateMs: parseOptionalDate(args['date'] as String?),
+      dateMs: _transactionDateOf(args),
       dateConfirmed: _dateConfirmedOf(args),
       timeStatus: _timeStatusOf(args),
       tagIds: await _resolveTagIds(args['tagIdsOrNames']),
@@ -624,7 +622,7 @@ class ToolExecutors {
       currency: acc.currency,
       description: args['description'] as String?,
       status: (args['status'] as String?) ?? 'cleared',
-      dateMs: parseOptionalDate(args['date'] as String?),
+      dateMs: _transactionDateOf(args),
       dateConfirmed: _dateConfirmedOf(args),
       timeStatus: _timeStatusOf(args),
       tagIds: await _resolveTagIds(args['tagIdsOrNames']),
@@ -684,7 +682,7 @@ class ToolExecutors {
       exchangeRate: (args['exchangeRate'] as num?)?.toDouble(),
       categoryId: categoryId ?? '',
       description: args['description'] as String?,
-      dateMs: parseOptionalDate(args['date'] as String?),
+      dateMs: _transactionDateOf(args),
       dateConfirmed: _dateConfirmedOf(args),
       timeStatus: _timeStatusOf(args),
       tagIds: await _resolveTagIds(args['tagIdsOrNames']),
@@ -706,7 +704,7 @@ class ToolExecutors {
       currency: acc.currency,
       name: (args['name'] as String?) ?? 'Ajuste de saldo',
       description: args['description'] as String?,
-      dateMs: parseOptionalDate(args['date'] as String?),
+      dateMs: _transactionDateOf(args),
       dateConfirmed: _dateConfirmedOf(args),
       timeStatus: _timeStatusOf(args),
     );
@@ -737,11 +735,11 @@ class ToolExecutors {
       description: args.containsKey('description')
           ? Value(args['description'] as String?)
           : const Value.absent(),
-      date: args['date'] != null
-          ? Value(parseNaturalDate(args['date'] as String))
+      date: args['date'] != null || args['time'] != null
+          ? Value(_transactionDateOf(args))
           : const Value.absent(),
-      dateConfirmed: args.containsKey('dateConfirmed')
-          ? Value(_dateConfirmedOf(args))
+      dateConfirmed: args['date'] != null
+          ? const Value(true)
           : const Value.absent(),
       timeStatus: args.containsKey('timeStatus')
           ? Value(_timeStatusOf(args))

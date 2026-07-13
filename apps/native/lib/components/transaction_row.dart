@@ -49,6 +49,7 @@ class TransactionRow extends StatelessWidget {
         detailIdentities.add(identity);
       }
     }
+    final showAttention = !dateCheck || (timeIdentity?.attention ?? false);
 
     final rowContent = Padding(
       padding: EdgeInsets.symmetric(
@@ -114,13 +115,13 @@ class TransactionRow extends StatelessWidget {
                     ],
                   ),
                 ),
-                if (!dateCheck || timeIdentity != null) ...[
+                if (showAttention || timeIdentity != null) ...[
                   const SizedBox(width: 12),
                   Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      if (!dateCheck) const _DateCheckIcon(size: 15),
-                      if (!dateCheck && timeIdentity != null)
+                      if (showAttention) const _DateCheckIcon(size: 15),
+                      if (showAttention && timeIdentity != null)
                         const SizedBox(width: 4),
                       if (timeIdentity != null)
                         _IdentityIcon(
@@ -202,10 +203,6 @@ class _IdentityIcon extends StatelessWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            if (identity.attention) ...[
-              Icon(identity.icon, size: iconSize + 1, color: color),
-              const SizedBox(width: 3),
-            ],
             Text(
               identity.label,
               style: TextStyle(

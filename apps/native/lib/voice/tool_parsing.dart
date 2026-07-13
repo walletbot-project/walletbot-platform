@@ -2,6 +2,8 @@
 // sync with the TS version — both implement the same contract so behavior is
 // identical between web and native tool executors.
 
+import 'package:app/database.dart';
+
 export '../shared/money.dart' show parseAmountToCents;
 export '../shared/text.dart' show normalizeName;
 
@@ -12,9 +14,17 @@ export '../shared/text.dart' show normalizeName;
 ///  - "today" | "hoy"
 ///  - "yesterday" | "ayer"
 ///  - "tomorrow" | "mañana" | "manana"
+///  - "last Thursday" | "el jueves pasado"
+///  - "3 days ago" | "hace 3 días"
 BigInt parseNaturalDate(String input, {DateTime? now}) {
   final reference = now ?? DateTime.now();
   final trimmed = input.trim().toLowerCase();
+  final normalized = trimmed
+      .replaceAll(RegExp('[áàäâ]'), 'a')
+      .replaceAll(RegExp('[éèëê]'), 'e')
+      .replaceAll(RegExp('[íìïî]'), 'i')
+      .replaceAll(RegExp('[óòöô]'), 'o')
+      .replaceAll(RegExp('[úùüû]'), 'u');
 
   BigInt asDayOffset(int offset) {
     final d = DateTime(
@@ -25,17 +35,55 @@ BigInt parseNaturalDate(String input, {DateTime? now}) {
     return BigInt.from(d.millisecondsSinceEpoch);
   }
 
-  switch (trimmed) {
+  switch (normalized) {
     case 'today':
     case 'hoy':
       return asDayOffset(0);
     case 'yesterday':
     case 'ayer':
       return asDayOffset(-1);
+    case 'anteayer':
+    case 'day before yesterday':
+      return asDayOffset(-2);
     case 'tomorrow':
-    case 'mañana':
     case 'manana':
       return asDayOffset(1);
+  }
+
+  final daysAgo =
+      RegExp(r'^hace\s+(\d+)\s+dias?$').firstMatch(normalized) ??
+      RegExp(r'^(\d+)\s+days?\s+ago$').firstMatch(normalized);
+  if (daysAgo != null) {
+    return asDayOffset(-int.parse(daysAgo.group(1)!));
+  }
+
+  const weekdays = <String, int>{
+    'monday': DateTime.monday,
+    'lunes': DateTime.monday,
+    'tuesday': DateTime.tuesday,
+    'martes': DateTime.tuesday,
+    'wednesday': DateTime.wednesday,
+    'miercoles': DateTime.wednesday,
+    'thursday': DateTime.thursday,
+    'jueves': DateTime.thursday,
+    'friday': DateTime.friday,
+    'viernes': DateTime.friday,
+    'saturday': DateTime.saturday,
+    'sabado': DateTime.saturday,
+    'sunday': DateTime.sunday,
+    'domingo': DateTime.sunday,
+  };
+  final relativeWeekday =
+      RegExp(r'^(?:el\s+)?([a-z]+)\s+pasado$').firstMatch(normalized) ??
+      RegExp(r'^(?:el\s+)?pasado\s+([a-z]+)$').firstMatch(normalized) ??
+      RegExp(r'^(?:last|this\s+past)\s+([a-z]+)$').firstMatch(normalized);
+  if (relativeWeekday != null) {
+    final targetWeekday = weekdays[relativeWeekday.group(1)];
+    if (targetWeekday != null) {
+      var daysBack = (reference.weekday - targetWeekday + 7) % 7;
+      if (daysBack == 0) daysBack = 7;
+      return asDayOffset(-daysBack);
+    }
   }
 
   final parsed = DateTime.tryParse(input);
@@ -48,4 +96,58 @@ BigInt parseNaturalDate(String input, {DateTime? now}) {
 BigInt? parseOptionalDate(String? input, {DateTime? now}) {
   if (input == null) return null;
   return parseNaturalDate(input, now: now);
+}
+
+BigInt parseTransactionDate(
+  String? input, {
+  required TransactionTimeStatus timeStatus,
+  String? time,
+  DateTime? now,
+}) {
+  final reference = now ?? DateTime.now();
+  final parsed = input == null
+      ? null
+      : DateTime.fromMillisecondsSinceEpoch(
+          parseNaturalDate(input, now: reference).toInt(),
+        );
+
+  if (timeStatus != TransactionTimeStatus.none) {
+    final selectedDate = parsed ?? reference;
+    if (time != null) {
+      final match = RegExp(
+        r'^([01]?\d|2[0-3]):([0-5]\d)$',
+      ).firstMatch(time.trim());
+      if (match == null) {
+        throw FormatException('Invalid transaction time: $time');
+      }
+      return BigInt.from(
+        DateTime(
+          selectedDate.year,
+          selectedDate.month,
+          selectedDate.day,
+          int.parse(match.group(1)!),
+          int.parse(match.group(2)!),
+        ).millisecondsSinceEpoch,
+      );
+    }
+    if (parsed == null) {
+      throw ArgumentError(
+        'date or time is required when timeStatus is $timeStatus',
+      );
+    }
+    return BigInt.from(parsed.millisecondsSinceEpoch);
+  }
+
+  if (parsed == null) return BigInt.from(reference.millisecondsSinceEpoch);
+  return BigInt.from(
+    DateTime(
+      parsed.year,
+      parsed.month,
+      parsed.day,
+      reference.hour,
+      reference.minute,
+      reference.second,
+      reference.millisecond,
+    ).millisecondsSinceEpoch,
+  );
 }

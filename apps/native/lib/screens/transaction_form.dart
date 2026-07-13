@@ -35,6 +35,7 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
   Account? _selectedDestinationAccount;
   Category? _selectedCategory;
   DateTime _selectedDate = DateTime.now();
+  TimeOfDay? _selectedTime;
   final List<_FormTag> _tags = [];
   bool _isLoading = true;
   bool _isSaving = false;
@@ -175,6 +176,17 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
     );
     if (picked == null || !mounted) return;
     setState(() => _selectedDate = picked);
+  }
+
+  Future<void> _pickTime() async {
+    await _commitInlineEditing();
+    if (!mounted) return;
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: _selectedTime ?? TimeOfDay.now(),
+    );
+    if (picked == null || !mounted) return;
+    setState(() => _selectedTime = picked);
   }
 
   Future<void> _pickAccount({bool destination = false}) async {
@@ -469,7 +481,20 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
               destinationAmountValue > 0
           ? destinationAmountValue / amountValue
           : null;
-      final dateMs = BigInt.from(_selectedDate.millisecondsSinceEpoch);
+      final selectedTime = _selectedTime;
+      final transactionDate = selectedTime == null
+          ? _selectedDate
+          : DateTime(
+              _selectedDate.year,
+              _selectedDate.month,
+              _selectedDate.day,
+              selectedTime.hour,
+              selectedTime.minute,
+            );
+      final dateMs = BigInt.from(transactionDate.millisecondsSinceEpoch);
+      final timeStatus = selectedTime == null
+          ? TransactionTimeStatus.none
+          : TransactionTimeStatus.confirmed;
       final tagIds = _tags
           .map((tag) => tag.id)
           .whereType<String>()
@@ -484,6 +509,7 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
             currency: account.currency,
             description: _emptyToNull(_descriptionController.text),
             dateMs: dateMs,
+            timeStatus: timeStatus,
             tagIds: tagIds,
           );
         case TransactionFormType.expense:
@@ -495,6 +521,7 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
             currency: account.currency,
             description: _emptyToNull(_descriptionController.text),
             dateMs: dateMs,
+            timeStatus: timeStatus,
             tagIds: tagIds,
           );
         case TransactionFormType.transfer:
@@ -512,6 +539,7 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
             categoryId: category.id,
             description: _emptyToNull(_descriptionController.text),
             dateMs: dateMs,
+            timeStatus: timeStatus,
             tagIds: tagIds,
           );
       }
@@ -660,6 +688,16 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
                 onClear: _isSaving
                     ? null
                     : () => setState(() => _selectedDate = DateTime.now()),
+              ),
+              const SizedBox(height: 18),
+              _ReadonlyField(
+                label: context.l10n.timeOptional,
+                value: _selectedTime?.format(context) ?? context.l10n.noTime,
+                icon: Icons.schedule_outlined,
+                onTap: _isSaving ? null : _pickTime,
+                onClear: _isSaving || _selectedTime == null
+                    ? null
+                    : () => setState(() => _selectedTime = null),
               ),
               if (_type != TransactionFormType.transfer) ...[
                 const SizedBox(height: 18),

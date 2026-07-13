@@ -319,7 +319,7 @@ export const toolExecutors = {
         if (!catR.ok) return resolutionError('Category', catR)
 
         const id = newId()
-        const date = parseTransactionDate(args.date, args.timeStatus)
+        const date = parseTransactionDate(args.date, args.timeStatus, args.time)
         await ctx.client.mutation(api.transactions.mutations.createExpense, {
             id,
             name: args.name,
@@ -328,7 +328,7 @@ export const toolExecutors = {
             accountId: accR.entity.id,
             categoryId: catR.entity.id,
             date,
-            dateConfirmed: args.dateConfirmed,
+            dateConfirmed: args.date !== undefined,
             timeStatus: args.timeStatus,
             status: args.status,
         })
@@ -342,7 +342,7 @@ export const toolExecutors = {
         if (!catR.ok) return resolutionError('Category', catR)
 
         const id = newId()
-        const date = parseTransactionDate(args.date, args.timeStatus)
+        const date = parseTransactionDate(args.date, args.timeStatus, args.time)
         await ctx.client.mutation(api.transactions.mutations.createIncome, {
             id,
             name: args.name,
@@ -351,7 +351,7 @@ export const toolExecutors = {
             accountId: accR.entity.id,
             categoryId: catR.entity.id,
             date,
-            dateConfirmed: args.dateConfirmed,
+            dateConfirmed: args.date !== undefined,
             timeStatus: args.timeStatus,
             status: args.status,
         })
@@ -371,7 +371,7 @@ export const toolExecutors = {
         if (!catR.ok) return resolutionError('Category', catR)
 
         const id = newId()
-        const date = parseTransactionDate(args.date, args.timeStatus)
+        const date = parseTransactionDate(args.date, args.timeStatus, args.time)
         await ctx.client.mutation(api.transactions.mutations.createTransfer, {
             id,
             name: args.name,
@@ -386,7 +386,7 @@ export const toolExecutors = {
             exchangeRate: args.exchangeRate,
             categoryId: catR.entity.id,
             date,
-            dateConfirmed: args.dateConfirmed,
+            dateConfirmed: args.date !== undefined,
             timeStatus: args.timeStatus,
         })
         await attachTags(ctx, id, args.tagIdsOrNames)
@@ -398,7 +398,11 @@ export const toolExecutors = {
             const accR = await resolveAccount(ctx, args.accountIdOrName)
             if (!accR.ok) return resolutionError('Account', accR)
             const id = newId()
-            const date = parseTransactionDate(args.date, args.timeStatus)
+            const date = parseTransactionDate(
+                args.date,
+                args.timeStatus,
+                args.time,
+            )
             await ctx.client.mutation(
                 api.transactions.mutations.createBalanceAdjustment,
                 {
@@ -408,7 +412,7 @@ export const toolExecutors = {
                     name: args.name,
                     description: args.description,
                     date,
-                    dateConfirmed: args.dateConfirmed,
+                    dateConfirmed: args.date !== undefined,
                     timeStatus: args.timeStatus,
                 },
             )
@@ -430,15 +434,19 @@ export const toolExecutors = {
                 categoryId = r.entity.id
             }
             const date =
-                args.date === undefined
+                args.date === undefined && args.time === undefined
                     ? undefined
-                    : parseTransactionDate(args.date, args.timeStatus ?? 'none')
+                    : parseTransactionDate(
+                          args.date,
+                          args.timeStatus ?? 'none',
+                          args.time,
+                      )
             await ctx.client.mutation(api.transactions.mutations.update, {
                 id: args.id,
                 name: args.name,
                 description: args.description,
                 date,
-                dateConfirmed: args.dateConfirmed,
+                dateConfirmed: args.date === undefined ? undefined : true,
                 timeStatus: args.timeStatus,
                 amount:
                     args.amount !== undefined

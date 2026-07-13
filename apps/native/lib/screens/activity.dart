@@ -3,7 +3,6 @@ import 'package:app/components/category_icons.dart';
 import 'package:app/components/color_utils.dart';
 import 'package:app/components/transaction_filters_bar.dart';
 import 'package:app/components/transaction_row.dart';
-import 'package:app/components/transaction_time_mock.dart';
 import 'package:app/data/data.dart';
 import 'package:app/database.dart';
 import 'package:app/l10n/l10n.dart';
@@ -285,9 +284,17 @@ class _ActivityScreenState extends State<ActivityScreen> {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
     final entries = <_ListEntry>[];
+    final sortedItems = [...items]
+      ..sort((left, right) {
+        final byTime = right.date.compareTo(left.date);
+        if (byTime != 0) return byTime;
+        final byCreation = right.createdAt.compareTo(left.createdAt);
+        if (byCreation != 0) return byCreation;
+        return right.id.compareTo(left.id);
+      });
 
     DateTime? currentDay;
-    for (final t in items) {
+    for (final t in sortedItems) {
       // Group by transaction date (matches web). The list is ordered by date
       // desc above, so day headers stay contiguous.
       final dt = DateTime.fromMillisecondsSinceEpoch(t.date.toInt());
@@ -482,16 +489,19 @@ class _ActivityScreenState extends State<ActivityScreen> {
   }
 
   TransactionRowVisualIdentity _timeVisualIdentityFor(Transaction transaction) {
-    final time = mockTransactionTime(
-      transactionId: transaction.id,
-      createdAt: transaction.createdAt,
-    );
+    final date = DateTime.fromMillisecondsSinceEpoch(transaction.date.toInt());
+    final needsAttention =
+        transaction.timeStatus != TransactionTimeStatus.confirmed;
     return TransactionRowVisualIdentity(
       type: TransactionRowVisualIdentityType.time,
-      label: time.rowText,
-      icon: time.icon,
+      label: MaterialLocalizations.of(
+        context,
+      ).formatTimeOfDay(TimeOfDay.fromDateTime(date)),
+      icon: needsAttention
+          ? Icons.help_outline_rounded
+          : Icons.schedule_outlined,
       color: Colors.transparent,
-      attention: time.needsAttention,
+      attention: needsAttention,
     );
   }
 

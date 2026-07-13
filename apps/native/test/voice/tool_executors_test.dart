@@ -117,6 +117,56 @@ void main() {
     );
   });
 
+  test(
+    'relative day is confirmed even if the model boolean is wrong',
+    () async {
+      await tools.execute('createAccount', {
+        'name': 'Debit',
+        'currency': 'ARS',
+      });
+      await tools.execute('createCategory', {'name': 'Books'});
+
+      final result = await tools.execute('addExpense', {
+        'accountIdOrName': 'Debit',
+        'categoryIdOrName': 'Books',
+        'name': 'Libro',
+        'amount': 10000,
+        'date': 'el jueves pasado',
+        'dateConfirmed': false,
+        'timeStatus': 'none',
+      });
+
+      expect(result['ok'], isTrue);
+      final row = (await repos.transactions.getById(result['id'] as String))!;
+      final date = DateTime.fromMillisecondsSinceEpoch(row.date.toInt());
+      expect(row.dateConfirmed, isTrue);
+      expect(date.weekday, DateTime.thursday);
+      expect(date.isBefore(DateTime.now()), isTrue);
+    },
+  );
+
+  test('exact time without a day stays exact and defaults today', () async {
+    await tools.execute('createAccount', {'name': 'Debit', 'currency': 'ARS'});
+    await tools.execute('createCategory', {'name': 'Coffee'});
+
+    final result = await tools.execute('addExpense', {
+      'accountIdOrName': 'Debit',
+      'categoryIdOrName': 'Coffee',
+      'name': 'Café',
+      'amount': 3000,
+      'dateConfirmed': false,
+      'timeStatus': 'confirmed',
+      'time': '17:00',
+    });
+
+    expect(result['ok'], isTrue);
+    final row = (await repos.transactions.getById(result['id'] as String))!;
+    final date = DateTime.fromMillisecondsSinceEpoch(row.date.toInt());
+    expect(row.dateConfirmed, isFalse);
+    expect(row.timeStatus, TransactionTimeStatus.confirmed);
+    expect((date.hour, date.minute), (17, 0));
+  });
+
   test('tag/untag returns added/removed/missing', () async {
     await tools.execute('createAccount', {'name': 'Cash', 'currency': 'ARS'});
     await tools.execute('createCategory', {'name': 'Food'});

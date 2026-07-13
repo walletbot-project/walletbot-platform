@@ -21,6 +21,12 @@ const transactionTimeStatus = z
     .describe(
         'Hour confidence. confirmed when the user states an exact time; approximation when they give a range or event such as morning, lunch, afternoon, dinner, or night; none when they give no time clue. Required on transaction creates.',
     )
+const transactionTime = z
+    .string()
+    .optional()
+    .describe(
+        'Transaction clock in 24-hour HH:mm format. Supply this whenever timeStatus is confirmed or approximation. It is independent from date and may be supplied when date is omitted.',
+    )
 const dashboardWidgetType = z.enum(['stat', 'list', 'balance', 'chart'])
 const dashboardWidth = z.enum(['full', 'two_thirds', 'half', 'third'])
 const statAggregation = z.enum(['sum', 'net', 'count'])
@@ -32,12 +38,12 @@ const optionalIdOrName = idOrName.optional()
 const isoOrNaturalDate = z
     .string()
     .describe(
-        'ISO 8601 date/time or natural language date. Include an exact or estimated time when timeStatus is confirmed or approximation.',
+        'ISO 8601 or natural-language calendar date, including deterministic relative dates such as "el jueves pasado". Use the separate time argument for the clock.',
     )
 const dateConfirmed = z
     .boolean()
     .describe(
-        'Whether the transaction date is certain. Required on every write. true only when the user clearly stated when it happened (an explicit date, or "today"/"hoy", "yesterday"/"ayer"). false when you inferred or guessed it. When in doubt, prefer false.',
+        'Whether the calendar day is certain. true when date comes from an explicit or deterministic relative day; false when date is omitted and today is only the default. Executors enforce this from date presence.',
     )
 const tagList = z
     .array(idOrName)
@@ -202,6 +208,7 @@ export const toolSchemas = {
         date: isoOrNaturalDate.optional(),
         dateConfirmed,
         timeStatus: transactionTimeStatus,
+        time: transactionTime,
         description: z.string().optional(),
         tagIdsOrNames: tagList.optional(),
         status: transactionStatus.optional(),
@@ -214,6 +221,7 @@ export const toolSchemas = {
         date: isoOrNaturalDate.optional(),
         dateConfirmed,
         timeStatus: transactionTimeStatus,
+        time: transactionTime,
         description: z.string().optional(),
         tagIdsOrNames: tagList.optional(),
         status: transactionStatus.optional(),
@@ -234,6 +242,7 @@ export const toolSchemas = {
         date: isoOrNaturalDate.optional(),
         dateConfirmed,
         timeStatus: transactionTimeStatus,
+        time: transactionTime,
         description: z.string().optional(),
         tagIdsOrNames: tagList.optional(),
     }),
@@ -248,6 +257,7 @@ export const toolSchemas = {
         date: isoOrNaturalDate.optional(),
         dateConfirmed,
         timeStatus: transactionTimeStatus,
+        time: transactionTime,
         description: z.string().optional(),
     }),
     updateTransaction: z.object({
@@ -255,12 +265,13 @@ export const toolSchemas = {
         name: z.string().optional(),
         description: z.string().optional(),
         date: isoOrNaturalDate.optional(),
-        dateConfirmed,
+        dateConfirmed: dateConfirmed.optional(),
         timeStatus: transactionTimeStatus
             .optional()
             .describe(
                 'Required when changing date/time; omit when the transaction time is unchanged.',
             ),
+        time: transactionTime,
         amount: z.number().optional(),
         categoryIdOrName: optionalIdOrName,
         status: transactionStatus.optional(),

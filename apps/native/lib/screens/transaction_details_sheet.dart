@@ -2,7 +2,6 @@ import 'package:app/components/account_icons.dart';
 import 'package:app/components/category_icons.dart';
 import 'package:app/components/color_utils.dart';
 import 'package:app/components/grouped_card.dart';
-import 'package:app/components/transaction_time_mock.dart';
 import 'package:app/data/data.dart';
 import 'package:app/database.dart';
 import 'package:app/shared/money.dart';
@@ -42,6 +41,8 @@ class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
   Account? _selectedDestinationAccount;
   Category? _selectedCategory;
   DateTime _selectedDate = DateTime.now();
+  bool _selectedDateConfirmed = true;
+  TransactionTimeStatus _selectedTimeStatus = TransactionTimeStatus.none;
   Map<String, AccountBalanceAroundTransaction?> _balances = const {};
 
   bool _loading = true;
@@ -96,6 +97,8 @@ class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
       _selectedDate = DateTime.fromMillisecondsSinceEpoch(
         transaction.date.toInt(),
       );
+      _selectedDateConfirmed = transaction.dateConfirmed;
+      _selectedTimeStatus = transaction.timeStatus;
       _selectedAccount = accounts
           .where((account) => account.id == transaction.accountId)
           .firstOrNull;
@@ -261,7 +264,12 @@ class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
       final originalDate = DateTime.fromMillisecondsSinceEpoch(
         transaction.date.toInt(),
       );
-      final dateChanged = !_sameCalendarDate(originalDate, _selectedDate);
+      final dateChanged =
+          originalDate.millisecondsSinceEpoch !=
+          _selectedDate.millisecondsSinceEpoch;
+      final dateStatusChanged =
+          _selectedDateConfirmed != transaction.dateConfirmed;
+      final timeStatusChanged = _selectedTimeStatus != transaction.timeStatus;
       await widget.repos.transactions.update(
         transaction.id,
         name: Value(name),
@@ -269,9 +277,11 @@ class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
         date: dateChanged
             ? Value(BigInt.from(_selectedDate.millisecondsSinceEpoch))
             : const Value.absent(),
-        dateConfirmed: dateChanged ? const Value(true) : const Value.absent(),
-        timeStatus: dateChanged
-            ? const Value(TransactionTimeStatus.none)
+        dateConfirmed: dateStatusChanged
+            ? Value(_selectedDateConfirmed)
+            : const Value.absent(),
+        timeStatus: timeStatusChanged || dateChanged
+            ? Value(_selectedTimeStatus)
             : const Value.absent(),
         accountId: Value(selectedAccount.id),
         currency: Value(selectedAccount.currency),
@@ -372,6 +382,25 @@ class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
         _selectedDate.hour,
         _selectedDate.minute,
       );
+      _selectedDateConfirmed = true;
+    });
+  }
+
+  Future<void> _pickTime() async {
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.fromDateTime(_selectedDate),
+    );
+    if (picked == null || !mounted) return;
+    setState(() {
+      _selectedDate = DateTime(
+        _selectedDate.year,
+        _selectedDate.month,
+        _selectedDate.day,
+        picked.hour,
+        picked.minute,
+      );
+      _selectedTimeStatus = TransactionTimeStatus.confirmed;
     });
   }
 
@@ -575,10 +604,8 @@ class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
     final categoryIcon = category == null
         ? Icons.receipt_long_rounded
         : categoryIconFromName(category.icon);
-    final time = mockTransactionTime(
-      transactionId: transaction.id,
-      createdAt: transaction.createdAt,
-    );
+    final timeNeedsAttention =
+        _selectedTimeStatus != TransactionTimeStatus.confirmed;
     final description = transaction.description;
 
     final rows = <Widget>[
@@ -607,21 +634,26 @@ class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
               ),
       ),
       _ReceiptRow(
-        icon: transaction.dateConfirmed
+        icon: _selectedDateConfirmed
             ? Icons.calendar_month_rounded
             : Icons.help_outline_rounded,
-        attention: !transaction.dateConfirmed,
-        label: transaction.dateConfirmed ? 'Fecha' : 'Fecha estimada',
+        attention: !_selectedDateConfirmed,
+        label: _selectedDateConfirmed ? 'Fecha' : 'Fecha estimada',
         trailing: _editing
             ? TextButton(onPressed: _pickDate, child: const Text('Cambiar'))
             : null,
         value: Text(_formatDate(_selectedDate)),
       ),
       _ReceiptRow(
-        icon: time.icon,
-        attention: time.needsAttention,
-        label: time.detailLabel,
-        value: Text(time.detailText),
+        icon: timeNeedsAttention
+            ? Icons.help_outline_rounded
+            : Icons.schedule_outlined,
+        attention: timeNeedsAttention,
+        label: timeNeedsAttention ? 'Horario estimado' : 'Horario',
+        trailing: _editing
+            ? TextButton(onPressed: _pickTime, child: const Text('Cambiar'))
+            : null,
+        value: Text(_formatTime(context, _selectedDate)),
       ),
       if (_account != null)
         _accountReceiptRow(
@@ -905,6 +937,11 @@ class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
         '${date.month.toString().padLeft(2, '0')}/${date.year}';
   }
 
+  String _formatTime(BuildContext context, DateTime date) =>
+      MaterialLocalizations.of(
+        context,
+      ).formatTimeOfDay(TimeOfDay.fromDateTime(date));
+
   String? _emptyToNull(String value) {
     final trimmed = value.trim();
     return trimmed.isEmpty ? null : trimmed;
@@ -1074,8 +1111,3 @@ class _EntityCircleIcon extends StatelessWidget {
     );
   }
 }
-
-bool _sameCalendarDate(DateTime left, DateTime right) =>
-    left.year == right.year &&
-    left.month == right.month &&
-    left.day == right.day;

@@ -46,6 +46,8 @@
   "maximum": "Max",
   "error": "Error",
   "optional": "Optional",
+  "timeOptional": "Time (optional)",
+  "noTime": "No time",
   "search": "Search",
   "loadingFailed": "Could not load",
   "voiceCommands": "Voice commands",

@@ -374,6 +374,18 @@ abstract class AppLocalizations {
   /// **'Optional'**
   String get optional;
 
+  /// No description provided for @timeOptional.
+  ///
+  /// In en, this message translates to:
+  /// **'Time (optional)'**
+  String get timeOptional;
+
+  /// No description provided for @noTime.
+  ///
+  /// In en, this message translates to:
+  /// **'No time'**
+  String get noTime;
+
   /// No description provided for @search.
   ///
   /// In en, this message translates to:

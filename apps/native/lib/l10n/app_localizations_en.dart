@@ -147,6 +147,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get optional => 'Optional';
 
   @override
+  String get timeOptional => 'Time (optional)';
+
+  @override
+  String get noTime => 'No time';
+
+  @override
   String get search => 'Search';
 
   @override

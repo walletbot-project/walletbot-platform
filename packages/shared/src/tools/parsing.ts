@@ -25,12 +25,15 @@ export function parseAmountToCents(decimal: number): bigint {
  *  - "today" | "hoy"
  *  - "yesterday" | "ayer"
  *  - "tomorrow" | "mañana" | "manana"
+ *  - "last Thursday" | "el jueves pasado"
+ *  - "3 days ago" | "hace 3 días"
  */
 export function parseNaturalDate(
     input: string,
     now: Date = new Date(),
 ): bigint {
     const trimmed = input.trim().toLowerCase()
+    const normalized = trimmed.normalize('NFD').replace(/[\u0300-\u036f]/g, '')
 
     const day = (offset: number) => {
         const d = new Date(now)
@@ -39,10 +42,46 @@ export function parseNaturalDate(
         return BigInt(d.getTime())
     }
 
-    if (trimmed === 'today' || trimmed === 'hoy') return day(0)
-    if (trimmed === 'yesterday' || trimmed === 'ayer') return day(-1)
-    if (trimmed === 'tomorrow' || trimmed === 'mañana' || trimmed === 'manana')
-        return day(1)
+    if (normalized === 'today' || normalized === 'hoy') return day(0)
+    if (normalized === 'yesterday' || normalized === 'ayer') return day(-1)
+    if (normalized === 'anteayer' || normalized === 'day before yesterday')
+        return day(-2)
+    if (normalized === 'tomorrow' || normalized === 'manana') return day(1)
+
+    const daysAgo =
+        normalized.match(/^hace\s+(\d+)\s+dias?$/) ??
+        normalized.match(/^(\d+)\s+days?\s+ago$/)
+    if (daysAgo) return day(-Number(daysAgo[1]))
+
+    const weekdays: Record<string, number> = {
+        monday: 1,
+        lunes: 1,
+        tuesday: 2,
+        martes: 2,
+        wednesday: 3,
+        miercoles: 3,
+        thursday: 4,
+        jueves: 4,
+        friday: 5,
+        viernes: 5,
+        saturday: 6,
+        sabado: 6,
+        sunday: 7,
+        domingo: 7,
+    }
+    const relativeWeekday =
+        normalized.match(/^(?:el\s+)?([a-z]+)\s+pasado$/) ??
+        normalized.match(/^(?:el\s+)?pasado\s+([a-z]+)$/) ??
+        normalized.match(/^(?:last|this\s+past)\s+([a-z]+)$/)
+    if (relativeWeekday) {
+        const targetWeekday = weekdays[relativeWeekday[1]]
+        if (targetWeekday !== undefined) {
+            const currentWeekday = now.getDay() === 0 ? 7 : now.getDay()
+            let daysBack = (currentWeekday - targetWeekday + 7) % 7
+            if (daysBack === 0) daysBack = 7
+            return day(-daysBack)
+        }
+    }
 
     const parsed = Date.parse(input)
     if (Number.isNaN(parsed)) {
@@ -71,13 +110,27 @@ export type TransactionTimeStatus = 'confirmed' | 'approximation' | 'none'
 export function parseTransactionDate(
     input: string | undefined,
     timeStatus: TransactionTimeStatus,
+    time?: string,
     now: Date = new Date(),
 ): bigint {
     const parsed =
         input === undefined ? undefined : parseNaturalDate(input, now)
     if (timeStatus !== 'none') {
+        const selectedDate = new Date(
+            parsed === undefined ? now.getTime() : Number(parsed),
+        )
+        if (time !== undefined) {
+            const match = time.trim().match(/^([01]?\d|2[0-3]):([0-5]\d)$/)
+            if (!match) {
+                throw new Error(`Invalid transaction time: ${time}`)
+            }
+            selectedDate.setHours(Number(match[1]), Number(match[2]), 0, 0)
+            return BigInt(selectedDate.getTime())
+        }
         if (parsed === undefined) {
-            throw new Error(`date is required when timeStatus is ${timeStatus}`)
+            throw new Error(
+                `date or time is required when timeStatus is ${timeStatus}`,
+            )
         }
         return parsed
     }
