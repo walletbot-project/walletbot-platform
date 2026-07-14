@@ -346,6 +346,9 @@ export const update = mutation({
         dateConfirmed: v.optional(v.boolean()),
         timeStatus: v.optional(transactionTimeStatus),
         amount: v.optional(v.int64()),
+        accountId: v.optional(v.string()),
+        toAccountId: v.optional(v.string()),
+        toAmount: v.optional(v.int64()),
         categoryId: v.optional(v.string()),
         status: v.optional(v.union(v.literal('pending'), v.literal('cleared'))),
     },
@@ -359,6 +362,40 @@ export const update = mutation({
             if (!cat) throw new Error('Category not found')
         }
 
+        if (args.amount !== undefined)
+            assertPositiveAmount(args.amount, 'Amount')
+        if (args.toAmount !== undefined)
+            assertPositiveAmount(args.toAmount, 'Destination amount')
+
+        if (
+            row.type !== 'transfer' &&
+            (args.toAccountId !== undefined || args.toAmount !== undefined)
+        ) {
+            throw new Error(
+                'Destination account and amount can only be changed on transfers',
+            )
+        }
+        if (row.type === 'balance_adjustment' && args.accountId !== undefined) {
+            throw new Error('Balance adjustment account cannot be changed')
+        }
+
+        const nextAccountId = args.accountId ?? row.accountId
+        const sourceAccount = await getAccount(ctx, userId, nextAccountId)
+        if (!sourceAccount) throw new Error('Account not found')
+
+        const nextToAccountId = args.toAccountId ?? row.toAccountId
+        const destinationAccount =
+            row.type === 'transfer' && nextToAccountId !== undefined
+                ? await getAccount(ctx, userId, nextToAccountId)
+                : null
+        if (row.type === 'transfer') {
+            if (!destinationAccount)
+                throw new Error('Destination account not found')
+            if (nextAccountId === nextToAccountId) {
+                throw new Error('Source and destination accounts must differ')
+            }
+        }
+
         const seq = await nextSeq(ctx, userId)
         const now = BigInt(Date.now())
 
@@ -369,6 +406,12 @@ export const update = mutation({
             dateConfirmed?: boolean
             timeStatus?: TransactionTimeStatus
             amount?: bigint
+            accountId?: string
+            currency?: string
+            toAccountId?: string
+            toAmount?: bigint
+            toCurrency?: string
+            exchangeRate?: number
             categoryId?: string
             status?: 'pending' | 'cleared'
         } = {}
@@ -385,7 +428,45 @@ export const update = mutation({
             }
             patch.timeStatus = args.timeStatus
         }
-        if (args.amount !== undefined) patch.amount = args.amount
+        if (args.accountId !== undefined) {
+            patch.accountId = args.accountId
+            patch.currency = sourceAccount.currency
+        }
+        if (args.toAccountId !== undefined) {
+            patch.toAccountId = args.toAccountId
+            patch.toCurrency = destinationAccount!.currency
+        }
+
+        if (row.type === 'transfer') {
+            const sameCurrency =
+                sourceAccount.currency === destinationAccount!.currency
+            let nextAmount = args.amount ?? row.amount
+            let nextToAmount = args.toAmount ?? row.toAmount ?? row.amount
+
+            if (sameCurrency) {
+                if (args.toAmount !== undefined && args.amount === undefined) {
+                    nextAmount = args.toAmount
+                }
+                nextToAmount = nextAmount
+            }
+
+            if (args.amount !== undefined || nextAmount !== row.amount) {
+                patch.amount = nextAmount
+            }
+            if (
+                args.toAmount !== undefined ||
+                args.amount !== undefined ||
+                args.accountId !== undefined ||
+                args.toAccountId !== undefined
+            ) {
+                patch.toAmount = nextToAmount
+                patch.exchangeRate = sameCurrency
+                    ? undefined
+                    : Number(nextToAmount) / Number(nextAmount)
+            }
+        } else if (args.amount !== undefined) {
+            patch.amount = args.amount
+        }
         if (args.categoryId !== undefined) patch.categoryId = args.categoryId
         if (args.status !== undefined) patch.status = args.status
 

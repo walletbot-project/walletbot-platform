@@ -73,7 +73,8 @@ const typeConfig: Record<
 }
 
 function today() {
-    return new Date().toISOString().slice(0, 10)
+    const date = new Date()
+    return `${date.getFullYear().toString().padStart(4, '0')}-${(date.getMonth() + 1).toString().padStart(2, '0')}-${date.getDate().toString().padStart(2, '0')}`
 }
 
 function defaultDestinationAccountId(
@@ -208,6 +209,7 @@ export function AddManual() {
     const [title, setTitle] = useState('')
     const [description, setDescription] = useState('')
     const [date, setDate] = useState(today)
+    const [time, setTime] = useState('')
     const [accountId, setAccountId] = useState('')
     const [destinationAccountId, setDestinationAccountId] = useState('')
     const [categoryId, setCategoryId] = useState('')
@@ -277,6 +279,7 @@ export function AddManual() {
         setTitle('')
         setDescription('')
         setDate(today())
+        setTime('')
         setAccountId('')
         setDestinationAccountId('')
         setCategoryId('')
@@ -473,7 +476,12 @@ export function AddManual() {
             return
         }
 
-        const sourceDate = parseTransactionDate(date, 'none')
+        const timeStatus = time ? 'confirmed' : 'none'
+        const sourceDate = parseTransactionDate(
+            date,
+            timeStatus,
+            time || undefined,
+        )
         const trimmedDescription = description.trim() || undefined
 
         if (type === 'transfer') {
@@ -505,7 +513,7 @@ export function AddManual() {
                     categoryId,
                     date: sourceDate,
                     dateConfirmed: true,
-                    timeStatus: 'none',
+                    timeStatus,
                 })
             } else if (type === 'expense') {
                 await createExpense({
@@ -517,7 +525,7 @@ export function AddManual() {
                     categoryId,
                     date: sourceDate,
                     dateConfirmed: true,
-                    timeStatus: 'none',
+                    timeStatus,
                 })
             } else {
                 const parsedDestinationAmount =
@@ -547,7 +555,7 @@ export function AddManual() {
                     categoryId,
                     date: sourceDate,
                     dateConfirmed: true,
-                    timeStatus: 'none',
+                    timeStatus,
                 })
             }
 
@@ -684,6 +692,8 @@ export function AddManual() {
                         onSwap={swapTransferSides}
                         date={date}
                         onDateChange={setDate}
+                        time={time}
+                        onTimeChange={setTime}
                     />
                 ) : (
                     <section className="space-y-5">
@@ -763,6 +773,10 @@ export function AddManual() {
 
                             <Field label="Fecha" htmlFor="date">
                                 <DateInput value={date} onChange={setDate} />
+                            </Field>
+
+                            <Field label="Hora (opcional)" htmlFor="time">
+                                <TimeInput value={time} onChange={setTime} />
                             </Field>
                         </div>
                     </section>
@@ -926,6 +940,8 @@ function TransferAmounts({
     onSwap,
     date,
     onDateChange,
+    time,
+    onTimeChange,
 }: {
     accounts: AccountOption[]
     sourceAmount: string
@@ -939,6 +955,8 @@ function TransferAmounts({
     onSwap: () => void
     date: string
     onDateChange: (value: string) => void
+    time: string
+    onTimeChange: (value: string) => void
 }) {
     const sourceAccount = accounts.find(
         (account) => account.id === sourceAccountId,
@@ -981,9 +999,14 @@ function TransferAmounts({
                 />
             </div>
 
-            <Field label="Fecha" htmlFor="date">
-                <DateInput value={date} onChange={onDateChange} />
-            </Field>
+            <div className="grid gap-5 sm:grid-cols-2">
+                <Field label="Fecha" htmlFor="date">
+                    <DateInput value={date} onChange={onDateChange} />
+                </Field>
+                <Field label="Hora (opcional)" htmlFor="time">
+                    <TimeInput value={time} onChange={onTimeChange} />
+                </Field>
+            </div>
         </section>
     )
 }
@@ -1248,6 +1271,38 @@ function DateInput({
             className="h-11 rounded-xl border-[#D9D0D6] bg-white"
             required
         />
+    )
+}
+
+function TimeInput({
+    value,
+    onChange,
+}: {
+    value: string
+    onChange: (value: string) => void
+}) {
+    return (
+        <div className="flex gap-2">
+            <Input
+                id="time"
+                type="time"
+                value={value}
+                onChange={(event) => onChange(event.target.value)}
+                className="h-11 rounded-xl border-[#D9D0D6] bg-white"
+            />
+            {value ? (
+                <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    className="h-11 w-11 shrink-0 rounded-xl border-[#D9D0D6] bg-white"
+                    onClick={() => onChange('')}
+                    aria-label="Quitar hora"
+                >
+                    <X className="size-4" />
+                </Button>
+            ) : null}
+        </div>
     )
 }
 

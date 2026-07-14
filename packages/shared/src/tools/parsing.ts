@@ -42,6 +42,25 @@ export function parseNaturalDate(
         return BigInt(d.getTime())
     }
 
+    // Date-only ISO values represent a local calendar day. `Date.parse`
+    // treats them as UTC midnight, which moves the transaction to the previous
+    // day in negative UTC offsets such as Argentina.
+    const isoDate = normalized.match(/^(\d{4})-(\d{2})-(\d{2})$/)
+    if (isoDate) {
+        const year = Number(isoDate[1])
+        const month = Number(isoDate[2])
+        const date = Number(isoDate[3])
+        const localDate = new Date(year, month - 1, date)
+        if (
+            localDate.getFullYear() !== year ||
+            localDate.getMonth() !== month - 1 ||
+            localDate.getDate() !== date
+        ) {
+            throw new Error(`Unrecognized date: ${input}`)
+        }
+        return BigInt(localDate.getTime())
+    }
+
     if (normalized === 'today' || normalized === 'hoy') return day(0)
     if (normalized === 'yesterday' || normalized === 'ayer') return day(-1)
     if (normalized === 'anteayer' || normalized === 'day before yesterday')

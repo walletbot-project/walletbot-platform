@@ -37,6 +37,7 @@ import {
 } from '@/lib/entity-colors'
 import { normalizeTagColor } from '@/lib/tag-colors'
 import { cn } from '@/lib/utils'
+import { TransactionDetailsSheet } from './activity/transaction-details-sheet'
 
 type ActionResultMessage = Extract<ChatMessage, { kind: 'action-result' }>
 
@@ -163,194 +164,17 @@ function TransactionActionWidget({
                     <p className="truncate text-sm font-medium">{txn.name}</p>
                     <p className="truncate text-xs text-muted-foreground">
                         {label} {wasUpdated ? 'actualizado' : 'registrado'} ·{' '}
-                        {amount} · {location} · {epochToDDMMYYYY(txn.date)}
+                        {amount} · {location} · {epochToDDMMYYYY(txn.date)} ·{' '}
+                        {epochToHHMM(txn.date)}
                     </p>
                 </div>
                 <EditButton onClick={() => setEditOpen(true)} />
             </ActionCard>
-            <ActionSheet open={editOpen} onOpenChange={setEditOpen}>
-                <TxnEditContent txn={txn} onClose={() => setEditOpen(false)} />
-            </ActionSheet>
-        </>
-    )
-}
-
-function TxnEditContent({
-    txn,
-    onClose,
-}: {
-    txn: TxnDoc
-    onClose: () => void
-}) {
-    const updateTxn = useMutation(api.transactions.mutations.update)
-    const categories = useQuery(api.categories.queries.listActive)
-    const formId = useId()
-    const [name, setName] = useState(txn.name)
-    const [amount, setAmount] = useState(() => centsToDecimalStr(txn.amount))
-    const [date, setDate] = useState(() => epochToDateStr(txn.date))
-    const [categoryId, setCategoryId] = useState(txn.categoryId)
-    const [description, setDescription] = useState(txn.description ?? '')
-    const [status, setStatus] = useState(txn.status)
-    const [saving, setSaving] = useState(false)
-
-    // A transfer has a second amount/currency that the generic update mutation
-    // cannot change atomically. A balance adjustment's amount is derived from
-    // balanceAfter. Keep those values read-only to avoid corrupting balances.
-    const showAmount = txn.type === 'expense' || txn.type === 'income'
-    const showCategory = txn.type === 'expense' || txn.type === 'income'
-    const showDate = txn.type !== 'balance_adjustment'
-    const showStatus = txn.type !== 'balance_adjustment'
-
-    const handleSubmit = async (event: FormEvent) => {
-        event.preventDefault()
-        const parsedAmount = showAmount ? decimalStrToCents(amount) : undefined
-        if (
-            showAmount &&
-            (parsedAmount === null ||
-                parsedAmount === undefined ||
-                parsedAmount <= 0n)
-        ) {
-            toast.error('Ingresá un monto mayor a cero')
-            return
-        }
-
-        const originalDate = epochToDateStr(txn.date)
-        const dateChanged = showDate && date !== originalDate
-        const nextDescription = description.trim()
-        setSaving(true)
-        const promise = updateTxn({
-            id: txn.id,
-            name: name.trim(),
-            amount: parsedAmount ?? undefined,
-            date: dateChanged ? dateStrToEpoch(date) : undefined,
-            dateConfirmed: dateChanged ? true : undefined,
-            timeStatus: dateChanged ? 'none' : undefined,
-            categoryId: showCategory ? categoryId : undefined,
-            description:
-                nextDescription !== (txn.description ?? '')
-                    ? nextDescription
-                    : undefined,
-            status: showStatus ? status : undefined,
-        })
-        toast.promise(promise, {
-            loading: 'Guardando…',
-            success: 'Transacción actualizada',
-            error: 'Error al guardar',
-        })
-        try {
-            await promise
-            onClose()
-        } catch {
-            // toast.promise owns the user-facing error state.
-        } finally {
-            setSaving(false)
-        }
-    }
-
-    return (
-        <>
-            <SheetHeader>
-                <SheetTitle>Editar transacción</SheetTitle>
-            </SheetHeader>
-            <form
-                id={formId}
-                onSubmit={handleSubmit}
-                className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-4 py-2"
-            >
-                <EditField label="Nombre" id={`${formId}-name`}>
-                    <Input
-                        id={`${formId}-name`}
-                        value={name}
-                        onChange={(event) => setName(event.target.value)}
-                        required
-                    />
-                </EditField>
-
-                {showAmount ? (
-                    <EditField label="Monto" id={`${formId}-amount`}>
-                        <Input
-                            id={`${formId}-amount`}
-                            inputMode="decimal"
-                            value={amount}
-                            onChange={(event) =>
-                                setAmount(normalizeDecimal(event.target.value))
-                            }
-                            required
-                        />
-                    </EditField>
-                ) : null}
-
-                {showDate ? (
-                    <EditField label="Fecha" id={`${formId}-date`}>
-                        <Input
-                            id={`${formId}-date`}
-                            type="date"
-                            value={date}
-                            onChange={(event) => setDate(event.target.value)}
-                            required
-                        />
-                    </EditField>
-                ) : null}
-
-                {showCategory ? (
-                    <EditField label="Categoría" id={`${formId}-category`}>
-                        <select
-                            id={`${formId}-category`}
-                            value={categoryId}
-                            onChange={(event) =>
-                                setCategoryId(event.target.value)
-                            }
-                            disabled={categories === undefined}
-                            required
-                            className="h-9 w-full rounded-md border bg-transparent px-3 text-sm outline-none focus-visible:border-primary disabled:opacity-50"
-                        >
-                            {categories === undefined ? (
-                                <option value="">Cargando…</option>
-                            ) : (
-                                categories.map((category) => (
-                                    <option
-                                        key={category.id}
-                                        value={category.id}
-                                    >
-                                        {category.name}
-                                    </option>
-                                ))
-                            )}
-                        </select>
-                    </EditField>
-                ) : null}
-
-                <EditField label="Descripción" id={`${formId}-description`}>
-                    <Textarea
-                        id={`${formId}-description`}
-                        value={description}
-                        onChange={(event) => setDescription(event.target.value)}
-                        rows={3}
-                    />
-                </EditField>
-
-                {showStatus ? (
-                    <EditField label="Estado" id={`${formId}-status`}>
-                        <select
-                            id={`${formId}-status`}
-                            value={status}
-                            onChange={(event) =>
-                                setStatus(
-                                    event.target.value as 'pending' | 'cleared',
-                                )
-                            }
-                            className="h-9 w-full rounded-md border bg-transparent px-3 text-sm outline-none focus-visible:border-primary"
-                        >
-                            <option value="cleared">Confirmado</option>
-                            <option value="pending">Pendiente</option>
-                        </select>
-                    </EditField>
-                ) : null}
-            </form>
-            <ActionSheetFooter
-                formId={formId}
-                saving={saving}
-                onClose={onClose}
+            <TransactionDetailsSheet
+                transactionId={txn.id}
+                open={editOpen}
+                onOpenChange={setEditOpen}
+                initialEditing
             />
         </>
     )
@@ -985,14 +809,6 @@ function txnTypeConfig(type: TxnType) {
     }
 }
 
-function epochToDateStr(epoch: bigint): string {
-    const date = new Date(Number(epoch))
-    const year = date.getFullYear()
-    const month = String(date.getMonth() + 1).padStart(2, '0')
-    const day = String(date.getDate()).padStart(2, '0')
-    return `${year}-${month}-${day}`
-}
-
 function epochToDDMMYYYY(epoch: bigint): string {
     const date = new Date(Number(epoch))
     const day = String(date.getDate()).padStart(2, '0')
@@ -1000,16 +816,12 @@ function epochToDDMMYYYY(epoch: bigint): string {
     return `${day}/${month}/${date.getFullYear()}`
 }
 
-function dateStrToEpoch(value: string): bigint {
-    const selectedDate = new Date(`${value}T00:00:00`)
-    const loadedAt = new Date()
-    selectedDate.setHours(
-        loadedAt.getHours(),
-        loadedAt.getMinutes(),
-        loadedAt.getSeconds(),
-        loadedAt.getMilliseconds(),
-    )
-    return BigInt(selectedDate.getTime())
+function epochToHHMM(epoch: bigint): string {
+    return new Intl.DateTimeFormat('es-AR', {
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false,
+    }).format(new Date(Number(epoch)))
 }
 
 function centsToDecimalStr(cents: bigint): string {
@@ -1020,27 +832,6 @@ function centsToDecimalStr(cents: bigint): string {
 
 function formatAmount(cents: bigint, currency: string): string {
     return `${centsToDecimalStr(cents)} ${currency}`
-}
-
-function decimalStrToCents(value: string): bigint | null {
-    const normalized = value.replace(',', '.')
-    if (!/^\d+(?:\.\d{0,2})?$/.test(normalized)) return null
-    const [whole, fraction = ''] = normalized.split('.')
-    return BigInt(whole) * 100n + BigInt(fraction.padEnd(2, '0'))
-}
-
-function normalizeDecimal(value: string): string {
-    let hasSeparator = false
-    return Array.from(value)
-        .filter((character) => {
-            if (/\d/.test(character)) return true
-            if ((character === '.' || character === ',') && !hasSeparator) {
-                hasSeparator = true
-                return true
-            }
-            return false
-        })
-        .join('')
 }
 
 function descendantTagIds(
