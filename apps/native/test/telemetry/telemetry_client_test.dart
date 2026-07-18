@@ -71,6 +71,60 @@ void main() {
     client.dispose();
   });
 
+  test('sends expected metric payload', () async {
+    FlutterSecureStorage.setMockInitialValues({});
+
+    http.Request? captured;
+    final client = TelemetryClient(
+      convexSiteUrl: 'https://example.convex.site',
+      sessionId: 'session-1',
+      httpClient: MockClient((request) async {
+        captured = request;
+        return http.Response('{"ok":true,"accepted":1}', 200);
+      }),
+    );
+
+    await client.trackMetric(
+      'business.movements.created_count',
+      type: 'counter',
+      value: 1,
+      unit: 'count',
+      timestamp: DateTime.fromMillisecondsSinceEpoch(1730000000000),
+      attributes: {
+        'movement_type': 'expense',
+        'created_by': 'form',
+        'ingest_path': 'sync_push',
+        'tag_count_bucket': '2-3',
+      },
+    );
+
+    expect(
+      captured?.url.toString(),
+      'https://example.convex.site/telemetry/metrics',
+    );
+
+    final body = jsonDecode(captured!.body) as Map<String, Object?>;
+    final metrics = body['metrics'] as List<Object?>;
+    final metric = metrics.single as Map<String, Object?>;
+    expect(metric['name'], 'business.movements.created_count');
+    expect(metric['timestamp'], 1730000000000);
+    expect(metric['source'], 'native');
+    expect(metric['type'], 'counter');
+    expect(metric['value'], 1);
+    expect(metric['unit'], 'count');
+    expect(metric['sessionId'], 'session-1');
+    expect(metric['appVersion'], '1.0.0+1');
+    expect(metric['installationId'], isA<String>());
+    expect(metric['attributes'], {
+      'movement_type': 'expense',
+      'created_by': 'form',
+      'ingest_path': 'sync_push',
+      'tag_count_bucket': '2-3',
+    });
+
+    client.dispose();
+  });
+
   test('does not throw on HTTP error', () async {
     FlutterSecureStorage.setMockInitialValues({});
 

@@ -24,3 +24,32 @@ export type TelemetryEventInput = {
     appVersion?: string
     platform?: TelemetryPlatform
 }
+
+export type MetricName =
+    | 'business.user_accounts.created_count'
+    | 'business.financial_accounts.created_count'
+    | 'business.movements.created_count'
+    | 'business.transfers.created_count'
+
+export type MetricSource = 'web' | 'native' | 'backend'
+
+export type MetricType = 'counter' | 'gauge' | 'histogram'
+
+export type MetricUnit = 'count' | 'ms'
+
+export type MetricAttributeValue = string | number | boolean
+
+export type MetricInput = {
+    name: MetricName
+    timestamp: number
+    source: MetricSource
+    type: MetricType
+    value: number
+    unit?: MetricUnit
+    attributes?: Record<string, MetricAttributeValue>
+    installationId?: string
+    sessionId?: string
+    userId?: string
+    appVersion?: string
+    platform?: TelemetryPlatform
+}

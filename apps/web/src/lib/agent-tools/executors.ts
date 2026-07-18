@@ -23,7 +23,8 @@ function nativeDashboardOnly() {
     return {
         ok: false,
         error: 'native_only',
-        message: 'Home dashboard filters and widgets are only implemented in the native app right now.',
+        message:
+            'Home dashboard filters and widgets are only implemented in the native app right now.',
     }
 }
 
@@ -327,6 +328,7 @@ export const toolExecutors = {
             date: parseOptionalDate(args.date),
             dateConfirmed: args.dateConfirmed,
             status: args.status,
+            createdBy: 'agent',
         })
         await attachTags(ctx, id, args.tagIdsOrNames)
         return { ok: true, id }
@@ -348,6 +350,7 @@ export const toolExecutors = {
             date: parseOptionalDate(args.date),
             dateConfirmed: args.dateConfirmed,
             status: args.status,
+            createdBy: 'agent',
         })
         await attachTags(ctx, id, args.tagIdsOrNames)
         return { ok: true, id }
@@ -380,6 +383,7 @@ export const toolExecutors = {
             categoryId: catR.entity.id,
             date: parseOptionalDate(args.date),
             dateConfirmed: args.dateConfirmed,
+            createdBy: 'agent',
         })
         await attachTags(ctx, id, args.tagIdsOrNames)
         return { ok: true, id }
@@ -400,6 +404,7 @@ export const toolExecutors = {
                     description: args.description,
                     date: parseOptionalDate(args.date),
                     dateConfirmed: args.dateConfirmed,
+                    createdBy: 'agent',
                 },
             )
             return { ok: true, id }
@@ -578,8 +583,9 @@ export const toolExecutors = {
     archiveSavedFilter: defineTool(toolSchemas.archiveSavedFilter, async () =>
         nativeDashboardOnly(),
     ),
-    listDashboardWidgets: defineTool(toolSchemas.listDashboardWidgets, async () =>
-        nativeDashboardOnly(),
+    listDashboardWidgets: defineTool(
+        toolSchemas.listDashboardWidgets,
+        async () => nativeDashboardOnly(),
     ),
     createDashboardWidget: defineTool(
         toolSchemas.createDashboardWidget,

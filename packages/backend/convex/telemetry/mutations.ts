@@ -1,7 +1,44 @@
 import { v } from 'convex/values'
 import { internal } from '../_generated/api'
 import { internalMutation } from '../_generated/server'
-import { telemetryEventInput } from './validators'
+import { insertMetricBatch } from './metrics'
+import { metricInput, telemetryEventInput } from './validators'
+
+const authMethod = v.union(
+    v.literal('email_password'),
+    v.literal('google'),
+    v.literal('apple'),
+    v.literal('local'),
+)
+
+const metricSeriesKey = (metric: {
+    name: string
+    source: string
+    unit?: string
+    appVersion?: string
+    platform?: string
+    attributes?: unknown
+}): string => {
+    const attributes =
+        typeof metric.attributes === 'object' &&
+        metric.attributes !== null &&
+        !Array.isArray(metric.attributes)
+            ? Object.fromEntries(
+                  Object.entries(metric.attributes).sort(([a], [b]) =>
+                      a.localeCompare(b),
+                  ),
+              )
+            : {}
+
+    return JSON.stringify({
+        name: metric.name,
+        source: metric.source,
+        unit: metric.unit ?? '',
+        appVersion: metric.appVersion ?? '',
+        platform: metric.platform ?? '',
+        attributes,
+    })
+}
 
 export const insertBatch = internalMutation({
     args: {
@@ -28,8 +65,52 @@ export const insertBatch = internalMutation({
     },
 })
 
+export const insertMetricBatchMutation = internalMutation({
+    args: {
+        metrics: v.array(metricInput),
+        receivedAt: v.number(),
+    },
+    handler: async (ctx, args) => insertMetricBatch(ctx, args),
+})
+
+export const recordUserAccountCreated = internalMutation({
+    args: {
+        userId: v.string(),
+        authMethod,
+    },
+    handler: async (ctx, args) =>
+        insertMetricBatch(ctx, {
+            receivedAt: Date.now(),
+            metrics: [
+                {
+                    name: 'business.user_accounts.created_count',
+                    timestamp: Date.now(),
+                    source: 'backend',
+                    type: 'counter',
+                    value: 1,
+                    unit: 'count',
+                    userId: args.userId,
+                    attributes: { auth_method: args.authMethod },
+                },
+            ],
+        }),
+})
+
 export const markExported = internalMutation({
     args: { ids: v.array(v.id('telemetryEvents')) },
+    handler: async (ctx, args) => {
+        for (const id of args.ids) {
+            await ctx.db.patch(id, {
+                exportStatus: 'exported',
+                lastExportError: undefined,
+            })
+        }
+        return null
+    },
+})
+
+export const markMetricsExported = internalMutation({
+    args: { ids: v.array(v.id('telemetryMetrics')) },
     handler: async (ctx, args) => {
         for (const id of args.ids) {
             await ctx.db.patch(id, {
@@ -60,6 +141,86 @@ export const markExportFailed = internalMutation({
     },
 })
 
+export const markMetricsExportFailed = internalMutation({
+    args: {
+        ids: v.array(v.id('telemetryMetrics')),
+        error: v.string(),
+    },
+    handler: async (ctx, args) => {
+        for (const id of args.ids) {
+            const row = await ctx.db.get(id)
+            if (!row) continue
+            await ctx.db.patch(id, {
+                exportStatus: 'failed',
+                exportAttempts: row.exportAttempts + 1,
+                lastExportError: args.error.slice(0, 512),
+            })
+        }
+        return null
+    },
+})
+
+export const reserveMetricExports = internalMutation({
+    args: { ids: v.array(v.id('telemetryMetrics')) },
+    handler: async (ctx, args) => {
+        const reserved = []
+        for (const id of args.ids) {
+            const metric = await ctx.db.get(id)
+            if (!metric || metric.exportStatus !== 'pending') continue
+
+            if (
+                metric.reservedCumulativeValue !== undefined &&
+                metric.reservedCumulativeStartTime !== undefined
+            ) {
+                reserved.push({
+                    ...metric,
+                    cumulativeValue: metric.reservedCumulativeValue,
+                    cumulativeStartTime: metric.reservedCumulativeStartTime,
+                })
+                continue
+            }
+
+            const key = metricSeriesKey(metric)
+            const existing = await ctx.db
+                .query('telemetryMetricSeries')
+                .withIndex('by_key', (q) => q.eq('key', key))
+                .unique()
+            const cumulativeValue =
+                (existing?.cumulativeValue ?? 0) + metric.value
+            const cumulativeStartTime = existing?.startTime ?? metric.timestamp
+            const now = Date.now()
+
+            if (existing) {
+                await ctx.db.patch(existing._id, {
+                    cumulativeValue,
+                    updatedAt: now,
+                })
+            } else {
+                await ctx.db.insert('telemetryMetricSeries', {
+                    key,
+                    name: metric.name,
+                    cumulativeValue,
+                    startTime: cumulativeStartTime,
+                    updatedAt: now,
+                })
+            }
+
+            await ctx.db.patch(metric._id, {
+                reservedCumulativeValue: cumulativeValue,
+                reservedCumulativeStartTime: cumulativeStartTime,
+            })
+            reserved.push({
+                ...metric,
+                reservedCumulativeValue: cumulativeValue,
+                reservedCumulativeStartTime: cumulativeStartTime,
+                cumulativeValue,
+                cumulativeStartTime,
+            })
+        }
+        return reserved
+    },
+})
+
 export const resetFailedForRetry = internalMutation({
     args: { ids: v.array(v.id('telemetryEvents')) },
     handler: async (ctx, args) => {
@@ -67,5 +228,65 @@ export const resetFailedForRetry = internalMutation({
             await ctx.db.patch(id, { exportStatus: 'pending' })
         }
         return null
+    },
+})
+
+export const resetMetricsFailedForRetry = internalMutation({
+    args: { ids: v.array(v.id('telemetryMetrics')) },
+    handler: async (ctx, args) => {
+        for (const id of args.ids) {
+            await ctx.db.patch(id, { exportStatus: 'pending' })
+        }
+        return null
+    },
+})
+
+export const resetRetryableFailedMetrics = internalMutation({
+    args: {
+        olderThanMs: v.number(),
+        maxAttempts: v.number(),
+        limit: v.number(),
+    },
+    handler: async (ctx, args) => {
+        const cutoff = Date.now() - args.olderThanMs
+        const rows = await ctx.db
+            .query('telemetryMetrics')
+            .withIndex('by_exportStatus_and_receivedAt', (q) =>
+                q.eq('exportStatus', 'failed'),
+            )
+            .take(Math.min(Math.max(args.limit, 1), 100))
+
+        let reset = 0
+        for (const row of rows) {
+            if (
+                row.receivedAt <= cutoff &&
+                row.exportAttempts < args.maxAttempts
+            ) {
+                await ctx.db.patch(row._id, { exportStatus: 'pending' })
+                reset += 1
+            }
+        }
+        return { reset }
+    },
+})
+
+export const deleteOldExportedMetrics = internalMutation({
+    args: {
+        olderThanMs: v.number(),
+        limit: v.number(),
+    },
+    handler: async (ctx, args) => {
+        const cutoff = Date.now() - args.olderThanMs
+        const rows = await ctx.db
+            .query('telemetryMetrics')
+            .withIndex('by_exportStatus_and_receivedAt', (q) =>
+                q.eq('exportStatus', 'exported').lt('receivedAt', cutoff),
+            )
+            .take(Math.min(Math.max(args.limit, 1), 100))
+
+        for (const row of rows) {
+            await ctx.db.delete(row._id)
+        }
+        return { deleted: rows.length }
     },
 })

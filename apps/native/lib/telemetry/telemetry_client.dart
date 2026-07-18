@@ -46,6 +46,28 @@ class TelemetryClient {
     ]);
   }
 
+  Future<void> trackMetric(
+    String name, {
+    required String type,
+    required double value,
+    String source = 'native',
+    String? unit,
+    Map<String, Object?> attributes = const {},
+    DateTime? timestamp,
+  }) {
+    return sendMetricBatch([
+      TelemetryMetric(
+        name: name,
+        timestamp: timestamp ?? DateTime.now(),
+        source: source,
+        type: type,
+        value: value,
+        unit: unit,
+        attributes: attributes,
+      ),
+    ]);
+  }
+
   Future<void> sendBatch(List<TelemetryEvent> events) async {
     if (events.isEmpty || _convexSiteUrl.isEmpty) return;
 
@@ -84,6 +106,46 @@ class TelemetryClient {
     }
   }
 
+  Future<void> sendMetricBatch(List<TelemetryMetric> metrics) async {
+    if (metrics.isEmpty || _convexSiteUrl.isEmpty) return;
+
+    try {
+      final installationId = await _installationId();
+      final accessToken = await _accessTokenProvider?.call();
+      final headers = <String, String>{'Content-Type': 'application/json'};
+      if (accessToken != null && accessToken.isNotEmpty) {
+        headers['Authorization'] = 'Bearer $accessToken';
+      }
+
+      final response = await _http
+          .post(
+            Uri.parse('$_convexSiteUrl/telemetry/metrics'),
+            headers: headers,
+            body: jsonEncode({
+              'metrics': metrics
+                  .map(
+                    (metric) => metric.toJson(
+                      installationId: installationId,
+                      sessionId: sessionId,
+                      appVersion: AppConfig.appVersion,
+                      platform: _platform,
+                    ),
+                  )
+                  .toList(),
+            }),
+          )
+          .timeout(const Duration(seconds: 5));
+
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        debugPrint(
+          'telemetry metrics: HTTP ${response.statusCode}: ${response.body}',
+        );
+      }
+    } catch (error) {
+      debugPrint('telemetry metrics: send failed: $error');
+    }
+  }
+
   Future<String> _installationId() async {
     final existing = await _storage.read(key: _installationIdKey);
     if (existing != null && existing.isNotEmpty) return existing;
@@ -117,6 +179,45 @@ class TelemetryEvent {
     'name': name,
     'timestamp': timestamp.millisecondsSinceEpoch,
     'properties': properties,
+    'installationId': installationId,
+    'sessionId': sessionId,
+    'appVersion': appVersion,
+    'platform': platform,
+  };
+}
+
+class TelemetryMetric {
+  const TelemetryMetric({
+    required this.name,
+    required this.timestamp,
+    required this.source,
+    required this.type,
+    required this.value,
+    this.unit,
+    this.attributes = const {},
+  });
+
+  final String name;
+  final DateTime timestamp;
+  final String source;
+  final String type;
+  final double value;
+  final String? unit;
+  final Map<String, Object?> attributes;
+
+  Map<String, Object?> toJson({
+    required String installationId,
+    required String sessionId,
+    required String appVersion,
+    required String platform,
+  }) => {
+    'name': name,
+    'timestamp': timestamp.millisecondsSinceEpoch,
+    'source': source,
+    'type': type,
+    'value': value,
+    if (unit != null) 'unit': unit,
+    'attributes': attributes,
     'installationId': installationId,
     'sessionId': sessionId,
     'appVersion': appVersion,

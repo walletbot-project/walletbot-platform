@@ -1,6 +1,9 @@
+import 'dart:async';
+
 import 'package:drift/drift.dart';
 
 import '../../database.dart';
+import '../../telemetry/telemetry_client.dart';
 import '../ids.dart';
 import '../models/transaction_filter.dart';
 import '../queries/account_balance.dart';
@@ -11,7 +14,10 @@ import 'repository_base.dart';
 /// adjustments) and their tag joins. Filtered reads go through the single
 /// shared query builder in `queries/transaction_query.dart`.
 class TransactionRepository extends RepositoryBase {
-  TransactionRepository(super.db);
+  TransactionRepository(super.db, {TelemetryClient? telemetry})
+    : _telemetry = telemetry;
+
+  final TelemetryClient? _telemetry;
 
   // ───── Reads ─────
 
@@ -82,6 +88,7 @@ class TransactionRepository extends RepositoryBase {
     required String name,
     required BigInt amountCents,
     required String currency,
+    String createdBy = 'form',
     String? description,
     String status = 'cleared',
     BigInt? dateMs,
@@ -99,6 +106,7 @@ class TransactionRepository extends RepositoryBase {
     dateMs: dateMs,
     dateConfirmed: dateConfirmed,
     tagIds: tagIds,
+    createdBy: createdBy,
   );
 
   /// Creates an income. Same shape and semantics as [addExpense].
@@ -108,6 +116,7 @@ class TransactionRepository extends RepositoryBase {
     required String name,
     required BigInt amountCents,
     required String currency,
+    String createdBy = 'form',
     String? description,
     String status = 'cleared',
     BigInt? dateMs,
@@ -125,6 +134,7 @@ class TransactionRepository extends RepositoryBase {
     dateMs: dateMs,
     dateConfirmed: dateConfirmed,
     tagIds: tagIds,
+    createdBy: createdBy,
   );
 
   Future<String> _addSimple({
@@ -139,6 +149,7 @@ class TransactionRepository extends RepositoryBase {
     required BigInt? dateMs,
     required bool dateConfirmed,
     required List<String> tagIds,
+    required String createdBy,
   }) async {
     final id = newUuid();
     final now = currentMs;
@@ -165,6 +176,11 @@ class TransactionRepository extends RepositoryBase {
           );
       await _attachTagsTx(id, tagIds, now);
     });
+    _trackCreatedMetric(
+      type: type,
+      createdBy: createdBy,
+      tagCount: tagIds.length,
+    );
     return id;
   }
 
@@ -182,6 +198,7 @@ class TransactionRepository extends RepositoryBase {
     required String currency,
     required BigInt toAmountCents,
     required String toCurrency,
+    String createdBy = 'form',
     double? exchangeRate,
     String categoryId = '',
     String? description,
@@ -222,6 +239,11 @@ class TransactionRepository extends RepositoryBase {
           );
       await _attachTagsTx(id, tagIds, now);
     });
+    _trackTransferCreatedMetric(
+      createdBy: createdBy,
+      crossCurrency: currency != toCurrency,
+      tagCount: tagIds.length,
+    );
     return id;
   }
 
@@ -232,6 +254,7 @@ class TransactionRepository extends RepositoryBase {
     required String accountId,
     required BigInt balanceAfterCents,
     required String currency,
+    String createdBy = 'form',
     String name = 'Ajuste de saldo',
     String? description,
     BigInt? dateMs,
@@ -267,7 +290,61 @@ class TransactionRepository extends RepositoryBase {
             ),
           );
     });
+    _trackCreatedMetric(
+      type: 'balance_adjustment',
+      createdBy: createdBy,
+      tagCount: 0,
+    );
     return id;
+  }
+
+  void _trackCreatedMetric({
+    required String type,
+    required String createdBy,
+    required int tagCount,
+  }) {
+    unawaited(
+      _telemetry?.trackMetric(
+        'business.movements.created_count',
+        type: 'counter',
+        value: 1,
+        unit: 'count',
+        attributes: {
+          'movement_type': type,
+          'created_by': createdBy,
+          'ingest_path': 'direct_client',
+          'tag_count_bucket': _tagCountBucket(tagCount),
+        },
+      ),
+    );
+  }
+
+  void _trackTransferCreatedMetric({
+    required String createdBy,
+    required bool crossCurrency,
+    required int tagCount,
+  }) {
+    unawaited(
+      _telemetry?.trackMetric(
+        'business.transfers.created_count',
+        type: 'counter',
+        value: 1,
+        unit: 'count',
+        attributes: {
+          'created_by': createdBy,
+          'ingest_path': 'direct_client',
+          'cross_currency': crossCurrency,
+          'tag_count_bucket': _tagCountBucket(tagCount),
+        },
+      ),
+    );
+  }
+
+  String _tagCountBucket(int count) {
+    if (count <= 0) return '0';
+    if (count == 1) return '1';
+    if (count <= 3) return '2-3';
+    return '4+';
   }
 
   /// Partial update via `Value<T>` (absent = keep). Always bumps `updatedAt`

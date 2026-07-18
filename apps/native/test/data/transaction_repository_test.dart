@@ -1,9 +1,16 @@
+import 'dart:async';
+import 'dart:convert';
+
 import 'package:app/data/data.dart';
 import 'package:app/database.dart';
+import 'package:app/telemetry/telemetry_client.dart';
 import 'package:drift/drift.dart' show Value;
 import 'package:drift/native.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter/material.dart' show DateTimeRange;
 import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
 
 void main() {
   late AppDatabase db;
@@ -22,6 +29,49 @@ void main() {
 
   tearDown(() async {
     await db.close();
+  });
+
+  test('creation metrics are sent directly with caller attribution', () async {
+    await db.close();
+    FlutterSecureStorage.setMockInitialValues({});
+
+    final captured = Completer<http.Request>();
+    final telemetry = TelemetryClient(
+      convexSiteUrl: 'https://example.convex.site',
+      httpClient: MockClient((request) async {
+        if (!captured.isCompleted) captured.complete(request);
+        return http.Response('{"ok":true,"accepted":1}', 200);
+      }),
+    );
+    db = AppDatabase.forTesting(NativeDatabase.memory());
+    repos = AppRepositories(db, telemetry: telemetry);
+    cashId = await repos.accounts.create(name: 'Cash', currency: 'ARS');
+    foodId = await repos.categories.create(name: 'Food');
+
+    await repos.transactions.addExpense(
+      accountId: cashId,
+      categoryId: foodId,
+      name: 'Voice expense',
+      amountCents: BigInt.from(100),
+      currency: 'ARS',
+      createdBy: 'agent',
+    );
+
+    final request = await captured.future.timeout(const Duration(seconds: 1));
+    final body = jsonDecode(request.body) as Map<String, Object?>;
+    final metrics = body['metrics'] as List<Object?>;
+    final metric = metrics.single as Map<String, Object?>;
+
+    expect(metric['name'], 'business.movements.created_count');
+    expect(metric['source'], 'native');
+    expect(metric['attributes'], {
+      'movement_type': 'expense',
+      'created_by': 'agent',
+      'ingest_path': 'direct_client',
+      'tag_count_bucket': '0',
+    });
+
+    telemetry.dispose();
   });
 
   group('delete cascade (plan invariant #3)', () {

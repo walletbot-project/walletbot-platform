@@ -120,7 +120,10 @@ class _AuthGate extends StatelessWidget {
         // voice agent go through this. Scoped to the account subtree so it is
         // recreated together with the database on account switch.
         Provider<AppRepositories>(
-          create: (ctx) => AppRepositories(ctx.read<AppDatabase>()),
+          create: (ctx) => AppRepositories(
+            ctx.read<AppDatabase>(),
+            telemetry: ctx.read<TelemetryClient?>(),
+          ),
         ),
         // Drives the bottom-nav tab selection and lets one tab hand a filter to
         // another (e.g. an account's "Ver todas" opens Activity filtered to it).

@@ -4,6 +4,7 @@ import type { MutationCtx } from '../_generated/server'
 import { mutation } from '../_generated/server'
 import { inflowsByAccount, outflowsByAccount } from '../aggregates'
 import { syncedTable } from '../schema/sync'
+import { recordFinancialAccountCreated } from '../telemetry/metrics'
 import { requireAuth } from '../users/helpers'
 
 const accountUpsert = v.object({
@@ -224,7 +225,7 @@ async function applyAccountUpsert(
     userId: string,
     seq: bigint,
     payload: AccountUpsert,
-): Promise<void> {
+): Promise<boolean> {
     const existing = await ctx.db
         .query('accounts')
         .withIndex('by_user_id', (q) =>
@@ -255,6 +256,7 @@ async function applyAccountUpsert(
         await ctx.db.insert('accounts', doc)
     }
     await clearTombstone(ctx, userId, 'accounts', payload.id)
+    return !existing
 }
 
 async function applyCategoryUpsert(
@@ -727,7 +729,6 @@ export const push = mutation({
     },
     handler: async (ctx, args) => {
         const userId = await requireAuth(ctx)
-
         // 1) CAS
         const counterRow = await ctx.db
             .query('syncCounters')
@@ -753,7 +754,14 @@ export const push = mutation({
         // 3) Apply upserts in catalog-first order. transactionTags depends on
         //    both transactions and tags, so it goes last.
         for (const u of args.upserts.accounts ?? []) {
-            await applyAccountUpsert(ctx, userId, newSeq, u)
+            const inserted = await applyAccountUpsert(ctx, userId, newSeq, u)
+            if (inserted) {
+                await recordFinancialAccountCreated(ctx, {
+                    userId,
+                    createdBy: 'form',
+                    ingestPath: 'sync_push',
+                })
+            }
         }
         for (const u of args.upserts.categories ?? []) {
             await applyCategoryUpsert(ctx, userId, newSeq, u)
