@@ -49,26 +49,84 @@ class PlacementInput {
   final DashboardLayoutCoord? coord;
 }
 
+/// Result of resolving persisted dashboard coordinates.
+///
+/// [needsRepair] is true when the stored snapshot was incomplete or violated a
+/// grid invariant, so [placements] contains the deterministic legacy auto-flow
+/// instead. Callers can render that safe snapshot immediately and persist it
+/// later, after remote hydration has completed.
+class PlacementResolution {
+  const PlacementResolution({
+    required this.placements,
+    required this.needsRepair,
+  });
+
+  final List<WidgetPlacement> placements;
+  final bool needsRepair;
+}
+
 /// Resolves stored coordinates for [inputs] into placements. When every widget
 /// has a stored coordinate we honor them; if *any* is missing we derive the
 /// whole layout from the legacy auto-flow so a not-yet-migrated dashboard (or a
-/// transient mixed state) renders consistently. The first manual move then
-/// persists coordinates for all widgets, flipping the dashboard to the
-/// all-stored branch for good.
-List<WidgetPlacement> resolvePlacements(List<PlacementInput> inputs) {
-  final allStored = inputs.every((i) => i.coord != null);
-  if (allStored) {
-    return [
-      for (final i in inputs)
-        WidgetPlacement(
-          id: i.id,
-          row: i.coord!.row,
-          col: i.coord!.col,
-          width: i.width,
-        ),
-    ];
+/// transient mixed state) renders consistently. [DashboardSection] persists
+/// that safe snapshot after remote hydration; a manual move uses the same
+/// resolved snapshot if it happens first.
+List<WidgetPlacement> resolvePlacements(List<PlacementInput> inputs) =>
+    resolvePlacementSnapshot(inputs).placements;
+
+/// Resolves and validates a complete persisted layout snapshot.
+///
+/// Stored coordinates are only honored when every widget has one and the
+/// snapshot is internally valid: ids are unique, coordinates are non-negative,
+/// every tile stays within the six-column grid, and no two tiles overlap. Any
+/// violation falls back for the *whole* dashboard so a mixed sync snapshot can
+/// never produce an oversized Flutter row.
+PlacementResolution resolvePlacementSnapshot(List<PlacementInput> inputs) {
+  final stored = <WidgetPlacement>[];
+  final ids = <String>{};
+  final occupiedByRow = <int, List<bool>>{};
+
+  for (final input in inputs) {
+    final coord = input.coord;
+    if (coord == null || !ids.add(input.id)) {
+      return PlacementResolution(
+        placements: _legacyFlow(inputs),
+        needsRepair: true,
+      );
+    }
+    if (coord.row < 0 ||
+        coord.col < 0 ||
+        coord.col + input.width.units > dashboardGridUnits) {
+      return PlacementResolution(
+        placements: _legacyFlow(inputs),
+        needsRepair: true,
+      );
+    }
+
+    final occupied = occupiedByRow.putIfAbsent(
+      coord.row,
+      () => List<bool>.filled(dashboardGridUnits, false),
+    );
+    for (var unit = coord.col; unit < coord.col + input.width.units; unit++) {
+      if (occupied[unit]) {
+        return PlacementResolution(
+          placements: _legacyFlow(inputs),
+          needsRepair: true,
+        );
+      }
+      occupied[unit] = true;
+    }
+    stored.add(
+      WidgetPlacement(
+        id: input.id,
+        row: coord.row,
+        col: coord.col,
+        width: input.width,
+      ),
+    );
   }
-  return _legacyFlow(inputs);
+
+  return PlacementResolution(placements: stored, needsRepair: false);
 }
 
 /// Reproduces the original auto-flow packing: narrower widths flow left-to-right
@@ -140,7 +198,11 @@ class DashboardGridLayout {
     final occupied = List<bool>.filled(dashboardGridUnits, false);
     for (final p in placements) {
       if (p.row != row || p.id == ignoreId) continue;
-      for (var u = p.col; u < p.endCol && u < dashboardGridUnits; u++) {
+      for (
+        var u = p.col.clamp(0, dashboardGridUnits);
+        u < p.endCol && u < dashboardGridUnits;
+        u++
+      ) {
         occupied[u] = true;
       }
     }
@@ -164,7 +226,7 @@ class DashboardGridLayout {
   /// Whether the half-open unit range `[col, col + units)` is fully free on
   /// [row] (and within the grid).
   bool _spanFree(int row, int col, int units, {String? ignoreId}) {
-    if (col < 0 || col + units > dashboardGridUnits) return false;
+    if (row < 0 || col < 0 || col + units > dashboardGridUnits) return false;
     final occupied = _occupancy(row, ignoreId: ignoreId);
     for (var u = col; u < col + units; u++) {
       if (occupied[u]) return false;
@@ -193,6 +255,9 @@ class DashboardGridLayout {
   DashboardGridLayout? insertRowAt(String id, int rowIndex, {int col = 0}) {
     final current = byId(id);
     if (current == null) return null;
+    if (rowIndex < 0 || col < 0 || col + current.units > dashboardGridUnits) {
+      return null;
+    }
     final shifted = [
       for (final p in placements)
         if (p.id == id)
@@ -281,11 +346,15 @@ class DashboardGridLayout {
   }
 
   bool _spanFreeIgnoring(int row, int col, int units, Set<String> ignoreIds) {
-    if (col < 0 || col + units > dashboardGridUnits) return false;
+    if (row < 0 || col < 0 || col + units > dashboardGridUnits) return false;
     final occupied = List<bool>.filled(dashboardGridUnits, false);
     for (final p in placements) {
       if (p.row != row || ignoreIds.contains(p.id)) continue;
-      for (var u = p.col; u < p.endCol && u < dashboardGridUnits; u++) {
+      for (
+        var u = p.col.clamp(0, dashboardGridUnits);
+        u < p.endCol && u < dashboardGridUnits;
+        u++
+      ) {
         occupied[u] = true;
       }
     }

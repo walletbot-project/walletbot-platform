@@ -1,3 +1,7 @@
+import 'dart:async';
+
+import 'package:app/auth/account.dart';
+import 'package:app/auth/auth_controller.dart';
 import 'package:app/components/dashboard/add_widget_sheet.dart';
 import 'package:app/components/dashboard/dashboard_layout.dart';
 import 'package:app/components/dashboard/dashboard_models.dart';
@@ -5,6 +9,9 @@ import 'package:app/components/dashboard/dashboard_view.dart';
 import 'package:app/data/data.dart';
 import 'package:app/data/queries/stream_utils.dart';
 import 'package:app/database.dart';
+import 'package:app/l10n/l10n.dart';
+import 'package:app/sync/sync_engine.dart';
+import 'package:app/sync/sync_status.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -30,13 +37,33 @@ class DashboardSection extends StatefulWidget {
 
 class _DashboardSectionState extends State<DashboardSection> {
   var _ordered = <DashboardWidget>[];
+  AppRepositories? _repos;
+  Stream<(List<DashboardWidget>, List<SavedFilter>)>? _dashboardStream;
   final _pendingDeletes = <String>{};
   // Optimistic layout writes awaiting their stream round-trip, keyed by widget
   // id. Each holds the exact `options` (carrying the new `{row, col}`) and
   // `width` we wrote, so a stream re-emit doesn't flicker back to stale content
   // before the write lands. Cleared once the incoming row matches.
   final _pendingLayout = <String, ({String options, String width})>{};
+  int? _repairScheduledFor;
+  bool _repairInFlight = false;
+  bool _repairEnabled = false;
+  List<DashboardWidget>? _queuedRepairSnapshot;
   String? _selectedId;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final repos = context.read<AppRepositories>();
+    if (identical(_repos, repos)) return;
+    _repos = repos;
+    _dashboardStream = combineLatest2(
+      repos.dashboard.watchWidgets(),
+      repos.savedFilters.watchActive(),
+      (List<DashboardWidget> widgets, List<SavedFilter> filters) =>
+          (widgets, filters),
+    );
+  }
 
   @override
   void didUpdateWidget(DashboardSection oldWidget) {
@@ -48,21 +75,18 @@ class _DashboardSectionState extends State<DashboardSection> {
 
   @override
   Widget build(BuildContext context) {
-    final repos = context.read<AppRepositories>();
-    final stream = combineLatest2(
-      repos.dashboard.watchWidgets(),
-      repos.savedFilters.watchActive(),
-      (List<DashboardWidget> widgets, List<SavedFilter> filters) =>
-          (widgets, filters),
-    );
-
+    final repos = _repos!;
+    final accountType = context.read<AuthController>().activeAccount?.type;
+    final syncStatus = context.watch<SyncEngine>().status;
+    final canPersistRepair =
+        accountType == AccountType.local || syncStatus == SyncStatus.synced;
     return StreamBuilder<(List<DashboardWidget>, List<SavedFilter>)>(
-      stream: stream,
+      stream: _dashboardStream,
       builder: (context, snapshot) {
         final theme = Theme.of(context);
         if (snapshot.hasError) {
           return Text(
-            'No se pudo cargar el tablero.',
+            context.l10n.dashboardLoadFailed,
             style: theme.textTheme.bodyMedium?.copyWith(
               color: theme.colorScheme.error,
             ),
@@ -77,9 +101,10 @@ class _DashboardSectionState extends State<DashboardSection> {
 
         final (widgets, filters) = snapshot.data!;
         _syncOrdered(widgets);
+        _scheduleLayoutRepair(widgets, enabled: canPersistRepair);
         if (widgets.isEmpty) {
           return Text(
-            'Tu tablero está vacío. Agregá un widget para empezar.',
+            context.l10n.dashboardEmpty,
             style: theme.textTheme.bodyMedium?.copyWith(
               color: theme.colorScheme.onSurfaceVariant,
             ),
@@ -131,6 +156,115 @@ class _DashboardSectionState extends State<DashboardSection> {
     );
   }
 
+  void _scheduleLayoutRepair(
+    List<DashboardWidget> widgets, {
+    required bool enabled,
+  }) {
+    _repairEnabled = enabled;
+    if (!enabled || widgets.isEmpty) {
+      _repairScheduledFor = null;
+      _queuedRepairSnapshot = null;
+      return;
+    }
+    if (_repairInFlight) {
+      // Re-check the newest stream value after the active compare-and-write.
+      // It may be the snapshot that made that write correctly return false.
+      _queuedRepairSnapshot = List.unmodifiable(widgets);
+      return;
+    }
+    final resolution = resolvePlacementSnapshot(_placementInputs(widgets));
+    if (!resolution.needsRepair) {
+      _repairScheduledFor = null;
+      return;
+    }
+
+    final fingerprint = Object.hashAll([
+      for (final row in widgets) ...[
+        row.id,
+        row.options,
+        row.width,
+        row.updatedAt,
+      ],
+    ]);
+    if (_repairScheduledFor == fingerprint) return;
+    _repairScheduledFor = fingerprint;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_repairEnabled || _repairScheduledFor != fingerprint) {
+        return;
+      }
+      unawaited(_repairLayout(widgets, resolution, fingerprint));
+    });
+    WidgetsBinding.instance.ensureVisualUpdate();
+  }
+
+  Future<void> _repairLayout(
+    List<DashboardWidget> observed,
+    PlacementResolution resolution,
+    int fingerprint,
+  ) async {
+    if (_repairInFlight) return;
+    _repairInFlight = true;
+    _queuedRepairSnapshot = null;
+    final normalized = DashboardGridLayout.fromPlacements(
+      resolution.placements,
+    ).placements;
+    final byId = {for (final row in observed) row.id: row};
+    final entries = <DashboardLayoutEntry>[];
+    for (var position = 0; position < normalized.length; position++) {
+      final placement = normalized[position];
+      final row = byId[placement.id];
+      if (row == null) continue;
+      entries.add((
+        id: row.id,
+        options: writeDashboardLayout(
+          row.options,
+          DashboardLayoutCoord(row: placement.row, col: placement.col),
+        ),
+        position: position,
+        width: placement.width.wire,
+      ));
+    }
+    final expected = <String, DashboardLayoutExpectation>{
+      for (final row in observed)
+        row.id: (
+          options: row.options,
+          width: row.width,
+          updatedAt: row.updatedAt,
+        ),
+    };
+
+    try {
+      final repaired = await context
+          .read<AppRepositories>()
+          .dashboard
+          .applyLayoutIfUnchanged(entries, expected);
+      if (repaired) {
+        debugPrint(
+          'dashboard: repaired invalid persisted layout (${entries.length} widgets)',
+        );
+      }
+    } catch (error, stackTrace) {
+      debugPrint('dashboard: layout repair failed: $error\n$stackTrace');
+    } finally {
+      _repairInFlight = false;
+      if (_repairScheduledFor == fingerprint) _repairScheduledFor = null;
+      final queued = _queuedRepairSnapshot;
+      _queuedRepairSnapshot = null;
+      if (mounted && queued != null) {
+        _scheduleLayoutRepair(queued, enabled: _repairEnabled);
+      }
+    }
+  }
+
+  List<PlacementInput> _placementInputs(List<DashboardWidget> widgets) => [
+    for (final row in widgets)
+      PlacementInput(
+        id: row.id,
+        width: DashboardWidth.fromWire(row.width) ?? DashboardWidth.full,
+        coord: dashboardLayoutFromOptions(row.options),
+      ),
+  ];
+
   void _syncOrdered(List<DashboardWidget> incomingWidgets) {
     final incomingIds = {for (final row in incomingWidgets) row.id};
     _pendingDeletes.removeWhere((id) => !incomingIds.contains(id));
@@ -178,14 +312,7 @@ class _DashboardSectionState extends State<DashboardSection> {
   /// auto-flow used for any widget that predates manual placement.
   DashboardGridLayout _currentLayout() {
     return DashboardGridLayout.fromPlacements(
-      resolvePlacements([
-        for (final row in _ordered)
-          PlacementInput(
-            id: row.id,
-            width: DashboardWidth.fromWire(row.width) ?? DashboardWidth.full,
-            coord: dashboardLayoutFromOptions(row.options),
-          ),
-      ]),
+      resolvePlacements(_placementInputs(_ordered)),
     );
   }
 
@@ -214,9 +341,9 @@ class _DashboardSectionState extends State<DashboardSection> {
   /// auto-flow fallback. [maxUnits] caps the new widget's width to the free run.
   Future<void> _addWidgetAt(int row, int col, int maxUnits) async {
     final repos = context.read<AppRepositories>();
-    final needsMigration = _ordered.any(
-      (w) => dashboardLayoutFromOptions(w.options) == null,
-    );
+    final needsMigration = resolvePlacementSnapshot(
+      _placementInputs(_ordered),
+    ).needsRepair;
     if (needsMigration) {
       await _applyLayout(_currentLayout(), _selectedId ?? '');
       if (!mounted) return;
@@ -288,7 +415,7 @@ class _DashboardSectionState extends State<DashboardSection> {
           ..addAll(previousPending);
       });
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('No se pudo actualizar el tablero: $error')),
+        SnackBar(content: Text(context.l10n.dashboardUpdateFailed(error))),
       );
     }
   }
@@ -308,19 +435,20 @@ class _DashboardSectionState extends State<DashboardSection> {
 
   Future<void> _deleteItem(DashboardViewItem item) async {
     final dashboard = context.read<AppRepositories>().dashboard;
+    final l10n = context.l10n;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Quitar widget'),
-        content: Text('¿Quitar "${_titleOf(item.row)}" del tablero?'),
+        title: Text(l10n.removeWidget),
+        content: Text(l10n.removeWidgetConfirmation(_titleOf(item.row))),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Cancelar'),
+            child: Text(l10n.cancel),
           ),
           FilledButton(
             onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('Quitar'),
+            child: Text(l10n.remove),
           ),
         ],
       ),
@@ -340,9 +468,9 @@ class _DashboardSectionState extends State<DashboardSection> {
       if (!mounted) return;
       _pendingDeletes.remove(item.row.id);
       setState(() => _ordered = previous);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('No se pudo quitar el widget: $error')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(l10n.widgetRemoveFailed(error))));
     }
   }
 
@@ -363,20 +491,13 @@ class _DashboardSectionState extends State<DashboardSection> {
       StatWidgetSpec(:final title) ||
       TransactionListWidgetSpec(:final title) ||
       BalanceCardWidgetSpec(:final title) ||
-      ChartWidgetSpec(
-        :final title,
-      ) => title.isEmpty ? _typeLabelOf(row) : title,
+      ChartWidgetSpec(:final title) =>
+        title.isEmpty ? _typeLabelOf(row) : context.l10n.dashboardTitle(title),
       null => _typeLabelOf(row),
     };
   }
 
   String _typeLabelOf(DashboardWidget row) {
-    return switch (WidgetType.fromWire(row.type)) {
-      WidgetType.stat => 'Valor',
-      WidgetType.list => 'Lista',
-      WidgetType.balance => 'Saldo',
-      WidgetType.chart => 'Gráfico',
-      null => 'Widget',
-    };
+    return context.l10n.dashboardFallbackType(WidgetType.fromWire(row.type));
   }
 }

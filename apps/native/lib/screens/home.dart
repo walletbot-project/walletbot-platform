@@ -1,13 +1,18 @@
 import 'package:app/auth/account.dart';
 import 'package:app/auth/auth_controller.dart';
 import 'package:app/auth/pop_on_account_switch.dart';
+import 'package:app/app_config/app_config_banner_list.dart';
 import 'package:app/components/dashboard/add_widget_sheet.dart';
 import 'package:app/components/dashboard/dashboard_section.dart';
 import 'package:app/components/dashboard/default_dashboard.dart';
 import 'package:app/data/data.dart';
+import 'package:app/l10n/l10n.dart';
 import 'package:app/screens/login.dart';
+import 'package:app/screens/settings.dart';
 import 'package:app/screens/transaction_form.dart';
 import 'package:app/shared/app_navigation.dart';
+import 'package:app/sync/sync_engine.dart';
+import 'package:app/sync/sync_status.dart';
 import 'package:app/sync/sync_status_pill.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -22,22 +27,79 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  bool _seedInFlight = false;
+  bool _seedFinished = false;
+  bool _remoteSeedScheduled = false;
+  SyncEngine? _syncEngine;
+
   @override
-  void initState() {
-    super.initState();
-    _maybeSeedDashboard();
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final active = context.read<AuthController>().activeAccount;
+    if (active?.type == AccountType.local) {
+      _detachSyncListener();
+      _maybeSeedDashboard(respectDeleteHistory: false);
+      return;
+    }
+
+    final engine = context.read<SyncEngine>();
+    if (!identical(_syncEngine, engine)) {
+      _detachSyncListener();
+      _syncEngine = engine..addListener(_onSyncChanged);
+    }
+    _onSyncChanged();
   }
 
-  /// Seeds the default dashboard once per device (the repository enforces the
-  /// empty-table + one-time guard). Fire-and-forget: the dashboard stream
-  /// updates reactively once the rows land.
-  void _maybeSeedDashboard() {
+  /// Remote dashboards must finish their first pull before the local empty-table
+  /// check. Otherwise defaults and an existing remote layout are merged into one
+  /// invalid grid. Local-only accounts can seed immediately.
+  void _onSyncChanged() {
+    if (_syncEngine?.status != SyncStatus.synced ||
+        _seedFinished ||
+        _seedInFlight ||
+        _remoteSeedScheduled) {
+      return;
+    }
+    // SyncStatus.synced is published just before the cycle's in-flight future
+    // clears. Wait until the next frame so seed writes are observed as new local
+    // work and schedule their own push.
+    _remoteSeedScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _remoteSeedScheduled = false;
+      if (!mounted || _syncEngine?.status != SyncStatus.synced) return;
+      _maybeSeedDashboard(respectDeleteHistory: true);
+    });
+  }
+
+  void _maybeSeedDashboard({required bool respectDeleteHistory}) {
+    if (_seedFinished || _seedInFlight) return;
+    _seedInFlight = true;
     final repos = context.read<AppRepositories>();
+    final l10n = context.l10n;
     repos.dashboard
-        .seedDefaultIfEmpty(() => writeDefaultDashboardSeed(repos))
+        .seedDefaultIfEmpty(
+          () => writeDefaultDashboardSeed(repos, l10n),
+          respectDeleteHistory: respectDeleteHistory,
+        )
+        .then((_) {
+          _seedInFlight = false;
+          _seedFinished = true;
+        })
         .catchError((Object e, StackTrace st) {
+          _seedInFlight = false;
           debugPrint('home: default dashboard seed failed: $e');
         });
+  }
+
+  void _detachSyncListener() {
+    _syncEngine?.removeListener(_onSyncChanged);
+    _syncEngine = null;
+  }
+
+  @override
+  void dispose() {
+    _detachSyncListener();
+    super.dispose();
   }
 
   void showUserMenu() {
@@ -49,7 +111,7 @@ class _HomeScreenState extends State<HomeScreen> {
         return Dialog.fullscreen(
           child: Scaffold(
             appBar: AppBar(
-              title: const Text('Tus cuentas'),
+              title: Text(context.l10n.yourAccounts),
               leading: IconButton(
                 icon: const Icon(Icons.close),
                 onPressed: () => Navigator.pop(dialogContext),
@@ -60,11 +122,13 @@ class _HomeScreenState extends State<HomeScreen> {
                 for (final account in auth.accounts)
                   ListTile(
                     leading: _AccountAvatar(account: account),
-                    title: Text(account.name ?? account.email ?? 'Sin nombre'),
+                    title: Text(
+                      account.name ?? account.email ?? context.l10n.noName,
+                    ),
                     subtitle: Text(
                       account.type == AccountType.local
-                          ? 'Sin cuenta'
-                          : account.email ?? 'Con cuenta',
+                          ? context.l10n.localAccount
+                          : account.email ?? context.l10n.syncedAccount,
                     ),
                     trailing: Row(
                       mainAxisSize: MainAxisSize.min,
@@ -76,7 +140,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           ),
                         IconButton(
                           icon: const Icon(Icons.delete_outline_rounded),
-                          tooltip: 'Quitar cuenta',
+                          tooltip: context.l10n.removeAccount,
                           onPressed: () =>
                               _confirmRemoveAccount(dialogContext, account),
                         ),
@@ -92,7 +156,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 const Divider(),
                 ListTile(
                   leading: const Icon(Icons.person_add_alt_1_rounded),
-                  title: const Text('Agregar cuenta'),
+                  title: Text(context.l10n.addAccount),
                   onTap: () {
                     final previousId = auth.activeId;
                     Navigator.pop(dialogContext);
@@ -105,6 +169,16 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                     );
                   },
+                ),
+                const Divider(),
+                ListTile(
+                  leading: const Icon(Icons.settings_rounded),
+                  title: Text(context.l10n.settings),
+                  onTap: () => Navigator.of(dialogContext).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => const SettingsScreen(),
+                    ),
+                  ),
                 ),
               ],
             ),
@@ -119,23 +193,21 @@ class _HomeScreenState extends State<HomeScreen> {
     UserAccount account,
   ) async {
     final auth = dialogContext.read<AuthController>();
-    final label = account.name ?? account.email ?? 'esta cuenta';
+    final l10n = dialogContext.l10n;
+    final label = account.name ?? account.email ?? context.l10n.thisAccount;
     final confirmed = await showDialog<bool>(
       context: dialogContext,
       builder: (confirmContext) => AlertDialog(
-        title: const Text('Quitar cuenta'),
-        content: Text(
-          'Se eliminarán los datos de "$label" de este dispositivo. '
-          'Esta acción no se puede deshacer.',
-        ),
+        title: Text(context.l10n.removeAccount),
+        content: Text(context.l10n.removeAccountConfirmation(label)),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(confirmContext, false),
-            child: const Text('Cancelar'),
+            child: Text(context.l10n.cancel),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(confirmContext, true),
-            child: const Text('Quitar'),
+            child: Text(context.l10n.remove),
           ),
         ],
       ),
@@ -151,9 +223,9 @@ class _HomeScreenState extends State<HomeScreen> {
       }
     } catch (e) {
       if (dialogContext.mounted) {
-        ScaffoldMessenger.of(dialogContext).showSnackBar(
-          SnackBar(content: Text('No se pudo quitar la cuenta: $e')),
-        );
+        ScaffoldMessenger.of(
+          dialogContext,
+        ).showSnackBar(SnackBar(content: Text(l10n.removeAccountFailed(e))));
       }
       return;
     }
@@ -192,16 +264,16 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Home'),
+        title: Text(context.l10n.home),
         actions: _editing
             ? [
                 IconButton(
-                  tooltip: 'Agregar widget',
+                  tooltip: context.l10n.addWidget,
                   onPressed: _openAddWidget,
                   icon: const Icon(Icons.add_rounded),
                 ),
                 IconButton(
-                  tooltip: 'Listo',
+                  tooltip: context.l10n.done,
                   onPressed: () => setState(() => _editing = false),
                   icon: const Icon(Icons.check_rounded),
                 ),
@@ -212,7 +284,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   child: Center(child: SyncStatusPill()),
                 ),
                 IconButton(
-                  tooltip: 'Editar tablero',
+                  tooltip: context.l10n.editDashboard,
                   onPressed: () => setState(() => _editing = true),
                   icon: const Icon(Icons.edit_outlined),
                 ),
@@ -225,18 +297,22 @@ class _HomeScreenState extends State<HomeScreen> {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
+          const AppConfigBannerList(placement: 'home', bottomSpacing: 16),
           DashboardSection(
             editing: _editing,
             onStartEditing: () => setState(() => _editing = true),
             onOpenFilter: widget.onOpenActivity,
           ),
           const SizedBox(height: 24),
-          Text('Acciones', style: Theme.of(context).textTheme.titleMedium),
+          Text(
+            context.l10n.actions,
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
           const SizedBox(height: 12),
           Align(
             alignment: Alignment.centerLeft,
             child: _HomeActionCard(
-              label: 'Agregar a mano',
+              label: context.l10n.addManually,
               icon: Icons.add_rounded,
               onTap: _openManualAdd,
             ),

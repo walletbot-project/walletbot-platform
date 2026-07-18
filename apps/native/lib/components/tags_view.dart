@@ -4,28 +4,13 @@ import 'package:app/components/grouped_card.dart';
 import 'package:app/components/transaction_row.dart';
 import 'package:app/data/data.dart';
 import 'package:app/database.dart';
+import 'package:app/l10n/l10n.dart';
 import 'package:app/shared/app_navigation.dart';
 import 'package:app/shared/money.dart';
 import 'package:drift/drift.dart' show Value;
 import 'package:flutter/material.dart';
 import 'package:m3e_buttons/m3e_buttons.dart';
 import 'package:provider/provider.dart';
-
-/// Short Spanish month labels for the compact movement dates in the sheet.
-const _shortMonths = [
-  'ene',
-  'feb',
-  'mar',
-  'abr',
-  'may',
-  'jun',
-  'jul',
-  'ago',
-  'sep',
-  'oct',
-  'nov',
-  'dic',
-];
 
 class TagsView extends StatelessWidget {
   const TagsView({super.key});
@@ -52,7 +37,7 @@ class TagsView extends StatelessWidget {
       stream: tags.watchWithCounts(),
       builder: (context, snapshot) {
         if (snapshot.hasError) {
-          return const Center(child: Text('No se pudieron cargar los tags.'));
+          return Center(child: Text(context.l10n.tagsLoadFailed));
         }
         if (snapshot.connectionState == ConnectionState.waiting &&
             !snapshot.hasData) {
@@ -61,7 +46,7 @@ class TagsView extends StatelessWidget {
 
         final data = snapshot.data ?? const <TagWithCount>[];
         if (data.isEmpty) {
-          return const Center(child: Text('No hay tags todavía.'));
+          return Center(child: Text(context.l10n.noTagsYet));
         }
 
         final tree = _buildTagTree(data);
@@ -205,6 +190,11 @@ class _TagDetailsSheetState extends State<TagDetailsSheet> {
       setState(() => _editing = false);
     } catch (e, st) {
       debugPrint('Error updating tag: $e\n$st');
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(context.l10n.tagSaveFailed)));
+      }
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -222,20 +212,19 @@ class _TagDetailsSheetState extends State<TagDetailsSheet> {
         builder: (dialogContext) {
           final colors = Theme.of(dialogContext).colorScheme;
           return AlertDialog(
-            title: const Text('Eliminar tag'),
+            title: Text(context.l10n.deleteTag),
             content: Text(
-              '¿Seguro que querés eliminar "${_nameController.text.trim()}"? '
-              'Dejará de aparecer en tus tags.',
+              context.l10n.deleteTagConfirmation(_nameController.text.trim()),
             ),
             actions: [
               TextButton(
                 onPressed: () => Navigator.of(dialogContext).pop(false),
-                child: const Text('Cancelar'),
+                child: Text(context.l10n.cancel),
               ),
               TextButton(
                 onPressed: () => Navigator.of(dialogContext).pop(true),
                 style: TextButton.styleFrom(foregroundColor: colors.error),
-                child: const Text('Eliminar'),
+                child: Text(context.l10n.delete),
               ),
             ],
           );
@@ -250,15 +239,16 @@ class _TagDetailsSheetState extends State<TagDetailsSheet> {
         builder: (dialogContext) {
           final colors = Theme.of(dialogContext).colorScheme;
           return AlertDialog(
-            title: const Text('Eliminar tag con sub-tags'),
+            title: Text(context.l10n.deleteTagWithChildren),
             content: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  '"${_nameController.text.trim()}" tiene '
-                  '${children.length} sub-tag${children.length == 1 ? '' : 's'}. '
-                  '¿Qué hacemos con ${children.length == 1 ? 'él' : 'ellos'}?',
+                  context.l10n.deleteTagWithChildrenPrompt(
+                    _nameController.text.trim(),
+                    children.length,
+                  ),
                 ),
                 const SizedBox(height: 8),
                 ...children.map((c) => Text('• ${c.name}')),
@@ -268,18 +258,18 @@ class _TagDetailsSheetState extends State<TagDetailsSheet> {
               TextButton(
                 onPressed: () =>
                     Navigator.of(dialogContext).pop(_CascadeChoice.cancel),
-                child: const Text('Cancelar'),
+                child: Text(context.l10n.cancel),
               ),
               TextButton(
                 onPressed: () =>
                     Navigator.of(dialogContext).pop(_CascadeChoice.keep),
-                child: const Text('Conservar sub-tags'),
+                child: Text(context.l10n.keepSubtags),
               ),
               TextButton(
                 onPressed: () =>
                     Navigator.of(dialogContext).pop(_CascadeChoice.cascade),
                 style: TextButton.styleFrom(foregroundColor: colors.error),
-                child: const Text('Eliminar todo'),
+                child: Text(context.l10n.deleteEverything),
               ),
             ],
           );
@@ -340,10 +330,10 @@ class _TagDetailsSheetState extends State<TagDetailsSheet> {
         controller: _nameController,
         style: style,
         textCapitalization: TextCapitalization.sentences,
-        decoration: const InputDecoration(
+        decoration: InputDecoration(
           isDense: true,
-          labelText: 'Nombre',
-          border: OutlineInputBorder(),
+          labelText: context.l10n.name,
+          border: const OutlineInputBorder(),
         ),
         onChanged: (_) => setState(() {}),
       );
@@ -419,7 +409,7 @@ class _TagDetailsSheetState extends State<TagDetailsSheet> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'GASTADO ESTE MES',
+                        context.l10n.spentThisMonth,
                         style: textTheme.labelMedium?.copyWith(
                           color: colors.onSurfaceVariant,
                           letterSpacing: 0.8,
@@ -460,7 +450,7 @@ class _TagDetailsSheetState extends State<TagDetailsSheet> {
 
         if (spend.isEmpty) {
           return Text(
-            'Sin gastos este mes',
+            context.l10n.noSpendingThisMonth,
             style: textTheme.titleMedium?.copyWith(
               color: Theme.of(context).colorScheme.onSurfaceVariant,
             ),
@@ -475,7 +465,11 @@ class _TagDetailsSheetState extends State<TagDetailsSheet> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              formatMoney(top.value.toInt(), top.key),
+              formatMoney(
+                top.value.toInt(),
+                top.key,
+                locale: context.localeName,
+              ),
               style: bigStyle,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
@@ -484,7 +478,7 @@ class _TagDetailsSheetState extends State<TagDetailsSheet> {
               Padding(
                 padding: const EdgeInsets.only(top: 4),
                 child: Text(
-                  '+ ${entries.length - 1} ${entries.length - 1 == 1 ? 'otra moneda' : 'otras monedas'}',
+                  context.l10n.otherCurrencies(entries.length - 1),
                   style: textTheme.bodySmall?.copyWith(
                     color: Theme.of(context).colorScheme.onSurfaceVariant,
                   ),
@@ -507,15 +501,15 @@ class _TagDetailsSheetState extends State<TagDetailsSheet> {
             onPressed: _saving ? null : _toggleEditing,
             size: M3EButtonSize.md,
             icon: Icon(_editing ? Icons.check_rounded : Icons.edit_outlined),
-            label: Text(_editing ? 'Listo' : 'Editar'),
+            label: Text(_editing ? context.l10n.done : context.l10n.edit),
           ),
         ),
         const SizedBox(width: 8),
         M3EButton(
           onPressed: _saving ? null : _confirmDelete,
           size: M3EButtonSize.md,
-          tooltip: 'Eliminar',
-          semanticLabel: 'Eliminar',
+          tooltip: context.l10n.delete,
+          semanticLabel: context.l10n.delete,
           decoration: M3EButtonDecoration.styleFrom(
             backgroundColor: colors.errorContainer,
             foregroundColor: colors.onErrorContainer,
@@ -533,11 +527,14 @@ class _TagDetailsSheetState extends State<TagDetailsSheet> {
     return Row(
       children: [
         Expanded(
-          child: Text('Últimos movimientos', style: textTheme.titleMedium),
+          child: Text(
+            context.l10n.latestMovements,
+            style: textTheme.titleMedium,
+          ),
         ),
         TextButton(
           onPressed: _openAllTransactions,
-          child: const Text('Ver todos'),
+          child: Text(context.l10n.viewAll),
         ),
       ],
     );
@@ -553,7 +550,7 @@ class _TagDetailsSheetState extends State<TagDetailsSheet> {
       ),
       builder: (context, snapshot) {
         if (snapshot.hasError) {
-          return _hintText(context, 'No se pudieron cargar los movimientos');
+          return _hintText(context, context.l10n.movementsLoadFailed);
         }
         if (snapshot.connectionState == ConnectionState.waiting &&
             !snapshot.hasData) {
@@ -564,7 +561,7 @@ class _TagDetailsSheetState extends State<TagDetailsSheet> {
         }
         final txs = snapshot.data ?? const <Transaction>[];
         if (txs.isEmpty) {
-          return _hintText(context, 'Sin movimientos todavía');
+          return _hintText(context, context.l10n.noMovementsYet);
         }
         return Column(
           children: [
@@ -574,7 +571,7 @@ class _TagDetailsSheetState extends State<TagDetailsSheet> {
                 title: txs[i].name,
                 amountCents: _signedAmountCents(txs[i]),
                 dateCheck: txs[i].dateConfirmed,
-                description: _shortDate(txs[i].date),
+                description: _shortDate(context, txs[i].date),
                 currencySymbol: currencyPrefix(txs[i].currency).trim(),
                 onTap: () {},
               ),
@@ -612,9 +609,9 @@ int _signedAmountCents(Transaction t) {
 }
 
 /// Compact `day month` label, e.g. `27 may`.
-String _shortDate(BigInt dateMs) {
+String _shortDate(BuildContext context, BigInt dateMs) {
   final dt = DateTime.fromMillisecondsSinceEpoch(dateMs.toInt());
-  return '${dt.day} ${_shortMonths[dt.month - 1]}';
+  return formatShortDate(dt, context.localeName);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -681,7 +678,7 @@ class _TagDialogState extends State<_TagDialog> {
     final parentCandidates = widget.parentCandidates;
 
     return AlertDialog(
-      title: const Text('Nuevo tag'),
+      title: Text(context.l10n.newTag),
       content: SingleChildScrollView(
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -689,11 +686,14 @@ class _TagDialogState extends State<_TagDialog> {
           children: [
             TextField(
               controller: _nameController,
-              decoration: const InputDecoration(labelText: 'Nombre'),
+              decoration: InputDecoration(labelText: context.l10n.name),
               autofocus: true,
             ),
             const SizedBox(height: 20),
-            Text('Color', style: Theme.of(context).textTheme.labelLarge),
+            Text(
+              context.l10n.color,
+              style: Theme.of(context).textTheme.labelLarge,
+            ),
             const SizedBox(height: 12),
             _ColorPicker(
               selected: _selectedColor,
@@ -710,19 +710,22 @@ class _TagDialogState extends State<_TagDialog> {
                       if (!_isSubtag) _parentId = null;
                     }),
                   ),
-                  const Text('Crear sub-tag'),
+                  Text(context.l10n.createSubtag),
                 ],
               ),
             ],
             if (_isSubtag && parentCandidates.isNotEmpty) ...[
               const SizedBox(height: 12),
-              Text('Tag padre', style: Theme.of(context).textTheme.labelLarge),
+              Text(
+                context.l10n.parentTag,
+                style: Theme.of(context).textTheme.labelLarge,
+              ),
               const SizedBox(height: 8),
               DropdownButtonFormField<String>(
                 initialValue: _parentId,
                 isExpanded: true,
                 decoration: const InputDecoration(border: OutlineInputBorder()),
-                hint: const Text('Elegí el tag padre'),
+                hint: Text(context.l10n.chooseParentTag),
                 items: parentCandidates
                     .map(
                       (t) => DropdownMenuItem(value: t.id, child: Text(t.name)),
@@ -737,9 +740,9 @@ class _TagDialogState extends State<_TagDialog> {
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(context),
-          child: const Text('Cancelar'),
+          child: Text(context.l10n.cancel),
         ),
-        TextButton(onPressed: _submit, child: const Text('Crear')),
+        TextButton(onPressed: _submit, child: Text(context.l10n.create)),
       ],
     );
   }

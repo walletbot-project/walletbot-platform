@@ -7,28 +7,13 @@ import 'package:app/components/icon_picker.dart';
 import 'package:app/components/transaction_row.dart';
 import 'package:app/data/data.dart';
 import 'package:app/database.dart';
+import 'package:app/l10n/l10n.dart';
 import 'package:app/shared/app_navigation.dart';
 import 'package:app/shared/money.dart';
 import 'package:drift/drift.dart' show Value;
 import 'package:flutter/material.dart';
 import 'package:m3e_buttons/m3e_buttons.dart';
 import 'package:provider/provider.dart';
-
-/// Short Spanish month labels for the compact movement dates in the sheet.
-const _shortMonths = [
-  'ene',
-  'feb',
-  'mar',
-  'abr',
-  'may',
-  'jun',
-  'jul',
-  'ago',
-  'sep',
-  'oct',
-  'nov',
-  'dic',
-];
 
 class CategoriesView extends StatelessWidget {
   const CategoriesView({super.key});
@@ -61,7 +46,7 @@ class CategoriesView extends StatelessWidget {
         if (snapshot.hasError) {
           return _CategoriesMessage(
             icon: Icons.error_outline_rounded,
-            title: 'No se pudieron cargar las categorías',
+            title: context.l10n.categoriesLoadFailed,
             detail: snapshot.error.toString(),
           );
         }
@@ -72,10 +57,10 @@ class CategoriesView extends StatelessWidget {
 
         final data = snapshot.data ?? const <CategoryWithCount>[];
         if (data.isEmpty) {
-          return const _CategoriesMessage(
+          return _CategoriesMessage(
             icon: Icons.category_outlined,
-            title: 'No tenés categorías aún',
-            detail: 'Creá una categoría para organizar tus movimientos.',
+            title: context.l10n.noCategoriesTitle,
+            detail: context.l10n.noCategoriesBody,
           );
         }
 
@@ -224,6 +209,11 @@ class _CategoryDetailsSheetState extends State<CategoryDetailsSheet> {
       setState(() => _editing = false);
     } catch (e, st) {
       debugPrint('Error updating category: $e\n$st');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(context.l10n.categorySaveFailed)),
+        );
+      }
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -235,20 +225,21 @@ class _CategoryDetailsSheetState extends State<CategoryDetailsSheet> {
       builder: (dialogContext) {
         final colors = Theme.of(dialogContext).colorScheme;
         return AlertDialog(
-          title: const Text('Eliminar categoría'),
+          title: Text(context.l10n.deleteCategory),
           content: Text(
-            '¿Seguro que querés eliminar "${_nameController.text.trim()}"? '
-            'Dejará de aparecer en tus categorías.',
+            context.l10n.deleteCategoryConfirmation(
+              _nameController.text.trim(),
+            ),
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(dialogContext).pop(false),
-              child: const Text('Cancelar'),
+              child: Text(context.l10n.cancel),
             ),
             TextButton(
               onPressed: () => Navigator.of(dialogContext).pop(true),
               style: TextButton.styleFrom(foregroundColor: colors.error),
-              child: const Text('Eliminar'),
+              child: Text(context.l10n.delete),
             ),
           ],
         );
@@ -263,7 +254,12 @@ class _CategoryDetailsSheetState extends State<CategoryDetailsSheet> {
       Navigator.of(context).pop(); // close the details sheet
     } catch (e, st) {
       debugPrint('Error archiving category: $e\n$st');
-      if (mounted) setState(() => _saving = false);
+      if (mounted) {
+        setState(() => _saving = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(context.l10n.deleteCategoryFailed)),
+        );
+      }
     }
   }
 
@@ -305,10 +301,10 @@ class _CategoryDetailsSheetState extends State<CategoryDetailsSheet> {
         controller: _nameController,
         style: style,
         textCapitalization: TextCapitalization.sentences,
-        decoration: const InputDecoration(
+        decoration: InputDecoration(
           isDense: true,
-          labelText: 'Nombre',
-          border: OutlineInputBorder(),
+          labelText: context.l10n.name,
+          border: const OutlineInputBorder(),
         ),
         onChanged: (_) => setState(() {}),
       );
@@ -421,7 +417,7 @@ class _CategoryDetailsSheetState extends State<CategoryDetailsSheet> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'GASTADO ESTE MES',
+                        context.l10n.spentThisMonth,
                         style: textTheme.labelMedium?.copyWith(
                           color: colors.onSurfaceVariant,
                           letterSpacing: 0.8,
@@ -462,7 +458,7 @@ class _CategoryDetailsSheetState extends State<CategoryDetailsSheet> {
 
         if (spend.isEmpty) {
           return Text(
-            'Sin gastos este mes',
+            context.l10n.noSpendingThisMonth,
             style: textTheme.titleMedium?.copyWith(
               color: Theme.of(context).colorScheme.onSurfaceVariant,
             ),
@@ -478,7 +474,11 @@ class _CategoryDetailsSheetState extends State<CategoryDetailsSheet> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              formatMoney(top.value.toInt(), top.key),
+              formatMoney(
+                top.value.toInt(),
+                top.key,
+                locale: context.localeName,
+              ),
               style: bigStyle,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
@@ -487,7 +487,7 @@ class _CategoryDetailsSheetState extends State<CategoryDetailsSheet> {
               Padding(
                 padding: const EdgeInsets.only(top: 4),
                 child: Text(
-                  '+ ${entries.length - 1} ${entries.length - 1 == 1 ? 'otra moneda' : 'otras monedas'}',
+                  context.l10n.otherCurrencies(entries.length - 1),
                   style: textTheme.bodySmall?.copyWith(
                     color: Theme.of(context).colorScheme.onSurfaceVariant,
                   ),
@@ -510,15 +510,15 @@ class _CategoryDetailsSheetState extends State<CategoryDetailsSheet> {
             onPressed: _saving ? null : _toggleEditing,
             size: M3EButtonSize.md,
             icon: Icon(_editing ? Icons.check_rounded : Icons.edit_outlined),
-            label: Text(_editing ? 'Listo' : 'Editar'),
+            label: Text(_editing ? context.l10n.done : context.l10n.edit),
           ),
         ),
         const SizedBox(width: 8),
         M3EButton(
           onPressed: _saving ? null : _confirmDelete,
           size: M3EButtonSize.md,
-          tooltip: 'Eliminar',
-          semanticLabel: 'Eliminar',
+          tooltip: context.l10n.delete,
+          semanticLabel: context.l10n.delete,
           decoration: M3EButtonDecoration.styleFrom(
             backgroundColor: colors.errorContainer,
             foregroundColor: colors.onErrorContainer,
@@ -536,11 +536,14 @@ class _CategoryDetailsSheetState extends State<CategoryDetailsSheet> {
     return Row(
       children: [
         Expanded(
-          child: Text('Últimos movimientos', style: textTheme.titleMedium),
+          child: Text(
+            context.l10n.latestMovements,
+            style: textTheme.titleMedium,
+          ),
         ),
         TextButton(
           onPressed: _openAllTransactions,
-          child: const Text('Ver todos'),
+          child: Text(context.l10n.viewAll),
         ),
       ],
     );
@@ -556,7 +559,7 @@ class _CategoryDetailsSheetState extends State<CategoryDetailsSheet> {
       ),
       builder: (context, snapshot) {
         if (snapshot.hasError) {
-          return _hintText(context, 'No se pudieron cargar los movimientos');
+          return _hintText(context, context.l10n.movementsLoadFailed);
         }
         if (snapshot.connectionState == ConnectionState.waiting &&
             !snapshot.hasData) {
@@ -567,7 +570,7 @@ class _CategoryDetailsSheetState extends State<CategoryDetailsSheet> {
         }
         final txs = snapshot.data ?? const <Transaction>[];
         if (txs.isEmpty) {
-          return _hintText(context, 'Sin movimientos todavía');
+          return _hintText(context, context.l10n.noMovementsYet);
         }
         return Column(
           children: [
@@ -577,7 +580,7 @@ class _CategoryDetailsSheetState extends State<CategoryDetailsSheet> {
                 title: txs[i].name,
                 amountCents: _signedAmountCents(txs[i]),
                 dateCheck: txs[i].dateConfirmed,
-                description: _shortDate(txs[i].date),
+                description: _shortDate(context, txs[i].date),
                 currencySymbol: currencyPrefix(txs[i].currency).trim(),
                 onTap: () {},
               ),
@@ -615,7 +618,7 @@ int _signedAmountCents(Transaction t) {
 }
 
 /// Compact `day month` label, e.g. `27 may`.
-String _shortDate(BigInt dateMs) {
+String _shortDate(BuildContext context, BigInt dateMs) {
   final dt = DateTime.fromMillisecondsSinceEpoch(dateMs.toInt());
-  return '${dt.day} ${_shortMonths[dt.month - 1]}';
+  return formatShortDate(dt, context.localeName);
 }

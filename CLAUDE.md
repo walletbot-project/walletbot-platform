@@ -8,7 +8,7 @@ Wallet Bot — app for keeping track of personal expenses
 
 | Package | Path | Stack |
 |---|---|---|
-| Native app | `apps/app` | Flutter |
+| Native app | `apps/native` | Flutter |
 | Web app | `apps/web` | Vite + React + Tailwind v4 + shadcn (base-ui) |
 | Backend | `packages/backend` | Convex + better-auth |
 | Shared | `packages/shared` | Pure TypeScript — convex backend |
@@ -75,7 +75,7 @@ Follow `apps/web/DEVELOPMENT.md` for project structure, layout system, and modul
 ## Backend
 
 Follow `packages/backend/README.md` for environment setup (Convex, better-auth, Google OAuth).
-Follow `packages/backend/DEVELOPMENT.md` for backend architecture and conventions.
+For backend architecture and conventions, follow the § Feature layout below (`packages/backend/DEVELOPMENT.md` is referenced historically but not yet written).
 
 ### Feature layout (quick ref)
 
@@ -129,6 +129,44 @@ Convex has two runtimes: the default (fast, no Node APIs) and Node.js. Files tha
 ## Long or complex processes
 
 - Please use multiple steps, and ideally use the Convex's Workflows component for durable long running proceses. Read docs to do it correctly.
+
+## Client–server contract, versioning & native config
+
+These rules govern how the native app (which can lag behind the backend) talks
+to Convex, and how native version gating is handled. The web app deploys in
+lockstep with the backend, so it is exempt from the versioning rule below.
+
+- **Version the native-consumed contract.** The HTTP native config surface the
+  native app calls is served under a `/vN` path prefix (`/v1/config`); to break
+  it, add `/v2/*` and retire `/v1/*` only after the `minSupportedVersion` cutoff
+  has passed. The sync and native-auth surfaces are **not yet path-versioned** —
+  they are still called at bare paths
+  (`sync/queries:pull`, `sync/mutations:push`, `sync/queries:getCounter`, and
+  the `/native-auth/*` + `/auth/*` HTTP routes). Until they are, treat any
+  change to their wire format as breaking and coordinate it via the
+  `minSupportedVersion` bump below. Web-only functions (typed `api.*` refs) stay
+  unversioned.
+- **Breaking sync/wire changes are a coordinated bump.** Any change to the sync
+  wire format or the set of synced tables/fields must bump **both**
+  `minSupportedVersion` (backend constants in
+  `packages/backend/convex/config/helpers.ts`, per platform) and the drift
+  `schemaVersion` in `apps/native/lib/database.dart` in the same change. Old
+  clients must fail *closed on sync* while continuing to work *offline* on their
+  local data — never silently drop or diverge. The gate is enforced on **both**
+  sides: the client won't start sync when `syncAllowed` is false, and because a
+  client whose config fetch failed fails *open*, `sync/*:push` and `pull` also
+  check `appVersion`/`platform` against `minSupportedVersion` server-side
+  (`config/helpers.ts:isClientSupported`) and return
+  `{ ok: false, error: 'client_outdated' }`, which halts the sync engine and
+  flips the client to the hard update prompt. Both entry points therefore take
+  required `platform` + `appVersion` args — a wire change is a coordinated bump.
+- **Device-scoped state stays out of the per-user DB.** Cached config and
+  update-prompt state are device-level and must live in a device-scoped store
+  (`flutter_secure_storage`), never in `AppDatabase.forUser` (that DB is torn
+  down and recreated on account switch).
+- **Native config fails open.** Never block offline use or delete local
+  sessions/accounts on a failed config/bootstrap fetch; always fall back to
+  bundled defaults plus the last-good cached config.
 
 <!-- convex-ai-start -->
 This project uses [Convex](https://convex.dev) as its backend.
