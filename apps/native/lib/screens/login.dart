@@ -1,7 +1,5 @@
-import 'dart:async';
-
 import 'package:app/auth/auth_controller.dart';
-import 'package:app/telemetry/telemetry_client.dart';
+import 'package:app/telemetry/business_metrics.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:google_sign_in/google_sign_in.dart';
@@ -95,18 +93,10 @@ class _LoginScreenState extends State<LoginScreen> {
     setState(() => _submitting = true);
     final messenger = ScaffoldMessenger.of(context);
     final auth = context.read<AuthController>();
-    final telemetry = context.read<TelemetryClient?>();
+    final businessMetrics = context.read<BusinessMetrics?>();
     try {
       await auth.addLocal(name: _localNameController.text.trim());
-      unawaited(
-        telemetry?.trackMetric(
-          'business.user_accounts.created_count',
-          type: 'counter',
-          value: 1,
-          unit: 'count',
-          attributes: {'auth_method': 'local'},
-        ),
-      );
+      businessMetrics?.userAccountCreated(authMethod: 'local');
     } catch (e) {
       messenger.showSnackBar(
         SnackBar(content: Text('No se pudo continuar sin cuenta: $e')),

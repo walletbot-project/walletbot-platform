@@ -93,8 +93,7 @@ void main() {
       attributes: {
         'movement_type': 'expense',
         'created_by': 'form',
-        'ingest_path': 'sync_push',
-        'tag_count_bucket': '2-3',
+        'ingest_path': 'direct_client',
       },
     );
 
@@ -118,8 +117,7 @@ void main() {
     expect(metric['attributes'], {
       'movement_type': 'expense',
       'created_by': 'form',
-      'ingest_path': 'sync_push',
-      'tag_count_bucket': '2-3',
+      'ingest_path': 'direct_client',
     });
 
     client.dispose();

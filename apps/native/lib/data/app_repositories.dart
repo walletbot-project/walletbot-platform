@@ -1,5 +1,5 @@
 import '../database.dart';
-import '../telemetry/telemetry_client.dart';
+import '../telemetry/business_metrics.dart';
 import 'entity_resolver.dart';
 import 'repositories/account_repository.dart';
 import 'repositories/category_repository.dart';
@@ -18,11 +18,14 @@ import 'repositories/transaction_repository.dart';
 /// repository `watch*` stream. Agent tools receive this bundle instead of the
 /// raw database.
 class AppRepositories {
-  AppRepositories(AppDatabase db, {TelemetryClient? telemetry})
-    : accounts = AccountRepository(db),
+  AppRepositories(AppDatabase db, {BusinessMetrics? businessMetrics})
+    : accounts = AccountRepository(db, businessMetrics: businessMetrics),
       categories = CategoryRepository(db),
       tags = TagRepository(db),
-      transactions = TransactionRepository(db, telemetry: telemetry),
+      transactions = TransactionRepository(
+        db,
+        businessMetrics: businessMetrics,
+      ),
       summaries = SummaryRepository(db),
       savedFilters = SavedFilterRepository(db),
       dashboard = DashboardRepository(db),

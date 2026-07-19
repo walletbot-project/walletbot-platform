@@ -140,7 +140,6 @@ export const createExpense = mutation({
             movementType: 'expense',
             createdBy: args.createdBy ?? 'form',
             ingestPath: 'direct_mutation',
-            tagCount: 0,
         })
         return args.id
     },
@@ -196,7 +195,6 @@ export const createIncome = mutation({
             movementType: 'income',
             createdBy: args.createdBy ?? 'form',
             ingestPath: 'direct_mutation',
-            tagCount: 0,
         })
         return args.id
     },
@@ -274,7 +272,6 @@ export const createTransfer = mutation({
             createdBy: args.createdBy ?? 'form',
             ingestPath: 'direct_mutation',
             crossCurrency: !sameCurrency,
-            tagCount: 0,
         })
         return args.id
     },
@@ -337,7 +334,6 @@ export const createBalanceAdjustment = mutation({
             movementType: 'balance_adjustment',
             createdBy: args.createdBy ?? 'form',
             ingestPath: 'direct_mutation',
-            tagCount: 0,
         })
         return args.id
     },

@@ -206,6 +206,7 @@ class ToolExecutors {
     final id = await repos.accounts.create(
       name: args['name'] as String,
       currency: args['currency'] as String,
+      createdBy: 'agent',
       description: args['description'] as String?,
       color: args['color'] as String?,
       icon: args['icon'] as String?,

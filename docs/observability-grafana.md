@@ -57,7 +57,6 @@ Useful labels:
 - `auth_method`
 - `movement_type`
 - `cross_currency`
-- `tag_count_bucket`
 - `deployment_environment`
 - `service_namespace`
 - `service_name`

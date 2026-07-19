@@ -2,6 +2,13 @@ import type { HttpRouter } from 'convex/server'
 import { internal } from '../_generated/api'
 import { httpAction } from '../_generated/server'
 import { requireAuth } from '../users/helpers'
+import {
+    metricCatalog,
+    metricNames,
+    metricSources,
+    metricTypes,
+    metricUnits,
+} from './catalog'
 import type {
     JsonValue,
     MetricAttributeValue,
@@ -34,79 +41,6 @@ const platforms = new Set<TelemetryPlatform>([
     'windows',
     'linux',
 ])
-
-const metricNames = new Set<MetricName>([
-    'business.user_accounts.created_count',
-    'business.financial_accounts.created_count',
-    'business.movements.created_count',
-    'business.transfers.created_count',
-])
-
-const metricSources = new Set<MetricSource>(['web', 'native', 'backend'])
-const metricTypes = new Set<MetricType>(['counter', 'gauge', 'histogram'])
-const metricUnits = new Set<MetricUnit>(['count', 'ms'])
-
-const metricCatalog: Record<
-    MetricName,
-    {
-        type: MetricType
-        unit: MetricUnit
-        attributes: Record<string, Set<MetricAttributeValue> | 'string'>
-    }
-> = {
-    'business.user_accounts.created_count': {
-        type: 'counter',
-        unit: 'count',
-        attributes: {
-            auth_method: new Set([
-                'email_password',
-                'google',
-                'apple',
-                'local',
-            ]),
-        },
-    },
-    'business.financial_accounts.created_count': {
-        type: 'counter',
-        unit: 'count',
-        attributes: {
-            created_by: new Set(['form', 'agent']),
-            ingest_path: new Set([
-                'direct_mutation',
-                'sync_push',
-                'direct_client',
-            ]),
-        },
-    },
-    'business.movements.created_count': {
-        type: 'counter',
-        unit: 'count',
-        attributes: {
-            movement_type: new Set(['expense', 'income', 'balance_adjustment']),
-            created_by: new Set(['form', 'agent']),
-            ingest_path: new Set([
-                'direct_mutation',
-                'sync_push',
-                'direct_client',
-            ]),
-            tag_count_bucket: new Set(['0', '1', '2-3', '4+']),
-        },
-    },
-    'business.transfers.created_count': {
-        type: 'counter',
-        unit: 'count',
-        attributes: {
-            created_by: new Set(['form', 'agent']),
-            ingest_path: new Set([
-                'direct_mutation',
-                'sync_push',
-                'direct_client',
-            ]),
-            cross_currency: new Set([true, false]),
-            tag_count_bucket: new Set(['0', '1', '2-3', '4+']),
-        },
-    },
-}
 
 const jsonResponse = (body: unknown, init?: ResponseInit): Response => {
     const headers = new Headers(init?.headers)

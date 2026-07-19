@@ -13,6 +13,7 @@ import 'package:app/screens/login.dart';
 import 'package:app/screens/voice.dart';
 import 'package:app/shared/app_navigation.dart';
 import 'package:app/sync/sync_engine.dart';
+import 'package:app/telemetry/business_metrics.dart';
 import 'package:app/telemetry/telemetry_client.dart';
 import 'package:app/voice/gemini_voice_expense_command.dart';
 import 'package:convex_flutter/convex_flutter.dart';
@@ -62,6 +63,8 @@ class MyApp extends StatelessWidget {
             create: (_) => telemetry,
             dispose: (_, client) => client.dispose(),
           ),
+        if (telemetry != null)
+          Provider<BusinessMetrics>(create: (_) => BusinessMetrics(telemetry)),
       ],
       child: _TelemetryStarter(
         child: MaterialApp(
@@ -122,7 +125,7 @@ class _AuthGate extends StatelessWidget {
         Provider<AppRepositories>(
           create: (ctx) => AppRepositories(
             ctx.read<AppDatabase>(),
-            telemetry: ctx.read<TelemetryClient?>(),
+            businessMetrics: ctx.read<BusinessMetrics?>(),
           ),
         ),
         // Drives the bottom-nav tab selection and lets one tab hand a filter to

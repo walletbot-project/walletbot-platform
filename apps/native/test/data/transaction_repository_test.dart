@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:app/data/data.dart';
 import 'package:app/database.dart';
+import 'package:app/telemetry/business_metrics.dart';
 import 'package:app/telemetry/telemetry_client.dart';
 import 'package:drift/drift.dart' show Value;
 import 'package:drift/native.dart';
@@ -44,9 +45,10 @@ void main() {
       }),
     );
     db = AppDatabase.forTesting(NativeDatabase.memory());
-    repos = AppRepositories(db, telemetry: telemetry);
+    repos = AppRepositories(db);
     cashId = await repos.accounts.create(name: 'Cash', currency: 'ARS');
     foodId = await repos.categories.create(name: 'Food');
+    repos = AppRepositories(db, businessMetrics: BusinessMetrics(telemetry));
 
     await repos.transactions.addExpense(
       accountId: cashId,
@@ -68,11 +70,49 @@ void main() {
       'movement_type': 'expense',
       'created_by': 'agent',
       'ingest_path': 'direct_client',
-      'tag_count_bucket': '0',
     });
 
     telemetry.dispose();
   });
+
+  test(
+    'account creation metrics are sent directly with caller attribution',
+    () async {
+      await db.close();
+      FlutterSecureStorage.setMockInitialValues({});
+
+      final captured = Completer<http.Request>();
+      final telemetry = TelemetryClient(
+        convexSiteUrl: 'https://example.convex.site',
+        httpClient: MockClient((request) async {
+          if (!captured.isCompleted) captured.complete(request);
+          return http.Response('{"ok":true,"accepted":1}', 200);
+        }),
+      );
+      db = AppDatabase.forTesting(NativeDatabase.memory());
+      repos = AppRepositories(db, businessMetrics: BusinessMetrics(telemetry));
+
+      await repos.accounts.create(
+        name: 'Agent cash',
+        currency: 'ARS',
+        createdBy: 'agent',
+      );
+
+      final request = await captured.future.timeout(const Duration(seconds: 1));
+      final body = jsonDecode(request.body) as Map<String, Object?>;
+      final metrics = body['metrics'] as List<Object?>;
+      final metric = metrics.single as Map<String, Object?>;
+
+      expect(metric['name'], 'business.financial_accounts.created_count');
+      expect(metric['source'], 'native');
+      expect(metric['attributes'], {
+        'created_by': 'agent',
+        'ingest_path': 'direct_client',
+      });
+
+      telemetry.dispose();
+    },
+  );
 
   group('delete cascade (plan invariant #3)', () {
     test('N tags → N join tombstones + 1 transaction tombstone', () async {

@@ -35,6 +35,7 @@ import type * as sync_queries from "../sync/queries.js";
 import type * as tags_mutations from "../tags/mutations.js";
 import type * as tags_queries from "../tags/queries.js";
 import type * as telemetry_actions from "../telemetry/actions.js";
+import type * as telemetry_catalog from "../telemetry/catalog.js";
 import type * as telemetry_http from "../telemetry/http.js";
 import type * as telemetry_metrics from "../telemetry/metrics.js";
 import type * as telemetry_mutations from "../telemetry/mutations.js";
@@ -81,6 +82,7 @@ declare const fullApi: ApiFromModules<{
   "tags/mutations": typeof tags_mutations;
   "tags/queries": typeof tags_queries;
   "telemetry/actions": typeof telemetry_actions;
+  "telemetry/catalog": typeof telemetry_catalog;
   "telemetry/http": typeof telemetry_http;
   "telemetry/metrics": typeof telemetry_metrics;
   "telemetry/mutations": typeof telemetry_mutations;

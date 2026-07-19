@@ -3,15 +3,8 @@ import type { MutationCtx } from '../_generated/server'
 import type { MetricAttributeValue, MetricInput, MetricName } from './types'
 
 type CreatedBy = 'form' | 'agent'
-type IngestPath = 'direct_mutation' | 'sync_push'
+type IngestPath = 'direct_mutation'
 type AuthMethod = 'email_password' | 'google' | 'apple' | 'local'
-
-export const tagCountBucket = (count: number): string => {
-    if (count <= 0) return '0'
-    if (count === 1) return '1'
-    if (count <= 3) return '2-3'
-    return '4+'
-}
 
 const recordMetric = async (
     ctx: MutationCtx,
@@ -42,11 +35,30 @@ const recordMetric = async (
     )
 }
 
+const recordMetricSafely = async (
+    ctx: MutationCtx,
+    metric: {
+        name: MetricName
+        userId: string
+        attributes: Record<string, MetricAttributeValue>
+    },
+): Promise<void> => {
+    try {
+        await recordMetric(ctx, metric)
+    } catch (error) {
+        console.warn('telemetry metric failed', {
+            metric: metric.name,
+            userId: metric.userId,
+            error: error instanceof Error ? error.message : String(error),
+        })
+    }
+}
+
 export const recordFinancialAccountCreated = (
     ctx: MutationCtx,
     args: { userId: string; createdBy: CreatedBy; ingestPath: IngestPath },
 ): Promise<void> =>
-    recordMetric(ctx, {
+    recordMetricSafely(ctx, {
         name: 'business.financial_accounts.created_count',
         userId: args.userId,
         attributes: {
@@ -59,7 +71,7 @@ export const recordUserAccountCreated = (
     ctx: MutationCtx,
     args: { userId: string; authMethod: AuthMethod },
 ): Promise<void> =>
-    recordMetric(ctx, {
+    recordMetricSafely(ctx, {
         name: 'business.user_accounts.created_count',
         userId: args.userId,
         attributes: { auth_method: args.authMethod },
@@ -72,17 +84,15 @@ export const recordMovementCreated = (
         movementType: 'expense' | 'income' | 'balance_adjustment'
         createdBy: CreatedBy
         ingestPath: IngestPath
-        tagCount: number
     },
 ): Promise<void> =>
-    recordMetric(ctx, {
+    recordMetricSafely(ctx, {
         name: 'business.movements.created_count',
         userId: args.userId,
         attributes: {
             movement_type: args.movementType,
             created_by: args.createdBy,
             ingest_path: args.ingestPath,
-            tag_count_bucket: tagCountBucket(args.tagCount),
         },
     })
 
@@ -93,17 +103,15 @@ export const recordTransferCreated = (
         createdBy: CreatedBy
         ingestPath: IngestPath
         crossCurrency: boolean
-        tagCount: number
     },
 ): Promise<void> =>
-    recordMetric(ctx, {
+    recordMetricSafely(ctx, {
         name: 'business.transfers.created_count',
         userId: args.userId,
         attributes: {
             created_by: args.createdBy,
             ingest_path: args.ingestPath,
             cross_currency: args.crossCurrency,
-            tag_count_bucket: tagCountBucket(args.tagCount),
         },
     })
 
