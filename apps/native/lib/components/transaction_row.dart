@@ -112,7 +112,9 @@ class TransactionRow extends StatelessWidget {
     }
 
     return Material(
-      color: theme.colorScheme.surface,
+      // surfaceContainer (not surface) so the row separates from the scaffold
+      // background in both themes; surface matches the page and vanishes in dark.
+      color: theme.colorScheme.surfaceContainer,
       elevation: 1,
       borderRadius: BorderRadius.circular(12),
       child: InkWell(
