@@ -70,9 +70,12 @@ class TagsView extends StatelessWidget {
               child: Align(
                 alignment: Alignment.centerLeft,
                 child: ActionChip(
-                  avatar: const CircleAvatar(backgroundColor: Colors.white),
+                  avatar: CircleAvatar(backgroundColor: foregroundOn(color)),
                   backgroundColor: color,
                   label: Text(tag.name),
+                  labelStyle: Theme.of(context).textTheme.labelLarge?.copyWith(
+                    color: foregroundOn(color),
+                  ),
                   onPressed: () => _openTagSheet(context, tag),
                 ),
               ),

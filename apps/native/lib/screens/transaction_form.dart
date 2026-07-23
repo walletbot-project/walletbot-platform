@@ -730,8 +730,11 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
                     for (final tag in _tags)
                       InputChip(
                         label: Text(tag.name),
+                        labelStyle: Theme.of(context).textTheme.labelLarge
+                            ?.copyWith(color: foregroundOn(tag.color)),
                         backgroundColor: tag.color,
                         side: BorderSide(color: tag.color),
+                        deleteIconColor: foregroundOn(tag.color),
                         onDeleted: _isSaving
                             ? null
                             : () => setState(() => _tags.remove(tag)),

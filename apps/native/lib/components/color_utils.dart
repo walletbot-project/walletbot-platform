@@ -65,6 +65,27 @@ Color readableWidgetBackground(Color background, Brightness brightness) {
       .toColor();
 }
 
+/// Picks a legible foreground (near-black or near-white) for text/icons drawn
+/// on top of [background], choosing whichever yields the higher contrast ratio.
+/// Used for tag chips whose fill is the tag's own identity color: the fill must
+/// stay as the user picked it, so only the label adapts to remain readable in
+/// both themes and for any color.
+Color foregroundOn(Color background) {
+  double contrast(Color a, Color b) {
+    final la = a.computeLuminance();
+    final lb = b.computeLuminance();
+    final hi = la > lb ? la : lb;
+    final lo = la > lb ? lb : la;
+    return (hi + 0.05) / (lo + 0.05);
+  }
+
+  const black = Color(0xFF000000);
+  const white = Color(0xFFFFFFFF);
+  return contrast(background, white) >= contrast(background, black)
+      ? white
+      : black;
+}
+
 String colorToHex(Color color) {
   final alpha = (color.a * 255).round() & 0xff;
   final red = (color.r * 255).round() & 0xff;
