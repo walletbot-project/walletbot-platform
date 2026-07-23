@@ -1401,6 +1401,10 @@ class _PickerChip extends StatelessWidget {
           icon: const Icon(Icons.keyboard_arrow_down_rounded, size: 20),
           label: Text(label, overflow: TextOverflow.ellipsis),
           style: FilledButton.styleFrom(
+            // Bright brand turquoise (not the dark `primary` tone, which reads
+            // green in light mode) so the pickers stay turquoise in both themes.
+            backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+            foregroundColor: Theme.of(context).colorScheme.onPrimaryContainer,
             minimumSize: Size.zero,
             tapTargetSize: MaterialTapTargetSize.shrinkWrap,
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
