@@ -167,13 +167,39 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     );
   }
 
-  ThemeData _theme(Brightness brightness) => ThemeData(
-    colorScheme: ColorScheme.fromSeed(
+  ThemeData _theme(Brightness brightness) {
+    final colorScheme = ColorScheme.fromSeed(
       seedColor: const Color(0xFF6DE7D8),
       brightness: brightness,
       dynamicSchemeVariant: DynamicSchemeVariant.fidelity,
-    ),
-  );
+    );
+    return ThemeData(
+      colorScheme: colorScheme,
+      // Selected tab: neutral readable label with a turquoise underline
+      // (primary at tone 40 reads green; the container keeps the brand hue).
+      tabBarTheme: TabBarThemeData(
+        indicatorColor: colorScheme.primaryContainer,
+        labelColor: colorScheme.onSurface,
+        unselectedLabelColor: colorScheme.onSurfaceVariant,
+      ),
+      // Selected segment uses the bright brand container instead of the pale
+      // secondaryContainer default, so selections read turquoise.
+      segmentedButtonTheme: SegmentedButtonThemeData(
+        style: ButtonStyle(
+          backgroundColor: WidgetStateProperty.resolveWith(
+            (states) => states.contains(WidgetState.selected)
+                ? colorScheme.primaryContainer
+                : null,
+          ),
+          foregroundColor: WidgetStateProperty.resolveWith(
+            (states) => states.contains(WidgetState.selected)
+                ? colorScheme.onPrimaryContainer
+                : null,
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class _AuthGate extends StatelessWidget {
