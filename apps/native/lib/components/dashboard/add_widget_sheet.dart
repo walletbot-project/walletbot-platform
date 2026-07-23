@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:app/components/color_utils.dart';
 import 'package:app/components/dashboard/dashboard_background.dart';
 import 'package:app/components/dashboard/dashboard_layout.dart';
 import 'package:app/components/dashboard/dashboard_models.dart';
@@ -752,7 +753,8 @@ class _ColorSwatches extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
     final onCleared = this.onCleared;
     return Wrap(
       spacing: 8,
@@ -795,7 +797,10 @@ class _ColorSwatches extends StatelessWidget {
                 width: 30,
                 height: 30,
                 decoration: BoxDecoration(
-                  color: color,
+                  // Preview the color as the widget will actually render it in
+                  // the current theme (see [readableWidgetBackground]); the
+                  // stored pastel is what selection compares against.
+                  color: readableWidgetBackground(color, theme.brightness),
                   shape: BoxShape.circle,
                   border: Border.all(
                     color: (!cleared && color == selected)
