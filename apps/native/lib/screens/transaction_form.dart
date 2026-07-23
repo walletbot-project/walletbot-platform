@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import 'package:app/components/account_icons.dart';
+import 'package:app/components/category_icons.dart';
 import 'package:app/components/color_utils.dart';
 import 'package:app/data/data.dart';
 import 'package:app/database.dart';
@@ -202,7 +204,7 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
               ),
               for (final account in _accounts)
                 ListTile(
-                  leading: const Icon(Icons.account_balance_wallet_rounded),
+                  leading: Icon(accountIconFromName(account.icon)),
                   title: Text(account.name),
                   subtitle: Text(account.currency),
                   trailing: account == selectedAccount
@@ -249,7 +251,7 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
               ),
               for (final category in _categories)
                 ListTile(
-                  leading: const Icon(Icons.label_rounded),
+                  leading: Icon(categoryIconFromName(category.icon)),
                   title: Text(category.name),
                   trailing: category == _selectedCategory
                       ? const Icon(Icons.check_circle_rounded)
@@ -537,13 +539,11 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
 
     if (_isLoading) {
       return const Scaffold(
-        backgroundColor: Color(0xFFFFF8F8),
         body: SafeArea(child: Center(child: CircularProgressIndicator())),
       );
     }
 
     return Scaffold(
-      backgroundColor: const Color(0xFFFFF8F8),
       resizeToAvoidBottomInset: true,
       body: SafeArea(
         child: Form(
@@ -555,7 +555,7 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
                 context.l10n.newTransaction,
                 textAlign: TextAlign.center,
                 style: Theme.of(context).textTheme.displaySmall?.copyWith(
-                  color: Colors.black,
+                  color: Theme.of(context).colorScheme.onSurface,
                   fontWeight: FontWeight.w800,
                 ),
               ),
@@ -585,7 +585,12 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
                       }
                       return Colors.transparent;
                     }),
-                    foregroundColor: const WidgetStatePropertyAll(Colors.black),
+                    foregroundColor: WidgetStateProperty.resolveWith((states) {
+                      if (states.contains(WidgetState.selected)) {
+                        return foregroundOn(selectedColor);
+                      }
+                      return Theme.of(context).colorScheme.onSurface;
+                    }),
                     textStyle: const WidgetStatePropertyAll(
                       TextStyle(fontWeight: FontWeight.w700),
                     ),
@@ -754,8 +759,6 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
                       label: Text(context.l10n.cancel),
                       style: FilledButton.styleFrom(
                         padding: const EdgeInsets.symmetric(vertical: 16),
-                        backgroundColor: const Color(0xFFF0C9CE),
-                        foregroundColor: Colors.black,
                       ),
                     ),
                   ),
@@ -772,8 +775,6 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
                       label: Text(context.l10n.record),
                       style: FilledButton.styleFrom(
                         padding: const EdgeInsets.symmetric(vertical: 16),
-                        backgroundColor: const Color(0xFF21C4B6),
-                        foregroundColor: Colors.white,
                       ),
                     ),
                   ),
@@ -1106,7 +1107,7 @@ class _RecurringExpenseControl extends StatelessWidget {
             context.l10n.recurringExpense,
             textAlign: TextAlign.center,
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              color: Colors.black,
+              color: Theme.of(context).colorScheme.onSurface,
               fontSize: 15,
               fontWeight: FontWeight.w800,
             ),
@@ -1177,10 +1178,6 @@ class _TransferBlock extends StatelessWidget {
               child: IconButton.filledTonal(
                 onPressed: onSwap,
                 icon: const Icon(Icons.swap_horiz_rounded),
-                style: IconButton.styleFrom(
-                  backgroundColor: const Color(0xFFE7FFFA),
-                  foregroundColor: Colors.black,
-                ),
               ),
             ),
             Expanded(
@@ -1239,7 +1236,7 @@ class _TransferSide extends StatelessWidget {
           label,
           textAlign: TextAlign.center,
           style: Theme.of(context).textTheme.labelLarge?.copyWith(
-            color: Colors.black87,
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
             fontWeight: FontWeight.w800,
           ),
         ),
@@ -1260,7 +1257,7 @@ class _TransferSide extends StatelessWidget {
             contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 11),
           ),
           style: Theme.of(context).textTheme.titleMedium?.copyWith(
-            color: Colors.black,
+            color: Theme.of(context).colorScheme.onSurface,
             fontWeight: FontWeight.w600,
           ),
           onChanged: onAmountChanged,
@@ -1379,7 +1376,7 @@ class _SectionLabel extends StatelessWidget {
       text,
       style: Theme.of(context).textTheme.titleLarge?.copyWith(
         fontWeight: FontWeight.w800,
-        color: Colors.black,
+        color: Theme.of(context).colorScheme.onSurface,
       ),
     );
   }
@@ -1404,8 +1401,6 @@ class _PickerChip extends StatelessWidget {
           icon: const Icon(Icons.keyboard_arrow_down_rounded, size: 20),
           label: Text(label, overflow: TextOverflow.ellipsis),
           style: FilledButton.styleFrom(
-            backgroundColor: const Color(0xFF21C4B6),
-            foregroundColor: Colors.white,
             minimumSize: Size.zero,
             tapTargetSize: MaterialTapTargetSize.shrinkWrap,
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
