@@ -169,8 +169,9 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
 
   ThemeData _theme(Brightness brightness) => ThemeData(
     colorScheme: ColorScheme.fromSeed(
-      seedColor: Colors.greenAccent,
+      seedColor: const Color(0xFF6DE7D8),
       brightness: brightness,
+      dynamicSchemeVariant: DynamicSchemeVariant.fidelity,
     ),
   );
 }
