@@ -198,6 +198,16 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
           ),
         ),
       ),
+      // Solid filled buttons use the bright brand turquoise (primaryContainer)
+      // instead of the dark `primary` tone, which reads green in light mode.
+      // Note: this also targets FilledButton.tonal, so tonal buttons that must
+      // stay lower-emphasis set secondaryContainer explicitly at their call site.
+      filledButtonTheme: FilledButtonThemeData(
+        style: FilledButton.styleFrom(
+          backgroundColor: colorScheme.primaryContainer,
+          foregroundColor: colorScheme.onPrimaryContainer,
+        ),
+      ),
     );
   }
 }

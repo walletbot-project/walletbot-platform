@@ -58,6 +58,7 @@ class TagsView extends StatelessWidget {
             final entry = tree[index];
             final tag = entry.row.tag;
             final color = colorFromHex(tag.color);
+            final isDark = Theme.of(context).brightness == Brightness.dark;
 
             // The chip stays as the tag's representation; tapping it opens the
             // details sheet. Sub-tags keep their indentation.
@@ -70,12 +71,16 @@ class TagsView extends StatelessWidget {
               child: Align(
                 alignment: Alignment.centerLeft,
                 child: ActionChip(
-                  avatar: CircleAvatar(backgroundColor: foregroundOn(color)),
+                  avatar: CircleAvatar(
+                    backgroundColor: isDark ? foregroundOn(color) : Colors.white,
+                  ),
                   backgroundColor: color,
                   label: Text(tag.name),
-                  labelStyle: Theme.of(context).textTheme.labelLarge?.copyWith(
-                    color: foregroundOn(color),
-                  ),
+                  labelStyle: isDark
+                      ? Theme.of(context).textTheme.labelLarge?.copyWith(
+                          color: foregroundOn(color),
+                        )
+                      : null,
                   onPressed: () => _openTagSheet(context, tag),
                 ),
               ),

@@ -735,11 +735,18 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
                     for (final tag in _tags)
                       InputChip(
                         label: Text(tag.name),
-                        labelStyle: Theme.of(context).textTheme.labelLarge
-                            ?.copyWith(color: foregroundOn(tag.color)),
+                        labelStyle:
+                            Theme.of(context).brightness == Brightness.dark
+                            ? Theme.of(context).textTheme.labelLarge?.copyWith(
+                                color: foregroundOn(tag.color),
+                              )
+                            : null,
                         backgroundColor: tag.color,
                         side: BorderSide(color: tag.color),
-                        deleteIconColor: foregroundOn(tag.color),
+                        deleteIconColor:
+                            Theme.of(context).brightness == Brightness.dark
+                            ? foregroundOn(tag.color)
+                            : null,
                         onDeleted: _isSaving
                             ? null
                             : () => setState(() => _tags.remove(tag)),
@@ -759,6 +766,13 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
                       label: Text(context.l10n.cancel),
                       style: FilledButton.styleFrom(
                         padding: const EdgeInsets.symmetric(vertical: 16),
+                        // Soft red (like the previous pink), theme-aware so it
+                        // also works in dark; overrides the global turquoise
+                        // filledButtonTheme.
+                        backgroundColor:
+                            Theme.of(context).colorScheme.errorContainer,
+                        foregroundColor:
+                            Theme.of(context).colorScheme.onErrorContainer,
                       ),
                     ),
                   ),
