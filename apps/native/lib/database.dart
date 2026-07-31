@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:drift/drift.dart';
 import 'package:drift_flutter/drift_flutter.dart';
+import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
@@ -11,7 +12,10 @@ part 'database.g.dart';
 // color (and accounts/categories an icon). These are the DB-level fallbacks
 // applied when a writer omits them; they MIRROR the UI constants in
 // components/color_utils.dart and components/{account,category}_icons.dart —
-// keep them in sync. Color is a hex string; icon is a stable icon-name.
+// keep them in sync. Table declarations intentionally repeat these values as
+// literals so drift_dev can export self-contained migration helpers; the schema
+// test verifies that both representations stay aligned. Color is a hex string;
+// icon is a stable icon-name.
 const String kDefaultAccountColor = '#3B82F6';
 const String kDefaultAccountIcon = 'wallet';
 const String kDefaultCategoryColor = '#6366F1';
@@ -31,9 +35,9 @@ class Accounts extends Table {
   TextColumn get description => text().named('description').nullable()();
   // Always defined (business rule): non-null with a DB default.
   TextColumn get color =>
-      text().named('color').withDefault(const Constant(kDefaultAccountColor))();
+      text().named('color').withDefault(const Constant('#3B82F6'))();
   TextColumn get icon =>
-      text().named('icon').withDefault(const Constant(kDefaultAccountIcon))();
+      text().named('icon').withDefault(const Constant('wallet'))();
 
   BoolColumn get archived =>
       boolean().named('is_archived').withDefault(const Constant(false))();
@@ -59,11 +63,10 @@ class Categories extends Table {
   TextColumn get name => text().named('name')();
   TextColumn get description => text().named('description').nullable()();
   // Always defined (business rule): non-null with a DB default.
-  TextColumn get color => text()
-      .named('color')
-      .withDefault(const Constant(kDefaultCategoryColor))();
+  TextColumn get color =>
+      text().named('color').withDefault(const Constant('#6366F1'))();
   TextColumn get icon =>
-      text().named('icon').withDefault(const Constant(kDefaultCategoryIcon))();
+      text().named('icon').withDefault(const Constant('category'))();
 
   BoolColumn get archived =>
       boolean().named('is_archived').withDefault(const Constant(false))();
@@ -154,7 +157,7 @@ class Tags extends Table {
   TextColumn get parentId => text().named('parent_id').nullable()();
   // Always defined (business rule): non-null with a DB default.
   TextColumn get color =>
-      text().named('color').withDefault(const Constant(kDefaultTagColor))();
+      text().named('color').withDefault(const Constant('#69F0AE'))();
 
   BoolColumn get archived =>
       boolean().named('is_archived').withDefault(const Constant(false))();
@@ -367,30 +370,34 @@ class VoiceSessionEvents extends Table {
 )
 class AppDatabase extends _$AppDatabase {
   AppDatabase.forUser(String userId)
-    : super(_openConnection(_dbNameFor(userId)));
+    : super(_openConnection(_dbNameFor(userId))) {
+    debugPrint('sqlite: constructing user database');
+  }
 
   /// Test-only constructor backed by an arbitrary executor (e.g.
   /// `NativeDatabase.memory()`). Production code must use [AppDatabase.forUser].
   AppDatabase.forTesting(super.executor);
 
   @override
-  int get schemaVersion => 3;
+  int get schemaVersion => 1;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
-    onCreate: (m) => m.createAll(),
+    onCreate: (m) async => m.createAll(),
     onUpgrade: (m, from, to) async {
-      // v2: home dashboard persistence (savedFilters + dashboardWidgets)
-      // and the one-time auto-seed guard on syncState.
-      if (from < 2) {
-        await m.createTable(savedFilters);
-        await m.createTable(dashboardWidgets);
-        await m.addColumn(syncState, syncState.dashboardSeeded);
-      }
-      if (from < 3) {
-        await m.createTable(voiceSessions);
-        await m.createTable(voiceSessionEvents);
-      }
+      throw UnsupportedError(
+        'Unhandled SQLite migration path: v$from -> v$to. '
+        'Define an explicit upgrade path in AppDatabase.migration.',
+      );
+    },
+    beforeOpen: (details) async {
+      final userVersion = await customSelect('PRAGMA user_version').getSingle();
+      debugPrint(
+        'sqlite: opening user database versionBefore=${details.versionBefore} '
+        'versionNow=${details.versionNow} wasCreated=${details.wasCreated} '
+        'hadUpgrade=${details.hadUpgrade} pragmaUserVersionBeforeFinalize='
+        '${userVersion.read<int>('user_version')}',
+      );
     },
   );
 
