@@ -151,19 +151,21 @@ function mergeTags(base: FormTag[], extra: FormTag[]): FormTag[] {
 export function AddManual() {
     const navigate = useNavigate()
 
-    const accounts = useQuery(api.accounts.queries.listActive)
-    const categories = useQuery(api.categories.queries.listActive)
-    const availableTags = useQuery(api.tags.queries.listActive)
+    const accounts = useQuery(api.v1.accounts.queries.listActive)
+    const categories = useQuery(api.v1.categories.queries.listActive)
+    const availableTags = useQuery(api.v1.tags.queries.listActive)
 
-    const createIncome = useMutation(api.transactions.mutations.createIncome)
-    const createExpense = useMutation(api.transactions.mutations.createExpense)
-    const createTransfer = useMutation(
-        api.transactions.mutations.createTransfer,
+    const createIncome = useMutation(api.v1.transactions.mutations.createIncome)
+    const createExpense = useMutation(
+        api.v1.transactions.mutations.createExpense,
     )
-    const createAccount = useMutation(api.accounts.mutations.create)
-    const createCategory = useMutation(api.categories.mutations.create)
-    const tagTransaction = useMutation(api.transactions.mutations.tag)
-    const createTag = useMutation(api.tags.mutations.create)
+    const createTransfer = useMutation(
+        api.v1.transactions.mutations.createTransfer,
+    )
+    const createAccount = useMutation(api.v1.accounts.mutations.create)
+    const createCategory = useMutation(api.v1.categories.mutations.create)
+    const tagTransaction = useMutation(api.v1.transactions.mutations.tag)
+    const createTag = useMutation(api.v1.tags.mutations.create)
 
     const [createdAccounts, setCreatedAccounts] = useState<AccountOption[]>([])
     const [createdCategories, setCreatedCategories] = useState<

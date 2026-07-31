@@ -1,14 +1,14 @@
 import { paginationOptsValidator } from 'convex/server'
 import { v } from 'convex/values'
-import type { Doc } from '../_generated/dataModel'
-import type { QueryCtx } from '../_generated/server'
-import { query } from '../_generated/server'
+import type { Doc } from '../../_generated/dataModel'
+import type { QueryCtx } from '../../_generated/server'
+import { query } from '../../_generated/server'
 import {
     accountNamespace,
     inflowsByAccount,
     outflowsByAccount,
-} from '../aggregates'
-import { requireAuth } from '../users/helpers'
+} from '../../aggregates'
+import { requireAuth } from '../../users/helpers'
 
 // Bounded read so we never accidentally collect an unbounded set. Callers that
 // truly need everything must paginate via `listPaginated`.

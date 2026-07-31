@@ -31,7 +31,7 @@ function nativeDashboardOnly() {
 export const toolExecutors = {
     // ───── Accounts ─────
     listAccounts: defineTool(toolSchemas.listAccounts, async (ctx, args) => {
-        const accounts = await ctx.client.query(api.accounts.queries.list, {
+        const accounts = await ctx.client.query(api.v1.accounts.queries.list, {
             includeArchived: args.includeArchived ?? false,
         })
         return {
@@ -57,7 +57,7 @@ export const toolExecutors = {
             const r = await resolveAccount(ctx, args.idOrName)
             if (!r.ok) return resolutionError('Account', r)
             const balance = await ctx.client.query(
-                api.transactions.queries.balance,
+                api.v1.transactions.queries.balance,
                 { accountId: r.entity.id },
             )
             if (!balance) return { ok: false, error: 'Account not found' }
@@ -72,7 +72,7 @@ export const toolExecutors = {
     ),
     createAccount: defineTool(toolSchemas.createAccount, async (ctx, args) => {
         const id = newId()
-        await ctx.client.mutation(api.accounts.mutations.create, {
+        await ctx.client.mutation(api.v1.accounts.mutations.create, {
             id,
             name: args.name,
             currency: args.currency,
@@ -85,7 +85,7 @@ export const toolExecutors = {
     updateAccount: defineTool(toolSchemas.updateAccount, async (ctx, args) => {
         const r = await resolveAccount(ctx, args.idOrName)
         if (!r.ok) return resolutionError('Account', r)
-        await ctx.client.mutation(api.accounts.mutations.update, {
+        await ctx.client.mutation(api.v1.accounts.mutations.update, {
             id: r.entity.id,
             name: args.name,
             description: args.description,
@@ -99,7 +99,7 @@ export const toolExecutors = {
         async (ctx, args) => {
             const r = await resolveAccount(ctx, args.idOrName)
             if (!r.ok) return resolutionError('Account', r)
-            await ctx.client.mutation(api.accounts.mutations.archive, {
+            await ctx.client.mutation(api.v1.accounts.mutations.archive, {
                 id: r.entity.id,
             })
             return { ok: true, id: r.entity.id }
@@ -108,7 +108,9 @@ export const toolExecutors = {
 
     // ───── Categories ─────
     listCategories: defineTool(toolSchemas.listCategories, async (ctx) => {
-        const cats = await ctx.client.query(api.categories.queries.listActive)
+        const cats = await ctx.client.query(
+            api.v1.categories.queries.listActive,
+        )
         return {
             ok: true,
             categories: cats.map((c) => ({
@@ -129,7 +131,7 @@ export const toolExecutors = {
         toolSchemas.createCategory,
         async (ctx, args) => {
             const id = newId()
-            await ctx.client.mutation(api.categories.mutations.create, {
+            await ctx.client.mutation(api.v1.categories.mutations.create, {
                 id,
                 name: args.name,
                 description: args.description,
@@ -144,7 +146,7 @@ export const toolExecutors = {
         async (ctx, args) => {
             const r = await resolveCategory(ctx, args.idOrName)
             if (!r.ok) return resolutionError('Category', r)
-            await ctx.client.mutation(api.categories.mutations.update, {
+            await ctx.client.mutation(api.v1.categories.mutations.update, {
                 id: r.entity.id,
                 name: args.name,
                 description: args.description,
@@ -159,7 +161,7 @@ export const toolExecutors = {
         async (ctx, args) => {
             const r = await resolveCategory(ctx, args.idOrName)
             if (!r.ok) return resolutionError('Category', r)
-            await ctx.client.mutation(api.categories.mutations.archive, {
+            await ctx.client.mutation(api.v1.categories.mutations.archive, {
                 id: r.entity.id,
             })
             return { ok: true, id: r.entity.id }
@@ -168,7 +170,7 @@ export const toolExecutors = {
 
     // ───── Tags ─────
     listTags: defineTool(toolSchemas.listTags, async (ctx) => {
-        const tags = await ctx.client.query(api.tags.queries.listActive)
+        const tags = await ctx.client.query(api.v1.tags.queries.listActive)
         return {
             ok: true,
             tags: tags.map((t) => ({
@@ -192,7 +194,7 @@ export const toolExecutors = {
             parentId = r.entity.id
         }
         const id = newId()
-        await ctx.client.mutation(api.tags.mutations.create, {
+        await ctx.client.mutation(api.v1.tags.mutations.create, {
             id,
             name: args.name,
             description: args.description,
@@ -210,7 +212,7 @@ export const toolExecutors = {
             if (!pr.ok) return resolutionError('Parent tag', pr)
             parentId = pr.entity.id
         }
-        await ctx.client.mutation(api.tags.mutations.update, {
+        await ctx.client.mutation(api.v1.tags.mutations.update, {
             id: r.entity.id,
             name: args.name,
             description: args.description,
@@ -222,7 +224,7 @@ export const toolExecutors = {
     archiveTag: defineTool(toolSchemas.archiveTag, async (ctx, args) => {
         const r = await resolveTag(ctx, args.idOrName)
         if (!r.ok) return resolutionError('Tag', r)
-        await ctx.client.mutation(api.tags.mutations.archive, {
+        await ctx.client.mutation(api.v1.tags.mutations.archive, {
             id: r.entity.id,
         })
         return { ok: true, id: r.entity.id }
@@ -246,7 +248,7 @@ export const toolExecutors = {
             }
 
             const page = await ctx.client.query(
-                api.transactions.queries.listPaginated,
+                api.v1.transactions.queries.listPaginated,
                 {
                     paginationOpts: {
                         numItems: args.limit ?? 50,
@@ -269,7 +271,7 @@ export const toolExecutors = {
                 const allowed = new Set<string>()
                 for (const t of items) {
                     const full = await ctx.client.query(
-                        api.transactions.queries.get,
+                        api.v1.transactions.queries.get,
                         { id: t.id },
                     )
                     if (full?.tagIds?.includes(tagR.entity.id))
@@ -289,9 +291,12 @@ export const toolExecutors = {
     getTransaction: defineTool(
         toolSchemas.getTransaction,
         async (ctx, args) => {
-            const txn = await ctx.client.query(api.transactions.queries.get, {
-                id: args.id,
-            })
+            const txn = await ctx.client.query(
+                api.v1.transactions.queries.get,
+                {
+                    id: args.id,
+                },
+            )
             if (!txn) return { ok: false, error: 'Transaction not found' }
             return { ok: true, transaction: serializeTransaction(txn) }
         },
@@ -300,7 +305,7 @@ export const toolExecutors = {
         toolSchemas.getRecentTransactions,
         async (ctx, args) => {
             const txns = await ctx.client.query(
-                api.transactions.queries.recent,
+                api.v1.transactions.queries.recent,
                 { limit: args.limit ?? 10 },
             )
             return {
@@ -318,7 +323,7 @@ export const toolExecutors = {
         if (!catR.ok) return resolutionError('Category', catR)
 
         const id = newId()
-        await ctx.client.mutation(api.transactions.mutations.createExpense, {
+        await ctx.client.mutation(api.v1.transactions.mutations.createExpense, {
             id,
             name: args.name,
             description: args.description,
@@ -339,7 +344,7 @@ export const toolExecutors = {
         if (!catR.ok) return resolutionError('Category', catR)
 
         const id = newId()
-        await ctx.client.mutation(api.transactions.mutations.createIncome, {
+        await ctx.client.mutation(api.v1.transactions.mutations.createIncome, {
             id,
             name: args.name,
             description: args.description,
@@ -366,22 +371,25 @@ export const toolExecutors = {
         if (!catR.ok) return resolutionError('Category', catR)
 
         const id = newId()
-        await ctx.client.mutation(api.transactions.mutations.createTransfer, {
-            id,
-            name: args.name,
-            description: args.description,
-            amount: parseAmountToCents(args.amount),
-            accountId: fromR.entity.id,
-            toAccountId: toR.entity.id,
-            toAmount:
-                args.toAmount !== undefined
-                    ? parseAmountToCents(args.toAmount)
-                    : undefined,
-            exchangeRate: args.exchangeRate,
-            categoryId: catR.entity.id,
-            date: parseOptionalDate(args.date),
-            dateConfirmed: args.dateConfirmed,
-        })
+        await ctx.client.mutation(
+            api.v1.transactions.mutations.createTransfer,
+            {
+                id,
+                name: args.name,
+                description: args.description,
+                amount: parseAmountToCents(args.amount),
+                accountId: fromR.entity.id,
+                toAccountId: toR.entity.id,
+                toAmount:
+                    args.toAmount !== undefined
+                        ? parseAmountToCents(args.toAmount)
+                        : undefined,
+                exchangeRate: args.exchangeRate,
+                categoryId: catR.entity.id,
+                date: parseOptionalDate(args.date),
+                dateConfirmed: args.dateConfirmed,
+            },
+        )
         await attachTags(ctx, id, args.tagIdsOrNames)
         return { ok: true, id }
     }),
@@ -392,7 +400,7 @@ export const toolExecutors = {
             if (!accR.ok) return resolutionError('Account', accR)
             const id = newId()
             await ctx.client.mutation(
-                api.transactions.mutations.createBalanceAdjustment,
+                api.v1.transactions.mutations.createBalanceAdjustment,
                 {
                     id,
                     accountId: accR.entity.id,
@@ -415,7 +423,7 @@ export const toolExecutors = {
                 if (!r.ok) return resolutionError('Category', r)
                 categoryId = r.entity.id
             }
-            await ctx.client.mutation(api.transactions.mutations.update, {
+            await ctx.client.mutation(api.v1.transactions.mutations.update, {
                 id: args.id,
                 name: args.name,
                 description: args.description,
@@ -434,7 +442,7 @@ export const toolExecutors = {
     deleteTransaction: defineTool(
         toolSchemas.deleteTransaction,
         async (ctx, args) => {
-            await ctx.client.mutation(api.transactions.mutations.archive, {
+            await ctx.client.mutation(api.v1.transactions.mutations.archive, {
                 id: args.id,
             })
             return { ok: true, id: args.id }
@@ -451,7 +459,7 @@ export const toolExecutors = {
                 return { ok: false, error: 'No tags resolved', missing }
             }
             const result = await ctx.client.mutation(
-                api.transactions.mutations.tag,
+                api.v1.transactions.mutations.tag,
                 {
                     transactionId: args.transactionId,
                     tagIds: resolved,
@@ -468,7 +476,7 @@ export const toolExecutors = {
                 args.tagIdsOrNames,
             )
             const result = await ctx.client.mutation(
-                api.transactions.mutations.untag,
+                api.v1.transactions.mutations.untag,
                 {
                     transactionId: args.transactionId,
                     tagIds: resolved,
@@ -500,7 +508,7 @@ export const toolExecutors = {
                 totals.set(key, (totals.get(key) ?? 0n) + t.amount)
             }
             const cats = await ctx.client.query(
-                api.categories.queries.listActive,
+                api.v1.categories.queries.listActive,
             )
             const nameById = new Map(cats.map((c) => [c.id, c.name]))
             return {
@@ -525,9 +533,12 @@ export const toolExecutors = {
                 string,
                 { name: string; currency: string; in: bigint; out: bigint }
             >()
-            const accounts = await ctx.client.query(api.accounts.queries.list, {
-                includeArchived: false,
-            })
+            const accounts = await ctx.client.query(
+                api.v1.accounts.queries.list,
+                {
+                    includeArchived: false,
+                },
+            )
             for (const a of accounts) {
                 rows.set(a.id, {
                     name: a.name,
@@ -649,7 +660,7 @@ async function attachTags(
     if (!tagIdsOrNames || tagIdsOrNames.length === 0) return
     const { resolved } = await resolveTagIds(ctx, tagIdsOrNames)
     if (resolved.length === 0) return
-    await ctx.client.mutation(api.transactions.mutations.tag, {
+    await ctx.client.mutation(api.v1.transactions.mutations.tag, {
         transactionId,
         tagIds: resolved,
     })
@@ -672,7 +683,7 @@ async function collectAllInRange(
             page: TxnLite[]
             isDone: boolean
             continueCursor: string
-        } = await ctx.client.query(api.transactions.queries.listPaginated, {
+        } = await ctx.client.query(api.v1.transactions.queries.listPaginated, {
             paginationOpts: { numItems: 200, cursor },
             type: args.type,
             dateFrom: args.dateFrom,

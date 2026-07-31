@@ -20,10 +20,10 @@ function newId() {
 }
 
 export function Accounts() {
-    const accounts = useQuery(api.accounts.queries.listActive)
-    const createAccount = useMutation(api.accounts.mutations.create)
+    const accounts = useQuery(api.v1.accounts.queries.listActive)
+    const createAccount = useMutation(api.v1.accounts.mutations.create)
     const createBalanceAdjustment = useMutation(
-        api.transactions.mutations.createBalanceAdjustment,
+        api.v1.transactions.mutations.createBalanceAdjustment,
     )
 
     const [creating, setCreating] = useState(false)

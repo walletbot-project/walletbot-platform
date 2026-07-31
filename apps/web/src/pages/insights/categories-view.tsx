@@ -27,8 +27,8 @@ export function CategoriesView({
     creating,
     onCreatingChange,
 }: CategoriesViewProps) {
-    const categories = useQuery(api.categories.queries.listActiveWithCounts)
-    const createCategory = useMutation(api.categories.mutations.create)
+    const categories = useQuery(api.v1.categories.queries.listActiveWithCounts)
+    const createCategory = useMutation(api.v1.categories.mutations.create)
 
     const [selectedId, setSelectedId] = useState<string | null>(null)
 

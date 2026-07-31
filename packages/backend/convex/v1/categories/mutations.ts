@@ -1,7 +1,7 @@
 import { v } from 'convex/values'
-import { mutation } from '../_generated/server'
-import { nextSeq, writeTombstone } from '../sync/helpers'
-import { requireAuth } from '../users/helpers'
+import { mutation } from '../../_generated/server'
+import { nextSeq, writeTombstone } from '../../sync/helpers'
+import { requireAuth } from '../../users/helpers'
 
 // Business rule: a category always has a color + icon. Convex has no
 // column-level defaults, so we fill them here when a writer omits them.
