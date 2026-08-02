@@ -50,10 +50,10 @@ export function Activity() {
         id: string
         transferSide?: TransactionTransferSide
     } | null>(null)
-    const accounts = useQuery(api.accounts.queries.list, {
+    const accounts = useQuery(api.v1.accounts.queries.list, {
         includeArchived: true,
     })
-    const categories = useQuery(api.categories.queries.listActive)
+    const categories = useQuery(api.v1.categories.queries.listActive)
 
     const accountsById = useMemo(
         () => new Map((accounts ?? []).map((account) => [account.id, account])),

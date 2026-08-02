@@ -47,13 +47,13 @@ import { cn } from '@/lib/utils'
 import type { TransactionTimeStatus, TransactionTransferSide } from './helpers'
 
 type Transaction = NonNullable<
-    FunctionReturnType<typeof api.transactions.queries.get>
+    FunctionReturnType<typeof api.v1.transactions.queries.get>
 >
-type Account = FunctionReturnType<typeof api.accounts.queries.list>[number]
+type Account = FunctionReturnType<typeof api.v1.accounts.queries.list>[number]
 type Category = FunctionReturnType<
-    typeof api.categories.queries.listActive
+    typeof api.v1.categories.queries.listActive
 >[number]
-type Tag = FunctionReturnType<typeof api.tags.queries.listActive>[number]
+type Tag = FunctionReturnType<typeof api.v1.tags.queries.listActive>[number]
 
 type TransactionDetailsSheetProps = {
     transactionId: string | null
@@ -71,24 +71,24 @@ export function TransactionDetailsSheet({
     initialEditing = false,
 }: TransactionDetailsSheetProps) {
     const transaction = useQuery(
-        api.transactions.queries.get,
+        api.v1.transactions.queries.get,
         open && transactionId ? { id: transactionId } : 'skip',
     )
     const accounts = useQuery(
-        api.accounts.queries.list,
+        api.v1.accounts.queries.list,
         open ? { includeArchived: true } : 'skip',
     )
     const categories = useQuery(
-        api.categories.queries.listActive,
+        api.v1.categories.queries.listActive,
         open ? {} : 'skip',
     )
     const currentCategory = useQuery(
-        api.categories.queries.get,
+        api.v1.categories.queries.get,
         open && transaction?.categoryId
             ? { id: transaction.categoryId }
             : 'skip',
     )
-    const tags = useQuery(api.tags.queries.listActive, open ? {} : 'skip')
+    const tags = useQuery(api.v1.tags.queries.listActive, open ? {} : 'skip')
 
     const isLoading =
         transaction === undefined ||
@@ -154,10 +154,12 @@ function TransactionDetailsContent({
     initialEditing: boolean
     onClose: () => void
 }) {
-    const updateTransaction = useMutation(api.transactions.mutations.update)
-    const archiveTransaction = useMutation(api.transactions.mutations.archive)
-    const tagTransaction = useMutation(api.transactions.mutations.tag)
-    const untagTransaction = useMutation(api.transactions.mutations.untag)
+    const updateTransaction = useMutation(api.v1.transactions.mutations.update)
+    const archiveTransaction = useMutation(
+        api.v1.transactions.mutations.archive,
+    )
+    const tagTransaction = useMutation(api.v1.transactions.mutations.tag)
+    const untagTransaction = useMutation(api.v1.transactions.mutations.untag)
     const formId = useId()
 
     const [editing, setEditing] = useState(initialEditing)
