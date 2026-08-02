@@ -126,8 +126,8 @@ function TransactionActionWidget({
     entityId: string
     wasUpdated: boolean
 }) {
-    const txn = useQuery(api.transactions.queries.get, { id: entityId })
-    const accounts = useQuery(api.accounts.queries.list, {
+    const txn = useQuery(api.v1.transactions.queries.get, { id: entityId })
+    const accounts = useQuery(api.v1.accounts.queries.list, {
         includeArchived: true,
     })
     const [editOpen, setEditOpen] = useState(false)
@@ -196,7 +196,7 @@ function AccountActionWidget({
     entityId: string
     wasUpdated: boolean
 }) {
-    const account = useQuery(api.accounts.queries.get, { id: entityId })
+    const account = useQuery(api.v1.accounts.queries.get, { id: entityId })
     const [editOpen, setEditOpen] = useState(false)
     if (account === undefined) return <ActionSkeleton />
     if (account === null) return null
@@ -235,7 +235,7 @@ function AccountEditContent({
     account: AccountDoc
     onClose: () => void
 }) {
-    const updateAccount = useMutation(api.accounts.mutations.update)
+    const updateAccount = useMutation(api.v1.accounts.mutations.update)
     const formId = useId()
     const [name, setName] = useState(account.name)
     const [description, setDescription] = useState(account.description ?? '')
@@ -332,7 +332,7 @@ function CategoryActionWidget({
     entityId: string
     wasUpdated: boolean
 }) {
-    const category = useQuery(api.categories.queries.get, { id: entityId })
+    const category = useQuery(api.v1.categories.queries.get, { id: entityId })
     const [editOpen, setEditOpen] = useState(false)
     if (category === undefined) return <ActionSkeleton />
     if (category === null) return null
@@ -371,7 +371,7 @@ function CategoryEditContent({
     category: CategoryDoc
     onClose: () => void
 }) {
-    const updateCategory = useMutation(api.categories.mutations.update)
+    const updateCategory = useMutation(api.v1.categories.mutations.update)
     const formId = useId()
     const [name, setName] = useState(category.name)
     const [description, setDescription] = useState(category.description ?? '')
@@ -468,7 +468,7 @@ function TagActionWidget({
     entityId: string
     wasUpdated: boolean
 }) {
-    const tag = useQuery(api.tags.queries.get, { id: entityId })
+    const tag = useQuery(api.v1.tags.queries.get, { id: entityId })
     const [editOpen, setEditOpen] = useState(false)
     if (tag === undefined) return <ActionSkeleton />
     if (tag === null) return null
@@ -500,8 +500,8 @@ function TagEditContent({
     tag: TagDoc
     onClose: () => void
 }) {
-    const updateTag = useMutation(api.tags.mutations.update)
-    const tags = useQuery(api.tags.queries.listActive)
+    const updateTag = useMutation(api.v1.tags.mutations.update)
+    const tags = useQuery(api.v1.tags.queries.listActive)
     const formId = useId()
     const [name, setName] = useState(tag.name)
     const [description, setDescription] = useState(tag.description ?? '')

@@ -1,11 +1,11 @@
 import { v } from 'convex/values'
-import type { Doc } from '../_generated/dataModel'
-import type { MutationCtx } from '../_generated/server'
-import { mutation } from '../_generated/server'
-import { inflowsByAccount, outflowsByAccount } from '../aggregates'
-import { CLIENT_OUTDATED, isClientSupported } from '../config/helpers'
-import { syncedTable } from '../schema/sync'
-import { requireAuth } from '../users/helpers'
+import type { Doc } from '../../_generated/dataModel'
+import type { MutationCtx } from '../../_generated/server'
+import { mutation } from '../../_generated/server'
+import { inflowsByAccount, outflowsByAccount } from '../../aggregates'
+import { CLIENT_OUTDATED, isClientSupported } from '../../config/helpers'
+import { syncedTable } from '../../schema/sync'
+import { requireAuth } from '../../users/helpers'
 
 const accountUpsert = v.object({
     id: v.string(),

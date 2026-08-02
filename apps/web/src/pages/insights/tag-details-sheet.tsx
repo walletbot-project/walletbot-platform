@@ -40,8 +40,8 @@ export function TagDetailsSheet({
     onOpenChange: (open: boolean) => void
 }) {
     const navigate = useNavigate()
-    const updateTag = useMutation(api.tags.mutations.update)
-    const archiveTag = useMutation(api.tags.mutations.archive)
+    const updateTag = useMutation(api.v1.tags.mutations.update)
+    const archiveTag = useMutation(api.v1.tags.mutations.archive)
 
     const tagId = tag?.id ?? ''
     const [monthWindow] = useState(() => {
@@ -55,11 +55,11 @@ export function TagDetailsSheet({
     })
 
     const spend = useQuery(
-        api.tags.queries.spendByCurrency,
+        api.v1.tags.queries.spendByCurrency,
         tag ? { id: tagId, ...monthWindow } : 'skip',
     )
     const recent = useQuery(
-        api.tags.queries.recentTransactions,
+        api.v1.tags.queries.recentTransactions,
         tag ? { id: tagId, limit: 5 } : 'skip',
     )
 

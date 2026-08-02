@@ -1,10 +1,10 @@
 import { v } from 'convex/values'
-import type { Doc } from '../_generated/dataModel'
-import type { QueryCtx } from '../_generated/server'
-import { query } from '../_generated/server'
-import { CLIENT_OUTDATED, isClientSupported } from '../config/helpers'
-import { syncedTable } from '../schema/sync'
-import { requireAuth } from '../users/helpers'
+import type { Doc } from '../../_generated/dataModel'
+import type { QueryCtx } from '../../_generated/server'
+import { query } from '../../_generated/server'
+import { CLIENT_OUTDATED, isClientSupported } from '../../config/helpers'
+import { syncedTable } from '../../schema/sync'
+import { requireAuth } from '../../users/helpers'
 
 // Default page size if the caller doesn't override. Calibrated below the
 // Convex query item-read limit (~1024 rows per index) so a single pull page

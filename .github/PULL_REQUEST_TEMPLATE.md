@@ -15,6 +15,14 @@
 - Dependencies to install
 - etc. -->
 
+<!-- SQLite / Drift checklist (delete when not applicable):
+- Bump AppDatabase.schemaVersion for every schema change
+- Add an explicit onUpgrade path that preserves existing local data
+- Run dart run drift_dev make-migrations
+- Regenerate test/generated_migrations/ from drift_schemas/app_database/
+- Add migration schema + data-integrity tests
+-->
+
 ## Acceptance Tests
 
 <!-- Step-by-step instructions the reviewer should follow to verify the feature works correctly.

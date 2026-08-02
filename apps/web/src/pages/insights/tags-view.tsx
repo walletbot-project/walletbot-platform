@@ -32,8 +32,8 @@ type TagsViewProps = {
 }
 
 export function TagsView({ creating, onCreatingChange }: TagsViewProps) {
-    const tags = useQuery(api.tags.queries.listActiveWithCounts)
-    const createTag = useMutation(api.tags.mutations.create)
+    const tags = useQuery(api.v1.tags.queries.listActiveWithCounts)
+    const createTag = useMutation(api.v1.tags.mutations.create)
 
     const [selectedId, setSelectedId] = useState<string | null>(null)
 

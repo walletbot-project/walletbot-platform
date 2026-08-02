@@ -97,7 +97,7 @@ class SyncEngine extends ChangeNotifier {
     // Subscribe to the user's server counter. Any change → pull.
     try {
       _counterSub = await _client.subscribe(
-        name: 'sync/queries:getCounter',
+        name: 'v1/sync/queries:getCounter',
         args: const {},
         onUpdate: (raw) {
           final value = decodeConvexResponse(raw);
@@ -253,7 +253,7 @@ class SyncEngine extends ChangeNotifier {
         throw StateError('sync: pull loop exceeded 10k iterations');
       }
 
-      final raw = await _client.query('sync/queries:pull', {
+      final raw = await _client.query('v1/sync/queries:pull', {
         'since': prepareArgValue(since),
         'limit': pullPageLimit,
         'platform': _clientInfo.platform,
@@ -478,7 +478,10 @@ class SyncEngine extends ChangeNotifier {
       'appVersion': _clientInfo.appVersion,
     };
 
-    final raw = await _client.mutation(name: 'sync/mutations:push', args: args);
+    final raw = await _client.mutation(
+      name: 'v1/sync/mutations:push',
+      args: args,
+    );
     final decoded = decodeConvexResponse(raw);
     if (decoded is! Map) {
       throw StateError('sync: malformed push response: $raw');

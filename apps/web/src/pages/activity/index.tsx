@@ -77,7 +77,7 @@ export function Activity() {
             : undefined
 
     const { results, status, loadMore } = usePaginatedQuery(
-        api.transactions.queries.listPaginated,
+        api.v1.transactions.queries.listPaginated,
         {
             accountId,
             categoryId,

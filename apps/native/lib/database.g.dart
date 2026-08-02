@@ -56,7 +56,7 @@ class $AccountsTable extends Accounts with TableInfo<$AccountsTable, Account> {
     false,
     type: DriftSqlType.string,
     requiredDuringInsert: false,
-    defaultValue: const Constant(kDefaultAccountColor),
+    defaultValue: const Constant('#3B82F6'),
   );
   static const VerificationMeta _iconMeta = const VerificationMeta('icon');
   @override
@@ -66,7 +66,7 @@ class $AccountsTable extends Accounts with TableInfo<$AccountsTable, Account> {
     false,
     type: DriftSqlType.string,
     requiredDuringInsert: false,
-    defaultValue: const Constant(kDefaultAccountIcon),
+    defaultValue: const Constant('wallet'),
   );
   static const VerificationMeta _archivedMeta = const VerificationMeta(
     'archived',
@@ -649,7 +649,7 @@ class $CategoriesTable extends Categories
     false,
     type: DriftSqlType.string,
     requiredDuringInsert: false,
-    defaultValue: const Constant(kDefaultCategoryColor),
+    defaultValue: const Constant('#6366F1'),
   );
   static const VerificationMeta _iconMeta = const VerificationMeta('icon');
   @override
@@ -659,7 +659,7 @@ class $CategoriesTable extends Categories
     false,
     type: DriftSqlType.string,
     requiredDuringInsert: false,
-    defaultValue: const Constant(kDefaultCategoryIcon),
+    defaultValue: const Constant('category'),
   );
   static const VerificationMeta _archivedMeta = const VerificationMeta(
     'archived',
@@ -2389,7 +2389,7 @@ class $TagsTable extends Tags with TableInfo<$TagsTable, Tag> {
     false,
     type: DriftSqlType.string,
     requiredDuringInsert: false,
-    defaultValue: const Constant(kDefaultTagColor),
+    defaultValue: const Constant('#69F0AE'),
   );
   static const VerificationMeta _archivedMeta = const VerificationMeta(
     'archived',
