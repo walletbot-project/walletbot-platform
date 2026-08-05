@@ -19,6 +19,8 @@ import 'package:app/screens/voice.dart';
 import 'package:app/settings/display_settings.dart';
 import 'package:app/shared/app_navigation.dart';
 import 'package:app/sync/sync_engine.dart';
+import 'package:app/telemetry/business_metrics.dart';
+import 'package:app/telemetry/telemetry_client.dart';
 import 'package:app/voice/gemini_voice_expense_command.dart';
 import 'package:app/voice/voice_session_remote_sync.dart';
 import 'package:app/voice/voice_session_repository.dart';
@@ -58,6 +60,9 @@ Future<void> main() async {
   final displaySettings = DisplaySettingsController();
   await displaySettings.load();
   await auth.load();
+  final telemetry = TelemetryClient(
+    accessTokenProvider: auth.fetchAccessTokenForHttp,
+  );
 
   // Native version verdict. Loaded in the background; sync waits for `loaded`,
   // while an offline start resolves fast from cache/bundled defaults.
@@ -78,6 +83,7 @@ Future<void> main() async {
       displaySettings: displaySettings,
       appConfig: appConfig,
       clientInfo: clientInfo,
+      telemetry: telemetry,
     ),
   );
 }
@@ -94,6 +100,7 @@ class MyApp extends StatefulWidget {
     required this.appConfig,
     required this.clientInfo,
     this.locale,
+    this.telemetry,
   });
 
   final AuthController auth;
@@ -101,6 +108,7 @@ class MyApp extends StatefulWidget {
   final Locale? locale;
   final AppConfigController appConfig;
   final ClientInfo clientInfo;
+  final TelemetryClient? telemetry;
 
   @override
   State<MyApp> createState() => _MyAppState();
@@ -136,6 +144,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     widget.displaySettings.removeListener(_refreshConfigLocale);
+    widget.telemetry?.dispose();
     super.dispose();
   }
 
@@ -151,17 +160,25 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
           value: widget.appConfig,
         ),
         Provider<ClientInfo>.value(value: widget.clientInfo),
+        if (widget.telemetry != null)
+          Provider<TelemetryClient>.value(value: widget.telemetry!),
+        if (widget.telemetry != null)
+          Provider<BusinessMetrics>(
+            create: (_) => BusinessMetrics(widget.telemetry!),
+          ),
       ],
-      child: Consumer<DisplaySettingsController>(
-        builder: (context, settings, _) => MaterialApp(
-          locale: widget.locale ?? settings.locale,
-          onGenerateTitle: (context) => context.l10n.appTitle,
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
-          supportedLocales: AppLocalizations.supportedLocales,
-          theme: _theme(Brightness.light),
-          darkTheme: _theme(Brightness.dark),
-          themeMode: settings.themeMode,
-          home: const _AuthGate(),
+      child: _TelemetryStarter(
+        child: Consumer<DisplaySettingsController>(
+          builder: (context, settings, _) => MaterialApp(
+            locale: widget.locale ?? settings.locale,
+            onGenerateTitle: (context) => context.l10n.appTitle,
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            theme: _theme(Brightness.light),
+            darkTheme: _theme(Brightness.dark),
+            themeMode: settings.themeMode,
+            home: const _AuthGate(),
+          ),
         ),
       ),
     );
@@ -173,6 +190,32 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
       brightness: brightness,
     ),
   );
+}
+
+class _TelemetryStarter extends StatefulWidget {
+  const _TelemetryStarter({required this.child});
+
+  final Widget child;
+
+  @override
+  State<_TelemetryStarter> createState() => _TelemetryStarterState();
+}
+
+class _TelemetryStarterState extends State<_TelemetryStarter> {
+  bool _sent = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_sent) return;
+    final telemetry = context.read<TelemetryClient?>();
+    if (telemetry == null) return;
+    _sent = true;
+    unawaited(telemetry.track('app.started'));
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.child;
 }
 
 class _AuthGate extends StatelessWidget {
@@ -196,7 +239,10 @@ class _AuthGate extends StatelessWidget {
         // voice agent go through this. Scoped to the account subtree so it is
         // recreated together with the database on account switch.
         Provider<AppRepositories>(
-          create: (ctx) => AppRepositories(ctx.read<AppDatabase>()),
+          create: (ctx) => AppRepositories(
+            ctx.read<AppDatabase>(),
+            businessMetrics: ctx.read<BusinessMetrics?>(),
+          ),
         ),
         Provider<VoiceSessionRepository>(
           create: (ctx) => VoiceSessionRepository(

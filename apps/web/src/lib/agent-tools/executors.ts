@@ -333,6 +333,7 @@ export const toolExecutors = {
             date: parseOptionalDate(args.date),
             dateConfirmed: args.dateConfirmed,
             status: args.status,
+            createdBy: 'agent',
         })
         await attachTags(ctx, id, args.tagIdsOrNames)
         return { ok: true, id }
@@ -354,6 +355,7 @@ export const toolExecutors = {
             date: parseOptionalDate(args.date),
             dateConfirmed: args.dateConfirmed,
             status: args.status,
+            createdBy: 'agent',
         })
         await attachTags(ctx, id, args.tagIdsOrNames)
         return { ok: true, id }
@@ -388,6 +390,7 @@ export const toolExecutors = {
                 categoryId: catR.entity.id,
                 date: parseOptionalDate(args.date),
                 dateConfirmed: args.dateConfirmed,
+                createdBy: 'agent',
             },
         )
         await attachTags(ctx, id, args.tagIdsOrNames)
@@ -409,6 +412,7 @@ export const toolExecutors = {
                     description: args.description,
                     date: parseOptionalDate(args.date),
                     dateConfirmed: args.dateConfirmed,
+                    createdBy: 'agent',
                 },
             )
             return { ok: true, id }

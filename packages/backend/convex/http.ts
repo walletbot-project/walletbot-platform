@@ -6,6 +6,7 @@ import { registerAuthNativeRoutes } from './authNative/http'
 import { hashSessionSecret } from './authNative/utils'
 import { registerConfigRoutes } from './config/http'
 import { jsonResponse } from './httpHelpers'
+import { registerTelemetryRoutes } from './telemetry/http'
 
 const http = httpRouter()
 
@@ -14,6 +15,7 @@ authComponent.registerRoutes(http, createAuth, { cors: true })
 
 // Native app auth: Google idToken → mint our own JWT + rotating refresh token.
 registerAuthNativeRoutes(http)
+registerTelemetryRoutes(http)
 
 // Versioned native config surface:
 // - `/v1/config` = device/client-version layer (unauthenticated)
