@@ -380,7 +380,7 @@ Expression<bool> _amountCondition(
   return expression;
 }
 
-T? _enumByWire<T extends WireLabeled>(List<T> values, String wire) {
+T? _enumByWire<T extends WireValue>(List<T> values, String wire) {
   for (final value in values) {
     if (value.wire == wire) return value;
   }
@@ -480,24 +480,6 @@ StatValue aggregateStat(List<Transaction> rows, StatAggregation aggregation) {
   }
 }
 
-/// Spanish three-letter month abbreviations for [BreakdownGroupBy.month]
-/// labels, indexed by month-1. Kept local so the breakdown needs no
-/// `intl`/locale dependency.
-const _esMonthsShort = [
-  'ene',
-  'feb',
-  'mar',
-  'abr',
-  'may',
-  'jun',
-  'jul',
-  'ago',
-  'sep',
-  'oct',
-  'nov',
-  'dic',
-];
-
 /// Groups already-filtered transactions into labeled buckets for a Breakdown
 /// chart, summing **absolute** amounts (magnitude of activity) per group. Pure
 /// and synchronous so the grouping logic has one home and is unit-testable;
@@ -518,6 +500,9 @@ List<BreakdownSlice> aggregateBreakdown(
   List<Transaction> rows,
   BreakdownGroupBy groupBy, {
   Map<String, ({String label, String? colorHex})> labels = const {},
+  String missingCategoryLabel = '',
+  String missingAccountLabel = '',
+  String Function(DateTime date)? monthLabel,
 }) {
   final totals = <String, BigInt>{};
   for (final t in rows) {
@@ -540,15 +525,15 @@ List<BreakdownSlice> aggregateBreakdown(
   String labelFor(String key) {
     switch (groupBy) {
       case BreakdownGroupBy.category:
-        return labels[key]?.label ?? '(sin categoría)';
+        return labels[key]?.label ?? missingCategoryLabel;
       case BreakdownGroupBy.account:
-        return labels[key]?.label ?? '(sin cuenta)';
+        return labels[key]?.label ?? missingAccountLabel;
       case BreakdownGroupBy.month:
         final parts = key.split('-');
         final year = int.tryParse(parts.first) ?? 0;
         final month = parts.length > 1 ? int.tryParse(parts[1]) ?? 0 : 0;
         if (month < 1 || month > 12) return key;
-        return '${_esMonthsShort[month - 1]} $year';
+        return monthLabel?.call(DateTime(year, month)) ?? key;
     }
   }
 

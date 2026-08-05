@@ -4,11 +4,24 @@ import 'package:convex_flutter/convex_flutter.dart';
 import 'package:drift/drift.dart';
 import 'package:flutter/foundation.dart' hide Category;
 
+import '../app_config/client_info.dart';
 import '../database.dart';
 import 'sync_merge.dart';
 import 'sync_recompute.dart';
 import 'sync_status.dart';
 import 'wire.dart';
+
+/// The `error` value returned by `sync/*:pull` and `push` when the backend
+/// rejects this client for being below the platform's `minSupportedVersion`.
+/// Mirrors `packages/backend/convex/config/helpers.ts` `CLIENT_OUTDATED`.
+const _clientOutdatedError = 'client_outdated';
+
+/// Thrown internally when the server reports this client is outdated, so the
+/// sync cycle unwinds to [_runOnce] where the engine halts (rather than being
+/// treated as a transient error and retried forever).
+class _ClientOutdatedException implements Exception {
+  const _ClientOutdatedException();
+}
 
 /// The end-to-end sync engine: pull → merge → recompute → push.
 ///
@@ -22,16 +35,26 @@ class SyncEngine extends ChangeNotifier {
   SyncEngine({
     required AppDatabase db,
     required ConvexClient client,
+    required ClientInfo clientInfo,
+    this.onClientOutdated,
     this.pullPageLimit = 200,
     this.pushChunkLimit = 80,
     Duration writeDebounce = const Duration(milliseconds: 600),
   }) : _db = db,
        _client = client,
+       _clientInfo = clientInfo,
        _writeDebounce = writeDebounce;
 
   final AppDatabase _db;
   final ConvexClient _client;
+  final ClientInfo _clientInfo;
   final Duration _writeDebounce;
+
+  /// Invoked when the backend rejects sync because this client is below the
+  /// supported-version floor. Lets the app flip to the hard update prompt even
+  /// when the client-side config gate was bypassed (e.g. a failed config fetch
+  /// left the client fail-open). The engine halts itself before calling this.
+  final void Function()? onClientOutdated;
 
   /// Hard cap on the `limit` passed to `sync.queries:pull`. Page size on the
   /// server is `min(this, args.limit ?? default)`. Keep below the Convex
@@ -60,16 +83,21 @@ class SyncEngine extends ChangeNotifier {
   StreamSubscription<Object?>? _writeListener;
   bool _started = false;
 
+  /// Set once the backend rejects this client as outdated. Terminal: the engine
+  /// tears down its subscription/timers and refuses to start or schedule again
+  /// for the rest of the process (the user must update the app).
+  bool _halted = false;
+
   /// Wire up the counter subscription and kick off the first sync. Safe to
   /// call multiple times; subsequent calls are no-ops.
   Future<void> start() async {
-    if (_started) return;
+    if (_started || _halted) return;
     _started = true;
 
     // Subscribe to the user's server counter. Any change → pull.
     try {
       _counterSub = await _client.subscribe(
-        name: 'sync/queries:getCounter',
+        name: 'v1/sync/queries:getCounter',
         args: const {},
         onUpdate: (raw) {
           final value = decodeConvexResponse(raw);
@@ -140,6 +168,7 @@ class SyncEngine extends ChangeNotifier {
   // ─── Scheduler ───────────────────────────────────────────────────────────
 
   Future<void> _scheduleNow() {
+    if (_halted) return Future.value();
     if (_inFlight != null) {
       _trailingTrigger = true;
       return _inFlight!;
@@ -180,10 +209,27 @@ class SyncEngine extends ChangeNotifier {
         ),
       );
       _setStatus(SyncStatus.synced, error: null);
+    } on _ClientOutdatedException {
+      debugPrint('sync: backend rejected client as outdated — halting sync');
+      _haltForOutdatedClient();
     } catch (e, st) {
       debugPrint('sync: runOnce failed: $e\n$st');
       _setStatus(SyncStatus.error, error: e);
     }
+  }
+
+  /// Tear down the engine after a `client_outdated` rejection: cancel the
+  /// counter subscription, write listener and debounce timer so no further
+  /// cycles run, then notify the app so it can surface the update prompt.
+  void _haltForOutdatedClient() {
+    _halted = true;
+    _debounce?.cancel();
+    _counterSub?.cancel();
+    _counterSub = null;
+    _writeListener?.cancel();
+    _writeListener = null;
+    _setStatus(SyncStatus.error, error: const _ClientOutdatedException());
+    onClientOutdated?.call();
   }
 
   void _setStatus(SyncStatus status, {Object? error}) {
@@ -207,13 +253,18 @@ class SyncEngine extends ChangeNotifier {
         throw StateError('sync: pull loop exceeded 10k iterations');
       }
 
-      final raw = await _client.query('sync/queries:pull', {
+      final raw = await _client.query('v1/sync/queries:pull', {
         'since': prepareArgValue(since),
         'limit': pullPageLimit,
+        'platform': _clientInfo.platform,
+        'appVersion': _clientInfo.appVersion,
       });
       final decoded = decodeConvexResponse(raw);
       if (decoded is! Map) {
         throw StateError('sync: malformed pull response: $raw');
+      }
+      if (decoded['error'] == _clientOutdatedError) {
+        throw const _ClientOutdatedException();
       }
       final rows = (decoded['rows'] as List).cast<Map<String, Object?>>();
       final tombstones = (decoded['tombstones'] as List)
@@ -423,9 +474,14 @@ class SyncEngine extends ChangeNotifier {
         'tombstones': prepareArgValue(
           chunk.tombstones.map(_serializeTombstone).toList(),
         ),
+      'platform': _clientInfo.platform,
+      'appVersion': _clientInfo.appVersion,
     };
 
-    final raw = await _client.mutation(name: 'sync/mutations:push', args: args);
+    final raw = await _client.mutation(
+      name: 'v1/sync/mutations:push',
+      args: args,
+    );
     final decoded = decodeConvexResponse(raw);
     if (decoded is! Map) {
       throw StateError('sync: malformed push response: $raw');
@@ -433,6 +489,9 @@ class SyncEngine extends ChangeNotifier {
     final ok = decoded['ok'] == true;
     if (!ok) {
       final err = decoded['error'];
+      if (err == _clientOutdatedError) {
+        throw const _ClientOutdatedException();
+      }
       if (err == 'cursor_mismatch') {
         final cc = decoded['currentCounter'];
         if (cc is BigInt) _lastKnownRemoteCounter = cc;

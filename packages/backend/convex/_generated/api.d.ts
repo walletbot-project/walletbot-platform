@@ -8,18 +8,18 @@
  * @module
  */
 
-import type * as accounts_mutations from "../accounts/mutations.js";
-import type * as accounts_queries from "../accounts/queries.js";
 import type * as aggregates from "../aggregates.js";
 import type * as auth from "../auth.js";
 import type * as authNative_http from "../authNative/http.js";
 import type * as authNative_mutations from "../authNative/mutations.js";
 import type * as authNative_utils from "../authNative/utils.js";
-import type * as categories_mutations from "../categories/mutations.js";
-import type * as categories_queries from "../categories/queries.js";
+import type * as config_helpers from "../config/helpers.js";
+import type * as config_http from "../config/http.js";
+import type * as config_utils from "../config/utils.js";
 import type * as crons from "../crons.js";
 import type * as http from "../http.js";
-import type * as live_actions from "../live/actions.js";
+import type * as httpHelpers from "../httpHelpers.js";
+import type * as live_createToken from "../live/createToken.js";
 import type * as schema_accounts from "../schema/accounts.js";
 import type * as schema_categories from "../schema/categories.js";
 import type * as schema_dashboard from "../schema/dashboard.js";
@@ -29,11 +29,8 @@ import type * as schema_tags from "../schema/tags.js";
 import type * as schema_telemetry from "../schema/telemetry.js";
 import type * as schema_transactionTags from "../schema/transactionTags.js";
 import type * as schema_transactions from "../schema/transactions.js";
+import type * as schema_voice from "../schema/voice.js";
 import type * as sync_helpers from "../sync/helpers.js";
-import type * as sync_mutations from "../sync/mutations.js";
-import type * as sync_queries from "../sync/queries.js";
-import type * as tags_mutations from "../tags/mutations.js";
-import type * as tags_queries from "../tags/queries.js";
 import type * as telemetry_actions from "../telemetry/actions.js";
 import type * as telemetry_catalog from "../telemetry/catalog.js";
 import type * as telemetry_http from "../telemetry/http.js";
@@ -42,11 +39,20 @@ import type * as telemetry_mutations from "../telemetry/mutations.js";
 import type * as telemetry_queries from "../telemetry/queries.js";
 import type * as telemetry_types from "../telemetry/types.js";
 import type * as telemetry_validators from "../telemetry/validators.js";
-import type * as test from "../test.js";
 import type * as transactions_backfill from "../transactions/backfill.js";
-import type * as transactions_mutations from "../transactions/mutations.js";
-import type * as transactions_queries from "../transactions/queries.js";
 import type * as users_helpers from "../users/helpers.js";
+import type * as v1_accounts_mutations from "../v1/accounts/mutations.js";
+import type * as v1_accounts_queries from "../v1/accounts/queries.js";
+import type * as v1_categories_mutations from "../v1/categories/mutations.js";
+import type * as v1_categories_queries from "../v1/categories/queries.js";
+import type * as v1_live_actions from "../v1/live/actions.js";
+import type * as v1_sync_mutations from "../v1/sync/mutations.js";
+import type * as v1_sync_queries from "../v1/sync/queries.js";
+import type * as v1_tags_mutations from "../v1/tags/mutations.js";
+import type * as v1_tags_queries from "../v1/tags/queries.js";
+import type * as v1_transactions_mutations from "../v1/transactions/mutations.js";
+import type * as v1_transactions_queries from "../v1/transactions/queries.js";
+import type * as v1_voice_sessions from "../v1/voice/sessions.js";
 
 import type {
   ApiFromModules,
@@ -55,18 +61,18 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
-  "accounts/mutations": typeof accounts_mutations;
-  "accounts/queries": typeof accounts_queries;
   aggregates: typeof aggregates;
   auth: typeof auth;
   "authNative/http": typeof authNative_http;
   "authNative/mutations": typeof authNative_mutations;
   "authNative/utils": typeof authNative_utils;
-  "categories/mutations": typeof categories_mutations;
-  "categories/queries": typeof categories_queries;
+  "config/helpers": typeof config_helpers;
+  "config/http": typeof config_http;
+  "config/utils": typeof config_utils;
   crons: typeof crons;
   http: typeof http;
-  "live/actions": typeof live_actions;
+  httpHelpers: typeof httpHelpers;
+  "live/createToken": typeof live_createToken;
   "schema/accounts": typeof schema_accounts;
   "schema/categories": typeof schema_categories;
   "schema/dashboard": typeof schema_dashboard;
@@ -76,11 +82,8 @@ declare const fullApi: ApiFromModules<{
   "schema/telemetry": typeof schema_telemetry;
   "schema/transactionTags": typeof schema_transactionTags;
   "schema/transactions": typeof schema_transactions;
+  "schema/voice": typeof schema_voice;
   "sync/helpers": typeof sync_helpers;
-  "sync/mutations": typeof sync_mutations;
-  "sync/queries": typeof sync_queries;
-  "tags/mutations": typeof tags_mutations;
-  "tags/queries": typeof tags_queries;
   "telemetry/actions": typeof telemetry_actions;
   "telemetry/catalog": typeof telemetry_catalog;
   "telemetry/http": typeof telemetry_http;
@@ -89,11 +92,20 @@ declare const fullApi: ApiFromModules<{
   "telemetry/queries": typeof telemetry_queries;
   "telemetry/types": typeof telemetry_types;
   "telemetry/validators": typeof telemetry_validators;
-  test: typeof test;
   "transactions/backfill": typeof transactions_backfill;
-  "transactions/mutations": typeof transactions_mutations;
-  "transactions/queries": typeof transactions_queries;
   "users/helpers": typeof users_helpers;
+  "v1/accounts/mutations": typeof v1_accounts_mutations;
+  "v1/accounts/queries": typeof v1_accounts_queries;
+  "v1/categories/mutations": typeof v1_categories_mutations;
+  "v1/categories/queries": typeof v1_categories_queries;
+  "v1/live/actions": typeof v1_live_actions;
+  "v1/sync/mutations": typeof v1_sync_mutations;
+  "v1/sync/queries": typeof v1_sync_queries;
+  "v1/tags/mutations": typeof v1_tags_mutations;
+  "v1/tags/queries": typeof v1_tags_queries;
+  "v1/transactions/mutations": typeof v1_transactions_mutations;
+  "v1/transactions/queries": typeof v1_transactions_queries;
+  "v1/voice/sessions": typeof v1_voice_sessions;
 }>;
 
 /**

@@ -8,7 +8,7 @@ Wallet Bot — app for keeping track of personal expenses
 
 | Package | Path | Stack |
 |---|---|---|
-| Native app | `apps/app` | Flutter |
+| Native app | `apps/native` | Flutter |
 | Web app | `apps/web` | Vite + React + Tailwind v4 + shadcn (base-ui) |
 | Backend | `packages/backend` | Convex + better-auth |
 | Shared | `packages/shared` | Pure TypeScript — convex backend |
@@ -45,6 +45,12 @@ Wallet Bot — app for keeping track of personal expenses
 - After implementing a feature, review `docs/riesgos.md` and decide whether
   the feature mitigates an existing risk, changes its probability or impact, or
   introduces a new risk that should be added.
+- The current native SQLite schema is `v1`, established as the baseline for
+  coordinated native DB migrations. Every future schema change must be agreed
+  with the team, increment `schemaVersion`, implement an explicit
+  data-preserving `onUpgrade` path, run Drift migration artifact generation, and
+  add schema plus data-integrity migration tests. Follow
+  `docs/schema/README.md`.
 - After all steps of any task run a CLAUDE.md rules check
 - Always report violations
 
@@ -69,7 +75,7 @@ Follow `apps/web/DEVELOPMENT.md` for project structure, layout system, and modul
 ## Backend
 
 Follow `packages/backend/README.md` for environment setup (Convex, better-auth, Google OAuth).
-Follow `packages/backend/DEVELOPMENT.md` for backend architecture and conventions.
+For backend architecture and conventions, follow the § Feature layout below (`packages/backend/DEVELOPMENT.md` is referenced historically but not yet written).
 
 ### Feature layout (quick ref)
 
@@ -123,6 +129,41 @@ Convex has two runtimes: the default (fast, no Node APIs) and Node.js. Files tha
 ## Long or complex processes
 
 - Please use multiple steps, and ideally use the Convex's Workflows component for durable long running proceses. Read docs to do it correctly.
+
+## Client–server contract, versioning & native config
+
+These rules govern how the native and web apps talk to Convex, and how native
+version gating is handled.
+
+- **Version application-owned client contracts.** Public Convex functions used
+  by native or web clients live under a `vN/` module prefix, and application
+  HTTP APIs use a `/vN` path prefix. Current examples are
+  `v1/sync/queries:pull`, `v1/accounts/mutations:create`, `/v1/config`, and
+  `/v1/live/token`. Do not version framework-managed authentication, OIDC,
+  JWKS, or Better Auth routes. To make a breaking contract change, add the next
+  version and retire the old one only when its clients no longer require it.
+- **Breaking sync/wire changes are a coordinated bump.** Any change to the sync
+  wire format or the set of synced tables/fields must bump **both**
+  `minSupportedVersion` (backend constants in
+  `packages/backend/convex/config/helpers.ts`, per platform) and the drift
+  `schemaVersion` in `apps/native/lib/database.dart` in the same change. Old
+  clients must fail *closed on sync* while continuing to work *offline* on their
+  local data — never silently drop or diverge. The gate is enforced on **both**
+  sides: the client won't start sync when `syncAllowed` is false, and because a
+  client whose config fetch failed fails *open*, `v1/sync/mutations:push` and
+  `v1/sync/queries:pull` also check `appVersion`/`platform` against
+  `minSupportedVersion` server-side
+  (`config/helpers.ts:isClientSupported`) and return
+  `{ ok: false, error: 'client_outdated' }`, which halts the sync engine and
+  flips the client to the hard update prompt. Both entry points therefore take
+  required `platform` + `appVersion` args — a wire change is a coordinated bump.
+- **Device-scoped state stays out of the per-user DB.** Cached config and
+  update-prompt state are device-level and must live in a device-scoped store
+  (`flutter_secure_storage`), never in `AppDatabase.forUser` (that DB is torn
+  down and recreated on account switch).
+- **Native config fails open.** Never block offline use or delete local
+  sessions/accounts on a failed config/bootstrap fetch; always fall back to
+  bundled defaults plus the last-good cached config.
 
 <!-- convex-ai-start -->
 This project uses [Convex](https://convex.dev) as its backend.

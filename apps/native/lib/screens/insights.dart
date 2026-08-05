@@ -1,6 +1,7 @@
 import 'package:app/components/categories_view.dart';
 import 'package:app/components/tags_view.dart';
 import 'package:app/data/data.dart';
+import 'package:app/l10n/l10n.dart';
 import 'package:app/screens/create_category.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -54,19 +55,21 @@ class _InsightsScreenState extends State<InsightsScreen>
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Insights'),
+        title: Text(context.l10n.insights),
         actions: [
           IconButton(
-            tooltip: _tabController.index == 0 ? 'New category' : 'New tag',
+            tooltip: _tabController.index == 0
+                ? context.l10n.newCategoryTooltip
+                : context.l10n.newTagTooltip,
             onPressed: _handleAdd,
             icon: const Icon(Icons.add),
           ),
         ],
         bottom: TabBar(
           controller: _tabController,
-          tabs: const [
-            Tab(text: 'Categories'),
-            Tab(text: 'Tags'),
+          tabs: [
+            Tab(text: context.l10n.categories),
+            Tab(text: context.l10n.tags),
           ],
         ),
       ),

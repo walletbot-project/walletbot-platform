@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:app/l10n/l10n.dart';
 
 /// A reusable grid for picking an entity icon. Renders the provided [options]
 /// and highlights the [selected] one, tinted with [accent]. Stateless: the
@@ -68,7 +69,7 @@ Future<IconData?> showIconPickerDialog(
     context: context,
     builder: (dialogContext) {
       return AlertDialog(
-        title: const Text('Elegir ícono'),
+        title: Text(context.l10n.chooseIcon),
         content: SingleChildScrollView(
           child: IconPicker(
             selected: selected,

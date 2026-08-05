@@ -1,4 +1,5 @@
 import 'package:app/shared/money.dart';
+import 'package:app/l10n/l10n.dart';
 import 'package:flutter/material.dart';
 
 class TransactionRow extends StatelessWidget {
@@ -79,8 +80,16 @@ class TransactionRow extends StatelessWidget {
           const SizedBox(width: 12),
           Text(
             currency == null
-                ? _formatSignedAmount(amountCents, currencySymbol)
-                : formatMoney(amountCents, currency!),
+                ? _formatSignedAmount(
+                    amountCents,
+                    currencySymbol,
+                    context.localeName,
+                  )
+                : formatMoney(
+                    amountCents,
+                    currency!,
+                    locale: context.localeName,
+                  ),
             style: TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.w600,
@@ -133,7 +142,8 @@ class _DateCheckIcon extends StatelessWidget {
   }
 }
 
-String _formatSignedAmount(int cents, String currencySymbol) {
+String _formatSignedAmount(int cents, String currencySymbol, String locale) {
   final sign = cents < 0 ? '-' : (cents > 0 ? '+' : '');
-  return '$sign $currencySymbol ${formatCentsUnsigned(cents.abs())}';
+  return '$sign $currencySymbol '
+      '${formatCentsUnsigned(cents.abs(), locale: locale)}';
 }

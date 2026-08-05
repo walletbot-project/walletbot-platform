@@ -6,6 +6,7 @@ import 'package:app/components/dashboard/dashboard_models.dart';
 import 'package:app/components/filter_sheet.dart';
 import 'package:app/data/data.dart';
 import 'package:app/database.dart';
+import 'package:app/l10n/l10n.dart';
 import 'package:drift/drift.dart' show Value;
 import 'package:flutter/material.dart';
 
@@ -68,36 +69,11 @@ Future<bool> _showWidgetSheet(
   return saved ?? false;
 }
 
-const _aggregationLabels = {
-  StatAggregation.sum: 'Suma',
-  StatAggregation.net: 'Neto',
-  StatAggregation.count: 'Conteo',
-};
-
-const _typeLabels = {
-  WidgetType.stat: 'Valor',
-  WidgetType.list: 'Lista',
-  WidgetType.balance: 'Saldo',
-  WidgetType.chart: 'Gráfico',
-};
-
 const _defaultWidthFor = {
   WidgetType.stat: DashboardWidth.third,
   WidgetType.list: DashboardWidth.full,
   WidgetType.balance: DashboardWidth.half,
   WidgetType.chart: DashboardWidth.full,
-};
-
-const _groupByLabels = {
-  BreakdownGroupBy.category: 'Categoría',
-  BreakdownGroupBy.account: 'Cuenta',
-  BreakdownGroupBy.month: 'Mes',
-};
-
-const _chartKindLabels = {
-  BreakdownChartKind.pie: 'Torta',
-  BreakdownChartKind.bar: 'Barras',
-  BreakdownChartKind.line: 'Línea',
 };
 
 class _WidgetSheet extends StatefulWidget {
@@ -274,13 +250,13 @@ class _WidgetSheetState extends State<_WidgetSheet> {
     final title = _titleController.text.trim();
     if (title.isEmpty) {
       messenger.showSnackBar(
-        const SnackBar(content: Text('Ingresá un título')),
+        SnackBar(content: Text(context.l10n.enterWidgetTitle)),
       );
       return;
     }
     if (_type == WidgetType.balance && _currency == null) {
       messenger.showSnackBar(
-        const SnackBar(content: Text('Seleccioná una moneda')),
+        SnackBar(content: Text(context.l10n.selectWidgetCurrency)),
       );
       return;
     }
@@ -318,7 +294,7 @@ class _WidgetSheetState extends State<_WidgetSheet> {
       if (!mounted) return;
       setState(() => _saving = false);
       messenger.showSnackBar(
-        SnackBar(content: Text('No se pudo guardar el widget: $error')),
+        SnackBar(content: Text(context.l10n.widgetSaveFailed(error))),
       );
     }
   }
@@ -418,7 +394,7 @@ class _WidgetSheetState extends State<_WidgetSheet> {
       existing.id,
       type: Value(_type.wire),
       filterId: Value(filterId),
-      options: Value(encodeWidgetOptions(options)),
+      options: Value(mergeWidgetOptions(existing.options, options)),
     );
   }
 
@@ -441,21 +417,21 @@ class _WidgetSheetState extends State<_WidgetSheet> {
             mainAxisSize: MainAxisSize.min,
             children: [
               Text(
-                _isEditing ? 'Editar widget' : 'Agregar widget',
+                _isEditing ? context.l10n.editWidget : context.l10n.addWidget,
                 style: theme.textTheme.titleLarge?.copyWith(
                   fontWeight: FontWeight.w700,
                 ),
               ),
               const SizedBox(height: 16),
 
-              Text('Tipo', style: theme.textTheme.titleSmall),
+              Text(context.l10n.widgetType, style: theme.textTheme.titleSmall),
               const SizedBox(height: 8),
               Wrap(
                 spacing: 8,
                 children: [
                   for (final type in WidgetType.values)
                     ChoiceChip(
-                      label: Text(_typeLabels[type]!),
+                      label: Text(context.l10n.dashboardWidgetType(type)),
                       selected: _type == type,
                       onSelected: (_) => setState(() => _type = type),
                     ),
@@ -465,9 +441,9 @@ class _WidgetSheetState extends State<_WidgetSheet> {
 
               TextField(
                 controller: _titleController,
-                decoration: const InputDecoration(
-                  labelText: 'Título',
-                  border: OutlineInputBorder(),
+                decoration: InputDecoration(
+                  labelText: context.l10n.widgetTitle,
+                  border: const OutlineInputBorder(),
                   isDense: true,
                 ),
               ),
@@ -485,7 +461,7 @@ class _WidgetSheetState extends State<_WidgetSheet> {
                       onPressed: _saving
                           ? null
                           : () => Navigator.of(context).pop(false),
-                      child: const Text('Cancelar'),
+                      child: Text(context.l10n.cancel),
                     ),
                   ),
                   const SizedBox(width: 12),
@@ -498,7 +474,11 @@ class _WidgetSheetState extends State<_WidgetSheet> {
                               width: 18,
                               child: CircularProgressIndicator(strokeWidth: 2),
                             )
-                          : Text(_isEditing ? 'Guardar' : 'Agregar'),
+                          : Text(
+                              _isEditing
+                                  ? context.l10n.saveWidgetAction
+                                  : context.l10n.addWidgetAction,
+                            ),
                     ),
                   ),
                 ],
@@ -521,11 +501,11 @@ class _WidgetSheetState extends State<_WidgetSheet> {
       children: [
         Row(
           children: [
-            Text('Fondo', style: theme.textTheme.titleSmall),
+            Text(context.l10n.background, style: theme.textTheme.titleSmall),
             if (_showAdvancedToggle) ...[
               const Spacer(),
               Text(
-                'Avanzado',
+                context.l10n.advanced,
                 style: theme.textTheme.bodySmall?.copyWith(
                   color: theme.colorScheme.onSurfaceVariant,
                   fontWeight: FontWeight.w700,
@@ -563,9 +543,9 @@ class _WidgetSheetState extends State<_WidgetSheet> {
                     decimal: true,
                     signed: true,
                   ),
-                  decoration: const InputDecoration(
-                    labelText: 'Bajo',
-                    border: OutlineInputBorder(),
+                  decoration: InputDecoration(
+                    labelText: context.l10n.low,
+                    border: const OutlineInputBorder(),
                     isDense: true,
                   ),
                 ),
@@ -578,9 +558,9 @@ class _WidgetSheetState extends State<_WidgetSheet> {
                     decimal: true,
                     signed: true,
                   ),
-                  decoration: const InputDecoration(
-                    labelText: 'Alto',
-                    border: OutlineInputBorder(),
+                  decoration: InputDecoration(
+                    labelText: context.l10n.high,
+                    border: const OutlineInputBorder(),
                     isDense: true,
                   ),
                 ),
@@ -589,7 +569,7 @@ class _WidgetSheetState extends State<_WidgetSheet> {
           ),
           const SizedBox(height: 12),
           _ValueColorRow(
-            label: 'Menor que bajo',
+            label: context.l10n.belowLow,
             selected: _lowBackgroundColor,
             onSelected: (color) => setState(() {
               _lowBackgroundColor = color;
@@ -597,7 +577,7 @@ class _WidgetSheetState extends State<_WidgetSheet> {
           ),
           const SizedBox(height: 10),
           _ValueColorRow(
-            label: 'Entre bajo y alto',
+            label: context.l10n.betweenLowHigh,
             selected: _betweenBackgroundColor,
             onSelected: (color) => setState(() {
               _betweenBackgroundColor = color;
@@ -605,7 +585,7 @@ class _WidgetSheetState extends State<_WidgetSheet> {
           ),
           const SizedBox(height: 10),
           _ValueColorRow(
-            label: 'Mayor que alto',
+            label: context.l10n.aboveHigh,
             selected: _highBackgroundColor,
             onSelected: (color) => setState(() {
               _highBackgroundColor = color;
@@ -621,14 +601,14 @@ class _WidgetSheetState extends State<_WidgetSheet> {
     switch (_type) {
       case WidgetType.stat:
         return [
-          Text('Agregación', style: theme.textTheme.titleSmall),
+          Text(context.l10n.aggregation, style: theme.textTheme.titleSmall),
           const SizedBox(height: 8),
           Wrap(
             spacing: 8,
             children: [
               for (final agg in StatAggregation.values)
                 ChoiceChip(
-                  label: Text(_aggregationLabels[agg]!),
+                  label: Text(context.l10n.statAggregation(agg)),
                   selected: _aggregation == agg,
                   onSelected: (_) => setState(() => _aggregation = agg),
                 ),
@@ -642,9 +622,9 @@ class _WidgetSheetState extends State<_WidgetSheet> {
           TextField(
             controller: _limitController,
             keyboardType: TextInputType.number,
-            decoration: const InputDecoration(
-              labelText: 'Cantidad de movimientos',
-              border: OutlineInputBorder(),
+            decoration: InputDecoration(
+              labelText: context.l10n.transactionCount,
+              border: const OutlineInputBorder(),
               isDense: true,
             ),
           ),
@@ -653,28 +633,28 @@ class _WidgetSheetState extends State<_WidgetSheet> {
         ];
       case WidgetType.chart:
         return [
-          Text('Agrupar por', style: theme.textTheme.titleSmall),
+          Text(context.l10n.groupBy, style: theme.textTheme.titleSmall),
           const SizedBox(height: 8),
           Wrap(
             spacing: 8,
             children: [
               for (final groupBy in BreakdownGroupBy.values)
                 ChoiceChip(
-                  label: Text(_groupByLabels[groupBy]!),
+                  label: Text(context.l10n.breakdownGroupBy(groupBy)),
                   selected: _groupBy == groupBy,
                   onSelected: (_) => setState(() => _groupBy = groupBy),
                 ),
             ],
           ),
           const SizedBox(height: 16),
-          Text('Tipo de gráfico', style: theme.textTheme.titleSmall),
+          Text(context.l10n.chartType, style: theme.textTheme.titleSmall),
           const SizedBox(height: 8),
           Wrap(
             spacing: 8,
             children: [
               for (final kind in BreakdownChartKind.values)
                 ChoiceChip(
-                  label: Text(_chartKindLabels[kind]!),
+                  label: Text(context.l10n.breakdownChartKind(kind)),
                   selected: _chartKind == kind,
                   onSelected: (_) => setState(() => _chartKind = kind),
                 ),
@@ -685,11 +665,11 @@ class _WidgetSheetState extends State<_WidgetSheet> {
         ];
       case WidgetType.balance:
         return [
-          Text('Moneda', style: theme.textTheme.titleSmall),
+          Text(context.l10n.currency, style: theme.textTheme.titleSmall),
           const SizedBox(height: 8),
           if (_currencies.isEmpty)
             Text(
-              'No hay cuentas todavía; se usará ARS.',
+              context.l10n.noAccountsUseArs,
               style: theme.textTheme.bodyMedium?.copyWith(
                 color: theme.colorScheme.onSurfaceVariant,
               ),
@@ -780,7 +760,7 @@ class _ColorSwatches extends StatelessWidget {
       children: [
         if (onCleared != null)
           Tooltip(
-            message: 'Sin color',
+            message: context.l10n.noColor,
             child: InkResponse(
               radius: 20,
               onTap: onCleared,
@@ -806,7 +786,7 @@ class _ColorSwatches extends StatelessWidget {
           ),
         for (final color in dashboardBackgroundPalette)
           Tooltip(
-            message: 'Color',
+            message: context.l10n.color,
             child: InkResponse(
               radius: 20,
               onTap: () => onSelected(color),
@@ -876,12 +856,12 @@ class _FilterCallToActionState extends State<_FilterCallToAction>
             child: OutlinedButton.icon(
               onPressed: widget.onConfigure,
               icon: const Icon(Icons.tune, size: 18),
-              label: const Text('Editar filtro'),
+              label: Text(context.l10n.editFilter),
             ),
           ),
           const SizedBox(width: 8),
           IconButton(
-            tooltip: 'Quitar filtro',
+            tooltip: context.l10n.removeFilter,
             icon: const Icon(Icons.close),
             onPressed: widget.onClear,
           ),
@@ -894,7 +874,7 @@ class _FilterCallToActionState extends State<_FilterCallToAction>
       child: FilledButton.icon(
         onPressed: widget.onConfigure,
         icon: const Icon(Icons.tune, size: 18),
-        label: const Text('Configurar filtro'),
+        label: Text(context.l10n.configureFilter),
       ),
     );
 

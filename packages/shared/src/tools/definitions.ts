@@ -315,7 +315,9 @@ export const toolSchemas = {
         background: dashboardBackground,
     }),
     reorderDashboardWidgets: z.object({
-        ids: z.array(z.string()).describe('Dashboard widget ids in display order.'),
+        ids: z
+            .array(z.string())
+            .describe('Dashboard widget ids in display order.'),
     }),
     archiveDashboardWidget: z.object({
         id: z.string(),

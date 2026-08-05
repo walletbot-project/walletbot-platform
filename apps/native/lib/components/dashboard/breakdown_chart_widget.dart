@@ -3,6 +3,7 @@ import 'package:app/components/dashboard/dashboard_cell.dart';
 import 'package:app/components/dashboard/dashboard_models.dart';
 import 'package:app/data/data.dart';
 import 'package:app/shared/money.dart';
+import 'package:app/l10n/l10n.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -37,14 +38,20 @@ class BreakdownChartWidget extends StatelessWidget {
     final repos = context.read<AppRepositories>();
 
     return StreamBuilder<List<BreakdownSlice>>(
-      stream: repos.summaries.watchBreakdown(spec.filter, spec.groupBy),
+      stream: repos.summaries.watchBreakdown(
+        spec.filter,
+        spec.groupBy,
+        missingCategoryLabel: context.l10n.uncategorized,
+        missingAccountLabel: context.l10n.unknownAccount,
+        monthLabel: (date) => formatMonthYear(date, context.localeName),
+      ),
       builder: (context, snapshot) {
         final slices = (snapshot.data ?? const <BreakdownSlice>[])
             .where((s) => s.totalCents > BigInt.zero)
             .toList();
         final total = slices.fold(BigInt.zero, (sum, s) => sum + s.totalCents);
         return DashboardCell(
-          title: spec.title,
+          title: context.l10n.dashboardTitle(spec.title),
           icon: _iconFor(spec.chartKind),
           minHeight: 280,
           backgroundColor: spec.background.resolve(
@@ -138,7 +145,8 @@ class BreakdownChartWidget extends StatelessWidget {
               ),
               const SizedBox(width: 6),
               Text(
-                '${slices[i].label}  ${_amount(slices[i].totalCents)}',
+                '${slices[i].label}  '
+                '${_amount(slices[i].totalCents, context.localeName)}',
                 style: theme.textTheme.bodySmall?.copyWith(
                   color: theme.colorScheme.onSurfaceVariant,
                 ),
@@ -255,8 +263,8 @@ class BreakdownChartWidget extends StatelessWidget {
   String _short(String label) =>
       label.length <= 6 ? label : '${label.substring(0, 6)}…';
 
-  String _amount(BigInt cents) {
-    final formatted = formatCentsUnsigned(cents.abs().toInt());
+  String _amount(BigInt cents, String locale) {
+    final formatted = formatCentsUnsigned(cents.abs().toInt(), locale: locale);
     final currency = spec.filter.currency;
     return currency == null ? formatted : '$currency $formatted';
   }
@@ -284,7 +292,7 @@ class _ChartContent extends StatelessWidget {
     final theme = Theme.of(context);
     if (snapshot.hasError) {
       return Text(
-        'No se pudo cargar el gráfico.',
+        context.l10n.chartLoadFailed,
         style: theme.textTheme.bodySmall?.copyWith(
           color: theme.colorScheme.error,
         ),
@@ -299,7 +307,7 @@ class _ChartContent extends StatelessWidget {
     }
     if (slices.isEmpty) {
       return Text(
-        'No hay datos para mostrar todavía.',
+        context.l10n.chartNoData,
         style: theme.textTheme.bodyMedium?.copyWith(
           color: theme.colorScheme.onSurfaceVariant,
         ),

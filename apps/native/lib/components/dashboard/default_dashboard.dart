@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:app/components/dashboard/dashboard_models.dart';
 import 'package:app/data/data.dart';
+import 'package:app/l10n/l10n.dart';
 
 /// Writes the default v1 dashboard (saved filters + widgets) for a brand-new
 /// user. Passed to `DashboardRepository.seedDefaultIfEmpty`, which runs it once
@@ -14,7 +15,10 @@ import 'package:app/data/data.dart';
 /// NOTE: the monetary tiles are scoped to `ARS` — the app's de-facto default
 /// currency (`screens/create_account.dart`). Placeholder until the currency
 /// scope is user-driven; sums for users without ARS transactions read as 0.
-Future<void> writeDefaultDashboardSeed(AppRepositories repos) async {
+Future<void> writeDefaultDashboardSeed(
+  AppRepositories repos,
+  AppLocalizations l10n,
+) async {
   const expenseFilterId = 'seed-flt-gastos-mes';
   const incomeFilterId = 'seed-flt-ingresos-mes';
   const monthFilterId = 'seed-flt-movimientos-mes';
@@ -28,7 +32,7 @@ Future<void> writeDefaultDashboardSeed(AppRepositories repos) async {
 
   await seedFilter(
     expenseFilterId,
-    'Gastos del mes',
+    l10n.defaultExpensesMonth,
     const TransactionFilter(
       types: {TxnType.expense},
       datePreset: DatePreset.thisMonth,
@@ -37,7 +41,7 @@ Future<void> writeDefaultDashboardSeed(AppRepositories repos) async {
   );
   await seedFilter(
     incomeFilterId,
-    'Ingresos del mes',
+    l10n.defaultIncomeMonth,
     const TransactionFilter(
       types: {TxnType.income},
       datePreset: DatePreset.thisMonth,
@@ -46,7 +50,7 @@ Future<void> writeDefaultDashboardSeed(AppRepositories repos) async {
   );
   await seedFilter(
     monthFilterId,
-    'Movimientos del mes',
+    l10n.defaultMovementsMonth,
     const TransactionFilter(datePreset: DatePreset.thisMonth),
   );
 
@@ -81,7 +85,7 @@ Future<void> writeDefaultDashboardSeed(AppRepositories repos) async {
     width: DashboardWidth.full,
     row: 0,
     col: 0,
-    options: {'title': 'Saldo total (ARS)', 'currency': 'ARS'},
+    options: {'title': l10n.defaultTotalBalanceArs, 'currency': 'ARS'},
   );
   await seedWidget(
     id: 'seed-wgt-gastos',
@@ -91,7 +95,7 @@ Future<void> writeDefaultDashboardSeed(AppRepositories repos) async {
     width: DashboardWidth.third,
     row: 1,
     col: 0,
-    options: {'title': 'Gastos del mes', 'aggregation': 'sum'},
+    options: {'title': l10n.defaultExpensesMonth, 'aggregation': 'sum'},
   );
   await seedWidget(
     id: 'seed-wgt-ingresos',
@@ -101,7 +105,7 @@ Future<void> writeDefaultDashboardSeed(AppRepositories repos) async {
     width: DashboardWidth.third,
     row: 1,
     col: 2,
-    options: {'title': 'Ingresos del mes', 'aggregation': 'sum'},
+    options: {'title': l10n.defaultIncomeMonth, 'aggregation': 'sum'},
   );
   await seedWidget(
     id: 'seed-wgt-movimientos',
@@ -111,7 +115,7 @@ Future<void> writeDefaultDashboardSeed(AppRepositories repos) async {
     width: DashboardWidth.third,
     row: 1,
     col: 4,
-    options: {'title': 'Movimientos', 'aggregation': 'count'},
+    options: {'title': l10n.defaultMovements, 'aggregation': 'count'},
   );
   await seedWidget(
     id: 'seed-wgt-recientes',
@@ -120,6 +124,6 @@ Future<void> writeDefaultDashboardSeed(AppRepositories repos) async {
     width: DashboardWidth.full,
     row: 2,
     col: 0,
-    options: {'title': 'Movimientos recientes', 'limit': 5},
+    options: {'title': l10n.defaultRecentMovements, 'limit': 5},
   );
 }

@@ -383,5 +383,104 @@ void main() {
         expect(runs, 0);
       },
     );
+
+    test('remote seed respects pulled dashboard deletion history', () async {
+      final now = BigInt.from(1000);
+      await db
+          .into(db.tombstones)
+          .insert(
+            TombstonesCompanion.insert(
+              entityTable: 'dashboardWidgets',
+              entityId: 'deleted-widget',
+              deletedAt: now,
+              createdAt: now,
+              updatedAt: now,
+              dirty: const Value(false),
+            ),
+          );
+      var runs = 0;
+
+      await repos.dashboard.seedDefaultIfEmpty(
+        () async => runs++,
+        respectDeleteHistory: true,
+      );
+
+      expect(runs, 0);
+      expect(await repos.dashboard.listActive(), isEmpty);
+      final state = await db.select(db.syncState).getSingle();
+      expect(state.dashboardSeeded, isTrue);
+    });
+
+    test('layout repair compare-and-write rejects a stale snapshot', () async {
+      final id = await repos.dashboard.create(
+        type: 'stat',
+        position: 0,
+        width: 'third',
+        options: '{"title":"Before","layout":{"row":0,"col":6}}',
+      );
+      final observed = (await repos.dashboard.getById(id))!;
+      await repos.dashboard.update(
+        id,
+        options: const Value('{"title":"After","layout":{"row":0,"col":0}}'),
+      );
+
+      final repaired = await repos.dashboard.applyLayoutIfUnchanged(
+        [
+          (
+            id: id,
+            options: '{"title":"Before","layout":{"row":0,"col":0}}',
+            position: 0,
+            width: 'third',
+          ),
+        ],
+        {
+          id: (
+            options: observed.options,
+            width: observed.width,
+            updatedAt: observed.updatedAt,
+          ),
+        },
+      );
+
+      expect(repaired, isFalse);
+      expect((await repos.dashboard.getById(id))!.options, contains('After'));
+    });
+
+    test(
+      'layout repair compare-and-write persists a current snapshot',
+      () async {
+        final id = await repos.dashboard.create(
+          type: 'stat',
+          position: 4,
+          width: 'third',
+          options: '{"title":"Stat","layout":{"row":0,"col":6}}',
+        );
+        final observed = (await repos.dashboard.getById(id))!;
+
+        final repaired = await repos.dashboard.applyLayoutIfUnchanged(
+          [
+            (
+              id: id,
+              options: '{"title":"Stat","layout":{"row":0,"col":0}}',
+              position: 0,
+              width: 'third',
+            ),
+          ],
+          {
+            id: (
+              options: observed.options,
+              width: observed.width,
+              updatedAt: observed.updatedAt,
+            ),
+          },
+        );
+
+        final row = (await repos.dashboard.getById(id))!;
+        expect(repaired, isTrue);
+        expect(row.position, 0);
+        expect(row.options, contains('"col":0'));
+        expect(row.dirty, isTrue);
+      },
+    );
   });
 }

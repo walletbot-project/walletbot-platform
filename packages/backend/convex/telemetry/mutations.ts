@@ -78,22 +78,32 @@ export const recordUserAccountCreated = internalMutation({
         userId: v.string(),
         authMethod,
     },
-    handler: async (ctx, args) =>
-        insertMetricBatch(ctx, {
-            receivedAt: Date.now(),
-            metrics: [
-                {
-                    name: 'business.user_accounts.created_count',
-                    timestamp: Date.now(),
-                    source: 'backend',
-                    type: 'counter',
-                    value: 1,
-                    unit: 'count',
-                    userId: args.userId,
-                    attributes: { auth_method: args.authMethod },
-                },
-            ],
-        }),
+    handler: async (ctx, args) => {
+        try {
+            return await insertMetricBatch(ctx, {
+                receivedAt: Date.now(),
+                metrics: [
+                    {
+                        name: 'business.user_accounts.created_count',
+                        timestamp: Date.now(),
+                        source: 'backend',
+                        type: 'counter',
+                        value: 1,
+                        unit: 'count',
+                        userId: args.userId,
+                        attributes: { auth_method: args.authMethod },
+                    },
+                ],
+            })
+        } catch (error) {
+            console.warn('telemetry metric failed', {
+                metric: 'business.user_accounts.created_count',
+                userId: args.userId,
+                error: error instanceof Error ? error.message : String(error),
+            })
+            return { accepted: 0 }
+        }
+    },
 })
 
 export const markExported = internalMutation({

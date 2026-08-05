@@ -3,15 +3,17 @@ import 'package:app/components/color_picker.dart';
 import 'package:app/components/color_utils.dart';
 import 'package:app/components/icon_picker.dart';
 import 'package:app/data/data.dart';
+import 'package:app/l10n/l10n.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 // Name + icon presets, mirroring the account creation suggestions.
-const _nameSuggestions = [
-  (label: 'Supermercado', icon: Icons.shopping_cart_rounded),
-  (label: 'Transporte', icon: Icons.directions_bus_rounded),
-  (label: 'Servicios', icon: Icons.receipt_long_rounded),
-];
+List<({String label, IconData icon})> _nameSuggestions(AppLocalizations l10n) =>
+    [
+      (label: l10n.groceries, icon: Icons.shopping_cart_rounded),
+      (label: l10n.transport, icon: Icons.directions_bus_rounded),
+      (label: l10n.services, icon: Icons.receipt_long_rounded),
+    ];
 
 class CreateCategoryScreen extends StatefulWidget {
   const CreateCategoryScreen({super.key});
@@ -68,6 +70,11 @@ class _CreateCategoryScreenState extends State<CreateCategoryScreen> {
       if (mounted) Navigator.of(context).pop();
     } catch (e, st) {
       debugPrint('Error creating category: $e\n$st');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(context.l10n.categoryCreateFailed)),
+        );
+      }
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -76,18 +83,21 @@ class _CreateCategoryScreenState extends State<CreateCategoryScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Nueva categoría')),
+      appBar: AppBar(title: Text(context.l10n.newCategory)),
       body: Form(
         key: _formKey,
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
-            Text('Sugerencias', style: Theme.of(context).textTheme.labelLarge),
+            Text(
+              context.l10n.suggestions,
+              style: Theme.of(context).textTheme.labelLarge,
+            ),
             const SizedBox(height: 8),
             Wrap(
               spacing: 8,
               children: [
-                for (final s in _nameSuggestions)
+                for (final s in _nameSuggestions(context.l10n))
                   ActionChip(
                     avatar: Icon(s.icon),
                     label: Text(s.label),
@@ -100,26 +110,27 @@ class _CreateCategoryScreenState extends State<CreateCategoryScreen> {
               controller: _nameController,
               autofocus: true,
               textCapitalization: TextCapitalization.sentences,
-              decoration: const InputDecoration(
-                labelText: 'Nombre *',
-                hintText: 'Ej: Supermercado, Transporte…',
-                border: OutlineInputBorder(),
+              decoration: InputDecoration(
+                labelText: context.l10n.nameRequiredLabel,
+                hintText: context.l10n.categoryNameExample,
+                border: const OutlineInputBorder(),
               ),
-              validator: (v) =>
-                  (v == null || v.trim().isEmpty) ? 'Ingresá un nombre' : null,
+              validator: (v) => (v == null || v.trim().isEmpty)
+                  ? context.l10n.enterName
+                  : null,
             ),
             const SizedBox(height: 16),
             TextFormField(
               controller: _descriptionController,
               textCapitalization: TextCapitalization.sentences,
-              decoration: const InputDecoration(
-                labelText: 'Descripción (opcional)',
-                border: OutlineInputBorder(),
+              decoration: InputDecoration(
+                labelText: context.l10n.descriptionOptional,
+                border: const OutlineInputBorder(),
               ),
             ),
             const SizedBox(height: 24),
             Text(
-              'Ícono y color',
+              context.l10n.iconAndColor,
               style: Theme.of(context).textTheme.labelLarge,
             ),
             const SizedBox(height: 12),
@@ -160,7 +171,7 @@ class _CreateCategoryScreenState extends State<CreateCategoryScreen> {
                       dimension: 20,
                       child: CircularProgressIndicator(strokeWidth: 2),
                     )
-                  : const Text('Crear categoría'),
+                  : Text(context.l10n.createCategory),
             ),
           ],
         ),

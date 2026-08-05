@@ -1,5 +1,6 @@
 import 'package:app/components/grouped_card.dart';
 import 'package:app/shared/money.dart';
+import 'package:app/l10n/l10n.dart';
 import 'package:flutter/material.dart';
 
 /// A single account rendered as a Material 3 expressive card-like list tile:
@@ -61,7 +62,7 @@ class AccountListTile extends StatelessWidget {
             const SizedBox(width: 16),
             // Balance: signed, with currency; negative balances use error color.
             Text(
-              formatMoney(balanceCents, currency),
+              formatMoney(balanceCents, currency, locale: context.localeName),
               style: textTheme.titleMedium?.copyWith(
                 color: isNegative ? colors.error : null,
               ),

@@ -41,9 +41,9 @@ export function TransactionFiltersBar({
     filters,
     onChange,
 }: TransactionFiltersBarProps) {
-    const accounts = useQuery(api.accounts.queries.listActive)
-    const categories = useQuery(api.categories.queries.listActive)
-    const tags = useQuery(api.tags.queries.listActive)
+    const accounts = useQuery(api.v1.accounts.queries.listActive)
+    const categories = useQuery(api.v1.categories.queries.listActive)
+    const tags = useQuery(api.v1.tags.queries.listActive)
 
     return (
         <div className="flex flex-col gap-3">

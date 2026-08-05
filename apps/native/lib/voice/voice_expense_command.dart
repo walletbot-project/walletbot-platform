@@ -4,6 +4,8 @@ import 'dart:typed_data';
 import 'voice_event.dart';
 
 abstract interface class VoiceExpenseCommandFactory {
+  VoiceExpenseCommand? get activeCommand;
+
   VoiceExpenseCommand create();
 }
 
@@ -11,6 +13,10 @@ abstract interface class VoiceExpenseCommand {
   String get label;
 
   Stream<VoiceEvent> get events;
+
+  bool get isActive;
+
+  bool get isConnected;
 
   Future<void> start({bool respondWithAudio = true});
 
@@ -27,6 +33,14 @@ abstract interface class VoiceExpenseCommand {
   Future<void> sendText(String text);
 
   void setAudioPlaybackEnabled(bool enabled);
+
+  void recordClientEvent(
+    String action, [
+    Map<String, Object?> details = const {},
+  ]);
+
+  /// Immediately clears queued agent audio without ending the Live session.
+  Future<void> interruptAgentResponse({required String reason});
 
   Future<VoiceExpenseCommandResult> stop();
 
@@ -47,6 +61,9 @@ class DebugVoiceExpenseCommandFactory implements VoiceExpenseCommandFactory {
   const DebugVoiceExpenseCommandFactory();
 
   @override
+  VoiceExpenseCommand? get activeCommand => null;
+
+  @override
   VoiceExpenseCommand create() => DebugVoiceExpenseCommand();
 }
 
@@ -61,6 +78,12 @@ class DebugVoiceExpenseCommand implements VoiceExpenseCommand {
 
   @override
   Stream<VoiceEvent> get events => _events.stream;
+
+  @override
+  bool get isActive => true;
+
+  @override
+  bool get isConnected => true;
 
   @override
   Future<void> start({bool respondWithAudio = true}) async {
@@ -93,6 +116,19 @@ class DebugVoiceExpenseCommand implements VoiceExpenseCommand {
   @override
   void setAudioPlaybackEnabled(bool enabled) {
     _events.add(VoiceSystemEvent('Debug audio playback: $enabled'));
+  }
+
+  @override
+  void recordClientEvent(
+    String action, [
+    Map<String, Object?> details = const {},
+  ]) {
+    _events.add(VoiceClientActionEvent(action, details));
+  }
+
+  @override
+  Future<void> interruptAgentResponse({required String reason}) async {
+    _events.add(VoiceAgentInterruptedEvent(reason: reason));
   }
 
   @override
