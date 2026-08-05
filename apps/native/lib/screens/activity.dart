@@ -284,7 +284,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
         return Padding(
           padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
           child: TransactionRow(
-            title: title,
+            title: context.l10n.transactionName(title),
             amountCents: amountCents,
             currency: currency,
             dateCheck: dateConfirmed,

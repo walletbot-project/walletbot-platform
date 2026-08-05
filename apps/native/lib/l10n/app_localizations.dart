@@ -764,7 +764,7 @@ abstract class AppLocalizations {
   /// **'Transfers'**
   String get transfers;
 
-  /// No description provided for @balanceAdjustment.
+  /// Transaction type label. Also the display name of an auto-generated balance-adjustment transaction (stored canonically as 'Ajuste de saldo').
   ///
   /// In en, this message translates to:
   /// **'Balance adjustment'**
@@ -775,6 +775,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Adjustments'**
   String get balanceAdjustments;
+
+  /// Display name of the balance-adjustment transaction seeded when an account is created with a starting balance (stored canonically as 'Balance inicial').
+  ///
+  /// In en, this message translates to:
+  /// **'Initial balance'**
+  String get initialBalance;
 
   /// No description provided for @pending.
   ///

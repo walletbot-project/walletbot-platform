@@ -85,6 +85,21 @@ extension LocalizedModelLabels on AppLocalizations {
     null => widget,
   };
 
+  /// Localizes the auto-generated names the app (and the backend) persist for
+  /// balance-adjustment transactions. The stored value is a fixed cross-platform
+  /// constant — `packages/backend/convex/v1/transactions/mutations.ts` writes
+  /// `Ajuste de saldo` too — so it is mapped at render time rather than at write
+  /// time. That keeps the synced wire value stable and localizes rows that were
+  /// already persisted. User-typed names pass through untouched.
+  ///
+  /// Display only: never feed this through an editable field, or saving would
+  /// persist the localized copy in place of the canonical name.
+  String transactionName(String value) => switch (value) {
+    'Ajuste de saldo' || 'Balance adjustment' => balanceAdjustment,
+    'Balance inicial' || 'Initial balance' => initialBalance,
+    _ => value,
+  };
+
   String dashboardTitle(String value) => switch (value) {
     'Gastos del mes' || 'Monthly expenses' => defaultExpensesMonth,
     'Ingresos del mes' || 'Monthly income' => defaultIncomeMonth,

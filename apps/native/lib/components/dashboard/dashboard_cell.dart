@@ -1,3 +1,4 @@
+import 'package:app/l10n/l10n.dart';
 import 'package:flutter/material.dart';
 
 /// Shared visual shell for dashboard widgets. Cells read like compact Material
@@ -28,7 +29,7 @@ class DashboardCell extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colors = theme.colorScheme;
-    final resolvedTitle = title.isEmpty ? 'Widget' : title;
+    final resolvedTitle = title.isEmpty ? context.l10n.widget : title;
     final cellColor =
         backgroundColor ??
         Color.alphaBlend(

@@ -37,6 +37,21 @@ void main() {
     expect(es.dashboardTitle('Monthly expenses'), 'Gastos del mes');
   });
 
+  test('auto-generated transaction names follow the active locale', () {
+    final en = AppLocalizationsEn();
+    final es = AppLocalizationsEs();
+
+    // The canonical persisted values are the Spanish ones the backend writes.
+    expect(en.transactionName('Ajuste de saldo'), 'Balance adjustment');
+    expect(es.transactionName('Ajuste de saldo'), 'Ajuste de saldo');
+    expect(en.transactionName('Balance inicial'), 'Initial balance');
+    expect(es.transactionName('Balance inicial'), 'Balance inicial');
+
+    // User-typed names pass through untouched.
+    expect(en.transactionName('Coffee'), 'Coffee');
+    expect(es.transactionName('Café'), 'Café');
+  });
+
   test('dates and money use locale-specific separators and ordering', () {
     final date = DateTime(2026, 7, 10);
 
