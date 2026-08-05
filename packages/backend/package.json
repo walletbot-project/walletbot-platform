@@ -14,16 +14,21 @@
         "@convex-dev/resend": "^0.2.6",
         "@convex-dev/workflow": "^0.3.8",
         "@google/genai": "^1.49.0",
+        "@react-email/components": "^1.0.12",
+        "@react-email/render": "^2.1.0",
         "@wallet-bot/shared": "workspace:*",
         "a-calc": "^3.0.0",
         "better-auth": "catalog:",
         "convex": "catalog:",
         "convex-helpers": "^0.1.114",
         "jose": "^6.2.3",
+        "react": "^19.2.5",
+        "react-dom": "^19.2.5",
         "zod": "^3.25.76"
     },
     "devDependencies": {
         "@types/node": "^24.12.2",
+        "@types/react": "^19.2.14",
         "typescript": "catalog:"
     }
 }

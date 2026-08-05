@@ -19,7 +19,7 @@ import type * as config_utils from "../config/utils.js";
 import type * as crons from "../crons.js";
 import type * as emails_helpers from "../emails/helpers.js";
 import type * as emails_internal from "../emails/internal.js";
-import type * as emails_utils from "../emails/utils.js";
+import type * as emails_nodeActions from "../emails/nodeActions.js";
 import type * as http from "../http.js";
 import type * as httpHelpers from "../httpHelpers.js";
 import type * as live_createToken from "../live/createToken.js";
@@ -66,7 +66,7 @@ declare const fullApi: ApiFromModules<{
   crons: typeof crons;
   "emails/helpers": typeof emails_helpers;
   "emails/internal": typeof emails_internal;
-  "emails/utils": typeof emails_utils;
+  "emails/nodeActions": typeof emails_nodeActions;
   http: typeof http;
   httpHelpers: typeof httpHelpers;
   "live/createToken": typeof live_createToken;
