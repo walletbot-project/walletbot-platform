@@ -1718,6 +1718,108 @@ abstract class AppLocalizations {
   /// **'Could not {action}: {error}'**
   String emailAuthFailed(String action, Object error);
 
+  /// No description provided for @forgotPassword.
+  ///
+  /// In en, this message translates to:
+  /// **'Forgot your password?'**
+  String get forgotPassword;
+
+  /// No description provided for @resetPasswordTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Reset your password'**
+  String get resetPasswordTitle;
+
+  /// No description provided for @resetPasswordSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter your email and we\'ll send you a reset link.'**
+  String get resetPasswordSubtitle;
+
+  /// No description provided for @sendResetLink.
+  ///
+  /// In en, this message translates to:
+  /// **'Send reset link'**
+  String get sendResetLink;
+
+  /// No description provided for @resetEmailSent.
+  ///
+  /// In en, this message translates to:
+  /// **'If an account exists for {email}, we sent it a link to reset the password. The link opens in your browser.'**
+  String resetEmailSent(String email);
+
+  /// No description provided for @resetEmailSentReturnHint.
+  ///
+  /// In en, this message translates to:
+  /// **'After resetting it, come back here and sign in with your new password.'**
+  String get resetEmailSentReturnHint;
+
+  /// No description provided for @resetRequestFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not send the reset email: {error}'**
+  String resetRequestFailed(Object error);
+
+  /// No description provided for @backToSignIn.
+  ///
+  /// In en, this message translates to:
+  /// **'Back to sign in'**
+  String get backToSignIn;
+
+  /// No description provided for @verifyEmailTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Verify your email'**
+  String get verifyEmailTitle;
+
+  /// No description provided for @verifyEmailSent.
+  ///
+  /// In en, this message translates to:
+  /// **'We sent a verification link to {email}. The link opens in your browser.'**
+  String verifyEmailSent(String email);
+
+  /// No description provided for @verifyEmailInstructions.
+  ///
+  /// In en, this message translates to:
+  /// **'Open the link to verify your account, then come back here and sign in.'**
+  String get verifyEmailInstructions;
+
+  /// No description provided for @verifyEmailDone.
+  ///
+  /// In en, this message translates to:
+  /// **'I verified my email — sign in'**
+  String get verifyEmailDone;
+
+  /// No description provided for @resendVerificationEmail.
+  ///
+  /// In en, this message translates to:
+  /// **'Resend email'**
+  String get resendVerificationEmail;
+
+  /// No description provided for @resendVerificationCooldown.
+  ///
+  /// In en, this message translates to:
+  /// **'Resend in {seconds}s'**
+  String resendVerificationCooldown(int seconds);
+
+  /// No description provided for @verificationEmailResent.
+  ///
+  /// In en, this message translates to:
+  /// **'Verification email sent again.'**
+  String get verificationEmailResent;
+
+  /// No description provided for @resendVerificationFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not resend the email: {error}'**
+  String resendVerificationFailed(Object error);
+
+  /// No description provided for @emailStillNotVerified.
+  ///
+  /// In en, this message translates to:
+  /// **'That email isn\'t verified yet. We sent you a new link.'**
+  String get emailStillNotVerified;
+
   /// No description provided for @localAccountFailed.
   ///
   /// In en, this message translates to:

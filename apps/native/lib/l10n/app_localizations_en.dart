@@ -904,6 +904,71 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get forgotPassword => 'Forgot your password?';
+
+  @override
+  String get resetPasswordTitle => 'Reset your password';
+
+  @override
+  String get resetPasswordSubtitle =>
+      'Enter your email and we\'ll send you a reset link.';
+
+  @override
+  String get sendResetLink => 'Send reset link';
+
+  @override
+  String resetEmailSent(String email) {
+    return 'If an account exists for $email, we sent it a link to reset the password. The link opens in your browser.';
+  }
+
+  @override
+  String get resetEmailSentReturnHint =>
+      'After resetting it, come back here and sign in with your new password.';
+
+  @override
+  String resetRequestFailed(Object error) {
+    return 'Could not send the reset email: $error';
+  }
+
+  @override
+  String get backToSignIn => 'Back to sign in';
+
+  @override
+  String get verifyEmailTitle => 'Verify your email';
+
+  @override
+  String verifyEmailSent(String email) {
+    return 'We sent a verification link to $email. The link opens in your browser.';
+  }
+
+  @override
+  String get verifyEmailInstructions =>
+      'Open the link to verify your account, then come back here and sign in.';
+
+  @override
+  String get verifyEmailDone => 'I verified my email — sign in';
+
+  @override
+  String get resendVerificationEmail => 'Resend email';
+
+  @override
+  String resendVerificationCooldown(int seconds) {
+    return 'Resend in ${seconds}s';
+  }
+
+  @override
+  String get verificationEmailResent => 'Verification email sent again.';
+
+  @override
+  String resendVerificationFailed(Object error) {
+    return 'Could not resend the email: $error';
+  }
+
+  @override
+  String get emailStillNotVerified =>
+      'That email isn\'t verified yet. We sent you a new link.';
+
+  @override
   String localAccountFailed(Object error) {
     return 'Could not continue locally: $error';
   }

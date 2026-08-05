@@ -29,6 +29,15 @@ void main() {
     expect(es.withoutAccount, 'Cuenta local');
   });
 
+  test('Spanish auth email-flow copy keeps the voseo tone', () {
+    final es = AppLocalizationsEs();
+
+    expect(es.forgotPassword, '¿Olvidaste tu contraseña?');
+    expect(es.verifyEmailTitle, 'Verificá tu correo');
+    expect(es.verifyEmailDone, 'Ya verifiqué — iniciar sesión');
+    expect(es.backToSignIn, 'Volver a iniciar sesión');
+  });
+
   test('existing default dashboard titles follow the active locale', () {
     final en = AppLocalizationsEn();
     final es = AppLocalizationsEs();

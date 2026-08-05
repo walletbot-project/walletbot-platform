@@ -908,6 +908,72 @@ class AppLocalizationsEs extends AppLocalizations {
   }
 
   @override
+  String get forgotPassword => '¿Olvidaste tu contraseña?';
+
+  @override
+  String get resetPasswordTitle => 'Restablecer contraseña';
+
+  @override
+  String get resetPasswordSubtitle =>
+      'Ingresá tu correo y te enviamos un enlace para restablecerla.';
+
+  @override
+  String get sendResetLink => 'Enviar enlace';
+
+  @override
+  String resetEmailSent(String email) {
+    return 'Si existe una cuenta para $email, le enviamos un enlace para restablecer la contraseña. El enlace se abre en el navegador.';
+  }
+
+  @override
+  String get resetEmailSentReturnHint =>
+      'Cuando la restablezcas, volvé acá e iniciá sesión con tu contraseña nueva.';
+
+  @override
+  String resetRequestFailed(Object error) {
+    return 'No se pudo enviar el correo de restablecimiento: $error';
+  }
+
+  @override
+  String get backToSignIn => 'Volver a iniciar sesión';
+
+  @override
+  String get verifyEmailTitle => 'Verificá tu correo';
+
+  @override
+  String verifyEmailSent(String email) {
+    return 'Te enviamos un enlace de verificación a $email. El enlace se abre en el navegador.';
+  }
+
+  @override
+  String get verifyEmailInstructions =>
+      'Abrí el enlace para verificar tu cuenta y después volvé acá a iniciar sesión.';
+
+  @override
+  String get verifyEmailDone => 'Ya verifiqué — iniciar sesión';
+
+  @override
+  String get resendVerificationEmail => 'Reenviar correo';
+
+  @override
+  String resendVerificationCooldown(int seconds) {
+    return 'Reenviar en ${seconds}s';
+  }
+
+  @override
+  String get verificationEmailResent =>
+      'Te reenviamos el correo de verificación.';
+
+  @override
+  String resendVerificationFailed(Object error) {
+    return 'No se pudo reenviar el correo: $error';
+  }
+
+  @override
+  String get emailStillNotVerified =>
+      'Ese correo todavía no está verificado. Te enviamos un enlace nuevo.';
+
+  @override
   String localAccountFailed(Object error) {
     return 'No se pudo continuar sin cuenta: $error';
   }

@@ -31,6 +31,36 @@ export const router = createBrowserRouter([
                 ],
             },
             {
+                // Deliberately guard-free: these pages are reached from email
+                // links and must render whether or not a session exists —
+                // PublicGuard would bounce a signed-in user to '/' and lose
+                // the ?token/?error params.
+                element: <AuthLayout />,
+                children: [
+                    {
+                        path: '/forgot-password',
+                        lazy: () =>
+                            import('@/pages/forgot-password').then((m) => ({
+                                Component: m.ForgotPassword,
+                            })),
+                    },
+                    {
+                        path: '/reset-password',
+                        lazy: () =>
+                            import('@/pages/reset-password').then((m) => ({
+                                Component: m.ResetPassword,
+                            })),
+                    },
+                    {
+                        path: '/verify-email',
+                        lazy: () =>
+                            import('@/pages/verify-email').then((m) => ({
+                                Component: m.VerifyEmail,
+                            })),
+                    },
+                ],
+            },
+            {
                 element: <AuthGuard />,
                 children: [
                     {

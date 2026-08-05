@@ -1,3 +1,4 @@
+import { APIError } from 'better-auth/api'
 import type { HttpRouter } from 'convex/server'
 import { internal } from '../_generated/api'
 import { type ActionCtx, httpAction } from '../_generated/server'
@@ -162,6 +163,18 @@ const emailSignIn = httpAction(async (ctx, req) => {
         })
         return issueNativeSession(ctx, req, result.user)
     } catch (err) {
+        // Better-auth already re-sent the verification email on this attempt
+        // (sendOnSignIn), so the client only needs to show the pending state.
+        if (
+            err instanceof APIError &&
+            err.body?.code === 'EMAIL_NOT_VERIFIED'
+        ) {
+            return jsonError(
+                403,
+                'email_not_verified',
+                'Tenés que verificar tu correo. Te enviamos un nuevo enlace de verificación.',
+            )
+        }
         const message = err instanceof Error ? err.message : String(err)
         return jsonError(401, 'sign_in_failed', message)
     }
@@ -188,11 +201,81 @@ const emailSignUp = httpAction(async (ctx, req) => {
             },
             headers,
         })
+        // With requireEmailVerification there is no session yet (`token` is
+        // null) and duplicate emails return a SYNTHETIC user with a fake id —
+        // gate on the token, never mint a session from `result.user` alone.
+        if (!result.token) {
+            return jsonError(
+                403,
+                'email_not_verified',
+                'Revisá tu correo: te enviamos un enlace para verificar tu cuenta.',
+            )
+        }
         return issueNativeSession(ctx, req, result.user)
     } catch (err) {
         const message = err instanceof Error ? err.message : String(err)
         return jsonError(400, 'sign_up_failed', message)
     }
+})
+
+type EmailOnlyBody = {
+    email?: string
+}
+
+const getEmail = (body: EmailOnlyBody | null): string | Response => {
+    if (
+        !body ||
+        typeof body.email !== 'string' ||
+        body.email.trim().length === 0
+    ) {
+        return jsonError(400, 'bad_request', 'missing email')
+    }
+    return body.email.trim().toLowerCase()
+}
+
+// Enumeration safety comes from better-auth itself: an unknown (or already
+// verified) email resolves successfully WITHOUT invoking the send hook, so a
+// throw here never means "user not found" — it is a real failure (Resend
+// config, enqueue, template). Masking those as success left users waiting
+// for emails that never went out; surface them as 500 instead. The client
+// still can't learn whether an email exists.
+const emailSendFailedResponse = (op: string, err: unknown): Response => {
+    // This log is the only server-side forensic trail — keep the stack.
+    console.error(
+        `authNative: ${op} failed`,
+        err instanceof Error ? (err.stack ?? err.message) : String(err),
+    )
+    return jsonError(
+        500,
+        'email_send_failed',
+        'No pudimos enviar el correo. Probá de nuevo en unos minutos.',
+    )
+}
+
+const forgotPasswordHandler = httpAction(async (ctx, req) => {
+    const email = getEmail(await parseJsonBody<EmailOnlyBody>(req))
+    if (email instanceof Response) return email
+
+    const { auth, headers } = await authComponent.getAuth(createAuth, ctx)
+    try {
+        await auth.api.requestPasswordReset({ body: { email }, headers })
+    } catch (err) {
+        return emailSendFailedResponse('requestPasswordReset', err)
+    }
+    return jsonResponse({ ok: true })
+})
+
+const resendVerificationHandler = httpAction(async (ctx, req) => {
+    const email = getEmail(await parseJsonBody<EmailOnlyBody>(req))
+    if (email instanceof Response) return email
+
+    const { auth, headers } = await authComponent.getAuth(createAuth, ctx)
+    try {
+        await auth.api.sendVerificationEmail({ body: { email }, headers })
+    } catch (err) {
+        return emailSendFailedResponse('sendVerificationEmail', err)
+    }
+    return jsonResponse({ ok: true })
 })
 
 type RefreshBody = {
@@ -283,6 +366,16 @@ export const registerAuthNativeRoutes = (http: HttpRouter): void => {
         path: '/auth/email/sign-up',
         method: 'POST',
         handler: emailSignUp,
+    })
+    http.route({
+        path: '/auth/password/forgot',
+        method: 'POST',
+        handler: forgotPasswordHandler,
+    })
+    http.route({
+        path: '/auth/email/resend-verification',
+        method: 'POST',
+        handler: resendVerificationHandler,
     })
     http.route({
         path: '/auth/refresh',

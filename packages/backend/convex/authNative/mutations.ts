@@ -37,6 +37,25 @@ export const validateSessionToken = internalMutation({
     },
 })
 
+// Used on password reset: every native session for the user must die so a
+// potentially-compromised device can't keep syncing with the old token.
+export const revokeAllSessionTokensForUser = internalMutation({
+    args: { userId: v.string() },
+    handler: async (ctx, args) => {
+        const rows = await ctx.db
+            .query('refreshTokens')
+            .withIndex('by_userId', (q) => q.eq('userId', args.userId))
+            .collect()
+        const now = Date.now()
+        for (const row of rows) {
+            if (row.revokedAt === undefined) {
+                await ctx.db.patch(row._id, { revokedAt: now })
+            }
+        }
+        return null
+    },
+})
+
 export const revokeSessionTokenByHash = internalMutation({
     args: { tokenHash: v.string() },
     handler: async (ctx, args) => {

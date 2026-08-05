@@ -178,6 +178,9 @@ importers:
       '@convex-dev/better-auth':
         specifier: 'catalog:'
         version: 0.11.4(@standard-schema/spec@1.1.0)(better-auth@1.5.6(@opentelemetry/api@1.9.1)(react-dom@19.2.5(react@19.2.5))(react@19.2.5))(convex@1.35.1(react@19.2.5))(hono@4.12.12)(react@19.2.5)(typescript@6.0.2)
+      '@convex-dev/resend':
+        specifier: ^0.2.6
+        version: 0.2.6(convex-helpers@0.1.114(@standard-schema/spec@1.1.0)(convex@1.35.1(react@19.2.5))(hono@4.12.12)(react@19.2.5)(typescript@6.0.2)(zod@3.25.76))(convex@1.35.1(react@19.2.5))(react@19.2.5)
       '@convex-dev/workflow':
         specifier: ^0.3.8
         version: 0.3.9(@convex-dev/workpool@0.4.6(convex-helpers@0.1.114(@standard-schema/spec@1.1.0)(convex@1.35.1(react@19.2.5))(hono@4.12.12)(react@19.2.5)(typescript@6.0.2)(zod@3.25.76))(convex@1.35.1(react@19.2.5)))(convex-helpers@0.1.114(@standard-schema/spec@1.1.0)(convex@1.35.1(react@19.2.5))(hono@4.12.12)(react@19.2.5)(typescript@6.0.2)(zod@3.25.76))(convex@1.35.1(react@19.2.5))
@@ -561,6 +564,21 @@ packages:
       better-auth: '>=1.5.0 <1.6.0'
       convex: ^1.25.0
       react: ^18.3.1 || ^19.0.0
+
+  '@convex-dev/rate-limiter@0.3.2':
+    resolution: {integrity: sha512-+oBPsBfFbzdxiF/9XaaTQmVnvDlvEfg/c69/v8LxTbw4VLuiflIKlfnPQL8OS0azXQQ11hcPWHmU8ytFmHKDXA==}
+    peerDependencies:
+      convex: ^1.24.8
+      react: ^18.2.0 || ^19.0.0
+    peerDependenciesMeta:
+      react:
+        optional: true
+
+  '@convex-dev/resend@0.2.6':
+    resolution: {integrity: sha512-TUmHezzRDtZFrsEC32c5lu5JHXlTSb7zNoaXNETKI5+X1xOrAkRT3sK/HoeWFqb/Xy42h+hqnqQWwnWpGNMiFA==}
+    peerDependencies:
+      convex: ^1.31.7
+      convex-helpers: ^0.1.106
 
   '@convex-dev/workflow@0.3.9':
     resolution: {integrity: sha512-jkNhQni+mdeh5E3ZfDrmFXUodCmr1PfJAtFhLVw8zxbQQt1Yk4yr3JXAPOvVxMG2jqIwERyzD71XTaFGebDzuQ==}
@@ -1632,6 +1650,9 @@ packages:
   '@speed-highlight/core@1.2.15':
     resolution: {integrity: sha512-BMq1K3DsElxDWawkX6eLg9+CKJrTVGCBAWVuHXVUV2u0s2711qiChLSId6ikYPfxhdYocLNt3wWwSvDiTvFabw==}
 
+  '@stablelib/base64@1.0.1':
+    resolution: {integrity: sha512-1bnPQqSxSuc3Ii6MhBysoWCg58j97aUjuCSZrGSmDxNqtytIi0k8utUenAwTZN4V5mXXYGsVUI9zeBqy+jBOSQ==}
+
   '@standard-schema/spec@1.1.0':
     resolution: {integrity: sha512-l2aFy5jALhniG5HgqrD6jXLi/rUWrKvqN/qJx6yoJsgKhblVd+iqqU4RCXavm/jPityDo5TCvKMnpjKnOriy0w==}
 
@@ -2573,6 +2594,9 @@ packages:
   fast-levenshtein@2.0.6:
     resolution: {integrity: sha512-DCXu6Ifhqcks7TZKY3Hxp3y6qphY5SJZmrWMDrKcERSOXWQdMhU9Ig/PYrzyw/ul9jOIyh0N4M0tbC5hodg8dw==}
 
+  fast-sha256@1.3.0:
+    resolution: {integrity: sha512-n11RGP/lrWEFI/bWdygLxhI+pVeo1ZYIVwvvPkW7azl/rOy+F3HYRZ2K5zeE9mmkhQppyv9sQFx0JM9UabnpPQ==}
+
   fast-uri@3.1.0:
     resolution: {integrity: sha512-iPeeDKJSWf4IEOasVVrknXpaBV0IApz/gp7S2bb7Z4Lljbl2MGJRqInZiUrQwV16cpzw/D3S5j5Julj/gT52AA==}
 
@@ -3282,6 +3306,9 @@ packages:
     resolution: {integrity: sha512-wQ0b/W4Fr01qtpHlqSqspcj3EhBvimsdh0KlHhH8HRZnMsEa0ea2fTULOXOS9ccQr3om+GcGRk4e+isrZWV8qQ==}
     engines: {node: '>=16.20.0'}
 
+  postal-mime@2.7.5:
+    resolution: {integrity: sha512-GNEXKvWFQnbgO5NlrGzVa0FmWzBZ24PersAWErttSg1Hjpf0ATxTwS5DOMGaOpTG6bUh5cTr7xi0jAD942wCJA==}
+
   postcss-selector-parser@7.1.1:
     resolution: {integrity: sha512-orRsuYpJVw8LdAwqqLykBj9ecS5/cRHlI5+nvTo8LcCKmzDmqVORXtOIYEEQuL9D4BxtA1lm5isAqzQZCoQ6Eg==}
     engines: {node: '>=4'}
@@ -3455,6 +3482,15 @@ packages:
   reselect@5.1.1:
     resolution: {integrity: sha512-K/BG6eIky/SBpzfHZv/dd+9JBFiS4SWV7FIujVyJRux6e45+73RaUHXLmIR1f7WOMaQ0U1km6qwklRQxpJJY0w==}
 
+  resend@6.18.1:
+    resolution: {integrity: sha512-XN8XIaDdKF+ziSQ3K23ndUcyhP7U3ze2gky6SPgYkuAOq54mH4Wdhwm7QylEQ3zlz0NzdX7/l1AgmJUZbdPI/Q==}
+    engines: {node: '>=20'}
+    peerDependencies:
+      '@react-email/render': '*'
+    peerDependenciesMeta:
+      '@react-email/render':
+        optional: true
+
   resolve-from@4.0.0:
     resolution: {integrity: sha512-pb/MYmXstAkysRFx8piNI1tGFNQIFA3vkE3Gq4EuA1dF6gHp/+vgZqsCGJapvy8N3Q+4o7FwvquPJcnZ7RYy4g==}
     engines: {node: '>=4'}
@@ -3584,6 +3620,9 @@ packages:
     resolution: {integrity: sha512-UjgapumWlbMhkBgzT7Ykc5YXUT46F0iKu8SGXq0bcwP5dz/h0Plj6enJqjz1Zbq2l5WaqYnrVbwWOWMyF3F47g==}
     engines: {node: '>=0.10.0'}
 
+  standardwebhooks@1.0.0:
+    resolution: {integrity: sha512-BbHGOQK9olHPMvQNHWul6MYlrRTAOKn03rOe4A8O3CLWhNf4YHBqq2HJKKC+sfqpxiBY52pNeesD6jIiLDz8jg==}
+
   statuses@2.0.2:
     resolution: {integrity: sha512-DvEy55V3DB7uknRo+4iOGT5fP1slR8wQohVdknigZPMpMstaKJQWhwiYBACJE3Ul2pTnATihhBYnRhZQHGBiRw==}
     engines: {node: '>= 0.8'}
@@ -3638,6 +3677,9 @@ packages:
   supports-color@7.2.0:
     resolution: {integrity: sha512-qpCAvRl9stuOHveKsn7HncJRvv501qIacKzQlO/+Lwxc9+0q2wLyv4Dfvt80/DPn2pqOBsJdDiogXGR9+OvwRw==}
     engines: {node: '>=8'}
+
+  svix@1.99.1:
+    resolution: {integrity: sha512-JfpvbAg5iT5NagDAfOq3e6Ci6NbOMbMm6C3DnfDBB60m2JDK+Z2hXPE9XNAmutb53DCdPoih1V70IbklZnX09A==}
 
   tabbable@6.4.0:
     resolution: {integrity: sha512-05PUHKSNE8ou2dwIxTngl4EzcnsCDZGJ/iCLtDflR/SHB/ny14rXc+qU5P4mG9JkusiV7EivzY9Mhm55AzAvCg==}
@@ -4305,6 +4347,25 @@ snapshots:
       - '@standard-schema/spec'
       - hono
       - typescript
+
+  '@convex-dev/rate-limiter@0.3.2(convex@1.35.1(react@19.2.5))(react@19.2.5)':
+    dependencies:
+      convex: 1.35.1(react@19.2.5)
+    optionalDependencies:
+      react: 19.2.5
+
+  '@convex-dev/resend@0.2.6(convex-helpers@0.1.114(@standard-schema/spec@1.1.0)(convex@1.35.1(react@19.2.5))(hono@4.12.12)(react@19.2.5)(typescript@6.0.2)(zod@3.25.76))(convex@1.35.1(react@19.2.5))(react@19.2.5)':
+    dependencies:
+      '@convex-dev/rate-limiter': 0.3.2(convex@1.35.1(react@19.2.5))(react@19.2.5)
+      '@convex-dev/workpool': 0.4.6(convex-helpers@0.1.114(@standard-schema/spec@1.1.0)(convex@1.35.1(react@19.2.5))(hono@4.12.12)(react@19.2.5)(typescript@6.0.2)(zod@3.25.76))(convex@1.35.1(react@19.2.5))
+      convex: 1.35.1(react@19.2.5)
+      convex-helpers: 0.1.114(@standard-schema/spec@1.1.0)(convex@1.35.1(react@19.2.5))(hono@4.12.12)(react@19.2.5)(typescript@6.0.2)(zod@3.25.76)
+      remeda: 2.33.7
+      resend: 6.18.1
+      svix: 1.99.1
+    transitivePeerDependencies:
+      - '@react-email/render'
+      - react
 
   '@convex-dev/workflow@0.3.9(@convex-dev/workpool@0.4.6(convex-helpers@0.1.114(@standard-schema/spec@1.1.0)(convex@1.35.1(react@19.2.5))(hono@4.12.12)(react@19.2.5)(typescript@6.0.2)(zod@3.25.76))(convex@1.35.1(react@19.2.5)))(convex-helpers@0.1.114(@standard-schema/spec@1.1.0)(convex@1.35.1(react@19.2.5))(hono@4.12.12)(react@19.2.5)(typescript@6.0.2)(zod@3.25.76))(convex@1.35.1(react@19.2.5))':
     dependencies:
@@ -5106,6 +5167,8 @@ snapshots:
   '@sindresorhus/merge-streams@4.0.0': {}
 
   '@speed-highlight/core@1.2.15': {}
+
+  '@stablelib/base64@1.0.1': {}
 
   '@standard-schema/spec@1.1.0': {}
 
@@ -6054,6 +6117,8 @@ snapshots:
 
   fast-levenshtein@2.0.6: {}
 
+  fast-sha256@1.3.0: {}
+
   fast-uri@3.1.0: {}
 
   fastq@1.20.1:
@@ -6669,6 +6734,8 @@ snapshots:
 
   pkce-challenge@5.0.1: {}
 
+  postal-mime@2.7.5: {}
+
   postcss-selector-parser@7.1.1:
     dependencies:
       cssesc: 3.0.0
@@ -6845,6 +6912,11 @@ snapshots:
   require-from-string@2.0.2: {}
 
   reselect@5.1.1: {}
+
+  resend@6.18.1:
+    dependencies:
+      postal-mime: 2.7.5
+      standardwebhooks: 1.0.0
 
   resolve-from@4.0.0: {}
 
@@ -7062,6 +7134,11 @@ snapshots:
 
   source-map@0.6.1: {}
 
+  standardwebhooks@1.0.0:
+    dependencies:
+      '@stablelib/base64': 1.0.1
+      fast-sha256: 1.3.0
+
   statuses@2.0.2: {}
 
   stdin-discarder@0.2.2: {}
@@ -7107,6 +7184,10 @@ snapshots:
   supports-color@7.2.0:
     dependencies:
       has-flag: 4.0.0
+
+  svix@1.99.1:
+    dependencies:
+      standardwebhooks: 1.0.0
 
   tabbable@6.4.0: {}
 

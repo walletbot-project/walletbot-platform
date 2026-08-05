@@ -17,6 +17,9 @@ import type * as config_helpers from "../config/helpers.js";
 import type * as config_http from "../config/http.js";
 import type * as config_utils from "../config/utils.js";
 import type * as crons from "../crons.js";
+import type * as emails_helpers from "../emails/helpers.js";
+import type * as emails_internal from "../emails/internal.js";
+import type * as emails_utils from "../emails/utils.js";
 import type * as http from "../http.js";
 import type * as httpHelpers from "../httpHelpers.js";
 import type * as live_createToken from "../live/createToken.js";
@@ -61,6 +64,9 @@ declare const fullApi: ApiFromModules<{
   "config/http": typeof config_http;
   "config/utils": typeof config_utils;
   crons: typeof crons;
+  "emails/helpers": typeof emails_helpers;
+  "emails/internal": typeof emails_internal;
+  "emails/utils": typeof emails_utils;
   http: typeof http;
   httpHelpers: typeof httpHelpers;
   "live/createToken": typeof live_createToken;
@@ -118,6 +124,7 @@ export declare const internal: FilterApi<
 
 export declare const components: {
   betterAuth: import("@convex-dev/better-auth/_generated/component.js").ComponentApi<"betterAuth">;
+  resend: import("@convex-dev/resend/_generated/component.js").ComponentApi<"resend">;
   outflowsByAccount: import("@convex-dev/aggregate/_generated/component.js").ComponentApi<"outflowsByAccount">;
   inflowsByAccount: import("@convex-dev/aggregate/_generated/component.js").ComponentApi<"inflowsByAccount">;
 };

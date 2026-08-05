@@ -82,6 +82,10 @@ class AuthController extends ChangeNotifier {
     );
   }
 
+  /// Under server-side email verification this always throws
+  /// [EmailNotVerifiedException] on successful account creation (the backend
+  /// sends the verification email and returns no session). The caller must
+  /// route to the verification-pending state.
   Future<UserAccount> signUpWithEmail({
     required String name,
     required String email,
@@ -97,6 +101,19 @@ class AuthController extends ChangeNotifier {
       body,
       rejectExisting: rejectExisting,
     );
+  }
+
+  /// Requests a password-reset email. Enumeration-safe: unknown emails still
+  /// return 200. Throws [AuthHttpError] when the server failed to send the
+  /// email (`email_send_failed`), or on network failure.
+  Future<void> requestPasswordReset({required String email}) async {
+    await _postJson('/auth/password/forgot', {'email': email});
+  }
+
+  /// Re-sends the verification email. Enumeration-safe like
+  /// [requestPasswordReset], and throws on the same failures.
+  Future<void> resendVerificationEmail({required String email}) async {
+    await _postJson('/auth/email/resend-verification', {'email': email});
   }
 
   Future<UserAccount> addLocal({required String name}) async {
@@ -268,7 +285,7 @@ class AuthController extends ChangeNotifier {
       return body['accessToken'] as String;
     } catch (e) {
       debugPrint('auth: token refresh failed: $e');
-      if (e is _AuthHttpError && e.statusCode == 401) {
+      if (e is AuthHttpError && e.statusCode == 401) {
         await _markRequiresReauth(active.id);
       }
       rethrow;
@@ -299,7 +316,22 @@ class AuthController extends ChangeNotifier {
       try {
         decoded = jsonDecode(response.body);
       } catch (_) {}
-      throw _AuthHttpError(response.statusCode, decoded, response.body);
+      // Keep the forensic trail: the UI deliberately shows generic messages,
+      // so this log line is the only evidence of what the server said. Never
+      // log the request body — it may contain a password.
+      debugPrint(
+        'auth: POST $path failed: HTTP ${response.statusCode} '
+        'body=${response.body}',
+      );
+      if (decoded is Map<String, Object?> &&
+          decoded['code'] == 'email_not_verified') {
+        throw EmailNotVerifiedException(
+          response.statusCode,
+          decoded,
+          response.body,
+        );
+      }
+      throw AuthHttpError(response.statusCode, decoded, response.body);
     }
     return jsonDecode(response.body) as Map<String, Object?>;
   }
@@ -338,13 +370,28 @@ class AccountAlreadyAddedError implements Exception {
   String toString() => 'Account already added: ${email ?? '(unknown email)'}';
 }
 
-class _AuthHttpError implements Exception {
-  _AuthHttpError(this.statusCode, this.body, this.rawBody);
+/// Non-2xx response from the auth backend. [code] is the flat `{ code }`
+/// field of the JSON error body when present.
+class AuthHttpError implements Exception {
+  AuthHttpError(this.statusCode, this.body, this.rawBody);
 
   final int statusCode;
   final Object? body;
   final String rawBody;
 
+  String? get code {
+    final b = body;
+    return b is Map<String, Object?> ? b['code'] as String? : null;
+  }
+
   @override
   String toString() => 'HTTP $statusCode: ${body ?? rawBody}';
+}
+
+/// The account exists but its email is unverified (`email_not_verified`).
+/// Thrown by sign-in AND sign-up under server-side email verification; the
+/// backend (re-)sends the verification email on the attempt that triggers
+/// this.
+class EmailNotVerifiedException extends AuthHttpError {
+  EmailNotVerifiedException(super.statusCode, super.body, super.rawBody);
 }
