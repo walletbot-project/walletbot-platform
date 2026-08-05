@@ -173,7 +173,7 @@ const toOtlpMetricsPayload = (metrics: Array<ReservedMetricExport>) => {
                         metrics: metrics.map((metric) => {
                             const point = {
                                 startTimeUnixNano: `${Math.trunc(metric.cumulativeStartTime * 1_000_000)}`,
-                                timeUnixNano: `${Math.trunc(metric.timestamp * 1_000_000)}`,
+                                timeUnixNano: `${Math.trunc(metric.receivedAt * 1_000_000)}`,
                                 asDouble: metric.cumulativeValue,
                                 attributes: toOtlpMetricAttributes(metric),
                             }
@@ -270,8 +270,8 @@ const logExportFailure = (args: {
 export const exportPending = internalAction({
     args: {},
     handler: async (ctx) => {
-        const events: Array<Doc<'telemetryEvents'>> = await ctx.runQuery(
-            internal.telemetry.queries.pendingForExport,
+        const events: Array<Doc<'telemetryEvents'>> = await ctx.runMutation(
+            internal.telemetry.mutations.reserveEventExports,
             { limit: exportBatchSize },
         )
         if (events.length === 0) return { exported: 0 }
@@ -332,30 +332,23 @@ export const exportPending = internalAction({
 export const exportPendingMetrics = internalAction({
     args: {},
     handler: async (ctx) => {
-        const metrics: Array<Doc<'telemetryMetrics'>> = await ctx.runQuery(
-            internal.telemetry.queries.pendingMetricsForExport,
+        const reservedMetrics: ReservedMetricExport[] = await ctx.runMutation(
+            internal.telemetry.mutations.reserveMetricExports,
             { limit: exportBatchSize },
         )
-        if (metrics.length === 0) return { exported: 0 }
+        if (reservedMetrics.length === 0) return { exported: 0 }
 
         const endpoint = otlpMetricsEndpoint()
-        const ids = metrics.map((metric) => metric._id)
         if (!endpoint) {
             await ctx.runMutation(
                 internal.telemetry.mutations.markMetricsExportFailed,
                 {
-                    ids,
+                    ids: reservedMetrics.map((metric) => metric._id),
                     error: 'OTEL_EXPORTER_OTLP_ENDPOINT not configured',
                 },
             )
             return { exported: 0 }
         }
-
-        const reservedMetrics: ReservedMetricExport[] = await ctx.runMutation(
-            internal.telemetry.mutations.reserveMetricExports,
-            { ids },
-        )
-        if (reservedMetrics.length === 0) return { exported: 0 }
 
         try {
             const response = await fetch(endpoint, {

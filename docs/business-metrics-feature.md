@@ -140,3 +140,9 @@ by cron.
 - Metric delivery is best-effort on native and backend.
 - Native stores a stable `telemetry_installation_id` in secure storage for
 anonymous-safe telemetry payloads.
+
+## Follow-ups
+
+- Replace the hard-coded native `AppConfig.appVersion` telemetry value with the
+  runtime package/build version so version labels match release artifacts built
+  with Flutter `--build-name` / `--build-number`.

@@ -22,6 +22,7 @@ export const telemetryEvents = defineTable({
     ),
     exportStatus: v.union(
         v.literal('pending'),
+        v.literal('exporting'),
         v.literal('exported'),
         v.literal('failed'),
     ),
@@ -81,6 +82,7 @@ export const telemetryMetrics = defineTable({
     ),
     exportStatus: v.union(
         v.literal('pending'),
+        v.literal('exporting'),
         v.literal('exported'),
         v.literal('failed'),
     ),

@@ -48,11 +48,25 @@ const jsonResponse = (body: unknown, init?: ResponseInit): Response => {
         headers.set('Content-Type', 'application/json')
     }
     headers.set('Access-Control-Allow-Origin', '*')
+    headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization')
+    headers.set('Access-Control-Allow-Methods', 'POST, OPTIONS')
     return new Response(JSON.stringify(body), { ...init, headers })
 }
 
 const jsonError = (status: number, code: string, message: string): Response =>
     jsonResponse({ code, message }, { status })
+
+const corsHeaders = (): Headers => {
+    const headers = new Headers()
+    headers.set('Access-Control-Allow-Origin', '*')
+    headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization')
+    headers.set('Access-Control-Allow-Methods', 'POST, OPTIONS')
+    return headers
+}
+
+const corsPreflightHandler = httpAction(async () => {
+    return new Response(null, { status: 204, headers: corsHeaders() })
+})
 
 const isObject = (value: unknown): value is Record<string, unknown> =>
     typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -397,8 +411,18 @@ const telemetryMetricsHandler = httpAction(async (ctx, req) => {
 export const registerTelemetryRoutes = (http: HttpRouter): void => {
     http.route({
         path: '/telemetry/events',
+        method: 'OPTIONS',
+        handler: corsPreflightHandler,
+    })
+    http.route({
+        path: '/telemetry/events',
         method: 'POST',
         handler: telemetryEventsHandler,
+    })
+    http.route({
+        path: '/telemetry/metrics',
+        method: 'OPTIONS',
+        handler: corsPreflightHandler,
     })
     http.route({
         path: '/telemetry/metrics',

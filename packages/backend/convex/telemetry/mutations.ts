@@ -110,6 +110,8 @@ export const markExported = internalMutation({
     args: { ids: v.array(v.id('telemetryEvents')) },
     handler: async (ctx, args) => {
         for (const id of args.ids) {
+            const row = await ctx.db.get(id)
+            if (!row || row.exportStatus !== 'exporting') continue
             await ctx.db.patch(id, {
                 exportStatus: 'exported',
                 lastExportError: undefined,
@@ -123,6 +125,8 @@ export const markMetricsExported = internalMutation({
     args: { ids: v.array(v.id('telemetryMetrics')) },
     handler: async (ctx, args) => {
         for (const id of args.ids) {
+            const row = await ctx.db.get(id)
+            if (!row || row.exportStatus !== 'exporting') continue
             await ctx.db.patch(id, {
                 exportStatus: 'exported',
                 lastExportError: undefined,
@@ -140,7 +144,7 @@ export const markExportFailed = internalMutation({
     handler: async (ctx, args) => {
         for (const id of args.ids) {
             const row = await ctx.db.get(id)
-            if (!row) continue
+            if (!row || row.exportStatus !== 'exporting') continue
             await ctx.db.patch(id, {
                 exportStatus: 'failed',
                 exportAttempts: row.exportAttempts + 1,
@@ -159,7 +163,7 @@ export const markMetricsExportFailed = internalMutation({
     handler: async (ctx, args) => {
         for (const id of args.ids) {
             const row = await ctx.db.get(id)
-            if (!row) continue
+            if (!row || row.exportStatus !== 'exporting') continue
             await ctx.db.patch(id, {
                 exportStatus: 'failed',
                 exportAttempts: row.exportAttempts + 1,
@@ -170,20 +174,46 @@ export const markMetricsExportFailed = internalMutation({
     },
 })
 
-export const reserveMetricExports = internalMutation({
-    args: { ids: v.array(v.id('telemetryMetrics')) },
+export const reserveEventExports = internalMutation({
+    args: { limit: v.number() },
     handler: async (ctx, args) => {
-        const reserved = []
-        for (const id of args.ids) {
-            const metric = await ctx.db.get(id)
-            if (!metric || metric.exportStatus !== 'pending') continue
+        const rows = await ctx.db
+            .query('telemetryEvents')
+            .withIndex('by_exportStatus_and_receivedAt', (q) =>
+                q.eq('exportStatus', 'pending'),
+            )
+            .take(Math.min(Math.max(args.limit, 1), 100))
 
+        for (const row of rows) {
+            await ctx.db.patch(row._id, { exportStatus: 'exporting' })
+        }
+        return rows.map((row) => ({
+            ...row,
+            exportStatus: 'exporting' as const,
+        }))
+    },
+})
+
+export const reserveMetricExports = internalMutation({
+    args: { limit: v.number() },
+    handler: async (ctx, args) => {
+        const rows = await ctx.db
+            .query('telemetryMetrics')
+            .withIndex('by_exportStatus_and_receivedAt', (q) =>
+                q.eq('exportStatus', 'pending'),
+            )
+            .take(Math.min(Math.max(args.limit, 1), 100))
+
+        const reserved = []
+        for (const metric of rows) {
             if (
                 metric.reservedCumulativeValue !== undefined &&
                 metric.reservedCumulativeStartTime !== undefined
             ) {
+                await ctx.db.patch(metric._id, { exportStatus: 'exporting' })
                 reserved.push({
                     ...metric,
+                    exportStatus: 'exporting' as const,
                     cumulativeValue: metric.reservedCumulativeValue,
                     cumulativeStartTime: metric.reservedCumulativeStartTime,
                 })
@@ -216,11 +246,13 @@ export const reserveMetricExports = internalMutation({
             }
 
             await ctx.db.patch(metric._id, {
+                exportStatus: 'exporting',
                 reservedCumulativeValue: cumulativeValue,
                 reservedCumulativeStartTime: cumulativeStartTime,
             })
             reserved.push({
                 ...metric,
+                exportStatus: 'exporting' as const,
                 reservedCumulativeValue: cumulativeValue,
                 reservedCumulativeStartTime: cumulativeStartTime,
                 cumulativeValue,
@@ -228,6 +260,42 @@ export const reserveMetricExports = internalMutation({
             })
         }
         return reserved
+    },
+})
+
+export const resetRetryableFailedEvents = internalMutation({
+    args: {
+        olderThanMs: v.number(),
+        maxAttempts: v.number(),
+        limit: v.number(),
+    },
+    handler: async (ctx, args) => {
+        const cutoff = Date.now() - args.olderThanMs
+        const rows = await ctx.db
+            .query('telemetryEvents')
+            .withIndex('by_exportStatus_and_receivedAt', (q) =>
+                q.eq('exportStatus', 'failed'),
+            )
+            .take(Math.min(Math.max(args.limit, 1), 100))
+
+        let reset = 0
+        for (const row of rows) {
+            if (
+                row.receivedAt <= cutoff &&
+                row.exportAttempts < args.maxAttempts
+            ) {
+                await ctx.db.patch(row._id, { exportStatus: 'pending' })
+                reset += 1
+            }
+        }
+        if (reset > 0) {
+            await ctx.scheduler.runAfter(
+                0,
+                internal.telemetry.actions.exportPending,
+                {},
+            )
+        }
+        return { reset }
     },
 })
 

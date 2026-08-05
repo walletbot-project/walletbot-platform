@@ -31,6 +31,7 @@ class TelemetryClient {
   final FlutterSecureStorage _storage;
   final AccessTokenProvider? _accessTokenProvider;
   final String sessionId;
+  Future<String>? _installationIdFuture;
 
   Future<void> track(
     String name, {
@@ -146,12 +147,14 @@ class TelemetryClient {
     }
   }
 
-  Future<String> _installationId() async {
-    final existing = await _storage.read(key: _installationIdKey);
-    if (existing != null && existing.isNotEmpty) return existing;
-    final created = const Uuid().v4();
-    await _storage.write(key: _installationIdKey, value: created);
-    return created;
+  Future<String> _installationId() {
+    return _installationIdFuture ??= () async {
+      final existing = await _storage.read(key: _installationIdKey);
+      if (existing != null && existing.isNotEmpty) return existing;
+      final created = const Uuid().v4();
+      await _storage.write(key: _installationIdKey, value: created);
+      return created;
+    }();
   }
 
   void dispose() {

@@ -71,6 +71,34 @@ void main() {
     client.dispose();
   });
 
+  test('shares installationId across concurrent sends', () async {
+    FlutterSecureStorage.setMockInitialValues({});
+
+    final installationIds = <String>[];
+    final client = TelemetryClient(
+      convexSiteUrl: 'https://example.convex.site',
+      sessionId: 'session-1',
+      httpClient: MockClient((request) async {
+        final body = jsonDecode(request.body) as Map<String, Object?>;
+        final events = body['events'] as List<Object?>;
+        final event = events.single as Map<String, Object?>;
+        installationIds.add(event['installationId'] as String);
+        return http.Response('{"ok":true,"accepted":1}', 200);
+      }),
+    );
+
+    await Future.wait([
+      client.track('first'),
+      client.track('second'),
+      client.track('third'),
+    ]);
+
+    expect(installationIds, hasLength(3));
+    expect(installationIds.toSet(), hasLength(1));
+
+    client.dispose();
+  });
+
   test('sends expected metric payload', () async {
     FlutterSecureStorage.setMockInitialValues({});
 
