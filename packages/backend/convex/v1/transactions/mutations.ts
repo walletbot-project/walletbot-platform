@@ -4,6 +4,10 @@ import type { MutationCtx } from '../../_generated/server'
 import { mutation } from '../../_generated/server'
 import { inflowsByAccount, outflowsByAccount } from '../../aggregates'
 import { nextSeq, writeTombstone } from '../../sync/helpers'
+import {
+    recordMovementCreated,
+    recordTransferCreated,
+} from '../../telemetry/metrics'
 import { requireAuth } from '../../users/helpers'
 import { computeAccountBalance } from './queries'
 
@@ -26,6 +30,8 @@ function resolveTimeStatus(
     }
     return resolved
 }
+
+const createdByArg = v.optional(v.union(v.literal('form'), v.literal('agent')))
 
 async function getAccount(
     ctx: MutationCtx,
@@ -114,6 +120,7 @@ export const createExpense = mutation({
         dateConfirmed: v.boolean(),
         timeStatus: v.optional(transactionTimeStatus),
         status: v.optional(v.union(v.literal('pending'), v.literal('cleared'))),
+        createdBy: createdByArg,
     },
     handler: async (ctx, args) => {
         const userId = await requireAuth(ctx)
@@ -149,6 +156,12 @@ export const createExpense = mutation({
             seq,
         })
         await aggregateInsert(ctx, inserted)
+        await recordMovementCreated(ctx, {
+            userId,
+            movementType: 'expense',
+            createdBy: args.createdBy ?? 'form',
+            ingestPath: 'direct_mutation',
+        })
         return args.id
     },
 })
@@ -165,6 +178,7 @@ export const createIncome = mutation({
         dateConfirmed: v.boolean(),
         timeStatus: v.optional(transactionTimeStatus),
         status: v.optional(v.union(v.literal('pending'), v.literal('cleared'))),
+        createdBy: createdByArg,
     },
     handler: async (ctx, args) => {
         const userId = await requireAuth(ctx)
@@ -200,6 +214,12 @@ export const createIncome = mutation({
             seq,
         })
         await aggregateInsert(ctx, inserted)
+        await recordMovementCreated(ctx, {
+            userId,
+            movementType: 'income',
+            createdBy: args.createdBy ?? 'form',
+            ingestPath: 'direct_mutation',
+        })
         return args.id
     },
 })
@@ -219,6 +239,7 @@ export const createTransfer = mutation({
         dateConfirmed: v.boolean(),
         timeStatus: v.optional(transactionTimeStatus),
         status: v.optional(v.union(v.literal('pending'), v.literal('cleared'))),
+        createdBy: createdByArg,
     },
     handler: async (ctx, args) => {
         const userId = await requireAuth(ctx)
@@ -273,6 +294,12 @@ export const createTransfer = mutation({
             seq,
         })
         await aggregateInsert(ctx, inserted)
+        await recordTransferCreated(ctx, {
+            userId,
+            createdBy: args.createdBy ?? 'form',
+            ingestPath: 'direct_mutation',
+            crossCurrency: !sameCurrency,
+        })
         return args.id
     },
 })
@@ -287,6 +314,7 @@ export const createBalanceAdjustment = mutation({
         date: v.optional(v.int64()),
         dateConfirmed: v.boolean(),
         timeStatus: v.optional(transactionTimeStatus),
+        createdBy: createdByArg,
     },
     handler: async (ctx, args) => {
         const userId = await requireAuth(ctx)
@@ -331,6 +359,12 @@ export const createBalanceAdjustment = mutation({
             seq,
         })
         await aggregateInsert(ctx, inserted)
+        await recordMovementCreated(ctx, {
+            userId,
+            movementType: 'balance_adjustment',
+            createdBy: args.createdBy ?? 'form',
+            ingestPath: 'direct_mutation',
+        })
         return args.id
     },
 })

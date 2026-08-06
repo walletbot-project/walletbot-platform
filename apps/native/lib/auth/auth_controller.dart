@@ -275,6 +275,8 @@ class AuthController extends ChangeNotifier {
     }
   }
 
+  Future<String?> fetchAccessTokenForHttp() => _fetchFreshAccessToken();
+
   Future<void> _markRequiresReauth(String accountId) async {
     final idx = _accounts.indexWhere((a) => a.id == accountId);
     if (idx == -1 || _accounts[idx].requiresReauth) return;

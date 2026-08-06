@@ -336,6 +336,7 @@ export const toolExecutors = {
             dateConfirmed: args.date !== undefined,
             timeStatus: args.timeStatus,
             status: args.status,
+            createdBy: 'agent',
         })
         await attachTags(ctx, id, args.tagIdsOrNames)
         return { ok: true, id, date: Number(date), timeStatus: args.timeStatus }
@@ -359,6 +360,7 @@ export const toolExecutors = {
             dateConfirmed: args.date !== undefined,
             timeStatus: args.timeStatus,
             status: args.status,
+            createdBy: 'agent',
         })
         await attachTags(ctx, id, args.tagIdsOrNames)
         return { ok: true, id, date: Number(date), timeStatus: args.timeStatus }
@@ -395,6 +397,7 @@ export const toolExecutors = {
                 date,
                 dateConfirmed: args.date !== undefined,
                 timeStatus: args.timeStatus,
+                createdBy: 'agent',
             },
         )
         await attachTags(ctx, id, args.tagIdsOrNames)
@@ -422,6 +425,7 @@ export const toolExecutors = {
                     date,
                     dateConfirmed: args.date !== undefined,
                     timeStatus: args.timeStatus,
+                    createdBy: 'agent',
                 },
             )
             return {

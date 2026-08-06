@@ -1,6 +1,7 @@
 import 'package:drift/drift.dart';
 
 import '../../database.dart';
+import '../../telemetry/business_metrics.dart';
 import '../ids.dart';
 import '../models/transaction_filter.dart';
 import '../queries/account_balance.dart';
@@ -11,7 +12,10 @@ import 'repository_base.dart';
 /// adjustments) and their tag joins. Filtered reads go through the single
 /// shared query builder in `queries/transaction_query.dart`.
 class TransactionRepository extends RepositoryBase {
-  TransactionRepository(super.db);
+  TransactionRepository(super.db, {BusinessMetrics? businessMetrics})
+    : _businessMetrics = businessMetrics;
+
+  final BusinessMetrics? _businessMetrics;
 
   // ───── Reads ─────
 
@@ -118,6 +122,7 @@ class TransactionRepository extends RepositoryBase {
     required String name,
     required BigInt amountCents,
     required String currency,
+    String createdBy = 'form',
     String? description,
     String status = 'cleared',
     BigInt? dateMs,
@@ -137,6 +142,7 @@ class TransactionRepository extends RepositoryBase {
     dateConfirmed: dateConfirmed,
     timeStatus: timeStatus,
     tagIds: tagIds,
+    createdBy: createdBy,
   );
 
   /// Creates an income. Same shape and semantics as [addExpense].
@@ -146,6 +152,7 @@ class TransactionRepository extends RepositoryBase {
     required String name,
     required BigInt amountCents,
     required String currency,
+    String createdBy = 'form',
     String? description,
     String status = 'cleared',
     BigInt? dateMs,
@@ -165,6 +172,7 @@ class TransactionRepository extends RepositoryBase {
     dateConfirmed: dateConfirmed,
     timeStatus: timeStatus,
     tagIds: tagIds,
+    createdBy: createdBy,
   );
 
   Future<String> _addSimple({
@@ -180,6 +188,7 @@ class TransactionRepository extends RepositoryBase {
     required bool dateConfirmed,
     required TransactionTimeStatus timeStatus,
     required List<String> tagIds,
+    required String createdBy,
   }) async {
     final id = newUuid();
     final now = currentMs;
@@ -211,6 +220,7 @@ class TransactionRepository extends RepositoryBase {
           );
       await _attachTagsTx(id, tagIds, now);
     });
+    _trackCreatedMetric(type: type, createdBy: createdBy);
     return id;
   }
 
@@ -228,6 +238,7 @@ class TransactionRepository extends RepositoryBase {
     required String currency,
     required BigInt toAmountCents,
     required String toCurrency,
+    String createdBy = 'form',
     double? exchangeRate,
     String categoryId = '',
     String? description,
@@ -274,6 +285,10 @@ class TransactionRepository extends RepositoryBase {
           );
       await _attachTagsTx(id, tagIds, now);
     });
+    _trackTransferCreatedMetric(
+      createdBy: createdBy,
+      crossCurrency: currency != toCurrency,
+    );
     return id;
   }
 
@@ -284,6 +299,7 @@ class TransactionRepository extends RepositoryBase {
     required String accountId,
     required BigInt balanceAfterCents,
     required String currency,
+    String createdBy = 'form',
     String name = 'Ajuste de saldo',
     String? description,
     BigInt? dateMs,
@@ -325,7 +341,22 @@ class TransactionRepository extends RepositoryBase {
             ),
           );
     });
+    _trackCreatedMetric(type: 'balance_adjustment', createdBy: createdBy);
     return id;
+  }
+
+  void _trackCreatedMetric({required String type, required String createdBy}) {
+    _businessMetrics?.movementCreated(movementType: type, createdBy: createdBy);
+  }
+
+  void _trackTransferCreatedMetric({
+    required String createdBy,
+    required bool crossCurrency,
+  }) {
+    _businessMetrics?.transferCreated(
+      createdBy: createdBy,
+      crossCurrency: crossCurrency,
+    );
   }
 
   /// Partial update via `Value<T>` (absent = keep). Always bumps `updatedAt`
