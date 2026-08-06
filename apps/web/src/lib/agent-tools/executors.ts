@@ -445,14 +445,36 @@ export const toolExecutors = {
                 if (!r.ok) return resolutionError('Category', r)
                 categoryId = r.entity.id
             }
-            const date =
-                args.date === undefined && args.time === undefined
-                    ? undefined
-                    : parseTransactionDate(
-                          args.date,
-                          args.timeStatus ?? 'none',
-                          args.time,
-                      )
+            // Partial temporal edits must preserve whichever of the calendar
+            // date / clock the caller omitted, instead of anchoring the
+            // missing half to "now". We read the existing transaction and
+            // backfill the omitted component from its stored timestamp. The
+            // status forced into `parseTransactionDate` only drives parsing
+            // (an explicit clock is always respected); the persisted
+            // `timeStatus` is `args.timeStatus`, handled separately below.
+            let date: bigint | undefined
+            if (args.date !== undefined || args.time !== undefined) {
+                const existing = await ctx.client.query(
+                    api.v1.transactions.queries.get,
+                    { id: args.id },
+                )
+                if (!existing) {
+                    return { ok: false, error: 'Transaction not found' }
+                }
+                const existingDate = new Date(Number(existing.date))
+                const pad = (n: number) => String(n).padStart(2, '0')
+                const dateInput =
+                    args.date ??
+                    `${existingDate.getFullYear()}-${pad(
+                        existingDate.getMonth() + 1,
+                    )}-${pad(existingDate.getDate())}`
+                const timeInput =
+                    args.time ??
+                    `${pad(existingDate.getHours())}:${pad(
+                        existingDate.getMinutes(),
+                    )}`
+                date = parseTransactionDate(dateInput, 'confirmed', timeInput)
+            }
             await ctx.client.mutation(api.v1.transactions.mutations.update, {
                 id: args.id,
                 name: args.name,

@@ -112,7 +112,11 @@ BigInt parseTransactionDate(
         );
 
   if (timeStatus != TransactionTimeStatus.none) {
-    final selectedDate = parsed ?? reference;
+    // A confirmed/approximate hour needs a real clock, which can arrive either
+    // as the separate `time` argument or embedded in an ISO datetime `input`.
+    // What we must reject is having no clock at all: otherwise we persist a
+    // bare midnight flagged as a known hour, dropping the part-of-day signal
+    // ("tarde", "mañana").
     if (time != null) {
       final match = RegExp(
         r'^([01]?\d|2[0-3]):([0-5]\d)$',
@@ -120,6 +124,7 @@ BigInt parseTransactionDate(
       if (match == null) {
         throw FormatException('Invalid transaction time: $time');
       }
+      final selectedDate = parsed ?? reference;
       return BigInt.from(
         DateTime(
           selectedDate.year,
@@ -134,6 +139,14 @@ BigInt parseTransactionDate(
       throw ArgumentError(
         'date or time is required when timeStatus is $timeStatus',
       );
+    }
+    final hasEmbeddedClock =
+        parsed.hour != 0 ||
+        parsed.minute != 0 ||
+        parsed.second != 0 ||
+        parsed.millisecond != 0;
+    if (!hasEmbeddedClock) {
+      throw ArgumentError('time is required when timeStatus is $timeStatus');
     }
     return BigInt.from(parsed.millisecondsSinceEpoch);
   }

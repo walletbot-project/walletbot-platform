@@ -25,7 +25,7 @@ const transactionTime = z
     .string()
     .optional()
     .describe(
-        'Transaction clock in 24-hour HH:mm format. Supply this whenever timeStatus is confirmed or approximation. It is independent from date and may be supplied when date is omitted.',
+        'Transaction clock in 24-hour HH:mm format. REQUIRED whenever timeStatus is confirmed or approximation — the create is rejected without it, so never omit it for those. For confirmed, use the exact time stated. For approximation, map the part-of-day cue to its representative clock: morning/desayuno/mañana = 10:00; lunch/almuerzo/mediodía = 13:00; afternoon/merienda/tarde = 16:00; dinner/cena/noche = 22:00; madrugada = 02:00. Leave it empty only when timeStatus is none. It is independent from date and may be supplied when date is omitted.',
     )
 const dashboardWidgetType = z.enum(['stat', 'list', 'balance', 'chart'])
 const dashboardWidth = z.enum(['full', 'two_thirds', 'half', 'third'])

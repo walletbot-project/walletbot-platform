@@ -968,7 +968,9 @@ function displaySignedAmount(
         case 'income':
             return Math.abs(amount)
         case 'transfer':
-            return side === 'source' ? -Math.abs(amount) : Math.abs(amount)
+            // An omitted side defaults to the source (outgoing) leg — the sheet
+            // opens on the source account when no side is passed.
+            return side === 'destination' ? Math.abs(amount) : -Math.abs(amount)
         case 'balance_adjustment':
             return amount
     }

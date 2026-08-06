@@ -219,7 +219,7 @@ class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
       final parsed = double.tryParse(
         _amountController.text.trim().replaceAll(',', '.'),
       );
-      if (parsed == null) {
+      if (parsed == null || !parsed.isFinite) {
         _showSnack('El monto no es válido');
         return;
       }

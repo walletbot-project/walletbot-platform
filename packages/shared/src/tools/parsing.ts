@@ -135,14 +135,19 @@ export function parseTransactionDate(
     const parsed =
         input === undefined ? undefined : parseNaturalDate(input, now)
     if (timeStatus !== 'none') {
-        const selectedDate = new Date(
-            parsed === undefined ? now.getTime() : Number(parsed),
-        )
+        // A confirmed/approximate hour needs a real clock, which can arrive
+        // either as the separate `time` argument or embedded in an ISO
+        // datetime `input`. What we must reject is having no clock at all:
+        // otherwise we persist a bare midnight flagged as a known hour,
+        // dropping the part-of-day signal ("tarde", "mañana").
         if (time !== undefined) {
             const match = time.trim().match(/^([01]?\d|2[0-3]):([0-5]\d)$/)
             if (!match) {
                 throw new Error(`Invalid transaction time: ${time}`)
             }
+            const selectedDate = new Date(
+                parsed === undefined ? now.getTime() : Number(parsed),
+            )
             selectedDate.setHours(Number(match[1]), Number(match[2]), 0, 0)
             return BigInt(selectedDate.getTime())
         }
@@ -150,6 +155,15 @@ export function parseTransactionDate(
             throw new Error(
                 `date or time is required when timeStatus is ${timeStatus}`,
             )
+        }
+        const embedded = new Date(Number(parsed))
+        const hasEmbeddedClock =
+            embedded.getHours() !== 0 ||
+            embedded.getMinutes() !== 0 ||
+            embedded.getSeconds() !== 0 ||
+            embedded.getMilliseconds() !== 0
+        if (!hasEmbeddedClock) {
+            throw new Error(`time is required when timeStatus is ${timeStatus}`)
         }
         return parsed
     }

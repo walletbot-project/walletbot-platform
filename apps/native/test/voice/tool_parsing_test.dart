@@ -52,4 +52,31 @@ void main() {
     );
     expect(parsed, DateTime(2026, 7, 9, 17));
   });
+
+  test('requires a time when timeStatus is confirmed or approximation', () {
+    for (final status in const [
+      TransactionTimeStatus.confirmed,
+      TransactionTimeStatus.approximation,
+    ]) {
+      expect(
+        () => parseTransactionDate('ayer', timeStatus: status, now: reference),
+        throwsArgumentError,
+        reason:
+            'a $status hour without a clock must be rejected, not '
+            'silently anchored to midnight',
+      );
+    }
+  });
+
+  test('approximation with a representative clock keeps day and hour', () {
+    final parsed = DateTime.fromMillisecondsSinceEpoch(
+      parseTransactionDate(
+        'ayer',
+        timeStatus: TransactionTimeStatus.approximation,
+        time: '16:00',
+        now: reference,
+      ).toInt(),
+    );
+    expect(parsed, DateTime(2026, 7, 11, 16));
+  });
 }
