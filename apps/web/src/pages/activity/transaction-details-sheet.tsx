@@ -204,6 +204,7 @@ function TransactionDetailsContent({
         transaction.type === 'transfer'
     const canEditAccount = transaction.type !== 'balance_adjustment'
     const isTransfer = transaction.type === 'transfer'
+    const hasSelectedTags = tags.some((tag) => selectedTagIds.has(tag.id))
     const timeNeedsAttention = timeStatus !== 'confirmed'
     const signedAmount = displaySignedAmount(transaction, transferSide)
     const displayCurrency =
@@ -433,17 +434,9 @@ function TransactionDetailsContent({
                                     rows={3}
                                     placeholder="Sin descripción"
                                 />
-                            ) : (
-                                <span
-                                    className={cn(
-                                        !transaction.description &&
-                                            'text-muted-foreground',
-                                    )}
-                                >
-                                    {transaction.description ||
-                                        'Sin descripción'}
-                                </span>
-                            )}
+                            ) : transaction.description ? (
+                                <span>{transaction.description}</span>
+                            ) : null}
                         </ReceiptRow>
 
                         <ReceiptRow
@@ -579,79 +572,88 @@ function TransactionDetailsContent({
                                             </option>
                                         ))}
                                     </select>
-                                ) : (
-                                    (category?.name ?? 'Sin categoría')
-                                )}
+                                ) : category ? (
+                                    category.name
+                                ) : null}
                             </ReceiptRow>
                         ) : null}
 
                         <ReceiptRow icon={<Tags />} label="Tags" stacked>
-                            <div className="flex flex-wrap gap-2">
-                                {tags.length === 0 ? (
-                                    <span className="text-muted-foreground">
-                                        Sin tags
-                                    </span>
-                                ) : (
-                                    tags.map((tag) => {
-                                        const selected = selectedTagIds.has(
-                                            tag.id,
-                                        )
-                                        if (!editing && !selected) return null
-                                        return (
-                                            <button
-                                                key={tag.id}
-                                                type="button"
-                                                disabled={!editing}
-                                                onClick={() =>
-                                                    setSelectedTagIds(
-                                                        (current) => {
-                                                            const next =
-                                                                new Set(current)
-                                                            if (
-                                                                next.has(tag.id)
-                                                            )
-                                                                next.delete(
-                                                                    tag.id,
+                            {editing || hasSelectedTags ? (
+                                <div className="flex flex-wrap gap-2">
+                                    {tags.length === 0 ? (
+                                        <span className="text-muted-foreground">
+                                            Sin tags
+                                        </span>
+                                    ) : (
+                                        tags.map((tag) => {
+                                            const selected = selectedTagIds.has(
+                                                tag.id,
+                                            )
+                                            if (!editing && !selected)
+                                                return null
+                                            return (
+                                                <button
+                                                    key={tag.id}
+                                                    type="button"
+                                                    disabled={!editing}
+                                                    onClick={() =>
+                                                        setSelectedTagIds(
+                                                            (current) => {
+                                                                const next =
+                                                                    new Set(
+                                                                        current,
+                                                                    )
+                                                                if (
+                                                                    next.has(
+                                                                        tag.id,
+                                                                    )
                                                                 )
-                                                            else
-                                                                next.add(tag.id)
-                                                            return next
-                                                        },
-                                                    )
-                                                }
-                                            >
-                                                <Badge
-                                                    variant={
-                                                        selected
-                                                            ? 'secondary'
-                                                            : 'outline'
-                                                    }
-                                                    className={cn(
-                                                        'rounded-full',
-                                                        editing &&
-                                                            'cursor-pointer',
-                                                        !selected &&
-                                                            'opacity-50',
-                                                    )}
-                                                    style={
-                                                        selected
-                                                            ? {
-                                                                  backgroundColor:
-                                                                      normalizeTagColor(
-                                                                          tag.color,
-                                                                      ),
-                                                                  color: '#111',
-                                                              }
-                                                            : undefined
+                                                                    next.delete(
+                                                                        tag.id,
+                                                                    )
+                                                                else
+                                                                    next.add(
+                                                                        tag.id,
+                                                                    )
+                                                                return next
+                                                            },
+                                                        )
                                                     }
                                                 >
-                                                    {tag.name}
-                                                </Badge>
-                                            </button>
-                                        )
-                                    })
-                                )}
-                            </div>
+                                                    <Badge
+                                                        variant={
+                                                            selected
+                                                                ? 'secondary'
+                                                                : 'outline'
+                                                        }
+                                                        className={cn(
+                                                            'rounded-full',
+                                                            editing &&
+                                                                'cursor-pointer',
+                                                            !selected &&
+                                                                'opacity-50',
+                                                        )}
+                                                        style={
+                                                            selected
+                                                                ? {
+                                                                      backgroundColor:
+                                                                          normalizeTagColor(
+                                                                              tag.color,
+                                                                          ),
+                                                                      color: '#111',
+                                                                  }
+                                                                : undefined
+                                                        }
+                                                    >
+                                                        {tag.name}
+                                                    </Badge>
+                                                </button>
+                                            )
+                                        })
+                                    )}
+                                </div>
+                            ) : null}
                         </ReceiptRow>
                     </div>
                 </div>
@@ -731,12 +733,16 @@ function ReceiptRow({
     return stacked ? (
         <div className="space-y-2 py-4">
             {heading}
-            <div className="font-medium">{children}</div>
+            {children != null ? (
+                <div className="font-medium">{children}</div>
+            ) : null}
         </div>
     ) : (
         <div className="flex items-center justify-between gap-4 py-4">
             {heading}
-            <div className="text-right font-medium">{children}</div>
+            {children != null ? (
+                <div className="text-right font-medium">{children}</div>
+            ) : null}
         </div>
     )
 }

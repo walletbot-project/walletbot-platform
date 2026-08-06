@@ -628,14 +628,9 @@ class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
                   hintText: 'Sin descripción',
                 ),
               )
-            : Text(
-                description == null || description.isEmpty
-                    ? 'Sin descripción'
-                    : description,
-                style: description == null || description.isEmpty
-                    ? TextStyle(color: colors.onSurfaceVariant)
-                    : null,
-              ),
+            : (description == null || description.isEmpty
+                  ? null
+                  : Text(description)),
       ),
       _ReceiptRow(
         icon: _selectedDateConfirmed
@@ -695,12 +690,14 @@ class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
                 child: const Text('Cambiar'),
               )
             : null,
-        value: Text(
-          category?.name ?? 'Sin categoría',
-          style: category == null
-              ? TextStyle(color: colors.onSurfaceVariant)
-              : null,
-        ),
+        value: category == null
+            ? (_editing
+                  ? Text(
+                      'Sin categoría',
+                      style: TextStyle(color: colors.onSurfaceVariant),
+                    )
+                  : null)
+            : Text(category.name),
       ),
       _tagsReceiptRow(),
     ];
@@ -850,14 +847,16 @@ class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
           ? TextButton(onPressed: _pickTag, child: const Text('Agregar'))
           : null,
       value: selectedTags.isEmpty
-          ? Builder(
-              builder: (context) => Text(
-                'Sin tags',
-                style: TextStyle(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
-              ),
-            )
+          ? (_editing
+                ? Builder(
+                    builder: (context) => Text(
+                      'Sin tags',
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  )
+                : null)
           : Wrap(
               spacing: 8,
               runSpacing: 8,
@@ -1007,7 +1006,7 @@ class _ReceiptRow extends StatelessWidget {
   const _ReceiptRow({
     required this.icon,
     required this.label,
-    required this.value,
+    this.value,
     this.iconColor,
     this.trailing,
     this.stacked = false,
@@ -1016,7 +1015,7 @@ class _ReceiptRow extends StatelessWidget {
 
   final IconData icon;
   final String label;
-  final Widget value;
+  final Widget? value;
   final Color? iconColor;
   final Widget? trailing;
   final bool stacked;
@@ -1045,10 +1044,13 @@ class _ReceiptRow extends StatelessWidget {
       ],
     );
 
-    final styledValue = DefaultTextStyle.merge(
-      style: textTheme.bodyMedium!.copyWith(fontWeight: FontWeight.w500),
-      child: value,
-    );
+    final value = this.value;
+    final styledValue = value == null
+        ? null
+        : DefaultTextStyle.merge(
+            style: textTheme.bodyMedium!.copyWith(fontWeight: FontWeight.w500),
+            child: value,
+          );
 
     if (stacked) {
       return Padding(
@@ -1062,8 +1064,10 @@ class _ReceiptRow extends StatelessWidget {
                 ?trailing,
               ],
             ),
-            const SizedBox(height: 8),
-            styledValue,
+            if (styledValue != null) ...[
+              const SizedBox(height: 8),
+              styledValue,
+            ],
           ],
         ),
       );
@@ -1076,18 +1080,19 @@ class _ReceiptRow extends StatelessWidget {
         children: [
           labelRow,
           const SizedBox(width: 12),
-          Expanded(
-            child: Align(
-              alignment: Alignment.centerRight,
-              child: DefaultTextStyle.merge(
-                textAlign: TextAlign.end,
-                style: textTheme.bodyMedium!.copyWith(
-                  fontWeight: FontWeight.w500,
+          if (value != null)
+            Expanded(
+              child: Align(
+                alignment: Alignment.centerRight,
+                child: DefaultTextStyle.merge(
+                  textAlign: TextAlign.end,
+                  style: textTheme.bodyMedium!.copyWith(
+                    fontWeight: FontWeight.w500,
+                  ),
+                  child: value,
                 ),
-                child: value,
               ),
             ),
-          ),
           ?trailing,
         ],
       ),
