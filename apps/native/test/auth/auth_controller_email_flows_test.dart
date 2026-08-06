@@ -120,6 +120,27 @@ void main() {
     expect(jsonDecode(request.body), {'email': 'a@b.c'});
   });
 
+  test('requestAccountDeletion posts to /v1/account-deletion/request',
+      () async {
+    final requests = <http.Request>[];
+    final auth = controllerWith(
+      MockClient((request) async {
+        requests.add(request);
+        return http.Response(jsonEncode({'ok': true}), 200);
+      }),
+    );
+
+    await auth.requestAccountDeletion(email: 'a@b.c');
+
+    final request = requests.single;
+    expect(request.method, 'POST');
+    expect(
+      request.url.toString(),
+      'https://site.test/v1/account-deletion/request',
+    );
+    expect(jsonDecode(request.body), {'email': 'a@b.c'});
+  });
+
   test('requestPasswordReset propagates non-2xx as AuthHttpError', () async {
     final auth = controllerWith(
       respondWith(500, {'code': 'internal', 'message': 'boom'}),

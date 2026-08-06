@@ -560,6 +560,48 @@ abstract class AppLocalizations {
   /// **'Could not save the setting. Try again.'**
   String get settingsSaveFailed;
 
+  /// No description provided for @deleteUserAccount.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete my account'**
+  String get deleteUserAccount;
+
+  /// No description provided for @deleteUserAccountDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Permanently delete your account and all your data'**
+  String get deleteUserAccountDescription;
+
+  /// No description provided for @deleteUserAccountConfirmTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete your account?'**
+  String get deleteUserAccountConfirmTitle;
+
+  /// No description provided for @deleteUserAccountConfirmBody.
+  ///
+  /// In en, this message translates to:
+  /// **'We will send a confirmation link to {email}. Deleting your account is permanent and cannot be undone.'**
+  String deleteUserAccountConfirmBody(String email);
+
+  /// No description provided for @deleteUserAccountSend.
+  ///
+  /// In en, this message translates to:
+  /// **'Send link'**
+  String get deleteUserAccountSend;
+
+  /// No description provided for @deleteUserAccountEmailSent.
+  ///
+  /// In en, this message translates to:
+  /// **'Check your email: we sent you a link to confirm the deletion.'**
+  String get deleteUserAccountEmailSent;
+
+  /// No description provided for @deleteUserAccountFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not send the email. Try again in a few minutes.'**
+  String get deleteUserAccountFailed;
+
   /// No description provided for @updateRequiredTitle.
   ///
   /// In en, this message translates to:

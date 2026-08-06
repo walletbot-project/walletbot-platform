@@ -1,3 +1,5 @@
+import 'package:app/auth/account.dart';
+import 'package:app/auth/auth_controller.dart';
 import 'package:app/components/grouped_card.dart';
 import 'package:app/l10n/l10n.dart';
 import 'package:app/settings/display_settings.dart';
@@ -10,6 +12,15 @@ class SettingsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final settings = context.watch<DisplaySettingsController>();
+    final auth = context.watch<AuthController>();
+    final active = auth.activeAccount;
+    // User-account deletion only applies to server accounts with an email —
+    // local accounts have no server-side data to delete.
+    final deletableEmail =
+        active != null && active.type == AccountType.remote
+        ? active.email
+        : null;
+    final tileCount = deletableEmail != null ? 3 : 2;
 
     return Scaffold(
       appBar: AppBar(title: Text(context.l10n.settings)),
@@ -20,7 +31,7 @@ class SettingsScreen extends StatelessWidget {
             icon: Icons.language_rounded,
             title: context.l10n.language,
             value: _languageLabel(context, settings.language),
-            borderRadius: groupedRadius(0, 2),
+            borderRadius: groupedRadius(0, tileCount),
             onTap: () => _showLanguageChoices(context, settings),
           ),
           const SizedBox(height: kGroupSpacing),
@@ -28,12 +39,64 @@ class SettingsScreen extends StatelessWidget {
             icon: Icons.palette_outlined,
             title: context.l10n.theme,
             value: _themeLabel(context, settings.theme),
-            borderRadius: groupedRadius(1, 2),
+            borderRadius: groupedRadius(1, tileCount),
             onTap: () => _showThemeChoices(context, settings),
+          ),
+          if (deletableEmail != null) ...[
+            const SizedBox(height: kGroupSpacing),
+            _PreferenceTile(
+              icon: Icons.person_off_rounded,
+              title: context.l10n.deleteUserAccount,
+              value: context.l10n.deleteUserAccountDescription,
+              borderRadius: groupedRadius(2, tileCount),
+              destructive: true,
+              onTap: () =>
+                  _confirmDeleteUserAccount(context, auth, deletableEmail),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Future<void> _confirmDeleteUserAccount(
+    BuildContext context,
+    AuthController auth,
+    String email,
+  ) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(context.l10n.deleteUserAccountConfirmTitle),
+        content: Text(context.l10n.deleteUserAccountConfirmBody(email)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: Text(context.l10n.cancel),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: Text(context.l10n.deleteUserAccountSend),
           ),
         ],
       ),
     );
+    if (confirmed != true || !context.mounted) return;
+
+    try {
+      await auth.requestAccountDeletion(email: email);
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(context.l10n.deleteUserAccountEmailSent)),
+      );
+    } catch (err) {
+      // Keep the forensic trail — the snackbar copy is generic on purpose.
+      debugPrint('requestAccountDeletion failed: $err');
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(context.l10n.deleteUserAccountFailed)),
+      );
+    }
   }
 
   Future<void> _showLanguageChoices(
@@ -166,6 +229,7 @@ class _PreferenceTile extends StatelessWidget {
     required this.value,
     required this.borderRadius,
     required this.onTap,
+    this.destructive = false,
   });
 
   final IconData icon;
@@ -173,6 +237,7 @@ class _PreferenceTile extends StatelessWidget {
   final String value;
   final BorderRadius borderRadius;
   final VoidCallback onTap;
+  final bool destructive;
 
   @override
   Widget build(BuildContext context) {
@@ -190,18 +255,31 @@ class _PreferenceTile extends StatelessWidget {
               width: 40,
               height: 40,
               decoration: BoxDecoration(
-                color: colors.primaryContainer,
+                color: destructive
+                    ? colors.errorContainer
+                    : colors.primaryContainer,
                 shape: BoxShape.circle,
               ),
               alignment: Alignment.center,
-              child: Icon(icon, size: 22, color: colors.onPrimaryContainer),
+              child: Icon(
+                icon,
+                size: 22,
+                color: destructive
+                    ? colors.onErrorContainer
+                    : colors.onPrimaryContainer,
+              ),
             ),
             const SizedBox(width: 16),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(title, style: textTheme.bodyLarge),
+                  Text(
+                    title,
+                    style: textTheme.bodyLarge?.copyWith(
+                      color: destructive ? colors.error : null,
+                    ),
+                  ),
                   const SizedBox(height: 2),
                   Text(
                     value,

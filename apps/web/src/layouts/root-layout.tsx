@@ -9,8 +9,9 @@ import {
     RefreshCw,
     Trash2,
     User,
+    UserX,
 } from 'lucide-react'
-import { NavLink, Outlet, useLocation } from 'react-router-dom'
+import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import {
     DropdownMenu,
@@ -51,6 +52,7 @@ function pathMatches(path: string, to: string, end: boolean) {
 
 export function RootLayout() {
     const location = useLocation()
+    const navigate = useNavigate()
     const auth = useAuth()
     const user = useUser()
 
@@ -216,6 +218,16 @@ export function RootLayout() {
                                     <DropdownMenuItem onClick={auth.signOut}>
                                         <LogOut className="size-4" />
                                         Sign out
+                                    </DropdownMenuItem>
+                                    <DropdownMenuSeparator />
+                                    <DropdownMenuItem
+                                        variant="destructive"
+                                        onClick={() =>
+                                            navigate('/delete-account')
+                                        }
+                                    >
+                                        <UserX className="size-4" />
+                                        Delete account
                                     </DropdownMenuItem>
                                 </DropdownMenuContent>
                             </DropdownMenu>

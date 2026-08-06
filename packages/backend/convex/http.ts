@@ -7,6 +7,7 @@ import { hashSessionSecret } from './authNative/utils'
 import { registerConfigRoutes } from './config/http'
 import { resend } from './emails/helpers'
 import { jsonResponse } from './httpHelpers'
+import { registerUserDeletionRoutes } from './userDeletion/http'
 
 const http = httpRouter()
 
@@ -20,6 +21,10 @@ registerAuthNativeRoutes(http)
 // - `/v1/config` = device/client-version layer (unauthenticated)
 // - `/v1/account-config` = account layer (remote session token or local label)
 registerConfigRoutes(http)
+
+// Account deletion (request by email + emailed-link confirmation). Public,
+// unauthenticated by design — see userDeletion/http.ts.
+registerUserDeletionRoutes(http)
 
 const liveTokenHandler = httpAction(async (ctx, req) => {
     const authorization = req.headers.get('authorization')

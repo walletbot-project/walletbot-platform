@@ -1,0 +1,293 @@
+import { v } from 'convex/values'
+import { internal } from '../_generated/api'
+import type { Id, TableNames } from '../_generated/dataModel'
+import { internalMutation, internalQuery } from '../_generated/server'
+import { inflowsByAccount, outflowsByAccount } from '../aggregates'
+import { createAuth } from '../auth'
+import { MAX_REQUESTS_PER_HOUR } from './helpers'
+
+const HOUR_MS = 60 * 60 * 1000
+
+// How many rows a single purge invocation may delete before rescheduling
+// itself. Transactions cost extra (two aggregate ops per row), so this stays
+// conservative relative to backfill's 256.
+const PURGE_BUDGET = 100
+
+export const isUserDeleted = internalQuery({
+    args: { userId: v.string() },
+    handler: async (ctx, { userId }) => {
+        const row = await ctx.db
+            .query('deletedUsers')
+            .withIndex('by_userId', (q) => q.eq('userId', userId))
+            .first()
+        return row !== null
+    },
+})
+
+// Returns false when the email should silently NOT be sent (user already
+// deleted, or the address hit the hourly cap) — the HTTP handler answers
+// with the same generic success either way, so callers can't enumerate.
+export const createRequest = internalMutation({
+    args: {
+        userId: v.string(),
+        email: v.string(),
+        tokenHash: v.string(),
+        expiresAt: v.number(),
+    },
+    handler: async (ctx, args) => {
+        const deleted = await ctx.db
+            .query('deletedUsers')
+            .withIndex('by_userId', (q) => q.eq('userId', args.userId))
+            .first()
+        if (deleted) return false
+
+        const now = Date.now()
+        const recent = await ctx.db
+            .query('userDeletionRequests')
+            .withIndex('by_email', (q) => q.eq('email', args.email))
+            .order('desc')
+            .take(MAX_REQUESTS_PER_HOUR)
+
+        const withinHour = recent.filter(
+            (row) => row._creationTime > now - HOUR_MS,
+        )
+        if (withinHour.length >= MAX_REQUESTS_PER_HOUR) return false
+
+        // Opportunistic cleanup: expired links for this address are dead
+        // weight (there is no cron sweeping this table).
+        for (const row of recent) {
+            if (row.status === 'pending' && row.expiresAt <= now) {
+                await ctx.db.delete(row._id)
+            }
+        }
+
+        await ctx.db.insert('userDeletionRequests', {
+            ...args,
+            status: 'pending',
+        })
+        return true
+    },
+})
+
+// Consumes an emailed deletion token. On success the user is denylisted
+// (blocks the still-valid stateless native JWTs) and the purge is scheduled
+// inside the same transaction, so a crash after this commit can't lose the
+// deletion.
+export const consumeToken = internalMutation({
+    args: { tokenHash: v.string() },
+    handler: async (ctx, { tokenHash }) => {
+        const row = await ctx.db
+            .query('userDeletionRequests')
+            .withIndex('by_tokenHash', (q) => q.eq('tokenHash', tokenHash))
+            .unique()
+        if (!row) return { ok: false as const }
+
+        if (row.status === 'processing') {
+            // Second click, or a purge chain that died before finalizing —
+            // the purge is idempotent, so rescheduling it doubles as the
+            // recovery path.
+            await ctx.scheduler.runAfter(
+                0,
+                internal.userDeletion.internal.purgeUserData,
+                { userId: row.userId },
+            )
+            return { ok: true as const, userId: row.userId }
+        }
+
+        if (row.expiresAt <= Date.now()) {
+            await ctx.db.delete(row._id)
+            return { ok: false as const }
+        }
+
+        await ctx.db.patch(row._id, { status: 'processing' })
+
+        const alreadyDenylisted = await ctx.db
+            .query('deletedUsers')
+            .withIndex('by_userId', (q) => q.eq('userId', row.userId))
+            .first()
+        if (!alreadyDenylisted) {
+            await ctx.db.insert('deletedUsers', {
+                userId: row.userId,
+                deletedAt: Date.now(),
+            })
+        }
+
+        await ctx.scheduler.runAfter(
+            0,
+            internal.userDeletion.internal.purgeUserData,
+            { userId: row.userId },
+        )
+        return { ok: true as const, userId: row.userId }
+    },
+})
+
+// Deletes everything a user owns, PURGE_BUDGET rows at a time, rescheduling
+// itself until done (same pattern as transactions/backfill.ts). No tombstones
+// and no syncCounters bump on purpose: the user is denylisted before this
+// runs, so no client of theirs can pull again — and the point is to leave no
+// trace, not to replicate the deletion.
+export const purgeUserData = internalMutation({
+    args: { userId: v.string() },
+    handler: async (ctx, { userId }) => {
+        let remaining = PURGE_BUDGET
+
+        const deleteRows = async (
+            rows: Array<{ _id: Id<TableNames> }>,
+        ): Promise<number> => {
+            for (const row of rows) {
+                await ctx.db.delete(row._id)
+            }
+            return rows.length
+        }
+
+        // Ordered: sessions first (locks the user out), high-volume tables
+        // next, sync bookkeeping last so concurrent mutations from a not-yet
+        // -locked-out client still find a counter while data rows remain.
+        const steps: Array<(limit: number) => Promise<number>> = [
+            async (n) =>
+                deleteRows(
+                    await ctx.db
+                        .query('refreshTokens')
+                        .withIndex('by_userId', (q) => q.eq('userId', userId))
+                        .take(n),
+                ),
+            async (n) =>
+                deleteRows(
+                    await ctx.db
+                        .query('voiceSessionEvents')
+                        .withIndex(
+                            'by_userId_and_sessionId_and_sequence',
+                            (q) => q.eq('userId', userId),
+                        )
+                        .take(n),
+                ),
+            async (n) =>
+                deleteRows(
+                    await ctx.db
+                        .query('voiceSessions')
+                        .withIndex('by_userId_and_sessionId', (q) =>
+                            q.eq('userId', userId),
+                        )
+                        .take(n),
+                ),
+            async (n) =>
+                deleteRows(
+                    await ctx.db
+                        .query('transactionTags')
+                        .withIndex('by_user_seq', (q) => q.eq('userId', userId))
+                        .take(n),
+                ),
+            async (n) =>
+                deleteRows(
+                    await ctx.db
+                        .query('dashboardWidgets')
+                        .withIndex('by_user_seq', (q) => q.eq('userId', userId))
+                        .take(n),
+                ),
+            async (n) =>
+                deleteRows(
+                    await ctx.db
+                        .query('savedFilters')
+                        .withIndex('by_user_seq', (q) => q.eq('userId', userId))
+                        .take(n),
+                ),
+            async (n) => {
+                const txs = await ctx.db
+                    .query('transactions')
+                    .withIndex('by_user_seq', (q) => q.eq('userId', userId))
+                    .take(n)
+                for (const tx of txs) {
+                    // Aggregate entries derive their key from the doc, so
+                    // they must go before ctx.db.delete. Per-doc deletes
+                    // only — inflows' shared '__none__' namespace holds
+                    // every user's non-transfers, so clear() would corrupt
+                    // other users' balances.
+                    await outflowsByAccount.deleteIfExists(ctx, tx)
+                    await inflowsByAccount.deleteIfExists(ctx, tx)
+                    await ctx.db.delete(tx._id)
+                }
+                return txs.length
+            },
+            async (n) =>
+                deleteRows(
+                    await ctx.db
+                        .query('tags')
+                        .withIndex('by_user_seq', (q) => q.eq('userId', userId))
+                        .take(n),
+                ),
+            async (n) =>
+                deleteRows(
+                    await ctx.db
+                        .query('categories')
+                        .withIndex('by_user_seq', (q) => q.eq('userId', userId))
+                        .take(n),
+                ),
+            async (n) =>
+                deleteRows(
+                    await ctx.db
+                        .query('accounts')
+                        .withIndex('by_user_seq', (q) => q.eq('userId', userId))
+                        .take(n),
+                ),
+            async (n) =>
+                deleteRows(
+                    await ctx.db
+                        .query('tombstones')
+                        .withIndex('by_user_seq', (q) => q.eq('userId', userId))
+                        .take(n),
+                ),
+            async (n) =>
+                deleteRows(
+                    await ctx.db
+                        .query('syncCounters')
+                        .withIndex('by_user', (q) => q.eq('userId', userId))
+                        .take(n),
+                ),
+        ]
+
+        for (const step of steps) {
+            if (remaining === 0) break
+            remaining -= await step(remaining)
+        }
+
+        if (remaining === 0) {
+            // Budget exhausted — rows may remain; run again. (At worst this
+            // schedules one extra no-op pass.)
+            await ctx.scheduler.runAfter(
+                0,
+                internal.userDeletion.internal.purgeUserData,
+                { userId },
+            )
+            return null
+        }
+
+        await ctx.scheduler.runAfter(
+            0,
+            internal.userDeletion.internal.finalizeDeletion,
+            { userId },
+        )
+        return null
+    },
+})
+
+// Last step: remove the better-auth user (sessions, credential + OAuth
+// accounts, user row) and our own request rows, which hold the email.
+// The deletedUsers denylist row is kept forever — it's what rejects the
+// user's still-valid stateless native JWTs.
+export const finalizeDeletion = internalMutation({
+    args: { userId: v.string() },
+    handler: async (ctx, { userId }) => {
+        const auth = createAuth(ctx)
+        const authCtx = await auth.$context
+        await authCtx.internalAdapter.deleteUser(userId)
+
+        const rows = await ctx.db
+            .query('userDeletionRequests')
+            .withIndex('by_userId', (q) => q.eq('userId', userId))
+            .take(100)
+        for (const row of rows) {
+            await ctx.db.delete(row._id)
+        }
+        return null
+    },
+})

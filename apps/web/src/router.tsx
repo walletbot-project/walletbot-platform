@@ -58,6 +58,22 @@ export const router = createBrowserRouter([
                                 Component: m.VerifyEmail,
                             })),
                     },
+                    {
+                        path: '/delete-account',
+                        lazy: () =>
+                            import('@/pages/delete-account').then((m) => ({
+                                Component: m.DeleteAccount,
+                            })),
+                    },
+                    {
+                        path: '/delete-account/confirm',
+                        lazy: () =>
+                            import('@/pages/delete-account-confirm').then(
+                                (m) => ({
+                                    Component: m.DeleteAccountConfirm,
+                                }),
+                            ),
+                    },
                 ],
             },
             {

@@ -255,6 +255,32 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settingsSaveFailed => 'Could not save the setting. Try again.';
 
   @override
+  String get deleteUserAccount => 'Delete my account';
+
+  @override
+  String get deleteUserAccountDescription =>
+      'Permanently delete your account and all your data';
+
+  @override
+  String get deleteUserAccountConfirmTitle => 'Delete your account?';
+
+  @override
+  String deleteUserAccountConfirmBody(String email) {
+    return 'We will send a confirmation link to $email. Deleting your account is permanent and cannot be undone.';
+  }
+
+  @override
+  String get deleteUserAccountSend => 'Send link';
+
+  @override
+  String get deleteUserAccountEmailSent =>
+      'Check your email: we sent you a link to confirm the deletion.';
+
+  @override
+  String get deleteUserAccountFailed =>
+      'Could not send the email. Try again in a few minutes.';
+
+  @override
   String get updateRequiredTitle => 'Update required';
 
   @override

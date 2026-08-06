@@ -116,6 +116,13 @@ class AuthController extends ChangeNotifier {
     await _postJson('/auth/email/resend-verification', {'email': email});
   }
 
+  /// Requests an account-deletion email. The emailed link opens the web app,
+  /// where the user confirms the irreversible deletion. Enumeration-safe like
+  /// [requestPasswordReset], and throws on the same failures.
+  Future<void> requestAccountDeletion({required String email}) async {
+    await _postJson('/v1/account-deletion/request', {'email': email});
+  }
+
   Future<UserAccount> addLocal({required String name}) async {
     final trimmedName = name.trim();
     if (trimmedName.isEmpty) {

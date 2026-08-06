@@ -258,6 +258,32 @@ class AppLocalizationsEs extends AppLocalizations {
       'No se pudo guardar la configuración. Intentá de nuevo.';
 
   @override
+  String get deleteUserAccount => 'Eliminar mi cuenta';
+
+  @override
+  String get deleteUserAccountDescription =>
+      'Eliminá tu cuenta y todos tus datos para siempre';
+
+  @override
+  String get deleteUserAccountConfirmTitle => '¿Eliminar tu cuenta?';
+
+  @override
+  String deleteUserAccountConfirmBody(String email) {
+    return 'Te vamos a enviar un enlace de confirmación a $email. Eliminar tu cuenta es permanente y no se puede deshacer.';
+  }
+
+  @override
+  String get deleteUserAccountSend => 'Enviar enlace';
+
+  @override
+  String get deleteUserAccountEmailSent =>
+      'Revisá tu correo: te enviamos un enlace para confirmar la eliminación.';
+
+  @override
+  String get deleteUserAccountFailed =>
+      'No pudimos enviar el correo. Probá de nuevo en unos minutos.';
+
+  @override
   String get updateRequiredTitle => 'Actualización obligatoria';
 
   @override
