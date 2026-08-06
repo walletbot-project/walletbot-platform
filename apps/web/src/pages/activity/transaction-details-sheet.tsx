@@ -203,8 +203,6 @@ function TransactionDetailsContent({
     const archiveTransaction = useMutation(
         api.v1.transactions.mutations.archive,
     )
-    const tagTransaction = useMutation(api.v1.transactions.mutations.tag)
-    const untagTransaction = useMutation(api.v1.transactions.mutations.untag)
     const formId = useId()
 
     const [editing, setEditing] = useState(initialEditing)
@@ -318,19 +316,11 @@ function TransactionDetailsContent({
                     transaction.type !== 'balance_adjustment'
                         ? categoryId
                         : undefined,
+                // Tags ride in the same mutation so the edit and its tag
+                // changes commit atomically (no partially-saved state).
+                addTagIds: toAdd.length > 0 ? toAdd : undefined,
+                removeTagIds: toRemove.length > 0 ? toRemove : undefined,
             })
-            if (toAdd.length > 0) {
-                await tagTransaction({
-                    transactionId: transaction.id,
-                    tagIds: toAdd,
-                })
-            }
-            if (toRemove.length > 0) {
-                await untagTransaction({
-                    transactionId: transaction.id,
-                    tagIds: toRemove,
-                })
-            }
             toast.success('Actividad actualizada')
             setEditing(false)
         } catch (error) {

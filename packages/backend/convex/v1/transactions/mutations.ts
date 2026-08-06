@@ -385,6 +385,8 @@ export const update = mutation({
         toAmount: v.optional(v.int64()),
         categoryId: v.optional(v.string()),
         status: v.optional(v.union(v.literal('pending'), v.literal('cleared'))),
+        addTagIds: v.optional(v.array(v.string())),
+        removeTagIds: v.optional(v.array(v.string())),
     },
     handler: async (ctx, args) => {
         const userId = await requireAuth(ctx)
@@ -506,6 +508,16 @@ export const update = mutation({
 
         await ctx.db.patch(row._id, { ...patch, updatedAt: now, seq })
         await aggregateReplace(ctx, row, row._id)
+
+        // Tag changes ride in the same mutation so the edit and its tags commit
+        // atomically — a failing tag change rolls back the whole update instead
+        // of leaving a partially saved transaction.
+        if (args.removeTagIds && args.removeTagIds.length > 0) {
+            await detachTags(ctx, userId, args.id, args.removeTagIds)
+        }
+        if (args.addTagIds && args.addTagIds.length > 0) {
+            await attachTags(ctx, userId, args.id, args.addTagIds)
+        }
     },
 })
 
@@ -555,6 +567,83 @@ export const archive = mutation({
 
 // ───── Tag attach / detach ─────
 
+// Shared attach/detach used by the `tag`/`untag` mutations and by `update` so a
+// transaction edit and its tag changes commit atomically in one mutation.
+async function attachTags(
+    ctx: MutationCtx,
+    userId: string,
+    transactionId: string,
+    tagIds: string[],
+): Promise<number> {
+    let added = 0
+    for (const tagId of tagIds) {
+        const tagRow = await ctx.db
+            .query('tags')
+            .withIndex('by_user_id', (q) =>
+                q.eq('userId', userId).eq('id', tagId),
+            )
+            .unique()
+        if (!tagRow || tagRow.isArchived) continue
+
+        const existing = await ctx.db
+            .query('transactionTags')
+            .withIndex('by_user_transaction_tag', (q) =>
+                q
+                    .eq('userId', userId)
+                    .eq('transactionId', transactionId)
+                    .eq('tagId', tagId),
+            )
+            .unique()
+        if (existing) continue
+
+        const seq = await nextSeq(ctx, userId)
+        const now = BigInt(Date.now())
+        await ctx.db.insert('transactionTags', {
+            userId,
+            id: crypto.randomUUID(),
+            transactionId,
+            tagId,
+            createdAt: now,
+            updatedAt: now,
+            seq,
+        })
+        added += 1
+    }
+    return added
+}
+
+async function detachTags(
+    ctx: MutationCtx,
+    userId: string,
+    transactionId: string,
+    tagIds: string[],
+): Promise<number> {
+    let removed = 0
+    for (const tagId of tagIds) {
+        const join = await ctx.db
+            .query('transactionTags')
+            .withIndex('by_user_transaction_tag', (q) =>
+                q
+                    .eq('userId', userId)
+                    .eq('transactionId', transactionId)
+                    .eq('tagId', tagId),
+            )
+            .unique()
+        if (!join) continue
+
+        const seq = await nextSeq(ctx, userId)
+        await ctx.db.delete(join._id)
+        await writeTombstone(ctx, {
+            userId,
+            tableName: 'transactionTags',
+            entityId: join.id,
+            seq,
+        })
+        removed += 1
+    }
+    return removed
+}
+
 export const tag = mutation({
     args: {
         transactionId: v.string(),
@@ -565,40 +654,12 @@ export const tag = mutation({
         const txn = await getTransaction(ctx, userId, args.transactionId)
         if (!txn) throw new Error('Transaction not found')
 
-        let added = 0
-        for (const tagId of args.tagIds) {
-            const tagRow = await ctx.db
-                .query('tags')
-                .withIndex('by_user_id', (q) =>
-                    q.eq('userId', userId).eq('id', tagId),
-                )
-                .unique()
-            if (!tagRow || tagRow.isArchived) continue
-
-            const existing = await ctx.db
-                .query('transactionTags')
-                .withIndex('by_user_transaction_tag', (q) =>
-                    q
-                        .eq('userId', userId)
-                        .eq('transactionId', args.transactionId)
-                        .eq('tagId', tagId),
-                )
-                .unique()
-            if (existing) continue
-
-            const seq = await nextSeq(ctx, userId)
-            const now = BigInt(Date.now())
-            await ctx.db.insert('transactionTags', {
-                userId,
-                id: crypto.randomUUID(),
-                transactionId: args.transactionId,
-                tagId,
-                createdAt: now,
-                updatedAt: now,
-                seq,
-            })
-            added += 1
-        }
+        const added = await attachTags(
+            ctx,
+            userId,
+            args.transactionId,
+            args.tagIds,
+        )
         return { added }
     },
 })
@@ -610,29 +671,12 @@ export const untag = mutation({
     },
     handler: async (ctx, args) => {
         const userId = await requireAuth(ctx)
-        let removed = 0
-        for (const tagId of args.tagIds) {
-            const join = await ctx.db
-                .query('transactionTags')
-                .withIndex('by_user_transaction_tag', (q) =>
-                    q
-                        .eq('userId', userId)
-                        .eq('transactionId', args.transactionId)
-                        .eq('tagId', tagId),
-                )
-                .unique()
-            if (!join) continue
-
-            const seq = await nextSeq(ctx, userId)
-            await ctx.db.delete(join._id)
-            await writeTombstone(ctx, {
-                userId,
-                tableName: 'transactionTags',
-                entityId: join.id,
-                seq,
-            })
-            removed += 1
-        }
+        const removed = await detachTags(
+            ctx,
+            userId,
+            args.transactionId,
+            args.tagIds,
+        )
         return { removed }
     },
 })
