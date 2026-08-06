@@ -125,15 +125,23 @@ BigInt parseTransactionDate(
         throw FormatException('Invalid transaction time: $time');
       }
       final selectedDate = parsed ?? reference;
-      return BigInt.from(
-        DateTime(
-          selectedDate.year,
-          selectedDate.month,
-          selectedDate.day,
-          int.parse(match.group(1)!),
-          int.parse(match.group(2)!),
-        ).millisecondsSinceEpoch,
+      final hour = int.parse(match.group(1)!);
+      final minute = int.parse(match.group(2)!);
+      final resolved = DateTime(
+        selectedDate.year,
+        selectedDate.month,
+        selectedDate.day,
+        hour,
+        minute,
       );
+      // A time inside a DST spring-forward gap does not exist locally;
+      // DateTime silently shifts it forward (e.g. 02:30 → 03:30), so the stored
+      // timestamp would disagree with the supplied clock. Reject it instead of
+      // persisting a wrong hour under the same timeStatus.
+      if (resolved.hour != hour || resolved.minute != minute) {
+        throw FormatException('Nonexistent local time: $time');
+      }
+      return BigInt.from(resolved.millisecondsSinceEpoch);
     }
     if (parsed == null) {
       throw ArgumentError(

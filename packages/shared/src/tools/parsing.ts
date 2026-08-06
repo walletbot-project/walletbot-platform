@@ -148,7 +148,19 @@ export function parseTransactionDate(
             const selectedDate = new Date(
                 parsed === undefined ? now.getTime() : Number(parsed),
             )
-            selectedDate.setHours(Number(match[1]), Number(match[2]), 0, 0)
+            const hour = Number(match[1])
+            const minute = Number(match[2])
+            selectedDate.setHours(hour, minute, 0, 0)
+            // A time inside a DST spring-forward gap does not exist locally;
+            // setHours silently shifts it forward (e.g. 02:30 → 03:30), so the
+            // stored timestamp would disagree with the supplied clock. Reject
+            // it instead of persisting a wrong hour under the same timeStatus.
+            if (
+                selectedDate.getHours() !== hour ||
+                selectedDate.getMinutes() !== minute
+            ) {
+                throw new Error(`Nonexistent local time: ${time}`)
+            }
             return BigInt(selectedDate.getTime())
         }
         if (parsed === undefined) {
