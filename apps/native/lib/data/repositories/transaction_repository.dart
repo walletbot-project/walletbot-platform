@@ -75,6 +75,42 @@ class TransactionRepository extends RepositoryBase {
     return joins.map((j) => j.tagId).toList();
   }
 
+  /// Replays the local ledger for [accountId] and returns the balance
+  /// immediately before and after [transactionId].
+  Future<AccountBalanceAroundTransaction?> balanceAroundTransaction({
+    required String transactionId,
+    required String accountId,
+  }) async {
+    final rows =
+        await (db.select(db.transactions)
+              ..where((t) => t.archived.equals(false))
+              ..where(
+                (t) =>
+                    t.accountId.equals(accountId) |
+                    (t.type.equals('transfer') &
+                        t.toAccountId.equals(accountId)),
+              ))
+            .get();
+
+    rows.sort((a, b) {
+      final dateCompare = a.date.compareTo(b.date);
+      if (dateCompare != 0) return dateCompare;
+      final createdCompare = a.createdAt.compareTo(b.createdAt);
+      if (createdCompare != 0) return createdCompare;
+      return a.id.compareTo(b.id);
+    });
+
+    var running = BigInt.zero;
+    for (final row in rows) {
+      final before = running;
+      running += _accountDelta(row, accountId);
+      if (row.id == transactionId) {
+        return AccountBalanceAroundTransaction(before: before, after: running);
+      }
+    }
+    return null;
+  }
+
   // ───── Writes ─────
 
   /// Creates an expense (insert + tag attach in one transaction) and returns
@@ -91,6 +127,7 @@ class TransactionRepository extends RepositoryBase {
     String status = 'cleared',
     BigInt? dateMs,
     bool dateConfirmed = true,
+    TransactionTimeStatus timeStatus = TransactionTimeStatus.none,
     List<String> tagIds = const [],
   }) => _addSimple(
     type: 'expense',
@@ -103,6 +140,7 @@ class TransactionRepository extends RepositoryBase {
     status: status,
     dateMs: dateMs,
     dateConfirmed: dateConfirmed,
+    timeStatus: timeStatus,
     tagIds: tagIds,
     createdBy: createdBy,
   );
@@ -119,6 +157,7 @@ class TransactionRepository extends RepositoryBase {
     String status = 'cleared',
     BigInt? dateMs,
     bool dateConfirmed = true,
+    TransactionTimeStatus timeStatus = TransactionTimeStatus.none,
     List<String> tagIds = const [],
   }) => _addSimple(
     type: 'income',
@@ -131,6 +170,7 @@ class TransactionRepository extends RepositoryBase {
     status: status,
     dateMs: dateMs,
     dateConfirmed: dateConfirmed,
+    timeStatus: timeStatus,
     tagIds: tagIds,
     createdBy: createdBy,
   );
@@ -146,6 +186,7 @@ class TransactionRepository extends RepositoryBase {
     required String status,
     required BigInt? dateMs,
     required bool dateConfirmed,
+    required TransactionTimeStatus timeStatus,
     required List<String> tagIds,
     required String createdBy,
   }) async {
@@ -161,7 +202,12 @@ class TransactionRepository extends RepositoryBase {
               name: name,
               description: Value(description),
               status: status,
-              date: dateMs ?? now,
+              date: _resolveTransactionDate(
+                dateMs: dateMs,
+                timeStatus: timeStatus,
+                loadedAtMs: now,
+              ),
+              timeStatus: Value(timeStatus),
               accountId: accountId,
               categoryId: categoryId,
               amount: amountCents,
@@ -199,6 +245,7 @@ class TransactionRepository extends RepositoryBase {
     String status = 'cleared',
     BigInt? dateMs,
     bool dateConfirmed = true,
+    TransactionTimeStatus timeStatus = TransactionTimeStatus.none,
     List<String> tagIds = const [],
   }) async {
     if (fromAccountId == toAccountId) {
@@ -216,7 +263,12 @@ class TransactionRepository extends RepositoryBase {
               name: name,
               description: Value(description),
               status: status,
-              date: dateMs ?? now,
+              date: _resolveTransactionDate(
+                dateMs: dateMs,
+                timeStatus: timeStatus,
+                loadedAtMs: now,
+              ),
+              timeStatus: Value(timeStatus),
               accountId: fromAccountId,
               categoryId: categoryId,
               amount: amountCents,
@@ -252,6 +304,7 @@ class TransactionRepository extends RepositoryBase {
     String? description,
     BigInt? dateMs,
     bool dateConfirmed = true,
+    TransactionTimeStatus timeStatus = TransactionTimeStatus.none,
   }) async {
     final id = newUuid();
     final now = currentMs;
@@ -270,7 +323,12 @@ class TransactionRepository extends RepositoryBase {
               name: name,
               description: Value(description),
               status: 'cleared',
-              date: dateMs ?? now,
+              date: _resolveTransactionDate(
+                dateMs: dateMs,
+                timeStatus: timeStatus,
+                loadedAtMs: now,
+              ),
+              timeStatus: Value(timeStatus),
               accountId: accountId,
               categoryId: '',
               amount: amount,
@@ -309,18 +367,47 @@ class TransactionRepository extends RepositoryBase {
     Value<String?> description = const Value.absent(),
     Value<BigInt> date = const Value.absent(),
     Value<bool> dateConfirmed = const Value.absent(),
+    Value<TransactionTimeStatus> timeStatus = const Value.absent(),
+    Value<String> accountId = const Value.absent(),
     Value<BigInt> amount = const Value.absent(),
+    Value<String> currency = const Value.absent(),
     Value<String> categoryId = const Value.absent(),
+    Value<String?> toAccountId = const Value.absent(),
+    Value<BigInt?> toAmount = const Value.absent(),
+    Value<String?> toCurrency = const Value.absent(),
+    Value<double?> exchangeRate = const Value.absent(),
     Value<String> status = const Value.absent(),
   }) async {
+    var resolvedDate = date;
+    if (date.present) {
+      final existing = await getById(id);
+      if (existing == null) return;
+      resolvedDate = Value(
+        _resolveTransactionDate(
+          dateMs: date.value,
+          timeStatus: timeStatus.present
+              ? timeStatus.value
+              : existing.timeStatus,
+          loadedAtMs: existing.createdAt,
+        ),
+      );
+    }
+
     await (db.update(db.transactions)..where((t) => t.id.equals(id))).write(
       TransactionsCompanion(
         name: name,
         description: description,
-        date: date,
+        date: resolvedDate,
         dateConfirmed: dateConfirmed,
+        timeStatus: timeStatus,
+        accountId: accountId,
         amount: amount,
+        currency: currency,
         categoryId: categoryId,
+        toAccountId: toAccountId,
+        toAmount: toAmount,
+        toCurrency: toCurrency,
+        exchangeRate: exchangeRate,
         status: status,
         updatedAt: Value(currentMs),
         dirty: const Value(true),
@@ -394,6 +481,26 @@ class TransactionRepository extends RepositoryBase {
     return removed;
   }
 
+  BigInt _accountDelta(Transaction t, String accountId) {
+    var delta = BigInt.zero;
+    if (t.accountId == accountId) {
+      switch (t.type) {
+        case 'expense':
+        case 'transfer':
+          delta -= t.amount;
+          break;
+        case 'income':
+        case 'balance_adjustment':
+          delta += t.amount;
+          break;
+      }
+    }
+    if (t.type == 'transfer' && t.toAccountId == accountId) {
+      delta += t.toAmount ?? t.amount;
+    }
+    return delta;
+  }
+
   /// Join ids are deterministic (`txnId__tagId`) so an untag → retag
   /// round-trip recreates the same id with a newer `updatedAt`, letting the
   /// merge drop the older tombstone.
@@ -428,4 +535,43 @@ class TransactionRepository extends RepositoryBase {
     }
     return added;
   }
+}
+
+BigInt _resolveTransactionDate({
+  required BigInt? dateMs,
+  required TransactionTimeStatus timeStatus,
+  required BigInt loadedAtMs,
+}) {
+  if (timeStatus != TransactionTimeStatus.none) {
+    if (dateMs == null) {
+      throw ArgumentError('A date with a time is required for $timeStatus');
+    }
+    return dateMs;
+  }
+
+  if (dateMs == null) return loadedAtMs;
+
+  final selectedDate = DateTime.fromMillisecondsSinceEpoch(dateMs.toInt());
+  final loadedAt = DateTime.fromMillisecondsSinceEpoch(loadedAtMs.toInt());
+  return BigInt.from(
+    DateTime(
+      selectedDate.year,
+      selectedDate.month,
+      selectedDate.day,
+      loadedAt.hour,
+      loadedAt.minute,
+      loadedAt.second,
+      loadedAt.millisecond,
+    ).millisecondsSinceEpoch,
+  );
+}
+
+class AccountBalanceAroundTransaction {
+  const AccountBalanceAroundTransaction({
+    required this.before,
+    required this.after,
+  });
+
+  final BigInt before;
+  final BigInt after;
 }

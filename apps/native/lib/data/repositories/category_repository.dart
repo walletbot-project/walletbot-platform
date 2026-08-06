@@ -14,6 +14,15 @@ class CategoryRepository extends RepositoryBase {
     db.categories,
   )..where((c) => c.archived.equals(false))).watch();
 
+  /// Live list, active-only by default.
+  Stream<List<Category>> watchAll({bool includeArchived = false}) {
+    final query = db.select(db.categories);
+    if (!includeArchived) {
+      query.where((c) => c.archived.equals(false));
+    }
+    return query.watch();
+  }
+
   /// One-shot list, active-only by default.
   Future<List<Category>> listAll({bool includeArchived = false}) {
     final query = db.select(db.categories);

@@ -8,6 +8,10 @@ export type TransactionType =
     | 'transfer'
     | 'balance_adjustment'
 
+export type TransactionTimeStatus = 'confirmed' | 'approximation' | 'none'
+
+export type TransactionTransferSide = 'source' | 'destination'
+
 /**
  * The shape of a transaction this view actually reads. Convex returns the full
  * document (with extra fields and `int64` columns as `bigint`); this is a
@@ -24,7 +28,11 @@ export type ActivityTransaction = {
     categoryId: string
     amount: bigint
     toAmount?: bigint
+    currency: string
+    toCurrency?: string
+    toAccountId?: string
     dateConfirmed: boolean
+    timeStatus?: TransactionTimeStatus
     isArchived: boolean
     tagIds?: string[]
 }
@@ -81,9 +89,9 @@ export function formatSignedAmount(
     cents: number,
     currencySymbol = '$',
 ): string {
-    const sign = cents < 0 ? '-' : '+'
+    const sign = cents < 0 ? '-' : cents > 0 ? '+' : ''
     const whole = Math.round(Math.abs(cents) / 100)
-    return `${sign} ${currencySymbol} ${groupThousands(whole)}`
+    return `${sign ? `${sign} ` : ''}${currencySymbol} ${groupThousands(whole)}`
 }
 
 function startOfDay(date: Date): Date {
@@ -119,10 +127,29 @@ export function sectionLabel(dayMs: number, nowMs: number): string {
     return formatDDMMYYYY(day)
 }
 
-/** Secondary line shown when a date was inferred rather than confirmed. */
+/** Description plus the inferred-day notice, when applicable. */
 export function estimatedDescription(t: ActivityTransaction): string | null {
-    if (t.dateConfirmed) return null
-    return `${weekdayName(new Date(Number(t.date)))} (estimado)`
+    const parts = [
+        ...(t.dateConfirmed
+            ? []
+            : [`${weekdayName(new Date(Number(t.date)))} (estimado)`]),
+        ...(t.description ? [t.description] : []),
+    ]
+    return parts.length > 0 ? parts.join(' · ') : null
+}
+
+export function transactionTimeStatus(
+    t: ActivityTransaction,
+): TransactionTimeStatus {
+    return t.timeStatus ?? 'none'
+}
+
+export function formatTransactionTime(epoch: bigint | number): string {
+    return new Intl.DateTimeFormat('es-AR', {
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false,
+    }).format(new Date(Number(epoch)))
 }
 
 /**
@@ -249,16 +276,33 @@ export function matchesFilters(
 
 export type ListEntry =
     | { kind: 'header'; key: string; label: string }
-    | { kind: 'txn'; key: string; txn: ActivityTransaction }
+    | {
+          kind: 'txn'
+          key: string
+          txn: ActivityTransaction
+          title: string
+          amountCents: number
+          currency: string
+          accountId: string
+          transferSide?: TransactionTransferSide
+      }
 
-/** Groups transactions (already sorted by date desc) into day sections. */
+/** Sorts by the real timestamp and groups transactions into day sections. */
 export function buildListEntries(
     items: readonly ActivityTransaction[],
     nowMs: number,
 ): ListEntry[] {
     const entries: ListEntry[] = []
     let currentDay: number | null = null
-    for (const t of items) {
+    const sorted = [...items].sort((left, right) => {
+        const byDate = Number(right.date - left.date)
+        if (byDate !== 0) return byDate
+        const byCreation = Number(right.createdAt - left.createdAt)
+        if (byCreation !== 0) return byCreation
+        return right.id.localeCompare(left.id)
+    })
+
+    for (const t of sorted) {
         const dt = new Date(Number(t.date))
         const day = new Date(
             dt.getFullYear(),
@@ -273,7 +317,40 @@ export function buildListEntries(
             })
             currentDay = day
         }
-        entries.push({ kind: 'txn', key: t.id, txn: t })
+        if (t.type === 'transfer') {
+            entries.push(
+                {
+                    kind: 'txn',
+                    key: `${t.id}-source`,
+                    txn: t,
+                    title: 'Transferencia enviada',
+                    amountCents: -Math.abs(Number(t.amount)),
+                    currency: t.currency,
+                    accountId: t.accountId,
+                    transferSide: 'source',
+                },
+                {
+                    kind: 'txn',
+                    key: `${t.id}-destination`,
+                    txn: t,
+                    title: 'Transferencia recibida',
+                    amountCents: Math.abs(Number(t.toAmount ?? t.amount)),
+                    currency: t.toCurrency ?? t.currency,
+                    accountId: t.toAccountId ?? t.accountId,
+                    transferSide: 'destination',
+                },
+            )
+        } else {
+            entries.push({
+                kind: 'txn',
+                key: t.id,
+                txn: t,
+                title: t.name,
+                amountCents: signedAmountCents(t),
+                currency: t.currency,
+                accountId: t.accountId,
+            })
+        }
     }
     return entries
 }

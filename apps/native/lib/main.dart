@@ -189,6 +189,12 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
       seedColor: Colors.greenAccent,
       brightness: brightness,
     ),
+    timePickerTheme: const TimePickerThemeData(
+      dialTextStyle: TextStyle(fontSize: 14),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.all(Radius.circular(28)),
+      ),
+    ),
   );
 }
 

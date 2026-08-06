@@ -15,6 +15,15 @@ export const transactions = defineTable({
     description: v.optional(v.string()),
     status: v.union(v.literal('pending'), v.literal('cleared')),
     date: v.int64(), // ms since epoch
+    // Optional during the widen/backfill/narrow rollout. New writes always set
+    // it; historical rows are interpreted as `none` until migrated.
+    timeStatus: v.optional(
+        v.union(
+            v.literal('confirmed'),
+            v.literal('approximation'),
+            v.literal('none'),
+        ),
+    ),
     accountId: v.string(), // uuid of account
     categoryId: v.string(), // uuid of category
     amount: v.int64(), // cents
@@ -42,4 +51,4 @@ export const transactions = defineTable({
     .index('by_user_type', ['userId', 'type'])
     .index('by_user_account_date', ['userId', 'accountId', 'date'])
     .index('by_user_category_date', ['userId', 'categoryId', 'date'])
-    .index('by_user_to_account', ['userId', 'toAccountId'])
+    .index('by_user_to_account_date', ['userId', 'toAccountId', 'date'])
