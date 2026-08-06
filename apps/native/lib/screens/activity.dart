@@ -56,12 +56,14 @@ class _ActivityScreenState extends State<ActivityScreen> {
     context.read<AppNavigation>().index = AppNavigation.activityTab;
   }
 
-  void _openTransactionDetails(
+  Future<void> _openTransactionDetails(
     String transactionId, {
     TransactionDetailTransferSide? transferSide,
-  }) {
+  }) async {
     final repos = context.read<AppRepositories>();
-    Navigator.of(context).push(
+    // The details screen can pop back a filter (tapping its date/category/tag),
+    // asking Activity to show everything matching that dimension.
+    final result = await Navigator.of(context).push<TransactionFilter>(
       MaterialPageRoute(
         builder: (_) => TransactionDetailsScreen(
           transactionId: transactionId,
@@ -70,6 +72,11 @@ class _ActivityScreenState extends State<ActivityScreen> {
         ),
       ),
     );
+    if (!mounted || result == null) return;
+    setState(() {
+      _filter = result;
+      _resetPagination();
+    });
   }
 
   @override

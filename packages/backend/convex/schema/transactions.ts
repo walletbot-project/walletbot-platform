@@ -51,4 +51,4 @@ export const transactions = defineTable({
     .index('by_user_type', ['userId', 'type'])
     .index('by_user_account_date', ['userId', 'accountId', 'date'])
     .index('by_user_category_date', ['userId', 'categoryId', 'date'])
-    .index('by_user_to_account', ['userId', 'toAccountId'])
+    .index('by_user_to_account_date', ['userId', 'toAccountId', 'date'])

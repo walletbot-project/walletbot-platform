@@ -40,7 +40,13 @@ export function Activity() {
     const location = useLocation()
     const [filters, setFilters] = useState<TransactionFilters>(() => {
         const seed = location.state as Partial<TransactionFilters> | null
-        if (seed?.accountIds || seed?.categoryIds || seed?.tagIds) {
+        if (
+            seed?.accountIds ||
+            seed?.categoryIds ||
+            seed?.tagIds ||
+            seed?.dateFrom ||
+            seed?.dateTo
+        ) {
             return { ...EMPTY_FILTERS, ...seed }
         }
         return EMPTY_FILTERS
@@ -232,6 +238,9 @@ export function Activity() {
                 transactionId={selectedTransaction?.id ?? null}
                 transferSide={selectedTransaction?.transferSide}
                 open={selectedTransaction !== null}
+                onApplyFilter={(next) =>
+                    setFilters({ ...EMPTY_FILTERS, ...next })
+                }
                 onOpenChange={(open) => {
                     if (!open) setSelectedTransaction(null)
                 }}

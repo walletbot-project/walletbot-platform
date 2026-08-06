@@ -14,6 +14,7 @@ import {
     X,
 } from 'lucide-react'
 import { type FormEvent, type ReactNode, useId, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 import { AccountIcon } from '@/components/account-icon'
 import { CategoryIcon } from '@/components/category-icon'
@@ -44,7 +45,11 @@ import {
 import { formatMoney } from '@/lib/money'
 import { normalizeTagColor } from '@/lib/tag-colors'
 import { cn } from '@/lib/utils'
-import type { TransactionTimeStatus, TransactionTransferSide } from './helpers'
+import type {
+    TransactionFilters,
+    TransactionTimeStatus,
+    TransactionTransferSide,
+} from './helpers'
 
 type Transaction = NonNullable<
     FunctionReturnType<typeof api.v1.transactions.queries.get>
@@ -54,6 +59,9 @@ type Category = FunctionReturnType<
     typeof api.v1.categories.queries.listActive
 >[number]
 type Tag = FunctionReturnType<typeof api.v1.tags.queries.listActive>[number]
+type AccountBalance = FunctionReturnType<
+    typeof api.v1.transactions.queries.balanceAroundTransaction
+>
 
 type TransactionDetailsSheetProps = {
     transactionId: string | null
@@ -61,6 +69,10 @@ type TransactionDetailsSheetProps = {
     open: boolean
     onOpenChange: (open: boolean) => void
     initialEditing?: boolean
+    // When provided, the read-mode date/category/tag chips apply the filter in
+    // place (used by the Activity page, which owns the filter state). Without
+    // it, they deep-link to /activity via the router.
+    onApplyFilter?: (filters: Partial<TransactionFilters>) => void
 }
 
 export function TransactionDetailsSheet({
@@ -69,6 +81,7 @@ export function TransactionDetailsSheet({
     open,
     onOpenChange,
     initialEditing = false,
+    onApplyFilter,
 }: TransactionDetailsSheetProps) {
     const transaction = useQuery(
         api.v1.transactions.queries.get,
@@ -129,6 +142,7 @@ export function TransactionDetailsSheet({
                         tags={tags}
                         transferSide={transferSide}
                         initialEditing={initialEditing}
+                        onApplyFilter={onApplyFilter}
                         onClose={() => onOpenChange(false)}
                     />
                 )}
@@ -144,6 +158,7 @@ function TransactionDetailsContent({
     tags,
     transferSide,
     initialEditing,
+    onApplyFilter,
     onClose,
 }: {
     transaction: Transaction
@@ -152,8 +167,38 @@ function TransactionDetailsContent({
     tags: Tag[]
     transferSide?: TransactionTransferSide
     initialEditing: boolean
+    onApplyFilter?: (filters: Partial<TransactionFilters>) => void
     onClose: () => void
 }) {
+    const navigate = useNavigate()
+
+    // Running balance of each involved account before/after this transaction.
+    // Keyed off the saved account ids (not the edit-mode selection) since it
+    // reflects the persisted ledger, and only surfaced in read mode.
+    const sourceBalance = useQuery(
+        api.v1.transactions.queries.balanceAroundTransaction,
+        { transactionId: transaction.id, accountId: transaction.accountId },
+    )
+    const destBalance = useQuery(
+        api.v1.transactions.queries.balanceAroundTransaction,
+        transaction.type === 'transfer' && transaction.toAccountId
+            ? {
+                  transactionId: transaction.id,
+                  accountId: transaction.toAccountId,
+              }
+            : 'skip',
+    )
+
+    // Apply a filter to the Activity list and dismiss the sheet. Prefer the
+    // in-place callback (Activity owns the filter state); otherwise deep-link.
+    const applyFilter = (filters: Partial<TransactionFilters>) => {
+        if (onApplyFilter) {
+            onApplyFilter(filters)
+        } else {
+            void navigate('/activity', { state: filters })
+        }
+        onClose()
+    }
     const updateTransaction = useMutation(api.v1.transactions.mutations.update)
     const archiveTransaction = useMutation(
         api.v1.transactions.mutations.archive,
@@ -463,7 +508,22 @@ function TransactionDetailsContent({
                                     required
                                 />
                             ) : (
-                                formatDate(transaction.date)
+                                <button
+                                    type="button"
+                                    className="cursor-pointer"
+                                    onClick={() =>
+                                        applyFilter({
+                                            dateFrom: new Date(
+                                                Number(transaction.date),
+                                            ),
+                                            dateTo: new Date(
+                                                Number(transaction.date),
+                                            ),
+                                        })
+                                    }
+                                >
+                                    {formatDate(transaction.date)}
+                                </button>
                             )}
                         </ReceiptRow>
 
@@ -519,7 +579,34 @@ function TransactionDetailsContent({
                                     onChange={setAccountId}
                                 />
                             ) : (
-                                (account?.name ?? 'Cuenta eliminada')
+                                <div className="space-y-1">
+                                    <div>
+                                        {account ? (
+                                            <button
+                                                type="button"
+                                                className="cursor-pointer"
+                                                onClick={() =>
+                                                    applyFilter({
+                                                        accountIds: [
+                                                            account.id,
+                                                        ],
+                                                    })
+                                                }
+                                            >
+                                                {account.name}
+                                            </button>
+                                        ) : (
+                                            'Cuenta eliminada'
+                                        )}
+                                    </div>
+                                    <AccountBalanceLine
+                                        balance={sourceBalance}
+                                        currency={
+                                            account?.currency ??
+                                            transaction.currency
+                                        }
+                                    />
+                                </div>
                             )}
                         </ReceiptRow>
 
@@ -537,8 +624,35 @@ function TransactionDetailsContent({
                                         onChange={setToAccountId}
                                     />
                                 ) : (
-                                    (destinationAccount?.name ??
-                                    'Cuenta eliminada')
+                                    <div className="space-y-1">
+                                        <div>
+                                            {destinationAccount ? (
+                                                <button
+                                                    type="button"
+                                                    className="cursor-pointer"
+                                                    onClick={() =>
+                                                        applyFilter({
+                                                            accountIds: [
+                                                                destinationAccount.id,
+                                                            ],
+                                                        })
+                                                    }
+                                                >
+                                                    {destinationAccount.name}
+                                                </button>
+                                            ) : (
+                                                'Cuenta eliminada'
+                                            )}
+                                        </div>
+                                        <AccountBalanceLine
+                                            balance={destBalance}
+                                            currency={
+                                                destinationAccount?.currency ??
+                                                transaction.toCurrency ??
+                                                transaction.currency
+                                            }
+                                        />
+                                    </div>
                                 )}
                             </ReceiptRow>
                         ) : null}
@@ -573,7 +687,17 @@ function TransactionDetailsContent({
                                         ))}
                                     </select>
                                 ) : category ? (
-                                    category.name
+                                    <button
+                                        type="button"
+                                        className="cursor-pointer"
+                                        onClick={() =>
+                                            applyFilter({
+                                                categoryIds: [category.id],
+                                            })
+                                        }
+                                    >
+                                        {category.name}
+                                    </button>
                                 ) : null}
                             </ReceiptRow>
                         ) : null}
@@ -596,29 +720,38 @@ function TransactionDetailsContent({
                                                 <button
                                                     key={tag.id}
                                                     type="button"
-                                                    disabled={!editing}
-                                                    onClick={() =>
-                                                        setSelectedTagIds(
-                                                            (current) => {
-                                                                const next =
-                                                                    new Set(
-                                                                        current,
-                                                                    )
-                                                                if (
-                                                                    next.has(
-                                                                        tag.id,
-                                                                    )
-                                                                )
-                                                                    next.delete(
-                                                                        tag.id,
-                                                                    )
-                                                                else
-                                                                    next.add(
-                                                                        tag.id,
-                                                                    )
-                                                                return next
-                                                            },
-                                                        )
+                                                    onClick={
+                                                        editing
+                                                            ? () =>
+                                                                  setSelectedTagIds(
+                                                                      (
+                                                                          current,
+                                                                      ) => {
+                                                                          const next =
+                                                                              new Set(
+                                                                                  current,
+                                                                              )
+                                                                          if (
+                                                                              next.has(
+                                                                                  tag.id,
+                                                                              )
+                                                                          )
+                                                                              next.delete(
+                                                                                  tag.id,
+                                                                              )
+                                                                          else
+                                                                              next.add(
+                                                                                  tag.id,
+                                                                              )
+                                                                          return next
+                                                                      },
+                                                                  )
+                                                            : () =>
+                                                                  applyFilter({
+                                                                      tagIds: [
+                                                                          tag.id,
+                                                                      ],
+                                                                  })
                                                     }
                                                 >
                                                     <Badge
@@ -628,9 +761,7 @@ function TransactionDetailsContent({
                                                                 : 'outline'
                                                         }
                                                         className={cn(
-                                                            'rounded-full',
-                                                            editing &&
-                                                                'cursor-pointer',
+                                                            'rounded-full cursor-pointer',
                                                             !selected &&
                                                                 'opacity-50',
                                                         )}
@@ -744,6 +875,33 @@ function ReceiptRow({
                 <div className="text-right font-medium">{children}</div>
             ) : null}
         </div>
+    )
+}
+
+// Reads as a muted "… → …" balance line under the account name, with a
+// skeleton while loading and a fallback when the balance can't be resolved.
+function AccountBalanceLine({
+    balance,
+    currency,
+}: {
+    balance: AccountBalance | undefined
+    currency: string
+}) {
+    if (balance === undefined) {
+        return <Skeleton className="h-4 w-40" />
+    }
+    if (balance === null) {
+        return (
+            <span className="text-sm font-normal text-muted-foreground">
+                Saldo no disponible
+            </span>
+        )
+    }
+    return (
+        <span className="text-sm font-normal text-muted-foreground tabular-nums">
+            {formatMoney(Number(balance.before), currency)} →{' '}
+            {formatMoney(Number(balance.after), currency)}
+        </span>
     )
 }
 

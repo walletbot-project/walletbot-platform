@@ -641,7 +641,23 @@ class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
         trailing: _editing
             ? TextButton(onPressed: _pickDate, child: const Text('Cambiar'))
             : null,
-        value: Text(_formatDate(_selectedDate)),
+        value: _filterableValue(
+          child: Text(_formatDate(_selectedDate)),
+          filter: TransactionFilter(
+            dateRange: DateTimeRange(
+              start: DateTime(
+                _selectedDate.year,
+                _selectedDate.month,
+                _selectedDate.day,
+              ),
+              end: DateTime(
+                _selectedDate.year,
+                _selectedDate.month,
+                _selectedDate.day,
+              ),
+            ),
+          ),
+        ),
       ),
       _ReceiptRow(
         icon: timeNeedsAttention
@@ -697,7 +713,10 @@ class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
                       style: TextStyle(color: colors.onSurfaceVariant),
                     )
                   : null)
-            : Text(category.name),
+            : _filterableValue(
+                child: Text(category.name),
+                filter: TransactionFilter(categoryIds: {category.id}),
+              ),
       ),
       _tagsReceiptRow(),
     ];
@@ -795,6 +814,20 @@ class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
     );
   }
 
+  /// In read mode, wraps a receipt value so tapping it pops back a filter for
+  /// the Activity screen to apply. Visually identical to the plain value.
+  Widget _filterableValue({
+    required Widget child,
+    required TransactionFilter filter,
+  }) {
+    if (_editing) return child;
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () => Navigator.of(context).pop(filter),
+      child: child,
+    );
+  }
+
   _ReceiptRow _accountReceiptRow({
     required String label,
     required Account account,
@@ -814,7 +847,10 @@ class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
           return Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(account.name),
+              _filterableValue(
+                child: Text(account.name),
+                filter: TransactionFilter(accountIds: {account.id}),
+              ),
               const SizedBox(height: 4),
               if (balance == null)
                 Text(
@@ -823,8 +859,8 @@ class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
                 )
               else
                 Text(
-                  'Antes: ${formatMoney(balance.before.toInt(), account.currency)}'
-                  '  ·  Después: ${formatMoney(balance.after.toInt(), account.currency)}',
+                  '${formatMoney(balance.before.toInt(), account.currency)}'
+                  '  →  ${formatMoney(balance.after.toInt(), account.currency)}',
                   style: TextStyle(
                     fontSize: 13,
                     color: colors.onSurfaceVariant,
@@ -874,10 +910,18 @@ class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
                       ),
                     )
                   else
-                    Chip(
-                      avatar: const CircleAvatar(backgroundColor: Colors.white),
-                      label: Text(tag.name),
-                      backgroundColor: colorFromHex(tag.color),
+                    GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: () => Navigator.of(
+                        context,
+                      ).pop(TransactionFilter(tagIds: {tag.id})),
+                      child: Chip(
+                        avatar: const CircleAvatar(
+                          backgroundColor: Colors.white,
+                        ),
+                        label: Text(tag.name),
+                        backgroundColor: colorFromHex(tag.color),
+                      ),
                     ),
               ],
             ),
