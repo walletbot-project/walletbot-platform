@@ -140,12 +140,13 @@ BigInt parseTransactionDate(
         'date or time is required when timeStatus is $timeStatus',
       );
     }
-    final hasEmbeddedClock =
-        parsed.hour != 0 ||
-        parsed.minute != 0 ||
-        parsed.second != 0 ||
-        parsed.millisecond != 0;
-    if (!hasEmbeddedClock) {
+    // The clock may be embedded in an ISO datetime `input`. Detect it from the
+    // input string (a `HH:mm` component), not from zeroed timestamp fields — a
+    // real midnight like `2026-08-06T00:00:00` is a valid confirmed time and
+    // must not be mistaken for a date-only value.
+    final inputHasTime =
+        input != null && RegExp(r'\d{1,2}:\d{2}').hasMatch(input);
+    if (!inputHasTime) {
       throw ArgumentError('time is required when timeStatus is $timeStatus');
     }
     return BigInt.from(parsed.millisecondsSinceEpoch);

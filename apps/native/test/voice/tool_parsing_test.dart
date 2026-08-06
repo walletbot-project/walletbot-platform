@@ -79,4 +79,26 @@ void main() {
     );
     expect(parsed, DateTime(2026, 7, 11, 16));
   });
+
+  test('accepts a real midnight embedded in an ISO datetime input', () {
+    final parsed = DateTime.fromMillisecondsSinceEpoch(
+      parseTransactionDate(
+        '2026-08-06T00:00:00',
+        timeStatus: TransactionTimeStatus.confirmed,
+        now: reference,
+      ).toInt(),
+    );
+    expect(parsed, DateTime(2026, 8, 6));
+  });
+
+  test('rejects a date-only input without a clock', () {
+    expect(
+      () => parseTransactionDate(
+        '2026-08-06',
+        timeStatus: TransactionTimeStatus.confirmed,
+        now: reference,
+      ),
+      throwsArgumentError,
+    );
+  });
 }

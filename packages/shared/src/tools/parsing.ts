@@ -156,13 +156,12 @@ export function parseTransactionDate(
                 `date or time is required when timeStatus is ${timeStatus}`,
             )
         }
-        const embedded = new Date(Number(parsed))
-        const hasEmbeddedClock =
-            embedded.getHours() !== 0 ||
-            embedded.getMinutes() !== 0 ||
-            embedded.getSeconds() !== 0 ||
-            embedded.getMilliseconds() !== 0
-        if (!hasEmbeddedClock) {
+        // The clock may be embedded in an ISO datetime `input`. Detect it from
+        // the input string (a `HH:mm` component), not from zeroed timestamp
+        // fields — a real midnight like `2026-08-06T00:00:00` is a valid
+        // confirmed time and must not be mistaken for a date-only value.
+        const inputHasTime = input !== undefined && /\d{1,2}:\d{2}/.test(input)
+        if (!inputHasTime) {
             throw new Error(`time is required when timeStatus is ${timeStatus}`)
         }
         return parsed
