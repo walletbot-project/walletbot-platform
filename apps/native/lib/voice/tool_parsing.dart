@@ -27,11 +27,11 @@ BigInt parseNaturalDate(String input, {DateTime? now}) {
       .replaceAll(RegExp('[úùüû]'), 'u');
 
   BigInt asDayOffset(int offset) {
-    final d = DateTime(
-      reference.year,
-      reference.month,
-      reference.day,
-    ).add(Duration(days: offset));
+    // Build the target calendar day from date components (DateTime normalizes
+    // day overflow/underflow) so we land on local midnight of the right day.
+    // Adding a fixed Duration(days:) would drift across a DST transition —
+    // e.g. after spring-forward it lands at 23:00 the previous calendar day.
+    final d = DateTime(reference.year, reference.month, reference.day + offset);
     return BigInt.from(d.millisecondsSinceEpoch);
   }
 
