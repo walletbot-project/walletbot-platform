@@ -2,6 +2,8 @@ import 'package:app/components/account_icons.dart';
 import 'package:app/components/category_icons.dart';
 import 'package:app/components/color_utils.dart';
 import 'package:app/components/grouped_card.dart';
+import 'package:app/components/raised_card.dart';
+import 'package:app/components/tag_chip.dart';
 import 'package:app/components/readable_time_picker.dart';
 import 'package:app/data/data.dart';
 import 'package:app/database.dart';
@@ -722,8 +724,8 @@ class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
     ];
 
     return Material(
-      color: colors.surface,
-      elevation: 1,
+      color: raisedCardColor(colors, Theme.of(context).brightness),
+      elevation: raisedCardElevation(Theme.of(context).brightness),
       borderRadius: BorderRadius.circular(kGroupOuterRadius),
       clipBehavior: Clip.antiAlias,
       child: Padding(
@@ -896,35 +898,39 @@ class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
           : Wrap(
               spacing: 8,
               runSpacing: 8,
-              children: [
-                for (final tag in selectedTags)
-                  if (_editing)
-                    InputChip(
-                      avatar: const CircleAvatar(backgroundColor: Colors.white),
-                      label: Text(tag.name),
-                      backgroundColor: colorFromHex(tag.color),
-                      onDeleted: () => setState(
-                        () =>
-                            _selectedTagIds = {..._selectedTagIds}
-                              ..remove(tag.id),
-                      ),
-                    )
-                  else
-                    GestureDetector(
-                      behavior: HitTestBehavior.opaque,
-                      onTap: () => Navigator.of(
-                        context,
-                      ).pop(TransactionFilter(tagIds: {tag.id})),
-                      child: Chip(
-                        avatar: const CircleAvatar(
-                          backgroundColor: Colors.white,
-                        ),
-                        label: Text(tag.name),
-                        backgroundColor: colorFromHex(tag.color),
-                      ),
-                    ),
-              ],
+              children: [for (final tag in selectedTags) _tagChip(tag)],
             ),
+    );
+  }
+
+  /// Tag chip styled to match the Insights tag list: the fill stays the tag's
+  /// own color, and in dark mode the avatar and label switch to a contrasting
+  /// foreground so the chip reads the same in both places.
+  Widget _tagChip(Tag tag) {
+    final style = tagChipStyle(context, colorFromHex(tag.color));
+
+    if (_editing) {
+      return InputChip(
+        avatar: CircleAvatar(backgroundColor: style.avatarColor),
+        label: Text(tag.name),
+        labelStyle: style.labelStyle,
+        backgroundColor: style.background,
+        onDeleted: () => setState(
+          () => _selectedTagIds = {..._selectedTagIds}..remove(tag.id),
+        ),
+      );
+    }
+
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () =>
+          Navigator.of(context).pop(TransactionFilter(tagIds: {tag.id})),
+      child: Chip(
+        avatar: CircleAvatar(backgroundColor: style.avatarColor),
+        label: Text(tag.name),
+        labelStyle: style.labelStyle,
+        backgroundColor: style.background,
+      ),
     );
   }
 

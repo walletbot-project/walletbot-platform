@@ -132,10 +132,13 @@ const googleSignIn = httpAction(async (ctx, req) => {
     }
 
     if (isNewSocialUserResult(result)) {
-        await ctx.runMutation(internal.telemetry.mutations.recordUserAccountCreated, {
-            userId: result.user.id,
-            authMethod: 'google',
-        })
+        await ctx.runMutation(
+            internal.telemetry.mutations.recordUserAccountCreated,
+            {
+                userId: result.user.id,
+                authMethod: 'google',
+            },
+        )
     }
 
     return issueNativeSession(ctx, req, result.user)

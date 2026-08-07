@@ -1536,8 +1536,8 @@ class _PrimaryActionButton extends StatelessWidget {
       border = BorderSide(color: theme.colorScheme.outline, width: 1.5);
       elevation = 0;
     } else {
-      bg = theme.colorScheme.primary;
-      fg = theme.colorScheme.onPrimary;
+      bg = theme.colorScheme.primaryContainer;
+      fg = theme.colorScheme.onPrimaryContainer;
       border = BorderSide.none;
       elevation = 2;
     }

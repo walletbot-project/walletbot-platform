@@ -7,8 +7,8 @@ import { syncCounters, tombstones } from './schema/sync'
 import { tags } from './schema/tags'
 import {
     telemetryEvents,
-    telemetryMetrics,
     telemetryMetricSeries,
+    telemetryMetrics,
 } from './schema/telemetry'
 import { transactions } from './schema/transactions'
 import { transactionTags } from './schema/transactionTags'
