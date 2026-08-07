@@ -1,14 +1,14 @@
 import { paginationOptsValidator } from 'convex/server'
 import { v } from 'convex/values'
-import type { Doc } from '../_generated/dataModel'
-import type { QueryCtx } from '../_generated/server'
-import { query } from '../_generated/server'
+import type { Doc } from '../../_generated/dataModel'
+import type { QueryCtx } from '../../_generated/server'
+import { query } from '../../_generated/server'
 import {
     accountNamespace,
     inflowsByAccount,
     outflowsByAccount,
-} from '../aggregates'
-import { requireAuth } from '../users/helpers'
+} from '../../aggregates'
+import { requireAuth } from '../../users/helpers'
 
 // Bounded read so we never accidentally collect an unbounded set. Callers that
 // truly need everything must paginate via `listPaginated`.
@@ -225,5 +225,121 @@ export const balance = query({
             args.accountId,
         )
         return { balance: balanceCents, currency: account.currency }
+    },
+})
+
+// Signed effect of a transaction on `accountId`'s running balance. Mirrors the
+// native ledger replay (`_accountDelta`) and the aggregate sum contracts: a
+// transaction touches the account either as source (`accountId`) or, for
+// transfers, as destination (`toAccountId`) — never both. Archived rows are 0.
+function accountDelta(txn: Doc<'transactions'>, accountId: string): bigint {
+    if (txn.isArchived) return 0n
+    let delta = 0n
+    if (txn.accountId === accountId) {
+        switch (txn.type) {
+            case 'expense':
+            case 'transfer':
+                delta -= txn.amount
+                break
+            case 'income':
+            case 'balance_adjustment':
+                delta += txn.amount
+                break
+        }
+    }
+    if (txn.type === 'transfer' && txn.toAccountId === accountId) {
+        delta += txn.toAmount ?? txn.amount
+    }
+    return delta
+}
+
+// Running balance of `accountId` immediately before and after the given
+// transaction, matching the native ledger ordering (date, then createdAt, then
+// client id). The bulk (everything strictly before the transaction's date) is
+// an O(log n) aggregate sum; only rows sharing the exact same `date` are read
+// to break ties around the target — that set is bounded to one millisecond on
+// one account, so it stays tiny and index-backed.
+export const balanceAroundTransaction = query({
+    args: { transactionId: v.string(), accountId: v.string() },
+    handler: async (ctx, args) => {
+        const userId = await requireAuth(ctx)
+
+        const target = await ctx.db
+            .query('transactions')
+            .withIndex('by_user_id', (q) =>
+                q.eq('userId', userId).eq('id', args.transactionId),
+            )
+            .unique()
+        if (!target || target.isArchived) return null
+
+        const account = await ctx.db
+            .query('accounts')
+            .withIndex('by_user_id', (q) =>
+                q.eq('userId', userId).eq('id', args.accountId),
+            )
+            .unique()
+        if (!account) return null
+
+        const date = target.date
+        const namespace = accountNamespace(userId, args.accountId)
+
+        // Everything on this account strictly before the target's date.
+        const [outflows, inflows] = await Promise.all([
+            outflowsByAccount.sum(ctx, {
+                namespace,
+                bounds: { upper: { key: date, inclusive: false } },
+            }),
+            inflowsByAccount.sum(ctx, {
+                namespace,
+                bounds: { upper: { key: date, inclusive: false } },
+            }),
+        ])
+        let before = BigInt(Math.round(outflows + inflows))
+
+        // Same-date rows touching the account, as source or transfer target.
+        const [sourceRows, destRows] = await Promise.all([
+            ctx.db
+                .query('transactions')
+                .withIndex('by_user_account_date', (q) =>
+                    q
+                        .eq('userId', userId)
+                        .eq('accountId', args.accountId)
+                        .eq('date', date),
+                )
+                .collect(),
+            ctx.db
+                .query('transactions')
+                .withIndex('by_user_to_account_date', (q) =>
+                    q
+                        .eq('userId', userId)
+                        .eq('toAccountId', args.accountId)
+                        .eq('date', date),
+                )
+                .collect(),
+        ])
+
+        const sameDate = new Map<string, Doc<'transactions'>>()
+        for (const row of [...sourceRows, ...destRows]) {
+            if (!row.isArchived) sameDate.set(row.id, row)
+        }
+        const ordered = [...sameDate.values()].sort((a, b) => {
+            if (a.createdAt !== b.createdAt)
+                return a.createdAt < b.createdAt ? -1 : 1
+            return a.id < b.id ? -1 : a.id > b.id ? 1 : 0
+        })
+
+        let found = false
+        for (const row of ordered) {
+            if (row.id === target.id) {
+                found = true
+                break
+            }
+            before += accountDelta(row, args.accountId)
+        }
+        // The account doesn't participate in this transaction — nothing to show.
+        if (!found) return null
+
+        const after = before + accountDelta(target, args.accountId)
+        return { before, after, currency: account.currency }
     },
 })

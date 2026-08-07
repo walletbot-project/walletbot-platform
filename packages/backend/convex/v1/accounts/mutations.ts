@@ -1,7 +1,8 @@
 import { v } from 'convex/values'
-import { mutation } from '../_generated/server'
-import { nextSeq, writeTombstone } from '../sync/helpers'
-import { requireAuth } from '../users/helpers'
+import { mutation } from '../../_generated/server'
+import { nextSeq, writeTombstone } from '../../sync/helpers'
+import { recordFinancialAccountCreated } from '../../telemetry/metrics'
+import { requireAuth } from '../../users/helpers'
 
 // Business rule: an account always has a color + icon. Convex has no
 // column-level defaults, so we fill them here when a writer omits them.
@@ -46,6 +47,12 @@ export const create = mutation({
             createdAt: now,
             updatedAt: now,
             seq,
+        })
+
+        await recordFinancialAccountCreated(ctx, {
+            userId,
+            createdBy: 'form',
+            ingestPath: 'direct_mutation',
         })
 
         return args.id

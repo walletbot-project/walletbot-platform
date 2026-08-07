@@ -1,5 +1,4 @@
 import 'package:app/shared/money.dart';
-import 'package:app/l10n/l10n.dart';
 import 'package:flutter/material.dart';
 
 class TransactionRow extends StatelessWidget {
@@ -10,6 +9,7 @@ class TransactionRow extends StatelessWidget {
     required this.dateCheck,
     this.description,
     this.currency,
+    this.visualIdentities = const [],
     this.currencySymbol = '\$',
     this.onTap,
     this.contained = true,
@@ -27,6 +27,7 @@ class TransactionRow extends StatelessWidget {
 
   final String? description;
   final String? currency;
+  final List<TransactionRowVisualIdentity> visualIdentities;
   final String currencySymbol;
   final VoidCallback? onTap;
   final bool contained;
@@ -38,22 +39,31 @@ class TransactionRow extends StatelessWidget {
     final amountColor = isPositive
         ? Colors.green.shade600
         : theme.colorScheme.onSurface;
+    TransactionRowVisualIdentity? timeIdentity;
+    final detailIdentities = <TransactionRowVisualIdentity>[];
+    for (final identity in visualIdentities) {
+      if (identity.type == TransactionRowVisualIdentityType.time &&
+          timeIdentity == null) {
+        timeIdentity = identity;
+      } else {
+        detailIdentities.add(identity);
+      }
+    }
+    final showAttention = !dateCheck || (timeIdentity?.attention ?? false);
 
-    final content = Padding(
+    final rowContent = Padding(
       padding: EdgeInsets.symmetric(
         horizontal: contained ? 16 : 0,
         vertical: contained ? 14 : 11,
       ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _DateCheckIcon(dateConfirmed: dateCheck),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Text(
                   title,
                   style: const TextStyle(
                     fontSize: 16,
@@ -62,40 +72,69 @@ class TransactionRow extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
-                if (description != null && description!.isNotEmpty) ...[
-                  const SizedBox(height: 2),
-                  Text(
-                    description!,
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: theme.colorScheme.onSurfaceVariant,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+              ),
+              const SizedBox(width: 12),
+              Text(
+                currency == null
+                    ? _formatSignedAmount(amountCents, currencySymbol)
+                    : formatMoney(amountCents, currency!),
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  color: amountColor,
+                ),
+              ),
+            ],
+          ),
+          if (description != null && description!.isNotEmpty) ...[
+            const SizedBox(height: 2),
+            Text(
+              description!,
+              style: TextStyle(
+                fontSize: 13,
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
+          if (detailIdentities.isNotEmpty ||
+              timeIdentity != null ||
+              !dateCheck) ...[
+            const SizedBox(height: 6),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Expanded(
+                  child: Wrap(
+                    spacing: 6,
+                    runSpacing: 4,
+                    children: [
+                      for (final identity in detailIdentities)
+                        _IdentityIcon(identity: identity),
+                    ],
+                  ),
+                ),
+                if (showAttention || timeIdentity != null) ...[
+                  const SizedBox(width: 12),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (showAttention) const _DateCheckIcon(size: 15),
+                      if (showAttention && timeIdentity != null)
+                        const SizedBox(width: 4),
+                      if (timeIdentity != null)
+                        _IdentityIcon(
+                          identity: timeIdentity,
+                          size: 18,
+                          iconSize: 14,
+                        ),
+                    ],
                   ),
                 ],
               ],
             ),
-          ),
-          const SizedBox(width: 12),
-          Text(
-            currency == null
-                ? _formatSignedAmount(
-                    amountCents,
-                    currencySymbol,
-                    context.localeName,
-                  )
-                : formatMoney(
-                    amountCents,
-                    currency!,
-                    locale: context.localeName,
-                  ),
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w600,
-              color: amountColor,
-            ),
-          ),
+          ],
         ],
       ),
     );
@@ -106,7 +145,7 @@ class TransactionRow extends StatelessWidget {
         child: InkWell(
           onTap: onTap,
           borderRadius: BorderRadius.circular(8),
-          child: content,
+          child: rowContent,
         ),
       );
     }
@@ -123,32 +162,97 @@ class TransactionRow extends StatelessWidget {
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(12),
-        child: content,
+        child: rowContent,
+      ),
+    );
+  }
+}
+
+class TransactionRowVisualIdentity {
+  const TransactionRowVisualIdentity({
+    required this.type,
+    required this.label,
+    required this.icon,
+    required this.color,
+    this.attention = false,
+  });
+
+  final TransactionRowVisualIdentityType type;
+  final String label;
+  final IconData icon;
+  final Color color;
+  final bool attention;
+}
+
+enum TransactionRowVisualIdentityType { account, category, time }
+
+class _IdentityIcon extends StatelessWidget {
+  const _IdentityIcon({
+    required this.identity,
+    this.size = 24,
+    this.iconSize = 15,
+  });
+
+  final TransactionRowVisualIdentity identity;
+  final double size;
+  final double iconSize;
+
+  @override
+  Widget build(BuildContext context) {
+    if (identity.type == TransactionRowVisualIdentityType.time) {
+      final color = identity.attention
+          ? Colors.amber.shade700
+          : Theme.of(context).colorScheme.onSurfaceVariant;
+      return Tooltip(
+        message: identity.label,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              identity.label,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+                color: color,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return Tooltip(
+      message: identity.label,
+      child: Container(
+        width: size,
+        height: size,
+        decoration: BoxDecoration(
+          color: identity.color.withValues(alpha: 0.16),
+          shape: BoxShape.circle,
+        ),
+        alignment: Alignment.center,
+        child: Icon(identity.icon, size: iconSize, color: identity.color),
       ),
     );
   }
 }
 
 class _DateCheckIcon extends StatelessWidget {
-  const _DateCheckIcon({required this.dateConfirmed});
+  const _DateCheckIcon({this.size = 22});
 
-  final bool dateConfirmed;
+  final double size;
 
   @override
   Widget build(BuildContext context) {
-    if (dateConfirmed) {
-      return Icon(Icons.check_rounded, color: Colors.green.shade600, size: 22);
-    }
     return Icon(
       Icons.help_outline_rounded,
       color: Colors.amber.shade700,
-      size: 22,
+      size: size,
     );
   }
 }
 
-String _formatSignedAmount(int cents, String currencySymbol, String locale) {
+String _formatSignedAmount(int cents, String currencySymbol) {
   final sign = cents < 0 ? '-' : (cents > 0 ? '+' : '');
-  return '$sign $currencySymbol '
-      '${formatCentsUnsigned(cents.abs(), locale: locale)}';
+  return '$sign $currencySymbol ${formatCentsUnsigned(cents.abs())}';
 }

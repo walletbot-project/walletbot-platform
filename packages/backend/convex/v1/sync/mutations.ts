@@ -1,11 +1,11 @@
 import { v } from 'convex/values'
-import type { Doc } from '../_generated/dataModel'
-import type { MutationCtx } from '../_generated/server'
-import { mutation } from '../_generated/server'
-import { inflowsByAccount, outflowsByAccount } from '../aggregates'
-import { CLIENT_OUTDATED, isClientSupported } from '../config/helpers'
-import { syncedTable } from '../schema/sync'
-import { requireAuth } from '../users/helpers'
+import type { Doc } from '../../_generated/dataModel'
+import type { MutationCtx } from '../../_generated/server'
+import { mutation } from '../../_generated/server'
+import { inflowsByAccount, outflowsByAccount } from '../../aggregates'
+import { CLIENT_OUTDATED, isClientSupported } from '../../config/helpers'
+import { syncedTable } from '../../schema/sync'
+import { requireAuth } from '../../users/helpers'
 
 const accountUpsert = v.object({
     id: v.string(),
@@ -56,6 +56,13 @@ const transactionUpsert = v.object({
     // Optional for backward-compat: older clients don't send it. Defaults to
     // true on insert (matches the column default).
     dateConfirmed: v.optional(v.boolean()),
+    timeStatus: v.optional(
+        v.union(
+            v.literal('confirmed'),
+            v.literal('approximation'),
+            v.literal('none'),
+        ),
+    ),
     accountId: v.string(),
     categoryId: v.string(),
     amount: v.int64(),
@@ -153,6 +160,7 @@ type TransactionUpsert = {
     status: 'pending' | 'cleared'
     date: bigint
     dateConfirmed?: boolean
+    timeStatus?: 'confirmed' | 'approximation' | 'none'
     accountId: string
     categoryId: string
     amount: bigint
@@ -437,6 +445,7 @@ async function applyTransactionUpsert(
         status: payload.status,
         date: payload.date,
         dateConfirmed: payload.dateConfirmed ?? true,
+        timeStatus: payload.timeStatus ?? existing?.timeStatus ?? 'none',
         accountId: payload.accountId,
         categoryId: payload.categoryId,
         amount: payload.amount,

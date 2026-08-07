@@ -49,6 +49,12 @@ type NativeAuthUser = {
     image?: string | null
 }
 
+const isNewSocialUserResult = (value: unknown): boolean => {
+    if (typeof value !== 'object' || value === null) return false
+    const record = value as Record<string, unknown>
+    return record.isNewUser === true || record.newUser === true
+}
+
 const issueNativeSession = async (
     ctx: ActionCtx,
     req: Request,
@@ -125,6 +131,16 @@ const googleSignIn = httpAction(async (ctx, req) => {
         return jsonError(500, 'sign_in_failed', 'sign-in did not return a user')
     }
 
+    if (isNewSocialUserResult(result)) {
+        await ctx.runMutation(
+            internal.telemetry.mutations.recordUserAccountCreated,
+            {
+                userId: result.user.id,
+                authMethod: 'google',
+            },
+        )
+    }
+
     return issueNativeSession(ctx, req, result.user)
 })
 
@@ -188,6 +204,13 @@ const emailSignUp = httpAction(async (ctx, req) => {
             },
             headers,
         })
+        await ctx.runMutation(
+            internal.telemetry.mutations.recordUserAccountCreated,
+            {
+                userId: result.user.id,
+                authMethod: 'email_password',
+            },
+        )
         return issueNativeSession(ctx, req, result.user)
     } catch (err) {
         const message = err instanceof Error ? err.message : String(err)

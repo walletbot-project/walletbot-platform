@@ -1,9 +1,9 @@
 import { v } from 'convex/values'
-import type { Doc } from '../_generated/dataModel'
-import type { MutationCtx } from '../_generated/server'
-import { mutation } from '../_generated/server'
-import { nextSeq, writeTombstone } from '../sync/helpers'
-import { requireAuth } from '../users/helpers'
+import type { Doc } from '../../_generated/dataModel'
+import type { MutationCtx } from '../../_generated/server'
+import { mutation } from '../../_generated/server'
+import { nextSeq, writeTombstone } from '../../sync/helpers'
+import { requireAuth } from '../../users/helpers'
 
 // Business rule: a tag always has a color. Convex has no column-level
 // defaults, so we fill it here when a writer omits it. Mirrors the native

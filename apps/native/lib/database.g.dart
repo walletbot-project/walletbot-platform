@@ -56,7 +56,7 @@ class $AccountsTable extends Accounts with TableInfo<$AccountsTable, Account> {
     false,
     type: DriftSqlType.string,
     requiredDuringInsert: false,
-    defaultValue: const Constant(kDefaultAccountColor),
+    defaultValue: const Constant('#3B82F6'),
   );
   static const VerificationMeta _iconMeta = const VerificationMeta('icon');
   @override
@@ -66,7 +66,7 @@ class $AccountsTable extends Accounts with TableInfo<$AccountsTable, Account> {
     false,
     type: DriftSqlType.string,
     requiredDuringInsert: false,
-    defaultValue: const Constant(kDefaultAccountIcon),
+    defaultValue: const Constant('wallet'),
   );
   static const VerificationMeta _archivedMeta = const VerificationMeta(
     'archived',
@@ -649,7 +649,7 @@ class $CategoriesTable extends Categories
     false,
     type: DriftSqlType.string,
     requiredDuringInsert: false,
-    defaultValue: const Constant(kDefaultCategoryColor),
+    defaultValue: const Constant('#6366F1'),
   );
   static const VerificationMeta _iconMeta = const VerificationMeta('icon');
   @override
@@ -659,7 +659,7 @@ class $CategoriesTable extends Categories
     false,
     type: DriftSqlType.string,
     requiredDuringInsert: false,
-    defaultValue: const Constant(kDefaultCategoryIcon),
+    defaultValue: const Constant('category'),
   );
   static const VerificationMeta _archivedMeta = const VerificationMeta(
     'archived',
@@ -1224,6 +1224,19 @@ class $TransactionsTable extends Transactions
     type: DriftSqlType.bigInt,
     requiredDuringInsert: true,
   );
+  @override
+  late final GeneratedColumnWithTypeConverter<TransactionTimeStatus, String>
+  timeStatus =
+      GeneratedColumn<String>(
+        'time_status',
+        aliasedName,
+        false,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+        defaultValue: const Constant('none'),
+      ).withConverter<TransactionTimeStatus>(
+        $TransactionsTable.$convertertimeStatus,
+      );
   static const VerificationMeta _accountIdMeta = const VerificationMeta(
     'accountId',
   );
@@ -1394,6 +1407,7 @@ class $TransactionsTable extends Transactions
     description,
     status,
     date,
+    timeStatus,
     accountId,
     categoryId,
     amount,
@@ -1608,6 +1622,12 @@ class $TransactionsTable extends Transactions
         DriftSqlType.bigInt,
         data['${effectivePrefix}date'],
       )!,
+      timeStatus: $TransactionsTable.$convertertimeStatus.fromSql(
+        attachedDatabase.typeMapping.read(
+          DriftSqlType.string,
+          data['${effectivePrefix}time_status'],
+        )!,
+      ),
       accountId: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}account_id'],
@@ -1671,6 +1691,11 @@ class $TransactionsTable extends Transactions
   $TransactionsTable createAlias(String alias) {
     return $TransactionsTable(attachedDatabase, alias);
   }
+
+  static JsonTypeConverter2<TransactionTimeStatus, String, String>
+  $convertertimeStatus = const EnumNameConverter<TransactionTimeStatus>(
+    TransactionTimeStatus.values,
+  );
 }
 
 class Transaction extends DataClass implements Insertable<Transaction> {
@@ -1680,6 +1705,7 @@ class Transaction extends DataClass implements Insertable<Transaction> {
   final String? description;
   final String status;
   final BigInt date;
+  final TransactionTimeStatus timeStatus;
   final String accountId;
   final String categoryId;
   final BigInt amount;
@@ -1701,6 +1727,7 @@ class Transaction extends DataClass implements Insertable<Transaction> {
     this.description,
     required this.status,
     required this.date,
+    required this.timeStatus,
     required this.accountId,
     required this.categoryId,
     required this.amount,
@@ -1727,6 +1754,11 @@ class Transaction extends DataClass implements Insertable<Transaction> {
     }
     map['status'] = Variable<String>(status);
     map['date'] = Variable<BigInt>(date);
+    {
+      map['time_status'] = Variable<String>(
+        $TransactionsTable.$convertertimeStatus.toSql(timeStatus),
+      );
+    }
     map['account_id'] = Variable<String>(accountId);
     map['category_id'] = Variable<String>(categoryId);
     map['amount'] = Variable<BigInt>(amount);
@@ -1764,6 +1796,7 @@ class Transaction extends DataClass implements Insertable<Transaction> {
           : Value(description),
       status: Value(status),
       date: Value(date),
+      timeStatus: Value(timeStatus),
       accountId: Value(accountId),
       categoryId: Value(categoryId),
       amount: Value(amount),
@@ -1803,6 +1836,9 @@ class Transaction extends DataClass implements Insertable<Transaction> {
       description: serializer.fromJson<String?>(json['description']),
       status: serializer.fromJson<String>(json['status']),
       date: serializer.fromJson<BigInt>(json['date']),
+      timeStatus: $TransactionsTable.$convertertimeStatus.fromJson(
+        serializer.fromJson<String>(json['timeStatus']),
+      ),
       accountId: serializer.fromJson<String>(json['accountId']),
       categoryId: serializer.fromJson<String>(json['categoryId']),
       amount: serializer.fromJson<BigInt>(json['amount']),
@@ -1829,6 +1865,9 @@ class Transaction extends DataClass implements Insertable<Transaction> {
       'description': serializer.toJson<String?>(description),
       'status': serializer.toJson<String>(status),
       'date': serializer.toJson<BigInt>(date),
+      'timeStatus': serializer.toJson<String>(
+        $TransactionsTable.$convertertimeStatus.toJson(timeStatus),
+      ),
       'accountId': serializer.toJson<String>(accountId),
       'categoryId': serializer.toJson<String>(categoryId),
       'amount': serializer.toJson<BigInt>(amount),
@@ -1853,6 +1892,7 @@ class Transaction extends DataClass implements Insertable<Transaction> {
     Value<String?> description = const Value.absent(),
     String? status,
     BigInt? date,
+    TransactionTimeStatus? timeStatus,
     String? accountId,
     String? categoryId,
     BigInt? amount,
@@ -1874,6 +1914,7 @@ class Transaction extends DataClass implements Insertable<Transaction> {
     description: description.present ? description.value : this.description,
     status: status ?? this.status,
     date: date ?? this.date,
+    timeStatus: timeStatus ?? this.timeStatus,
     accountId: accountId ?? this.accountId,
     categoryId: categoryId ?? this.categoryId,
     amount: amount ?? this.amount,
@@ -1899,6 +1940,9 @@ class Transaction extends DataClass implements Insertable<Transaction> {
           : this.description,
       status: data.status.present ? data.status.value : this.status,
       date: data.date.present ? data.date.value : this.date,
+      timeStatus: data.timeStatus.present
+          ? data.timeStatus.value
+          : this.timeStatus,
       accountId: data.accountId.present ? data.accountId.value : this.accountId,
       categoryId: data.categoryId.present
           ? data.categoryId.value
@@ -1937,6 +1981,7 @@ class Transaction extends DataClass implements Insertable<Transaction> {
           ..write('description: $description, ')
           ..write('status: $status, ')
           ..write('date: $date, ')
+          ..write('timeStatus: $timeStatus, ')
           ..write('accountId: $accountId, ')
           ..write('categoryId: $categoryId, ')
           ..write('amount: $amount, ')
@@ -1956,13 +2001,14 @@ class Transaction extends DataClass implements Insertable<Transaction> {
   }
 
   @override
-  int get hashCode => Object.hash(
+  int get hashCode => Object.hashAll([
     id,
     type,
     name,
     description,
     status,
     date,
+    timeStatus,
     accountId,
     categoryId,
     amount,
@@ -1977,7 +2023,7 @@ class Transaction extends DataClass implements Insertable<Transaction> {
     createdAt,
     updatedAt,
     dirty,
-  );
+  ]);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -1988,6 +2034,7 @@ class Transaction extends DataClass implements Insertable<Transaction> {
           other.description == this.description &&
           other.status == this.status &&
           other.date == this.date &&
+          other.timeStatus == this.timeStatus &&
           other.accountId == this.accountId &&
           other.categoryId == this.categoryId &&
           other.amount == this.amount &&
@@ -2011,6 +2058,7 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
   final Value<String?> description;
   final Value<String> status;
   final Value<BigInt> date;
+  final Value<TransactionTimeStatus> timeStatus;
   final Value<String> accountId;
   final Value<String> categoryId;
   final Value<BigInt> amount;
@@ -2033,6 +2081,7 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
     this.description = const Value.absent(),
     this.status = const Value.absent(),
     this.date = const Value.absent(),
+    this.timeStatus = const Value.absent(),
     this.accountId = const Value.absent(),
     this.categoryId = const Value.absent(),
     this.amount = const Value.absent(),
@@ -2056,6 +2105,7 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
     this.description = const Value.absent(),
     required String status,
     required BigInt date,
+    this.timeStatus = const Value.absent(),
     required String accountId,
     required String categoryId,
     required BigInt amount,
@@ -2089,6 +2139,7 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
     Expression<String>? description,
     Expression<String>? status,
     Expression<BigInt>? date,
+    Expression<String>? timeStatus,
     Expression<String>? accountId,
     Expression<String>? categoryId,
     Expression<BigInt>? amount,
@@ -2112,6 +2163,7 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
       if (description != null) 'description': description,
       if (status != null) 'status': status,
       if (date != null) 'date': date,
+      if (timeStatus != null) 'time_status': timeStatus,
       if (accountId != null) 'account_id': accountId,
       if (categoryId != null) 'category_id': categoryId,
       if (amount != null) 'amount': amount,
@@ -2137,6 +2189,7 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
     Value<String?>? description,
     Value<String>? status,
     Value<BigInt>? date,
+    Value<TransactionTimeStatus>? timeStatus,
     Value<String>? accountId,
     Value<String>? categoryId,
     Value<BigInt>? amount,
@@ -2160,6 +2213,7 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
       description: description ?? this.description,
       status: status ?? this.status,
       date: date ?? this.date,
+      timeStatus: timeStatus ?? this.timeStatus,
       accountId: accountId ?? this.accountId,
       categoryId: categoryId ?? this.categoryId,
       amount: amount ?? this.amount,
@@ -2198,6 +2252,11 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
     }
     if (date.present) {
       map['date'] = Variable<BigInt>(date.value);
+    }
+    if (timeStatus.present) {
+      map['time_status'] = Variable<String>(
+        $TransactionsTable.$convertertimeStatus.toSql(timeStatus.value),
+      );
     }
     if (accountId.present) {
       map['account_id'] = Variable<String>(accountId.value);
@@ -2256,6 +2315,7 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
           ..write('description: $description, ')
           ..write('status: $status, ')
           ..write('date: $date, ')
+          ..write('timeStatus: $timeStatus, ')
           ..write('accountId: $accountId, ')
           ..write('categoryId: $categoryId, ')
           ..write('amount: $amount, ')
@@ -2329,7 +2389,7 @@ class $TagsTable extends Tags with TableInfo<$TagsTable, Tag> {
     false,
     type: DriftSqlType.string,
     requiredDuringInsert: false,
-    defaultValue: const Constant(kDefaultTagColor),
+    defaultValue: const Constant('#69F0AE'),
   );
   static const VerificationMeta _archivedMeta = const VerificationMeta(
     'archived',
@@ -7295,6 +7355,7 @@ typedef $$TransactionsTableCreateCompanionBuilder =
       Value<String?> description,
       required String status,
       required BigInt date,
+      Value<TransactionTimeStatus> timeStatus,
       required String accountId,
       required String categoryId,
       required BigInt amount,
@@ -7319,6 +7380,7 @@ typedef $$TransactionsTableUpdateCompanionBuilder =
       Value<String?> description,
       Value<String> status,
       Value<BigInt> date,
+      Value<TransactionTimeStatus> timeStatus,
       Value<String> accountId,
       Value<String> categoryId,
       Value<BigInt> amount,
@@ -7373,6 +7435,16 @@ class $$TransactionsTableFilterComposer
   ColumnFilters<BigInt> get date => $composableBuilder(
     column: $table.date,
     builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnWithTypeConverterFilters<
+    TransactionTimeStatus,
+    TransactionTimeStatus,
+    String
+  >
+  get timeStatus => $composableBuilder(
+    column: $table.timeStatus,
+    builder: (column) => ColumnWithTypeConverterFilters(column),
   );
 
   ColumnFilters<String> get accountId => $composableBuilder(
@@ -7485,6 +7557,11 @@ class $$TransactionsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get timeStatus => $composableBuilder(
+    column: $table.timeStatus,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get accountId => $composableBuilder(
     column: $table.accountId,
     builder: (column) => ColumnOrderings(column),
@@ -7585,6 +7662,12 @@ class $$TransactionsTableAnnotationComposer
   GeneratedColumn<BigInt> get date =>
       $composableBuilder(column: $table.date, builder: (column) => column);
 
+  GeneratedColumnWithTypeConverter<TransactionTimeStatus, String>
+  get timeStatus => $composableBuilder(
+    column: $table.timeStatus,
+    builder: (column) => column,
+  );
+
   GeneratedColumn<String> get accountId =>
       $composableBuilder(column: $table.accountId, builder: (column) => column);
 
@@ -7677,6 +7760,7 @@ class $$TransactionsTableTableManager
                 Value<String?> description = const Value.absent(),
                 Value<String> status = const Value.absent(),
                 Value<BigInt> date = const Value.absent(),
+                Value<TransactionTimeStatus> timeStatus = const Value.absent(),
                 Value<String> accountId = const Value.absent(),
                 Value<String> categoryId = const Value.absent(),
                 Value<BigInt> amount = const Value.absent(),
@@ -7699,6 +7783,7 @@ class $$TransactionsTableTableManager
                 description: description,
                 status: status,
                 date: date,
+                timeStatus: timeStatus,
                 accountId: accountId,
                 categoryId: categoryId,
                 amount: amount,
@@ -7723,6 +7808,7 @@ class $$TransactionsTableTableManager
                 Value<String?> description = const Value.absent(),
                 required String status,
                 required BigInt date,
+                Value<TransactionTimeStatus> timeStatus = const Value.absent(),
                 required String accountId,
                 required String categoryId,
                 required BigInt amount,
@@ -7745,6 +7831,7 @@ class $$TransactionsTableTableManager
                 description: description,
                 status: status,
                 date: date,
+                timeStatus: timeStatus,
                 accountId: accountId,
                 categoryId: categoryId,
                 amount: amount,

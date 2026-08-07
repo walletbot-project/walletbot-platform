@@ -44,8 +44,8 @@ export function CategoryDetailsSheet({
     onOpenChange: (open: boolean) => void
 }) {
     const navigate = useNavigate()
-    const updateCategory = useMutation(api.categories.mutations.update)
-    const archiveCategory = useMutation(api.categories.mutations.archive)
+    const updateCategory = useMutation(api.v1.categories.mutations.update)
+    const archiveCategory = useMutation(api.v1.categories.mutations.archive)
 
     const categoryId = category?.id ?? ''
     const [monthWindow] = useState(() => {
@@ -59,11 +59,11 @@ export function CategoryDetailsSheet({
     })
 
     const spend = useQuery(
-        api.categories.queries.spendByCurrency,
+        api.v1.categories.queries.spendByCurrency,
         category ? { id: categoryId, ...monthWindow } : 'skip',
     )
     const recent = useQuery(
-        api.categories.queries.recentTransactions,
+        api.v1.categories.queries.recentTransactions,
         category ? { id: categoryId, limit: 5 } : 'skip',
     )
 

@@ -4,7 +4,6 @@ import { betterAuth } from 'better-auth/minimal'
 import { bearer } from 'better-auth/plugins'
 import { components } from './_generated/api'
 import type { DataModel } from './_generated/dataModel'
-import { query } from './_generated/server'
 import authConfig from './auth.config'
 
 const siteUrl = process.env.SITE_URL!
@@ -12,6 +11,21 @@ const convexSiteUrl = process.env.CONVEX_SITE_URL
 
 const appleClientId = process.env.APPLE_CLIENT_ID
 const appleBundleId = process.env.APPLE_BUNDLE_ID
+
+// Google mints the native ID token for a different OAuth client per platform.
+// Android's plugin uses `serverClientId` (our web client), but Google Sign-In
+// for iOS issues the token for the app's own client — Info.plist `GIDClientID`
+// — and spends `serverClientId` on the server auth code instead. So an iOS
+// token carries an `aud` the web client ID doesn't match, and better-auth's
+// `verifyIdToken` rejects it with a 401 `INVALID_TOKEN`.
+//
+// Listing both makes the iOS client an additional accepted audience. The first
+// entry stays primary: it is the one used to build the web authorization URL.
+// Both clients must belong to the same Google project so consent is shared.
+// Falls back to the web client alone when the iOS client isn't configured, so
+// a deployment missing this var keeps working exactly as before.
+const googleClientId = process.env.GOOGLE_CLIENT_ID as string
+const googleIosClientId = process.env.GOOGLE_IOS_CLIENT_ID
 
 // The component client has methods needed for integrating Convex with Better Auth,
 // as well as helper methods for general use.
@@ -29,7 +43,9 @@ export const createAuth = (ctx: GenericCtx<DataModel>) => {
         },
         socialProviders: {
             google: {
-                clientId: process.env.GOOGLE_CLIENT_ID as string,
+                clientId: googleIosClientId
+                    ? [googleClientId, googleIosClientId]
+                    : googleClientId,
                 clientSecret: process.env.GOOGLE_CLIENT_SECRET as string,
             },
             ...(appleClientId
@@ -53,12 +69,3 @@ export const createAuth = (ctx: GenericCtx<DataModel>) => {
         ],
     })
 }
-
-// Example function for getting the current user
-// Feel free to edit, omit, etc.
-export const getCurrentUser = query({
-    args: {},
-    handler: async (ctx) => {
-        return authComponent.getAuthUser(ctx)
-    },
-})

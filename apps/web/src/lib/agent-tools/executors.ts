@@ -3,6 +3,7 @@ import type { ToolName } from '@wallet-bot/shared'
 import {
     parseAmountToCents,
     parseOptionalDate,
+    parseTransactionDate,
     toolSchemas,
 } from '@wallet-bot/shared'
 import {
@@ -31,7 +32,7 @@ function nativeDashboardOnly() {
 export const toolExecutors = {
     // ───── Accounts ─────
     listAccounts: defineTool(toolSchemas.listAccounts, async (ctx, args) => {
-        const accounts = await ctx.client.query(api.accounts.queries.list, {
+        const accounts = await ctx.client.query(api.v1.accounts.queries.list, {
             includeArchived: args.includeArchived ?? false,
         })
         return {
@@ -57,7 +58,7 @@ export const toolExecutors = {
             const r = await resolveAccount(ctx, args.idOrName)
             if (!r.ok) return resolutionError('Account', r)
             const balance = await ctx.client.query(
-                api.transactions.queries.balance,
+                api.v1.transactions.queries.balance,
                 { accountId: r.entity.id },
             )
             if (!balance) return { ok: false, error: 'Account not found' }
@@ -72,7 +73,7 @@ export const toolExecutors = {
     ),
     createAccount: defineTool(toolSchemas.createAccount, async (ctx, args) => {
         const id = newId()
-        await ctx.client.mutation(api.accounts.mutations.create, {
+        await ctx.client.mutation(api.v1.accounts.mutations.create, {
             id,
             name: args.name,
             currency: args.currency,
@@ -85,7 +86,7 @@ export const toolExecutors = {
     updateAccount: defineTool(toolSchemas.updateAccount, async (ctx, args) => {
         const r = await resolveAccount(ctx, args.idOrName)
         if (!r.ok) return resolutionError('Account', r)
-        await ctx.client.mutation(api.accounts.mutations.update, {
+        await ctx.client.mutation(api.v1.accounts.mutations.update, {
             id: r.entity.id,
             name: args.name,
             description: args.description,
@@ -99,7 +100,7 @@ export const toolExecutors = {
         async (ctx, args) => {
             const r = await resolveAccount(ctx, args.idOrName)
             if (!r.ok) return resolutionError('Account', r)
-            await ctx.client.mutation(api.accounts.mutations.archive, {
+            await ctx.client.mutation(api.v1.accounts.mutations.archive, {
                 id: r.entity.id,
             })
             return { ok: true, id: r.entity.id }
@@ -108,7 +109,9 @@ export const toolExecutors = {
 
     // ───── Categories ─────
     listCategories: defineTool(toolSchemas.listCategories, async (ctx) => {
-        const cats = await ctx.client.query(api.categories.queries.listActive)
+        const cats = await ctx.client.query(
+            api.v1.categories.queries.listActive,
+        )
         return {
             ok: true,
             categories: cats.map((c) => ({
@@ -129,7 +132,7 @@ export const toolExecutors = {
         toolSchemas.createCategory,
         async (ctx, args) => {
             const id = newId()
-            await ctx.client.mutation(api.categories.mutations.create, {
+            await ctx.client.mutation(api.v1.categories.mutations.create, {
                 id,
                 name: args.name,
                 description: args.description,
@@ -144,7 +147,7 @@ export const toolExecutors = {
         async (ctx, args) => {
             const r = await resolveCategory(ctx, args.idOrName)
             if (!r.ok) return resolutionError('Category', r)
-            await ctx.client.mutation(api.categories.mutations.update, {
+            await ctx.client.mutation(api.v1.categories.mutations.update, {
                 id: r.entity.id,
                 name: args.name,
                 description: args.description,
@@ -159,7 +162,7 @@ export const toolExecutors = {
         async (ctx, args) => {
             const r = await resolveCategory(ctx, args.idOrName)
             if (!r.ok) return resolutionError('Category', r)
-            await ctx.client.mutation(api.categories.mutations.archive, {
+            await ctx.client.mutation(api.v1.categories.mutations.archive, {
                 id: r.entity.id,
             })
             return { ok: true, id: r.entity.id }
@@ -168,7 +171,7 @@ export const toolExecutors = {
 
     // ───── Tags ─────
     listTags: defineTool(toolSchemas.listTags, async (ctx) => {
-        const tags = await ctx.client.query(api.tags.queries.listActive)
+        const tags = await ctx.client.query(api.v1.tags.queries.listActive)
         return {
             ok: true,
             tags: tags.map((t) => ({
@@ -192,7 +195,7 @@ export const toolExecutors = {
             parentId = r.entity.id
         }
         const id = newId()
-        await ctx.client.mutation(api.tags.mutations.create, {
+        await ctx.client.mutation(api.v1.tags.mutations.create, {
             id,
             name: args.name,
             description: args.description,
@@ -210,7 +213,7 @@ export const toolExecutors = {
             if (!pr.ok) return resolutionError('Parent tag', pr)
             parentId = pr.entity.id
         }
-        await ctx.client.mutation(api.tags.mutations.update, {
+        await ctx.client.mutation(api.v1.tags.mutations.update, {
             id: r.entity.id,
             name: args.name,
             description: args.description,
@@ -222,7 +225,7 @@ export const toolExecutors = {
     archiveTag: defineTool(toolSchemas.archiveTag, async (ctx, args) => {
         const r = await resolveTag(ctx, args.idOrName)
         if (!r.ok) return resolutionError('Tag', r)
-        await ctx.client.mutation(api.tags.mutations.archive, {
+        await ctx.client.mutation(api.v1.tags.mutations.archive, {
             id: r.entity.id,
         })
         return { ok: true, id: r.entity.id }
@@ -246,7 +249,7 @@ export const toolExecutors = {
             }
 
             const page = await ctx.client.query(
-                api.transactions.queries.listPaginated,
+                api.v1.transactions.queries.listPaginated,
                 {
                     paginationOpts: {
                         numItems: args.limit ?? 50,
@@ -269,7 +272,7 @@ export const toolExecutors = {
                 const allowed = new Set<string>()
                 for (const t of items) {
                     const full = await ctx.client.query(
-                        api.transactions.queries.get,
+                        api.v1.transactions.queries.get,
                         { id: t.id },
                     )
                     if (full?.tagIds?.includes(tagR.entity.id))
@@ -289,9 +292,12 @@ export const toolExecutors = {
     getTransaction: defineTool(
         toolSchemas.getTransaction,
         async (ctx, args) => {
-            const txn = await ctx.client.query(api.transactions.queries.get, {
-                id: args.id,
-            })
+            const txn = await ctx.client.query(
+                api.v1.transactions.queries.get,
+                {
+                    id: args.id,
+                },
+            )
             if (!txn) return { ok: false, error: 'Transaction not found' }
             return { ok: true, transaction: serializeTransaction(txn) }
         },
@@ -300,7 +306,7 @@ export const toolExecutors = {
         toolSchemas.getRecentTransactions,
         async (ctx, args) => {
             const txns = await ctx.client.query(
-                api.transactions.queries.recent,
+                api.v1.transactions.queries.recent,
                 { limit: args.limit ?? 10 },
             )
             return {
@@ -318,19 +324,22 @@ export const toolExecutors = {
         if (!catR.ok) return resolutionError('Category', catR)
 
         const id = newId()
-        await ctx.client.mutation(api.transactions.mutations.createExpense, {
+        const date = parseTransactionDate(args.date, args.timeStatus, args.time)
+        await ctx.client.mutation(api.v1.transactions.mutations.createExpense, {
             id,
             name: args.name,
             description: args.description,
             amount: parseAmountToCents(args.amount),
             accountId: accR.entity.id,
             categoryId: catR.entity.id,
-            date: parseOptionalDate(args.date),
-            dateConfirmed: args.dateConfirmed,
+            date,
+            dateConfirmed: args.date !== undefined,
+            timeStatus: args.timeStatus,
             status: args.status,
+            createdBy: 'agent',
         })
         await attachTags(ctx, id, args.tagIdsOrNames)
-        return { ok: true, id }
+        return { ok: true, id, date: Number(date), timeStatus: args.timeStatus }
     }),
     addIncome: defineTool(toolSchemas.addIncome, async (ctx, args) => {
         const accR = await resolveAccount(ctx, args.accountIdOrName)
@@ -339,19 +348,22 @@ export const toolExecutors = {
         if (!catR.ok) return resolutionError('Category', catR)
 
         const id = newId()
-        await ctx.client.mutation(api.transactions.mutations.createIncome, {
+        const date = parseTransactionDate(args.date, args.timeStatus, args.time)
+        await ctx.client.mutation(api.v1.transactions.mutations.createIncome, {
             id,
             name: args.name,
             description: args.description,
             amount: parseAmountToCents(args.amount),
             accountId: accR.entity.id,
             categoryId: catR.entity.id,
-            date: parseOptionalDate(args.date),
-            dateConfirmed: args.dateConfirmed,
+            date,
+            dateConfirmed: args.date !== undefined,
+            timeStatus: args.timeStatus,
             status: args.status,
+            createdBy: 'agent',
         })
         await attachTags(ctx, id, args.tagIdsOrNames)
-        return { ok: true, id }
+        return { ok: true, id, date: Number(date), timeStatus: args.timeStatus }
     }),
     addTransfer: defineTool(toolSchemas.addTransfer, async (ctx, args) => {
         const fromR = await resolveAccount(ctx, args.fromAccountIdOrName)
@@ -366,24 +378,30 @@ export const toolExecutors = {
         if (!catR.ok) return resolutionError('Category', catR)
 
         const id = newId()
-        await ctx.client.mutation(api.transactions.mutations.createTransfer, {
-            id,
-            name: args.name,
-            description: args.description,
-            amount: parseAmountToCents(args.amount),
-            accountId: fromR.entity.id,
-            toAccountId: toR.entity.id,
-            toAmount:
-                args.toAmount !== undefined
-                    ? parseAmountToCents(args.toAmount)
-                    : undefined,
-            exchangeRate: args.exchangeRate,
-            categoryId: catR.entity.id,
-            date: parseOptionalDate(args.date),
-            dateConfirmed: args.dateConfirmed,
-        })
+        const date = parseTransactionDate(args.date, args.timeStatus, args.time)
+        await ctx.client.mutation(
+            api.v1.transactions.mutations.createTransfer,
+            {
+                id,
+                name: args.name,
+                description: args.description,
+                amount: parseAmountToCents(args.amount),
+                accountId: fromR.entity.id,
+                toAccountId: toR.entity.id,
+                toAmount:
+                    args.toAmount !== undefined
+                        ? parseAmountToCents(args.toAmount)
+                        : undefined,
+                exchangeRate: args.exchangeRate,
+                categoryId: catR.entity.id,
+                date,
+                dateConfirmed: args.date !== undefined,
+                timeStatus: args.timeStatus,
+                createdBy: 'agent',
+            },
+        )
         await attachTags(ctx, id, args.tagIdsOrNames)
-        return { ok: true, id }
+        return { ok: true, id, date: Number(date), timeStatus: args.timeStatus }
     }),
     addBalanceAdjustment: defineTool(
         toolSchemas.addBalanceAdjustment,
@@ -391,19 +409,31 @@ export const toolExecutors = {
             const accR = await resolveAccount(ctx, args.accountIdOrName)
             if (!accR.ok) return resolutionError('Account', accR)
             const id = newId()
+            const date = parseTransactionDate(
+                args.date,
+                args.timeStatus,
+                args.time,
+            )
             await ctx.client.mutation(
-                api.transactions.mutations.createBalanceAdjustment,
+                api.v1.transactions.mutations.createBalanceAdjustment,
                 {
                     id,
                     accountId: accR.entity.id,
                     balanceAfter: parseAmountToCents(args.balanceAfter),
                     name: args.name,
                     description: args.description,
-                    date: parseOptionalDate(args.date),
-                    dateConfirmed: args.dateConfirmed,
+                    date,
+                    dateConfirmed: args.date !== undefined,
+                    timeStatus: args.timeStatus,
+                    createdBy: 'agent',
                 },
             )
-            return { ok: true, id }
+            return {
+                ok: true,
+                id,
+                date: Number(date),
+                timeStatus: args.timeStatus,
+            }
         },
     ),
     updateTransaction: defineTool(
@@ -415,12 +445,43 @@ export const toolExecutors = {
                 if (!r.ok) return resolutionError('Category', r)
                 categoryId = r.entity.id
             }
-            await ctx.client.mutation(api.transactions.mutations.update, {
+            // Partial temporal edits must preserve whichever of the calendar
+            // date / clock the caller omitted, instead of anchoring the
+            // missing half to "now". We read the existing transaction and
+            // backfill the omitted component from its stored timestamp. The
+            // status forced into `parseTransactionDate` only drives parsing
+            // (an explicit clock is always respected); the persisted
+            // `timeStatus` is `args.timeStatus`, handled separately below.
+            let date: bigint | undefined
+            if (args.date !== undefined || args.time !== undefined) {
+                const existing = await ctx.client.query(
+                    api.v1.transactions.queries.get,
+                    { id: args.id },
+                )
+                if (!existing) {
+                    return { ok: false, error: 'Transaction not found' }
+                }
+                const existingDate = new Date(Number(existing.date))
+                const pad = (n: number) => String(n).padStart(2, '0')
+                const dateInput =
+                    args.date ??
+                    `${existingDate.getFullYear()}-${pad(
+                        existingDate.getMonth() + 1,
+                    )}-${pad(existingDate.getDate())}`
+                const timeInput =
+                    args.time ??
+                    `${pad(existingDate.getHours())}:${pad(
+                        existingDate.getMinutes(),
+                    )}`
+                date = parseTransactionDate(dateInput, 'confirmed', timeInput)
+            }
+            await ctx.client.mutation(api.v1.transactions.mutations.update, {
                 id: args.id,
                 name: args.name,
                 description: args.description,
-                date: parseOptionalDate(args.date),
-                dateConfirmed: args.dateConfirmed,
+                date,
+                dateConfirmed: args.date === undefined ? undefined : true,
+                timeStatus: args.timeStatus,
                 amount:
                     args.amount !== undefined
                         ? parseAmountToCents(args.amount)
@@ -428,13 +489,20 @@ export const toolExecutors = {
                 categoryId,
                 status: args.status,
             })
-            return { ok: true, id: args.id }
+            return {
+                ok: true,
+                id: args.id,
+                ...(date === undefined ? {} : { date: Number(date) }),
+                ...(args.timeStatus === undefined
+                    ? {}
+                    : { timeStatus: args.timeStatus }),
+            }
         },
     ),
     deleteTransaction: defineTool(
         toolSchemas.deleteTransaction,
         async (ctx, args) => {
-            await ctx.client.mutation(api.transactions.mutations.archive, {
+            await ctx.client.mutation(api.v1.transactions.mutations.archive, {
                 id: args.id,
             })
             return { ok: true, id: args.id }
@@ -451,7 +519,7 @@ export const toolExecutors = {
                 return { ok: false, error: 'No tags resolved', missing }
             }
             const result = await ctx.client.mutation(
-                api.transactions.mutations.tag,
+                api.v1.transactions.mutations.tag,
                 {
                     transactionId: args.transactionId,
                     tagIds: resolved,
@@ -468,7 +536,7 @@ export const toolExecutors = {
                 args.tagIdsOrNames,
             )
             const result = await ctx.client.mutation(
-                api.transactions.mutations.untag,
+                api.v1.transactions.mutations.untag,
                 {
                     transactionId: args.transactionId,
                     tagIds: resolved,
@@ -500,7 +568,7 @@ export const toolExecutors = {
                 totals.set(key, (totals.get(key) ?? 0n) + t.amount)
             }
             const cats = await ctx.client.query(
-                api.categories.queries.listActive,
+                api.v1.categories.queries.listActive,
             )
             const nameById = new Map(cats.map((c) => [c.id, c.name]))
             return {
@@ -525,9 +593,12 @@ export const toolExecutors = {
                 string,
                 { name: string; currency: string; in: bigint; out: bigint }
             >()
-            const accounts = await ctx.client.query(api.accounts.queries.list, {
-                includeArchived: false,
-            })
+            const accounts = await ctx.client.query(
+                api.v1.accounts.queries.list,
+                {
+                    includeArchived: false,
+                },
+            )
             for (const a of accounts) {
                 rows.set(a.id, {
                     name: a.name,
@@ -608,6 +679,8 @@ type TxnLite = {
     type: 'expense' | 'income' | 'transfer' | 'balance_adjustment'
     name: string
     date: bigint
+    dateConfirmed?: boolean
+    timeStatus?: 'confirmed' | 'approximation' | 'none'
     accountId: string
     categoryId: string
     amount: bigint
@@ -625,6 +698,8 @@ function serializeTransaction(t: TxnLite) {
         type: t.type,
         name: t.name,
         date: Number(t.date),
+        dateConfirmed: t.dateConfirmed,
+        timeStatus: t.timeStatus ?? 'none',
         accountId: t.accountId,
         categoryId: t.categoryId,
         amount: Number(t.amount) / 100,
@@ -649,7 +724,7 @@ async function attachTags(
     if (!tagIdsOrNames || tagIdsOrNames.length === 0) return
     const { resolved } = await resolveTagIds(ctx, tagIdsOrNames)
     if (resolved.length === 0) return
-    await ctx.client.mutation(api.transactions.mutations.tag, {
+    await ctx.client.mutation(api.v1.transactions.mutations.tag, {
         transactionId,
         tagIds: resolved,
     })
@@ -672,7 +747,7 @@ async function collectAllInRange(
             page: TxnLite[]
             isDone: boolean
             continueCursor: string
-        } = await ctx.client.query(api.transactions.queries.listPaginated, {
+        } = await ctx.client.query(api.v1.transactions.queries.listPaginated, {
             paginationOpts: { numItems: 200, cursor },
             type: args.type,
             dateFrom: args.dateFrom,

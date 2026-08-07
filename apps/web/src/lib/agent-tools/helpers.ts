@@ -75,12 +75,12 @@ export async function resolveAccount(
     ctx: AgentToolContext,
     idOrName: string,
 ): Promise<Resolution<{ id: string; name: string; currency: string }>> {
-    const byId = await ctx.client.query(api.accounts.queries.get, {
+    const byId = await ctx.client.query(api.v1.accounts.queries.get, {
         id: idOrName,
     })
     if (byId) return { ok: true, entity: byId }
 
-    const list = await ctx.client.query(api.accounts.queries.list, {
+    const list = await ctx.client.query(api.v1.accounts.queries.list, {
         includeArchived: false,
     })
     const target = normalizeName(idOrName)
@@ -98,12 +98,12 @@ export async function resolveCategory(
     ctx: AgentToolContext,
     idOrName: string,
 ): Promise<Resolution<{ id: string; name: string }>> {
-    const byId = await ctx.client.query(api.categories.queries.get, {
+    const byId = await ctx.client.query(api.v1.categories.queries.get, {
         id: idOrName,
     })
     if (byId) return { ok: true, entity: byId }
 
-    const list = await ctx.client.query(api.categories.queries.listActive)
+    const list = await ctx.client.query(api.v1.categories.queries.listActive)
     const target = normalizeName(idOrName)
     const matches = list.filter((c) => normalizeName(c.name) === target)
     if (matches.length === 1) return { ok: true, entity: matches[0] }
@@ -119,10 +119,12 @@ export async function resolveTag(
     ctx: AgentToolContext,
     idOrName: string,
 ): Promise<Resolution<{ id: string; name: string }>> {
-    const byId = await ctx.client.query(api.tags.queries.get, { id: idOrName })
+    const byId = await ctx.client.query(api.v1.tags.queries.get, {
+        id: idOrName,
+    })
     if (byId) return { ok: true, entity: byId }
 
-    const list = await ctx.client.query(api.tags.queries.listActive)
+    const list = await ctx.client.query(api.v1.tags.queries.listActive)
     const target = normalizeName(idOrName)
     const matches = list.filter((t) => normalizeName(t.name) === target)
     if (matches.length === 1) return { ok: true, entity: matches[0] }

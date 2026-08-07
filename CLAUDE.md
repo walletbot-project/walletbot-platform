@@ -45,6 +45,12 @@ Wallet Bot — app for keeping track of personal expenses
 - After implementing a feature, review `docs/riesgos.md` and decide whether
   the feature mitigates an existing risk, changes its probability or impact, or
   introduces a new risk that should be added.
+- The current native SQLite schema is `v1`, established as the baseline for
+  coordinated native DB migrations. Every future schema change must be agreed
+  with the team, increment `schemaVersion`, implement an explicit
+  data-preserving `onUpgrade` path, run Drift migration artifact generation, and
+  add schema plus data-integrity migration tests. Follow
+  `docs/schema/README.md`.
 - After all steps of any task run a CLAUDE.md rules check
 - Always report violations
 
@@ -126,20 +132,16 @@ Convex has two runtimes: the default (fast, no Node APIs) and Node.js. Files tha
 
 ## Client–server contract, versioning & native config
 
-These rules govern how the native app (which can lag behind the backend) talks
-to Convex, and how native version gating is handled. The web app deploys in
-lockstep with the backend, so it is exempt from the versioning rule below.
+These rules govern how the native and web apps talk to Convex, and how native
+version gating is handled.
 
-- **Version the native-consumed contract.** The HTTP native config surface the
-  native app calls is served under a `/vN` path prefix (`/v1/config`); to break
-  it, add `/v2/*` and retire `/v1/*` only after the `minSupportedVersion` cutoff
-  has passed. The sync and native-auth surfaces are **not yet path-versioned** —
-  they are still called at bare paths
-  (`sync/queries:pull`, `sync/mutations:push`, `sync/queries:getCounter`, and
-  the `/native-auth/*` + `/auth/*` HTTP routes). Until they are, treat any
-  change to their wire format as breaking and coordinate it via the
-  `minSupportedVersion` bump below. Web-only functions (typed `api.*` refs) stay
-  unversioned.
+- **Version application-owned client contracts.** Public Convex functions used
+  by native or web clients live under a `vN/` module prefix, and application
+  HTTP APIs use a `/vN` path prefix. Current examples are
+  `v1/sync/queries:pull`, `v1/accounts/mutations:create`, `/v1/config`, and
+  `/v1/live/token`. Do not version framework-managed authentication, OIDC,
+  JWKS, or Better Auth routes. To make a breaking contract change, add the next
+  version and retire the old one only when its clients no longer require it.
 - **Breaking sync/wire changes are a coordinated bump.** Any change to the sync
   wire format or the set of synced tables/fields must bump **both**
   `minSupportedVersion` (backend constants in
@@ -148,8 +150,9 @@ lockstep with the backend, so it is exempt from the versioning rule below.
   clients must fail *closed on sync* while continuing to work *offline* on their
   local data — never silently drop or diverge. The gate is enforced on **both**
   sides: the client won't start sync when `syncAllowed` is false, and because a
-  client whose config fetch failed fails *open*, `sync/*:push` and `pull` also
-  check `appVersion`/`platform` against `minSupportedVersion` server-side
+  client whose config fetch failed fails *open*, `v1/sync/mutations:push` and
+  `v1/sync/queries:pull` also check `appVersion`/`platform` against
+  `minSupportedVersion` server-side
   (`config/helpers.ts:isClientSupported`) and return
   `{ ok: false, error: 'client_outdated' }`, which halts the sync engine and
   flips the client to the hard update prompt. Both entry points therefore take
