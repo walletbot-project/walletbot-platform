@@ -104,8 +104,19 @@ Future<String> createManualTransaction(
   }
 
   final id = newUuid();
-  final now = BigInt.from(DateTime.now().millisecondsSinceEpoch);
-  final date = BigInt.from(input.date.millisecondsSinceEpoch);
+  final loadedAt = DateTime.now();
+  final now = BigInt.from(loadedAt.millisecondsSinceEpoch);
+  final date = BigInt.from(
+    DateTime(
+      input.date.year,
+      input.date.month,
+      input.date.day,
+      loadedAt.hour,
+      loadedAt.minute,
+      loadedAt.second,
+      loadedAt.millisecond,
+    ).millisecondsSinceEpoch,
+  );
   final amount = _parseAmountToCents(input.amount);
 
   await db.transaction(() async {
@@ -123,6 +134,7 @@ Future<String> createManualTransaction(
             ),
             status: 'cleared',
             date: date,
+            timeStatus: const Value(TransactionTimeStatus.none),
             accountId: account.id,
             categoryId: category.id,
             amount: amount,

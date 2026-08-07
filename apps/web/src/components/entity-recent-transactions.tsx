@@ -1,9 +1,10 @@
 import { Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { currencyPrefix } from '@/lib/money'
 import {
     type ActivityTransaction,
+    formatTransactionTime,
     signedAmountCents,
+    transactionTimeStatus,
 } from '@/pages/activity/helpers'
 import { TransactionRow } from '@/pages/activity/transaction-row'
 
@@ -73,8 +74,10 @@ export function EntityRecentTransactions({
                             title={t.name}
                             amountCents={signedAmountCents(t)}
                             dateConfirmed={t.dateConfirmed}
+                            timeLabel={formatTransactionTime(t.date)}
+                            timeStatus={transactionTimeStatus(t)}
                             description={shortDate(Number(t.date))}
-                            currencySymbol={currencyPrefix(t.currency).trim()}
+                            currency={t.currency}
                         />
                     ))}
                 </div>

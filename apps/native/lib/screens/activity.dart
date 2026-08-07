@@ -1,3 +1,6 @@
+import 'package:app/components/account_icons.dart';
+import 'package:app/components/category_icons.dart';
+import 'package:app/components/color_utils.dart';
 import 'package:app/components/transaction_filters_bar.dart';
 import 'package:app/components/transaction_row.dart';
 import 'package:app/data/data.dart';
@@ -7,6 +10,7 @@ import 'package:app/shared/app_navigation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:app/screens/transaction_form.dart';
+import 'package:app/screens/transaction_details_sheet.dart';
 
 class ActivityScreen extends StatefulWidget {
   const ActivityScreen({
@@ -50,6 +54,29 @@ class _ActivityScreenState extends State<ActivityScreen> {
     );
     if (!mounted || saved != true) return;
     context.read<AppNavigation>().index = AppNavigation.activityTab;
+  }
+
+  Future<void> _openTransactionDetails(
+    String transactionId, {
+    TransactionDetailTransferSide? transferSide,
+  }) async {
+    final repos = context.read<AppRepositories>();
+    // The details screen can pop back a filter (tapping its date/category/tag),
+    // asking Activity to show everything matching that dimension.
+    final result = await Navigator.of(context).push<TransactionFilter>(
+      MaterialPageRoute(
+        builder: (_) => TransactionDetailsScreen(
+          transactionId: transactionId,
+          repos: repos,
+          transferSide: transferSide,
+        ),
+      ),
+    );
+    if (!mounted || result == null) return;
+    setState(() {
+      _filter = result;
+      _resetPagination();
+    });
   }
 
   @override
@@ -166,7 +193,32 @@ class _ActivityScreenState extends State<ActivityScreen> {
                 onChanged: _updateTypeChip,
               ),
             ),
-            StreamBuilder<List<Transaction>>(
+            _buildTransactionsSliver(repos),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTransactionsSliver(AppRepositories repos) {
+    return StreamBuilder<List<Account>>(
+      stream: repos.accounts.watchAll(includeArchived: true),
+      builder: (context, accountsSnapshot) {
+        final accountsById = {
+          for (final account in accountsSnapshot.data ?? const <Account>[])
+            account.id: account,
+        };
+
+        return StreamBuilder<List<Category>>(
+          stream: repos.categories.watchAll(includeArchived: true),
+          builder: (context, categoriesSnapshot) {
+            final categoriesById = {
+              for (final category
+                  in categoriesSnapshot.data ?? const <Category>[])
+                category.id: category,
+            };
+
+            return StreamBuilder<List<Transaction>>(
               stream: repos.transactions.watch(
                 _filter,
                 limit: _limit,
@@ -210,7 +262,12 @@ class _ActivityScreenState extends State<ActivityScreen> {
                 }
 
                 final hasMore = items.length >= _limit;
-                final entries = _buildListEntries(items, hasMore: hasMore);
+                final entries = _buildListEntries(
+                  items,
+                  hasMore: hasMore,
+                  accountsById: accountsById,
+                  categoriesById: categoriesById,
+                );
 
                 return SliverList.builder(
                   itemCount: entries.length,
@@ -218,23 +275,33 @@ class _ActivityScreenState extends State<ActivityScreen> {
                       _buildEntry(context, entries[index]),
                 );
               },
-            ),
-          ],
-        ),
-      ),
+            );
+          },
+        );
+      },
     );
   }
 
   List<_ListEntry> _buildListEntries(
     List<Transaction> items, {
     required bool hasMore,
+    required Map<String, Account> accountsById,
+    required Map<String, Category> categoriesById,
   }) {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
     final entries = <_ListEntry>[];
+    final sortedItems = [...items]
+      ..sort((left, right) {
+        final byTime = right.date.compareTo(left.date);
+        if (byTime != 0) return byTime;
+        final byCreation = right.createdAt.compareTo(left.createdAt);
+        if (byCreation != 0) return byCreation;
+        return right.id.compareTo(left.id);
+      });
 
     DateTime? currentDay;
-    for (final t in items) {
+    for (final t in sortedItems) {
       // Group by transaction date (matches web). The list is ordered by date
       // desc above, so day headers stay contiguous.
       final dt = DateTime.fromMillisecondsSinceEpoch(t.date.toInt());
@@ -244,13 +311,24 @@ class _ActivityScreenState extends State<ActivityScreen> {
         currentDay = day;
       }
       if (t.type == 'transfer') {
-        entries.addAll(_transferEntries(t));
+        entries.addAll(
+          _transferEntries(
+            t,
+            accountsById: accountsById,
+            categoriesById: categoriesById,
+          ),
+        );
       } else {
         entries.add(
           _TxnEntry.fromTransaction(
             t,
             amountCents: _signedAmountCents(t),
             description: _descriptionFor(t),
+            visualIdentities: _visualIdentitiesFor(
+              t,
+              accountsById: accountsById,
+              categoriesById: categoriesById,
+            ),
           ),
         );
       }
@@ -275,11 +353,14 @@ class _ActivityScreenState extends State<ActivityScreen> {
           ),
         );
       case _TxnEntry(
+        :final transactionId,
         :final title,
         :final amountCents,
         :final currency,
         :final dateConfirmed,
         :final description,
+        :final visualIdentities,
+        :final transferSide,
       ):
         return Padding(
           padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
@@ -289,6 +370,11 @@ class _ActivityScreenState extends State<ActivityScreen> {
             currency: currency,
             dateCheck: dateConfirmed,
             description: description,
+            visualIdentities: visualIdentities,
+            onTap: () => _openTransactionDetails(
+              transactionId,
+              transferSide: transferSide,
+            ),
           ),
         );
       case _LoadingEntry():
@@ -328,26 +414,102 @@ class _ActivityScreenState extends State<ActivityScreen> {
     }
   }
 
-  List<_TxnEntry> _transferEntries(Transaction t) {
+  List<_TxnEntry> _transferEntries(
+    Transaction t, {
+    required Map<String, Account> accountsById,
+    required Map<String, Category> categoriesById,
+  }) {
     final description = _descriptionFor(t);
     final sourceAmount = -t.amount.toInt().abs();
     final destinationAmount = (t.toAmount ?? t.amount).toInt().abs();
     return [
       _TxnEntry(
+        transactionId: t.id,
         title: context.l10n.transferSent,
         amountCents: sourceAmount,
         currency: t.currency,
         dateConfirmed: t.dateConfirmed,
         description: description,
+        transferSide: TransactionDetailTransferSide.source,
+        visualIdentities: _visualIdentitiesFor(
+          t,
+          accountId: t.accountId,
+          accountsById: accountsById,
+          categoriesById: categoriesById,
+        ),
       ),
       _TxnEntry(
+        transactionId: t.id,
         title: context.l10n.transferReceived,
         amountCents: destinationAmount,
         currency: t.toCurrency ?? t.currency,
         dateConfirmed: t.dateConfirmed,
         description: description,
+        transferSide: TransactionDetailTransferSide.destination,
+        visualIdentities: _visualIdentitiesFor(
+          t,
+          accountId: t.toAccountId ?? t.accountId,
+          accountsById: accountsById,
+          categoriesById: categoriesById,
+        ),
       ),
     ];
+  }
+
+  List<TransactionRowVisualIdentity> _visualIdentitiesFor(
+    Transaction transaction, {
+    required Map<String, Account> accountsById,
+    required Map<String, Category> categoriesById,
+    String? accountId,
+  }) {
+    final identities = <TransactionRowVisualIdentity>[];
+    final account = accountsById[accountId ?? transaction.accountId];
+    if (account != null) {
+      identities.add(
+        TransactionRowVisualIdentity(
+          type: TransactionRowVisualIdentityType.account,
+          label: 'Cuenta: ${account.name}',
+          icon: accountIconFromName(account.icon),
+          color: colorFromHex(account.color, fallback: accountDefaultColor),
+        ),
+      );
+    }
+
+    final categoryId = transaction.categoryId;
+    if (categoryId.isNotEmpty) {
+      final category = categoriesById[categoryId];
+      if (category != null) {
+        identities.add(
+          TransactionRowVisualIdentity(
+            type: TransactionRowVisualIdentityType.category,
+            label: 'Categoria: ${category.name}',
+            icon: categoryIconFromName(category.icon),
+            color: colorFromHex(category.color, fallback: categoryDefaultColor),
+          ),
+        );
+      }
+    }
+
+    identities.add(_timeVisualIdentityFor(transaction));
+
+    return identities;
+  }
+
+  TransactionRowVisualIdentity _timeVisualIdentityFor(Transaction transaction) {
+    final date = DateTime.fromMillisecondsSinceEpoch(transaction.date.toInt());
+    final needsAttention =
+        transaction.timeStatus != TransactionTimeStatus.confirmed;
+    return TransactionRowVisualIdentity(
+      type: TransactionRowVisualIdentityType.time,
+      label: MaterialLocalizations.of(
+        context,
+      ).formatTimeOfDay(TimeOfDay.fromDateTime(date)),
+      icon: needsAttention
+          ? Icons.help_outline_rounded
+          : Icons.schedule_outlined,
+      color: Colors.transparent,
+      attention: needsAttention,
+    );
   }
 
   String? _joinDescriptions(String? first, String? second) {
@@ -381,30 +543,40 @@ class _HeaderEntry extends _ListEntry {
 
 class _TxnEntry extends _ListEntry {
   const _TxnEntry({
+    required this.transactionId,
     required this.title,
     required this.amountCents,
     required this.currency,
     required this.dateConfirmed,
+    required this.visualIdentities,
+    this.transferSide,
     this.description,
   });
 
   factory _TxnEntry.fromTransaction(
     Transaction transaction, {
     required int amountCents,
+    required List<TransactionRowVisualIdentity> visualIdentities,
     String? description,
   }) => _TxnEntry(
+    transactionId: transaction.id,
     title: transaction.name,
     amountCents: amountCents,
     currency: transaction.currency,
     dateConfirmed: transaction.dateConfirmed,
     description: description,
+    visualIdentities: visualIdentities,
+    transferSide: null,
   );
 
+  final String transactionId;
   final String title;
   final int amountCents;
   final String currency;
   final bool dateConfirmed;
   final String? description;
+  final List<TransactionRowVisualIdentity> visualIdentities;
+  final TransactionDetailTransferSide? transferSide;
 }
 
 class _LoadingEntry extends _ListEntry {

@@ -124,10 +124,13 @@ const confirmHandler = httpAction(async (ctx, req) => {
     try {
         const { auth } = await authComponent.getAuth(createAuth, ctx)
         const authCtx = await auth.$context
-        await authCtx.internalAdapter.deleteSessions(result.userId)
+        // better-auth 1.6 split the old `deleteSessions(userIdOrTokens)`:
+        // `deleteSessions` now takes session tokens, `deleteUserSessions`
+        // takes the user id.
+        await authCtx.internalAdapter.deleteUserSessions(result.userId)
     } catch (err) {
         console.error(
-            'userDeletion: deleteSessions failed',
+            'userDeletion: deleteUserSessions failed',
             err instanceof Error ? (err.stack ?? err.message) : String(err),
         )
     }

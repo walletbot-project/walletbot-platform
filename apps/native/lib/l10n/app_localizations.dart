@@ -146,6 +146,12 @@ abstract class AppLocalizations {
   /// **'Cancel'**
   String get cancel;
 
+  /// No description provided for @accept.
+  ///
+  /// In en, this message translates to:
+  /// **'Accept'**
+  String get accept;
+
   /// No description provided for @apply.
   ///
   /// In en, this message translates to:
@@ -373,6 +379,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Optional'**
   String get optional;
+
+  /// No description provided for @timeOptional.
+  ///
+  /// In en, this message translates to:
+  /// **'Time (optional)'**
+  String get timeOptional;
+
+  /// No description provided for @noTime.
+  ///
+  /// In en, this message translates to:
+  /// **'No time'**
+  String get noTime;
 
   /// No description provided for @search.
   ///
@@ -1829,7 +1847,7 @@ abstract class AppLocalizations {
   /// No description provided for @verifyEmailDone.
   ///
   /// In en, this message translates to:
-  /// **'I verified my email — sign in'**
+  /// **'I verified my email'**
   String get verifyEmailDone;
 
   /// No description provided for @resendVerificationEmail.

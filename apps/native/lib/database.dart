@@ -81,6 +81,8 @@ class Categories extends Table {
   Set<Column<Object>> get primaryKey => {id};
 }
 
+enum TransactionTimeStatus { confirmed, approximation, none }
+
 @TableIndex(name: 'transactions_account_id', columns: {#accountId})
 @TableIndex(name: 'transactions_category_id', columns: {#categoryId})
 @TableIndex(name: 'transactions_to_account_id', columns: {#toAccountId})
@@ -107,6 +109,9 @@ class Transactions extends Table {
   TextColumn get description => text().named('description').nullable()();
   TextColumn get status => text().named('status')(); // "pending" | "cleared"
   Int64Column get date => int64().named('date')();
+  TextColumn get timeStatus => textEnum<TransactionTimeStatus>()
+      .named('time_status')
+      .withDefault(const Constant('none'))();
   TextColumn get accountId => text().named('account_id')();
   TextColumn get categoryId => text().named('category_id')();
   Int64Column get amount => int64().named('amount')(); // cents
@@ -379,12 +384,17 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.executor);
 
   @override
-  int get schemaVersion => 1;
+  int get schemaVersion => 2;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
     onCreate: (m) async => m.createAll(),
     onUpgrade: (m, from, to) async {
+      // v2: approximate/confirmed timing metadata on transactions.
+      if (from < 2) {
+        await m.addColumn(transactions, transactions.timeStatus);
+        return;
+      }
       throw UnsupportedError(
         'Unhandled SQLite migration path: v$from -> v$to. '
         'Define an explicit upgrade path in AppDatabase.migration.',

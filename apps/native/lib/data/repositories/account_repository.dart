@@ -1,6 +1,7 @@
 import 'package:drift/drift.dart';
 
 import '../../database.dart';
+import '../../telemetry/business_metrics.dart';
 import '../ids.dart';
 import '../queries/account_balance.dart';
 import 'repository_base.dart';
@@ -8,7 +9,10 @@ import 'repository_base.dart';
 /// Reads and writes for wallet accounts (the user's cash/bank/card pockets,
 /// not auth accounts).
 class AccountRepository extends RepositoryBase {
-  AccountRepository(super.db);
+  AccountRepository(super.db, {BusinessMetrics? businessMetrics})
+    : _businessMetrics = businessMetrics;
+
+  final BusinessMetrics? _businessMetrics;
 
   /// Active accounts ordered by creation time (the accounts screen order).
   Stream<List<Account>> watchActive() =>
@@ -16,6 +20,15 @@ class AccountRepository extends RepositoryBase {
             ..where((a) => a.archived.equals(false))
             ..orderBy([(a) => OrderingTerm(expression: a.createdAt)]))
           .watch();
+
+  /// Live list, active-only by default. Insertion order.
+  Stream<List<Account>> watchAll({bool includeArchived = false}) {
+    final query = db.select(db.accounts);
+    if (!includeArchived) {
+      query.where((a) => a.archived.equals(false));
+    }
+    return query.watch();
+  }
 
   /// One-shot list, active-only by default. Insertion order, no sorting.
   Future<List<Account>> listAll({bool includeArchived = false}) {
@@ -53,6 +66,7 @@ class AccountRepository extends RepositoryBase {
   Future<String> create({
     required String name,
     required String currency,
+    String createdBy = 'form',
     String? description,
     String? color,
     String? icon,
@@ -99,6 +113,13 @@ class AccountRepository extends RepositoryBase {
             );
       }
     });
+    _businessMetrics?.financialAccountCreated(createdBy: createdBy);
+    if (initialBalanceCents != null) {
+      _businessMetrics?.movementCreated(
+        movementType: 'balance_adjustment',
+        createdBy: createdBy,
+      );
+    }
     return id;
   }
 
