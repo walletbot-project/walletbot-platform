@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:math' as math;
-import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:app/l10n/l10n.dart';
@@ -63,11 +63,17 @@ class _VoiceScreenState extends State<VoiceScreen> {
   bool get _isMicEffectivelyMuted =>
       !_micActive || !_userMicOn || _isTextComposing;
 
-  static const _recordConfig = RecordConfig(
+  // Not const: echoCancel is platform-dependent. On iOS `echoCancel: true`
+  // makes `record` enable Apple's voice-processing I/O unit on its capture
+  // engine, which conflicts with the separate playback engine
+  // (PcmAudioPlayer.swift): the vpio unit enters a render-error loop
+  // (`auou/vpio/appl render err: -1`) and agent audio is silent. The known
+  // cost is that iOS has NO echo cancellation — see AUDIO.md § iOS.
+  static final _recordConfig = RecordConfig(
     encoder: AudioEncoder.pcm16bits,
     sampleRate: 16000,
     numChannels: 1,
-    echoCancel: true,
+    echoCancel: defaultTargetPlatform != TargetPlatform.iOS,
     noiseSuppress: true,
     autoGain: false,
     streamBufferSize: 3200,
@@ -327,6 +333,12 @@ class _VoiceScreenState extends State<VoiceScreen> {
         _addSystemSetState(l10n.pcmUnsupported, kind: _SystemKind.error);
         return;
       }
+
+      // iOS: the Swift PcmAudioPlayer owns the shared AVAudioSession
+      // (playAndRecord + voiceChat + defaultToSpeaker), configured before
+      // this point by _command.start(). Tell `record` not to fight over it.
+      // `ios` is null on every other platform, so this is a no-op elsewhere.
+      await _recorder.ios?.manageAudioSession(false);
 
       final audioStream = await _recorder.startStream(_recordConfig);
       _audioSubscription = audioStream.listen(
