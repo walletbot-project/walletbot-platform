@@ -22,10 +22,12 @@ import {
     SheetTitle,
     SheetTrigger,
 } from '@/components/ui/sheet'
+import { type Messages, useFormatLocale, useT } from '@/lib/i18n'
 import { cn } from '@/lib/utils'
 import {
     advancedFilterCount,
     EMPTY_FILTERS,
+    formatNumericDate,
     hasAdvancedFilters,
     type TransactionFilters,
 } from './helpers'
@@ -41,6 +43,7 @@ export function TransactionFiltersBar({
     filters,
     onChange,
 }: TransactionFiltersBarProps) {
+    const t = useT()
     const accounts = useQuery(api.v1.accounts.queries.listActive)
     const categories = useQuery(api.v1.categories.queries.listActive)
     const tags = useQuery(api.v1.tags.queries.listActive)
@@ -55,7 +58,7 @@ export function TransactionFiltersBar({
                         onChange={(e) =>
                             onChange({ ...filters, search: e.target.value })
                         }
-                        placeholder="Buscar"
+                        placeholder={t.activity.search}
                         className="rounded-full pl-9"
                     />
                 </div>
@@ -96,6 +99,7 @@ function FiltersSheet({
     categories,
     tags,
 }: FiltersSheetProps) {
+    const t = useT()
     const [open, setOpen] = useState(false)
     const [draft, setDraft] = useState<TransactionFilters>(filters)
     const count = advancedFilterCount(filters)
@@ -133,7 +137,7 @@ function FiltersSheet({
                         variant="outline"
                         size="icon"
                         className="relative shrink-0"
-                        aria-label="Filtros"
+                        aria-label={t.activity.filters}
                     />
                 }
             >
@@ -146,21 +150,21 @@ function FiltersSheet({
             </SheetTrigger>
             <SheetContent side="right" className="w-full gap-0 sm:max-w-md">
                 <SheetHeader className="flex-row items-center justify-between">
-                    <SheetTitle>Filtros</SheetTitle>
+                    <SheetTitle>{t.activity.filters}</SheetTitle>
                     <Button
                         type="button"
                         variant="ghost"
                         size="sm"
                         onClick={clear}
                     >
-                        Limpiar
+                        {t.common.clear}
                     </Button>
                 </SheetHeader>
                 <Separator />
 
                 <div className="flex-1 space-y-6 overflow-y-auto p-4">
                     <section className="space-y-2">
-                        <SectionTitle>Rango de fechas</SectionTitle>
+                        <SectionTitle>{t.activity.dateRange}</SectionTitle>
                         <DateRangeField
                             range={range}
                             onSelect={(next) =>
@@ -181,38 +185,38 @@ function FiltersSheet({
                     </section>
 
                     <section className="space-y-2">
-                        <SectionTitle>Cuentas</SectionTitle>
+                        <SectionTitle>{t.activity.accounts}</SectionTitle>
                         <TogglePicker
                             entities={accounts}
                             selected={draft.accountIds}
                             onChange={(accountIds) =>
                                 setDraft({ ...draft, accountIds })
                             }
-                            emptyText="No hay cuentas"
+                            emptyText={t.activity.noAccounts}
                         />
                     </section>
 
                     <section className="space-y-2">
-                        <SectionTitle>Categorías</SectionTitle>
+                        <SectionTitle>{t.activity.categories}</SectionTitle>
                         <TogglePicker
                             entities={categories}
                             selected={draft.categoryIds}
                             onChange={(categoryIds) =>
                                 setDraft({ ...draft, categoryIds })
                             }
-                            emptyText="No hay categorías"
+                            emptyText={t.activity.noCategories}
                         />
                     </section>
 
                     <section className="space-y-2">
-                        <SectionTitle>Tags</SectionTitle>
+                        <SectionTitle>{t.activity.tags}</SectionTitle>
                         <TogglePicker
                             entities={tags}
                             selected={draft.tagIds}
                             onChange={(tagIds) =>
                                 setDraft({ ...draft, tagIds })
                             }
-                            emptyText="No hay tags"
+                            emptyText={t.activity.noTags}
                         />
                     </section>
                 </div>
@@ -228,10 +232,10 @@ function FiltersSheet({
                             />
                         }
                     >
-                        Cancelar
+                        {t.common.cancel}
                     </SheetClose>
                     <Button type="button" className="flex-1" onClick={apply}>
-                        Aplicar
+                        {t.common.apply}
                     </Button>
                 </SheetFooter>
             </SheetContent>
@@ -250,11 +254,13 @@ type DateRangeFieldProps = {
 }
 
 function DateRangeField({ range, onSelect, onClear }: DateRangeFieldProps) {
+    const t = useT()
+    const formatLocale = useFormatLocale()
     const [open, setOpen] = useState(false)
     const label =
         range?.from || range?.to
-            ? formatDateRange(range.from, range.to)
-            : 'Seleccionar rango'
+            ? formatDateRange(range.from, range.to, t, formatLocale)
+            : t.activity.selectRange
     return (
         <div className="flex items-center gap-2">
             <Popover open={open} onOpenChange={setOpen}>
@@ -285,7 +291,7 @@ function DateRangeField({ range, onSelect, onClear }: DateRangeFieldProps) {
                     type="button"
                     variant="ghost"
                     size="icon"
-                    aria-label="Limpiar rango"
+                    aria-label={t.activity.clearRange}
                     onClick={onClear}
                 >
                     <X />
@@ -350,12 +356,19 @@ function ActiveFilterChips({
     categories,
     tags,
 }: ActiveFilterChipsProps) {
+    const t = useT()
+    const formatLocale = useFormatLocale()
     const chips: { key: string; label: string; onRemove: () => void }[] = []
 
     if (filters.dateFrom || filters.dateTo) {
         chips.push({
             key: 'date',
-            label: formatDateRange(filters.dateFrom, filters.dateTo),
+            label: formatDateRange(
+                filters.dateFrom,
+                filters.dateTo,
+                t,
+                formatLocale,
+            ),
             onRemove: () =>
                 onChange({
                     ...filters,
@@ -367,7 +380,11 @@ function ActiveFilterChips({
     if (filters.accountIds.length) {
         chips.push({
             key: 'accounts',
-            label: summarizeNames(filters.accountIds, accounts, 'cuentas'),
+            label: summarizeNames(
+                filters.accountIds,
+                accounts,
+                t.activity.fallbackAccounts,
+            ),
             onRemove: () => onChange({ ...filters, accountIds: [] }),
         })
     }
@@ -377,7 +394,7 @@ function ActiveFilterChips({
             label: summarizeNames(
                 filters.categoryIds,
                 categories,
-                'categorías',
+                t.activity.fallbackCategories,
             ),
             onRemove: () => onChange({ ...filters, categoryIds: [] }),
         })
@@ -385,7 +402,11 @@ function ActiveFilterChips({
     if (filters.tagIds.length) {
         chips.push({
             key: 'tags',
-            label: summarizeNames(filters.tagIds, tags, 'tags'),
+            label: summarizeNames(
+                filters.tagIds,
+                tags,
+                t.activity.fallbackTags,
+            ),
             onRemove: () => onChange({ ...filters, tagIds: [] }),
         })
     }
@@ -401,7 +422,9 @@ function ActiveFilterChips({
                     {chip.label}
                     <button
                         type="button"
-                        aria-label={`Quitar filtro ${chip.label}`}
+                        aria-label={t.activity.removeFilter({
+                            label: chip.label,
+                        })}
                         onClick={chip.onRemove}
                         className="rounded-full p-0.5 hover:bg-foreground/10"
                     >
@@ -426,13 +449,15 @@ function summarizeNames(
     return `${names.slice(0, 2).join(', ')} +${names.length - 2}`
 }
 
-function formatDateRange(from: Date | undefined, to: Date | undefined): string {
-    const fmt = (d: Date) =>
-        `${d.getDate().toString().padStart(2, '0')}/${(d.getMonth() + 1)
-            .toString()
-            .padStart(2, '0')}/${d.getFullYear()}`
+function formatDateRange(
+    from: Date | undefined,
+    to: Date | undefined,
+    messages: Messages,
+    locale: string,
+): string {
+    const fmt = (d: Date) => formatNumericDate(d, locale)
     if (from && to) return `${fmt(from)} – ${fmt(to)}`
-    if (from) return `Desde ${fmt(from)}`
-    if (to) return `Hasta ${fmt(to)}`
+    if (from) return messages.activity.rangeFrom({ date: fmt(from) })
+    if (to) return messages.activity.rangeTo({ date: fmt(to) })
     return ''
 }

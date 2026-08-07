@@ -35,6 +35,7 @@ import {
     COLOR_OPTIONS,
     normalizeColor,
 } from '@/lib/entity-colors'
+import { type Messages, useFormatLocale, useT } from '@/lib/i18n'
 import { normalizeTagColor } from '@/lib/tag-colors'
 import { cn } from '@/lib/utils'
 import { TransactionDetailsSheet } from './activity/transaction-details-sheet'
@@ -126,6 +127,8 @@ function TransactionActionWidget({
     entityId: string
     wasUpdated: boolean
 }) {
+    const t = useT()
+    const formatLocale = useFormatLocale()
     const txn = useQuery(api.v1.transactions.queries.get, { id: entityId })
     const accounts = useQuery(api.v1.accounts.queries.list, {
         includeArchived: true,
@@ -139,7 +142,7 @@ function TransactionActionWidget({
     const toAccount = txn.toAccountId
         ? accounts.find((item) => item.id === txn.toAccountId)
         : undefined
-    const { Icon, iconCls, label } = txnTypeConfig(txn.type)
+    const { Icon, iconCls, label } = txnTypeConfig(txn.type, t)
     const amount =
         txn.type === 'transfer' &&
         txn.toAmount !== undefined &&
@@ -149,10 +152,11 @@ function TransactionActionWidget({
                 txn.balanceAfter !== undefined
               ? formatAmount(txn.balanceAfter, txn.currency)
               : formatAmount(txn.amount, txn.currency)
+    const deletedAccount = t.transaction.deletedAccount
     const location =
         txn.type === 'transfer'
-            ? `${account?.name ?? 'Cuenta eliminada'} → ${toAccount?.name ?? 'Cuenta eliminada'}`
-            : (account?.name ?? 'Cuenta eliminada')
+            ? `${account?.name ?? deletedAccount} → ${toAccount?.name ?? deletedAccount}`
+            : (account?.name ?? deletedAccount)
 
     return (
         <>
@@ -163,9 +167,14 @@ function TransactionActionWidget({
                 <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-medium">{txn.name}</p>
                     <p className="truncate text-xs text-muted-foreground">
-                        {label} {wasUpdated ? 'actualizado' : 'registrado'} ·{' '}
-                        {amount} · {location} · {epochToDDMMYYYY(txn.date)} ·{' '}
-                        {epochToHHMM(txn.date)}
+                        {wasUpdated
+                            ? t.actionWidget.transactionUpdated({ type: label })
+                            : t.actionWidget.transactionRecorded({
+                                  type: label,
+                              })}{' '}
+                        · {amount} · {location} ·{' '}
+                        {epochToNumericDate(txn.date, formatLocale)} ·{' '}
+                        {epochToHHMM(txn.date, formatLocale)}
                     </p>
                 </div>
                 <EditButton onClick={() => setEditOpen(true)} />
@@ -196,6 +205,7 @@ function AccountActionWidget({
     entityId: string
     wasUpdated: boolean
 }) {
+    const t = useT()
     const account = useQuery(api.v1.accounts.queries.get, { id: entityId })
     const [editOpen, setEditOpen] = useState(false)
     if (account === undefined) return <ActionSkeleton />
@@ -214,7 +224,10 @@ function AccountActionWidget({
                 </EntityIcon>
                 <ActionCopy
                     title={account.name}
-                    detail={`Cuenta ${wasUpdated ? 'actualizada' : 'creada'} · ${account.currency}`}
+                    detail={t.actionWidget.accountDetail({
+                        currency: account.currency,
+                        updated: wasUpdated,
+                    })}
                 />
                 <EditButton onClick={() => setEditOpen(true)} />
             </ActionCard>
@@ -235,6 +248,7 @@ function AccountEditContent({
     account: AccountDoc
     onClose: () => void
 }) {
+    const t = useT()
     const updateAccount = useMutation(api.v1.accounts.mutations.update)
     const formId = useId()
     const [name, setName] = useState(account.name)
@@ -260,9 +274,9 @@ function AccountEditContent({
             icon,
         })
         toast.promise(promise, {
-            loading: 'Guardando…',
-            success: 'Cuenta actualizada',
-            error: 'Error al guardar',
+            loading: t.common.saving,
+            success: t.actionWidget.accountSaved,
+            error: t.common.saveFailed,
         })
         try {
             await promise
@@ -277,14 +291,14 @@ function AccountEditContent({
     return (
         <>
             <SheetHeader>
-                <SheetTitle>Editar cuenta</SheetTitle>
+                <SheetTitle>{t.actionWidget.editAccount}</SheetTitle>
             </SheetHeader>
             <form
                 id={formId}
                 onSubmit={handleSubmit}
                 className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-4 py-2"
             >
-                <EditField label="Nombre" id={`${formId}-name`}>
+                <EditField label={t.common.name} id={`${formId}-name`}>
                     <Input
                         id={`${formId}-name`}
                         value={name}
@@ -292,7 +306,10 @@ function AccountEditContent({
                         required
                     />
                 </EditField>
-                <EditField label="Descripción" id={`${formId}-description`}>
+                <EditField
+                    label={t.common.description}
+                    id={`${formId}-description`}
+                >
                     <Textarea
                         id={`${formId}-description`}
                         value={description}
@@ -332,6 +349,7 @@ function CategoryActionWidget({
     entityId: string
     wasUpdated: boolean
 }) {
+    const t = useT()
     const category = useQuery(api.v1.categories.queries.get, { id: entityId })
     const [editOpen, setEditOpen] = useState(false)
     if (category === undefined) return <ActionSkeleton />
@@ -350,7 +368,9 @@ function CategoryActionWidget({
                 </EntityIcon>
                 <ActionCopy
                     title={category.name}
-                    detail={`Categoría ${wasUpdated ? 'actualizada' : 'creada'}`}
+                    detail={t.actionWidget.categoryDetail({
+                        updated: wasUpdated,
+                    })}
                 />
                 <EditButton onClick={() => setEditOpen(true)} />
             </ActionCard>
@@ -371,6 +391,7 @@ function CategoryEditContent({
     category: CategoryDoc
     onClose: () => void
 }) {
+    const t = useT()
     const updateCategory = useMutation(api.v1.categories.mutations.update)
     const formId = useId()
     const [name, setName] = useState(category.name)
@@ -396,9 +417,9 @@ function CategoryEditContent({
             icon,
         })
         toast.promise(promise, {
-            loading: 'Guardando…',
-            success: 'Categoría actualizada',
-            error: 'Error al guardar',
+            loading: t.common.saving,
+            success: t.actionWidget.categorySaved,
+            error: t.common.saveFailed,
         })
         try {
             await promise
@@ -413,14 +434,14 @@ function CategoryEditContent({
     return (
         <>
             <SheetHeader>
-                <SheetTitle>Editar categoría</SheetTitle>
+                <SheetTitle>{t.actionWidget.editCategory}</SheetTitle>
             </SheetHeader>
             <form
                 id={formId}
                 onSubmit={handleSubmit}
                 className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-4 py-2"
             >
-                <EditField label="Nombre" id={`${formId}-name`}>
+                <EditField label={t.common.name} id={`${formId}-name`}>
                     <Input
                         id={`${formId}-name`}
                         value={name}
@@ -428,7 +449,10 @@ function CategoryEditContent({
                         required
                     />
                 </EditField>
-                <EditField label="Descripción" id={`${formId}-description`}>
+                <EditField
+                    label={t.common.description}
+                    id={`${formId}-description`}
+                >
                     <Textarea
                         id={`${formId}-description`}
                         value={description}
@@ -468,6 +492,7 @@ function TagActionWidget({
     entityId: string
     wasUpdated: boolean
 }) {
+    const t = useT()
     const tag = useQuery(api.v1.tags.queries.get, { id: entityId })
     const [editOpen, setEditOpen] = useState(false)
     if (tag === undefined) return <ActionSkeleton />
@@ -482,7 +507,7 @@ function TagActionWidget({
                 </EntityIcon>
                 <ActionCopy
                     title={tag.name}
-                    detail={`Tag ${wasUpdated ? 'actualizado' : 'creado'}`}
+                    detail={t.actionWidget.tagDetail({ updated: wasUpdated })}
                 />
                 <EditButton onClick={() => setEditOpen(true)} />
             </ActionCard>
@@ -500,6 +525,7 @@ function TagEditContent({
     tag: TagDoc
     onClose: () => void
 }) {
+    const t = useT()
     const updateTag = useMutation(api.v1.tags.mutations.update)
     const tags = useQuery(api.v1.tags.queries.listActive)
     const formId = useId()
@@ -530,9 +556,9 @@ function TagEditContent({
                 parentId !== originalParentId ? parentId || null : undefined,
         })
         toast.promise(promise, {
-            loading: 'Guardando…',
-            success: 'Tag actualizado',
-            error: 'Error al guardar',
+            loading: t.common.saving,
+            success: t.actionWidget.tagSaved,
+            error: t.common.saveFailed,
         })
         try {
             await promise
@@ -547,14 +573,14 @@ function TagEditContent({
     return (
         <>
             <SheetHeader>
-                <SheetTitle>Editar tag</SheetTitle>
+                <SheetTitle>{t.actionWidget.editTag}</SheetTitle>
             </SheetHeader>
             <form
                 id={formId}
                 onSubmit={handleSubmit}
                 className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-4 py-2"
             >
-                <EditField label="Nombre" id={`${formId}-name`}>
+                <EditField label={t.common.name} id={`${formId}-name`}>
                     <Input
                         id={`${formId}-name`}
                         value={name}
@@ -562,7 +588,10 @@ function TagEditContent({
                         required
                     />
                 </EditField>
-                <EditField label="Tag padre" id={`${formId}-parent`}>
+                <EditField
+                    label={t.actionWidget.parentTag}
+                    id={`${formId}-parent`}
+                >
                     <select
                         id={`${formId}-parent`}
                         value={parentId}
@@ -570,7 +599,7 @@ function TagEditContent({
                         disabled={tags === undefined}
                         className="h-9 w-full rounded-md border bg-transparent px-3 text-sm outline-none focus-visible:border-primary disabled:opacity-50"
                     >
-                        <option value="">Sin tag padre</option>
+                        <option value="">{t.actionWidget.noParentTag}</option>
                         {parentOptions?.map((item) => (
                             <option key={item.id} value={item.id}>
                                 {item.name}
@@ -578,7 +607,10 @@ function TagEditContent({
                         ))}
                     </select>
                 </EditField>
-                <EditField label="Descripción" id={`${formId}-description`}>
+                <EditField
+                    label={t.common.description}
+                    id={`${formId}-description`}
+                >
                     <Textarea
                         id={`${formId}-description`}
                         value={description}
@@ -587,7 +619,7 @@ function TagEditContent({
                     />
                 </EditField>
                 <div className="flex flex-col gap-2">
-                    <Label>Color</Label>
+                    <Label>{t.common.color}</Label>
                     <ColorSwatches
                         value={color}
                         onChange={setColor}
@@ -631,6 +663,7 @@ function ActionSheetFooter({
     saving: boolean
     onClose: () => void
 }) {
+    const t = useT()
     return (
         <SheetFooter className="pb-[max(1rem,env(safe-area-inset-bottom))]">
             <Button
@@ -639,10 +672,10 @@ function ActionSheetFooter({
                 onClick={onClose}
                 disabled={saving}
             >
-                Cancelar
+                {t.common.cancel}
             </Button>
             <Button type="submit" form={formId} disabled={saving}>
-                {saving ? 'Guardando…' : 'Guardar'}
+                {saving ? t.common.saving : t.common.save}
             </Button>
         </SheetFooter>
     )
@@ -668,6 +701,7 @@ function ActionCopy({ title, detail }: { title: string; detail: string }) {
 }
 
 function EditButton({ onClick }: { onClick: () => void }) {
+    const t = useT()
     return (
         <Button
             type="button"
@@ -677,7 +711,7 @@ function EditButton({ onClick }: { onClick: () => void }) {
             onClick={onClick}
         >
             <Pencil className="size-3.5" />
-            Editar
+            {t.common.edit}
         </Button>
     )
 }
@@ -768,7 +802,7 @@ function VisualIdentityFields({
 
 type TxnType = TxnDoc['type']
 
-function txnTypeConfig(type: TxnType) {
+function txnTypeConfig(type: TxnType, t: Messages) {
     switch (type) {
         case 'expense':
             return {
@@ -777,7 +811,7 @@ function txnTypeConfig(type: TxnType) {
                     bg: 'bg-red-100 dark:bg-red-900/30',
                     text: 'text-red-600 dark:text-red-400',
                 },
-                label: 'Gasto',
+                label: t.actionWidget.expense,
             }
         case 'income':
             return {
@@ -786,7 +820,7 @@ function txnTypeConfig(type: TxnType) {
                     bg: 'bg-green-100 dark:bg-green-900/30',
                     text: 'text-green-600 dark:text-green-400',
                 },
-                label: 'Ingreso',
+                label: t.actionWidget.income,
             }
         case 'transfer':
             return {
@@ -795,7 +829,7 @@ function txnTypeConfig(type: TxnType) {
                     bg: 'bg-blue-100 dark:bg-blue-900/30',
                     text: 'text-blue-600 dark:text-blue-400',
                 },
-                label: 'Transferencia',
+                label: t.actionWidget.transfer,
             }
         case 'balance_adjustment':
             return {
@@ -804,20 +838,17 @@ function txnTypeConfig(type: TxnType) {
                     bg: 'bg-amber-100 dark:bg-amber-900/30',
                     text: 'text-amber-700 dark:text-amber-400',
                 },
-                label: 'Ajuste de saldo',
+                label: t.actionWidget.balanceAdjustment,
             }
     }
 }
 
-function epochToDDMMYYYY(epoch: bigint): string {
-    const date = new Date(Number(epoch))
-    const day = String(date.getDate()).padStart(2, '0')
-    const month = String(date.getMonth() + 1).padStart(2, '0')
-    return `${day}/${month}/${date.getFullYear()}`
+function epochToNumericDate(epoch: bigint, locale: string): string {
+    return new Intl.DateTimeFormat(locale).format(new Date(Number(epoch)))
 }
 
-function epochToHHMM(epoch: bigint): string {
-    return new Intl.DateTimeFormat('es-AR', {
+function epochToHHMM(epoch: bigint, locale: string): string {
+    return new Intl.DateTimeFormat(locale, {
         hour: '2-digit',
         minute: '2-digit',
         hour12: false,
