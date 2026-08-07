@@ -854,6 +854,16 @@ class AppLocalizationsEs extends AppLocalizations {
   String get recurrenceDaysUnit => 'días';
 
   @override
+  String get futureMovements => 'Movimientos futuros';
+
+  @override
+  String get futureMovementsInfo =>
+      'Estos son tus movimientos recurrentes que todavía no ocurrieron. No aparecen en Actividad hasta que suceden.';
+
+  @override
+  String get noFutureMovements => 'No tenés movimientos futuros programados';
+
+  @override
   String get leaves => 'Sale';
 
   @override

@@ -7,6 +7,7 @@ import 'package:app/components/dashboard/dashboard_section.dart';
 import 'package:app/components/dashboard/default_dashboard.dart';
 import 'package:app/data/data.dart';
 import 'package:app/l10n/l10n.dart';
+import 'package:app/screens/future_movements.dart';
 import 'package:app/screens/login.dart';
 import 'package:app/screens/settings.dart';
 import 'package:app/screens/transaction_form.dart';
@@ -253,6 +254,12 @@ class _HomeScreenState extends State<HomeScreen> {
     context.read<AppNavigation>().index = AppNavigation.activityTab;
   }
 
+  void _openFutureMovements() {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(builder: (_) => const FutureMovementsScreen()),
+    );
+  }
+
   bool _editing = false;
 
   Future<void> _openAddWidget() async {
@@ -309,13 +316,21 @@ class _HomeScreenState extends State<HomeScreen> {
             style: Theme.of(context).textTheme.titleMedium,
           ),
           const SizedBox(height: 12),
-          Align(
-            alignment: Alignment.centerLeft,
-            child: _HomeActionCard(
-              label: context.l10n.addManually,
-              icon: Icons.add_rounded,
-              onTap: _openManualAdd,
-            ),
+          Wrap(
+            spacing: 12,
+            runSpacing: 12,
+            children: [
+              _HomeActionCard(
+                label: context.l10n.addManually,
+                icon: Icons.add_rounded,
+                onTap: _openManualAdd,
+              ),
+              _HomeActionCard(
+                label: context.l10n.futureMovements,
+                icon: Icons.event_repeat_rounded,
+                onTap: _openFutureMovements,
+              ),
+            ],
           ),
         ],
       ),

@@ -1,6 +1,7 @@
 import {
     BarChart3,
     Bot,
+    CalendarClock,
     Home,
     Landmark,
     List,
@@ -62,7 +63,9 @@ export function RootLayout() {
             ? 'Añadir manualmente'
             : location.pathname.startsWith('/add')
               ? 'Añadir con Gasti'
-              : 'Wallet Bot')
+              : location.pathname.startsWith('/future-movements')
+                ? 'Movimientos futuros'
+                : 'Wallet Bot')
 
     const initials = (user.name || user.email)
         .split(' ')
@@ -155,6 +158,22 @@ export function RootLayout() {
                                     >
                                         <Plus className="size-4" />
                                         <span>Añadir manualmente</span>
+                                    </SidebarMenuButton>
+                                </SidebarMenuItem>
+                                <SidebarMenuItem>
+                                    <SidebarMenuButton
+                                        tooltip="Ver movimientos futuros"
+                                        isActive={pathMatches(
+                                            location.pathname,
+                                            '/future-movements',
+                                            true,
+                                        )}
+                                        render={
+                                            <NavLink to="/future-movements" />
+                                        }
+                                    >
+                                        <CalendarClock className="size-4" />
+                                        <span>Movimientos futuros</span>
                                     </SidebarMenuButton>
                                 </SidebarMenuItem>
                             </SidebarMenu>

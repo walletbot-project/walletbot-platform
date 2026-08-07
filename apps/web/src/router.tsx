@@ -48,6 +48,15 @@ export const router = createBrowserRouter([
                                     })),
                             },
                             {
+                                path: '/future-movements',
+                                lazy: () =>
+                                    import('@/pages/future-movements').then(
+                                        (m) => ({
+                                            Component: m.FutureMovements,
+                                        }),
+                                    ),
+                            },
+                            {
                                 path: '/accounts',
                                 lazy: () =>
                                     import('@/pages/accounts').then((m) => ({

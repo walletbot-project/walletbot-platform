@@ -850,6 +850,16 @@ class AppLocalizationsEn extends AppLocalizations {
   String get recurrenceDaysUnit => 'days';
 
   @override
+  String get futureMovements => 'Future movements';
+
+  @override
+  String get futureMovementsInfo =>
+      'These are your recurring movements that haven\'t happened yet. They won\'t show in Activity until they occur.';
+
+  @override
+  String get noFutureMovements => 'You have no scheduled future movements';
+
+  @override
   String get leaves => 'Leaves';
 
   @override

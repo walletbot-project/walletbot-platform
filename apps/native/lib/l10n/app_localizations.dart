@@ -1622,6 +1622,24 @@ abstract class AppLocalizations {
   /// **'days'**
   String get recurrenceDaysUnit;
 
+  /// No description provided for @futureMovements.
+  ///
+  /// In en, this message translates to:
+  /// **'Future movements'**
+  String get futureMovements;
+
+  /// No description provided for @futureMovementsInfo.
+  ///
+  /// In en, this message translates to:
+  /// **'These are your recurring movements that haven\'t happened yet. They won\'t show in Activity until they occur.'**
+  String get futureMovementsInfo;
+
+  /// No description provided for @noFutureMovements.
+  ///
+  /// In en, this message translates to:
+  /// **'You have no scheduled future movements'**
+  String get noFutureMovements;
+
   /// No description provided for @leaves.
   ///
   /// In en, this message translates to:
