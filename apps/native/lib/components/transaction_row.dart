@@ -1,3 +1,4 @@
+import 'package:app/components/raised_card.dart';
 import 'package:app/shared/money.dart';
 import 'package:flutter/material.dart';
 
@@ -151,13 +152,8 @@ class TransactionRow extends StatelessWidget {
     }
 
     return Material(
-      // Light: keep the near-white surface (the elevation shadow already
-      // separates it from the page). Dark: shadows don't read, so lift to
-      // surfaceContainer to separate the row from the scaffold background.
-      color: theme.brightness == Brightness.dark
-          ? theme.colorScheme.surfaceContainer
-          : theme.colorScheme.surface,
-      elevation: 1,
+      color: raisedCardColor(theme.colorScheme, theme.brightness),
+      elevation: raisedCardElevation(theme.brightness),
       borderRadius: BorderRadius.circular(12),
       child: InkWell(
         onTap: onTap,
