@@ -336,17 +336,19 @@ class _HomeActionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
     return SizedBox.square(
       dimension: 112,
       child: Material(
-        color: Colors.white,
+        color: colors.surfaceContainer,
         borderRadius: BorderRadius.circular(14),
         child: InkWell(
           onTap: onTap,
           borderRadius: BorderRadius.circular(14),
           child: Container(
             decoration: BoxDecoration(
-              border: Border.all(color: const Color(0xFFD3CCD8), width: 1.4),
+              border: Border.all(color: colors.outlineVariant, width: 1.4),
               borderRadius: BorderRadius.circular(14),
             ),
             padding: const EdgeInsets.all(10),
@@ -356,11 +358,15 @@ class _HomeActionCard extends StatelessWidget {
                 Container(
                   width: 44,
                   height: 44,
-                  decoration: const BoxDecoration(
-                    color: Color(0xFF21C4B6),
+                  decoration: BoxDecoration(
+                    color: colors.primaryContainer,
                     shape: BoxShape.circle,
                   ),
-                  child: Icon(icon, color: Colors.white, size: 30),
+                  child: Icon(
+                    icon,
+                    color: colors.onPrimaryContainer,
+                    size: 30,
+                  ),
                 ),
                 const SizedBox(height: 8),
                 Text(
@@ -368,8 +374,8 @@ class _HomeActionCard extends StatelessWidget {
                   textAlign: TextAlign.center,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                    color: Colors.black,
+                  style: theme.textTheme.labelLarge?.copyWith(
+                    color: colors.onSurface,
                     fontWeight: FontWeight.w900,
                     fontSize: 13,
                     height: 1,

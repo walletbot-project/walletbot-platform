@@ -1,6 +1,7 @@
 import 'package:app/components/color_picker.dart';
 import 'package:app/components/color_utils.dart';
 import 'package:app/components/grouped_card.dart';
+import 'package:app/components/tag_chip.dart';
 import 'package:app/components/transaction_row.dart';
 import 'package:app/data/data.dart';
 import 'package:app/database.dart';
@@ -57,7 +58,7 @@ class TagsView extends StatelessWidget {
           itemBuilder: (context, index) {
             final entry = tree[index];
             final tag = entry.row.tag;
-            final color = colorFromHex(tag.color);
+            final style = tagChipStyle(context, colorFromHex(tag.color));
 
             // The chip stays as the tag's representation; tapping it opens the
             // details sheet. Sub-tags keep their indentation.
@@ -70,9 +71,10 @@ class TagsView extends StatelessWidget {
               child: Align(
                 alignment: Alignment.centerLeft,
                 child: ActionChip(
-                  avatar: const CircleAvatar(backgroundColor: Colors.white),
-                  backgroundColor: color,
+                  avatar: CircleAvatar(backgroundColor: style.avatarColor),
+                  backgroundColor: style.background,
                   label: Text(tag.name),
+                  labelStyle: style.labelStyle,
                   onPressed: () => _openTagSheet(context, tag),
                 ),
               ),
