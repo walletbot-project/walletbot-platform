@@ -268,6 +268,8 @@ class _TxnEditSheetState extends State<_TxnEditSheet> {
       initialDate: _date,
       firstDate: DateTime(1900),
       lastDate: DateTime(2100),
+      cancelText: context.l10n.cancel,
+      confirmText: context.l10n.accept,
     );
     if (picked != null && mounted) setState(() => _date = picked);
   }
@@ -285,11 +287,14 @@ class _TxnEditSheetState extends State<_TxnEditSheet> {
         _transaction.id,
         name: Value(_nameController.text.trim()),
         description: Value(description.isEmpty ? null : description),
-        date: _showDate
+        date: _showDate && dateChanged
             ? Value(BigInt.from(_date.millisecondsSinceEpoch))
             : const Value.absent(),
         dateConfirmed: _showDate && dateChanged
             ? const Value(true)
+            : const Value.absent(),
+        timeStatus: _showDate && dateChanged
+            ? const Value(TransactionTimeStatus.none)
             : const Value.absent(),
         amount: _showAmount
             ? Value(_decimalToCents(_amountController.text))

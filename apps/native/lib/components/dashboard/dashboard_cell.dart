@@ -1,3 +1,4 @@
+import 'package:app/components/color_utils.dart';
 import 'package:app/l10n/l10n.dart';
 import 'package:flutter/material.dart';
 
@@ -30,12 +31,13 @@ class DashboardCell extends StatelessWidget {
     final theme = Theme.of(context);
     final colors = theme.colorScheme;
     final resolvedTitle = title.isEmpty ? context.l10n.widget : title;
-    final cellColor =
-        backgroundColor ??
-        Color.alphaBlend(
-          colors.primary.withValues(alpha: 0.04),
-          colors.surface,
-        );
+    // No custom color: the M3 surfaceContainer role separates from the scaffold
+    // (surface) consistently in both themes: darker than the background in
+    // light, lighter in dark. A defined color is a stored light pastel, adapted
+    // per theme so its content stays legible (see [readableWidgetBackground]).
+    final cellColor = backgroundColor == null
+        ? colors.surfaceContainer
+        : readableWidgetBackground(backgroundColor!, theme.brightness);
     final resolvedPadding = padding.resolve(Directionality.of(context));
 
     return DecoratedBox(

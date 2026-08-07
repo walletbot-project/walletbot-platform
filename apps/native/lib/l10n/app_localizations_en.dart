@@ -33,6 +33,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get cancel => 'Cancel';
 
   @override
+  String get accept => 'Accept';
+
+  @override
   String get apply => 'Apply';
 
   @override
@@ -145,6 +148,12 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get optional => 'Optional';
+
+  @override
+  String get timeOptional => 'Time (optional)';
+
+  @override
+  String get noTime => 'No time';
 
   @override
   String get search => 'Search';

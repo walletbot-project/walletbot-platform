@@ -183,6 +183,7 @@ class PullPageMerger {
       status: Value(r['status'] as String),
       date: Value(_asBigInt(r['date'])),
       dateConfirmed: Value(r['dateConfirmed'] as bool? ?? true),
+      timeStatus: Value(_transactionTimeStatus(r['timeStatus'])),
       accountId: Value(r['accountId'] as String),
       categoryId: Value(r['categoryId'] as String),
       amount: Value(_asBigInt(r['amount'])),
@@ -433,6 +434,15 @@ class PullPageMerger {
           );
     }
   }
+}
+
+TransactionTimeStatus _transactionTimeStatus(Object? raw) {
+  if (raw is String) {
+    for (final status in TransactionTimeStatus.values) {
+      if (status.name == raw) return status;
+    }
+  }
+  return TransactionTimeStatus.none;
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────────────

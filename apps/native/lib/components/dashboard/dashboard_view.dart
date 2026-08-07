@@ -856,19 +856,34 @@ class _DashboardFloatingMenu extends StatelessWidget {
                         : () => onWidthChanged!(option),
                   ),
                 const SizedBox(width: 4),
+                // Named via `Icon.semanticLabel` rather than `IconButton`'s
+                // `tooltip:`. A tooltip is an `OverlayPortal`, and this menu is
+                // itself the overlay child of an `OverlayPortal`
+                // ([_FloatingMenuAnchor]); showing a tooltip on hover pushes a
+                // second layout-callback overlay child into the same
+                // `_RenderTheatre` and trips the framework assertion at
+                // rendering/object.dart `scheduleLayoutCallback`
+                // (`debugNeedsLayout is not true`). `semanticLabel` keeps these
+                // icon-only buttons named for screen readers — `IconButton`'s
+                // own `Semantics(button: true)` carries no label — without any
+                // overlay. Guarded by a semantics test in
+                // test/components/dashboard/dashboard_view_test.dart.
                 IconButton(
-                  tooltip: context.l10n.edit,
                   visualDensity: VisualDensity.compact,
-                  icon: const Icon(Icons.tune_rounded, size: 20),
+                  icon: Icon(
+                    Icons.tune_rounded,
+                    size: 20,
+                    semanticLabel: context.l10n.edit,
+                  ),
                   onPressed: onEdit,
                 ),
                 IconButton(
-                  tooltip: context.l10n.remove,
                   visualDensity: VisualDensity.compact,
                   icon: Icon(
                     Icons.delete_outline_rounded,
                     size: 20,
                     color: colors.error,
+                    semanticLabel: context.l10n.remove,
                   ),
                   onPressed: onDelete,
                 ),
@@ -881,7 +896,7 @@ class _DashboardFloatingMenu extends StatelessWidget {
                 children: [
                   _MoveButton(
                     icon: Icons.arrow_back_rounded,
-                    tooltip: context.l10n.moveLeft,
+                    semanticLabel: context.l10n.moveLeft,
                     onPressed:
                         enabledDirections.contains(DashboardMoveDirection.left)
                         ? () => onMove!(DashboardMoveDirection.left)
@@ -889,7 +904,7 @@ class _DashboardFloatingMenu extends StatelessWidget {
                   ),
                   _MoveButton(
                     icon: Icons.arrow_upward_rounded,
-                    tooltip: context.l10n.moveUp,
+                    semanticLabel: context.l10n.moveUp,
                     onPressed:
                         enabledDirections.contains(DashboardMoveDirection.up)
                         ? () => onMove!(DashboardMoveDirection.up)
@@ -897,7 +912,7 @@ class _DashboardFloatingMenu extends StatelessWidget {
                   ),
                   _MoveButton(
                     icon: Icons.arrow_downward_rounded,
-                    tooltip: context.l10n.moveDown,
+                    semanticLabel: context.l10n.moveDown,
                     onPressed:
                         enabledDirections.contains(DashboardMoveDirection.down)
                         ? () => onMove!(DashboardMoveDirection.down)
@@ -905,7 +920,7 @@ class _DashboardFloatingMenu extends StatelessWidget {
                   ),
                   _MoveButton(
                     icon: Icons.arrow_forward_rounded,
-                    tooltip: context.l10n.moveRight,
+                    semanticLabel: context.l10n.moveRight,
                     onPressed:
                         enabledDirections.contains(DashboardMoveDirection.right)
                         ? () => onMove!(DashboardMoveDirection.right)
@@ -933,20 +948,22 @@ class _DashboardFloatingMenu extends StatelessWidget {
 class _MoveButton extends StatelessWidget {
   const _MoveButton({
     required this.icon,
-    required this.tooltip,
+    required this.semanticLabel,
     required this.onPressed,
   });
 
   final IconData icon;
-  final String tooltip;
+
+  /// Accessible name for this icon-only button. Deliberately not an
+  /// `IconButton.tooltip` — see the note in [_DashboardFloatingMenu].
+  final String semanticLabel;
   final VoidCallback? onPressed;
 
   @override
   Widget build(BuildContext context) {
     return IconButton(
-      tooltip: tooltip,
       visualDensity: VisualDensity.compact,
-      icon: Icon(icon, size: 20),
+      icon: Icon(icon, size: 20, semanticLabel: semanticLabel),
       onPressed: onPressed,
     );
   }
