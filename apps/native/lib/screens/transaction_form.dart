@@ -1,6 +1,9 @@
 import 'dart:async';
 
+import 'package:app/components/account_icons.dart';
+import 'package:app/components/category_icons.dart';
 import 'package:app/components/color_utils.dart';
+import 'package:app/components/readable_time_picker.dart';
 import 'package:app/data/data.dart';
 import 'package:app/database.dart';
 import 'package:app/l10n/l10n.dart';
@@ -35,6 +38,7 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
   Account? _selectedDestinationAccount;
   Category? _selectedCategory;
   DateTime _selectedDate = DateTime.now();
+  TimeOfDay? _selectedTime;
   final List<_FormTag> _tags = [];
   bool _isLoading = true;
   bool _isSaving = false;
@@ -172,9 +176,22 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
       initialDate: _selectedDate,
       firstDate: DateTime(2000),
       lastDate: DateTime(2100),
+      cancelText: context.l10n.cancel,
+      confirmText: context.l10n.accept,
     );
     if (picked == null || !mounted) return;
     setState(() => _selectedDate = picked);
+  }
+
+  Future<void> _pickTime() async {
+    await _commitInlineEditing();
+    if (!mounted) return;
+    final picked = await showReadableTimePicker(
+      context: context,
+      initialTime: _selectedTime ?? TimeOfDay.now(),
+    );
+    if (picked == null || !mounted) return;
+    setState(() => _selectedTime = picked);
   }
 
   Future<void> _pickAccount({bool destination = false}) async {
@@ -202,7 +219,7 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
               ),
               for (final account in _accounts)
                 ListTile(
-                  leading: const Icon(Icons.account_balance_wallet_rounded),
+                  leading: Icon(accountIconFromName(account.icon)),
                   title: Text(account.name),
                   subtitle: Text(account.currency),
                   trailing: account == selectedAccount
@@ -249,7 +266,7 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
               ),
               for (final category in _categories)
                 ListTile(
-                  leading: const Icon(Icons.label_rounded),
+                  leading: Icon(categoryIconFromName(category.icon)),
                   title: Text(category.name),
                   trailing: category == _selectedCategory
                       ? const Icon(Icons.check_circle_rounded)
@@ -469,7 +486,20 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
               destinationAmountValue > 0
           ? destinationAmountValue / amountValue
           : null;
-      final dateMs = BigInt.from(_selectedDate.millisecondsSinceEpoch);
+      final selectedTime = _selectedTime;
+      final transactionDate = selectedTime == null
+          ? _selectedDate
+          : DateTime(
+              _selectedDate.year,
+              _selectedDate.month,
+              _selectedDate.day,
+              selectedTime.hour,
+              selectedTime.minute,
+            );
+      final dateMs = BigInt.from(transactionDate.millisecondsSinceEpoch);
+      final timeStatus = selectedTime == null
+          ? TransactionTimeStatus.none
+          : TransactionTimeStatus.confirmed;
       final tagIds = _tags
           .map((tag) => tag.id)
           .whereType<String>()
@@ -484,6 +514,7 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
             currency: account.currency,
             description: _emptyToNull(_descriptionController.text),
             dateMs: dateMs,
+            timeStatus: timeStatus,
             tagIds: tagIds,
           );
         case TransactionFormType.expense:
@@ -495,6 +526,7 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
             currency: account.currency,
             description: _emptyToNull(_descriptionController.text),
             dateMs: dateMs,
+            timeStatus: timeStatus,
             tagIds: tagIds,
           );
         case TransactionFormType.transfer:
@@ -512,6 +544,7 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
             categoryId: category.id,
             description: _emptyToNull(_descriptionController.text),
             dateMs: dateMs,
+            timeStatus: timeStatus,
             tagIds: tagIds,
           );
       }
@@ -537,13 +570,11 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
 
     if (_isLoading) {
       return const Scaffold(
-        backgroundColor: Color(0xFFFFF8F8),
         body: SafeArea(child: Center(child: CircularProgressIndicator())),
       );
     }
 
     return Scaffold(
-      backgroundColor: const Color(0xFFFFF8F8),
       resizeToAvoidBottomInset: true,
       body: SafeArea(
         child: Form(
@@ -555,7 +586,7 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
                 context.l10n.newTransaction,
                 textAlign: TextAlign.center,
                 style: Theme.of(context).textTheme.displaySmall?.copyWith(
-                  color: Colors.black,
+                  color: Theme.of(context).colorScheme.onSurface,
                   fontWeight: FontWeight.w800,
                 ),
               ),
@@ -585,7 +616,12 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
                       }
                       return Colors.transparent;
                     }),
-                    foregroundColor: const WidgetStatePropertyAll(Colors.black),
+                    foregroundColor: WidgetStateProperty.resolveWith((states) {
+                      if (states.contains(WidgetState.selected)) {
+                        return foregroundOn(selectedColor);
+                      }
+                      return Theme.of(context).colorScheme.onSurface;
+                    }),
                     textStyle: const WidgetStatePropertyAll(
                       TextStyle(fontWeight: FontWeight.w700),
                     ),
@@ -661,6 +697,16 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
                     ? null
                     : () => setState(() => _selectedDate = DateTime.now()),
               ),
+              const SizedBox(height: 18),
+              _ReadonlyField(
+                label: context.l10n.timeOptional,
+                value: _selectedTime?.format(context) ?? context.l10n.noTime,
+                icon: Icons.schedule_outlined,
+                onTap: _isSaving ? null : _pickTime,
+                onClear: _isSaving || _selectedTime == null
+                    ? null
+                    : () => setState(() => _selectedTime = null),
+              ),
               if (_type != TransactionFormType.transfer) ...[
                 const SizedBox(height: 18),
                 _AmountField(
@@ -730,8 +776,18 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
                     for (final tag in _tags)
                       InputChip(
                         label: Text(tag.name),
+                        labelStyle:
+                            Theme.of(context).brightness == Brightness.dark
+                            ? Theme.of(context).textTheme.labelLarge?.copyWith(
+                                color: foregroundOn(tag.color),
+                              )
+                            : null,
                         backgroundColor: tag.color,
                         side: BorderSide(color: tag.color),
+                        deleteIconColor:
+                            Theme.of(context).brightness == Brightness.dark
+                            ? foregroundOn(tag.color)
+                            : null,
                         onDeleted: _isSaving
                             ? null
                             : () => setState(() => _tags.remove(tag)),
@@ -751,8 +807,13 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
                       label: Text(context.l10n.cancel),
                       style: FilledButton.styleFrom(
                         padding: const EdgeInsets.symmetric(vertical: 16),
-                        backgroundColor: const Color(0xFFF0C9CE),
-                        foregroundColor: Colors.black,
+                        // Soft red (like the previous pink), theme-aware so it
+                        // also works in dark; overrides the global turquoise
+                        // filledButtonTheme.
+                        backgroundColor:
+                            Theme.of(context).colorScheme.errorContainer,
+                        foregroundColor:
+                            Theme.of(context).colorScheme.onErrorContainer,
                       ),
                     ),
                   ),
@@ -769,8 +830,6 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
                       label: Text(context.l10n.record),
                       style: FilledButton.styleFrom(
                         padding: const EdgeInsets.symmetric(vertical: 16),
-                        backgroundColor: const Color(0xFF21C4B6),
-                        foregroundColor: Colors.white,
                       ),
                     ),
                   ),
@@ -1103,7 +1162,7 @@ class _RecurringExpenseControl extends StatelessWidget {
             context.l10n.recurringExpense,
             textAlign: TextAlign.center,
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              color: Colors.black,
+              color: Theme.of(context).colorScheme.onSurface,
               fontSize: 15,
               fontWeight: FontWeight.w800,
             ),
@@ -1174,10 +1233,6 @@ class _TransferBlock extends StatelessWidget {
               child: IconButton.filledTonal(
                 onPressed: onSwap,
                 icon: const Icon(Icons.swap_horiz_rounded),
-                style: IconButton.styleFrom(
-                  backgroundColor: const Color(0xFFE7FFFA),
-                  foregroundColor: Colors.black,
-                ),
               ),
             ),
             Expanded(
@@ -1236,7 +1291,7 @@ class _TransferSide extends StatelessWidget {
           label,
           textAlign: TextAlign.center,
           style: Theme.of(context).textTheme.labelLarge?.copyWith(
-            color: Colors.black87,
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
             fontWeight: FontWeight.w800,
           ),
         ),
@@ -1257,7 +1312,7 @@ class _TransferSide extends StatelessWidget {
             contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 11),
           ),
           style: Theme.of(context).textTheme.titleMedium?.copyWith(
-            color: Colors.black,
+            color: Theme.of(context).colorScheme.onSurface,
             fontWeight: FontWeight.w600,
           ),
           onChanged: onAmountChanged,
@@ -1376,7 +1431,7 @@ class _SectionLabel extends StatelessWidget {
       text,
       style: Theme.of(context).textTheme.titleLarge?.copyWith(
         fontWeight: FontWeight.w800,
-        color: Colors.black,
+        color: Theme.of(context).colorScheme.onSurface,
       ),
     );
   }
@@ -1401,8 +1456,10 @@ class _PickerChip extends StatelessWidget {
           icon: const Icon(Icons.keyboard_arrow_down_rounded, size: 20),
           label: Text(label, overflow: TextOverflow.ellipsis),
           style: FilledButton.styleFrom(
-            backgroundColor: const Color(0xFF21C4B6),
-            foregroundColor: Colors.white,
+            // Bright brand turquoise (not the dark `primary` tone, which reads
+            // green in light mode) so the pickers stay turquoise in both themes.
+            backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+            foregroundColor: Theme.of(context).colorScheme.onPrimaryContainer,
             minimumSize: Size.zero,
             tapTargetSize: MaterialTapTargetSize.shrinkWrap,
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),

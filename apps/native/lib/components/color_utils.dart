@@ -50,6 +50,42 @@ Color pastelize(Color color) {
       .toColor();
 }
 
+/// Adapts a stored [pastelize]d widget background so its content stays legible
+/// in both themes. Widget backgrounds are persisted as light pastels, which
+/// work under dark-on-light text in light mode but leave the theme's
+/// light-on-dark text unreadable in dark mode. In light themes the pastel is
+/// returned as-is; in dark themes it is rebuilt as a deep tint of the same hue
+/// (fixed low lightness) so the same content reads against it.
+Color readableWidgetBackground(Color background, Brightness brightness) {
+  if (brightness == Brightness.light) return background;
+  final hsl = HSLColor.fromColor(background);
+  return hsl
+      .withSaturation(hsl.saturation.clamp(0.3, 0.6))
+      .withLightness(0.24)
+      .toColor();
+}
+
+/// Picks a legible foreground (near-black or near-white) for text/icons drawn
+/// on top of [background], choosing whichever yields the higher contrast ratio.
+/// Used for tag chips whose fill is the tag's own identity color: the fill must
+/// stay as the user picked it, so only the label adapts to remain readable in
+/// both themes and for any color.
+Color foregroundOn(Color background) {
+  double contrast(Color a, Color b) {
+    final la = a.computeLuminance();
+    final lb = b.computeLuminance();
+    final hi = la > lb ? la : lb;
+    final lo = la > lb ? lb : la;
+    return (hi + 0.05) / (lo + 0.05);
+  }
+
+  const black = Color(0xFF000000);
+  const white = Color(0xFFFFFFFF);
+  return contrast(background, white) >= contrast(background, black)
+      ? white
+      : black;
+}
+
 String colorToHex(Color color) {
   final alpha = (color.a * 255).round() & 0xff;
   final red = (color.r * 255).round() & 0xff;

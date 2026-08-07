@@ -1,66 +1,159 @@
-import { Check, HelpCircle } from 'lucide-react'
+import { HelpCircle } from 'lucide-react'
+import type { ReactNode } from 'react'
+import { AccountIcon } from '@/components/account-icon'
+import { CategoryIcon } from '@/components/category-icon'
+import { formatMoney } from '@/lib/money'
 import { cn } from '@/lib/utils'
+import type { TransactionTimeStatus } from './helpers'
 import { formatSignedAmount } from './helpers'
+
+export type TransactionRowIdentity = {
+    type: 'account' | 'category'
+    label: string
+    icon?: string
+    color: string
+}
 
 type TransactionRowProps = {
     title: string
     /** Signed cents: positive renders green with `+`, negative with `-`. */
     amountCents: number
-    /** `true` → confirmed date (green check); `false` → estimated (amber help). */
     dateConfirmed: boolean
+    timeLabel?: string
+    timeStatus?: TransactionTimeStatus
     description?: string | null
-    /** Currency symbol shown before the amount. Defaults to `$`. */
+    identities?: readonly TransactionRowIdentity[]
+    currency?: string
     currencySymbol?: string
+    onClick?: () => void
 }
 
 export function TransactionRow({
     title,
     amountCents,
     dateConfirmed,
+    timeLabel,
+    timeStatus = 'none',
     description,
+    identities = [],
+    currency,
     currencySymbol = '$',
+    onClick,
 }: TransactionRowProps) {
     const isPositive = amountCents > 0
-    return (
-        <div className="flex items-center gap-3 rounded-xl border bg-card px-4 py-3 shadow-xs">
-            <DateCheckIcon dateConfirmed={dateConfirmed} />
-            <div className="flex min-w-0 flex-1 flex-col">
-                <span className="truncate text-sm font-medium text-foreground">
+    const timeNeedsAttention = timeStatus !== 'confirmed'
+    const showAttention = !dateConfirmed || timeNeedsAttention
+    const sign = amountCents < 0 ? '-' : amountCents > 0 ? '+' : ''
+    const amount = currency
+        ? `${sign ? `${sign} ` : ''}${formatMoney(Math.abs(amountCents), currency)}`
+        : formatSignedAmount(amountCents, currencySymbol)
+
+    const content = (
+        <>
+            <div className="flex items-start justify-between gap-3">
+                <span className="min-w-0 flex-1 truncate text-base font-medium text-foreground">
                     {title}
                 </span>
-                {description ? (
-                    <span className="truncate text-xs text-muted-foreground">
-                        {description}
-                    </span>
-                ) : null}
+                <span
+                    className={cn(
+                        'shrink-0 text-base font-semibold tabular-nums',
+                        isPositive
+                            ? 'text-green-600 dark:text-green-500'
+                            : 'text-foreground',
+                    )}
+                >
+                    {amount}
+                </span>
             </div>
-            <span
-                className={cn(
-                    'shrink-0 text-sm font-semibold tabular-nums',
-                    isPositive
-                        ? 'text-green-600 dark:text-green-500'
-                        : 'text-foreground',
-                )}
-            >
-                {formatSignedAmount(amountCents, currencySymbol)}
-            </span>
-        </div>
+
+            {description ? (
+                <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                    {description}
+                </p>
+            ) : null}
+
+            {identities.length > 0 || timeLabel || showAttention ? (
+                <div className="mt-2 flex items-center justify-between gap-3">
+                    <div className="flex min-w-0 items-center gap-1.5">
+                        {identities.map((identity) => (
+                            <IdentityIcon
+                                key={`${identity.type}-${identity.label}`}
+                                identity={identity}
+                            />
+                        ))}
+                    </div>
+                    <div className="flex shrink-0 items-center gap-1">
+                        {showAttention ? (
+                            <HelpCircle
+                                className="size-4 text-amber-600 dark:text-amber-500"
+                                aria-label="Fecha u horario estimado"
+                            />
+                        ) : null}
+                        {timeLabel ? (
+                            <span
+                                className={cn(
+                                    'text-xs font-medium tabular-nums',
+                                    timeNeedsAttention
+                                        ? 'text-amber-700 dark:text-amber-500'
+                                        : 'text-muted-foreground',
+                                )}
+                            >
+                                {timeLabel}
+                            </span>
+                        ) : null}
+                    </div>
+                </div>
+            ) : null}
+        </>
+    )
+
+    const className =
+        'w-full rounded-xl border bg-card px-4 py-3 text-left shadow-xs transition-colors'
+    return onClick ? (
+        <button
+            type="button"
+            className={cn(
+                className,
+                'hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+            )}
+            onClick={onClick}
+        >
+            {content}
+        </button>
+    ) : (
+        <div className={className}>{content}</div>
     )
 }
 
-function DateCheckIcon({ dateConfirmed }: { dateConfirmed: boolean }) {
-    if (dateConfirmed) {
-        return (
-            <Check
-                className="size-5 shrink-0 text-green-600 dark:text-green-500"
-                aria-label="Fecha confirmada"
+function IdentityIcon({ identity }: { identity: TransactionRowIdentity }) {
+    let icon: ReactNode
+    if (identity.type === 'account') {
+        icon = (
+            <AccountIcon
+                name={identity.icon}
+                className="size-3.5"
+                color={identity.color}
+            />
+        )
+    } else {
+        icon = (
+            <CategoryIcon
+                name={identity.icon}
+                className="size-3.5"
+                color={identity.color}
             />
         )
     }
+
     return (
-        <HelpCircle
-            className="size-5 shrink-0 text-amber-600 dark:text-amber-500"
-            aria-label="Fecha estimada"
-        />
+        <span
+            role="img"
+            className="flex size-6 shrink-0 items-center justify-center rounded-full"
+            style={{ backgroundColor: `${identity.color}29` }}
+            title={identity.label}
+            aria-label={identity.label}
+        >
+            {icon}
+        </span>
     )
 }

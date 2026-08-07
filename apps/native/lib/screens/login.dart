@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:app/app_config/app_config_banner_list.dart';
 import 'package:app/auth/auth_controller.dart';
 import 'package:app/l10n/l10n.dart';
+import 'package:app/telemetry/business_metrics.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:google_sign_in/google_sign_in.dart';
@@ -203,11 +204,12 @@ class _LoginScreenState extends State<LoginScreen> {
 
     setState(() => _submitting = true);
     final messenger = ScaffoldMessenger.of(context);
+    final auth = context.read<AuthController>();
+    final businessMetrics = context.read<BusinessMetrics?>();
     final l10n = context.l10n;
     try {
-      await context.read<AuthController>().addLocal(
-        name: _localNameController.text.trim(),
-      );
+      await auth.addLocal(name: _localNameController.text.trim());
+      businessMetrics?.userAccountCreated(authMethod: 'local');
     } catch (e) {
       messenger.showSnackBar(
         SnackBar(content: Text(l10n.localAccountFailed(e))),

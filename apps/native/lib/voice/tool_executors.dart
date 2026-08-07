@@ -206,6 +206,7 @@ class ToolExecutors {
     final id = await repos.accounts.create(
       name: args['name'] as String,
       currency: args['currency'] as String,
+      createdBy: 'agent',
       description: args['description'] as String?,
       color: args['color'] as String?,
       icon: args['icon'] as String?,
@@ -538,23 +539,30 @@ class ToolExecutors {
 
   // ───── Transaction writes ─────
 
-  // The agent sets `dateConfirmed` when the date is certain (explicit date,
-  // "today"/"yesterday") and false when it inferred or defaulted it.
-  //
-  // Gemini's function-call args don't guarantee a typed JSON boolean: depending
-  // on the model it arrives as a real bool, the string "true"/"false", or a
-  // number (1/0). We coerce all of those here. A truly unparseable value falls
-  // back to false (conservative: treat the date as unconfirmed).
+  // A supplied date is explicit (including deterministic relative phrases).
+  // When date is omitted, the executor defaults the day to today and marks it
+  // unconfirmed. This prevents a mistaken model boolean from overriding the
+  // actual tool payload.
   bool _dateConfirmedOf(Map<String, dynamic> args) {
-    final raw = args['dateConfirmed'];
-    if (raw is bool) return raw;
-    if (raw is num) return raw != 0;
-    if (raw is String) {
-      final normalized = raw.trim().toLowerCase();
-      if (normalized == 'true') return true;
-      if (normalized == 'false') return false;
-    }
-    return false;
+    final date = args['date'];
+    return date is String && date.trim().isNotEmpty;
+  }
+
+  TransactionTimeStatus _timeStatusOf(Map<String, dynamic> args) {
+    return switch (args['timeStatus']) {
+      'confirmed' => TransactionTimeStatus.confirmed,
+      'approximation' => TransactionTimeStatus.approximation,
+      'none' || null => TransactionTimeStatus.none,
+      final value => throw ArgumentError('Invalid timeStatus: $value'),
+    };
+  }
+
+  BigInt _transactionDateOf(Map<String, dynamic> args) {
+    return parseTransactionDate(
+      args['date'] as String?,
+      timeStatus: _timeStatusOf(args),
+      time: args['time'] as String?,
+    );
   }
 
   /// Resolves the loosely typed `tagIdsOrNames` argument to tag ids,
@@ -587,13 +595,15 @@ class ToolExecutors {
       name: args['name'] as String,
       amountCents: parseAmountToCents(args['amount'] as num),
       currency: acc.currency,
+      createdBy: 'agent',
       description: args['description'] as String?,
       status: (args['status'] as String?) ?? 'cleared',
-      dateMs: parseOptionalDate(args['date'] as String?),
+      dateMs: _transactionDateOf(args),
       dateConfirmed: _dateConfirmedOf(args),
+      timeStatus: _timeStatusOf(args),
       tagIds: await _resolveTagIds(args['tagIdsOrNames']),
     );
-    return {'ok': true, 'id': id};
+    return _transactionWriteResult(id);
   }
 
   Future<Map<String, dynamic>> _addIncome(Map<String, dynamic> args) async {
@@ -612,13 +622,15 @@ class ToolExecutors {
       name: args['name'] as String,
       amountCents: parseAmountToCents(args['amount'] as num),
       currency: acc.currency,
+      createdBy: 'agent',
       description: args['description'] as String?,
       status: (args['status'] as String?) ?? 'cleared',
-      dateMs: parseOptionalDate(args['date'] as String?),
+      dateMs: _transactionDateOf(args),
       dateConfirmed: _dateConfirmedOf(args),
+      timeStatus: _timeStatusOf(args),
       tagIds: await _resolveTagIds(args['tagIdsOrNames']),
     );
-    return {'ok': true, 'id': id};
+    return _transactionWriteResult(id);
   }
 
   Future<Map<String, dynamic>> _addTransfer(Map<String, dynamic> args) async {
@@ -670,14 +682,16 @@ class ToolExecutors {
       currency: from.currency,
       toAmountCents: toAmount,
       toCurrency: to.currency,
+      createdBy: 'agent',
       exchangeRate: (args['exchangeRate'] as num?)?.toDouble(),
       categoryId: categoryId ?? '',
       description: args['description'] as String?,
-      dateMs: parseOptionalDate(args['date'] as String?),
+      dateMs: _transactionDateOf(args),
       dateConfirmed: _dateConfirmedOf(args),
+      timeStatus: _timeStatusOf(args),
       tagIds: await _resolveTagIds(args['tagIdsOrNames']),
     );
-    return {'ok': true, 'id': id};
+    return _transactionWriteResult(id);
   }
 
   Future<Map<String, dynamic>> _addBalanceAdjustment(
@@ -692,12 +706,14 @@ class ToolExecutors {
       accountId: acc.id,
       balanceAfterCents: parseAmountToCents(args['balanceAfter'] as num),
       currency: acc.currency,
+      createdBy: 'agent',
       name: (args['name'] as String?) ?? 'Ajuste de saldo',
       description: args['description'] as String?,
-      dateMs: parseOptionalDate(args['date'] as String?),
+      dateMs: _transactionDateOf(args),
       dateConfirmed: _dateConfirmedOf(args),
+      timeStatus: _timeStatusOf(args),
     );
-    return {'ok': true, 'id': id};
+    return _transactionWriteResult(id);
   }
 
   Future<Map<String, dynamic>> _updateTransaction(
@@ -724,11 +740,14 @@ class ToolExecutors {
       description: args.containsKey('description')
           ? Value(args['description'] as String?)
           : const Value.absent(),
-      date: args['date'] != null
-          ? Value(parseNaturalDate(args['date'] as String))
+      date: args['date'] != null || args['time'] != null
+          ? Value(_transactionDateOf(args))
           : const Value.absent(),
-      dateConfirmed: args.containsKey('dateConfirmed')
-          ? Value(_dateConfirmedOf(args))
+      dateConfirmed: args['date'] != null
+          ? const Value(true)
+          : const Value.absent(),
+      timeStatus: args.containsKey('timeStatus')
+          ? Value(_timeStatusOf(args))
           : const Value.absent(),
       amount: args['amount'] != null
           ? Value(parseAmountToCents(args['amount'] as num))
@@ -738,7 +757,7 @@ class ToolExecutors {
           ? Value(args['status'] as String)
           : const Value.absent(),
     );
-    return {'ok': true, 'id': id};
+    return _transactionWriteResult(id);
   }
 
   Future<Map<String, dynamic>> _deleteTransaction(
@@ -748,6 +767,19 @@ class ToolExecutors {
     // Idempotent: deleting a missing transaction still reports ok.
     await repos.transactions.delete(id);
     return {'ok': true, 'id': id};
+  }
+
+  Future<Map<String, dynamic>> _transactionWriteResult(String id) async {
+    final transaction = await repos.transactions.getById(id);
+    if (transaction == null) {
+      return {'ok': true, 'id': id};
+    }
+    return {
+      'ok': true,
+      'id': id,
+      'date': transaction.date.toString(),
+      'timeStatus': transaction.timeStatus.name,
+    };
   }
 
   Future<Map<String, dynamic>> _tagTransaction(
@@ -1260,6 +1292,8 @@ class ToolExecutors {
       'type': t.type,
       'name': t.name,
       'date': t.date.toString(),
+      'dateConfirmed': t.dateConfirmed,
+      'timeStatus': t.timeStatus.name,
       'accountId': t.accountId,
       'categoryId': t.categoryId,
       'amount': centsToDouble(t.amount),
