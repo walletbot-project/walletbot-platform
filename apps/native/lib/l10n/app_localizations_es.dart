@@ -821,6 +821,39 @@ class AppLocalizationsEs extends AppLocalizations {
   String get recurringExpense => 'Gasto recurrente';
 
   @override
+  String get recurringIncome => 'Ingreso recurrente';
+
+  @override
+  String get frequency => 'Frecuencia';
+
+  @override
+  String get recurrenceDaily => 'Diario';
+
+  @override
+  String get recurrenceWeekly => 'Semanal';
+
+  @override
+  String get recurrenceMonthly => 'Mensual';
+
+  @override
+  String get recurrenceYearly => 'Anual';
+
+  @override
+  String get recurrenceEndDateOptional => 'Fecha de fin (opcional)';
+
+  @override
+  String get recurrenceNoEndDate => 'Sin fecha de fin';
+
+  @override
+  String get recurrenceCustomDays => 'Cada X días';
+
+  @override
+  String get recurrenceRepeatEvery => 'Repetir cada';
+
+  @override
+  String get recurrenceDaysUnit => 'días';
+
+  @override
   String get leaves => 'Sale';
 
   @override

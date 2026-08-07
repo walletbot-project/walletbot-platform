@@ -16,11 +16,32 @@ import {
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
 import { TAG_COLOR_OPTIONS } from '@/lib/tag-colors'
 import { cn } from '@/lib/utils'
 
 type MovementType = 'income' | 'expense' | 'transfer'
+
+type RecurrenceFrequency =
+    | 'daily'
+    | 'weekly'
+    | 'monthly'
+    | 'yearly'
+    | 'customDays'
+
+const DEFAULT_RECURRENCE_DAY_INTERVAL = 15
+
+const RECURRENCE_FREQUENCY_OPTIONS: {
+    value: RecurrenceFrequency
+    label: string
+}[] = [
+    { value: 'daily', label: 'Diario' },
+    { value: 'weekly', label: 'Semanal' },
+    { value: 'monthly', label: 'Mensual' },
+    { value: 'yearly', label: 'Anual' },
+    { value: 'customDays', label: 'Cada X días' },
+]
 
 type AccountOption = {
     id: string
@@ -223,6 +244,13 @@ export function AddManual() {
     )
     const [saved, setSaved] = useState(false)
     const [isSaving, setIsSaving] = useState(false)
+    const [isRecurring, setIsRecurring] = useState(false)
+    const [recurrenceFrequency, setRecurrenceFrequency] =
+        useState<RecurrenceFrequency>('monthly')
+    const [recurrenceDayInterval, setRecurrenceDayInterval] = useState(
+        DEFAULT_RECURRENCE_DAY_INTERVAL,
+    )
+    const [recurrenceEndDate, setRecurrenceEndDate] = useState('')
 
     useEffect(() => {
         setAccountId((current) => {
@@ -290,6 +318,10 @@ export function AddManual() {
         setPendingTagName(null)
         setPendingTagColor(TAG_COLOR_OPTIONS[0])
         setSaved(false)
+        setIsRecurring(false)
+        setRecurrenceFrequency('monthly')
+        setRecurrenceDayInterval(DEFAULT_RECURRENCE_DAY_INTERVAL)
+        setRecurrenceEndDate('')
     }
 
     const changeType = (nextType: MovementType) => {
@@ -781,6 +813,24 @@ export function AddManual() {
                                 <TimeInput value={time} onChange={setTime} />
                             </Field>
                         </div>
+
+                        <RecurrenceControl
+                            label={
+                                type === 'income'
+                                    ? 'Ingreso recurrente'
+                                    : 'Gasto recurrente'
+                            }
+                            isRecurring={isRecurring}
+                            onIsRecurringChange={setIsRecurring}
+                            frequency={recurrenceFrequency}
+                            onFrequencyChange={setRecurrenceFrequency}
+                            dayInterval={recurrenceDayInterval}
+                            onDayIntervalChange={setRecurrenceDayInterval}
+                            endDate={recurrenceEndDate}
+                            onEndDateChange={setRecurrenceEndDate}
+                            minEndDate={date}
+                            disabled={isSaving}
+                        />
                     </section>
                 )}
 
@@ -1331,6 +1381,144 @@ function Field({
                 {action}
             </div>
             {children}
+        </div>
+    )
+}
+
+function RecurrenceControl({
+    label,
+    isRecurring,
+    onIsRecurringChange,
+    frequency,
+    onFrequencyChange,
+    dayInterval,
+    onDayIntervalChange,
+    endDate,
+    onEndDateChange,
+    minEndDate,
+    disabled,
+}: {
+    label: string
+    isRecurring: boolean
+    onIsRecurringChange: (value: boolean) => void
+    frequency: RecurrenceFrequency
+    onFrequencyChange: (value: RecurrenceFrequency) => void
+    dayInterval: number
+    onDayIntervalChange: (value: number) => void
+    endDate: string
+    onEndDateChange: (value: string) => void
+    minEndDate: string
+    disabled: boolean
+}) {
+    return (
+        <div className="space-y-4 rounded-xl border border-[#D9D0D6] bg-white p-4 shadow-sm">
+            <div className="flex items-center justify-between gap-3">
+                <Label
+                    htmlFor="recurring"
+                    className="text-base font-bold text-black"
+                >
+                    {label}
+                </Label>
+                <Switch
+                    id="recurring"
+                    checked={isRecurring}
+                    onCheckedChange={onIsRecurringChange}
+                    disabled={disabled}
+                />
+            </div>
+
+            {isRecurring ? (
+                <div className="space-y-4 rounded-lg border border-[#21C4B6] bg-[#F3FBFA] p-4">
+                    <div className="space-y-2">
+                        <Label className="text-sm font-bold text-black">
+                            Frecuencia
+                        </Label>
+                        <div className="flex flex-wrap gap-2">
+                            {RECURRENCE_FREQUENCY_OPTIONS.map((option) => (
+                                <button
+                                    key={option.value}
+                                    type="button"
+                                    disabled={disabled}
+                                    onClick={() =>
+                                        onFrequencyChange(option.value)
+                                    }
+                                    className={cn(
+                                        'rounded-full border px-4 py-1.5 text-sm font-medium transition-colors disabled:opacity-50',
+                                        frequency === option.value
+                                            ? 'border-[#21C4B6] bg-[#21C4B6] text-white'
+                                            : 'border-[#D9D0D6] bg-white text-black hover:bg-[#E7FFFA]',
+                                    )}
+                                >
+                                    {option.label}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+
+                    {frequency === 'customDays' ? (
+                        <div className="flex items-center gap-3">
+                            <Label
+                                htmlFor="recurrence-day-interval"
+                                className="text-sm font-bold text-black"
+                            >
+                                Repetir cada
+                            </Label>
+                            <Input
+                                id="recurrence-day-interval"
+                                type="number"
+                                min={1}
+                                value={dayInterval}
+                                onChange={(event) => {
+                                    const parsed = Number.parseInt(
+                                        event.target.value,
+                                        10,
+                                    )
+                                    if (Number.isNaN(parsed) || parsed < 1) {
+                                        return
+                                    }
+                                    onDayIntervalChange(parsed)
+                                }}
+                                disabled={disabled}
+                                className="h-11 w-20 rounded-xl border-[#D9D0D6] bg-white text-center"
+                            />
+                            <span className="text-sm font-medium text-black">
+                                días
+                            </span>
+                        </div>
+                    ) : null}
+
+                    <Field
+                        label="Fecha de fin (opcional)"
+                        htmlFor="recurrence-end-date"
+                        action={
+                            endDate ? (
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    className="h-8 rounded-full"
+                                    onClick={() => onEndDateChange('')}
+                                    disabled={disabled}
+                                >
+                                    <X className="size-3" />
+                                </Button>
+                            ) : undefined
+                        }
+                    >
+                        <Input
+                            id="recurrence-end-date"
+                            type="date"
+                            value={endDate}
+                            min={minEndDate}
+                            onChange={(event) =>
+                                onEndDateChange(event.target.value)
+                            }
+                            disabled={disabled}
+                            className="h-11 rounded-xl border-[#D9D0D6] bg-white"
+                        />
+                    </Field>
+                </div>
+            ) : null}
         </div>
     )
 }

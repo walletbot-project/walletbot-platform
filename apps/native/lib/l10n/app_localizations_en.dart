@@ -817,6 +817,39 @@ class AppLocalizationsEn extends AppLocalizations {
   String get recurringExpense => 'Recurring expense';
 
   @override
+  String get recurringIncome => 'Recurring income';
+
+  @override
+  String get frequency => 'Frequency';
+
+  @override
+  String get recurrenceDaily => 'Daily';
+
+  @override
+  String get recurrenceWeekly => 'Weekly';
+
+  @override
+  String get recurrenceMonthly => 'Monthly';
+
+  @override
+  String get recurrenceYearly => 'Yearly';
+
+  @override
+  String get recurrenceEndDateOptional => 'End date (optional)';
+
+  @override
+  String get recurrenceNoEndDate => 'No end date';
+
+  @override
+  String get recurrenceCustomDays => 'Every X days';
+
+  @override
+  String get recurrenceRepeatEvery => 'Repeat every';
+
+  @override
+  String get recurrenceDaysUnit => 'days';
+
+  @override
   String get leaves => 'Leaves';
 
   @override

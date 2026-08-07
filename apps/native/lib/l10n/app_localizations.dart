@@ -1556,6 +1556,72 @@ abstract class AppLocalizations {
   /// **'Recurring expense'**
   String get recurringExpense;
 
+  /// No description provided for @recurringIncome.
+  ///
+  /// In en, this message translates to:
+  /// **'Recurring income'**
+  String get recurringIncome;
+
+  /// No description provided for @frequency.
+  ///
+  /// In en, this message translates to:
+  /// **'Frequency'**
+  String get frequency;
+
+  /// No description provided for @recurrenceDaily.
+  ///
+  /// In en, this message translates to:
+  /// **'Daily'**
+  String get recurrenceDaily;
+
+  /// No description provided for @recurrenceWeekly.
+  ///
+  /// In en, this message translates to:
+  /// **'Weekly'**
+  String get recurrenceWeekly;
+
+  /// No description provided for @recurrenceMonthly.
+  ///
+  /// In en, this message translates to:
+  /// **'Monthly'**
+  String get recurrenceMonthly;
+
+  /// No description provided for @recurrenceYearly.
+  ///
+  /// In en, this message translates to:
+  /// **'Yearly'**
+  String get recurrenceYearly;
+
+  /// No description provided for @recurrenceEndDateOptional.
+  ///
+  /// In en, this message translates to:
+  /// **'End date (optional)'**
+  String get recurrenceEndDateOptional;
+
+  /// No description provided for @recurrenceNoEndDate.
+  ///
+  /// In en, this message translates to:
+  /// **'No end date'**
+  String get recurrenceNoEndDate;
+
+  /// No description provided for @recurrenceCustomDays.
+  ///
+  /// In en, this message translates to:
+  /// **'Every X days'**
+  String get recurrenceCustomDays;
+
+  /// No description provided for @recurrenceRepeatEvery.
+  ///
+  /// In en, this message translates to:
+  /// **'Repeat every'**
+  String get recurrenceRepeatEvery;
+
+  /// No description provided for @recurrenceDaysUnit.
+  ///
+  /// In en, this message translates to:
+  /// **'days'**
+  String get recurrenceDaysUnit;
+
   /// No description provided for @leaves.
   ///
   /// In en, this message translates to:
