@@ -1787,7 +1787,7 @@ abstract class AppLocalizations {
   /// No description provided for @verifyEmailDone.
   ///
   /// In en, this message translates to:
-  /// **'I verified my email — sign in'**
+  /// **'I verified my email'**
   String get verifyEmailDone;
 
   /// No description provided for @resendVerificationEmail.

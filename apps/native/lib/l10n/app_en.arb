@@ -308,7 +308,7 @@
   "verifyEmailSent": "We sent a verification link to {email}. The link opens in your browser.",
   "@verifyEmailSent": {"placeholders": {"email": {"type": "String"}}},
   "verifyEmailInstructions": "Open the link to verify your account, then come back here and sign in.",
-  "verifyEmailDone": "I verified my email — sign in",
+  "verifyEmailDone": "I verified my email",
   "resendVerificationEmail": "Resend email",
   "resendVerificationCooldown": "Resend in {seconds}s",
   "@resendVerificationCooldown": {"placeholders": {"seconds": {"type": "int"}}},

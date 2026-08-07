@@ -281,7 +281,7 @@
   "verifyEmailTitle": "Verificá tu correo",
   "verifyEmailSent": "Te enviamos un enlace de verificación a {email}. El enlace se abre en el navegador.",
   "verifyEmailInstructions": "Abrí el enlace para verificar tu cuenta y después volvé acá a iniciar sesión.",
-  "verifyEmailDone": "Ya verifiqué — iniciar sesión",
+  "verifyEmailDone": "Ya verifiqué",
   "resendVerificationEmail": "Reenviar correo",
   "resendVerificationCooldown": "Reenviar en {seconds}s",
   "verificationEmailResent": "Te reenviamos el correo de verificación.",

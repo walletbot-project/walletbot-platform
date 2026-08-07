@@ -950,7 +950,7 @@ class AppLocalizationsEs extends AppLocalizations {
       'Abrí el enlace para verificar tu cuenta y después volvé acá a iniciar sesión.';
 
   @override
-  String get verifyEmailDone => 'Ya verifiqué — iniciar sesión';
+  String get verifyEmailDone => 'Ya verifiqué';
 
   @override
   String get resendVerificationEmail => 'Reenviar correo';

@@ -946,7 +946,7 @@ class AppLocalizationsEn extends AppLocalizations {
       'Open the link to verify your account, then come back here and sign in.';
 
   @override
-  String get verifyEmailDone => 'I verified my email — sign in';
+  String get verifyEmailDone => 'I verified my email';
 
   @override
   String get resendVerificationEmail => 'Resend email';
