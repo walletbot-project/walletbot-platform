@@ -152,6 +152,12 @@ class _AppConfigBannerCard extends StatelessWidget {
                         for (final action in banner.actions)
                           FilledButton.tonalIcon(
                             onPressed: () => _openAction(context, action),
+                            // Keep the tonal look; the global filledButtonTheme
+                            // turns solid buttons turquoise.
+                            style: FilledButton.styleFrom(
+                              backgroundColor: colors.secondaryContainer,
+                              foregroundColor: colors.onSecondaryContainer,
+                            ),
                             icon: const Icon(Icons.open_in_new_rounded),
                             label: Text(
                               banner.fallback ==

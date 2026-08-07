@@ -1,9 +1,14 @@
 import { api } from '@wallet-bot/backend/api'
-import { usePaginatedQuery } from 'convex/react'
+import { usePaginatedQuery, useQuery } from 'convex/react'
 import { Loader2 } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation } from 'react-router-dom'
 import { Skeleton } from '@/components/ui/skeleton'
+import {
+    ACCOUNT_DEFAULT_COLOR,
+    CATEGORY_DEFAULT_COLOR,
+    normalizeColor,
+} from '@/lib/entity-colors'
 import { FilterChips } from './filter-chips'
 import {
     buildListEntries,
@@ -11,11 +16,14 @@ import {
     dateToMs,
     EMPTY_FILTERS,
     estimatedDescription,
+    formatTransactionTime,
     matchesFilters,
-    signedAmountCents,
     type TransactionFilters,
+    type TransactionTransferSide,
     type TransactionType,
+    transactionTimeStatus,
 } from './helpers'
+import { TransactionDetailsSheet } from './transaction-details-sheet'
 import { TransactionFiltersBar } from './transaction-filters-bar'
 import { TransactionRow } from './transaction-row'
 
@@ -32,12 +40,38 @@ export function Activity() {
     const location = useLocation()
     const [filters, setFilters] = useState<TransactionFilters>(() => {
         const seed = location.state as Partial<TransactionFilters> | null
-        if (seed?.accountIds || seed?.categoryIds || seed?.tagIds) {
+        if (
+            seed?.accountIds ||
+            seed?.categoryIds ||
+            seed?.tagIds ||
+            seed?.dateFrom ||
+            seed?.dateTo
+        ) {
             return { ...EMPTY_FILTERS, ...seed }
         }
         return EMPTY_FILTERS
     })
     const [type, setType] = useState<TransactionType | null>(null)
+    const [selectedTransaction, setSelectedTransaction] = useState<{
+        id: string
+        transferSide?: TransactionTransferSide
+    } | null>(null)
+    const accounts = useQuery(api.v1.accounts.queries.list, {
+        includeArchived: true,
+    })
+    const categories = useQuery(api.v1.categories.queries.listActive)
+
+    const accountsById = useMemo(
+        () => new Map((accounts ?? []).map((account) => [account.id, account])),
+        [accounts],
+    )
+    const categoriesById = useMemo(
+        () =>
+            new Map(
+                (categories ?? []).map((category) => [category.id, category]),
+            ),
+        [categories],
+    )
 
     // The backend narrows by a single account/category plus the date range
     // (all index-backed). Everything else is refined client-side below.
@@ -128,12 +162,64 @@ export function Activity() {
                             ) : (
                                 <TransactionRow
                                     key={entry.key}
-                                    title={entry.txn.name}
-                                    amountCents={signedAmountCents(entry.txn)}
+                                    title={entry.title}
+                                    amountCents={entry.amountCents}
+                                    currency={entry.currency}
                                     dateConfirmed={entry.txn.dateConfirmed}
+                                    timeLabel={formatTransactionTime(
+                                        entry.txn.date,
+                                    )}
+                                    timeStatus={transactionTimeStatus(
+                                        entry.txn,
+                                    )}
                                     description={estimatedDescription(
                                         entry.txn,
                                     )}
+                                    identities={[
+                                        ...(accountsById.has(entry.accountId)
+                                            ? [
+                                                  {
+                                                      type: 'account' as const,
+                                                      label: `Cuenta: ${accountsById.get(entry.accountId)!.name}`,
+                                                      icon: accountsById.get(
+                                                          entry.accountId,
+                                                      )!.icon,
+                                                      color: normalizeColor(
+                                                          accountsById.get(
+                                                              entry.accountId,
+                                                          )!.color,
+                                                          ACCOUNT_DEFAULT_COLOR,
+                                                      ),
+                                                  },
+                                              ]
+                                            : []),
+                                        ...(categoriesById.has(
+                                            entry.txn.categoryId,
+                                        )
+                                            ? [
+                                                  {
+                                                      type: 'category' as const,
+                                                      label: `Categoría: ${categoriesById.get(entry.txn.categoryId)!.name}`,
+                                                      icon: categoriesById.get(
+                                                          entry.txn.categoryId,
+                                                      )!.icon,
+                                                      color: normalizeColor(
+                                                          categoriesById.get(
+                                                              entry.txn
+                                                                  .categoryId,
+                                                          )!.color,
+                                                          CATEGORY_DEFAULT_COLOR,
+                                                      ),
+                                                  },
+                                              ]
+                                            : []),
+                                    ]}
+                                    onClick={() =>
+                                        setSelectedTransaction({
+                                            id: entry.txn.id,
+                                            transferSide: entry.transferSide,
+                                        })
+                                    }
                                 />
                             ),
                         )}
@@ -148,6 +234,17 @@ export function Activity() {
 
                 <div ref={sentinelRef} aria-hidden className="h-1" />
             </div>
+            <TransactionDetailsSheet
+                transactionId={selectedTransaction?.id ?? null}
+                transferSide={selectedTransaction?.transferSide}
+                open={selectedTransaction !== null}
+                onApplyFilter={(next) =>
+                    setFilters({ ...EMPTY_FILTERS, ...next })
+                }
+                onOpenChange={(open) => {
+                    if (!open) setSelectedTransaction(null)
+                }}
+            />
         </div>
     )
 }

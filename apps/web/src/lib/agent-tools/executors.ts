@@ -3,6 +3,7 @@ import type { ToolName } from '@wallet-bot/shared'
 import {
     parseAmountToCents,
     parseOptionalDate,
+    parseTransactionDate,
     toolSchemas,
 } from '@wallet-bot/shared'
 import {
@@ -323,6 +324,7 @@ export const toolExecutors = {
         if (!catR.ok) return resolutionError('Category', catR)
 
         const id = newId()
+        const date = parseTransactionDate(args.date, args.timeStatus, args.time)
         await ctx.client.mutation(api.v1.transactions.mutations.createExpense, {
             id,
             name: args.name,
@@ -330,13 +332,14 @@ export const toolExecutors = {
             amount: parseAmountToCents(args.amount),
             accountId: accR.entity.id,
             categoryId: catR.entity.id,
-            date: parseOptionalDate(args.date),
-            dateConfirmed: args.dateConfirmed,
+            date,
+            dateConfirmed: args.date !== undefined,
+            timeStatus: args.timeStatus,
             status: args.status,
             createdBy: 'agent',
         })
         await attachTags(ctx, id, args.tagIdsOrNames)
-        return { ok: true, id }
+        return { ok: true, id, date: Number(date), timeStatus: args.timeStatus }
     }),
     addIncome: defineTool(toolSchemas.addIncome, async (ctx, args) => {
         const accR = await resolveAccount(ctx, args.accountIdOrName)
@@ -345,6 +348,7 @@ export const toolExecutors = {
         if (!catR.ok) return resolutionError('Category', catR)
 
         const id = newId()
+        const date = parseTransactionDate(args.date, args.timeStatus, args.time)
         await ctx.client.mutation(api.v1.transactions.mutations.createIncome, {
             id,
             name: args.name,
@@ -352,13 +356,14 @@ export const toolExecutors = {
             amount: parseAmountToCents(args.amount),
             accountId: accR.entity.id,
             categoryId: catR.entity.id,
-            date: parseOptionalDate(args.date),
-            dateConfirmed: args.dateConfirmed,
+            date,
+            dateConfirmed: args.date !== undefined,
+            timeStatus: args.timeStatus,
             status: args.status,
             createdBy: 'agent',
         })
         await attachTags(ctx, id, args.tagIdsOrNames)
-        return { ok: true, id }
+        return { ok: true, id, date: Number(date), timeStatus: args.timeStatus }
     }),
     addTransfer: defineTool(toolSchemas.addTransfer, async (ctx, args) => {
         const fromR = await resolveAccount(ctx, args.fromAccountIdOrName)
@@ -373,6 +378,7 @@ export const toolExecutors = {
         if (!catR.ok) return resolutionError('Category', catR)
 
         const id = newId()
+        const date = parseTransactionDate(args.date, args.timeStatus, args.time)
         await ctx.client.mutation(
             api.v1.transactions.mutations.createTransfer,
             {
@@ -388,13 +394,14 @@ export const toolExecutors = {
                         : undefined,
                 exchangeRate: args.exchangeRate,
                 categoryId: catR.entity.id,
-                date: parseOptionalDate(args.date),
-                dateConfirmed: args.dateConfirmed,
+                date,
+                dateConfirmed: args.date !== undefined,
+                timeStatus: args.timeStatus,
                 createdBy: 'agent',
             },
         )
         await attachTags(ctx, id, args.tagIdsOrNames)
-        return { ok: true, id }
+        return { ok: true, id, date: Number(date), timeStatus: args.timeStatus }
     }),
     addBalanceAdjustment: defineTool(
         toolSchemas.addBalanceAdjustment,
@@ -402,6 +409,11 @@ export const toolExecutors = {
             const accR = await resolveAccount(ctx, args.accountIdOrName)
             if (!accR.ok) return resolutionError('Account', accR)
             const id = newId()
+            const date = parseTransactionDate(
+                args.date,
+                args.timeStatus,
+                args.time,
+            )
             await ctx.client.mutation(
                 api.v1.transactions.mutations.createBalanceAdjustment,
                 {
@@ -410,12 +422,18 @@ export const toolExecutors = {
                     balanceAfter: parseAmountToCents(args.balanceAfter),
                     name: args.name,
                     description: args.description,
-                    date: parseOptionalDate(args.date),
-                    dateConfirmed: args.dateConfirmed,
+                    date,
+                    dateConfirmed: args.date !== undefined,
+                    timeStatus: args.timeStatus,
                     createdBy: 'agent',
                 },
             )
-            return { ok: true, id }
+            return {
+                ok: true,
+                id,
+                date: Number(date),
+                timeStatus: args.timeStatus,
+            }
         },
     ),
     updateTransaction: defineTool(
@@ -427,12 +445,43 @@ export const toolExecutors = {
                 if (!r.ok) return resolutionError('Category', r)
                 categoryId = r.entity.id
             }
+            // Partial temporal edits must preserve whichever of the calendar
+            // date / clock the caller omitted, instead of anchoring the
+            // missing half to "now". We read the existing transaction and
+            // backfill the omitted component from its stored timestamp. The
+            // status forced into `parseTransactionDate` only drives parsing
+            // (an explicit clock is always respected); the persisted
+            // `timeStatus` is `args.timeStatus`, handled separately below.
+            let date: bigint | undefined
+            if (args.date !== undefined || args.time !== undefined) {
+                const existing = await ctx.client.query(
+                    api.v1.transactions.queries.get,
+                    { id: args.id },
+                )
+                if (!existing) {
+                    return { ok: false, error: 'Transaction not found' }
+                }
+                const existingDate = new Date(Number(existing.date))
+                const pad = (n: number) => String(n).padStart(2, '0')
+                const dateInput =
+                    args.date ??
+                    `${existingDate.getFullYear()}-${pad(
+                        existingDate.getMonth() + 1,
+                    )}-${pad(existingDate.getDate())}`
+                const timeInput =
+                    args.time ??
+                    `${pad(existingDate.getHours())}:${pad(
+                        existingDate.getMinutes(),
+                    )}`
+                date = parseTransactionDate(dateInput, 'confirmed', timeInput)
+            }
             await ctx.client.mutation(api.v1.transactions.mutations.update, {
                 id: args.id,
                 name: args.name,
                 description: args.description,
-                date: parseOptionalDate(args.date),
-                dateConfirmed: args.dateConfirmed,
+                date,
+                dateConfirmed: args.date === undefined ? undefined : true,
+                timeStatus: args.timeStatus,
                 amount:
                     args.amount !== undefined
                         ? parseAmountToCents(args.amount)
@@ -440,7 +489,14 @@ export const toolExecutors = {
                 categoryId,
                 status: args.status,
             })
-            return { ok: true, id: args.id }
+            return {
+                ok: true,
+                id: args.id,
+                ...(date === undefined ? {} : { date: Number(date) }),
+                ...(args.timeStatus === undefined
+                    ? {}
+                    : { timeStatus: args.timeStatus }),
+            }
         },
     ),
     deleteTransaction: defineTool(
@@ -623,6 +679,8 @@ type TxnLite = {
     type: 'expense' | 'income' | 'transfer' | 'balance_adjustment'
     name: string
     date: bigint
+    dateConfirmed?: boolean
+    timeStatus?: 'confirmed' | 'approximation' | 'none'
     accountId: string
     categoryId: string
     amount: bigint
@@ -640,6 +698,8 @@ function serializeTransaction(t: TxnLite) {
         type: t.type,
         name: t.name,
         date: Number(t.date),
+        dateConfirmed: t.dateConfirmed,
+        timeStatus: t.timeStatus ?? 'none',
         accountId: t.accountId,
         categoryId: t.categoryId,
         amount: Number(t.amount) / 100,

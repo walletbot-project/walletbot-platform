@@ -184,12 +184,55 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     );
   }
 
-  ThemeData _theme(Brightness brightness) => ThemeData(
-    colorScheme: ColorScheme.fromSeed(
-      seedColor: Colors.greenAccent,
+  ThemeData _theme(Brightness brightness) {
+    final colorScheme = ColorScheme.fromSeed(
+      seedColor: const Color(0xFF6DE7D8),
       brightness: brightness,
-    ),
-  );
+      dynamicSchemeVariant: DynamicSchemeVariant.fidelity,
+    );
+    return ThemeData(
+      colorScheme: colorScheme,
+      // Selected tab: neutral readable label with a turquoise underline
+      // (primary at tone 40 reads green; the container keeps the brand hue).
+      tabBarTheme: TabBarThemeData(
+        indicatorColor: colorScheme.primaryContainer,
+        labelColor: colorScheme.onSurface,
+        unselectedLabelColor: colorScheme.onSurfaceVariant,
+      ),
+      // Selected segment uses the bright brand container instead of the pale
+      // secondaryContainer default, so selections read turquoise.
+      segmentedButtonTheme: SegmentedButtonThemeData(
+        style: ButtonStyle(
+          backgroundColor: WidgetStateProperty.resolveWith(
+            (states) => states.contains(WidgetState.selected)
+                ? colorScheme.primaryContainer
+                : null,
+          ),
+          foregroundColor: WidgetStateProperty.resolveWith(
+            (states) => states.contains(WidgetState.selected)
+                ? colorScheme.onPrimaryContainer
+                : null,
+          ),
+        ),
+      ),
+      // Solid filled buttons use the bright brand turquoise (primaryContainer)
+      // instead of the dark `primary` tone, which reads green in light mode.
+      // Note: this also targets FilledButton.tonal, so tonal buttons that must
+      // stay lower-emphasis set secondaryContainer explicitly at their call site.
+      filledButtonTheme: FilledButtonThemeData(
+        style: FilledButton.styleFrom(
+          backgroundColor: colorScheme.primaryContainer,
+          foregroundColor: colorScheme.onPrimaryContainer,
+        ),
+      ),
+      timePickerTheme: const TimePickerThemeData(
+        dialTextStyle: TextStyle(fontSize: 14),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.all(Radius.circular(28)),
+        ),
+      ),
+    );
+  }
 }
 
 class _TelemetryStarter extends StatefulWidget {
