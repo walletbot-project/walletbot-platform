@@ -88,10 +88,11 @@ The Service is **free of charge**. We may in the future introduce optional paid 
 - **You will never be charged without your prior, express agreement** to a price and a payment method.
 - If a feature you actively use is to become paid, we will treat that as a material change to these Terms (Section 14), with the corresponding notice, and you may delete your account before it takes effect.
 
-## 12. Availability, updates and minimum supported versions
+## 12. Availability, interruptions, updates and discontinuation
 
-- We work to keep the Service available and your data safe, but the Service is provided over networks and systems partly outside our control, and — as a free service — we do not guarantee uninterrupted, error-free availability. We will apply reasonable efforts to restore the Service promptly after incidents.
-- The Service evolves continuously. To the maximum extent permitted by applicable law, we may add, change, limit, suspend or remove features (or access to them) at any time, at our sole discretion, without cause and without prior notice, and this shall not give rise to any liability to you. Where mandatory law (including consumer-protection law) requires notice or other conditions for a specific change, we will comply with it.
+- We work to keep the Service available and your data safe, but the Service is provided over networks and systems partly outside our control, and — as a free service — we do not guarantee uninterrupted, error-free availability. **The Service may be interrupted, suspended or degraded, in whole or in part, at any time** — for example due to maintenance, updates, incidents, capacity limits, or failures of third-party providers, networks or app stores — and, to the maximum extent permitted by applicable law, such interruptions do not give rise to any liability to you. We will apply reasonable efforts to restore the Service promptly after incidents.
+- The Service evolves continuously. To the maximum extent permitted by applicable law, we may add, change, limit, suspend, remove or permanently discontinue ("sunset") features (or access to them) at any time, at our sole discretion, without cause and without prior notice, and this shall not give rise to any liability to you. Where mandatory law (including consumer-protection law) requires notice or other conditions for a specific change, we will comply with it.
+- **Discontinuation of the Service:** we may permanently discontinue the Service, in whole or in part, at any time. Discontinuing the Service as a whole is treated as a termination without cause under Section 13, with the notice described there. Where reasonably possible, we will give you an opportunity to take note of your records before shutdown; after shutdown, server-side data is deleted in accordance with the Privacy Policy. Data stored locally on your devices remains there, but the app's online features (sign-in, synchronization, the AI assistant) will stop working.
 - For security and data-integrity reasons, synchronization may require a **minimum supported app version**. If your installed version falls below it, sync pauses until you update; **your local data remains accessible offline** in the meantime.
 - We may perform scheduled maintenance; where reasonably possible we will minimize disruption.
 
@@ -99,7 +100,7 @@ The Service is **free of charge**. We may in the future introduce optional paid 
 
 - **By you:** you may stop using the Service at any time and delete your account at any time from the app (Settings → Delete my account) or at `https://app.walletbot.live/delete-account`. Deletion is immediate and **irreversible** once confirmed; see the Privacy Policy for details of what is deleted.
 - **By us, for cause:** we may suspend or terminate your account if you materially breach these Terms, if required by law, or where necessary to protect the security of the Service or other users. Except where the breach is severe or legal/security reasons prevent it, we will notify you and, where the breach is curable, give you a reasonable opportunity to remedy it.
-- **By us, without cause:** given that these Terms have no fixed duration, we may terminate the Service or your account without cause only with **reasonable prior notice of at least 60 days**, during which you can delete your data or take note of your records.
+- **By us, without cause:** given that these Terms have no fixed duration, we may terminate the Service or your account without cause with the **shortest prior notice permitted by applicable law** — which may be little or none where the law allows it, and will be a reasonable advance notice where mandatory consumer-protection law so requires. You may use any notice period to take note of your records or delete your data.
 - Sections that by their nature should survive termination (including Sections 5 in fine, 6, 9, 15–18) survive it.
 
 ## 14. Changes to these Terms
@@ -121,7 +122,7 @@ To the maximum extent permitted by applicable law, the Service is provided "**as
 
 To the maximum extent permitted by applicable law:
 
-- We shall not be liable for indirect, incidental, special, consequential or punitive damages, or for loss of profits, revenue, data or goodwill, arising from or related to your use of (or inability to use) the Service.
+- We shall not be liable for indirect, incidental, special, consequential or punitive damages, or for loss of profits, revenue, data or goodwill, arising from or related to your use of (or inability to use) the Service — including Service interruptions or downtime and the modification, suspension or discontinuation of features or of the Service.
 - We are not liable for decisions you make based on information you entered into the Service, nor for inaccuracies in your own records (including records created by the AI assistant that you did not review), nor for loss of **local-only data** that was never in our custody.
 - Our total aggregate liability for all claims relating to the Service shall not exceed the greater of (a) the amounts you paid us for the Service in the 12 months preceding the event giving rise to liability, and (b) **USD 100**.
 
