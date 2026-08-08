@@ -1,5 +1,5 @@
 import { api } from '@wallet-bot/backend/api'
-import { useMutation, useQuery } from 'convex/react'
+import { useMutation, usePaginatedQuery, useQuery } from 'convex/react'
 import { type FormEvent, useState } from 'react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -61,10 +61,18 @@ type FlagRow = {
     enabledByDefault: boolean
 }
 
+const OVERRIDES_PAGE_SIZE = 20
+
 function FlagCard({ flag }: { flag: FlagRow }) {
-    const overrides = useQuery(api.v1.featureFlags.queries.listOverrides, {
-        flagKey: flag.key,
-    })
+    const {
+        results: overrides,
+        status: overridesStatus,
+        loadMore: loadMoreOverrides,
+    } = usePaginatedQuery(
+        api.v1.featureFlags.queries.listOverrides,
+        { flagKey: flag.key },
+        { initialNumItems: OVERRIDES_PAGE_SIZE },
+    )
     const setFlagDefault = useMutation(
         api.v1.featureFlags.mutations.setFlagDefault,
     )
@@ -133,7 +141,7 @@ function FlagCard({ flag }: { flag: FlagRow }) {
             <CardContent className="flex flex-col gap-3">
                 <p className="text-sm font-medium">Per-user overrides</p>
 
-                {overrides === undefined ? (
+                {overridesStatus === 'LoadingFirstPage' ? (
                     <Skeleton className="h-8 w-full" />
                 ) : overrides.length === 0 ? (
                     <p className="text-sm text-muted-foreground">
@@ -174,6 +182,16 @@ function FlagCard({ flag }: { flag: FlagRow }) {
                             </li>
                         ))}
                     </ul>
+                )}
+
+                {overridesStatus === 'CanLoadMore' && (
+                    <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => loadMoreOverrides(OVERRIDES_PAGE_SIZE)}
+                    >
+                        Load more
+                    </Button>
                 )}
 
                 <form

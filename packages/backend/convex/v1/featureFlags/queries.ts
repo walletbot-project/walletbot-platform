@@ -1,3 +1,4 @@
+import { paginationOptsValidator } from 'convex/server'
 import { v } from 'convex/values'
 import { query } from '../../_generated/server'
 import { authComponent } from '../../auth'
@@ -48,16 +49,16 @@ export const listFlags = query({
 })
 
 export const listOverrides = query({
-    args: { flagKey: v.string() },
+    args: { flagKey: v.string(), paginationOpts: paginationOptsValidator },
     handler: async (ctx, args) => {
         const userId = await requireAuth(ctx)
         await requireAdmin(ctx, userId)
-        const overrides = await ctx.db
+        const result = await ctx.db
             .query('featureFlagOverrides')
             .withIndex('by_flag_user', (q) => q.eq('flagKey', args.flagKey))
-            .take(500)
-        return await Promise.all(
-            overrides.map(async (override) => {
+            .paginate(args.paginationOpts)
+        const page = await Promise.all(
+            result.page.map(async (override) => {
                 const user = await authComponent.getAnyUserById(
                     ctx,
                     override.userId,
@@ -69,5 +70,6 @@ export const listOverrides = query({
                 }
             }),
         )
+        return { ...result, page }
     },
 })
