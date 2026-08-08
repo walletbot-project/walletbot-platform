@@ -4,6 +4,7 @@ import { nextSeq, writeTombstone } from '../../sync/helpers'
 import { recordFinancialAccountCreated } from '../../telemetry/metrics'
 import { requireAuth } from '../../users/helpers'
 import { getDefaultCurrency } from '../users/helpers'
+import { hasDuplicateAccount } from './helpers'
 
 // Business rule: an account always has a color + icon. Convex has no
 // column-level defaults, so we fill them here when a writer omits them.
@@ -31,6 +32,12 @@ export const create = mutation({
             .unique()
         if (existing) {
             throw new Error('Account with that id already exists')
+        }
+
+        if (await hasDuplicateAccount(ctx, userId, args.currency, args.name)) {
+            throw new Error(
+                'An account with that name and currency already exists',
+            )
         }
 
         const seq = await nextSeq(ctx, userId)
@@ -80,6 +87,24 @@ export const update = mutation({
             )
             .unique()
         if (!row) throw new Error('Account not found')
+
+        if (args.name !== undefined || args.currency !== undefined) {
+            const nextName = args.name ?? row.name
+            const nextCurrency = args.currency ?? row.currency
+            if (
+                await hasDuplicateAccount(
+                    ctx,
+                    userId,
+                    nextCurrency,
+                    nextName,
+                    row._id,
+                )
+            ) {
+                throw new Error(
+                    'An account with that name and currency already exists',
+                )
+            }
+        }
 
         const seq = await nextSeq(ctx, userId)
         const now = BigInt(Date.now())

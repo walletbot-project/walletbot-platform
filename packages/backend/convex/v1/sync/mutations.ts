@@ -6,6 +6,7 @@ import { inflowsByAccount, outflowsByAccount } from '../../aggregates'
 import { CLIENT_OUTDATED, isClientSupported } from '../../config/helpers'
 import { syncedTable } from '../../schema/sync'
 import { requireAuth } from '../../users/helpers'
+import { hasDuplicateAccount } from '../accounts/helpers'
 
 const accountUpsert = v.object({
     id: v.string(),
@@ -259,8 +260,36 @@ async function applyAccountUpsert(
                 `account ${payload.id}: currency cannot change once set`,
             )
         }
+        if (!payload.isArchived) {
+            if (
+                await hasDuplicateAccount(
+                    ctx,
+                    userId,
+                    payload.currency,
+                    payload.name,
+                    existing._id,
+                )
+            ) {
+                throw new Error(
+                    `account ${payload.id}: name and currency already exists`,
+                )
+            }
+        }
         await ctx.db.replace(existing._id, doc)
     } else {
+        if (
+            !payload.isArchived &&
+            (await hasDuplicateAccount(
+                ctx,
+                userId,
+                payload.currency,
+                payload.name,
+            ))
+        ) {
+            throw new Error(
+                `account ${payload.id}: name and currency already exists`,
+            )
+        }
         await ctx.db.insert('accounts', doc)
     }
     await clearTombstone(ctx, userId, 'accounts', payload.id)

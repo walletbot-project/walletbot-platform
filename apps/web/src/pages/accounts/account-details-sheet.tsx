@@ -27,6 +27,7 @@ import {
 import { useFormatLocale, useT } from '@/lib/i18n'
 import { formatMoney } from '@/lib/money'
 import { cn } from '@/lib/utils'
+import { accountErrorMessage } from '@/pages/accounts/account-errors'
 
 export type AccountSummary = {
     id: string
@@ -117,7 +118,8 @@ export function AccountDetailsSheet({
         toast.promise(promise, {
             loading: t.accounts.saving,
             success: t.accounts.saved,
-            error: t.accounts.saveFailed,
+            error: (error) =>
+                accountErrorMessage(error, t, t.accounts.saveFailed),
         })
         try {
             await promise

@@ -38,6 +38,7 @@ import {
 import { type Messages, useFormatLocale, useT } from '@/lib/i18n'
 import { normalizeTagColor } from '@/lib/tag-colors'
 import { cn } from '@/lib/utils'
+import { accountErrorMessage } from '@/pages/accounts/account-errors'
 import { TransactionDetailsSheet } from './activity/transaction-details-sheet'
 
 type ActionResultMessage = Extract<ChatMessage, { kind: 'action-result' }>
@@ -276,7 +277,8 @@ function AccountEditContent({
         toast.promise(promise, {
             loading: t.common.saving,
             success: t.actionWidget.accountSaved,
-            error: t.common.saveFailed,
+            error: (error) =>
+                accountErrorMessage(error, t, t.common.saveFailed),
         })
         try {
             await promise

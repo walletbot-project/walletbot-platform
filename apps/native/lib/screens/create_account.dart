@@ -92,9 +92,12 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
     } catch (e, st) {
       debugPrint('Error creating account: $e\n$st');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(context.l10n.accountCreateFailed)),
-        );
+        final message = e is DuplicateAccountException
+            ? context.l10n.accountDuplicateNameCurrency
+            : context.l10n.accountCreateFailed;
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(message)));
       }
     } finally {
       if (mounted) setState(() => _saving = false);

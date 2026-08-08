@@ -162,6 +162,7 @@
   "initialBalanceOptional": "Initial balance (optional)",
   "enterValidAmount": "Enter a valid amount",
   "accountCreateFailed": "Could not create the account",
+  "accountDuplicateNameCurrency": "An account with that name and currency already exists",
   "suggestions": "Suggestions",
   "accountNameExample": "E.g. Cash, Main bank…",
   "categoryNameExample": "E.g. Groceries, Transport…",
