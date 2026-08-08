@@ -24,7 +24,7 @@ Wallet Bot es una aplicación de **registro de gastos personales**:
 
 ## 3. Capacidad y edad mínima
 
-Para usar el Servicio usted debe tener al menos **18 años** y capacidad legal para contratar. Al aceptar estos Términos declara cumplir estos requisitos. No prestamos el Servicio a sabiendas a menores de edad; las cuentas que se detecten como pertenecientes a menores serán eliminadas (ver la Política de Privacidad).
+Para usar el Servicio usted debe tener al menos **18 años** y capacidad legal para contratar. Al aceptar estos Términos declara cumplir estos requisitos. No prestamos el Servicio a sabiendas a menores de edad (ver la Política de Privacidad).
 
 ## 4. Su cuenta
 
@@ -36,7 +36,7 @@ Para usar el Servicio usted debe tener al menos **18 años** y capacidad legal p
 ## 5. Su contenido y sus datos
 
 - **Sus datos son suyos.** Los registros financieros y demás contenido que usted ingresa siguen siendo de su propiedad.
-- Usted nos otorga una licencia limitada, no exclusiva y mundial para alojar, almacenar, reproducir y procesar ese contenido **únicamente en la medida necesaria para prestarle, asegurar y mantener el Servicio**, conforme a la Política de Privacidad. Esta licencia termina cuando su contenido se elimina del Servicio.
+- Usted nos otorga una licencia limitada, no exclusiva y mundial para alojar, almacenar, reproducir y procesar ese contenido **únicamente en la medida necesaria para prestar, asegurar, mantener y mejorar el Servicio**, conforme a la Política de Privacidad. Esta licencia termina cuando su contenido se elimina del Servicio.
 - Usted es responsable del contenido que ingresa y no debe ingresar contenido ilícito o que infrinja derechos de terceros.
 - Usted puede eliminar de forma permanente su cuenta y sus datos en cualquier momento (Sección 13 y la Política de Privacidad).
 
@@ -65,6 +65,7 @@ Usted se compromete a no:
 - interferir con el Servicio o interrumpirlo, eludir medidas de seguridad o límites de uso, ni introducir código malicioso;
 - extraer datos del Servicio en forma masiva o automatizada, ni usarlo para construir un conjunto de datos competidor;
 - revender, sublicenciar o explotar comercialmente el Servicio;
+- usar el asistente de inteligencia artificial con fines ajenos al registro de sus finanzas personales, ni intentar eludir su función prevista o sus límites de seguridad;
 - realizar ingeniería inversa, descompilar o desensamblar el Servicio, salvo en la medida en que tal restricción esté prohibida por la ley aplicable;
 - suplantar la identidad de una persona o falsear su vinculación con ella.
 
@@ -84,7 +85,7 @@ El Servicio se apoya en servicios de terceros (por ejemplo, el inicio de sesión
 
 El Servicio es **gratuito**. En el futuro podremos introducir funciones o planes pagos opcionales. Si lo hacemos:
 
-- Los anunciaremos con una antelación razonable y publicaremos sus condiciones antes de que se apliquen.
+- Publicaremos sus condiciones antes de que se apliquen.
 - **Nunca se le cobrará sin su acuerdo previo y expreso** sobre un precio y un medio de pago.
 - Si una función que usted usa activamente pasara a ser paga, lo trataremos como una modificación sustancial de estos Términos (Sección 14), con el preaviso correspondiente, y usted podrá eliminar su cuenta antes de que entre en vigencia.
 

@@ -87,7 +87,7 @@ Tratamos sus datos personales para:
 1. **Prestar y operar el Servicio** — crear su cuenta, almacenar y sincronizar sus registros financieros entre sus dispositivos y operar el asistente de voz cuando usted lo usa. Este tratamiento es necesario para la ejecución del contrato entre usted y nosotros (artículo 5°, inciso 2, apartado d, Ley 25.326).
 2. **Autenticación y seguridad** — verificar su correo, proteger su cuenta, detectar y prevenir fraude y abuso, limitar solicitudes y revocar sesiones tras un restablecimiento de contraseña.
 3. **Comunicaciones transaccionales** — correos estrictamente necesarios para el Servicio (verificación, restablecimiento de contraseña, eliminación de cuenta). **No enviamos correos de marketing**; si alguna vez los introducimos, serán estrictamente opcionales (opt-in) y con un mecanismo de baja funcional.
-4. **Analítica y mejora del Servicio** — medir cómo se usa el Servicio y recolectar reportes de fallos y diagnóstico para detectar errores, mejorar la estabilidad y orientar mejoras del producto. No usamos estos datos con fines publicitarios.
+4. **Analítica y mejora del Servicio** — medir cómo se usa el Servicio y recolectar reportes de fallos y diagnóstico para detectar errores, mejorar la estabilidad y orientar mejoras del producto. También podremos analizar el contenido que usted ingresa, en forma agregada o disociada, para mejorar y desarrollar funciones del Servicio. No usamos estos datos con fines publicitarios.
 5. **Cumplimiento legal** — responder a requerimientos legales válidos y ejercer o defender reclamos legales.
 
 No usamos sus datos para decisiones automatizadas que produzcan efectos jurídicos o significativos sobre usted, ni construimos perfiles publicitarios.

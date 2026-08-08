@@ -24,7 +24,7 @@ Wallet Bot is a **personal expense-tracking** application:
 
 ## 3. Eligibility
 
-You must be at least **18 years old** and have legal capacity to contract in order to use the Service. By accepting these Terms you represent that you meet these requirements. We do not knowingly provide the Service to minors; accounts found to belong to minors will be deleted (see the Privacy Policy).
+You must be at least **18 years old** and have legal capacity to contract in order to use the Service. By accepting these Terms you represent that you meet these requirements. We do not knowingly provide the Service to minors (see the Privacy Policy).
 
 ## 4. Your account
 
@@ -36,7 +36,7 @@ You must be at least **18 years old** and have legal capacity to contract in ord
 ## 5. Your content and data
 
 - **You own your data.** The financial records and other content you enter remain yours.
-- You grant us a limited, non-exclusive, worldwide license to host, store, reproduce and process that content **solely as necessary to provide, secure and maintain the Service** to you, in accordance with the Privacy Policy. This license ends when your content is deleted from the Service.
+- You grant us a limited, non-exclusive, worldwide license to host, store, reproduce and process that content **solely as necessary to provide, secure, maintain and improve the Service**, in accordance with the Privacy Policy. This license ends when your content is deleted from the Service.
 - You are responsible for the content you enter, and you must not enter content that is unlawful or infringes third-party rights.
 - You can permanently delete your account and data at any time (Section 13 and the Privacy Policy).
 
@@ -65,6 +65,7 @@ You agree not to:
 - interfere with or disrupt the Service, circumvent security or rate limits, or introduce malicious code;
 - scrape, harvest or bulk-extract data from the Service, or use it to build a competing dataset;
 - resell, sublicense or commercially exploit the Service;
+- use the AI assistant for purposes unrelated to tracking your personal finances, or attempt to circumvent its intended function or safety limits;
 - reverse engineer, decompile or disassemble the Service, except to the extent such restriction is prohibited by applicable law;
 - impersonate any person or misrepresent your affiliation.
 
@@ -84,7 +85,7 @@ The Service relies on third-party services (e.g. sign-in with Google, the Gemini
 
 The Service is **free of charge**. We may in the future introduce optional paid features or plans. If we do:
 
-- We will announce them with reasonable advance notice and publish their conditions before they apply.
+- We will publish their conditions before they apply.
 - **You will never be charged without your prior, express agreement** to a price and a payment method.
 - If a feature you actively use is to become paid, we will treat that as a material change to these Terms (Section 14), with the corresponding notice, and you may delete your account before it takes effect.
 

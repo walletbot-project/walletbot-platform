@@ -87,7 +87,7 @@ We process your personal data to:
 1. **Provide and operate the Service** — creating your account, storing and synchronizing your financial records across your devices, and operating the voice assistant when you use it. This processing is necessary to perform the contract between you and us (Article 5.2(d), Law 25,326).
 2. **Authentication and security** — verifying your email, protecting your account, detecting and preventing fraud and abuse, rate limiting, revoking sessions after a password reset.
 3. **Transactional communications** — emails strictly necessary for the Service (verification, password reset, account deletion). We send **no marketing emails**; if we ever introduce them, they will be strictly opt-in with a working unsubscribe.
-4. **Analytics and service improvement** — measuring how the Service is used and collecting crash and diagnostic reports to detect errors, improve stability and guide product improvements. We do not use this data for advertising.
+4. **Analytics and service improvement** — measuring how the Service is used and collecting crash and diagnostic reports to detect errors, improve stability and guide product improvements. We may also analyze the content you enter, in aggregated or de-identified form, to improve and develop features of the Service. We do not use this data for advertising.
 5. **Legal compliance** — responding to valid legal requests and exercising or defending legal claims.
 
 We do not use your data for automated decision-making that produces legal or similarly significant effects on you, and we do not build advertising profiles.
