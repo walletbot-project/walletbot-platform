@@ -24,9 +24,12 @@ export const isUserDeleted = internalQuery({
     },
 })
 
-// Returns false when the email should silently NOT be sent (user already
+// Returns null when the email should silently NOT be sent (user already
 // deleted, or the address hit the hourly cap) — the HTTP handler answers
 // with the same generic success either way, so callers can't enumerate.
+// On success returns the row id so the caller can roll the row back if the
+// send fails; otherwise a transient Resend error would burn a slot against
+// the hourly cap and lock the user out of their own deletion link.
 export const createRequest = internalMutation({
     args: {
         userId: v.string(),
@@ -39,7 +42,7 @@ export const createRequest = internalMutation({
             .query('deletedUsers')
             .withIndex('by_userId', (q) => q.eq('userId', args.userId))
             .first()
-        if (deleted) return false
+        if (deleted) return null
 
         const now = Date.now()
         const recent = await ctx.db
@@ -51,7 +54,7 @@ export const createRequest = internalMutation({
         const withinHour = recent.filter(
             (row) => row._creationTime > now - HOUR_MS,
         )
-        if (withinHour.length >= MAX_REQUESTS_PER_HOUR) return false
+        if (withinHour.length >= MAX_REQUESTS_PER_HOUR) return null
 
         // Opportunistic cleanup: expired links for this address are dead
         // weight (there is no cron sweeping this table).
@@ -61,11 +64,21 @@ export const createRequest = internalMutation({
             }
         }
 
-        await ctx.db.insert('userDeletionRequests', {
+        return await ctx.db.insert('userDeletionRequests', {
             ...args,
             status: 'pending',
         })
-        return true
+    },
+})
+
+// Rollback for a request whose email never went out. Only ever called with an
+// id createRequest just returned, and a no-op if the row is already gone.
+export const deleteRequest = internalMutation({
+    args: { requestId: v.id('userDeletionRequests') },
+    handler: async (ctx, { requestId }) => {
+        const row = await ctx.db.get(requestId)
+        if (row) await ctx.db.delete(requestId)
+        return null
     },
 })
 
@@ -271,7 +284,7 @@ export const purgeUserData = internalMutation({
 })
 
 // Last step: remove the better-auth user (sessions, credential + OAuth
-// accounts, user row) and our own request rows, which hold the email.
+// accounts, user row), then hand off to the request-row sweep.
 // The deletedUsers denylist row is kept forever — it's what rejects the
 // user's still-valid stateless native JWTs.
 export const finalizeDeletion = internalMutation({
@@ -281,12 +294,40 @@ export const finalizeDeletion = internalMutation({
         const authCtx = await auth.$context
         await authCtx.internalAdapter.deleteUser(userId)
 
+        // Separate mutation so the reschedule loop below can't re-run
+        // deleteUser on an already-deleted user.
+        await ctx.scheduler.runAfter(
+            0,
+            internal.userDeletion.internal.purgeDeletionRequests,
+            { userId },
+        )
+        return null
+    },
+})
+
+// Drains our own request rows, which hold the user's email. The hourly cap in
+// createRequest only bounds *recent* requests, so a long-lived account can
+// have accumulated far more than one batch — a single bounded take() would
+// strand the rest, leaving the email behind after the account is "deleted".
+// Reschedules until a short batch proves the table is clear, mirroring
+// purgeUserData.
+export const purgeDeletionRequests = internalMutation({
+    args: { userId: v.string() },
+    handler: async (ctx, { userId }) => {
         const rows = await ctx.db
             .query('userDeletionRequests')
             .withIndex('by_userId', (q) => q.eq('userId', userId))
-            .take(100)
+            .take(PURGE_BUDGET)
         for (const row of rows) {
             await ctx.db.delete(row._id)
+        }
+
+        if (rows.length === PURGE_BUDGET) {
+            await ctx.scheduler.runAfter(
+                0,
+                internal.userDeletion.internal.purgeDeletionRequests,
+                { userId },
+            )
         }
         return null
     },

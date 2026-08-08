@@ -13,7 +13,7 @@ import { useCachedSession } from '@/hooks/use-cached-session'
 // requires a web-accessible deletion URL). The endpoint never discloses
 // whether the email exists.
 export function DeleteAccount() {
-    const { session } = useCachedSession()
+    const { session, isInitialLoading } = useCachedSession()
     const [loading, setLoading] = useState(false)
     const [sentTo, setSentTo] = useState<string | null>(null)
 
@@ -52,6 +52,17 @@ export function DeleteAccount() {
         } finally {
             setLoading(false)
         }
+    }
+
+    // The email field is uncontrolled, so `defaultValue` is only read at mount.
+    // Rendering the form before the session settles would leave a logged-in
+    // user with a blank field that never fills in.
+    if (isInitialLoading) {
+        return (
+            <div className="flex min-h-screen items-center justify-center bg-background">
+                <LoaderCircle className="size-5 animate-spin text-muted-foreground" />
+            </div>
+        )
     }
 
     return (

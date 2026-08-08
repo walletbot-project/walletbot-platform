@@ -50,8 +50,8 @@ const requestHandler = httpAction(async (ctx, req) => {
         return jsonError(500, 'misconfigured', 'SITE_URL not set')
     }
 
-    // Anti-enumeration: every outcome below except a real email-send failure
-    // answers with the same generic success.
+    // Anti-enumeration: every outcome below answers with the same generic
+    // success — unknown address, throttled, already deleted, send failure.
     const { auth } = await authComponent.getAuth(createAuth, ctx)
     const authCtx = await auth.$context
     const found = await authCtx.internalAdapter.findUserByEmail(email)
@@ -60,7 +60,7 @@ const requestHandler = httpAction(async (ctx, req) => {
     }
 
     const token = generateDeletionToken()
-    const created = await ctx.runMutation(
+    const requestId = await ctx.runMutation(
         internal.userDeletion.internal.createRequest,
         {
             userId: found.user.id,
@@ -69,7 +69,7 @@ const requestHandler = httpAction(async (ctx, req) => {
             expiresAt: Date.now() + DELETION_TOKEN_TTL_MS,
         },
     )
-    if (!created) {
+    if (!requestId) {
         // Throttled or already deleted — still generic.
         return jsonResponse({ ok: true })
     }
@@ -81,18 +81,23 @@ const requestHandler = httpAction(async (ctx, req) => {
             url: `${siteUrl}/delete-account/confirm?token=${token}`,
         })
     } catch (err) {
-        // The user exists and the send really failed (Resend config,
-        // enqueue, template) — same reasoning as authNative's
-        // emailSendFailedResponse. Keep the stack: it's the only trail.
+        // The user exists and the send really failed (Resend config, enqueue,
+        // template). Keep the stack: it's the only trail.
         console.error(
             'userDeletion: sendAccountDeletionEmail failed',
             err instanceof Error ? (err.stack ?? err.message) : String(err),
         )
-        return jsonError(
-            500,
-            'email_send_failed',
-            'No pudimos enviar el correo. Probá de nuevo en unos minutos.',
-        )
+        // Drop the row we just wrote. It counts against the hourly cap, so
+        // leaving it would let three transient Resend errors lock the user out
+        // of their own deletion link for an hour.
+        await ctx.runMutation(internal.userDeletion.internal.deleteRequest, {
+            requestId,
+        })
+        // Generic success even here: a distinct status/body on send failure
+        // would tell an unauthenticated caller that the address IS registered
+        // (unknown emails always return 200 above), handing them exactly the
+        // enumeration oracle the rest of this handler avoids.
+        return jsonResponse({ ok: true })
     }
 
     return jsonResponse({ ok: true })
