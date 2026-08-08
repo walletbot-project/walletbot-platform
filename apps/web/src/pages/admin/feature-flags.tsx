@@ -16,7 +16,10 @@ import { Switch } from '@/components/ui/switch'
 
 export function FeatureFlags() {
     const isAdmin = useQuery(api.v1.featureFlags.queries.getMyAdminStatus)
-    const flags = useQuery(api.v1.featureFlags.queries.listFlags)
+    const flags = useQuery(
+        api.v1.featureFlags.queries.listFlags,
+        isAdmin === true ? {} : 'skip',
+    )
 
     if (isAdmin === undefined) {
         return (
