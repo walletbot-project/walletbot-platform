@@ -14,6 +14,7 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { CATEGORY_DEFAULT_ICON, CATEGORY_ICONS } from '@/lib/category-icons'
 import { CATEGORY_DEFAULT_COLOR, COLOR_OPTIONS } from '@/lib/entity-colors'
+import { type Messages, useT } from '@/lib/i18n'
 
 export type CategoryFormValue = {
     name: string
@@ -22,10 +23,19 @@ export type CategoryFormValue = {
     icon: string
 }
 
-const NAME_SUGGESTIONS: { label: string; icon: string }[] = [
-    { label: 'Supermercado', icon: 'shopping_cart' },
-    { label: 'Transporte', icon: 'transport' },
-    { label: 'Servicios', icon: 'receipt' },
+const NAME_SUGGESTIONS: { label: (t: Messages) => string; icon: string }[] = [
+    {
+        label: (t) => t.insights.categorySuggestionGroceries,
+        icon: 'shopping_cart',
+    },
+    {
+        label: (t) => t.insights.categorySuggestionTransport,
+        icon: 'transport',
+    },
+    {
+        label: (t) => t.insights.categorySuggestionUtilities,
+        icon: 'receipt',
+    },
 ]
 
 export function CategoryDialog({
@@ -37,6 +47,7 @@ export function CategoryDialog({
     onOpenChange: (open: boolean) => void
     onSubmit: (value: CategoryFormValue) => Promise<void>
 }) {
+    const t = useT()
     const [name, setName] = useState('')
     const [description, setDescription] = useState('')
     const [color, setColor] = useState(CATEGORY_DEFAULT_COLOR)
@@ -73,37 +84,40 @@ export function CategoryDialog({
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent>
                 <DialogHeader>
-                    <DialogTitle>Nueva categoría</DialogTitle>
+                    <DialogTitle>{t.insights.newCategory}</DialogTitle>
                 </DialogHeader>
                 <form onSubmit={handleSubmit} className="flex flex-col gap-4">
                     <div className="flex flex-wrap gap-2">
-                        {NAME_SUGGESTIONS.map((s) => (
-                            <Badge
-                                key={s.label}
-                                render={
-                                    <button
-                                        type="button"
-                                        onClick={() => {
-                                            setName(s.label)
-                                            setIcon(s.icon)
-                                        }}
-                                    />
-                                }
-                                variant="outline"
-                                className="cursor-pointer"
-                            >
-                                {s.label}
-                            </Badge>
-                        ))}
+                        {NAME_SUGGESTIONS.map((suggestion) => {
+                            const label = suggestion.label(t)
+                            return (
+                                <Badge
+                                    key={suggestion.icon}
+                                    render={
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setName(label)
+                                                setIcon(suggestion.icon)
+                                            }}
+                                        />
+                                    }
+                                    variant="outline"
+                                    className="cursor-pointer"
+                                >
+                                    {label}
+                                </Badge>
+                            )
+                        })}
                     </div>
 
                     <div className="flex flex-col gap-2">
-                        <Label htmlFor="category-name">Nombre</Label>
+                        <Label htmlFor="category-name">{t.common.name}</Label>
                         <Input
                             id="category-name"
                             value={name}
                             onChange={(e) => setName(e.target.value)}
-                            placeholder="Ej: Supermercado, Transporte…"
+                            placeholder={t.insights.categoryNamePlaceholder}
                             autoFocus
                             required
                         />
@@ -111,7 +125,7 @@ export function CategoryDialog({
 
                     <div className="flex flex-col gap-2">
                         <Label htmlFor="category-description">
-                            Descripción (opcional)
+                            {t.insights.categoryDescriptionOptional}
                         </Label>
                         <Textarea
                             id="category-description"
@@ -122,7 +136,7 @@ export function CategoryDialog({
                     </div>
 
                     <div className="flex flex-col gap-2">
-                        <Label>Ícono y color</Label>
+                        <Label>{t.common.iconAndColor}</Label>
                         <IconColorPicker
                             icon={icon}
                             color={color}
@@ -140,13 +154,13 @@ export function CategoryDialog({
                             onClick={() => onOpenChange(false)}
                             disabled={submitting}
                         >
-                            Cancelar
+                            {t.common.cancel}
                         </Button>
                         <Button
                             type="submit"
                             disabled={submitting || !name.trim()}
                         >
-                            Crear
+                            {t.common.create}
                         </Button>
                     </DialogFooter>
                 </form>

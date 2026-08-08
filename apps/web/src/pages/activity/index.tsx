@@ -9,6 +9,7 @@ import {
     CATEGORY_DEFAULT_COLOR,
     normalizeColor,
 } from '@/lib/entity-colors'
+import { useFormatLocale, useT } from '@/lib/i18n'
 import { FilterChips } from './filter-chips'
 import {
     buildListEntries,
@@ -38,6 +39,8 @@ export function Activity() {
     // A details sheet can deep-link here with a pre-applied entity filter,
     // passed via the router location state (see the account/category/tag sheets).
     const location = useLocation()
+    const t = useT()
+    const formatLocale = useFormatLocale()
     const [filters, setFilters] = useState<TransactionFilters>(() => {
         const seed = location.state as Partial<TransactionFilters> | null
         if (
@@ -105,8 +108,8 @@ export function Activity() {
     const nowMs = now.getTime()
 
     const entries = useMemo(
-        () => buildListEntries(filtered, nowMs),
-        [filtered, nowMs],
+        () => buildListEntries(filtered, nowMs, t, formatLocale),
+        [filtered, nowMs, t, formatLocale],
     )
 
     // Keep the list filled when client-side filters reduce the loaded page.
@@ -147,7 +150,7 @@ export function Activity() {
                     <ListSkeleton />
                 ) : entries.length === 0 && status === 'Exhausted' ? (
                     <p className="py-12 text-center text-sm text-muted-foreground">
-                        No hay transacciones
+                        {t.activity.noTransactions}
                     </p>
                 ) : (
                     <div className="flex flex-col gap-2">
@@ -168,19 +171,28 @@ export function Activity() {
                                     dateConfirmed={entry.txn.dateConfirmed}
                                     timeLabel={formatTransactionTime(
                                         entry.txn.date,
+                                        formatLocale,
                                     )}
                                     timeStatus={transactionTimeStatus(
                                         entry.txn,
                                     )}
                                     description={estimatedDescription(
                                         entry.txn,
+                                        t,
+                                        formatLocale,
                                     )}
                                     identities={[
                                         ...(accountsById.has(entry.accountId)
                                             ? [
                                                   {
                                                       type: 'account' as const,
-                                                      label: `Cuenta: ${accountsById.get(entry.accountId)!.name}`,
+                                                      label: t.activity.accountIdentity(
+                                                          {
+                                                              name: accountsById.get(
+                                                                  entry.accountId,
+                                                              )!.name,
+                                                          },
+                                                      ),
                                                       icon: accountsById.get(
                                                           entry.accountId,
                                                       )!.icon,
@@ -199,7 +211,14 @@ export function Activity() {
                                             ? [
                                                   {
                                                       type: 'category' as const,
-                                                      label: `Categoría: ${categoriesById.get(entry.txn.categoryId)!.name}`,
+                                                      label: t.activity.categoryIdentity(
+                                                          {
+                                                              name: categoriesById.get(
+                                                                  entry.txn
+                                                                      .categoryId,
+                                                              )!.name,
+                                                          },
+                                                      ),
                                                       icon: categoriesById.get(
                                                           entry.txn.categoryId,
                                                       )!.icon,

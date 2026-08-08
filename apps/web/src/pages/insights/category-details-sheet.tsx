@@ -25,6 +25,7 @@ import {
     COLOR_OPTIONS,
     normalizeColor,
 } from '@/lib/entity-colors'
+import { useT } from '@/lib/i18n'
 
 export type CategorySummary = {
     id: string
@@ -44,6 +45,7 @@ export function CategoryDetailsSheet({
     onOpenChange: (open: boolean) => void
 }) {
     const navigate = useNavigate()
+    const t = useT()
     const updateCategory = useMutation(api.v1.categories.mutations.update)
     const archiveCategory = useMutation(api.v1.categories.mutations.archive)
 
@@ -103,7 +105,7 @@ export function CategoryDetailsSheet({
         }
         const trimmed = name.trim()
         if (!trimmed) {
-            toast.error('El nombre no puede estar vacío')
+            toast.error(t.common.nameCannotBeEmpty)
             return
         }
         setSaving(true)
@@ -114,9 +116,9 @@ export function CategoryDetailsSheet({
             icon,
         })
         toast.promise(promise, {
-            loading: 'Guardando categoría…',
-            success: 'Categoría guardada',
-            error: 'No se pudo guardar la categoría',
+            loading: t.insights.categorySaving,
+            success: t.insights.categorySaved,
+            error: t.insights.categorySaveFailed,
         })
         try {
             await promise
@@ -130,9 +132,9 @@ export function CategoryDetailsSheet({
         setSaving(true)
         const promise = archiveCategory({ id: category.id })
         toast.promise(promise, {
-            loading: 'Eliminando categoría…',
-            success: 'Categoría eliminada',
-            error: 'No se pudo eliminar la categoría',
+            loading: t.insights.categoryDeleting,
+            success: t.insights.categoryDeleted,
+            error: t.insights.categoryDeleteFailed,
         })
         try {
             await promise
@@ -182,7 +184,7 @@ export function CategoryDetailsSheet({
                                 value={name}
                                 onChange={(e) => setName(e.target.value)}
                                 className="bg-background"
-                                aria-label="Nombre"
+                                aria-label={t.common.name}
                             />
                         ) : (
                             <div className="flex min-w-0 flex-1 flex-col">
@@ -209,7 +211,7 @@ export function CategoryDetailsSheet({
                     {/* Monthly spend hero. */}
                     <div className="flex flex-col gap-1 rounded-2xl border bg-card p-5">
                         <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                            Gastado este mes
+                            {t.insights.spentThisMonth}
                         </span>
                         <MonthlySpend spend={spend} />
                     </div>
@@ -227,22 +229,22 @@ export function CategoryDetailsSheet({
                             ) : (
                                 <Pencil data-icon="inline-start" />
                             )}
-                            {editing ? 'Listo' : 'Editar'}
+                            {editing ? t.common.done : t.common.edit}
                         </Button>
                         <Button
                             variant="destructive"
                             size="icon"
                             onClick={() => setDeleteOpen(true)}
                             disabled={saving}
-                            aria-label="Eliminar"
+                            aria-label={t.common.delete}
                         >
                             <Trash2 />
                         </Button>
                     </div>
 
                     <EntityRecentTransactions
-                        title="Últimos movimientos"
-                        viewAllLabel="Ver todos"
+                        title={t.insights.lastMovements}
+                        viewAllLabel={t.insights.viewAll}
                         onViewAll={viewAllTransactions}
                         transactions={recent}
                     />
@@ -252,11 +254,14 @@ export function CategoryDetailsSheet({
             <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
                 <DialogContent>
                     <DialogHeader>
-                        <DialogTitle>Eliminar categoría</DialogTitle>
+                        <DialogTitle>
+                            {t.insights.categoryDeleteTitle}
+                        </DialogTitle>
                     </DialogHeader>
                     <p className="text-sm text-muted-foreground">
-                        ¿Seguro que querés eliminar "{category.name}"? Dejará de
-                        aparecer en tus categorías.
+                        {t.insights.categoryDeleteConfirm({
+                            name: category.name,
+                        })}
                     </p>
                     <DialogFooter>
                         <Button
@@ -264,14 +269,14 @@ export function CategoryDetailsSheet({
                             onClick={() => setDeleteOpen(false)}
                             disabled={saving}
                         >
-                            Cancelar
+                            {t.common.cancel}
                         </Button>
                         <Button
                             variant="destructive"
                             onClick={handleDelete}
                             disabled={saving}
                         >
-                            Eliminar
+                            {t.common.delete}
                         </Button>
                     </DialogFooter>
                 </DialogContent>

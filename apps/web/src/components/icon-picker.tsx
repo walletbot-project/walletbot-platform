@@ -5,6 +5,7 @@ import {
     PopoverTrigger,
 } from '@/components/ui/popover'
 import type { IconOption } from '@/lib/account-icons'
+import { useT } from '@/lib/i18n'
 import { cn } from '@/lib/utils'
 
 type IconPickerProps = {
@@ -25,6 +26,7 @@ export function IconPicker({
     onIconChange,
     icons,
 }: IconPickerProps) {
+    const t = useT()
     const [open, setOpen] = useState(false)
     const ActiveIcon = icons.find((i) => i.name === icon)?.Icon ?? icons[0].Icon
 
@@ -36,7 +38,7 @@ export function IconPicker({
                         type="button"
                         className="flex size-14 shrink-0 items-center justify-center rounded-2xl"
                         style={{ backgroundColor: `${color}47` }}
-                        aria-label="Elegir ícono"
+                        aria-label={t.common.chooseIcon}
                     />
                 }
             >

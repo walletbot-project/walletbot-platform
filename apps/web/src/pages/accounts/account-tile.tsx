@@ -2,6 +2,7 @@ import { api } from '@wallet-bot/backend/api'
 import { useQuery } from 'convex/react'
 import { AccountIcon } from '@/components/account-icon'
 import { ACCOUNT_DEFAULT_COLOR, normalizeColor } from '@/lib/entity-colors'
+import { useFormatLocale } from '@/lib/i18n'
 import { formatMoney } from '@/lib/money'
 import { cn } from '@/lib/utils'
 
@@ -21,6 +22,7 @@ export function AccountTile({
     color,
     onClick,
 }: AccountTileProps) {
+    const formatLocale = useFormatLocale()
     const balance = useQuery(api.v1.transactions.queries.balance, {
         accountId: id,
     })
@@ -49,7 +51,11 @@ export function AccountTile({
                 )}
             >
                 {balance
-                    ? formatMoney(Number(balance.balance), balance.currency)
+                    ? formatMoney(
+                          Number(balance.balance),
+                          balance.currency,
+                          formatLocale,
+                      )
                     : '—'}
             </span>
         </button>

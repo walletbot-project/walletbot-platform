@@ -9,6 +9,7 @@ import { useConvex } from 'convex/react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { executeToolCall } from '@/lib/agent-tools'
 import type { AgentToolContext } from '@/lib/agent-tools/helpers'
+import { useT } from '@/lib/i18n'
 
 // Constants
 
@@ -133,6 +134,7 @@ export type UseVoiceOpts = {
 
 export function useVoice(opts: UseVoiceOpts) {
     const convex = useConvex()
+    const catalog = useT()
 
     const [connectionStatus, setConnectionStatus] =
         useState<ConnectionStatus>('disconnected')
@@ -462,7 +464,7 @@ export function useVoice(opts: UseVoiceOpts) {
         pendingUserIdRef.current = null
         pendingAgentIdRef.current = null
         setConnectionStatus('connecting')
-        addSystem('Connecting…', 'info')
+        addSystem(catalog.voice.systemConnecting, 'info')
 
         try {
             const tempStream = await navigator.mediaDevices.getUserMedia({
@@ -475,7 +477,7 @@ export function useVoice(opts: UseVoiceOpts) {
                 api.v1.live.actions.requestLiveToken,
                 {},
             )
-            addSystem(`Token received for ${model}`, 'info')
+            addSystem(catalog.voice.systemTokenReceived({ model }), 'info')
 
             const playbackCtx = new AudioContext({
                 sampleRate: OUTPUT_SAMPLE_RATE,
@@ -573,11 +575,11 @@ export function useVoice(opts: UseVoiceOpts) {
                         }
                     },
                     onerror: () => {
-                        addSystem('WebSocket error', 'error')
+                        addSystem(catalog.voice.systemSocketError, 'error')
                         setConnectionStatus('disconnected')
                     },
                     onclose: () => {
-                        addSystem('Disconnected', 'info')
+                        addSystem(catalog.voice.systemDisconnected, 'info')
                         setConnectionStatus('disconnected')
                         setMicLevel(0)
                         finalisePendingUser()
@@ -588,17 +590,20 @@ export function useVoice(opts: UseVoiceOpts) {
 
             sessionRef.current = session
             setConnectionStatus('connected')
-            addSystem('Connected. Start speaking.', 'success')
+            addSystem(catalog.voice.systemConnected, 'success')
             await startMicCapture(selectedDeviceIdRef.current)
         } catch (err) {
             addSystem(
-                `Connection failed: ${err instanceof Error ? err.message : String(err)}`,
+                catalog.voice.systemConnectionFailed({
+                    error: err instanceof Error ? err.message : String(err),
+                }),
                 'error',
             )
             setConnectionStatus('disconnected')
         }
     }, [
         convex,
+        catalog,
         startMicCapture,
         addSystem,
         addToolCall,
