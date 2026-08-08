@@ -355,6 +355,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
       case _TxnEntry(
         :final transactionId,
         :final title,
+        :final type,
         :final amountCents,
         :final currency,
         :final dateConfirmed,
@@ -365,7 +366,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
         return Padding(
           padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
           child: TransactionRow(
-            title: context.l10n.transactionName(title),
+            title: context.l10n.transactionName(title, type),
             amountCents: amountCents,
             currency: currency,
             dateCheck: dateConfirmed,
@@ -426,6 +427,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
       _TxnEntry(
         transactionId: t.id,
         title: context.l10n.transferSent,
+        type: t.type,
         amountCents: sourceAmount,
         currency: t.currency,
         dateConfirmed: t.dateConfirmed,
@@ -441,6 +443,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
       _TxnEntry(
         transactionId: t.id,
         title: context.l10n.transferReceived,
+        type: t.type,
         amountCents: destinationAmount,
         currency: t.toCurrency ?? t.currency,
         dateConfirmed: t.dateConfirmed,
@@ -545,6 +548,7 @@ class _TxnEntry extends _ListEntry {
   const _TxnEntry({
     required this.transactionId,
     required this.title,
+    required this.type,
     required this.amountCents,
     required this.currency,
     required this.dateConfirmed,
@@ -561,6 +565,7 @@ class _TxnEntry extends _ListEntry {
   }) => _TxnEntry(
     transactionId: transaction.id,
     title: transaction.name,
+    type: transaction.type,
     amountCents: amountCents,
     currency: transaction.currency,
     dateConfirmed: transaction.dateConfirmed,
@@ -571,6 +576,10 @@ class _TxnEntry extends _ListEntry {
 
   final String transactionId;
   final String title;
+
+  /// Wire transaction type ([TxnType.wire]); gates name localization so only
+  /// generated balance-adjustment names are translated.
+  final String type;
   final int amountCents;
   final String currency;
   final bool dateConfirmed;

@@ -92,13 +92,21 @@ extension LocalizedModelLabels on AppLocalizations {
   /// time. That keeps the synced wire value stable and localizes rows that were
   /// already persisted. User-typed names pass through untouched.
   ///
+  /// [type] is the transaction's wire type ([TxnType.wire], the `type` column on
+  /// `Transaction`). Only balance adjustments carry generated names, so every
+  /// other type passes through verbatim: an expense a user literally named
+  /// `Initial balance` keeps that name when the locale changes.
+  ///
   /// Display only: never feed this through an editable field, or saving would
   /// persist the localized copy in place of the canonical name.
-  String transactionName(String value) => switch (value) {
-    'Ajuste de saldo' || 'Balance adjustment' => balanceAdjustment,
-    'Balance inicial' || 'Initial balance' => initialBalance,
-    _ => value,
-  };
+  String transactionName(String value, String type) {
+    if (type != TxnType.balanceAdjustment.wire) return value;
+    return switch (value) {
+      'Ajuste de saldo' || 'Balance adjustment' => balanceAdjustment,
+      'Balance inicial' || 'Initial balance' => initialBalance,
+      _ => value,
+    };
+  }
 
   String dashboardTitle(String value) => switch (value) {
     'Gastos del mes' || 'Monthly expenses' => defaultExpensesMonth,

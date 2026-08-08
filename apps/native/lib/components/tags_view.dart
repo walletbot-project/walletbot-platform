@@ -570,7 +570,7 @@ class _TagDetailsSheetState extends State<TagDetailsSheet> {
             for (var i = 0; i < txs.length; i++) ...[
               if (i > 0) const SizedBox(height: 10),
               TransactionRow(
-                title: context.l10n.transactionName(txs[i].name),
+                title: context.l10n.transactionName(txs[i].name, txs[i].type),
                 amountCents: _signedAmountCents(txs[i]),
                 dateCheck: txs[i].dateConfirmed,
                 description: _shortDate(context, txs[i].date),
