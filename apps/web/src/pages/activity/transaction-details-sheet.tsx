@@ -42,6 +42,7 @@ import {
     CATEGORY_DEFAULT_COLOR,
     normalizeColor,
 } from '@/lib/entity-colors'
+import { useFormatLocale, useT } from '@/lib/i18n'
 import { formatMoney } from '@/lib/money'
 import { normalizeTagColor } from '@/lib/tag-colors'
 import { cn } from '@/lib/utils'
@@ -83,6 +84,7 @@ export function TransactionDetailsSheet({
     initialEditing = false,
     onApplyFilter,
 }: TransactionDetailsSheetProps) {
+    const t = useT()
     const transaction = useQuery(
         api.v1.transactions.queries.get,
         open && transactionId ? { id: transactionId } : 'skip',
@@ -131,7 +133,7 @@ export function TransactionDetailsSheet({
                     <TransactionDetailsSkeleton />
                 ) : transaction === null ? (
                     <div className="flex flex-1 items-center justify-center p-8 text-sm text-muted-foreground">
-                        La actividad ya no existe
+                        {t.transaction.gone}
                     </div>
                 ) : (
                     <TransactionDetailsContent
@@ -171,6 +173,8 @@ function TransactionDetailsContent({
     onClose: () => void
 }) {
     const navigate = useNavigate()
+    const t = useT()
+    const formatLocale = useFormatLocale()
 
     // Running balance of each involved account before/after this transaction.
     // Keyed off the saved account ids (not the edit-mode selection) since it
@@ -259,15 +263,15 @@ function TransactionDetailsContent({
         event.preventDefault()
         const trimmedName = name.trim()
         if (!trimmedName) {
-            toast.error('El nombre no puede estar vacío')
+            toast.error(t.common.nameCannotBeEmpty)
             return
         }
         if (!account) {
-            toast.error('Elegí una cuenta')
+            toast.error(t.transaction.chooseAccount)
             return
         }
         if (isTransfer && (!destinationAccount || accountId === toAccountId)) {
-            toast.error('La cuenta origen y destino deben ser distintas')
+            toast.error(t.transaction.sameAccounts)
             return
         }
 
@@ -275,7 +279,7 @@ function TransactionDetailsContent({
         if (canEditAmount) {
             const parsed = inputToCents(amount)
             if (parsed === null || parsed <= 0n) {
-                toast.error('Ingresá un monto mayor a cero')
+                toast.error(t.transaction.amountGreaterThanZero)
                 return
             }
             parsedAmount = parsed
@@ -321,13 +325,13 @@ function TransactionDetailsContent({
                 addTagIds: toAdd.length > 0 ? toAdd : undefined,
                 removeTagIds: toRemove.length > 0 ? toRemove : undefined,
             })
-            toast.success('Actividad actualizada')
+            toast.success(t.transaction.updated)
             setEditing(false)
         } catch (error) {
             toast.error(
                 error instanceof Error
                     ? error.message
-                    : 'No se pudo guardar la actividad',
+                    : t.transaction.updateFailed,
             )
         } finally {
             setSaving(false)
@@ -338,11 +342,11 @@ function TransactionDetailsContent({
         setSaving(true)
         try {
             await archiveTransaction({ id: transaction.id })
-            toast.success('Actividad eliminada')
+            toast.success(t.transaction.deleted)
             setDeleteOpen(false)
             onClose()
         } catch {
-            toast.error('No se pudo eliminar la actividad')
+            toast.error(t.transaction.deleteFailed)
         } finally {
             setSaving(false)
         }
@@ -352,7 +356,9 @@ function TransactionDetailsContent({
         <>
             <SheetHeader className="flex-row items-center border-b">
                 <SheetTitle className="flex-1">
-                    {editing ? 'Editar actividad' : 'Detalle'}
+                    {editing
+                        ? t.transaction.editActivity
+                        : t.transaction.detail}
                 </SheetTitle>
                 {editing ? (
                     // Keep the edit button's space occupied. Besides avoiding
@@ -365,7 +371,7 @@ function TransactionDetailsContent({
                         variant="ghost"
                         size="icon-sm"
                         onClick={() => setEditing(true)}
-                        aria-label="Editar"
+                        aria-label={t.common.edit}
                     >
                         <Pencil />
                     </Button>
@@ -376,7 +382,7 @@ function TransactionDetailsContent({
                     size="icon-sm"
                     onClick={() => setDeleteOpen(true)}
                     disabled={saving}
-                    aria-label="Eliminar"
+                    aria-label={t.common.delete}
                 >
                     <Trash2 />
                 </Button>
@@ -386,7 +392,7 @@ function TransactionDetailsContent({
                     size="icon-sm"
                     onClick={onClose}
                     disabled={saving}
-                    aria-label="Cerrar"
+                    aria-label={t.common.close}
                 >
                     <X />
                 </Button>
@@ -416,7 +422,7 @@ function TransactionDetailsContent({
                                     setName(event.target.value)
                                 }
                                 className="mt-4 h-10 max-w-sm text-center text-lg font-bold"
-                                aria-label="Nombre"
+                                aria-label={t.common.name}
                                 required
                             />
                         ) : (
@@ -435,7 +441,7 @@ function TransactionDetailsContent({
                                 }
                                 inputMode="decimal"
                                 className="mt-3 h-11 max-w-52 text-center text-2xl font-bold"
-                                aria-label="Monto"
+                                aria-label={t.transaction.amount}
                                 required
                             />
                         ) : (
@@ -447,7 +453,11 @@ function TransactionDetailsContent({
                                         : 'text-foreground',
                                 )}
                             >
-                                {formatMoney(signedAmount, displayCurrency)}
+                                {formatMoney(
+                                    signedAmount,
+                                    displayCurrency,
+                                    formatLocale,
+                                )}
                             </p>
                         )}
                     </div>
@@ -457,7 +467,7 @@ function TransactionDetailsContent({
                     <div className="divide-y px-6">
                         <ReceiptRow
                             icon={<FileText />}
-                            label="Descripción"
+                            label={t.common.description}
                             stacked
                         >
                             {editing ? (
@@ -467,7 +477,7 @@ function TransactionDetailsContent({
                                         setDescription(event.target.value)
                                     }
                                     rows={3}
-                                    placeholder="Sin descripción"
+                                    placeholder={t.transaction.noDescription}
                                 />
                             ) : transaction.description ? (
                                 <span>{transaction.description}</span>
@@ -482,7 +492,11 @@ function TransactionDetailsContent({
                                     <HelpCircle />
                                 )
                             }
-                            label={dateConfirmed ? 'Fecha' : 'Fecha estimada'}
+                            label={
+                                dateConfirmed
+                                    ? t.transaction.date
+                                    : t.transaction.estimatedDate
+                            }
                             attention={!dateConfirmed}
                         >
                             {editing ? (
@@ -512,7 +526,7 @@ function TransactionDetailsContent({
                                         })
                                     }
                                 >
-                                    {formatDate(transaction.date)}
+                                    {formatDate(transaction.date, formatLocale)}
                                 </button>
                             )}
                         </ReceiptRow>
@@ -523,8 +537,8 @@ function TransactionDetailsContent({
                             }
                             label={
                                 timeNeedsAttention
-                                    ? 'Horario estimado'
-                                    : 'Horario'
+                                    ? t.transaction.estimatedTime
+                                    : t.transaction.time
                             }
                             attention={timeNeedsAttention}
                         >
@@ -541,7 +555,7 @@ function TransactionDetailsContent({
                                     required
                                 />
                             ) : (
-                                formatTime(transaction.date)
+                                formatTime(transaction.date, formatLocale)
                             )}
                         </ReceiptRow>
 
@@ -556,7 +570,11 @@ function TransactionDetailsContent({
                                     )}
                                 />
                             }
-                            label={isTransfer ? 'Cuenta origen' : 'Cuenta'}
+                            label={
+                                isTransfer
+                                    ? t.transaction.sourceAccount
+                                    : t.transaction.account
+                            }
                             stacked
                         >
                             {editing && canEditAccount ? (
@@ -586,7 +604,7 @@ function TransactionDetailsContent({
                                                 {account.name}
                                             </button>
                                         ) : (
-                                            'Cuenta eliminada'
+                                            t.transaction.deletedAccount
                                         )}
                                     </div>
                                     <AccountBalanceLine
@@ -603,7 +621,7 @@ function TransactionDetailsContent({
                         {isTransfer ? (
                             <ReceiptRow
                                 icon={<WalletCards />}
-                                label="Cuenta destino"
+                                label={t.transaction.destinationAccount}
                                 stacked
                             >
                                 {editing ? (
@@ -631,7 +649,7 @@ function TransactionDetailsContent({
                                                     {destinationAccount.name}
                                                 </button>
                                             ) : (
-                                                'Cuenta eliminada'
+                                                t.transaction.deletedAccount
                                             )}
                                         </div>
                                         <AccountBalanceLine
@@ -656,7 +674,7 @@ function TransactionDetailsContent({
                                         color={categoryColor}
                                     />
                                 }
-                                label="Categoría"
+                                label={t.transaction.category}
                             >
                                 {editing ? (
                                     <select
@@ -692,12 +710,16 @@ function TransactionDetailsContent({
                             </ReceiptRow>
                         ) : null}
 
-                        <ReceiptRow icon={<Tags />} label="Tags" stacked>
+                        <ReceiptRow
+                            icon={<Tags />}
+                            label={t.transaction.tags}
+                            stacked
+                        >
                             {editing || hasSelectedTags ? (
                                 <div className="flex flex-wrap gap-2">
                                     {tags.length === 0 ? (
                                         <span className="text-muted-foreground">
-                                            Sin tags
+                                            {t.transaction.noTags}
                                         </span>
                                     ) : (
                                         tags.map((tag) => {
@@ -789,7 +811,7 @@ function TransactionDetailsContent({
                         className="w-full"
                     >
                         <Check />
-                        {saving ? 'Guardando…' : 'Guardar cambios'}
+                        {saving ? t.common.saving : t.transaction.saveChanges}
                     </Button>
                 </SheetFooter>
             ) : null}
@@ -797,10 +819,12 @@ function TransactionDetailsContent({
             <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
                 <DialogContent>
                     <DialogHeader>
-                        <DialogTitle>Eliminar actividad</DialogTitle>
+                        <DialogTitle>{t.transaction.deleteTitle}</DialogTitle>
                     </DialogHeader>
                     <p className="text-sm text-muted-foreground">
-                        ¿Seguro que querés eliminar “{transaction.name}”?
+                        {t.transaction.deleteConfirm({
+                            name: transaction.name,
+                        })}
                     </p>
                     <DialogFooter>
                         <Button
@@ -808,14 +832,14 @@ function TransactionDetailsContent({
                             onClick={() => setDeleteOpen(false)}
                             disabled={saving}
                         >
-                            Cancelar
+                            {t.common.cancel}
                         </Button>
                         <Button
                             variant="destructive"
                             onClick={() => void handleDelete()}
                             disabled={saving}
                         >
-                            Eliminar
+                            {t.common.delete}
                         </Button>
                     </DialogFooter>
                 </DialogContent>
@@ -877,20 +901,22 @@ function AccountBalanceLine({
     balance: AccountBalance | undefined
     currency: string
 }) {
+    const t = useT()
+    const formatLocale = useFormatLocale()
     if (balance === undefined) {
         return <Skeleton className="h-4 w-40" />
     }
     if (balance === null) {
         return (
             <span className="text-sm font-normal text-muted-foreground">
-                Saldo no disponible
+                {t.transaction.balanceUnavailable}
             </span>
         )
     }
     return (
         <span className="text-sm font-normal text-muted-foreground tabular-nums">
-            {formatMoney(Number(balance.before), currency)} →{' '}
-            {formatMoney(Number(balance.after), currency)}
+            {formatMoney(Number(balance.before), currency, formatLocale)} →{' '}
+            {formatMoney(Number(balance.after), currency, formatLocale)}
         </span>
     )
 }
@@ -997,12 +1023,12 @@ function localDateTimeEpoch(dateValue: string, timeValue: string): bigint {
     return BigInt(new Date(year, month - 1, day, hour, minute, 0, 0).getTime())
 }
 
-function formatDate(epoch: bigint): string {
-    return new Intl.DateTimeFormat('es-AR').format(new Date(Number(epoch)))
+function formatDate(epoch: bigint, locale: string): string {
+    return new Intl.DateTimeFormat(locale).format(new Date(Number(epoch)))
 }
 
-function formatTime(epoch: bigint): string {
-    return new Intl.DateTimeFormat('es-AR', {
+function formatTime(epoch: bigint, locale: string): string {
+    return new Intl.DateTimeFormat(locale, {
         hour: '2-digit',
         minute: '2-digit',
         hour12: false,
