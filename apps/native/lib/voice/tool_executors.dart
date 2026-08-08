@@ -205,7 +205,7 @@ class ToolExecutors {
   Future<Map<String, dynamic>> _createAccount(Map<String, dynamic> args) async {
     final id = await repos.accounts.create(
       name: args['name'] as String,
-      currency: args['currency'] as String,
+      currency: args['currency'] as String? ?? repos.defaultCurrency(),
       createdBy: 'agent',
       description: args['description'] as String?,
       color: args['color'] as String?,

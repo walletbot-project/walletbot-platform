@@ -1,13 +1,19 @@
 import 'package:app/l10n/l10n.dart';
 import 'package:app/screens/settings.dart';
 import 'package:app/settings/display_settings.dart';
+import 'package:app/user_settings/default_currency_controller.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 
 import '../helpers/memory_display_settings_store.dart';
 
 void main() {
+  setUp(() {
+    FlutterSecureStorage.setMockInitialValues({});
+  });
+
   testWidgets('shows the settings title in the app bar', (tester) async {
     final settings = DisplaySettingsController(
       store: MemoryDisplaySettingsStore(),
@@ -117,8 +123,14 @@ class _SettingsTestApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ChangeNotifierProvider.value(
-      value: settings,
+    return MultiProvider(
+      providers: [
+        ChangeNotifierProvider.value(value: settings),
+        ChangeNotifierProvider(
+          create: (_) =>
+              DefaultCurrencyController(accountId: 'test', isRemote: false),
+        ),
+      ],
       child: Consumer<DisplaySettingsController>(
         builder: (context, value, _) => MaterialApp(
           locale: value.locale,
