@@ -67,6 +67,34 @@ export const createAuth = (ctx: GenericCtx<DataModel>) => {
             },
             revokeSessionsOnPasswordReset: true,
         },
+        databaseHooks: {
+            user: {
+                create: {
+                    // Account-creation telemetry has to hang off the real insert.
+                    // With `requireEmailVerification` the sign-up endpoint always
+                    // answers `token: null` and returns a SYNTHETIC user for
+                    // already-registered emails — deliberately indistinguishable
+                    // from a genuine one — so nothing at the endpoint can tell a
+                    // new account from a duplicate attempt. This hook only runs
+                    // when a row is actually written, so duplicates never count.
+                    //
+                    // Scoped to the email path: social sign-in creates users
+                    // through `/sign-in/social`, and `googleSignIn` in
+                    // `authNative/http.ts` already records those.
+                    after: async (user, context) => {
+                        if (context?.path !== '/sign-up/email') return
+                        await requireRunMutationCtx(ctx).runMutation(
+                            internal.telemetry.mutations
+                                .recordUserAccountCreated,
+                            {
+                                userId: user.id,
+                                authMethod: 'email_password',
+                            },
+                        )
+                    },
+                },
+            },
+        },
         emailVerification: {
             sendVerificationEmail: async ({ user, url }) => {
                 await sendVerificationEmail(requireRunMutationCtx(ctx), {

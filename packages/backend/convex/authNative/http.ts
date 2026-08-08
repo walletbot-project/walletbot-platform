@@ -3,6 +3,7 @@ import type { HttpRouter } from 'convex/server'
 import { internal } from '../_generated/api'
 import { type ActionCtx, httpAction } from '../_generated/server'
 import { authComponent, createAuth } from '../auth'
+import { authRateLimiter } from './rateLimits'
 import {
     generateSessionSecret,
     hashSessionSecret,
@@ -220,6 +221,9 @@ const emailSignUp = httpAction(async (ctx, req) => {
         // With requireEmailVerification there is no session yet (`token` is
         // null) and duplicate emails return a SYNTHETIC user with a fake id —
         // gate on the token, never mint a session from `result.user` alone.
+        // Account-creation telemetry can't live here for the same reason: this
+        // branch is taken for BOTH cases. It hangs off the real row insert in
+        // `databaseHooks.user.create.after` (see `auth.ts`) instead.
         if (!result.token) {
             return jsonError(
                 403,
@@ -227,15 +231,6 @@ const emailSignUp = httpAction(async (ctx, req) => {
                 'Revisá tu correo: te enviamos un enlace para verificar tu cuenta.',
             )
         }
-        // Deliberately below the gate: recording above it would count
-        // duplicate-email attempts under better-auth's synthetic fake id.
-        await ctx.runMutation(
-            internal.telemetry.mutations.recordUserAccountCreated,
-            {
-                userId: result.user.id,
-                authMethod: 'email_password',
-            },
-        )
         return issueNativeSession(ctx, req, result.user)
     } catch (err) {
         const message = err instanceof Error ? err.message : String(err)
@@ -277,9 +272,27 @@ const emailSendFailedResponse = (op: string, err: unknown): Response => {
     )
 }
 
+// Keyed by address, so no inbox can be mail-bombed through these routes. The
+// counter advances before better-auth is consulted and regardless of whether
+// the address is registered, so a 429 reveals nothing an attacker could use to
+// enumerate accounts. Note this bounds sends *per recipient*, not per caller:
+// spreading attempts across many addresses is still possible, which would need
+// a client-IP dimension we can't trust from a header here.
+const rateLimitedResponse = (): Response =>
+    jsonError(
+        429,
+        'rate_limited',
+        'Demasiados intentos. Esperá un minuto y probá de nuevo.',
+    )
+
 const forgotPasswordHandler = httpAction(async (ctx, req) => {
     const email = getEmail(await parseJsonBody<EmailOnlyBody>(req))
     if (email instanceof Response) return email
+
+    const { ok } = await authRateLimiter.limit(ctx, 'passwordResetEmail', {
+        key: email,
+    })
+    if (!ok) return rateLimitedResponse()
 
     const { auth, headers } = await authComponent.getAuth(createAuth, ctx)
     try {
@@ -293,6 +306,11 @@ const forgotPasswordHandler = httpAction(async (ctx, req) => {
 const resendVerificationHandler = httpAction(async (ctx, req) => {
     const email = getEmail(await parseJsonBody<EmailOnlyBody>(req))
     if (email instanceof Response) return email
+
+    const { ok } = await authRateLimiter.limit(ctx, 'verificationEmail', {
+        key: email,
+    })
+    if (!ok) return rateLimitedResponse()
 
     const { auth, headers } = await authComponent.getAuth(createAuth, ctx)
     try {

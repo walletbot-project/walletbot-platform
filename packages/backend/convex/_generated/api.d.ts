@@ -12,6 +12,7 @@ import type * as aggregates from "../aggregates.js";
 import type * as auth from "../auth.js";
 import type * as authNative_http from "../authNative/http.js";
 import type * as authNative_mutations from "../authNative/mutations.js";
+import type * as authNative_rateLimits from "../authNative/rateLimits.js";
 import type * as authNative_utils from "../authNative/utils.js";
 import type * as config_helpers from "../config/helpers.js";
 import type * as config_http from "../config/http.js";
@@ -69,6 +70,7 @@ declare const fullApi: ApiFromModules<{
   auth: typeof auth;
   "authNative/http": typeof authNative_http;
   "authNative/mutations": typeof authNative_mutations;
+  "authNative/rateLimits": typeof authNative_rateLimits;
   "authNative/utils": typeof authNative_utils;
   "config/helpers": typeof config_helpers;
   "config/http": typeof config_http;
@@ -145,6 +147,7 @@ export declare const internal: FilterApi<
 export declare const components: {
   betterAuth: import("@convex-dev/better-auth/_generated/component.js").ComponentApi<"betterAuth">;
   migrations: import("@convex-dev/migrations/_generated/component.js").ComponentApi<"migrations">;
+  rateLimiter: import("@convex-dev/rate-limiter/_generated/component.js").ComponentApi<"rateLimiter">;
   resend: import("@convex-dev/resend/_generated/component.js").ComponentApi<"resend">;
   outflowsByAccount: import("@convex-dev/aggregate/_generated/component.js").ComponentApi<"outflowsByAccount">;
   inflowsByAccount: import("@convex-dev/aggregate/_generated/component.js").ComponentApi<"inflowsByAccount">;
