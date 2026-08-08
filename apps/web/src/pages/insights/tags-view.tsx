@@ -3,6 +3,7 @@ import { useMutation, useQuery } from 'convex/react'
 import { useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import { Skeleton } from '@/components/ui/skeleton'
+import { useT } from '@/lib/i18n'
 import { normalizeTagColor } from '@/lib/tag-colors'
 import {
     TagDetailsSheet,
@@ -32,6 +33,7 @@ type TagsViewProps = {
 }
 
 export function TagsView({ creating, onCreatingChange }: TagsViewProps) {
+    const t = useT()
     const tags = useQuery(api.v1.tags.queries.listActiveWithCounts)
     const createTag = useMutation(api.v1.tags.mutations.create)
 
@@ -89,9 +91,9 @@ export function TagsView({ creating, onCreatingChange }: TagsViewProps) {
             parentId: value.parentId ?? undefined,
         })
         toast.promise(promise, {
-            loading: 'Creando tag…',
-            success: 'Tag creado',
-            error: 'No se pudo crear el tag',
+            loading: t.insights.tagCreating,
+            success: t.insights.tagCreated,
+            error: t.insights.tagCreateFailed,
         })
         await promise
         onCreatingChange(false)
@@ -104,7 +106,7 @@ export function TagsView({ creating, onCreatingChange }: TagsViewProps) {
                     <TagsSkeleton />
                 ) : tags.length === 0 ? (
                     <p className="py-12 text-center text-sm text-muted-foreground">
-                        No tenés tags aún.
+                        {t.insights.noTagsYet}
                     </p>
                 ) : (
                     <ul className="flex flex-col gap-1.5">
@@ -138,8 +140,8 @@ export function TagsView({ creating, onCreatingChange }: TagsViewProps) {
             <TagDialog
                 open={creating}
                 onOpenChange={onCreatingChange}
-                title="Nuevo tag"
-                submitLabel="Crear"
+                title={t.insights.newTag}
+                submitLabel={t.common.create}
                 parentOptions={parentOptions}
                 onSubmit={handleCreate}
             />

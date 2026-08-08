@@ -9,12 +9,14 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Separator } from '@/components/ui/separator'
 import { authClient } from '@/lib/auth-client'
+import { useT } from '@/lib/i18n'
 
 type AuthMode = 'sign-in' | 'sign-up'
 
 export function Login({ mode }: { mode: AuthMode }) {
     const location = useLocation()
     const navigate = useNavigate()
+    const t = useT()
     const from = location.state?.from?.pathname || '/'
 
     const [loading, setLoading] = useState<'email' | 'google' | null>(null)
@@ -87,7 +89,7 @@ export function Login({ mode }: { mode: AuthMode }) {
             })
 
             if (result.error) {
-                throw new Error(result.error.message ?? 'No se pudo autenticar')
+                throw new Error(result.error.message ?? t.auth.authFailed)
             }
 
             // With email verification required there is no session yet — for
@@ -99,9 +101,7 @@ export function Login({ mode }: { mode: AuthMode }) {
             // with Google are nudged toward it — without disclosing whether the
             // email exists or which provider it uses.
             setError(
-                mode === 'sign-in'
-                    ? `${message}. Si te registraste con Google, usá "Continuar con Google".`
-                    : message,
+                mode === 'sign-in' ? t.auth.googleHint({ message }) : message,
             )
         } finally {
             setLoading(null)
@@ -169,10 +169,10 @@ export function Login({ mode }: { mode: AuthMode }) {
             <div className="flex w-full max-w-sm flex-col items-center gap-6 px-4">
                 <div className="flex flex-col items-center gap-2">
                     <h1 className="text-2xl font-semibold tracking-tight">
-                        Wallet Bot
+                        {t.common.appName}
                     </h1>
                     <p className="text-sm text-muted-foreground">
-                        Iniciá sesión para continuar
+                        {t.auth.signInToContinue}
                     </p>
                 </div>
 
@@ -184,7 +184,7 @@ export function Login({ mode }: { mode: AuthMode }) {
                         aria-pressed={mode === 'sign-in'}
                         onClick={() => goToMode('sign-in')}
                     >
-                        Iniciar sesión
+                        {t.auth.signIn}
                     </Button>
                     <Button
                         type="button"
@@ -193,7 +193,7 @@ export function Login({ mode }: { mode: AuthMode }) {
                         aria-pressed={mode === 'sign-up'}
                         onClick={() => goToMode('sign-up')}
                     >
-                        Crear cuenta
+                        {t.auth.signUp}
                     </Button>
                 </div>
 
@@ -203,14 +203,14 @@ export function Login({ mode }: { mode: AuthMode }) {
                 >
                     {mode === 'sign-up' ? (
                         <div className="grid gap-2">
-                            <Label htmlFor="name">Nombre</Label>
+                            <Label htmlFor="name">{t.common.name}</Label>
                             <div className="relative">
                                 <UserRound className="-translate-y-1/2 pointer-events-none absolute top-1/2 left-2.5 size-4 text-muted-foreground" />
                                 <Input
                                     id="name"
                                     name="name"
                                     autoComplete="name"
-                                    placeholder="Tu nombre"
+                                    placeholder={t.auth.namePlaceholder}
                                     className="pl-8"
                                     disabled={loading !== null}
                                 />
@@ -219,7 +219,7 @@ export function Login({ mode }: { mode: AuthMode }) {
                     ) : null}
 
                     <div className="grid gap-2">
-                        <Label htmlFor="email">Correo</Label>
+                        <Label htmlFor="email">{t.auth.email}</Label>
                         <div className="relative">
                             <Mail className="-translate-y-1/2 pointer-events-none absolute top-1/2 left-2.5 size-4 text-muted-foreground" />
                             <Input
@@ -236,7 +236,7 @@ export function Login({ mode }: { mode: AuthMode }) {
                     </div>
 
                     <div className="grid gap-2">
-                        <Label htmlFor="password">Contraseña</Label>
+                        <Label htmlFor="password">{t.auth.password}</Label>
                         <div className="relative">
                             <Lock className="-translate-y-1/2 pointer-events-none absolute top-1/2 left-2.5 size-4 text-muted-foreground" />
                             <Input
@@ -250,8 +250,8 @@ export function Login({ mode }: { mode: AuthMode }) {
                                 }
                                 placeholder={
                                     mode === 'sign-in'
-                                        ? 'Tu contraseña'
-                                        : 'Al menos 8 caracteres'
+                                        ? t.auth.passwordPlaceholder
+                                        : t.auth.newPasswordPlaceholder
                                 }
                                 className="pl-8"
                                 minLength={8}
@@ -284,13 +284,15 @@ export function Login({ mode }: { mode: AuthMode }) {
                         {loading === 'email' ? (
                             <LoaderCircle className="animate-spin" />
                         ) : null}
-                        {mode === 'sign-in' ? 'Iniciar sesión' : 'Crear cuenta'}
+                        {mode === 'sign-in' ? t.auth.signIn : t.auth.signUp}
                     </Button>
                 </form>
 
                 <div className="flex w-full items-center gap-3">
                     <Separator className="flex-1" />
-                    <span className="text-xs text-muted-foreground">o</span>
+                    <span className="text-xs text-muted-foreground">
+                        {t.auth.or}
+                    </span>
                     <Separator className="flex-1" />
                 </div>
 
@@ -310,8 +312,8 @@ export function Login({ mode }: { mode: AuthMode }) {
                         />
                     )}
                     {loading === 'google'
-                        ? 'Iniciando sesión...'
-                        : 'Continuar con Google'}
+                        ? t.auth.signingIn
+                        : t.auth.continueWithGoogle}
                 </Button>
             </div>
         </div>
