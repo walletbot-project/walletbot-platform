@@ -34,7 +34,7 @@ void main() {
 
     expect(es.forgotPassword, '¿Olvidaste tu contraseña?');
     expect(es.verifyEmailTitle, 'Verificá tu correo');
-    expect(es.verifyEmailDone, 'Ya verifiqué — iniciar sesión');
+    expect(es.verifyEmailDone, 'Ya verifiqué');
     expect(es.backToSignIn, 'Volver a iniciar sesión');
   });
 

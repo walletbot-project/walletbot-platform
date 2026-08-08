@@ -171,6 +171,9 @@ class _LoginScreenState extends State<LoginScreen> {
 
     try {
       await auth.resendVerificationEmail(email: _pendingEmail);
+      // Popping the screen mid-request disposes this State; _startResendCooldown
+      // would then setState (and arm a timer) on a dead widget.
+      if (!mounted) return;
       messenger.showSnackBar(
         SnackBar(content: Text(l10n.verificationEmailResent)),
       );

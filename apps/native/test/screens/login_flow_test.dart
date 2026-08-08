@@ -79,7 +79,7 @@ void main() {
 
     expect(requests.single.url.path, '/auth/email/sign-up');
     expect(find.text('Verificá tu correo'), findsOneWidget);
-    expect(find.text('Ya verifiqué — iniciar sesión'), findsOneWidget);
+    expect(find.text('Ya verifiqué'), findsOneWidget);
     // Cooldown just started: the resend button shows the countdown, disabled.
     expect(find.textContaining('Reenviar en'), findsOneWidget);
     expect(auth.accounts, isEmpty);
@@ -110,7 +110,7 @@ void main() {
 
     // "I verified" returns to the credentials form, email prefilled.
     await drainResendCooldown(tester);
-    await tester.tap(find.text('Ya verifiqué — iniciar sesión'));
+    await tester.tap(find.text('Ya verifiqué'));
     await tester.pumpAndSettle();
     expect(find.text('ana@test.com'), findsOneWidget);
 
@@ -119,8 +119,10 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Verificá tu correo'), findsOneWidget);
     expect(
-      find.text('Ese correo todavía no está verificado. '
-          'Te enviamos un enlace nuevo.'),
+      find.text(
+        'Ese correo todavía no está verificado. '
+        'Te enviamos un enlace nuevo.',
+      ),
       findsOneWidget,
     );
 
