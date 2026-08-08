@@ -1,0 +1,10 @@
+@import "tailwindcss";
+
+/*
+ * Tailwind v4 is configured here in CSS, not in a `tailwind.config.js`.
+ * Design tokens go in an `@theme` block — each one becomes both a CSS custom
+ * property and a utility class (e.g. `--color-brand` → `bg-brand`/`text-brand`).
+ *
+ * Deliberately bare: the landing's tokens, fonts and base styles land with its
+ * design. `@import 'tailwindcss'` alone already gives the full default theme.
+ */

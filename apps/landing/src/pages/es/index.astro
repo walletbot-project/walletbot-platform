@@ -1,0 +1,20 @@
+---
+import BaseLayout from '@/layouts/base-layout.astro'
+import { useTranslations } from '@/i18n'
+
+const { locale, t } = useTranslations(Astro.currentLocale)
+---
+
+<BaseLayout>
+    <section class="mx-auto max-w-2xl space-y-4 py-16">
+        <h1 class="text-4xl font-semibold tracking-tight sm:text-5xl">
+            {t.home.headline}
+        </h1>
+        <p class="text-lg text-slate-600">{t.home.subheadline}</p>
+        <p
+            class="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 font-mono text-sm text-slate-700"
+        >
+            {t.home.setupNotice({ locale })}
+        </p>
+    </section>
+</BaseLayout>
