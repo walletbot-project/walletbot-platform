@@ -20,7 +20,6 @@ The ES and EN versions are substantively identical and **must always be updated 
 1. **Replace the placeholders** in all four files:
    - `[CONTROLLER LEGAL NAME]` / `[NOMBRE LEGAL DEL RESPONSABLE]`
    - `[CONTROLLER ADDRESS, ARGENTINA]` / `[DOMICILIO DEL RESPONSABLE, ARGENTINA]`
-   - `[CITY, ARGENTINA — JURISDICTION]` / `[CIUDAD, ARGENTINA — JURISDICCIÓN]` (Terms §18 — forum for non-consumer disputes)
    - `[ANALYTICS / CRASH-REPORTING PROVIDER]` / `[PROVEEDOR DE ANALÍTICA / REPORTES DE FALLOS]` and the analytics retention placeholders (Privacy §7 and §9) — see item 4 below.
 2. **Create the `support@walletbot.live` mailbox** (or alias). It is the contact named in every document; today only `no-reply@walletbot.live` exists and it cannot receive mail.
 3. **Implement the 12-month voice-data retention cron.** The Privacy Policy (§5, §9) commits to auto-deleting `voiceSessions` / `voiceSessionEvents` older than 12 months. No such cleanup exists today (`docs/voice-session-lifecycle.md` explicitly notes there is no retention policy). **The policy must not go live before the cron ships.**
@@ -33,7 +32,7 @@ The ES and EN versions are substantively identical and **must always be updated 
 
 Audit of 2026-08-06 (policy text vs. `main` at `ba3f017` and branch `wal-151-agregar-opcion-para-eliminar-cuenta`). Owner decision: **implement these rather than reword the policy.** None of the affected claims may go live before its feature ships.
 
-1. **Ship PR #192 (`wal-151-agregar-opcion-para-eliminar-cuenta`).** The entire account-deletion flow (Privacy §10: in-app option, `app.walletbot.live/delete-account`, 24 h confirmation link), the deletion-request + tombstone retention rows (§9), the Resend integration and ALL transactional emails (§3.5, §17: verification, password reset, deletion confirmation) exist only on that unmerged branch — none of it is on `main`. Merge hazard: the branch's `crons.ts` drops `main`'s five telemetry crons; re-add them when resolving.
+1. **Ship PR #192 (`wal-151-agregar-opcion-para-eliminar-cuenta`).** The entire account-deletion flow (Privacy §10: in-app option, `app.walletbot.live/delete-account`, 24 h confirmation link), the deletion-request + tombstone retention rows (§9), the Resend integration and ALL transactional emails (§3.5, §6: verification, password reset, deletion confirmation) exist only on that unmerged branch — none of it is on `main`. Merge hazard: the branch's `crons.ts` drops `main`'s five telemetry crons; re-add them when resolving.
 2. **Purge user-scoped telemetry on account deletion.** `telemetryEvents` rows carry `userId` (`packages/backend/convex/schema/telemetry.ts`) and PR #192's `purgeUserData` predates telemetry, so they survive deletion — contradicting §9/§10 ("hard-deleted; only a random identifier and timestamp remain"). Extend the purge list and define a telemetry retention period (ties into the §9 analytics-retention placeholder).
 3. **Enforce mandatory email verification.** §11 claims it; `packages/backend/convex/auth.ts` sets `requireEmailVerification: false`.
 4. **Implement password reset, revoking ALL sessions on reset** (§6.2, §9, §11). No reset flow exists on `main`; note native sessions live in the app's own `refreshTokens` table, which better-auth's built-in reset would NOT revoke — needs explicit handling.
@@ -57,7 +56,7 @@ Also outstanding from the required list above: the **12-month voice-retention cr
 
 - **EU/GDPR intentionally excluded** per owner decision — the documents contain no GDPR sections and no EU-representative appointment, and do not geographically restrict EU users. If EU users are ever targeted (or sign up in relevant numbers), revisit: GDPR applies extraterritorially with no size threshold; an Art. 27 EU representative and Art. 13 disclosures would be needed.
 - Minimum age **18+**; single T&C per language with consumer carve-outs (no separate AR/international split); governing law Argentina with consumer-domicile forum; Spanish prevails for AR consumers, English otherwise; formal *usted* register.
-- Future-proofing included: paid features require ≥30 days notice + express opt-in (T&C §11); marketing e-mail would be opt-in only (Privacy §17).
+- Future-proofing included: paid features require reasonable advance notice + express opt-in (T&C §11); marketing e-mail would be opt-in only (Privacy §6).
 
 ## Keep the documents in sync with the code
 

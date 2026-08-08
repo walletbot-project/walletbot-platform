@@ -50,11 +50,11 @@ The Service organizes and displays **information that you provide**. It is not i
 
 ## 7. AI assistant
 
-The optional voice/text assistant is powered by a third-party artificial-intelligence model (Google's Gemini API). By using it you acknowledge that:
+The optional voice/text assistant is powered by third-party artificial-intelligence models (Google's Gemini API or OpenAI's API). By using it you acknowledge that:
 
 - The assistant **can make mistakes**: it may mis-hear or misinterpret amounts, currencies, dates, merchant names or instructions, and may create, modify or delete records incorrectly as a result. **You are responsible for reviewing the records it creates or changes.**
 - Assistant responses are generated automatically and are informational only; Section 6 (Not financial advice) fully applies to them.
-- When you use the assistant, your microphone audio and conversation content are processed by Google as described in the Privacy Policy (Section 5 there). The feature is optional and the rest of the app works without it.
+- When you use the assistant, your microphone audio and conversation content are processed by the AI provider (Google or OpenAI) as described in the Privacy Policy (Section 5 there). The feature is optional and the rest of the app works without it.
 
 ## 8. Acceptable use
 
@@ -78,20 +78,20 @@ If you send us feedback or suggestions, you grant us a free, perpetual license t
 
 ## 10. Third-party services
 
-The Service relies on third-party services (e.g. sign-in with Google, the Gemini API for the assistant, app-store distribution). Your use of those services may be subject to their own terms and privacy policies. We are not a party to your relationship with those providers, and their availability is not under our control. Where the app is distributed through an app store (e.g. Google Play, Apple App Store), the store's terms also apply to the download and, in case of conflict regarding the store relationship, prevail in that respect.
+The Service relies on third-party services (e.g. sign-in with Google, the Gemini or OpenAI APIs for the assistant, app-store distribution). Your use of those services may be subject to their own terms and privacy policies. We are not a party to your relationship with those providers, and their availability is not under our control. Where the app is distributed through an app store (e.g. Google Play, Apple App Store), the store's terms also apply to the download and, in case of conflict regarding the store relationship, prevail in that respect.
 
 ## 11. Fees and future paid features
 
 The Service is **free of charge**. We may in the future introduce optional paid features or plans. If we do:
 
-- We will announce them with reasonable advance notice (at least 30 days) and publish their conditions before they apply.
+- We will announce them with reasonable advance notice and publish their conditions before they apply.
 - **You will never be charged without your prior, express agreement** to a price and a payment method.
-- If a feature you actively use is to become paid or be materially restricted, we will treat that as a material change to these Terms (Section 14), with the corresponding notice, and you may delete your account before it takes effect.
+- If a feature you actively use is to become paid, we will treat that as a material change to these Terms (Section 14), with the corresponding notice, and you may delete your account before it takes effect.
 
 ## 12. Availability, updates and minimum supported versions
 
 - We work to keep the Service available and your data safe, but the Service is provided over networks and systems partly outside our control, and — as a free service — we do not guarantee uninterrupted, error-free availability. We will apply reasonable efforts to restore the Service promptly after incidents.
-- We continuously improve the Service and may add, modify or remove features. We will not materially degrade the essential functionality you use without the notice described in Section 14.
+- The Service evolves continuously. To the maximum extent permitted by applicable law, we may add, change, limit, suspend or remove features (or access to them) at any time, at our sole discretion, without cause and without prior notice, and this shall not give rise to any liability to you. Where mandatory law (including consumer-protection law) requires notice or other conditions for a specific change, we will comply with it.
 - For security and data-integrity reasons, synchronization may require a **minimum supported app version**. If your installed version falls below it, sync pauses until you update; **your local data remains accessible offline** in the meantime.
 - We may perform scheduled maintenance; where reasonably possible we will minimize disruption.
 
@@ -106,7 +106,7 @@ The Service is **free of charge**. We may in the future introduce optional paid 
 
 We may modify these Terms for legitimate reasons: legal or regulatory changes, security needs, or the evolution of the Service. Changes will follow objective criteria:
 
-- We will announce **material changes at least 30 days before** they take effect, by email or a prominent in-app notice, indicating the new effective date.
+- We will announce **material changes with reasonable advance notice** before they take effect, through the Service (for example, a prominent in-app notice), indicating the new effective date.
 - Changes are **not retroactive**.
 - If you do not agree with a change, you may terminate the relationship and delete your account free of charge before the change takes effect. Continuing to use the Service after the effective date of a duly notified change constitutes acceptance of it.
 - Non-material changes (e.g. clarifications or typo fixes) may apply upon publication with an updated "Last updated" date.
@@ -134,8 +134,8 @@ To the extent permitted by applicable law — and, in the case of consumers, onl
 ## 18. Governing law and disputes
 
 - These Terms are governed by the laws of the **Argentine Republic**, without prejudice to any mandatory consumer protections of the country or state of your habitual residence that apply to you by law.
-- **If you are a consumer residing in Argentina:** any dispute shall be brought before the courts of **your domicile**, in accordance with consumer-protection law. You also retain the right to file complaints with consumer-protection authorities (including through the COPREC system) and, in data-protection matters, with the Agencia de Acceso a la Información Pública.
-- **Other users:** disputes shall be submitted to the ordinary courts sitting at [CITY, ARGENTINA — JURISDICTION], except where the law of your place of residence grants you, as a consumer, the mandatory right to sue or be sued in your local courts, which these Terms do not displace.
+- **If you are a consumer residing in Argentina:** any dispute shall be brought before the courts of **your domicile**, in accordance with consumer-protection law. You also retain the right to file complaints with consumer-protection authorities and, in data-protection matters, with the Agencia de Acceso a la Información Pública.
+- **Other users:** disputes shall be submitted to the ordinary courts sitting in the Autonomous City of Buenos Aires (Ciudad Autónoma de Buenos Aires), Argentina, except where the law of your place of residence grants you, as a consumer, the mandatory right to sue or be sued in your local courts, which these Terms do not displace.
 - We encourage you to contact us first at support@walletbot.live — most issues can be resolved informally.
 
 ## 19. Language versions

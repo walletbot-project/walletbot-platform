@@ -62,7 +62,7 @@ Cuando le enviamos un correo transaccional (verificación, restablecimiento de c
 
 - Sin conexión con bancos ni entidades financieras; sin credenciales bancarias ni de tarjetas.
 - Sin geolocalización precisa ni aproximada.
-- Sin acceso a sus contactos, fotos, archivos ni cámara.
+- Sin acceso a sus contactos. Solo accedemos a sus archivos, fotos o cámara cuando usted explícitamente elige un archivo, comparte un archivo o toma una foto — nunca en segundo plano ni sin una acción suya.
 - Sin identificadores publicitarios, sin redes de publicidad, sin rastreo de terceros.
 - Sin número de teléfono, fecha de nacimiento ni documento de identidad.
 - No vendemos ni alquilamos datos personales a nadie, ni los compartimos para publicidad de terceros.
@@ -72,11 +72,11 @@ Cuando le enviamos un correo transaccional (verificación, restablecimiento de c
 El asistente de voz de Wallet Bot es una función **opcional**. Le permite registrar gastos y consultar sus finanzas por voz o por chat de texto.
 
 - El **acceso al micrófono** se solicita únicamente cuando usted inicia una sesión de voz, y puede denegarlo; el resto de la aplicación funciona sin él.
-- Al iniciar una sesión, nuestro backend emite un **token de acceso de corta duración y de un solo uso**, y su dispositivo se conecta **directamente** a la API Gemini Live de Google (Google LLC). El audio de su micrófono se transmite desde su dispositivo hacia Google; **el audio en crudo nunca pasa por nuestros servidores ni se almacena en ellos**.
+- Al iniciar una sesión, nuestro backend emite un **token de acceso de corta duración y de un solo uso**, y su dispositivo se conecta **directamente** al proveedor de inteligencia artificial de la sesión: la API Gemini Live de Google (Google LLC) o la API de OpenAI (OpenAI, L.L.C.). El audio de su micrófono se transmite desde su dispositivo hacia ese proveedor; **el audio en crudo nunca pasa por nuestros servidores ni se almacena en ellos**.
 - Las grabaciones de audio de una sesión se conservan **únicamente en su dispositivo** (app nativa). Nunca se suben a nuestros servidores; del audio solo se registra en el servidor el tipo y el tamaño de los segmentos.
 - Almacenamos el **contenido de la conversación**: transcripciones de lo que usted dijo y de lo que respondió el asistente, las acciones que el asistente ejecutó ("tool calls" — por ejemplo, crear una transacción) con sus resultados, y metadatos de la sesión. Para cuentas con sesión iniciada este historial se sincroniza con nuestro backend; **las sesiones de voz de la aplicación web no se almacenan en nuestros servidores**; **las cuentas en modo local nunca suben su historial de voz**.
-- Mientras una sesión está activa, el asistente puede **leer y modificar los datos financieros de su cuenta** (cuentas, saldos, transacciones, categorías, etiquetas, resúmenes) para ejecutar sus pedidos. Los datos que lee o escribe pasan a formar parte de la conversación procesada por Google.
-- Google procesa el audio y el contenido de la conversación bajo sus propios términos de API aplicables. Configuramos las sesiones para usar credenciales efímeras de un solo uso.
+- Mientras una sesión está activa, el asistente puede **leer y modificar los datos financieros de su cuenta** (cuentas, saldos, transacciones, categorías, etiquetas, resúmenes) para ejecutar sus pedidos. Los datos que lee o escribe pasan a formar parte de la conversación procesada por el proveedor de inteligencia artificial.
+- El proveedor de inteligencia artificial (Google u OpenAI) procesa el audio y el contenido de la conversación bajo sus propios términos de API aplicables. Configuramos las sesiones para usar credenciales efímeras de un solo uso.
 - El historial de sesiones de voz se conserva por un **máximo de 12 meses** y también se elimina de inmediato si usted elimina su cuenta (Sección 9).
 - El asistente puede cometer errores (interpretar mal montos, nombres o monedas). Revise los registros que crea; ver el descargo correspondiente en los Términos y Condiciones.
 
@@ -86,7 +86,7 @@ Tratamos sus datos personales para:
 
 1. **Prestar y operar el Servicio** — crear su cuenta, almacenar y sincronizar sus registros financieros entre sus dispositivos y operar el asistente de voz cuando usted lo usa. Este tratamiento es necesario para la ejecución del contrato entre usted y nosotros (artículo 5°, inciso 2, apartado d, Ley 25.326).
 2. **Autenticación y seguridad** — verificar su correo, proteger su cuenta, detectar y prevenir fraude y abuso, limitar solicitudes y revocar sesiones tras un restablecimiento de contraseña.
-3. **Comunicaciones transaccionales** — correos estrictamente necesarios para el Servicio (verificación, restablecimiento de contraseña, eliminación de cuenta). **No enviamos correos de marketing**; si alguna vez los introducimos, serán estrictamente opcionales (opt-in) y con un mecanismo de baja funcional (Sección 17).
+3. **Comunicaciones transaccionales** — correos estrictamente necesarios para el Servicio (verificación, restablecimiento de contraseña, eliminación de cuenta). **No enviamos correos de marketing**; si alguna vez los introducimos, serán estrictamente opcionales (opt-in) y con un mecanismo de baja funcional.
 4. **Analítica y mejora del Servicio** — medir cómo se usa el Servicio y recolectar reportes de fallos y diagnóstico para detectar errores, mejorar la estabilidad y orientar mejoras del producto. No usamos estos datos con fines publicitarios.
 5. **Cumplimiento legal** — responder a requerimientos legales válidos y ejercer o defender reclamos legales.
 
@@ -102,6 +102,7 @@ Compartimos datos personales únicamente con los encargados de tratamiento neces
 |---|---|---|
 | Convex, Inc. (EE. UU.) | Plataforma de backend y alojamiento de la base de datos | Todos los datos del lado del servidor descriptos en la Sección 3 |
 | Google LLC (EE. UU.) | Inicio de sesión con Google; API Gemini Live (asistente de voz) | Datos de perfil del inicio de sesión; audio y contenido de conversaciones de voz/chat y los datos financieros que el asistente lee o escribe durante una sesión |
+| OpenAI, L.L.C. (EE. UU.) | Proveedor de inteligencia artificial de chat y voz (asistente) | Audio y contenido de conversaciones de voz/chat y los datos financieros que el asistente lee o escribe durante una sesión |
 | Apple Inc. (EE. UU.) | Inicio de sesión con Apple (cuando esté disponible) | Datos de perfil del inicio de sesión (nombre, correo electrónico, identificador de cuenta del proveedor) |
 | Resend, Inc. (EE. UU.) | Envío de correos transaccionales | Dirección de correo del destinatario, nombre para mostrar, contenido del mensaje |
 | Cloudflare, Inc. (EE. UU.) | Alojamiento / CDN de la aplicación web | Registros estándar de solicitudes web (dirección IP, user-agent) |
@@ -191,33 +192,17 @@ El Servicio está destinado a personas adultas y requiere tener **18 años o má
 
 ## 15. Cookies y tecnologías similares (aplicación web)
 
-La aplicación web utiliza cookies y almacenamiento del navegador similar únicamente para la autenticación y el funcionamiento propio del Servicio:
-
-| Elemento | Finalidad | Duración |
-|---|---|---|
-| Datos de autenticación (cookies y/o almacenamiento del navegador establecidos por nuestro sistema de autenticación) | Mantener su sesión iniciada de forma segura | Hasta expiración o cierre de sesión |
-| Cookie `sidebar_state` | Recordar si la barra lateral está abierta | 7 días |
-| `chunk-reload` (sessionStorage) | Evitar bucles de recarga tras un despliegue | Sesión del navegador |
-
-**No** usamos cookies de publicidad ni de rastreo. Nuestras herramientas de analítica pueden usar cookies o almacenamiento similar del navegador para medir el uso y diagnosticar errores (Sección 3.4); no se usan con fines publicitarios. Si introducimos otras cookies no esenciales, pediremos su consentimiento cuando corresponda antes de establecerlas.
+La aplicación web puede utilizar cookies y almacenamiento del navegador similar para el funcionamiento del Servicio (por ejemplo, para mantener su sesión iniciada). **No** utilizamos cookies de terceros.
 
 ## 16. Datos almacenados en su dispositivo
 
-- La aplicación nativa mantiene una **base de datos local por cuenta** en su dispositivo con sus registros financieros e historial de sesiones de voz (incluidas las grabaciones de audio), para que la app funcione sin conexión.
-- Su credencial de sesión, correo, nombre para mostrar y URL de avatar se guardan en el almacenamiento seguro del sistema operativo; las preferencias de visualización (idioma, tema) se guardan localmente.
-- **Cuentas en modo local:** la app puede usarse sin ninguna cuenta en línea. En ese modo, sus registros financieros, su historial de voz y su contenido permanecen exclusivamente en su dispositivo, nunca se nos transmiten y **no podemos recuperarlos** si el dispositivo se pierde — tampoco están alcanzados por el flujo de eliminación del lado del servidor (borrar la app o la cuenta local los elimina). La aplicación sí envía los datos de uso y diagnóstico descriptos en la Sección 3.4, que no incluyen sus registros financieros.
-- Las funciones de respaldo de su sistema operativo (por ejemplo, copias de seguridad de Android/iOS) pueden incluir datos de la aplicación según la configuración de su dispositivo, que está bajo su control.
-- Cerrar sesión en una cuenta elimina su base de datos local del dispositivo.
+La aplicación almacena sus datos localmente en su dispositivo para poder funcionar sin conexión. Si usa el **modo local** (sin cuenta en línea), sus datos permanecen exclusivamente en su dispositivo, nunca se nos transmiten y **no podemos recuperarlos** si el dispositivo se pierde (la aplicación sí envía los datos de uso y diagnóstico descriptos en la Sección 3.4). Cerrar sesión en una cuenta o desinstalar la aplicación elimina sus datos locales. Las funciones de respaldo de su sistema operativo pueden incluir datos de la aplicación según la configuración de su dispositivo, que está bajo su control.
 
-## 17. Comunicaciones
+## 17. Cambios a esta Política
 
-Enviamos **únicamente correos transaccionales** (verificación, restablecimiento de contraseña, eliminación de cuenta). No enviamos marketing. Si en el futuro introducimos comunicaciones de marketing, serán **exclusivamente opt-in**, claramente identificadas, con un mecanismo de baja funcional, y rechazarlas nunca afectará el Servicio.
+Podremos actualizar esta Política a medida que el Servicio evolucione. Ante cambios sustanciales, se lo notificaremos a través del Servicio (por ejemplo, mediante un aviso en la aplicación) antes de que entren en vigencia o al momento de entrar en vigencia y, cuando el cambio lo requiera (por ejemplo, una nueva finalidad de tratamiento), le pediremos su consentimiento. La fecha de "Última actualización" en el encabezado refleja siempre la versión vigente. Si usted no está de acuerdo con un cambio, puede eliminar su cuenta.
 
-## 18. Cambios a esta Política
-
-Podremos actualizar esta Política a medida que el Servicio evolucione. Ante cambios sustanciales, le daremos un preaviso razonable (al menos 30 días) por correo electrónico o mediante un aviso en la aplicación antes de que entren en vigencia y, cuando el cambio lo requiera (por ejemplo, una nueva finalidad de tratamiento), le pediremos su consentimiento. La fecha de "Última actualización" en el encabezado refleja siempre la versión vigente. Si usted no está de acuerdo con un cambio, puede eliminar su cuenta antes de que entre en vigencia.
-
-## 19. Contacto
+## 18. Contacto
 
 - **Solicitudes de privacidad y protección de datos:** support@walletbot.live
 - **Responsable:** [NOMBRE LEGAL DEL RESPONSABLE], [DOMICILIO DEL RESPONSABLE, ARGENTINA]

@@ -62,7 +62,7 @@ When we send you a transactional email (verification, password reset, account de
 
 - No connection to banks or financial institutions; no bank or card credentials.
 - No precise or approximate geolocation.
-- No access to your contacts, photos, files or camera.
+- No access to your contacts. We access your files, photos or camera only when you explicitly pick a file, share a file or take a picture — never in the background or without an action from you.
 - No advertising identifiers, no advertising networks, no third-party tracking.
 - No phone number, date of birth or government ID.
 - We do not sell or rent personal data to anyone, and we do not share it for third-party advertising.
@@ -72,11 +72,11 @@ When we send you a transactional email (verification, password reset, account de
 Wallet Bot's voice assistant is an **optional** feature. It lets you record expenses and query your finances by voice or text chat.
 
 - **Microphone access** is requested only when you start a voice session, and you can deny it; the rest of the app works without it.
-- When you start a session, our backend issues a **short-lived, single-use access token**, and your device then connects **directly** to Google's Gemini Live API (Google LLC). Your microphone audio is streamed from your device to Google; **raw audio never passes through or is stored on our servers**.
+- When you start a session, our backend issues a **short-lived, single-use access token**, and your device then connects **directly** to the session's AI provider: Google's Gemini Live API (Google LLC) or OpenAI's API (OpenAI, L.L.C.). Your microphone audio is streamed from your device to that provider; **raw audio never passes through or is stored on our servers**.
 - Audio recordings of a session are kept **only on your device** (native app). They are never uploaded to us; only the type and size of audio segments are recorded server-side.
 - We store the **conversation content**: transcripts of what you said and what the assistant answered, the actions the assistant performed ("tool calls" — e.g. creating a transaction) and their results, and session metadata. For signed-in accounts this history is synchronized to our backend; **web voice sessions are not stored on our servers**; **local-only accounts never upload voice history**.
-- While a session is active, the assistant can **read and modify the financial data in your account** (accounts, balances, transactions, categories, tags, summaries) in order to carry out your requests. The data it reads or writes becomes part of the conversation processed by Google.
-- Google processes the audio and conversation content under its own applicable API terms. We configure sessions to use ephemeral, single-use credentials.
+- While a session is active, the assistant can **read and modify the financial data in your account** (accounts, balances, transactions, categories, tags, summaries) in order to carry out your requests. The data it reads or writes becomes part of the conversation processed by the AI provider.
+- The AI provider (Google or OpenAI) processes the audio and conversation content under its own applicable API terms. We configure sessions to use ephemeral, single-use credentials.
 - Voice-session history is retained for a **maximum of 12 months** and is also deleted immediately if you delete your account (Section 9).
 - The assistant can make mistakes (mis-hearing amounts, names or currencies). Review the records it creates; see the Terms and Conditions for the corresponding disclaimer.
 
@@ -86,7 +86,7 @@ We process your personal data to:
 
 1. **Provide and operate the Service** — creating your account, storing and synchronizing your financial records across your devices, and operating the voice assistant when you use it. This processing is necessary to perform the contract between you and us (Article 5.2(d), Law 25,326).
 2. **Authentication and security** — verifying your email, protecting your account, detecting and preventing fraud and abuse, rate limiting, revoking sessions after a password reset.
-3. **Transactional communications** — emails strictly necessary for the Service (verification, password reset, account deletion). We send **no marketing emails**; if we ever introduce them, they will be strictly opt-in with a working unsubscribe (Section 17).
+3. **Transactional communications** — emails strictly necessary for the Service (verification, password reset, account deletion). We send **no marketing emails**; if we ever introduce them, they will be strictly opt-in with a working unsubscribe.
 4. **Analytics and service improvement** — measuring how the Service is used and collecting crash and diagnostic reports to detect errors, improve stability and guide product improvements. We do not use this data for advertising.
 5. **Legal compliance** — responding to valid legal requests and exercising or defending legal claims.
 
@@ -102,6 +102,7 @@ We share personal data only with the processors needed to run the Service, under
 |---|---|---|
 | Convex, Inc. (USA) | Backend platform and database hosting | All server-side data described in Section 3 |
 | Google LLC (USA) | Sign-in with Google; Gemini Live API (voice assistant) | Sign-in profile data; voice/chat audio and conversation content and the financial data the assistant reads or writes during a session |
+| OpenAI, L.L.C. (USA) | AI chat and voice provider (assistant) | Voice/chat audio and conversation content and the financial data the assistant reads or writes during a session |
 | Apple Inc. (USA) | Sign in with Apple (where available) | Sign-in profile data (name, email address, provider account identifier) |
 | Resend, Inc. (USA) | Transactional email delivery | Recipient email address, display name, message content |
 | Cloudflare, Inc. (USA) | Web application hosting / CDN | Standard web request logs (IP address, user-agent) |
@@ -193,33 +194,17 @@ The Service is intended for adults and requires users to be **18 years or older*
 
 ## 15. Cookies and similar technologies (web app)
 
-The web app uses cookies and similar browser storage only for authentication and the Service's own functionality:
-
-| Item | Purpose | Duration |
-|---|---|---|
-| Authentication data (cookies and/or browser storage set by our authentication system) | Keeping you signed in securely | Until expiry or sign-out |
-| `sidebar_state` cookie | Remembering whether the sidebar is open | 7 days |
-| `chunk-reload` (sessionStorage) | Preventing reload loops after a deployment | Browser session |
-
-We use **no advertising or tracking cookies**. Our analytics tooling may use cookies or similar browser storage to measure usage and diagnose errors (Section 3.4); it is not used for advertising. If we introduce other non-essential cookies, we will ask for your consent where required before setting them.
+The web app may use cookies and similar browser storage to make the Service work (for example, keeping you signed in). We do **not** use third-party cookies.
 
 ## 16. Data stored on your device
 
-- The native app keeps a **local database per account** on your device with your financial records and voice-session history (including audio recordings), so the app works offline.
-- Your session credential, email, display name and avatar URL are stored in the operating system's secure storage; display preferences (language, theme) are stored locally.
-- **Local-only accounts:** the app can be used without any online account. In that mode your financial records, voice history and content stay exclusively on your device, are never transmitted to us, and **we cannot recover them** if the device is lost — they are also not covered by the server-side deletion flow (deleting the app or the local account removes them). The app still sends the usage and diagnostic data described in Section 3.4, which does not include your financial records.
-- Your operating system's backup features (e.g. Android/iOS device backups) may include app data according to your device settings, which are under your control.
-- Signing out of an account removes its local database from the device.
+The app stores your data locally on your device so it can work offline. If you use **local-only mode** (no online account), your data stays exclusively on your device, is never sent to us, and **we cannot recover it** if the device is lost (the app still sends the usage and diagnostic data described in Section 3.4). Signing out of an account or uninstalling the app removes its local data. Your operating system's backup features may include app data according to your device settings, which are under your control.
 
-## 17. Communications
+## 17. Changes to this Policy
 
-We send **transactional emails only** (verification, password reset, account deletion). We do not send marketing. If we introduce marketing communications in the future, they will be **opt-in only**, clearly identified, with a functioning unsubscribe mechanism, and declining them will never affect the Service.
+We may update this Policy as the Service evolves. If we make material changes, we will notify you through the Service (for example, with an in-app notice) before or when they take effect, and, where the change requires it (for example, a new purpose of processing), we will ask for your consent. The "Last updated" date at the top always reflects the current version. If you do not agree with a change, you may delete your account.
 
-## 18. Changes to this Policy
-
-We may update this Policy as the Service evolves. For material changes we will give you reasonable advance notice (at least 30 days) by email or an in-app notice before the changes take effect, and, where the change requires it (for example, a new purpose of processing), we will ask for your consent. The "Last updated" date at the top always reflects the current version. If you do not agree with a change, you may delete your account before it takes effect.
-
-## 19. Contact
+## 18. Contact
 
 - **Privacy and data-protection requests:** support@walletbot.live
 - **Controller:** [CONTROLLER LEGAL NAME], [CONTROLLER ADDRESS, ARGENTINA]

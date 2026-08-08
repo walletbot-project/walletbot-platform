@@ -50,11 +50,11 @@ El Servicio organiza y muestra **información que usted proporciona**. No tiene 
 
 ## 7. Asistente de inteligencia artificial
 
-El asistente opcional de voz/texto funciona sobre un modelo de inteligencia artificial de terceros (la API Gemini de Google). Al usarlo, usted reconoce que:
+El asistente opcional de voz/texto funciona sobre modelos de inteligencia artificial de terceros (la API Gemini de Google o la API de OpenAI). Al usarlo, usted reconoce que:
 
 - El asistente **puede cometer errores**: puede oír o interpretar mal montos, monedas, fechas, nombres de comercios o instrucciones, y en consecuencia crear, modificar o eliminar registros de forma incorrecta. **Usted es responsable de revisar los registros que el asistente crea o modifica.**
 - Las respuestas del asistente se generan automáticamente y son meramente informativas; la Sección 6 (No es asesoramiento financiero) les resulta plenamente aplicable.
-- Cuando usa el asistente, el audio de su micrófono y el contenido de la conversación son procesados por Google según se describe en la Política de Privacidad (Sección 5 de aquella). La función es opcional y el resto de la aplicación funciona sin ella.
+- Cuando usa el asistente, el audio de su micrófono y el contenido de la conversación son procesados por el proveedor de inteligencia artificial (Google u OpenAI) según se describe en la Política de Privacidad (Sección 5 de aquella). La función es opcional y el resto de la aplicación funciona sin ella.
 
 ## 8. Uso aceptable
 
@@ -78,20 +78,20 @@ Si usted nos envía comentarios o sugerencias, nos otorga una licencia gratuita 
 
 ## 10. Servicios de terceros
 
-El Servicio se apoya en servicios de terceros (por ejemplo, el inicio de sesión con Google, la API Gemini para el asistente y la distribución mediante tiendas de aplicaciones). El uso de esos servicios puede estar sujeto a sus propios términos y políticas de privacidad. No somos parte de su relación con esos proveedores y su disponibilidad no está bajo nuestro control. Cuando la aplicación se distribuye a través de una tienda de aplicaciones (por ejemplo, Google Play o el App Store de Apple), los términos de la tienda también se aplican a la descarga y, en caso de conflicto respecto de la relación con la tienda, prevalecen en ese aspecto.
+El Servicio se apoya en servicios de terceros (por ejemplo, el inicio de sesión con Google, las API de Gemini o de OpenAI para el asistente y la distribución mediante tiendas de aplicaciones). El uso de esos servicios puede estar sujeto a sus propios términos y políticas de privacidad. No somos parte de su relación con esos proveedores y su disponibilidad no está bajo nuestro control. Cuando la aplicación se distribuye a través de una tienda de aplicaciones (por ejemplo, Google Play o el App Store de Apple), los términos de la tienda también se aplican a la descarga y, en caso de conflicto respecto de la relación con la tienda, prevalecen en ese aspecto.
 
 ## 11. Precio y futuras funciones pagas
 
 El Servicio es **gratuito**. En el futuro podremos introducir funciones o planes pagos opcionales. Si lo hacemos:
 
-- Los anunciaremos con una antelación razonable (al menos 30 días) y publicaremos sus condiciones antes de que se apliquen.
+- Los anunciaremos con una antelación razonable y publicaremos sus condiciones antes de que se apliquen.
 - **Nunca se le cobrará sin su acuerdo previo y expreso** sobre un precio y un medio de pago.
-- Si una función que usted usa activamente pasara a ser paga o se restringiera sustancialmente, lo trataremos como una modificación sustancial de estos Términos (Sección 14), con el preaviso correspondiente, y usted podrá eliminar su cuenta antes de que entre en vigencia.
+- Si una función que usted usa activamente pasara a ser paga, lo trataremos como una modificación sustancial de estos Términos (Sección 14), con el preaviso correspondiente, y usted podrá eliminar su cuenta antes de que entre en vigencia.
 
 ## 12. Disponibilidad, actualizaciones y versiones mínimas soportadas
 
 - Trabajamos para mantener el Servicio disponible y sus datos seguros, pero el Servicio se presta sobre redes y sistemas en parte ajenos a nuestro control y — tratándose de un servicio gratuito — no garantizamos una disponibilidad ininterrumpida y libre de errores. Aplicaremos esfuerzos razonables para restablecer el Servicio con prontitud ante incidentes.
-- Mejoramos el Servicio en forma continua y podremos agregar, modificar o eliminar funciones. No degradaremos sustancialmente la funcionalidad esencial que usted usa sin el preaviso descripto en la Sección 14.
+- El Servicio evoluciona en forma continua. En la máxima medida permitida por la ley aplicable, podremos agregar, cambiar, limitar, suspender o eliminar funciones (o el acceso a ellas) en cualquier momento, a nuestra sola discreción, sin expresión de causa y sin preaviso, sin que ello genere responsabilidad alguna frente a usted. Cuando una norma imperativa (incluidas las de defensa del consumidor) exija preaviso u otras condiciones para un cambio determinado, la cumpliremos.
 - Por razones de seguridad e integridad de los datos, la sincronización puede requerir una **versión mínima soportada de la aplicación**. Si su versión instalada queda por debajo de ella, la sincronización se pausa hasta que actualice; **mientras tanto, sus datos locales siguen accesibles sin conexión**.
 - Podremos realizar mantenimientos programados; cuando sea razonablemente posible, minimizaremos las interrupciones.
 
@@ -106,7 +106,7 @@ El Servicio es **gratuito**. En el futuro podremos introducir funciones o planes
 
 Podremos modificar estos Términos por razones legítimas: cambios legales o regulatorios, necesidades de seguridad o la evolución del Servicio. Las modificaciones seguirán criterios objetivos:
 
-- Anunciaremos las **modificaciones sustanciales con al menos 30 días de antelación** a su entrada en vigencia, por correo electrónico o mediante un aviso destacado en la aplicación, indicando la nueva fecha de vigencia.
+- Anunciaremos las **modificaciones sustanciales con una antelación razonable** a su entrada en vigencia, a través del Servicio (por ejemplo, mediante un aviso destacado en la aplicación), indicando la nueva fecha de vigencia.
 - Las modificaciones **no son retroactivas**.
 - Si usted no está de acuerdo con una modificación, puede rescindir la relación y eliminar su cuenta sin costo antes de que entre en vigencia. Continuar usando el Servicio después de la fecha de vigencia de una modificación debidamente notificada implica su aceptación.
 - Las modificaciones no sustanciales (por ejemplo, aclaraciones o correcciones tipográficas) podrán aplicarse desde su publicación, con la fecha de "Última actualización" actualizada.
@@ -134,8 +134,8 @@ En la medida permitida por la ley aplicable — y, tratándose de consumidores, 
 ## 18. Ley aplicable y jurisdicción
 
 - Estos Términos se rigen por las leyes de la **República Argentina**, sin perjuicio de las protecciones imperativas al consumidor del país o estado de su residencia habitual que le resulten aplicables por ley.
-- **Si usted es un consumidor residente en Argentina:** toda controversia se someterá a los tribunales de **su domicilio**, conforme a las normas de defensa del consumidor. Usted conserva además el derecho de presentar reclamos ante las autoridades de defensa del consumidor (incluido el sistema COPREC) y, en materia de protección de datos, ante la Agencia de Acceso a la Información Pública.
-- **Demás usuarios:** las controversias se someterán a los tribunales ordinarios con asiento en [CIUDAD, ARGENTINA — JURISDICCIÓN], salvo que la ley de su lugar de residencia le otorgue, como consumidor, el derecho imperativo de demandar o ser demandado ante sus tribunales locales, derecho que estos Términos no desplazan.
+- **Si usted es un consumidor residente en Argentina:** toda controversia se someterá a los tribunales de **su domicilio**, conforme a las normas de defensa del consumidor. Usted conserva además el derecho de presentar reclamos ante las autoridades de defensa del consumidor y, en materia de protección de datos, ante la Agencia de Acceso a la Información Pública.
+- **Demás usuarios:** las controversias se someterán a los tribunales ordinarios con asiento en la Ciudad Autónoma de Buenos Aires, República Argentina, salvo que la ley de su lugar de residencia le otorgue, como consumidor, el derecho imperativo de demandar o ser demandado ante sus tribunales locales, derecho que estos Términos no desplazan.
 - Lo invitamos a contactarnos primero a support@walletbot.live — la mayoría de los problemas pueden resolverse informalmente.
 
 ## 19. Idiomas
