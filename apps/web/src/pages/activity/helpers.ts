@@ -1,6 +1,11 @@
 // Shared types, formatters and grouping logic for the Activity view.
 // Mirrors the native app's activity screen (apps/native/lib/screens/activity.dart)
 // so both clients read and present transactions the same way.
+//
+// The label-producing helpers take the active catalog and BCP 47 tag rather
+// than reading a module-level locale, so they stay pure and testable.
+
+import type { Messages } from '@/lib/i18n'
 
 export type TransactionType =
     | 'expense'
@@ -53,45 +58,39 @@ export const EMPTY_FILTERS: TransactionFilters = {
     tagIds: [],
 }
 
-const SPANISH_WEEKDAYS = [
-    'Lunes',
-    'Martes',
-    'Miércoles',
-    'Jueves',
-    'Viernes',
-    'Sábado',
-    'Domingo',
-]
-
-/** Maps JS `getDay()` (0 = Sunday) onto the Monday-first weekday array. */
-function weekdayName(date: Date): string {
-    return SPANISH_WEEKDAYS[(date.getDay() + 6) % 7]
+/** Capitalised weekday name in the active locale, e.g. `Lunes` / `Monday`. */
+function weekdayName(date: Date, locale: string): string {
+    const name = new Intl.DateTimeFormat(locale, { weekday: 'long' }).format(
+        date,
+    )
+    return name.charAt(0).toUpperCase() + name.slice(1)
 }
 
-function groupThousands(value: number): string {
-    const digits = Math.trunc(Math.abs(value)).toString()
-    let out = ''
-    for (let i = 0; i < digits.length; i++) {
-        if (i > 0 && (digits.length - i) % 3 === 0) out += '.'
-        out += digits[i]
-    }
-    return out
+function groupThousands(value: number, locale: string): string {
+    return new Intl.NumberFormat(locale, {
+        maximumFractionDigits: 0,
+    }).format(Math.trunc(Math.abs(value)))
 }
 
 /** Unsigned amount, e.g. `$1.234`. Cents are rounded to whole units. */
-export function formatAmount(cents: number, currencySymbol = '$'): string {
+export function formatAmount(
+    cents: number,
+    locale: string,
+    currencySymbol = '$',
+): string {
     const whole = Math.round(Math.abs(cents) / 100)
-    return `${currencySymbol}${groupThousands(whole)}`
+    return `${currencySymbol}${groupThousands(whole, locale)}`
 }
 
 /** Signed amount, e.g. `+ $ 1.234` / `- $ 1.234`. */
 export function formatSignedAmount(
     cents: number,
+    locale: string,
     currencySymbol = '$',
 ): string {
     const sign = cents < 0 ? '-' : cents > 0 ? '+' : ''
     const whole = Math.round(Math.abs(cents) / 100)
-    return `${sign ? `${sign} ` : ''}${currencySymbol} ${groupThousands(whole)}`
+    return `${sign ? `${sign} ` : ''}${currencySymbol} ${groupThousands(whole, locale)}`
 }
 
 function startOfDay(date: Date): Date {
@@ -110,29 +109,41 @@ function endOfDay(date: Date): Date {
     )
 }
 
-function formatDDMMYYYY(date: Date): string {
-    const dd = date.getDate().toString().padStart(2, '0')
-    const mm = (date.getMonth() + 1).toString().padStart(2, '0')
-    return `${dd}/${mm}/${date.getFullYear()}`
+/** Numeric date in the active locale, e.g. `10/7/2026` (es) / `7/10/2026` (en). */
+export function formatNumericDate(date: Date, locale: string): string {
+    return new Intl.DateTimeFormat(locale).format(date)
 }
 
-/** Day-group header label: "Hoy", "Ayer", a weekday name, or a date. */
-export function sectionLabel(dayMs: number, nowMs: number): string {
+/** Day-group header label: "today", "yesterday", a weekday name, or a date. */
+export function sectionLabel(
+    dayMs: number,
+    nowMs: number,
+    messages: Messages,
+    locale: string,
+): string {
     const day = startOfDay(new Date(dayMs))
     const today = startOfDay(new Date(nowMs))
     const diffDays = Math.round((today.getTime() - day.getTime()) / 86_400_000)
-    if (diffDays === 0) return 'Hoy'
-    if (diffDays === 1) return 'Ayer'
-    if (diffDays > 1 && diffDays < 7) return weekdayName(day)
-    return formatDDMMYYYY(day)
+    if (diffDays === 0) return messages.activity.today
+    if (diffDays === 1) return messages.activity.yesterday
+    if (diffDays > 1 && diffDays < 7) return weekdayName(day, locale)
+    return formatNumericDate(day, locale)
 }
 
 /** Description plus the inferred-day notice, when applicable. */
-export function estimatedDescription(t: ActivityTransaction): string | null {
+export function estimatedDescription(
+    t: ActivityTransaction,
+    messages: Messages,
+    locale: string,
+): string | null {
     const parts = [
         ...(t.dateConfirmed
             ? []
-            : [`${weekdayName(new Date(Number(t.date)))} (estimado)`]),
+            : [
+                  messages.activity.estimatedDay({
+                      weekday: weekdayName(new Date(Number(t.date)), locale),
+                  }),
+              ]),
         ...(t.description ? [t.description] : []),
     ]
     return parts.length > 0 ? parts.join(' · ') : null
@@ -144,8 +155,11 @@ export function transactionTimeStatus(
     return t.timeStatus ?? 'none'
 }
 
-export function formatTransactionTime(epoch: bigint | number): string {
-    return new Intl.DateTimeFormat('es-AR', {
+export function formatTransactionTime(
+    epoch: bigint | number,
+    locale: string,
+): string {
+    return new Intl.DateTimeFormat(locale, {
         hour: '2-digit',
         minute: '2-digit',
         hour12: false,
@@ -291,6 +305,8 @@ export type ListEntry =
 export function buildListEntries(
     items: readonly ActivityTransaction[],
     nowMs: number,
+    messages: Messages,
+    locale: string,
 ): ListEntry[] {
     const entries: ListEntry[] = []
     let currentDay: number | null = null
@@ -313,7 +329,7 @@ export function buildListEntries(
             entries.push({
                 kind: 'header',
                 key: `header-${day}`,
-                label: sectionLabel(day, nowMs),
+                label: sectionLabel(day, nowMs, messages, locale),
             })
             currentDay = day
         }
@@ -323,7 +339,7 @@ export function buildListEntries(
                     kind: 'txn',
                     key: `${t.id}-source`,
                     txn: t,
-                    title: 'Transferencia enviada',
+                    title: messages.activity.transferSent,
                     amountCents: -Math.abs(Number(t.amount)),
                     currency: t.currency,
                     accountId: t.accountId,
@@ -333,7 +349,7 @@ export function buildListEntries(
                     kind: 'txn',
                     key: `${t.id}-destination`,
                     txn: t,
-                    title: 'Transferencia recibida',
+                    title: messages.activity.transferReceived,
                     amountCents: Math.abs(Number(t.toAmount ?? t.amount)),
                     currency: t.toCurrency ?? t.currency,
                     accountId: t.toAccountId ?? t.accountId,

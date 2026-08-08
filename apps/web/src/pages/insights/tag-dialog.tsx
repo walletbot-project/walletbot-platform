@@ -12,6 +12,7 @@ import {
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { useT } from '@/lib/i18n'
 import {
     normalizeTagColor,
     TAG_COLOR_OPTIONS,
@@ -51,6 +52,7 @@ export function TagDialog({
     onSubmit: (value: TagFormValue) => Promise<void>
     onDelete?: () => Promise<void>
 }) {
+    const t = useT()
     const [name, setName] = useState('')
     const [color, setColor] = useState(TAG_DEFAULT_COLOR)
     const [isSubtag, setIsSubtag] = useState(false)
@@ -113,7 +115,7 @@ export function TagDialog({
                 </DialogHeader>
                 <form onSubmit={handleSubmit} className="flex flex-col gap-4">
                     <div className="flex flex-col gap-2">
-                        <Label htmlFor="tag-name">Name</Label>
+                        <Label htmlFor="tag-name">{t.common.name}</Label>
                         <Input
                             id="tag-name"
                             value={name}
@@ -123,7 +125,7 @@ export function TagDialog({
                         />
                     </div>
                     <div className="flex flex-col gap-2">
-                        <Label>Color</Label>
+                        <Label>{t.common.color}</Label>
                         <div className="flex flex-wrap gap-2">
                             {TAG_COLOR_OPTIONS.map((option) => {
                                 const isSelected = option === color
@@ -139,7 +141,9 @@ export function TagDialog({
                                                 : 'border-transparent hover:scale-105',
                                         )}
                                         style={{ backgroundColor: option }}
-                                        aria-label={`Color ${option}`}
+                                        aria-label={t.common.colorSwatch({
+                                            color: option,
+                                        })}
                                         aria-pressed={isSelected}
                                     >
                                         {isSelected ? (
@@ -163,23 +167,23 @@ export function TagDialog({
                                 }}
                             />
                             <Label htmlFor="tag-is-subtag">
-                                Create sub-tag
+                                {t.insights.createSubtag}
                             </Label>
                         </div>
                     ) : null}
 
                     {isSubtag && canShowSubtag ? (
                         <div className="flex flex-col gap-2">
-                            <Label>Parent tag</Label>
+                            <Label>{t.insights.parentTag}</Label>
                             <Combobox
                                 value={parentId ? [parentId] : []}
                                 onChange={(values) =>
                                     setParentId(values[0] ?? null)
                                 }
                                 options={comboboxOptions}
-                                placeholder="Select parent tag"
-                                searchPlaceholder="Search tags…"
-                                emptyMessage="No tags available"
+                                placeholder={t.insights.selectParentTag}
+                                searchPlaceholder={t.insights.searchTags}
+                                emptyMessage={t.insights.noTagsAvailable}
                                 className="w-full"
                             />
                         </div>
@@ -193,7 +197,7 @@ export function TagDialog({
                                 onClick={handleDelete}
                                 disabled={submitting}
                             >
-                                Delete
+                                {t.common.delete}
                             </Button>
                         ) : null}
                         <Button
@@ -202,7 +206,7 @@ export function TagDialog({
                             onClick={() => onOpenChange(false)}
                             disabled={submitting}
                         >
-                            Cancel
+                            {t.common.cancel}
                         </Button>
                         <Button
                             type="submit"

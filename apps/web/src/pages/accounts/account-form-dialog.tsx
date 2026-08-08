@@ -12,8 +12,13 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { ACCOUNT_DEFAULT_ICON, ACCOUNT_ICONS } from '@/lib/account-icons'
-import { CURRENCIES, DEFAULT_CURRENCY } from '@/lib/currencies'
+import {
+    CURRENCY_CODES,
+    currencyName,
+    DEFAULT_CURRENCY,
+} from '@/lib/currencies'
 import { ACCOUNT_DEFAULT_COLOR, COLOR_OPTIONS } from '@/lib/entity-colors'
+import { useFormatLocale, useT } from '@/lib/i18n'
 
 export type AccountFormValue = {
     name: string
@@ -33,6 +38,8 @@ export function AccountFormDialog({
     onOpenChange: (open: boolean) => void
     onSubmit: (value: AccountFormValue) => Promise<void>
 }) {
+    const t = useT()
+    const formatLocale = useFormatLocale()
     const [name, setName] = useState('')
     const [currency, setCurrency] = useState(DEFAULT_CURRENCY)
     const [color, setColor] = useState(ACCOUNT_DEFAULT_COLOR)
@@ -52,20 +59,20 @@ export function AccountFormDialog({
 
     const currencyOptions = useMemo(
         () =>
-            CURRENCIES.map((c) => ({
-                value: c.code,
-                label: `${c.code} — ${c.name}`,
+            CURRENCY_CODES.map((code) => ({
+                value: code,
+                label: `${code} — ${currencyName(code, formatLocale)}`,
             })),
-        [],
+        [formatLocale],
     )
 
     const balanceError = useMemo(() => {
         const trimmed = balance.trim()
         if (!trimmed) return null
         const parsed = Number.parseFloat(trimmed.replace(',', '.'))
-        if (Number.isNaN(parsed) || parsed < 0) return 'Ingresá un monto válido'
+        if (Number.isNaN(parsed) || parsed < 0) return t.accounts.invalidAmount
         return null
-    }, [balance])
+    }, [balance, t])
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault()
@@ -95,23 +102,23 @@ export function AccountFormDialog({
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent>
                 <DialogHeader>
-                    <DialogTitle>Nueva cuenta</DialogTitle>
+                    <DialogTitle>{t.accounts.newAccount}</DialogTitle>
                 </DialogHeader>
                 <form onSubmit={handleSubmit} className="flex flex-col gap-4">
                     <div className="flex flex-col gap-2">
-                        <Label htmlFor="account-name">Nombre</Label>
+                        <Label htmlFor="account-name">{t.common.name}</Label>
                         <Input
                             id="account-name"
                             value={name}
                             onChange={(e) => setName(e.target.value)}
-                            placeholder="Ej: Efectivo, Banco Nación…"
+                            placeholder={t.accounts.namePlaceholder}
                             autoFocus
                             required
                         />
                     </div>
 
                     <div className="flex flex-col gap-2">
-                        <Label>Ícono y color</Label>
+                        <Label>{t.common.iconAndColor}</Label>
                         <IconColorPicker
                             icon={icon}
                             color={color}
@@ -123,23 +130,23 @@ export function AccountFormDialog({
                     </div>
 
                     <div className="flex flex-col gap-2">
-                        <Label>Moneda</Label>
+                        <Label>{t.common.currency}</Label>
                         <Combobox
                             value={[currency]}
                             onChange={(values) =>
                                 setCurrency(values[0] ?? DEFAULT_CURRENCY)
                             }
                             options={currencyOptions}
-                            placeholder="Elegí una moneda"
-                            searchPlaceholder="Buscar moneda…"
-                            emptyMessage="Sin resultados"
+                            placeholder={t.accounts.chooseCurrency}
+                            searchPlaceholder={t.accounts.searchCurrency}
+                            emptyMessage={t.common.noResults}
                             className="w-full"
                         />
                     </div>
 
                     <div className="flex flex-col gap-2">
                         <Label htmlFor="account-balance">
-                            Balance inicial (opcional)
+                            {t.accounts.initialBalance}
                         </Label>
                         <Input
                             id="account-balance"
@@ -162,7 +169,7 @@ export function AccountFormDialog({
                             onClick={() => onOpenChange(false)}
                             disabled={submitting}
                         >
-                            Cancelar
+                            {t.common.cancel}
                         </Button>
                         <Button
                             type="submit"
@@ -172,7 +179,7 @@ export function AccountFormDialog({
                                 balanceError !== null
                             }
                         >
-                            Crear cuenta
+                            {t.accounts.createAccount}
                         </Button>
                     </DialogFooter>
                 </form>
