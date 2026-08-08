@@ -1,4 +1,8 @@
-import { CURRENCIES, DEFAULT_CURRENCY, SUGGESTED_CURRENCIES } from '@wallet-bot/shared'
+import {
+    CURRENCIES,
+    DEFAULT_CURRENCY,
+    SUGGESTED_CURRENCIES,
+} from '@wallet-bot/shared'
 
 // Currency codes, sourced from the shared catalog (single source of truth for
 // backend validation and both clients).
