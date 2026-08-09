@@ -1,0 +1,48 @@
+---
+import { useTranslations } from '@/i18n'
+import { PLAY_STORE_URL } from '@/lib/links'
+import Icon from './icon.astro'
+
+/**
+ * Two-line store badges (Google Play linked, App Store coming soon), shown in
+ * the hero so the stores are visible above the fold.
+ */
+const { t } = useTranslations(Astro.currentLocale)
+---
+
+<div class="flex flex-wrap items-center justify-center gap-3 lg:justify-start">
+    <a
+        href={PLAY_STORE_URL}
+        class="flex items-center gap-3 rounded-xl border border-white/15 bg-white/5 px-4 py-2.5 transition-colors hover:border-white/30 hover:bg-white/10"
+    >
+        <Icon name="google-play" class="size-6 text-white" />
+        <span class="text-left">
+            <span
+                class="block text-[10px] tracking-wide text-slate-400 uppercase"
+            >
+                {t.download.android.lead}
+            </span>
+            <span class="block text-sm leading-tight font-semibold text-white">
+                {t.download.android.name}
+            </span>
+        </span>
+    </a>
+
+    <div
+        class="flex cursor-default items-center gap-3 rounded-xl border border-white/10 border-dashed bg-white/[0.02] px-4 py-2.5 opacity-70"
+    >
+        <Icon name="apple" class="size-6 text-slate-400" />
+        <span class="text-left">
+            <span
+                class="block text-[10px] tracking-wide text-slate-500 uppercase"
+            >
+                {t.download.ios.lead}
+            </span>
+            <span
+                class="block text-sm leading-tight font-semibold text-slate-300"
+            >
+                {t.download.ios.name}
+            </span>
+        </span>
+    </div>
+</div>

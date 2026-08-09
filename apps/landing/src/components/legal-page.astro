@@ -1,0 +1,43 @@
+---
+import { getEntry, render } from 'astro:content'
+import { getRelativeLocaleUrl } from 'astro:i18n'
+import { useTranslations } from '@/i18n'
+import BaseLayout from '@/layouts/base-layout.astro'
+
+type Props = {
+    /** Which of the two `docs/legal` documents to render. */
+    doc: 'privacy-policy' | 'terms-and-conditions'
+}
+
+const { doc } = Astro.props
+const { locale, t } = useTranslations(Astro.currentLocale)
+
+// Entry ids in the `legal` collection are the filenames minus `.md`
+// (see src/content.config.ts). A missing file must fail the build, not ship a
+// blank legal page.
+const entry = await getEntry('legal', `${doc}.${locale}`)
+if (!entry) {
+    throw new Error(`Missing legal document ${doc}.${locale} in docs/legal`)
+}
+const { Content } = await render(entry)
+
+const meta = doc === 'privacy-policy' ? t.legal.privacy : t.legal.terms
+---
+
+<BaseLayout title={`${meta.title} — Wallet Bot`} description={meta.description}>
+    <div class="mx-auto w-full max-w-3xl px-6 py-16">
+        <a
+            href={getRelativeLocaleUrl(locale)}
+            class="text-sm text-slate-400 underline-offset-4 hover:text-white hover:underline"
+        >
+            ← {t.legal.backHome}
+        </a>
+
+        {/* The documents bring their own H1, so none is added here. */}
+        <article
+            class="prose prose-invert mt-8 max-w-none prose-headings:tracking-tight"
+        >
+            <Content />
+        </article>
+    </div>
+</BaseLayout>

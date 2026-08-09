@@ -1,0 +1,85 @@
+---
+import { getRelativeLocaleUrl } from 'astro:i18n'
+import { LOCALE_LABELS, LOCALES, useTranslations } from '@/i18n'
+import { WEB_APP_URL } from '@/lib/links'
+
+const { locale, t } = useTranslations(Astro.currentLocale)
+
+// Every route lives under `/<locale>/`, so dropping the first segment leaves
+// the path the language switcher appends to the other locale's prefix.
+const path = Astro.url.pathname.split('/').filter(Boolean).slice(1).join('/')
+
+// Section anchors point at the home page, so they also work from legal pages.
+const home = getRelativeLocaleUrl(locale)
+---
+
+<header
+    class="sticky top-0 z-40 border-b border-white/10 bg-slate-950/70 backdrop-blur"
+>
+    <div
+        class="mx-auto flex w-full max-w-6xl items-center justify-between gap-4 px-6 py-4"
+    >
+        <a
+            href={home}
+            class="flex items-center gap-2.5 font-semibold tracking-tight text-white"
+        >
+            <img
+                src="/favicon.png"
+                alt=""
+                width="28"
+                height="28"
+                class="size-7 rounded-lg"
+            />
+            Wallet Bot
+        </a>
+
+        <div class="flex items-center gap-4 sm:gap-6">
+            <a
+                href={`${home}#features`}
+                class="hidden text-sm text-slate-300 underline-offset-4 hover:text-white hover:underline sm:inline"
+            >
+                {t.nav.features}
+            </a>
+            <a
+                href={`${home}#download`}
+                class="hidden text-sm text-slate-300 underline-offset-4 hover:text-white hover:underline sm:inline"
+            >
+                {t.nav.download}
+            </a>
+
+            {/* Compact codes keep the bar tight; full names for screen readers. */}
+            <nav
+                aria-label={t.nav.languageLabel}
+                class="flex items-center gap-2 text-sm"
+            >
+                {
+                    LOCALES.map((alternate) => (
+                        <a
+                            href={getRelativeLocaleUrl(alternate, path)}
+                            hreflang={alternate}
+                            aria-label={LOCALE_LABELS[alternate]}
+                            aria-current={
+                                alternate === locale ? 'page' : undefined
+                            }
+                            class:list={[
+                                'underline-offset-4 uppercase hover:underline',
+                                alternate === locale
+                                    ? 'font-semibold text-white'
+                                    : 'text-slate-400',
+                            ]}
+                        >
+                            {alternate}
+                        </a>
+                    ))
+                }
+            </nav>
+
+            <a
+                href={WEB_APP_URL}
+                class="rounded-full bg-white px-4 py-2 text-sm font-medium text-slate-950 transition-colors hover:bg-slate-200"
+            >
+                {t.nav.openApp}
+            </a>
+        </div>
+    </div>
+</header>

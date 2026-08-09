@@ -4,6 +4,37 @@ Public marketing site for Wallet Bot — Astro 7, Tailwind v4, deployed to Verce
 Separate from `apps/web`, which is the authenticated app served from
 `app.walletbot.live`.
 
+## Pages
+
+| Route (per locale) | Source | Content |
+|---|---|---|
+| `/{en,es}/` | `src/components/home-page.astro` | Hero, feature grid, get-the-app links |
+| `/{en,es}/privacy` | `src/components/legal-page.astro` | Renders `docs/legal/privacy-policy.{locale}.md` |
+| `/{en,es}/terms` | `src/components/legal-page.astro` | Renders `docs/legal/terms-and-conditions.{locale}.md` |
+
+Every marketing claim on the home page maps to shipped code (voice agent,
+offline sync, local accounts, multi-currency, dashboard, saved filters). Do not
+add claims for features that don't exist — and keep local-only wording scoped
+to *financial records*, per `docs/legal/README.md`.
+
+Store links: Google Play points at the real `live.walletbot.app` listing URL
+(a placeholder until the listing goes live), the App Store card is
+"coming soon" (no link), and the web app links to `app.walletbot.live` with a
+Beta badge. All in `src/lib/links.ts`.
+
+## Legal documents
+
+The privacy policy and terms are **not copied** into this package. A content
+collection (`src/content.config.ts`) loads `docs/legal/*.md` from the repo root
+via the glob loader's `base` option, so the landing always renders the exact
+operative files. A custom `generateId` keeps ids as filename stems
+(`privacy-policy.en`), and a Sätteri hast plugin in `astro.config.mjs` rewrites
+the docs' repo-relative cross-links (`./privacy-policy.en.md` → `/en/privacy`)
+at render time.
+
+Vercel clones the whole repo even when the project root is `apps/landing`, so
+the out-of-package files are available at build time.
+
 ## Commands
 
 Run from this directory:
@@ -58,6 +89,28 @@ Tailwind v4 via `@tailwindcss/vite` (configured in `astro.config.mjs`), not the
 retired `@astrojs/tailwind` integration. There is no `tailwind.config.js` —
 tokens go in the `@theme` block in `src/styles/global.css`, which
 `base-layout.astro` imports.
+
+- Dark theme (`bg-slate-950`), Linear-style: white/slate type, hairline
+  `white/10` borders, `--color-brand` (the native app's Material seed color)
+  reserved for glows, icons and tinted chips. It is too light for text — never
+  use it as a text color.
+- Font: Inter Variable, self-hosted via `@fontsource-variable/inter`.
+- Icons are inline SVGs in `src/components/icon.astro` — Lucide outlines plus
+  the Apple and Google Play brand glyphs (Simple Icons paths). No icon font, no
+  client JS.
+- The hero phone mockup (`src/components/phone-mockup.astro`) is a CSS-only
+  illustration of the native voice screen; its copy lives in the `demo` catalog
+  section.
+- Legal pages use `@tailwindcss/typography` (`prose prose-invert`), loaded with
+  `@plugin` in `global.css`.
+
+## Markdown
+
+Astro 7's default processor is Sätteri (`@astrojs/markdown-satteri`), not
+remark/rehype — `markdown.remarkPlugins`/`rehypePlugins` require installing the
+legacy `@astrojs/markdown-remark` processor. This package stays on Sätteri and
+extends it through `markdown.processor: satteri({ hastPlugins: [...] })`
+(`satteri` is a devDependency for the plugin types).
 
 ## Deploying
 

@@ -1,0 +1,364 @@
+---
+import Icon from '@/components/icon.astro'
+import PhoneMockup from '@/components/phone-mockup.astro'
+import StoreBadges from '@/components/store-badges.astro'
+import { LOCALE_LABELS, useTranslations } from '@/i18n'
+import BaseLayout from '@/layouts/base-layout.astro'
+import { PLAY_STORE_URL, WEB_APP_URL } from '@/lib/links'
+
+const { t } = useTranslations(Astro.currentLocale)
+
+const voiceTypes = Object.values(t.features.items.voice.types)
+
+// Decorative bar heights (%) for the dashboard card's mini chart.
+const CHART_BARS = [45, 70, 35, 85, 55, 75, 40]
+---
+
+<BaseLayout>
+    {/* ── Hero ─────────────────────────────────────────────────────────── */}
+    <section class="relative overflow-hidden">
+        {/* Ambient glows. */}
+        <div
+            class="pointer-events-none absolute -top-40 left-1/2 -z-10 size-[40rem] -translate-x-1/2 rounded-full bg-brand/15 blur-3xl"
+            aria-hidden="true"
+        >
+        </div>
+        <div
+            class="pointer-events-none absolute top-40 -right-40 -z-10 size-[30rem] rounded-full bg-teal-500/10 blur-3xl"
+            aria-hidden="true"
+        >
+        </div>
+
+        <div
+            class="mx-auto grid w-full max-w-6xl items-center gap-14 px-6 pt-16 pb-20 sm:pt-20 lg:grid-cols-[1.1fr_0.9fr] lg:gap-8 lg:pt-24 lg:pb-28"
+        >
+            <div
+                class="flex flex-col items-center gap-7 text-center lg:items-start lg:text-left"
+            >
+                <p
+                    class="flex items-center gap-2 rounded-full border border-brand/30 bg-brand/10 px-3.5 py-1.5 text-xs font-medium text-slate-200"
+                >
+                    <Icon name="mic" class="size-3.5 text-brand" />
+                    {t.hero.badge}
+                </p>
+
+                <h1
+                    class="max-w-2xl text-5xl font-semibold tracking-tight text-balance text-white sm:text-6xl lg:text-7xl"
+                >
+                    {t.hero.headline}
+                </h1>
+
+                <p class="max-w-xl text-lg text-pretty text-slate-400">
+                    {t.hero.subheadline}
+                </p>
+
+                <div
+                    class="flex flex-wrap items-center justify-center gap-3 lg:justify-start"
+                >
+                    <a
+                        href={WEB_APP_URL}
+                        class="rounded-full bg-white px-6 py-3 text-sm font-semibold text-slate-950 transition-colors hover:bg-slate-200"
+                    >
+                        {t.hero.ctaWeb}
+                    </a>
+                    <a
+                        href="#features"
+                        class="rounded-full border border-white/20 px-6 py-3 text-sm font-medium text-white transition-colors hover:border-white/40 hover:bg-white/5"
+                    >
+                        {t.hero.ctaFeatures}
+                    </a>
+                </div>
+
+                <StoreBadges />
+            </div>
+
+            <PhoneMockup />
+        </div>
+    </section>
+
+    {/* ── Features (bento) ─────────────────────────────────────────────── */}
+    <section
+        id="features"
+        class="scroll-mt-20 border-t border-white/10 bg-white/[0.02]"
+    >
+        <div class="mx-auto w-full max-w-6xl px-6 py-20 lg:py-24">
+            <h2
+                class="text-3xl font-semibold tracking-tight text-white sm:text-4xl"
+            >
+                {t.features.title}
+            </h2>
+            <p class="mt-3 max-w-xl text-slate-400">{t.features.subtitle}</p>
+
+            <div class="mt-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {/* Voice — flagship, double width. */}
+                <div
+                    class="rounded-2xl border border-white/10 bg-white/5 p-6 transition-colors hover:bg-white/[0.07] sm:col-span-2"
+                >
+                    <div
+                        class="flex size-10 items-center justify-center rounded-lg bg-brand/15 ring-1 ring-brand/25"
+                    >
+                        <Icon name="mic" class="size-5 text-brand" />
+                    </div>
+                    <h3 class="mt-4 font-medium text-white">
+                        {t.features.items.voice.title}
+                    </h3>
+                    <p class="mt-2 text-sm leading-relaxed text-slate-400">
+                        {t.features.items.voice.body}
+                    </p>
+                    <ul class="mt-4 flex flex-wrap gap-2">
+                        {
+                            voiceTypes.map((type) => (
+                                <li class="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-slate-300">
+                                    {type}
+                                </li>
+                            ))
+                        }
+                    </ul>
+                </div>
+
+                <div
+                    class="rounded-2xl border border-white/10 bg-white/5 p-6 transition-colors hover:bg-white/[0.07]"
+                >
+                    <div
+                        class="flex size-10 items-center justify-center rounded-lg bg-brand/15 ring-1 ring-brand/25"
+                    >
+                        <Icon name="cloud-off" class="size-5 text-brand" />
+                    </div>
+                    <h3 class="mt-4 font-medium text-white">
+                        {t.features.items.offline.title}
+                    </h3>
+                    <p class="mt-2 text-sm leading-relaxed text-slate-400">
+                        {t.features.items.offline.body}
+                    </p>
+                </div>
+
+                <div
+                    class="rounded-2xl border border-white/10 bg-white/5 p-6 transition-colors hover:bg-white/[0.07]"
+                >
+                    <div
+                        class="flex size-10 items-center justify-center rounded-lg bg-brand/15 ring-1 ring-brand/25"
+                    >
+                        <Icon name="lock" class="size-5 text-brand" />
+                    </div>
+                    <h3 class="mt-4 font-medium text-white">
+                        {t.features.items.local.title}
+                    </h3>
+                    <p class="mt-2 text-sm leading-relaxed text-slate-400">
+                        {t.features.items.local.body}
+                    </p>
+                </div>
+
+                <div
+                    class="rounded-2xl border border-white/10 bg-white/5 p-6 transition-colors hover:bg-white/[0.07]"
+                >
+                    <div
+                        class="flex size-10 items-center justify-center rounded-lg bg-brand/15 ring-1 ring-brand/25"
+                    >
+                        <Icon name="zap" class="size-5 text-brand" />
+                    </div>
+                    <h3 class="mt-4 font-medium text-white">
+                        {t.features.items.fast.title}
+                    </h3>
+                    <p class="mt-2 text-sm leading-relaxed text-slate-400">
+                        {t.features.items.fast.body}
+                    </p>
+                </div>
+
+                <div
+                    class="rounded-2xl border border-white/10 bg-white/5 p-6 transition-colors hover:bg-white/[0.07]"
+                >
+                    <div
+                        class="flex size-10 items-center justify-center rounded-lg bg-brand/15 ring-1 ring-brand/25"
+                    >
+                        <Icon name="coins" class="size-5 text-brand" />
+                    </div>
+                    <h3 class="mt-4 font-medium text-white">
+                        {t.features.items.currencies.title}
+                    </h3>
+                    <p class="mt-2 text-sm leading-relaxed text-slate-400">
+                        {t.features.items.currencies.body}
+                    </p>
+                </div>
+
+                {/* Dashboard — double width with a decorative mini chart. */}
+                <div
+                    class="rounded-2xl border border-white/10 bg-white/5 p-6 transition-colors hover:bg-white/[0.07] sm:col-span-2"
+                >
+                    <div class="flex flex-wrap items-start justify-between gap-6">
+                        <div class="max-w-sm">
+                            <div
+                                class="flex size-10 items-center justify-center rounded-lg bg-brand/15 ring-1 ring-brand/25"
+                            >
+                                <Icon
+                                    name="layout-dashboard"
+                                    class="size-5 text-brand"
+                                />
+                            </div>
+                            <h3 class="mt-4 font-medium text-white">
+                                {t.features.items.dashboard.title}
+                            </h3>
+                            <p
+                                class="mt-2 text-sm leading-relaxed text-slate-400"
+                            >
+                                {t.features.items.dashboard.body}
+                            </p>
+                        </div>
+
+                        <div
+                            class="flex h-24 flex-1 items-end gap-2 self-end border-b border-white/10 pb-px min-w-40"
+                            aria-hidden="true"
+                        >
+                            {
+                                CHART_BARS.map((height) => (
+                                    <div
+                                        class="flex-1 rounded-t bg-brand/50"
+                                        style={`height:${height}%`}
+                                    />
+                                ))
+                            }
+                        </div>
+                    </div>
+                </div>
+
+                <div
+                    class="rounded-2xl border border-white/10 bg-white/5 p-6 transition-colors hover:bg-white/[0.07]"
+                >
+                    <div
+                        class="flex size-10 items-center justify-center rounded-lg bg-brand/15 ring-1 ring-brand/25"
+                    >
+                        <Icon name="filter" class="size-5 text-brand" />
+                    </div>
+                    <h3 class="mt-4 font-medium text-white">
+                        {t.features.items.filters.title}
+                    </h3>
+                    <p class="mt-2 text-sm leading-relaxed text-slate-400">
+                        {t.features.items.filters.body}
+                    </p>
+                </div>
+
+                {/* Bilingual — full-width slim banner. */}
+                <div
+                    class="flex flex-wrap items-center justify-between gap-6 rounded-2xl border border-white/10 bg-white/5 p-6 transition-colors hover:bg-white/[0.07] sm:col-span-2 lg:col-span-3"
+                >
+                    <div class="flex items-start gap-4">
+                        <div
+                            class="flex size-10 shrink-0 items-center justify-center rounded-lg bg-brand/15 ring-1 ring-brand/25"
+                        >
+                            <Icon name="globe" class="size-5 text-brand" />
+                        </div>
+                        <div class="max-w-xl">
+                            <h3 class="font-medium text-white">
+                                {t.features.items.bilingual.title}
+                            </h3>
+                            <p
+                                class="mt-1 text-sm leading-relaxed text-slate-400"
+                            >
+                                {t.features.items.bilingual.body}
+                            </p>
+                        </div>
+                    </div>
+
+                    <p
+                        class="flex items-center gap-2 text-sm font-medium text-slate-300"
+                        aria-hidden="true"
+                    >
+                        <span
+                            class="rounded-full border border-white/10 bg-white/5 px-3 py-1"
+                        >
+                            {LOCALE_LABELS.es}
+                        </span>
+                        ⇄
+                        <span
+                            class="rounded-full border border-white/10 bg-white/5 px-3 py-1"
+                        >
+                            {LOCALE_LABELS.en}
+                        </span>
+                    </p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    {/* ── Get it ───────────────────────────────────────────────────────── */}
+    <section id="download" class="scroll-mt-20 border-t border-white/10">
+        <div class="mx-auto w-full max-w-6xl px-6 py-20 lg:py-24">
+            <h2
+                class="text-3xl font-semibold tracking-tight text-white sm:text-4xl"
+            >
+                {t.download.title}
+            </h2>
+            <p class="mt-3 max-w-xl text-slate-400">{t.download.subtitle}</p>
+
+            <div class="mt-10 grid gap-4 sm:grid-cols-3">
+                <a
+                    href={PLAY_STORE_URL}
+                    class="group rounded-2xl border border-white/10 bg-white/5 p-6 transition-colors hover:border-white/25 hover:bg-white/[0.07]"
+                >
+                    <div class="flex items-center justify-between gap-2">
+                        <Icon name="google-play" class="size-6 text-brand" />
+                        <span class="text-sm text-slate-400">
+                            {t.download.android.note}
+                        </span>
+                    </div>
+                    <p
+                        class="mt-4 text-lg font-semibold tracking-tight text-white"
+                    >
+                        {t.download.android.name}
+                    </p>
+                    <p
+                        class="mt-3 text-sm font-medium text-slate-300 group-hover:text-white group-hover:underline"
+                    >
+                        {t.download.android.cta}
+                        <span aria-hidden="true"> ↗</span>
+                    </p>
+                </a>
+
+                <div
+                    class="rounded-2xl border border-white/10 border-dashed bg-white/[0.02] p-6"
+                >
+                    <div class="flex items-center justify-between gap-2">
+                        <Icon name="apple" class="size-6 text-slate-500" />
+                        <span
+                            class="rounded-full bg-white/10 px-2.5 py-0.5 text-xs font-medium text-slate-300"
+                        >
+                            {t.download.ios.badge}
+                        </span>
+                    </div>
+                    <p
+                        class="mt-4 text-lg font-semibold tracking-tight text-slate-400"
+                    >
+                        {t.download.ios.name}
+                    </p>
+                    <p class="mt-3 text-sm text-slate-500">
+                        {t.download.ios.note}
+                    </p>
+                </div>
+
+                <a
+                    href={WEB_APP_URL}
+                    class="group rounded-2xl border border-white/10 bg-white/5 p-6 transition-colors hover:border-white/25 hover:bg-white/[0.07]"
+                >
+                    <div class="flex items-center justify-between gap-2">
+                        <Icon name="globe" class="size-6 text-brand" />
+                        <span
+                            class="rounded-full bg-brand px-2.5 py-0.5 text-xs font-semibold text-slate-950"
+                        >
+                            {t.download.web.badge}
+                        </span>
+                    </div>
+                    <p
+                        class="mt-4 text-lg font-semibold tracking-tight text-white"
+                    >
+                        {t.download.web.name}
+                    </p>
+                    <p
+                        class="mt-3 text-sm font-medium text-slate-300 group-hover:text-white group-hover:underline"
+                    >
+                        {t.download.web.note}
+                        <span aria-hidden="true"> ↗</span>
+                    </p>
+                </a>
+            </div>
+        </div>
+    </section>
+</BaseLayout>
