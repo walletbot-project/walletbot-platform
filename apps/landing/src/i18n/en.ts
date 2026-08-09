@@ -17,7 +17,7 @@ export const en: Messages = {
         languageLabel: 'Language',
         features: 'Features',
         download: 'Download',
-        openApp: 'Open the web app',
+        getApp: 'Get the app',
     },
 
     hero: {
@@ -25,8 +25,14 @@ export const en: Messages = {
         headline: 'Say it. It’s already logged.',
         subheadline:
             'Wallet Bot is a personal expense tracker with a live voice mode: tell it what you spent and the assistant writes it down for you. No spreadsheets. No forms. Just a conversation.',
-        ctaWeb: 'Try the web beta',
         ctaFeatures: 'See features',
+    },
+
+    stats: {
+        currencies: { value: '50+', label: 'currencies supported' },
+        types: { value: '4', label: 'movement types' },
+        languages: { value: '2', label: 'languages, one assistant' },
+        offline: { value: '100%', label: 'offline-first on your phone' },
     },
 
     demo: {
@@ -86,25 +92,15 @@ export const en: Messages = {
     },
 
     download: {
-        title: 'Wherever you are',
-        subtitle: 'Take it on your phone or open it in the browser.',
+        title: 'Download it free',
+        subtitle: 'On Android today. iPhone coming soon.',
         android: {
             lead: 'Get it on',
             name: 'Google Play',
-            note: 'Android app',
-            cta: 'Download',
         },
         ios: {
             lead: 'Coming soon on',
             name: 'App Store',
-            note: 'iPhone app',
-            badge: 'Coming soon',
-        },
-        web: {
-            name: 'Web app',
-            note: 'app.walletbot.live',
-            badge: 'Beta',
-            cta: 'Open',
         },
     },
 
@@ -112,6 +108,7 @@ export const en: Messages = {
         tagline: 'A simple, conversational personal expense tracker.',
         privacy: 'Privacy Policy',
         terms: 'Terms and Conditions',
+        webApp: 'Web app (beta)',
         copyright: (p) => `© ${p.year} Wallet Bot`,
     },
 

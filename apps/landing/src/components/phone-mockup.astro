@@ -13,7 +13,9 @@ const { t } = useTranslations(Astro.currentLocale)
 const WAVE = [10, 18, 26, 14, 22, 8]
 ---
 
-<div class="relative mx-auto w-[280px] sm:w-[310px]">
+<div
+    class="relative mx-auto w-[280px] motion-safe:animate-[float_7s_ease-in-out_infinite] sm:w-[310px]"
+>
     {/* Glow behind the device. */}
     <div
         class="absolute -inset-10 rounded-full bg-brand/20 blur-3xl"

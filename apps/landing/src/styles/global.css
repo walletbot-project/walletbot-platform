@@ -20,3 +20,14 @@
     background-color: rgb(109 231 216 / 0.3);
     color: white;
 }
+
+/* Gentle vertical drift for the hero phone mockup (motion-safe only). */
+@keyframes float {
+    0%,
+    100% {
+        transform: translateY(0);
+    }
+    50% {
+        transform: translateY(-12px);
+    }
+}

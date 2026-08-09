@@ -25,7 +25,7 @@ export const es = {
         languageLabel: 'Idioma',
         features: 'Funciones',
         download: 'Descargar',
-        openApp: 'Abrir la app web',
+        getApp: 'Descargar la app',
     },
 
     hero: {
@@ -33,8 +33,17 @@ export const es = {
         headline: 'Hablá. Ya quedó registrado.',
         subheadline:
             'Wallet Bot es un gestor de gastos personales con modo de voz en vivo: contale qué gastaste y el asistente lo anota por vos. Sin planillas. Sin formularios. Solo una conversación.',
-        ctaWeb: 'Probar la beta web',
         ctaFeatures: 'Ver funciones',
+    },
+
+    // Verified numbers only: 52 currencies in the catalog, 4 movement types in
+    // the transactions schema, es/en across app and assistant, offline-first
+    // native data layer.
+    stats: {
+        currencies: { value: '50+', label: 'monedas soportadas' },
+        types: { value: '4', label: 'tipos de movimiento' },
+        languages: { value: '2', label: 'idiomas, un asistente' },
+        offline: { value: '100%', label: 'offline-first en el celular' },
     },
 
     // Static illustration of the real voice flow: the assistant registers the
@@ -95,26 +104,17 @@ export const es = {
         },
     },
 
+    // The service is free of charge per T&C §2.
     download: {
-        title: 'Disponible donde estés',
-        subtitle: 'Llevala en el teléfono o abrila en el navegador.',
+        title: 'Descargala gratis',
+        subtitle: 'Hoy en Android. Muy pronto en iPhone.',
         android: {
             lead: 'Disponible en',
             name: 'Google Play',
-            note: 'App para Android',
-            cta: 'Descargar',
         },
         ios: {
             lead: 'Próximamente en',
             name: 'App Store',
-            note: 'App para iPhone',
-            badge: 'Muy pronto',
-        },
-        web: {
-            name: 'App web',
-            note: 'app.walletbot.live',
-            badge: 'Beta',
-            cta: 'Abrir',
         },
     },
 
@@ -122,6 +122,7 @@ export const es = {
         tagline: 'Gestor de gastos personales, conversacional y simple.',
         privacy: 'Política de Privacidad',
         terms: 'Términos y Condiciones',
+        webApp: 'App web (beta)',
         copyright: (p: { year: number }) => `© ${p.year} Wallet Bot`,
     },
 

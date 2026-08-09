@@ -17,10 +17,11 @@ offline sync, local accounts, multi-currency, dashboard, saved filters). Do not
 add claims for features that don't exist — and keep local-only wording scoped
 to *financial records*, per `docs/legal/README.md`.
 
-Store links: Google Play points at the real `live.walletbot.app` listing URL
-(a placeholder until the listing goes live), the App Store card is
-"coming soon" (no link), and the web app links to `app.walletbot.live` with a
-Beta badge. All in `src/lib/links.ts`.
+Store links are the primary CTA (hero badges, header button, closing section):
+Google Play points at the real `live.walletbot.app` listing URL (a placeholder
+until the listing goes live) and the App Store badge is "coming soon" (no
+link). The web app is deliberately downplayed — a single quiet footer link to
+`app.walletbot.live`. URLs live in `src/lib/links.ts`.
 
 ## Legal documents
 
