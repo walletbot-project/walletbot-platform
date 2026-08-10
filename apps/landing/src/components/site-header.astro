@@ -24,12 +24,14 @@ const home = getRelativeLocaleUrl(locale)
             href={home}
             class="flex items-center gap-2.5 font-semibold tracking-tight text-white"
         >
+            {/* 26x28 keeps the mark's 670x721 aspect; it already carries its
+                own corner radius, so no `rounded-*` here. */}
             <img
-                src="/favicon.png"
+                src="/logo.svg"
                 alt=""
-                width="28"
+                width="26"
                 height="28"
-                class="size-7 rounded-lg"
+                class="h-7 w-auto"
             />
             Wallet Bot
         </a>
