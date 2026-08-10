@@ -76,6 +76,15 @@ export const router = createBrowserRouter([
                                     })),
                             },
                             {
+                                path: '/admin/feature-flags',
+                                lazy: () =>
+                                    import('@/pages/admin/feature-flags').then(
+                                        (m) => ({
+                                            Component: m.FeatureFlags,
+                                        }),
+                                    ),
+                            },
+                            {
                                 path: '*',
                                 lazy: () =>
                                     import('@/pages/not-found').then((m) => ({
