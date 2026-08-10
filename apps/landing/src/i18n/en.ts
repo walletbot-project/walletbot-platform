@@ -31,7 +31,7 @@ export const en: Messages = {
     stats: {
         currencies: { value: '50+', label: 'currencies supported' },
         types: { value: '4', label: 'movement types' },
-        languages: { value: '2', label: 'languages, one assistant' },
+        languages: { value: '2', label: 'languages in the app' },
         offline: { value: '100%', label: 'offline-first on your phone' },
     },
 
@@ -86,8 +86,9 @@ export const en: Messages = {
                 body: 'Search by text, combine conditions, and save your favorite views to come back to them in one tap.',
             },
             bilingual: {
-                title: 'Spanish and English',
-                body: 'The app and the assistant speak both. Switch whenever you want, even mid-conversation.',
+                title: 'Spanish, English and more',
+                body: 'The app comes in Spanish and English, and the assistant understands most languages: just talk to it in yours. Switch whenever you want, even mid-conversation.',
+                chipMore: '+ many more',
             },
         },
     },

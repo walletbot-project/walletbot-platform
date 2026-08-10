@@ -9,9 +9,11 @@
  * types checked at the call site.
  *
  * Every product claim here is backed by shipped code (voice agent, sync engine,
- * local accounts, multi-currency, dashboard, saved filters). Claims about
- * local-only mode are deliberately scoped to *financial records*, matching
- * docs/legal — the app still sends usage/diagnostic telemetry.
+ * local accounts, multi-currency, dashboard). Claims about local-only mode are
+ * deliberately scoped to *financial records*, matching docs/legal — the app
+ * still sends usage/diagnostic telemetry. The assistant's language claim is
+ * deliberately hedged to "most languages": the UI ships es/en, but the agent
+ * understands far more.
  */
 export const es = {
     meta: {
@@ -37,12 +39,12 @@ export const es = {
     },
 
     // Verified numbers only: 52 currencies in the catalog, 4 movement types in
-    // the transactions schema, es/en across app and assistant, offline-first
-    // native data layer.
+    // the transactions schema, es/en app UI (the assistant understands most
+    // languages), offline-first native data layer.
     stats: {
         currencies: { value: '50+', label: 'monedas soportadas' },
         types: { value: '4', label: 'tipos de movimiento' },
-        languages: { value: '2', label: 'idiomas, un asistente' },
+        languages: { value: '2', label: 'idiomas en la app' },
         offline: { value: '100%', label: 'offline-first en el celular' },
     },
 
@@ -94,13 +96,17 @@ export const es = {
                 title: 'Inicio a tu medida',
                 body: 'Armá el inicio de la app móvil con widgets: estadísticas, listas y gráficos de torta, barras o líneas. El asistente también puede armarlo por vos.',
             },
+            // The filters card is hidden on the home page for now — saved
+            // filters aren't shipped in the app yet. Kept so the card can be
+            // re-enabled without rewriting the copy.
             filters: {
                 title: 'Filtros con memoria',
                 body: 'Buscá por texto, combiná condiciones y guardá tus vistas favoritas para volver a ellas con un toque.',
             },
             bilingual: {
-                title: 'Español e inglés',
-                body: 'La app y el asistente hablan los dos idiomas. Cambiá cuando quieras, incluso en medio de una conversación.',
+                title: 'Español, inglés y más',
+                body: 'La app está en español e inglés, y el asistente entiende la mayoría de los idiomas: hablale en el tuyo. Cambiá cuando quieras, incluso en medio de una conversación.',
+                chipMore: '+ muchos más',
             },
         },
     },

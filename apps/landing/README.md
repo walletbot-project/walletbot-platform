@@ -13,9 +13,10 @@ Separate from `apps/web`, which is the authenticated app served from
 | `/{en,es}/terms` | `src/components/legal-page.astro` | Renders `docs/legal/terms-and-conditions.{locale}.md` |
 
 Every marketing claim on the home page maps to shipped code (voice agent,
-offline sync, local accounts, multi-currency, dashboard, saved filters). Do not
-add claims for features that don't exist — and keep local-only wording scoped
-to *financial records*, per `docs/legal/README.md`.
+offline sync, local accounts, multi-currency, dashboard). Do not add claims for
+features that don't exist — the saved-filters card is commented out until that
+feature ships — and keep local-only wording scoped to *financial records*, per
+`docs/legal/README.md`.
 
 Store links are the primary CTA (hero badges, header button, closing section):
 Google Play points at the real `live.walletbot.app` listing URL (a placeholder

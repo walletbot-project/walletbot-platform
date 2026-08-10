@@ -21,13 +21,14 @@ const VOICE_WAVE = [14, 30, 22, 44, 28, 52, 36, 48, 24, 40, 18, 32]
 // catalog has 52 currencies in total, hence the +48 chip.
 const SUGGESTED_CURRENCIES = ['ARS', 'USD', 'EUR', 'BRL']
 
-// Filter-slider dot positions: resting and on-hover (all literal classes so
-// Tailwind picks them up).
-const FILTER_SLIDERS = [
-    ['left-1/4', 'group-hover:left-2/3'],
-    ['left-3/5', 'group-hover:left-1/4'],
-    ['left-2/5', 'group-hover:left-1/2'],
-]
+// Filter-slider dot positions for the hidden filters card below: resting and
+// on-hover (all literal classes so Tailwind picks them up). Commented out with
+// the card — restore both together when saved filters ship.
+// const FILTER_SLIDERS = [
+//     ['left-1/4', 'group-hover:left-2/3'],
+//     ['left-3/5', 'group-hover:left-1/4'],
+//     ['left-2/5', 'group-hover:left-1/2'],
+// ]
 
 const card =
     'group rounded-2xl border border-white/10 bg-white/5 p-6 transition-all hover:-translate-y-1 hover:border-white/20 hover:bg-white/[0.07] hover:shadow-[0_12px_40px_rgb(109_231_216/0.07)]'
@@ -328,35 +329,43 @@ const iconChip =
                     </div>
                 </div>
 
-                {/* Filters — slider dots drift to a new "view" on hover. */}
-                <div class={card}>
-                    <div class={iconChip}>
-                        <Icon name="filter" class="size-5 text-brand" />
-                    </div>
-                    <h3 class="mt-4 font-medium text-white">
-                        {t.features.items.filters.title}
-                    </h3>
-                    <p class="mt-2 text-sm leading-relaxed text-slate-400">
-                        {t.features.items.filters.body}
-                    </p>
-                    <div class="mt-7 space-y-4" aria-hidden="true">
-                        {
-                            FILTER_SLIDERS.map(([rest, hover]) => (
-                                <div class="relative h-px bg-white/15">
-                                    <span
-                                        class:list={[
-                                            'absolute -top-[3px] size-[7px] -translate-x-1/2 rounded-full bg-brand ring-4 ring-slate-950/80 transition-all duration-500',
-                                            rest,
-                                            hover,
-                                        ]}
-                                    />
-                                </div>
-                            ))
-                        }
-                    </div>
-                </div>
+                {
+                    /* Filters — slider dots drift to a new "view" on hover.
+                       Hidden for now: saved filters aren't implemented in the
+                       app yet. Re-enable this card (plus FILTER_SLIDERS in the
+                       frontmatter and the `filters` catalog entries) once the
+                       feature ships.
 
-                {/* Bilingual — full-width slim banner. */}
+                    <div class={card}>
+                        <div class={iconChip}>
+                            <Icon name="filter" class="size-5 text-brand" />
+                        </div>
+                        <h3 class="mt-4 font-medium text-white">
+                            {t.features.items.filters.title}
+                        </h3>
+                        <p class="mt-2 text-sm leading-relaxed text-slate-400">
+                            {t.features.items.filters.body}
+                        </p>
+                        <div class="mt-7 space-y-4" aria-hidden="true">
+                            {
+                                FILTER_SLIDERS.map(([rest, hover]) => (
+                                    <div class="relative h-px bg-white/15">
+                                        <span
+                                            class:list={[
+                                                'absolute -top-[3px] size-[7px] -translate-x-1/2 rounded-full bg-brand ring-4 ring-slate-950/80 transition-all duration-500',
+                                                rest,
+                                                hover,
+                                            ]}
+                                        />
+                                    </div>
+                                ))
+                            }
+                        </div>
+                    </div>
+                    */
+                }
+
+                {/* Languages — full-width slim banner. */}
                 <div
                     class:list={[
                         card,
@@ -397,6 +406,11 @@ const iconChip =
                             class="rounded-full border border-white/10 bg-white/5 px-3 py-1"
                         >
                             {LOCALE_LABELS.en}
+                        </span>
+                        <span
+                            class="rounded-full border border-brand/25 bg-brand/10 px-3 py-1 text-slate-200"
+                        >
+                            {t.features.items.bilingual.chipMore}
                         </span>
                     </p>
                 </div>
