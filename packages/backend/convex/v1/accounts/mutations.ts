@@ -34,7 +34,10 @@ export const create = mutation({
             throw new Error('Account with that id already exists')
         }
 
-        if (await hasDuplicateAccount(ctx, userId, args.currency, args.name)) {
+        const currency =
+            args.currency ?? (await getDefaultCurrency(ctx, userId))
+
+        if (await hasDuplicateAccount(ctx, userId, currency, args.name)) {
             throw new Error(
                 'An account with that name and currency already exists',
             )
@@ -42,8 +45,6 @@ export const create = mutation({
 
         const seq = await nextSeq(ctx, userId)
         const now = BigInt(Date.now())
-        const currency =
-            args.currency ?? (await getDefaultCurrency(ctx, userId))
 
         await ctx.db.insert('accounts', {
             userId,
