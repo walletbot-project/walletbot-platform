@@ -1,3 +1,6 @@
+import { internal } from '../_generated/api'
+import type { ActionCtx } from '../_generated/server'
+import type { FlagKey } from '../featureFlags/utils'
 import { compareVersions } from './utils'
 
 type NativeVersionConfig = {
@@ -50,6 +53,7 @@ export type ConfigVerdict = {
 
 export type AccountConfigVerdict = {
     banners: ConfigBanner[]
+    flags: Record<FlagKey, boolean>
 }
 
 type AccountConfigAccount =
@@ -276,19 +280,25 @@ export function resolveConfigVerdict(args: {
     }
 }
 
-export function resolveAccountConfig(args: {
+export async function resolveAccountConfig(args: {
+    ctx: ActionCtx
     platform: string
     appVersion: string
     deviceId: string
     locale?: string
     account: AccountConfigAccount
-}): AccountConfigVerdict {
-    // Keep this account layer intentionally boring for now. It exists so we can
-    // target by stable install id plus authenticated remote user or local
-    // account label later without changing the client wire contract.
-    void args
+}): Promise<AccountConfigVerdict> {
+    // Local-only device accounts have no backend userId, so they always get
+    // the global default for every flag; only authenticated remote users can
+    // carry a per-user override.
+    const userId = args.account?.type === 'remote' ? args.account.userId : null
+    const flags = await args.ctx.runQuery(
+        internal.featureFlags.internal.resolveFlagsForUserInternal,
+        { userId },
+    )
     return {
         banners: [],
+        flags,
     }
 }
 

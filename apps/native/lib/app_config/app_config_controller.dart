@@ -158,6 +158,7 @@ class AppConfigController extends ChangeNotifier {
   String? _updateUrl;
   List<AppConfigBanner> _deviceBanners = const [];
   List<AppConfigBanner> _accountBanners = const [];
+  Map<String, bool> _accountFlags = const {};
   String? _accountScopeKey;
   // Scope whose successful result is currently held in [_accountBanners], and
   // the scope of an in-flight fetch. Together they dedup the repeated
@@ -179,6 +180,13 @@ class AppConfigController extends ChangeNotifier {
     accountBanners: _accountBanners,
   );
 
+  /// Feature flags are only ever delivered through the authenticated
+  /// account-config call, so local-only accounts (and any state before the
+  /// first successful fetch) simply get every flag defaulted to off via
+  /// [isFlagEnabled].
+  Map<String, bool> get flags => _accountFlags;
+  bool isFlagEnabled(String key) => _accountFlags[key] ?? false;
+
   /// Sync is allowed only for supported clients.
   bool get syncAllowed => _supported;
 
@@ -195,6 +203,7 @@ class AppConfigController extends ChangeNotifier {
     // fallback and let the widget render that fallback in the new locale.
     _deviceBanners = _localVersionFallback();
     _accountBanners = const [];
+    _accountFlags = const {};
     _accountScopeKey = null;
     _accountBannersScope = null;
     _accountFetchInFlight = null;
@@ -230,6 +239,7 @@ class AppConfigController extends ChangeNotifier {
     if (_accountScopeKey != scopeKey) {
       _accountScopeKey = scopeKey;
       _accountBanners = const [];
+      _accountFlags = const {};
       _accountBannersScope = null;
       notifyListeners();
     }
@@ -271,6 +281,7 @@ class AppConfigController extends ChangeNotifier {
       if (resp.statusCode >= 200 && resp.statusCode < 300) {
         final data = jsonDecode(resp.body) as Map<String, Object?>;
         _accountBanners = _parseBanners(data, allowVersionFallback: false);
+        _accountFlags = _parseFlags(data);
         _accountBannersScope = scopeKey;
         notifyListeners();
         return;
@@ -420,6 +431,17 @@ class AppConfigController extends ChangeNotifier {
       if (fallback != null) return [fallback];
     }
     return const [];
+  }
+
+  Map<String, bool> _parseFlags(Map<String, Object?> data) {
+    final rawFlags = data['flags'];
+    if (rawFlags is! Map) return const {};
+    final flags = <String, bool>{};
+    for (final entry in rawFlags.entries) {
+      final key = entry.key;
+      if (key is String) flags[key] = entry.value == true;
+    }
+    return flags;
   }
 
   List<AppConfigBanner> _localVersionFallback() {
