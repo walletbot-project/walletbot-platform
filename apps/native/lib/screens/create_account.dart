@@ -4,6 +4,7 @@ import 'package:app/components/color_utils.dart';
 import 'package:app/components/icon_picker.dart';
 import 'package:app/data/data.dart';
 import 'package:app/l10n/l10n.dart';
+import 'package:app/user_settings/default_currency_controller.dart';
 import 'package:app/widgets/currency_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -26,16 +27,13 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
   final _balanceController = TextEditingController();
-  late String _currency;
+  // Null until the user explicitly picks one — until then the currency
+  // tracks `DefaultCurrencyController.value` live, so it doesn't get stuck
+  // on the placeholder value while the real default is still loading.
+  String? _currency;
   Color _color = accountDefaultColor;
   IconData _icon = accountDefaultIcon;
   bool _saving = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _currency = context.read<AppRepositories>().defaultCurrency();
-  }
 
   @override
   void dispose() {
@@ -51,12 +49,12 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
     setState(() => _icon = suggestion.icon);
   }
 
-  Future<void> _pickCurrency() async {
+  Future<void> _pickCurrency(String currency) async {
     final picked = await showModalBottomSheet<String>(
       context: context,
       isScrollControlled: true,
       showDragHandle: true,
-      builder: (_) => CurrencyPicker(selected: _currency),
+      builder: (_) => CurrencyPicker(selected: currency),
     );
     if (picked != null) setState(() => _currency = picked);
   }
@@ -71,7 +69,7 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
     if (picked != null) setState(() => _icon = picked);
   }
 
-  Future<void> _submit() async {
+  Future<void> _submit(String currency) async {
     if (!_formKey.currentState!.validate()) return;
 
     final rawBalance = _balanceController.text.trim();
@@ -85,7 +83,7 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
     try {
       await context.read<AppRepositories>().accounts.create(
         name: _nameController.text.trim(),
-        currency: _currency,
+        currency: currency,
         color: colorToHex(_color),
         icon: accountIconName(_icon),
         initialBalanceCents: initialAmountCents,
@@ -105,6 +103,8 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final currency =
+        _currency ?? context.watch<DefaultCurrencyController>().value;
     return Scaffold(
       appBar: AppBar(title: Text(context.l10n.newAccount)),
       body: Form(
@@ -179,7 +179,7 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
             ),
             const SizedBox(height: 16),
             InkWell(
-              onTap: _pickCurrency,
+              onTap: () => _pickCurrency(currency),
               borderRadius: BorderRadius.circular(4),
               child: InputDecorator(
                 decoration: InputDecoration(
@@ -187,7 +187,7 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                   border: const OutlineInputBorder(),
                   suffixIcon: const Icon(Icons.arrow_drop_down),
                 ),
-                child: Text(_currency),
+                child: Text(currency),
               ),
             ),
             const SizedBox(height: 16),
@@ -199,7 +199,7 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
               decoration: InputDecoration(
                 labelText: context.l10n.initialBalanceOptional,
                 hintText: '0.00',
-                prefixText: '$_currency ',
+                prefixText: '$currency ',
                 border: const OutlineInputBorder(),
               ),
               validator: (v) {
@@ -213,7 +213,7 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
             ),
             const SizedBox(height: 32),
             FilledButton(
-              onPressed: _saving ? null : _submit,
+              onPressed: _saving ? null : () => _submit(currency),
               child: _saving
                   ? const SizedBox.square(
                       dimension: 20,

@@ -40,6 +40,10 @@ class DefaultCurrencyController extends ChangeNotifier {
   String _value = kDefaultCurrency;
   String get value => _value;
 
+  // Set for the duration of `setValue()` so a concurrent `_refresh()` never
+  // overwrites the user's just-made choice with a stale backend value.
+  bool _setValueInProgress = false;
+
   String get _cacheKey => 'default_currency_$accountId';
 
   /// Restores the cached value immediately, then (for remote accounts)
@@ -61,13 +65,16 @@ class DefaultCurrencyController extends ChangeNotifier {
 
   Future<void> _refresh() async {
     try {
+      if (_setValueInProgress) return;
       final raw = await _resolvedClient.query(
         'v1/users/queries:getSettings',
         {},
       );
+      if (_setValueInProgress) return;
       final decoded = decodeConvexResponse(raw);
       if (decoded is Map && decoded['defaultCurrency'] is String) {
         final next = decoded['defaultCurrency'] as String;
+        if (_setValueInProgress) return;
         await _storage.write(key: _cacheKey, value: next);
         if (next != _value) {
           _value = next;
@@ -85,6 +92,7 @@ class DefaultCurrencyController extends ChangeNotifier {
   /// background path), so surfacing the failure to the caller is correct.
   Future<void> setValue(String currency) async {
     final previous = _value;
+    _setValueInProgress = true;
     _value = currency;
     notifyListeners();
     try {
@@ -98,7 +106,16 @@ class DefaultCurrencyController extends ChangeNotifier {
     } catch (e) {
       _value = previous;
       notifyListeners();
+      try {
+        await _storage.write(key: _cacheKey, value: previous);
+      } catch (_) {
+        // Cache rollback is best-effort; the in-memory value above is
+        // already correct, and a stale write here is recoverable next
+        // successful `_refresh()`.
+      }
       rethrow;
+    } finally {
+      _setValueInProgress = false;
     }
   }
 }
