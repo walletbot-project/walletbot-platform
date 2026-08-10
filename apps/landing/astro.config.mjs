@@ -1,6 +1,5 @@
 // @ts-check
 import { satteri } from '@astrojs/markdown-satteri'
-import vercel from '@astrojs/vercel'
 import tailwindcss from '@tailwindcss/vite'
 import { defineConfig } from 'astro/config'
 
@@ -39,9 +38,8 @@ export default defineConfig({
     site: 'https://www.walletbot.live',
 
     // `output` is left at its default (`'static'`): the landing prerenders to
-    // plain HTML. The adapter is still required so the build emits Vercel's
-    // Build Output API format instead of a bare `dist/`.
-    adapter: vercel(),
+    // plain HTML in `dist/`, which Cloudflare Pages serves directly. No adapter
+    // — Astro only needs one to render routes on demand, and nothing here does.
 
     i18n: {
         // Keep in sync with `LOCALES` in `src/i18n/locales.ts`.
@@ -54,15 +52,12 @@ export default defineConfig({
         },
     },
 
-    // `/` has no content of its own. This is preferred over
-    // `i18n.routing.redirectToDefaultLocale`, which requires a root
-    // `src/pages/index.astro` and then only emits a 2-second meta-refresh page
-    // that conflicts with it; the adapter turns this into a real HTTP redirect
-    // in `.vercel/output/config.json`. 302, not 301, so the choice of default
-    // locale is not permanently cached in browsers.
-    redirects: {
-        '/': { status: 302, destination: '/en/' },
-    },
+    // `/` has no content of its own and is deliberately absent from the build.
+    // `functions/index.ts` owns it, negotiating `Accept-Language` into a 302.
+    // Neither Astro mechanism can do that: `redirects` here only emits a
+    // meta-refresh page without an adapter, and
+    // `i18n.routing.redirectToDefaultLocale` both demands a root
+    // `src/pages/index.astro` and can only ever pick the default locale.
 
     markdown: {
         processor: satteri({ hastPlugins: [legalDocLinks] }),

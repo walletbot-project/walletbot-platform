@@ -1,6 +1,8 @@
 # build output
 dist/
-.vercel/
+
+# wrangler's local state, written by `wrangler pages dev`
+.wrangler/
 
 # generated types
 .astro/
