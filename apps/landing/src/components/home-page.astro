@@ -1,0 +1,447 @@
+---
+import Icon from '@/components/icon.astro'
+import PhoneMockup from '@/components/phone-mockup.astro'
+import StoreBadges from '@/components/store-badges.astro'
+import { LOCALE_LABELS, useTranslations } from '@/i18n'
+import BaseLayout from '@/layouts/base-layout.astro'
+
+const { t } = useTranslations(Astro.currentLocale)
+
+const voiceTypes = Object.values(t.features.items.voice.types)
+const stats = Object.values(t.stats)
+
+// Decorative bar heights (%) for the dashboard card's mini chart; bars grow a
+// little on hover, staggered left to right.
+const CHART_BARS = [45, 70, 35, 85, 55, 75, 40]
+
+// Decorative waveform heights (px) for the voice card.
+const VOICE_WAVE = [14, 30, 22, 44, 28, 52, 36, 48, 24, 40, 18, 32]
+
+// The four "most used" shortcuts from the app's account-creation screen; the
+// catalog has 52 currencies in total, hence the +48 chip.
+const SUGGESTED_CURRENCIES = ['ARS', 'USD', 'EUR', 'BRL']
+
+// Filter-slider dot positions for the hidden filters card below: resting and
+// on-hover (all literal classes so Tailwind picks them up). Commented out with
+// the card — restore both together when saved filters ship.
+// const FILTER_SLIDERS = [
+//     ['left-1/4', 'group-hover:left-2/3'],
+//     ['left-3/5', 'group-hover:left-1/4'],
+//     ['left-2/5', 'group-hover:left-1/2'],
+// ]
+
+const card =
+    'group rounded-2xl border border-white/10 bg-white/5 p-6 transition-all hover:-translate-y-1 hover:border-white/20 hover:bg-white/[0.07] hover:shadow-[0_12px_40px_rgb(109_231_216/0.07)]'
+const iconChip =
+    'flex size-10 items-center justify-center rounded-lg bg-brand/15 ring-1 ring-brand/25'
+---
+
+<BaseLayout>
+    {/* ── Hero ─────────────────────────────────────────────────────────── */}
+    <section class="relative overflow-hidden">
+        {/* Faded grid + ambient glows. */}
+        <div
+            class="absolute inset-0 -z-20 bg-[linear-gradient(to_right,rgb(255_255_255/0.045)_1px,transparent_1px),linear-gradient(to_bottom,rgb(255_255_255/0.045)_1px,transparent_1px)] bg-[size:56px_56px] [mask-image:radial-gradient(ellipse_75%_65%_at_50%_0%,black,transparent)]"
+            aria-hidden="true"
+        >
+        </div>
+        <div
+            class="pointer-events-none absolute -top-40 left-1/2 -z-10 size-[42rem] -translate-x-1/2 rounded-full bg-brand/15 blur-3xl"
+            aria-hidden="true"
+        >
+        </div>
+        <div
+            class="pointer-events-none absolute top-40 -right-40 -z-10 size-[30rem] rounded-full bg-teal-500/10 blur-3xl"
+            aria-hidden="true"
+        >
+        </div>
+
+        <div
+            class="mx-auto grid w-full max-w-6xl items-center gap-16 px-6 pt-16 pb-24 sm:pt-24 lg:grid-cols-[1.1fr_0.9fr] lg:gap-8 lg:pt-28 lg:pb-32"
+        >
+            <div
+                class="flex flex-col items-center gap-7 text-center lg:items-start lg:text-left"
+            >
+                <p
+                    class="flex items-center gap-2 rounded-full border border-brand/30 bg-brand/10 px-3.5 py-1.5 text-xs font-medium text-slate-200 shadow-[0_0_20px_rgb(109_231_216/0.15)]"
+                >
+                    <Icon name="mic" class="size-3.5 text-brand" />
+                    {t.hero.badge}
+                </p>
+
+                <h1
+                    class="max-w-2xl bg-gradient-to-b from-white via-white to-slate-400 bg-clip-text text-5xl font-semibold tracking-tighter text-balance text-transparent sm:text-7xl lg:text-8xl"
+                >
+                    {t.hero.headline}
+                </h1>
+
+                <p class="max-w-xl text-lg text-pretty text-slate-400 sm:text-xl">
+                    {t.hero.subheadline}
+                </p>
+
+                <StoreBadges />
+
+                <a
+                    href="#features"
+                    class="group text-sm text-slate-400 transition-colors hover:text-white"
+                >
+                    {t.hero.ctaFeatures}
+                    <span
+                        aria-hidden="true"
+                        class="inline-block transition-transform group-hover:translate-y-0.5"
+                    >
+                        ↓
+                    </span>
+                </a>
+            </div>
+
+            <PhoneMockup />
+        </div>
+
+        {/* Stats strip. */}
+        <div class="border-t border-white/10 bg-white/[0.02]">
+            <dl
+                class="mx-auto grid w-full max-w-6xl grid-cols-2 gap-x-6 gap-y-8 px-6 py-10 text-center lg:grid-cols-4"
+            >
+                {
+                    stats.map((stat) => (
+                        <div>
+                            <dd
+                                class="text-4xl font-semibold tracking-tight text-white sm:text-5xl"
+                            >
+                                {stat.value}
+                            </dd>
+                            <dt
+                                class="mt-2 text-xs font-medium tracking-widest text-slate-500 uppercase"
+                            >
+                                {stat.label}
+                            </dt>
+                        </div>
+                    ))
+                }
+            </dl>
+        </div>
+    </section>
+
+    {/* ── Features (bento) ─────────────────────────────────────────────── */}
+    <section
+        id="features"
+        class="scroll-mt-20 border-t border-white/10"
+    >
+        <div class="mx-auto w-full max-w-6xl px-6 py-20 lg:py-28">
+            <p
+                class="flex items-center gap-3 text-xs font-semibold tracking-widest text-slate-400 uppercase"
+            >
+                <span class="h-px w-8 bg-brand" aria-hidden="true"></span>
+                {t.nav.features}
+            </p>
+            <h2
+                class="mt-3 text-3xl font-semibold tracking-tight text-white sm:text-5xl"
+            >
+                {t.features.title}
+            </h2>
+            <p class="mt-4 max-w-xl text-lg text-slate-400">
+                {t.features.subtitle}
+            </p>
+
+            <div class="mt-14 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {/* Voice — flagship: gradient tint + live waveform. */}
+                <div
+                    class:list={[
+                        card,
+                        'border-brand/20 bg-gradient-to-br from-brand/10 via-white/5 to-white/5 sm:col-span-2',
+                    ]}
+                >
+                    <div class="flex flex-wrap items-center gap-8">
+                        <div class="max-w-md">
+                            <div class={iconChip}>
+                                <Icon name="mic" class="size-5 text-brand" />
+                            </div>
+                            <h3 class="mt-4 font-medium text-white">
+                                {t.features.items.voice.title}
+                            </h3>
+                            <p
+                                class="mt-2 text-sm leading-relaxed text-slate-400"
+                            >
+                                {t.features.items.voice.body}
+                            </p>
+                            <ul class="mt-4 flex flex-wrap gap-2">
+                                {
+                                    voiceTypes.map((type) => (
+                                        <li class="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-slate-300">
+                                            {type}
+                                        </li>
+                                    ))
+                                }
+                            </ul>
+                        </div>
+
+                        <div
+                            class="flex min-w-32 flex-1 items-center justify-center gap-1.5 self-stretch"
+                            aria-hidden="true"
+                        >
+                            {
+                                VOICE_WAVE.map((height, index) => (
+                                    <span
+                                        class="w-1 animate-pulse rounded-full bg-brand/70"
+                                        style={`height:${height}px;animation-delay:${index * 110}ms`}
+                                    />
+                                ))
+                            }
+                        </div>
+                    </div>
+                </div>
+
+                {/* Offline — phone syncing to cloud over a dashed link. */}
+                <div class={card}>
+                    <div class={iconChip}>
+                        <Icon name="cloud-off" class="size-5 text-brand" />
+                    </div>
+                    <h3 class="mt-4 font-medium text-white">
+                        {t.features.items.offline.title}
+                    </h3>
+                    <p class="mt-2 text-sm leading-relaxed text-slate-400">
+                        {t.features.items.offline.body}
+                    </p>
+                    <div
+                        class="mt-6 flex items-center gap-3 text-slate-500"
+                        aria-hidden="true"
+                    >
+                        <Icon name="smartphone" class="size-4 shrink-0" />
+                        <span
+                            class="relative flex-1 border-t border-dashed border-white/20"
+                        >
+                            <span
+                                class="absolute top-1/2 left-1/2 size-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-brand"
+                            >
+                            </span>
+                            <span
+                                class="absolute top-1/2 left-1/2 size-1.5 -translate-x-1/2 -translate-y-1/2 animate-ping rounded-full bg-brand"
+                            >
+                            </span>
+                        </span>
+                        <Icon name="cloud" class="size-4 shrink-0" />
+                    </div>
+                </div>
+
+                {/* Local mode — an "on" toggle, no account attached. */}
+                <div class={card}>
+                    <div class={iconChip}>
+                        <Icon name="lock" class="size-5 text-brand" />
+                    </div>
+                    <h3 class="mt-4 font-medium text-white">
+                        {t.features.items.local.title}
+                    </h3>
+                    <p class="mt-2 text-sm leading-relaxed text-slate-400">
+                        {t.features.items.local.body}
+                    </p>
+                    <div class="mt-6" aria-hidden="true">
+                        <span
+                            class="relative block h-6 w-11 rounded-full bg-brand/25 ring-1 ring-brand/40 ring-inset"
+                        >
+                            <span
+                                class="absolute top-0.5 right-0.5 size-5 rounded-full bg-brand transition-transform duration-300 group-hover:-translate-x-[1px]"
+                            >
+                            </span>
+                        </span>
+                    </div>
+                </div>
+
+                {/* Fast — cheeky chip instead of a fake benchmark. */}
+                <div class={card}>
+                    <div class={iconChip}>
+                        <Icon name="zap" class="size-5 text-brand" />
+                    </div>
+                    <h3 class="mt-4 font-medium text-white">
+                        {t.features.items.fast.title}
+                    </h3>
+                    <p class="mt-2 text-sm leading-relaxed text-slate-400">
+                        {t.features.items.fast.body}
+                    </p>
+                    <p
+                        class="mt-6 inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-slate-300"
+                    >
+                        <Icon name="check" class="size-3.5 text-brand" />
+                        {t.features.items.fast.chip}
+                    </p>
+                </div>
+
+                {/* Currencies — the app's real "most used" shortcuts. */}
+                <div class={card}>
+                    <div class={iconChip}>
+                        <Icon name="coins" class="size-5 text-brand" />
+                    </div>
+                    <h3 class="mt-4 font-medium text-white">
+                        {t.features.items.currencies.title}
+                    </h3>
+                    <p class="mt-2 text-sm leading-relaxed text-slate-400">
+                        {t.features.items.currencies.body}
+                    </p>
+                    <ul class="mt-6 flex flex-wrap gap-2 font-mono text-xs">
+                        {
+                            SUGGESTED_CURRENCIES.map((code) => (
+                                <li class="rounded-md border border-white/10 bg-white/5 px-2.5 py-1 text-slate-300">
+                                    {code}
+                                </li>
+                            ))
+                        }
+                        <li
+                            class="rounded-md border border-brand/25 bg-brand/10 px-2.5 py-1 text-slate-200"
+                        >
+                            +48
+                        </li>
+                    </ul>
+                </div>
+
+                {/* Dashboard — double width with a decorative mini chart. */}
+                <div class:list={[card, 'sm:col-span-2']}>
+                    <div class="flex flex-wrap items-start justify-between gap-6">
+                        <div class="max-w-sm">
+                            <div class={iconChip}>
+                                <Icon
+                                    name="layout-dashboard"
+                                    class="size-5 text-brand"
+                                />
+                            </div>
+                            <h3 class="mt-4 font-medium text-white">
+                                {t.features.items.dashboard.title}
+                            </h3>
+                            <p
+                                class="mt-2 text-sm leading-relaxed text-slate-400"
+                            >
+                                {t.features.items.dashboard.body}
+                            </p>
+                        </div>
+
+                        <div
+                            class="flex h-24 min-w-40 flex-1 items-end gap-2 self-end border-b border-white/10 pb-px"
+                            aria-hidden="true"
+                        >
+                            {
+                                CHART_BARS.map((height, index) => (
+                                    <div
+                                        class="flex-1 origin-bottom scale-y-[0.8] rounded-t bg-brand/50 transition-transform duration-500 group-hover:scale-y-100 group-hover:bg-brand/70"
+                                        style={`height:${height}%;transition-delay:${index * 45}ms`}
+                                    />
+                                ))
+                            }
+                        </div>
+                    </div>
+                </div>
+
+                {
+                    /* Filters — slider dots drift to a new "view" on hover.
+                       Hidden for now: saved filters aren't implemented in the
+                       app yet. Re-enable this card (plus FILTER_SLIDERS in the
+                       frontmatter and the `filters` catalog entries) once the
+                       feature ships.
+
+                    <div class={card}>
+                        <div class={iconChip}>
+                            <Icon name="filter" class="size-5 text-brand" />
+                        </div>
+                        <h3 class="mt-4 font-medium text-white">
+                            {t.features.items.filters.title}
+                        </h3>
+                        <p class="mt-2 text-sm leading-relaxed text-slate-400">
+                            {t.features.items.filters.body}
+                        </p>
+                        <div class="mt-7 space-y-4" aria-hidden="true">
+                            {
+                                FILTER_SLIDERS.map(([rest, hover]) => (
+                                    <div class="relative h-px bg-white/15">
+                                        <span
+                                            class:list={[
+                                                'absolute -top-[3px] size-[7px] -translate-x-1/2 rounded-full bg-brand ring-4 ring-slate-950/80 transition-all duration-500',
+                                                rest,
+                                                hover,
+                                            ]}
+                                        />
+                                    </div>
+                                ))
+                            }
+                        </div>
+                    </div>
+                    */
+                }
+
+                {/* Languages — full-width slim banner. */}
+                <div
+                    class:list={[
+                        card,
+                        'flex flex-wrap items-center justify-between gap-6 sm:col-span-2 lg:col-span-3',
+                    ]}
+                >
+                    <div class="flex items-start gap-4">
+                        <div class:list={[iconChip, 'shrink-0']}>
+                            <Icon name="globe" class="size-5 text-brand" />
+                        </div>
+                        <div class="max-w-xl">
+                            <h3 class="font-medium text-white">
+                                {t.features.items.bilingual.title}
+                            </h3>
+                            <p
+                                class="mt-1 text-sm leading-relaxed text-slate-400"
+                            >
+                                {t.features.items.bilingual.body}
+                            </p>
+                        </div>
+                    </div>
+
+                    <p
+                        class="flex items-center gap-2 text-sm font-medium text-slate-300"
+                        aria-hidden="true"
+                    >
+                        <span
+                            class="rounded-full border border-white/10 bg-white/5 px-3 py-1"
+                        >
+                            {LOCALE_LABELS.es}
+                        </span>
+                        <span
+                            class="inline-block transition-transform duration-500 group-hover:rotate-180"
+                        >
+                            ⇄
+                        </span>
+                        <span
+                            class="rounded-full border border-white/10 bg-white/5 px-3 py-1"
+                        >
+                            {LOCALE_LABELS.en}
+                        </span>
+                        <span
+                            class="rounded-full border border-brand/25 bg-brand/10 px-3 py-1 text-slate-200"
+                        >
+                            {t.features.items.bilingual.chipMore}
+                        </span>
+                    </p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    {/* ── Download CTA ─────────────────────────────────────────────────── */}
+    <section
+        id="download"
+        class="relative scroll-mt-20 overflow-hidden border-t border-white/10"
+    >
+        <div
+            class="pointer-events-none absolute -bottom-52 left-1/2 -z-10 size-[36rem] -translate-x-1/2 rounded-full bg-brand/15 blur-3xl"
+            aria-hidden="true"
+        >
+        </div>
+
+        <div
+            class="mx-auto flex w-full max-w-3xl flex-col items-center gap-8 px-6 py-24 text-center lg:py-32"
+        >
+            <h2
+                class="bg-gradient-to-b from-white via-white to-slate-400 bg-clip-text text-4xl font-semibold tracking-tighter text-transparent sm:text-6xl"
+            >
+                {t.download.title}
+            </h2>
+            <p class="text-lg text-slate-400 sm:text-xl">
+                {t.download.subtitle}
+            </p>
+
+            <StoreBadges variant="cta" />
+        </div>
+    </section>
+</BaseLayout>
