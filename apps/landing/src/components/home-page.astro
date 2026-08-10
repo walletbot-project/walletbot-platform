@@ -10,11 +10,27 @@ const { t } = useTranslations(Astro.currentLocale)
 const voiceTypes = Object.values(t.features.items.voice.types)
 const stats = Object.values(t.stats)
 
-// Decorative bar heights (%) for the dashboard card's mini chart.
+// Decorative bar heights (%) for the dashboard card's mini chart; bars grow a
+// little on hover, staggered left to right.
 const CHART_BARS = [45, 70, 35, 85, 55, 75, 40]
 
+// Decorative waveform heights (px) for the voice card.
+const VOICE_WAVE = [14, 30, 22, 44, 28, 52, 36, 48, 24, 40, 18, 32]
+
+// The four "most used" shortcuts from the app's account-creation screen; the
+// catalog has 52 currencies in total, hence the +48 chip.
+const SUGGESTED_CURRENCIES = ['ARS', 'USD', 'EUR', 'BRL']
+
+// Filter-slider dot positions: resting and on-hover (all literal classes so
+// Tailwind picks them up).
+const FILTER_SLIDERS = [
+    ['left-1/4', 'group-hover:left-2/3'],
+    ['left-3/5', 'group-hover:left-1/4'],
+    ['left-2/5', 'group-hover:left-1/2'],
+]
+
 const card =
-    'rounded-2xl border border-white/10 bg-white/5 p-6 transition-all hover:-translate-y-1 hover:border-white/20 hover:bg-white/[0.07] hover:shadow-[0_12px_40px_rgb(109_231_216/0.07)]'
+    'group rounded-2xl border border-white/10 bg-white/5 p-6 transition-all hover:-translate-y-1 hover:border-white/20 hover:bg-white/[0.07] hover:shadow-[0_12px_40px_rgb(109_231_216/0.07)]'
 const iconChip =
     'flex size-10 items-center justify-center rounded-lg bg-brand/15 ring-1 ring-brand/25'
 ---
@@ -112,8 +128,14 @@ const iconChip =
         class="scroll-mt-20 border-t border-white/10"
     >
         <div class="mx-auto w-full max-w-6xl px-6 py-20 lg:py-28">
+            <p
+                class="flex items-center gap-3 text-xs font-semibold tracking-widest text-slate-400 uppercase"
+            >
+                <span class="h-px w-8 bg-brand" aria-hidden="true"></span>
+                {t.nav.features}
+            </p>
             <h2
-                class="text-3xl font-semibold tracking-tight text-white sm:text-5xl"
+                class="mt-3 text-3xl font-semibold tracking-tight text-white sm:text-5xl"
             >
                 {t.features.title}
             </h2>
@@ -122,28 +144,54 @@ const iconChip =
             </p>
 
             <div class="mt-14 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                {/* Voice — flagship, double width. */}
-                <div class:list={[card, 'sm:col-span-2']}>
-                    <div class={iconChip}>
-                        <Icon name="mic" class="size-5 text-brand" />
+                {/* Voice — flagship: gradient tint + live waveform. */}
+                <div
+                    class:list={[
+                        card,
+                        'border-brand/20 bg-gradient-to-br from-brand/10 via-white/5 to-white/5 sm:col-span-2',
+                    ]}
+                >
+                    <div class="flex flex-wrap items-center gap-8">
+                        <div class="max-w-md">
+                            <div class={iconChip}>
+                                <Icon name="mic" class="size-5 text-brand" />
+                            </div>
+                            <h3 class="mt-4 font-medium text-white">
+                                {t.features.items.voice.title}
+                            </h3>
+                            <p
+                                class="mt-2 text-sm leading-relaxed text-slate-400"
+                            >
+                                {t.features.items.voice.body}
+                            </p>
+                            <ul class="mt-4 flex flex-wrap gap-2">
+                                {
+                                    voiceTypes.map((type) => (
+                                        <li class="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-slate-300">
+                                            {type}
+                                        </li>
+                                    ))
+                                }
+                            </ul>
+                        </div>
+
+                        <div
+                            class="flex min-w-32 flex-1 items-center justify-center gap-1.5 self-stretch"
+                            aria-hidden="true"
+                        >
+                            {
+                                VOICE_WAVE.map((height, index) => (
+                                    <span
+                                        class="w-1 animate-pulse rounded-full bg-brand/70"
+                                        style={`height:${height}px;animation-delay:${index * 110}ms`}
+                                    />
+                                ))
+                            }
+                        </div>
                     </div>
-                    <h3 class="mt-4 font-medium text-white">
-                        {t.features.items.voice.title}
-                    </h3>
-                    <p class="mt-2 text-sm leading-relaxed text-slate-400">
-                        {t.features.items.voice.body}
-                    </p>
-                    <ul class="mt-4 flex flex-wrap gap-2">
-                        {
-                            voiceTypes.map((type) => (
-                                <li class="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-slate-300">
-                                    {type}
-                                </li>
-                            ))
-                        }
-                    </ul>
                 </div>
 
+                {/* Offline — phone syncing to cloud over a dashed link. */}
                 <div class={card}>
                     <div class={iconChip}>
                         <Icon name="cloud-off" class="size-5 text-brand" />
@@ -154,8 +202,28 @@ const iconChip =
                     <p class="mt-2 text-sm leading-relaxed text-slate-400">
                         {t.features.items.offline.body}
                     </p>
+                    <div
+                        class="mt-6 flex items-center gap-3 text-slate-500"
+                        aria-hidden="true"
+                    >
+                        <Icon name="smartphone" class="size-4 shrink-0" />
+                        <span
+                            class="relative flex-1 border-t border-dashed border-white/20"
+                        >
+                            <span
+                                class="absolute top-1/2 left-1/2 size-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-brand"
+                            >
+                            </span>
+                            <span
+                                class="absolute top-1/2 left-1/2 size-1.5 -translate-x-1/2 -translate-y-1/2 animate-ping rounded-full bg-brand"
+                            >
+                            </span>
+                        </span>
+                        <Icon name="cloud" class="size-4 shrink-0" />
+                    </div>
                 </div>
 
+                {/* Local mode — an "on" toggle, no account attached. */}
                 <div class={card}>
                     <div class={iconChip}>
                         <Icon name="lock" class="size-5 text-brand" />
@@ -166,8 +234,19 @@ const iconChip =
                     <p class="mt-2 text-sm leading-relaxed text-slate-400">
                         {t.features.items.local.body}
                     </p>
+                    <div class="mt-6" aria-hidden="true">
+                        <span
+                            class="relative block h-6 w-11 rounded-full bg-brand/25 ring-1 ring-brand/40 ring-inset"
+                        >
+                            <span
+                                class="absolute top-0.5 right-0.5 size-5 rounded-full bg-brand transition-transform duration-300 group-hover:-translate-x-[1px]"
+                            >
+                            </span>
+                        </span>
+                    </div>
                 </div>
 
+                {/* Fast — cheeky chip instead of a fake benchmark. */}
                 <div class={card}>
                     <div class={iconChip}>
                         <Icon name="zap" class="size-5 text-brand" />
@@ -178,8 +257,15 @@ const iconChip =
                     <p class="mt-2 text-sm leading-relaxed text-slate-400">
                         {t.features.items.fast.body}
                     </p>
+                    <p
+                        class="mt-6 inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-slate-300"
+                    >
+                        <Icon name="check" class="size-3.5 text-brand" />
+                        {t.features.items.fast.chip}
+                    </p>
                 </div>
 
+                {/* Currencies — the app's real "most used" shortcuts. */}
                 <div class={card}>
                     <div class={iconChip}>
                         <Icon name="coins" class="size-5 text-brand" />
@@ -190,6 +276,20 @@ const iconChip =
                     <p class="mt-2 text-sm leading-relaxed text-slate-400">
                         {t.features.items.currencies.body}
                     </p>
+                    <ul class="mt-6 flex flex-wrap gap-2 font-mono text-xs">
+                        {
+                            SUGGESTED_CURRENCIES.map((code) => (
+                                <li class="rounded-md border border-white/10 bg-white/5 px-2.5 py-1 text-slate-300">
+                                    {code}
+                                </li>
+                            ))
+                        }
+                        <li
+                            class="rounded-md border border-brand/25 bg-brand/10 px-2.5 py-1 text-slate-200"
+                        >
+                            +48
+                        </li>
+                    </ul>
                 </div>
 
                 {/* Dashboard — double width with a decorative mini chart. */}
@@ -217,10 +317,10 @@ const iconChip =
                             aria-hidden="true"
                         >
                             {
-                                CHART_BARS.map((height) => (
+                                CHART_BARS.map((height, index) => (
                                     <div
-                                        class="flex-1 rounded-t bg-brand/50"
-                                        style={`height:${height}%`}
+                                        class="flex-1 origin-bottom scale-y-[0.8] rounded-t bg-brand/50 transition-transform duration-500 group-hover:scale-y-100 group-hover:bg-brand/70"
+                                        style={`height:${height}%;transition-delay:${index * 45}ms`}
                                     />
                                 ))
                             }
@@ -228,6 +328,7 @@ const iconChip =
                     </div>
                 </div>
 
+                {/* Filters — slider dots drift to a new "view" on hover. */}
                 <div class={card}>
                     <div class={iconChip}>
                         <Icon name="filter" class="size-5 text-brand" />
@@ -238,6 +339,21 @@ const iconChip =
                     <p class="mt-2 text-sm leading-relaxed text-slate-400">
                         {t.features.items.filters.body}
                     </p>
+                    <div class="mt-7 space-y-4" aria-hidden="true">
+                        {
+                            FILTER_SLIDERS.map(([rest, hover]) => (
+                                <div class="relative h-px bg-white/15">
+                                    <span
+                                        class:list={[
+                                            'absolute -top-[3px] size-[7px] -translate-x-1/2 rounded-full bg-brand ring-4 ring-slate-950/80 transition-all duration-500',
+                                            rest,
+                                            hover,
+                                        ]}
+                                    />
+                                </div>
+                            ))
+                        }
+                    </div>
                 </div>
 
                 {/* Bilingual — full-width slim banner. */}
@@ -272,7 +388,11 @@ const iconChip =
                         >
                             {LOCALE_LABELS.es}
                         </span>
-                        ⇄
+                        <span
+                            class="inline-block transition-transform duration-500 group-hover:rotate-180"
+                        >
+                            ⇄
+                        </span>
                         <span
                             class="rounded-full border border-white/10 bg-white/5 px-3 py-1"
                         >

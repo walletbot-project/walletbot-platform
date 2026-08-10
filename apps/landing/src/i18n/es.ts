@@ -84,6 +84,7 @@ export const es = {
             fast: {
                 title: 'Rápida de verdad',
                 body: 'Sin recargas ni esperas: registrás algo — vos o el asistente — y aparece al instante en listas, saldos y gráficos.',
+                chip: 'Cero spinners',
             },
             currencies: {
                 title: 'Multi-moneda',

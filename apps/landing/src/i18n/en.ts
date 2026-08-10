@@ -71,6 +71,7 @@ export const en: Messages = {
             fast: {
                 title: 'Actually fast',
                 body: 'No reloads, no waiting: the moment you — or the assistant — log something, it shows up in lists, balances and charts.',
+                chip: 'Zero spinners',
             },
             currencies: {
                 title: 'Multi-currency',
