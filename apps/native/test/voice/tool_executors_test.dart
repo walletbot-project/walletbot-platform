@@ -73,8 +73,8 @@ void main() {
   );
 
   test('ambiguous account surfaces candidates on getAccount', () async {
-    await tools.execute('createAccount', {'name': 'Cash', 'currency': 'ARS'});
-    await tools.execute('createAccount', {'name': 'cash', 'currency': 'USD'});
+    await tools.execute('createAccount', {'name': 'Cash', 'currency': 'USD'});
+    await tools.execute('createAccount', {'name': 'cash', 'currency': 'EUR'});
 
     final res = await tools.execute('getAccount', {'idOrName': 'CASH'});
     expect(res['ok'], isFalse);
@@ -86,6 +86,29 @@ void main() {
     final bal = await tools.execute('getAccountBalance', {'idOrName': 'CASH'});
     expect(bal, {'ok': false, 'error': 'Account not found'});
   });
+
+  test(
+    'same-name accounts resolve to the one matching the default currency',
+    () async {
+      await tools.execute('createAccount', {'name': 'Cash', 'currency': 'ARS'});
+      await tools.execute('createAccount', {'name': 'cash', 'currency': 'USD'});
+
+      final res = await tools.execute('getAccount', {'idOrName': 'CASH'});
+      expect(res['ok'], isTrue);
+      expect(res['account']['currency'], 'ARS');
+    },
+  );
+
+  test(
+    'createAccount without a currency falls back to the default currency',
+    () async {
+      final res = await tools.execute('createAccount', {'name': 'Cash'});
+      expect(res['ok'], isTrue);
+
+      final acc = await tools.execute('getAccount', {'idOrName': 'Cash'});
+      expect(acc['account']['currency'], 'ARS');
+    },
+  );
 
   test('deleteTransaction is idempotent', () async {
     final res = await tools.execute('deleteTransaction', {'id': 'missing'});

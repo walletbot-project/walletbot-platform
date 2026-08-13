@@ -1,5 +1,6 @@
 import '../database.dart';
 import '../telemetry/business_metrics.dart';
+import '../widgets/currency_picker.dart' show kDefaultCurrency;
 import 'entity_resolver.dart';
 import 'repositories/account_repository.dart';
 import 'repositories/category_repository.dart';
@@ -18,18 +19,21 @@ import 'repositories/transaction_repository.dart';
 /// repository `watch*` stream. Agent tools receive this bundle instead of the
 /// raw database.
 class AppRepositories {
-  AppRepositories(AppDatabase db, {BusinessMetrics? businessMetrics})
-    : accounts = AccountRepository(db, businessMetrics: businessMetrics),
-      categories = CategoryRepository(db),
-      tags = TagRepository(db),
-      transactions = TransactionRepository(
-        db,
-        businessMetrics: businessMetrics,
-      ),
-      summaries = SummaryRepository(db),
-      savedFilters = SavedFilterRepository(db),
-      dashboard = DashboardRepository(db),
-      resolver = EntityResolver(db);
+  AppRepositories(
+    AppDatabase db, {
+    BusinessMetrics? businessMetrics,
+    this.defaultCurrency = _fallbackDefaultCurrency,
+  }) : accounts = AccountRepository(db, businessMetrics: businessMetrics),
+       categories = CategoryRepository(db),
+       tags = TagRepository(db),
+       transactions = TransactionRepository(
+         db,
+         businessMetrics: businessMetrics,
+       ),
+       summaries = SummaryRepository(db),
+       savedFilters = SavedFilterRepository(db),
+       dashboard = DashboardRepository(db),
+       resolver = EntityResolver(db, defaultCurrency);
 
   final AccountRepository accounts;
   final CategoryRepository categories;
@@ -39,4 +43,11 @@ class AppRepositories {
   final SavedFilterRepository savedFilters;
   final DashboardRepository dashboard;
   final EntityResolver resolver;
+
+  /// The user's default currency (device cache, backed by
+  /// `DefaultCurrencyController` — see `user_settings/`). Used to fill in an
+  /// omitted `currency` on account creation and to break name-collision ties.
+  final String Function() defaultCurrency;
 }
+
+String _fallbackDefaultCurrency() => kDefaultCurrency;

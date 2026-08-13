@@ -21,6 +21,7 @@ import 'package:app/shared/app_navigation.dart';
 import 'package:app/sync/sync_engine.dart';
 import 'package:app/telemetry/business_metrics.dart';
 import 'package:app/telemetry/telemetry_client.dart';
+import 'package:app/user_settings/default_currency_controller.dart';
 import 'package:app/voice/gemini_voice_expense_command.dart';
 import 'package:app/voice/voice_session_remote_sync.dart';
 import 'package:app/voice/voice_session_repository.dart';
@@ -278,6 +279,20 @@ class _AuthGate extends StatelessWidget {
           create: (_) => AppDatabase.forUser(active.id),
           dispose: (_, db) => db.close(),
         ),
+        // The user's default currency. Scoped to the account subtree (like
+        // AppDatabase above) so switching accounts never leaks a stale value.
+        // Created for local accounts too (kept purely device-local, no
+        // backend user exists to own the setting) so it's always available.
+        ChangeNotifierProvider<DefaultCurrencyController>(
+          create: (_) {
+            final controller = DefaultCurrencyController(
+              accountId: active.id,
+              isRemote: active.type == AccountType.remote,
+            );
+            unawaited(controller.load());
+            return controller;
+          },
+        ),
         // The app-facing data layer: all reads/writes from screens and the
         // voice agent go through this. Scoped to the account subtree so it is
         // recreated together with the database on account switch.
@@ -285,6 +300,7 @@ class _AuthGate extends StatelessWidget {
           create: (ctx) => AppRepositories(
             ctx.read<AppDatabase>(),
             businessMetrics: ctx.read<BusinessMetrics?>(),
+            defaultCurrency: () => ctx.read<DefaultCurrencyController>().value,
           ),
         ),
         Provider<VoiceSessionRepository>(

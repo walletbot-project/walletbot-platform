@@ -87,6 +87,20 @@ export async function resolveAccount(
     const matches = list.filter((a) => normalizeName(a.name) === target)
     if (matches.length === 1) return { ok: true, entity: matches[0] }
     if (matches.length === 0) return { ok: false, reason: 'not_found' }
+
+    // Same name, different currencies: prefer the account matching the
+    // user's default currency instead of asking for clarification.
+    const { defaultCurrency } = await ctx.client.query(
+        api.v1.users.queries.getSettings,
+        {},
+    )
+    const defaultCurrencyMatches = matches.filter(
+        (m) => m.currency === defaultCurrency,
+    )
+    if (defaultCurrencyMatches.length === 1) {
+        return { ok: true, entity: defaultCurrencyMatches[0] }
+    }
+
     return {
         ok: false,
         reason: 'ambiguous',

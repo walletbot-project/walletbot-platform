@@ -38,6 +38,7 @@ import type * as schema_tags from "../schema/tags.js";
 import type * as schema_telemetry from "../schema/telemetry.js";
 import type * as schema_transactionTags from "../schema/transactionTags.js";
 import type * as schema_transactions from "../schema/transactions.js";
+import type * as schema_userSettings from "../schema/userSettings.js";
 import type * as schema_voice from "../schema/voice.js";
 import type * as sync_helpers from "../sync/helpers.js";
 import type * as telemetry_actions from "../telemetry/actions.js";
@@ -63,6 +64,9 @@ import type * as v1_tags_mutations from "../v1/tags/mutations.js";
 import type * as v1_tags_queries from "../v1/tags/queries.js";
 import type * as v1_transactions_mutations from "../v1/transactions/mutations.js";
 import type * as v1_transactions_queries from "../v1/transactions/queries.js";
+import type * as v1_users_helpers from "../v1/users/helpers.js";
+import type * as v1_users_mutations from "../v1/users/mutations.js";
+import type * as v1_users_queries from "../v1/users/queries.js";
 import type * as v1_voice_sessions from "../v1/voice/sessions.js";
 
 import type {
@@ -102,6 +106,7 @@ declare const fullApi: ApiFromModules<{
   "schema/telemetry": typeof schema_telemetry;
   "schema/transactionTags": typeof schema_transactionTags;
   "schema/transactions": typeof schema_transactions;
+  "schema/userSettings": typeof schema_userSettings;
   "schema/voice": typeof schema_voice;
   "sync/helpers": typeof sync_helpers;
   "telemetry/actions": typeof telemetry_actions;
@@ -127,6 +132,9 @@ declare const fullApi: ApiFromModules<{
   "v1/tags/queries": typeof v1_tags_queries;
   "v1/transactions/mutations": typeof v1_transactions_mutations;
   "v1/transactions/queries": typeof v1_transactions_queries;
+  "v1/users/helpers": typeof v1_users_helpers;
+  "v1/users/mutations": typeof v1_users_mutations;
+  "v1/users/queries": typeof v1_users_queries;
   "v1/voice/sessions": typeof v1_voice_sessions;
 }>;
 

@@ -17,6 +17,7 @@ import {
 } from './schema/telemetry'
 import { transactions } from './schema/transactions'
 import { transactionTags } from './schema/transactionTags'
+import { userSettings } from './schema/userSettings'
 import { voiceSessionEvents, voiceSessions } from './schema/voice'
 
 export default defineSchema({
@@ -36,6 +37,7 @@ export default defineSchema({
     tombstones,
     transactionTags,
     transactions,
+    userSettings,
     voiceSessionEvents,
     voiceSessions,
 })
