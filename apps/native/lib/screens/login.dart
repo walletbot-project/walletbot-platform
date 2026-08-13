@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:app/app_config/app_config_banner_list.dart';
 import 'package:app/auth/auth_controller.dart';
 import 'package:app/l10n/l10n.dart';
@@ -7,9 +9,15 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:provider/provider.dart';
 
+part 'login_email_flows.dart';
+
 enum _EmailAuthMode { signIn, signUp }
 
 enum _LoginPath { remote, local }
+
+/// Which panel the remote path shows. [credentials] is the sign-in/sign-up
+/// form; the other two replace it entirely until the user navigates back.
+enum _RemoteFlow { credentials, forgotPassword, verifyPending }
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key, this.canDismiss = false});
@@ -25,7 +33,10 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
+  static const _resendCooldownSeconds = 30;
+
   final _remoteFormKey = GlobalKey<FormState>();
+  final _forgotFormKey = GlobalKey<FormState>();
   final _localFormKey = GlobalKey<FormState>();
   final _remoteNameController = TextEditingController();
   final _emailController = TextEditingController();
@@ -34,15 +45,41 @@ class _LoginScreenState extends State<LoginScreen> {
 
   _LoginPath _path = _LoginPath.remote;
   _EmailAuthMode _emailMode = _EmailAuthMode.signIn;
+  _RemoteFlow _remoteFlow = _RemoteFlow.credentials;
   bool _submitting = false;
+
+  /// Email echoed in the pending/sent copy of the new flows.
+  String _pendingEmail = '';
+
+  /// Forgot-password panel: false = form, true = success state.
+  bool _resetEmailSent = false;
+
+  /// Seconds until the resend-verification button re-enables. UX throttling
+  /// only — the backend re-sends on blocked sign-in attempts regardless.
+  int _resendCooldown = 0;
+  Timer? _resendTimer;
 
   @override
   void dispose() {
+    _resendTimer?.cancel();
     _remoteNameController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
     _localNameController.dispose();
     super.dispose();
+  }
+
+  void _startResendCooldown() {
+    _resendTimer?.cancel();
+    setState(() => _resendCooldown = _resendCooldownSeconds);
+    _resendTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
+      setState(() => _resendCooldown -= 1);
+      if (_resendCooldown <= 0) timer.cancel();
+    });
   }
 
   Future<void> _submitRemote() async {
@@ -72,6 +109,21 @@ class _LoginScreenState extends State<LoginScreen> {
       }
     } on AccountAlreadyAddedError {
       messenger.showSnackBar(SnackBar(content: Text(l10n.accountAlreadyAdded)));
+    } on EmailNotVerifiedException {
+      // The backend already (re-)sent the verification email on this attempt.
+      if (mounted) {
+        setState(() {
+          _pendingEmail = email;
+          _remoteFlow = _RemoteFlow.verifyPending;
+        });
+        _startResendCooldown();
+      }
+      if (_emailMode == _EmailAuthMode.signIn) {
+        // Repeat attempt (e.g. tapped "I verified" too early): say so.
+        messenger.showSnackBar(
+          SnackBar(content: Text(l10n.emailStillNotVerified)),
+        );
+      }
     } catch (e) {
       // Generic, account-independent hint: many failed sign-ins are users who
       // actually registered with Google. Avoids leaking whether the email
@@ -83,6 +135,71 @@ class _LoginScreenState extends State<LoginScreen> {
     } finally {
       if (mounted) setState(() => _submitting = false);
     }
+  }
+
+  Future<void> _submitForgotPassword() async {
+    if (!_forgotFormKey.currentState!.validate()) return;
+
+    setState(() => _submitting = true);
+    final messenger = ScaffoldMessenger.of(context);
+    final l10n = context.l10n;
+    final auth = context.read<AuthController>();
+    final email = _emailController.text.trim();
+
+    try {
+      await auth.requestPasswordReset(email: email);
+      if (mounted) {
+        setState(() {
+          _pendingEmail = email;
+          _resetEmailSent = true;
+        });
+      }
+    } catch (e) {
+      messenger.showSnackBar(
+        SnackBar(content: Text(l10n.resetRequestFailed(e))),
+      );
+    } finally {
+      if (mounted) setState(() => _submitting = false);
+    }
+  }
+
+  Future<void> _resendVerification() async {
+    setState(() => _submitting = true);
+    final messenger = ScaffoldMessenger.of(context);
+    final l10n = context.l10n;
+    final auth = context.read<AuthController>();
+
+    try {
+      await auth.resendVerificationEmail(email: _pendingEmail);
+      // Popping the screen mid-request disposes this State; _startResendCooldown
+      // would then setState (and arm a timer) on a dead widget.
+      if (!mounted) return;
+      messenger.showSnackBar(
+        SnackBar(content: Text(l10n.verificationEmailResent)),
+      );
+      _startResendCooldown();
+    } catch (e) {
+      messenger.showSnackBar(
+        SnackBar(content: Text(l10n.resendVerificationFailed(e))),
+      );
+    } finally {
+      if (mounted) setState(() => _submitting = false);
+    }
+  }
+
+  void _openForgotPassword() {
+    setState(() {
+      _remoteFlow = _RemoteFlow.forgotPassword;
+      _resetEmailSent = false;
+    });
+  }
+
+  void _returnToSignIn() {
+    setState(() {
+      _remoteFlow = _RemoteFlow.credentials;
+      _emailMode = _EmailAuthMode.signIn;
+      _resetEmailSent = false;
+    });
   }
 
   Future<void> _submitLocal() async {
@@ -164,17 +281,41 @@ class _LoginScreenState extends State<LoginScreen> {
                             const SizedBox(height: 14),
                             _AuthPathSwitcher(
                               path: _path,
-                              remote: _RemoteLoginPanel(
-                                mode: _emailMode,
-                                submitting: _submitting,
-                                formKey: _remoteFormKey,
-                                nameController: _remoteNameController,
-                                emailController: _emailController,
-                                passwordController: _passwordController,
-                                onModeChanged: (mode) =>
-                                    setState(() => _emailMode = mode),
-                                onSubmit: _submitRemote,
-                                onGoogle: _signInWithGoogle,
+                              remote: KeyedSubtree(
+                                key: ValueKey(_remoteFlow),
+                                child: switch (_remoteFlow) {
+                                  _RemoteFlow.credentials => _RemoteLoginPanel(
+                                    mode: _emailMode,
+                                    submitting: _submitting,
+                                    formKey: _remoteFormKey,
+                                    nameController: _remoteNameController,
+                                    emailController: _emailController,
+                                    passwordController: _passwordController,
+                                    onModeChanged: (mode) =>
+                                        setState(() => _emailMode = mode),
+                                    onSubmit: _submitRemote,
+                                    onGoogle: _signInWithGoogle,
+                                    onForgotPassword: _openForgotPassword,
+                                  ),
+                                  _RemoteFlow.forgotPassword =>
+                                    _ForgotPasswordPanel(
+                                      submitting: _submitting,
+                                      emailSent: _resetEmailSent,
+                                      sentToEmail: _pendingEmail,
+                                      formKey: _forgotFormKey,
+                                      emailController: _emailController,
+                                      onSubmit: _submitForgotPassword,
+                                      onBack: _returnToSignIn,
+                                    ),
+                                  _RemoteFlow.verifyPending =>
+                                    _VerifyEmailPendingPanel(
+                                      submitting: _submitting,
+                                      email: _pendingEmail,
+                                      resendCooldown: _resendCooldown,
+                                      onResend: _resendVerification,
+                                      onSignIn: _returnToSignIn,
+                                    ),
+                                },
                               ),
                               local: _LocalLoginPanel(
                                 submitting: _submitting,
@@ -521,6 +662,7 @@ class _RemoteLoginPanel extends StatelessWidget {
     required this.onModeChanged,
     required this.onSubmit,
     required this.onGoogle,
+    required this.onForgotPassword,
   });
 
   final _EmailAuthMode mode;
@@ -532,6 +674,7 @@ class _RemoteLoginPanel extends StatelessWidget {
   final ValueChanged<_EmailAuthMode> onModeChanged;
   final VoidCallback onSubmit;
   final VoidCallback onGoogle;
+  final VoidCallback onForgotPassword;
 
   @override
   Widget build(BuildContext context) {
@@ -616,7 +759,22 @@ class _RemoteLoginPanel extends StatelessWidget {
                     return null;
                   },
                 ),
-                const SizedBox(height: 16),
+                AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 180),
+                  child: mode == _EmailAuthMode.signIn
+                      ? Align(
+                          key: const ValueKey('forgot-password'),
+                          alignment: Alignment.centerRight,
+                          child: TextButton(
+                            onPressed: submitting ? null : onForgotPassword,
+                            child: Text(context.l10n.forgotPassword),
+                          ),
+                        )
+                      : const SizedBox(
+                          key: ValueKey('no-forgot-password'),
+                          height: 16,
+                        ),
+                ),
                 _PrimaryActionButton(
                   submitting: submitting,
                   label: mode.primaryButtonLabel(context.l10n),

@@ -24,3 +24,7 @@ export const refreshTokens = defineTable({
 })
     .index('by_tokenHash', ['tokenHash'])
     .index('by_userId', ['userId'])
+    // Bulk revocation walks only the still-active rows for a user. Patching
+    // `revokedAt` drops the row out of the `revokedAt: undefined` range, so
+    // each batch makes progress instead of re-reading rows it already revoked.
+    .index('by_userId_revokedAt', ['userId', 'revokedAt'])

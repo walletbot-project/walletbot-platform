@@ -4,6 +4,13 @@ import { internal } from './_generated/api'
 const crons = cronJobs()
 
 crons.interval(
+    'cleanup resend emails',
+    { hours: 24 },
+    internal.emails.internal.cleanupResendEmails,
+    {},
+)
+
+crons.interval(
     'export pending telemetry events',
     { minutes: 5 },
     internal.telemetry.actions.exportPending,
