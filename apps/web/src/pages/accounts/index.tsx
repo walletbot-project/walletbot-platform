@@ -10,6 +10,7 @@ import {
     AccountDetailsSheet,
     type AccountSummary,
 } from '@/pages/accounts/account-details-sheet'
+import { accountErrorMessage } from '@/pages/accounts/account-errors'
 import {
     AccountFormDialog,
     type AccountFormValue,
@@ -69,7 +70,8 @@ export function Accounts() {
         toast.promise(run, {
             loading: t.accounts.creating,
             success: t.accounts.created,
-            error: t.accounts.createFailed,
+            error: (error) =>
+                accountErrorMessage(error, t, t.accounts.createFailed),
         })
         await run
         setCreating(false)

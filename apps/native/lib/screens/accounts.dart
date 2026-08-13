@@ -304,7 +304,11 @@ class _AccountDetailsSheetState extends State<AccountDetailsSheet> {
       setState(() => _editing = false);
     } catch (e, st) {
       debugPrint('Error updating account: $e\n$st');
-      _showSnack(context.l10n.accountSaveFailed);
+      _showSnack(
+        e is DuplicateAccountException
+            ? context.l10n.accountDuplicateNameCurrency
+            : context.l10n.accountSaveFailed,
+      );
     } finally {
       if (mounted) setState(() => _saving = false);
     }

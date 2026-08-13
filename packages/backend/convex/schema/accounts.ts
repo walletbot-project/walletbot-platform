@@ -17,3 +17,4 @@ export const accounts = defineTable({
     .index('by_user_seq', ['userId', 'seq'])
     .index('by_user_id', ['userId', 'id'])
     .index('by_user_archived', ['userId', 'isArchived'])
+    .index('by_user_currency', ['userId', 'currency'])

@@ -986,6 +986,12 @@ abstract class AppLocalizations {
   /// **'Could not create the account'**
   String get accountCreateFailed;
 
+  /// No description provided for @accountDuplicateNameCurrency.
+  ///
+  /// In en, this message translates to:
+  /// **'An account with that name and currency already exists'**
+  String get accountDuplicateNameCurrency;
+
   /// No description provided for @suggestions.
   ///
   /// In en, this message translates to:

@@ -148,6 +148,7 @@
   "initialBalanceOptional": "Balance inicial (opcional)",
   "enterValidAmount": "Ingresá un monto válido",
   "accountCreateFailed": "No se pudo crear la cuenta",
+  "accountDuplicateNameCurrency": "Ya existe una cuenta con ese nombre y moneda",
   "suggestions": "Sugerencias",
   "accountNameExample": "Ej.: Efectivo, Banco Nación…",
   "categoryNameExample": "Ej.: Supermercado, Transporte…",

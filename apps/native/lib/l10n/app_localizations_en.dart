@@ -481,6 +481,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get accountCreateFailed => 'Could not create the account';
 
   @override
+  String get accountDuplicateNameCurrency =>
+      'An account with that name and currency already exists';
+
+  @override
   String get suggestions => 'Suggestions';
 
   @override
