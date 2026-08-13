@@ -408,6 +408,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get balanceAdjustments => 'Adjustments';
 
   @override
+  String get initialBalance => 'Initial balance';
+
+  @override
   String get pending => 'Pending';
 
   @override

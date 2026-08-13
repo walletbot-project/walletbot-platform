@@ -1,4 +1,5 @@
-import { useConvex } from 'convex/react'
+import { api } from '@wallet-bot/backend/api'
+import { useConvex, useQuery } from 'convex/react'
 import {
     AlertCircle,
     CheckCircle2,
@@ -147,8 +148,10 @@ function AgentBubble({
 
 function ToolCard({
     message,
+    debugEnabled,
 }: {
     message: Extract<ChatMessage, { kind: 'tool' }>
+    debugEnabled: boolean
 }) {
     const t = useT()
     const status = message.status
@@ -192,10 +195,10 @@ function ToolCard({
                         {statusLabel}
                     </span>
                 </div>
-                {Object.keys(message.args).length > 0 && (
+                {debugEnabled && Object.keys(message.args).length > 0 && (
                     <KvBlock label="args" data={message.args} />
                 )}
-                {message.result && (
+                {debugEnabled && message.result && (
                     <KvBlock label="result" data={message.result} />
                 )}
             </div>
@@ -249,14 +252,20 @@ function SystemLine({
     )
 }
 
-function MessageView({ message }: { message: ChatMessage }) {
+function MessageView({
+    message,
+    debugEnabled,
+}: {
+    message: ChatMessage
+    debugEnabled: boolean
+}) {
     switch (message.kind) {
         case 'user':
             return <UserBubble message={message} />
         case 'agent':
             return <AgentBubble message={message} />
         case 'tool':
-            return <ToolCard message={message} />
+            return <ToolCard message={message} debugEnabled={debugEnabled} />
         case 'system':
             return <SystemLine message={message} />
         case 'action-result':
@@ -322,6 +331,8 @@ export function Add() {
     const t = useT()
     const client = useConvex()
     const voice = useVoice({ context: { client } })
+    const flags = useQuery(api.v1.featureFlags.queries.getMyFlags)
+    const debugEnabled = flags?.debugToolCalls ?? false
 
     const status: 'idle' | 'connecting' | 'connected' = voice.isConnected
         ? 'connected'
@@ -352,7 +363,11 @@ export function Add() {
                     <EmptyState isConnecting={voice.isConnecting} />
                 ) : (
                     voice.messages.map((m) => (
-                        <MessageView key={m.id} message={m} />
+                        <MessageView
+                            key={m.id}
+                            message={m}
+                            debugEnabled={debugEnabled}
+                        />
                     ))
                 )}
                 <div ref={bottomRef} aria-hidden className="h-0" />

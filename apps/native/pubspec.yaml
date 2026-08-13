@@ -71,6 +71,39 @@ dev_dependencies:
   flutter_lints: ^6.0.0
   drift_dev: ^2.32.1
   build_runner: ^2.13.1
+  flutter_launcher_icons: ^0.14.4
+
+# Launcher icons, rendered from `apps/landing/public/logo.svg` — the single
+# source of truth shared with the web app and the landing site. Regenerate the
+# platform assets with `dart run flutter_launcher_icons` after touching either
+# PNG under `assets/icon/`.
+#
+# Android keeps the mark's card silhouette (rounded corners + notched edge).
+# The system always masks the composited adaptive layers to the launcher's own
+# shape, so a full-bleed card would just come back as a circle or squircle. The
+# card therefore lives in the *foreground* over a transparent background, sized
+# to 51% of the 108dp canvas — the largest scale whose opaque pixels all stay
+# inside the 66dp safe circle, so no launcher mask can clip it.
+#
+# iOS forbids alpha in app icons, so it keeps the full-bleed `icon.png`, where
+# the card is flattened onto its own background colour. Its squircle is close
+# enough to the card's own corners that nothing visibly doubles up.
+flutter_launcher_icons:
+  image_path: assets/icon/icon.png
+  # Legacy mipmaps are shown unmasked on API 24-25, so they get the card with
+  # its alpha intact rather than the flattened iOS artwork.
+  image_path_android: assets/icon/icon-android.png
+  android: true
+  # `minSdk` in android/app/build.gradle.kts resolves through
+  # `flutter.minSdkVersion`, which the generator can't read — state it here.
+  min_sdk_android: 24
+  adaptive_icon_background: "#00000000"
+  adaptive_icon_foreground: assets/icon/icon-foreground.png
+  # The foreground PNG is already sized against the safe zone; skip the
+  # generator's default 16% inset so the card isn't shrunk twice.
+  adaptive_icon_foreground_inset: 0
+  ios: true
+  remove_alpha_ios: true
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec

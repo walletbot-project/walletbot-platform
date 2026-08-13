@@ -4,8 +4,10 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
+import 'package:app/app_config/app_config_controller.dart';
 import 'package:app/l10n/l10n.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:provider/provider.dart';
 import 'package:record/record.dart';
 
 import '../voice/voice_event.dart';
@@ -1101,13 +1103,17 @@ class _ToolCard extends StatelessWidget {
                   ),
                 ],
               ),
-              if (item.args.isNotEmpty) ...[
-                const SizedBox(height: 8),
-                _KvBlock(label: context.l10n.arguments, data: item.args),
-              ],
-              if (item.result != null) ...[
-                const SizedBox(height: 6),
-                _KvBlock(label: context.l10n.result, data: item.result!),
+              if (context.watch<AppConfigController>().isFlagEnabled(
+                'debugToolCalls',
+              )) ...[
+                if (item.args.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  _KvBlock(label: context.l10n.arguments, data: item.args),
+                ],
+                if (item.result != null) ...[
+                  const SizedBox(height: 6),
+                  _KvBlock(label: context.l10n.result, data: item.result!),
+                ],
               ],
             ],
           ),

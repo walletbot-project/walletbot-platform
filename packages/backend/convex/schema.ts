@@ -2,6 +2,11 @@ import { defineSchema } from 'convex/server'
 import { accounts } from './schema/accounts'
 import { categories } from './schema/categories'
 import { dashboardWidgets, savedFilters } from './schema/dashboard'
+import {
+    admins,
+    featureFlagOverrides,
+    featureFlags,
+} from './schema/featureFlags'
 import { refreshTokens } from './schema/refreshTokens'
 import { syncCounters, tombstones } from './schema/sync'
 import { tags } from './schema/tags'
@@ -17,9 +22,12 @@ import { voiceSessionEvents, voiceSessions } from './schema/voice'
 
 export default defineSchema({
     accounts,
+    admins,
     categories,
     dashboardWidgets,
     deletedUsers,
+    featureFlagOverrides,
+    featureFlags,
     refreshTokens,
     savedFilters,
     syncCounters,

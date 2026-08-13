@@ -7,7 +7,7 @@ import type { DataModel } from '../_generated/dataModel'
 // testMode is hardcoded OFF: every deployment sends real emails to real
 // addresses. (With testMode on, sendEmail throws for any recipient that
 // isn't a resend.dev test address.) There is no RESEND_TEST_MODE env var —
-// docs/riesgos.md R-013 used to claim one; the row now matches this code.
+// docs/riesgos.md R-015 used to claim one; the row now matches this code.
 export const resend: Resend = new Resend(components.resend, {
     testMode: false,
     onEmailEvent: internal.emails.internal.handleEmailEvent,

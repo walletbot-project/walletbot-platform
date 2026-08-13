@@ -81,7 +81,7 @@ class _TransactionListContent extends StatelessWidget {
             if (i > 0)
               Divider(height: 1, color: theme.colorScheme.outlineVariant),
             TransactionRow(
-              title: items[i].name,
+              title: context.l10n.transactionName(items[i].name, items[i].type),
               amountCents: signedDisplayCents(items[i].type, items[i].amount),
               dateCheck: items[i].dateConfirmed,
               contained: false,

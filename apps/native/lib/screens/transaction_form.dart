@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:app/app_config/app_config_controller.dart';
 import 'package:app/components/account_icons.dart';
 import 'package:app/components/category_icons.dart';
 import 'package:app/components/color_utils.dart';
@@ -675,7 +676,10 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
                         ],
                       ),
                     ),
-                    if (_type == TransactionFormType.expense) ...[
+                    if (_type == TransactionFormType.expense &&
+                        context.watch<AppConfigController>().isFlagEnabled(
+                          'recurringExpense',
+                        )) ...[
                       const SizedBox(width: 16),
                       _RecurringExpenseControl(
                         value: _isRecurringExpense,
@@ -810,10 +814,12 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
                         // Soft red (like the previous pink), theme-aware so it
                         // also works in dark; overrides the global turquoise
                         // filledButtonTheme.
-                        backgroundColor:
-                            Theme.of(context).colorScheme.errorContainer,
-                        foregroundColor:
-                            Theme.of(context).colorScheme.onErrorContainer,
+                        backgroundColor: Theme.of(
+                          context,
+                        ).colorScheme.errorContainer,
+                        foregroundColor: Theme.of(
+                          context,
+                        ).colorScheme.onErrorContainer,
                       ),
                     ),
                   ),

@@ -16,7 +16,8 @@
             "!**/build",
             "!**/_generated",
             "!**/ui",
-            "!**/*.astro"
+            "!**/*.astro",
+            "!**/drift_schemas"
         ]
     },
     "formatter": {
