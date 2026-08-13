@@ -1,0 +1,8 @@
+# Cloudflare parses this file out of the deployed directory instead of serving
+# it. Replaces the asset-caching route the Vercel adapter used to emit into
+# `.vercel/output/config.json`.
+
+# Astro fingerprints every filename under `/_astro/`, so a change ships as a new
+# URL and the old one can be cached indefinitely.
+/_astro/*
+  Cache-Control: public, max-age=31536000, immutable

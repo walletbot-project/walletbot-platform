@@ -46,6 +46,51 @@ void main() {
     expect(es.dashboardTitle('Monthly expenses'), 'Gastos del mes');
   });
 
+  test('auto-generated transaction names follow the active locale', () {
+    final en = AppLocalizationsEn();
+    final es = AppLocalizationsEs();
+    const adjustment = 'balance_adjustment';
+
+    // The canonical persisted values are the Spanish ones the backend writes.
+    expect(
+      en.transactionName('Ajuste de saldo', adjustment),
+      'Balance adjustment',
+    );
+    expect(
+      es.transactionName('Ajuste de saldo', adjustment),
+      'Ajuste de saldo',
+    );
+    expect(
+      en.transactionName('Balance inicial', adjustment),
+      'Initial balance',
+    );
+    expect(
+      es.transactionName('Balance inicial', adjustment),
+      'Balance inicial',
+    );
+
+    // User-typed names pass through untouched.
+    expect(en.transactionName('Coffee', adjustment), 'Coffee');
+    expect(es.transactionName('Café', adjustment), 'Café');
+  });
+
+  test('only balance adjustments have their name localized', () {
+    final en = AppLocalizationsEn();
+    final es = AppLocalizationsEs();
+
+    // A user-entered name that collides with a generated one is never
+    // rewritten, because non-adjustment types carry no generated names.
+    for (final type in const ['expense', 'income', 'transfer']) {
+      expect(en.transactionName('Ajuste de saldo', type), 'Ajuste de saldo');
+      expect(es.transactionName('Initial balance', type), 'Initial balance');
+      expect(en.transactionName('Balance inicial', type), 'Balance inicial');
+      expect(
+        es.transactionName('Balance adjustment', type),
+        'Balance adjustment',
+      );
+    }
+  });
+
   test('dates and money use locale-specific separators and ordering', () {
     final date = DateTime(2026, 7, 10);
 

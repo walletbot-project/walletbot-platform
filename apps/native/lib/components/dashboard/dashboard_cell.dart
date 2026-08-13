@@ -1,4 +1,5 @@
 import 'package:app/components/color_utils.dart';
+import 'package:app/l10n/l10n.dart';
 import 'package:flutter/material.dart';
 
 /// Shared visual shell for dashboard widgets. Cells read like compact Material
@@ -29,7 +30,7 @@ class DashboardCell extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colors = theme.colorScheme;
-    final resolvedTitle = title.isEmpty ? 'Widget' : title;
+    final resolvedTitle = title.isEmpty ? context.l10n.widget : title;
     // No custom color: the M3 surfaceContainer role separates from the scaffold
     // (surface) consistently in both themes: darker than the background in
     // light, lighter in dark. A defined color is a stored light pastel, adapted

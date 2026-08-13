@@ -1,0 +1,150 @@
+/**
+ * Spanish catalog — the reference locale, mirroring
+ * `apps/web/src/lib/i18n/es.ts`. Its shape defines `Messages`, so every other
+ * catalog is checked against it at compile time: a missing key, a stray key, or
+ * a value function whose parameters drifted is a type error, not a runtime
+ * fallback.
+ *
+ * Entries that take values are functions, which keeps the parameter names and
+ * types checked at the call site.
+ *
+ * Every product claim here is backed by shipped code (voice agent, sync engine,
+ * local accounts, multi-currency, dashboard). Claims about local-only mode are
+ * deliberately scoped to *financial records*, matching docs/legal — the app
+ * still sends usage/diagnostic telemetry. The assistant's language claim is
+ * deliberately hedged to "most languages": the UI ships es/en, but the agent
+ * understands far more.
+ */
+export const es = {
+    meta: {
+        title: 'Wallet Bot — Tus gastos, registrados con la voz',
+        description:
+            'Gestor de gastos personales simple, rápido y moderno. Hablá y tus gastos quedan registrados: sin planillas, sin formularios tediosos. Solo una conversación.',
+    },
+
+    nav: {
+        skipToContent: 'Saltar al contenido',
+        languageLabel: 'Idioma',
+        features: 'Funciones',
+        download: 'Descargar',
+        getApp: 'Descargar la app',
+    },
+
+    hero: {
+        badge: 'Modo de voz en vivo',
+        headline: 'Hablá. Ya quedó registrado.',
+        subheadline:
+            'Wallet Bot es un gestor de gastos personales con modo de voz en vivo: contale qué gastaste y el asistente lo anota por vos. Sin planillas. Sin formularios. Solo una conversación.',
+        ctaFeatures: 'Ver funciones',
+    },
+
+    // Verified numbers only: 52 currencies in the catalog, 4 movement types in
+    // the transactions schema, es/en app UI (the assistant understands most
+    // languages), offline-first native data layer.
+    stats: {
+        currencies: { value: '50+', label: 'monedas soportadas' },
+        types: { value: '4', label: 'tipos de movimiento' },
+        languages: { value: '2', label: 'idiomas en la app' },
+        offline: { value: '100%', label: 'offline-first en el celular' },
+    },
+
+    // Static illustration of the real voice flow: the assistant registers the
+    // movement and the chat shows an editable action card.
+    demo: {
+        listening: 'Escuchando',
+        userSays: '«Pagué 8.500 pesos en el supermercado con la tarjeta»',
+        actionType: 'Gasto',
+        actionName: 'Supermercado',
+        actionAccount: 'Tarjeta',
+        actionAmount: '$8.500',
+        logged: 'Registrado — tocá la tarjeta para corregir lo que sea',
+    },
+
+    features: {
+        title: 'Simple a propósito',
+        subtitle:
+            'Lo que necesitás para saber en qué se va la plata — y nada más.',
+        items: {
+            voice: {
+                title: 'Asistente de voz en vivo',
+                body: 'Hablale y queda anotado: crea cuentas y categorías sobre la marcha, y cada acción aparece como una tarjeta editable para corregir al toque.',
+                types: {
+                    expense: 'Gastos',
+                    income: 'Ingresos',
+                    transfer: 'Transferencias',
+                    adjustment: 'Ajustes de saldo',
+                },
+            },
+            offline: {
+                title: 'Funciona sin conexión',
+                body: 'La app móvil guarda todo en tu teléfono y sincroniza sola entre tus dispositivos cuando volvés a tener red.',
+            },
+            local: {
+                title: 'Modo local, sin cuenta',
+                body: 'Usá la app móvil sin registrarte: tus registros financieros se quedan en tu dispositivo.',
+            },
+            fast: {
+                title: 'Rápida de verdad',
+                body: 'Sin recargas ni esperas: registrás algo — vos o el asistente — y aparece al instante en listas, saldos y gráficos.',
+                chip: 'Cero spinners',
+            },
+            currencies: {
+                title: 'Multi-moneda',
+                body: 'Cuentas en más de 50 monedas, transferencias entre monedas con tipo de cambio, y totales siempre separados por moneda.',
+            },
+            dashboard: {
+                title: 'Inicio a tu medida',
+                body: 'Armá el inicio de la app móvil con widgets: estadísticas, listas y gráficos de torta, barras o líneas. El asistente también puede armarlo por vos.',
+            },
+            // The filters card is hidden on the home page for now — saved
+            // filters aren't shipped in the app yet. Kept so the card can be
+            // re-enabled without rewriting the copy.
+            filters: {
+                title: 'Filtros con memoria',
+                body: 'Buscá por texto, combiná condiciones y guardá tus vistas favoritas para volver a ellas con un toque.',
+            },
+            bilingual: {
+                title: 'Español, inglés y más',
+                body: 'La app está en español e inglés, y el asistente entiende la mayoría de los idiomas: hablale en el tuyo. Cambiá cuando quieras, incluso en medio de una conversación.',
+                chipMore: '+ muchos más',
+            },
+        },
+    },
+
+    // The service is free of charge per T&C §2.
+    download: {
+        title: 'Descargala gratis',
+        subtitle: 'Hoy en Android. Muy pronto en iPhone.',
+        android: {
+            lead: 'Disponible en',
+            name: 'Google Play',
+        },
+        ios: {
+            lead: 'Próximamente en',
+            name: 'App Store',
+        },
+    },
+
+    footer: {
+        tagline: 'Gestor de gastos personales, conversacional y simple.',
+        privacy: 'Política de Privacidad',
+        terms: 'Términos y Condiciones',
+        webApp: 'App web (beta)',
+        copyright: (p: { year: number }) => `© ${p.year} Wallet Bot`,
+    },
+
+    legal: {
+        privacy: {
+            title: 'Política de Privacidad',
+            description:
+                'Cómo Wallet Bot recolecta, usa y protege tus datos personales.',
+        },
+        terms: {
+            title: 'Términos y Condiciones',
+            description: 'Condiciones de uso del servicio Wallet Bot.',
+        },
+        backHome: 'Volver al inicio',
+    },
+}
+
+export type Messages = typeof es

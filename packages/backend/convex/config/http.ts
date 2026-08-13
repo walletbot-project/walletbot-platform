@@ -90,7 +90,8 @@ const postAccountConfig = httpAction(async (ctx, req) => {
     )
     const account = await accountFromBody(ctx, body?.account)
 
-    const verdict = resolveAccountConfig({
+    const verdict = await resolveAccountConfig({
+        ctx,
         platform,
         appVersion,
         deviceId,

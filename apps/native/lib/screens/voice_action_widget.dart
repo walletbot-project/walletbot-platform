@@ -188,7 +188,7 @@ class _TxnActionWidgetState extends State<_TxnActionWidget> {
     return _ActionCard(
       icon: icon,
       iconColor: color,
-      title: transaction.name,
+      title: context.l10n.transactionName(transaction.name, transaction.type),
       subtitle: '$amountLabel · $location',
       trailing: context.l10n.transactionSaved(
         typeLabel,

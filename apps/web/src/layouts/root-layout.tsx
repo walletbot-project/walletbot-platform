@@ -1,6 +1,9 @@
+import { api } from '@wallet-bot/backend/api'
+import { useQuery } from 'convex/react'
 import {
     BarChart3,
     Bot,
+    Flag,
     Home,
     Landmark,
     List,
@@ -10,7 +13,7 @@ import {
     Trash2,
     User,
 } from 'lucide-react'
-import { NavLink, Outlet, useLocation } from 'react-router-dom'
+import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import {
     DropdownMenu,
@@ -69,9 +72,11 @@ function pathMatches(path: string, to: string, end: boolean) {
 
 export function RootLayout() {
     const location = useLocation()
+    const navigate = useNavigate()
     const auth = useAuth()
     const user = useUser()
     const t = useT()
+    const isAdmin = useQuery(api.v1.featureFlags.queries.getMyAdminStatus)
 
     const currentTitle =
         NAV_ITEMS.find((item) =>
@@ -225,6 +230,21 @@ export function RootLayout() {
                                             {user.name || user.email}
                                         </DropdownMenuLabel>
                                     </DropdownMenuGroup>
+                                    {isAdmin && (
+                                        <>
+                                            <DropdownMenuSeparator />
+                                            <DropdownMenuItem
+                                                onClick={() =>
+                                                    navigate(
+                                                        '/admin/feature-flags',
+                                                    )
+                                                }
+                                            >
+                                                <Flag className="size-4" />
+                                                Feature flags
+                                            </DropdownMenuItem>
+                                        </>
+                                    )}
                                     <DropdownMenuSeparator />
                                     <LanguageMenu />
                                     <DropdownMenuSeparator />

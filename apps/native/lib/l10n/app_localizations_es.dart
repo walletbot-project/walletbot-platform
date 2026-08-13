@@ -385,6 +385,9 @@ class AppLocalizationsEs extends AppLocalizations {
   String get balanceAdjustments => 'Ajustes';
 
   @override
+  String get initialBalance => 'Balance inicial';
+
+  @override
   String get pending => 'Pendiente';
 
   @override
@@ -1301,10 +1304,10 @@ class AppLocalizationsEs extends AppLocalizations {
   @override
   String transactionSaved(String type, String updated, String date) {
     String _temp0 = intl.Intl.selectLogic(updated, {
-      'true': 'actualizado',
-      'other': 'registrado',
+      'true': 'Se actualizó',
+      'other': 'Se registró',
     });
-    return '$type $_temp0 · $date';
+    return '$_temp0: $type · $date';
   }
 
   @override
