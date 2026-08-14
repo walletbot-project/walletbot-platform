@@ -1736,6 +1736,12 @@ abstract class AppLocalizations {
   /// **'You already added an account with that email'**
   String get accountAlreadyAdded;
 
+  /// No description provided for @accountExistsSignIn.
+  ///
+  /// In en, this message translates to:
+  /// **'An account with that email already exists. Sign in with your password or with Google.'**
+  String get accountExistsSignIn;
+
   /// No description provided for @emailSignInFailedGoogleHint.
   ///
   /// In en, this message translates to:

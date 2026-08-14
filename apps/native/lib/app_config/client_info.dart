@@ -43,6 +43,9 @@ class ClientInfo {
 /// The platform key sent to the backend. Kept in one place so the config
 /// verdict and sync gate agree on the string.
 String clientPlatform() {
+  // kIsWeb must be checked before Platform: dart:io's Platform throws
+  // `Unsupported operation` on web.
+  if (kIsWeb) return 'web';
   if (Platform.isIOS) return 'ios';
   if (Platform.isAndroid) return 'android';
   if (Platform.isMacOS) return 'macos';

@@ -21,6 +21,44 @@ const jsonResponse = (body: unknown, init?: ResponseInit): Response => {
 const jsonError = (status: number, code: string, message: string): Response =>
     jsonResponse({ code, message }, { status })
 
+// Browser CORS for the /auth/* surface. Native mobile clients never send an
+// Origin header and are unaffected. Flutter web dev servers pick a random
+// port, so any localhost origin is allowed; when a web build gets a real
+// domain it goes in ALLOWED_WEB_ORIGINS. These endpoints authenticate via
+// explicit tokens in the body or Authorization header (never cookies), so
+// reflecting the origin adds no CSRF surface.
+const ALLOWED_WEB_ORIGINS: readonly string[] = []
+
+const LOCALHOST_ORIGIN_PATTERN = /^https?:\/\/localhost(:\d+)?$/
+
+const allowedOrigin = (req: Request): string | null => {
+    const origin = req.headers.get('origin')
+    if (!origin) return null
+    return LOCALHOST_ORIGIN_PATTERN.test(origin) ||
+        ALLOWED_WEB_ORIGINS.includes(origin)
+        ? origin
+        : null
+}
+
+const withCorsHeaders = (req: Request, res: Response): Response => {
+    const origin = allowedOrigin(req)
+    if (!origin) return res
+    const headers = new Headers(res.headers)
+    headers.set('Access-Control-Allow-Origin', origin)
+    headers.set('Vary', 'Origin')
+    return new Response(res.body, {
+        status: res.status,
+        statusText: res.statusText,
+        headers,
+    })
+}
+
+// httpAction wrapper for browser-callable routes: reflects the allowed
+// origin onto whatever response the handler returns.
+const corsHttpAction = (
+    fn: (ctx: ActionCtx, req: Request) => Promise<Response>,
+) => httpAction(async (ctx, req) => withCorsHeaders(req, await fn(ctx, req)))
+
 const parseJsonBody = async <T>(req: Request): Promise<T | null> => {
     try {
         return (await req.json()) as T
@@ -95,7 +133,7 @@ const issueNativeSession = async (
     })
 }
 
-const googleSignIn = httpAction(async (ctx, req) => {
+const googleSignIn = corsHttpAction(async (ctx, req) => {
     const body = await parseJsonBody<GoogleSignInBody>(req)
     if (
         !body ||
@@ -162,7 +200,7 @@ const getEmailAndPassword = (
     return { email: body.email.trim().toLowerCase(), password: body.password }
 }
 
-const emailSignIn = httpAction(async (ctx, req) => {
+const emailSignIn = corsHttpAction(async (ctx, req) => {
     const parsed = getEmailAndPassword(
         await parseJsonBody<EmailSignInBody>(req),
     )
@@ -197,7 +235,7 @@ const emailSignIn = httpAction(async (ctx, req) => {
     }
 })
 
-const emailSignUp = httpAction(async (ctx, req) => {
+const emailSignUp = corsHttpAction(async (ctx, req) => {
     const body = await parseJsonBody<EmailSignUpBody>(req)
     const parsed = getEmailAndPassword(body)
     if (parsed instanceof Response) return parsed
@@ -208,6 +246,63 @@ const emailSignUp = httpAction(async (ctx, req) => {
             : parsed.email
 
     const { auth, headers } = await authComponent.getAuth(createAuth, ctx)
+
+    // better-auth answers a duplicate sign-up with a SYNTHETIC user and
+    // `token: null` — deliberately indistinguishable from a real pending
+    // verification, and it sends no email. Reporting that as "check your
+    // inbox" stranded users on a verify screen waiting for mail that was
+    // never sent (typically Google-registered accounts). So resolve the
+    // address first and answer honestly. This trades sign-up enumeration
+    // resistance for a usable recovery path; forgot/resend stay opaque
+    // (see docs/riesgos.md R-002).
+    const { internalAdapter } = await auth.$context
+    const existing = await internalAdapter.findUserByEmail(parsed.email, {
+        includeAccounts: true,
+    })
+
+    if (existing) {
+        // `credential` is better-auth's providerId for email+password.
+        const hasPassword = existing.accounts.some(
+            (account) => account.providerId === 'credential',
+        )
+        // An unverified password account re-running sign-up is not a
+        // conflict, it's someone who lost the first link: re-send it and
+        // keep the verify-pending flow. Rate limited per address, like the
+        // dedicated resend route.
+        if (hasPassword && !existing.user.emailVerified) {
+            const { ok } = await authRateLimiter.limit(
+                ctx,
+                'verificationEmail',
+                {
+                    key: parsed.email,
+                },
+            )
+            if (!ok) return rateLimitedResponse()
+            try {
+                await auth.api.sendVerificationEmail({
+                    body: { email: parsed.email },
+                    headers,
+                })
+            } catch (err) {
+                return emailSendFailedResponse('sendVerificationEmail', err)
+            }
+            return jsonError(
+                403,
+                'email_not_verified',
+                'Revisá tu correo: te enviamos un enlace para verificar tu cuenta.',
+            )
+        }
+
+        // Deliberately does NOT say which provider the account uses: an
+        // account can hold both a password and a social login, and naming
+        // one would leak more than "this address is taken". The client
+        // tells the user to sign in with either.
+        return jsonError(
+            409,
+            'account_exists',
+            'Ya existe una cuenta con ese correo.',
+        )
+    }
 
     try {
         const result = await auth.api.signUpEmail({
@@ -285,7 +380,7 @@ const rateLimitedResponse = (): Response =>
         'Demasiados intentos. Esperá un minuto y probá de nuevo.',
     )
 
-const forgotPasswordHandler = httpAction(async (ctx, req) => {
+const forgotPasswordHandler = corsHttpAction(async (ctx, req) => {
     const email = getEmail(await parseJsonBody<EmailOnlyBody>(req))
     if (email instanceof Response) return email
 
@@ -303,7 +398,7 @@ const forgotPasswordHandler = httpAction(async (ctx, req) => {
     return jsonResponse({ ok: true })
 })
 
-const resendVerificationHandler = httpAction(async (ctx, req) => {
+const resendVerificationHandler = corsHttpAction(async (ctx, req) => {
     const email = getEmail(await parseJsonBody<EmailOnlyBody>(req))
     if (email instanceof Response) return email
 
@@ -325,7 +420,7 @@ type RefreshBody = {
     refreshToken?: string
 }
 
-const refreshHandler = httpAction(async (ctx, req) => {
+const refreshHandler = corsHttpAction(async (ctx, req) => {
     const body = await parseJsonBody<RefreshBody>(req)
     if (
         !body ||
@@ -357,7 +452,7 @@ type SignOutBody = {
     refreshToken?: string
 }
 
-const signOutHandler = httpAction(async (ctx, req) => {
+const signOutHandler = corsHttpAction(async (ctx, req) => {
     const body = await parseJsonBody<SignOutBody>(req)
     if (
         body &&
@@ -398,6 +493,21 @@ const jwksHandler = httpAction(async () => {
     })
 })
 
+const preflightHandler = httpAction(async (_ctx, req) => {
+    const origin = allowedOrigin(req)
+    if (!origin) return new Response(null, { status: 204 })
+    return new Response(null, {
+        status: 204,
+        headers: {
+            'Access-Control-Allow-Origin': origin,
+            'Access-Control-Allow-Methods': 'POST, OPTIONS',
+            'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+            'Access-Control-Max-Age': '86400',
+            Vary: 'Origin',
+        },
+    })
+})
+
 export const registerAuthNativeRoutes = (http: HttpRouter): void => {
     http.route({ path: '/auth/google', method: 'POST', handler: googleSignIn })
     http.route({
@@ -429,6 +539,15 @@ export const registerAuthNativeRoutes = (http: HttpRouter): void => {
         path: '/auth/signout',
         method: 'POST',
         handler: signOutHandler,
+    })
+
+    // Browser preflight for the whole /auth/ namespace (Flutter web). Native
+    // mobile clients never send OPTIONS; without this the preflight 404s with
+    // no CORS headers and the browser blocks the POST.
+    http.route({
+        pathPrefix: '/auth/',
+        method: 'OPTIONS',
+        handler: preflightHandler,
     })
     http.route({
         path: '/native-auth/.well-known/jwks.json',

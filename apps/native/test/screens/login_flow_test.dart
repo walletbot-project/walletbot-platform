@@ -88,6 +88,42 @@ void main() {
     expect(find.text('Reenviar correo'), findsOneWidget);
   });
 
+  testWidgets('sign-up on a registered email says so instead of pending', (
+    tester,
+  ) async {
+    final auth = AuthController(
+      httpClient: MockClient(
+        (request) async => http.Response(
+          jsonEncode({'code': 'account_exists', 'message': 'exists'}),
+          409,
+        ),
+      ),
+    );
+    await pumpLogin(tester, auth);
+
+    await tester.tap(find.text('¿Necesitás una cuenta? Registrate'));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(find.byType(TextFormField).at(0), 'Ana');
+    await tester.enterText(find.byType(TextFormField).at(1), 'ana@test.com');
+    await tester.enterText(find.byType(TextFormField).at(2), 'password123');
+    await tester.tap(find.text('Registrarme'));
+    await tester.pumpAndSettle();
+
+    // The old behaviour parked the user here waiting for mail that never
+    // gets sent; it must not appear.
+    expect(find.text('Verificá tu correo'), findsNothing);
+    // One message for both providers — naming the account's provider would
+    // leak more than "this address is taken".
+    expect(
+      find.textContaining('con tu contraseña o con Google'),
+      findsOneWidget,
+    );
+    // And the form drops back to sign-in so the hint is actionable.
+    expect(find.text('¿Olvidaste tu contraseña?'), findsOneWidget);
+    expect(auth.accounts, isEmpty);
+  });
+
   testWidgets('premature "I verified" sign-in returns to pending with notice', (
     tester,
   ) async {

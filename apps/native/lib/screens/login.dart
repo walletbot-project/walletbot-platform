@@ -109,6 +109,14 @@ class _LoginScreenState extends State<LoginScreen> {
       }
     } on AccountAlreadyAddedError {
       messenger.showSnackBar(SnackBar(content: Text(l10n.accountAlreadyAdded)));
+    } on AccountExistsException {
+      // Registering an existing address used to land on the verify-pending
+      // screen waiting for mail the backend never sends. Say what happened
+      // and drop the user into sign-in.
+      if (mounted) {
+        setState(() => _emailMode = _EmailAuthMode.signIn);
+      }
+      messenger.showSnackBar(SnackBar(content: Text(l10n.accountExistsSignIn)));
     } on EmailNotVerifiedException {
       // The backend already (re-)sent the verification email on this attempt.
       if (mounted) {

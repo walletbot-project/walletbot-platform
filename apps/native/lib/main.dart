@@ -26,6 +26,7 @@ import 'package:app/voice/gemini_voice_expense_command.dart';
 import 'package:app/voice/voice_session_remote_sync.dart';
 import 'package:app/voice/voice_session_repository.dart';
 import 'package:convex_flutter/convex_flutter.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:google_sign_in/google_sign_in.dart';
@@ -49,9 +50,17 @@ Future<void> main() async {
     ),
   );
 
-  await GoogleSignIn.instance.initialize(
-    serverClientId: AppConfig.googleServerClientId,
-  );
+  // On web the client ID comes from the <meta name="google-signin-client_id">
+  // tag in web/index.html, and serverClientId is not supported (the plugin
+  // asserts it is null). A missing/invalid client ID must not prevent the app
+  // from rendering — only sign-in becomes unavailable.
+  try {
+    await GoogleSignIn.instance.initialize(
+      serverClientId: kIsWeb ? null : AppConfig.googleServerClientId,
+    );
+  } catch (e, st) {
+    debugPrint('GoogleSignIn.initialize failed: $e\n$st');
+  }
 
   // Platform + app version, resolved once and shared by the config controller
   // and the sync engine so both gates identify the client the same way.

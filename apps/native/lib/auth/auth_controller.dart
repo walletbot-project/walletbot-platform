@@ -333,6 +333,14 @@ class AuthController extends ChangeNotifier {
           response.body,
         );
       }
+      if (decoded is Map<String, Object?> &&
+          decoded['code'] == 'account_exists') {
+        throw AccountExistsException(
+          response.statusCode,
+          decoded,
+          response.body,
+        );
+      }
       throw AuthHttpError(response.statusCode, decoded, response.body);
     }
     return jsonDecode(response.body) as Map<String, Object?>;
@@ -396,4 +404,12 @@ class AuthHttpError implements Exception {
 /// this.
 class EmailNotVerifiedException extends AuthHttpError {
   EmailNotVerifiedException(super.statusCode, super.body, super.rawBody);
+}
+
+/// Sign-up hit an address that is already registered (`account_exists`).
+/// The backend intentionally doesn't say which provider that account uses —
+/// it may have both a password and a social login — so the UI points at
+/// either without narrowing it down.
+class AccountExistsException extends AuthHttpError {
+  AccountExistsException(super.statusCode, super.body, super.rawBody);
 }

@@ -298,6 +298,7 @@
   "signInAction": "sign in",
   "signUpAction": "create the account",
   "accountAlreadyAdded": "You already added an account with that email",
+  "accountExistsSignIn": "An account with that email already exists. Sign in with your password or with Google.",
   "emailSignInFailedGoogleHint": "Sign-in failed. If you registered with Google, use “Continue with Google”.",
   "emailAuthFailed": "Could not {action}: {error}",
   "@emailAuthFailed": {"placeholders": {"action": {"type": "String"}, "error": {"type": "Object"}}},

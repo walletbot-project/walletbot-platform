@@ -911,6 +911,10 @@ class AppLocalizationsEn extends AppLocalizations {
       'You already added an account with that email';
 
   @override
+  String get accountExistsSignIn =>
+      'An account with that email already exists. Sign in with your password or with Google.';
+
+  @override
   String get emailSignInFailedGoogleHint =>
       'Sign-in failed. If you registered with Google, use “Continue with Google”.';
 

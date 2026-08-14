@@ -273,6 +273,7 @@
   "signInAction": "iniciar sesión",
   "signUpAction": "crear la cuenta",
   "accountAlreadyAdded": "Ya tenés una cuenta agregada con ese correo",
+  "accountExistsSignIn": "Ya existe una cuenta con ese correo. Iniciá sesión con tu contraseña o con Google.",
   "emailSignInFailedGoogleHint": "No se pudo iniciar sesión. Si te registraste con Google, usá «Continuar con Google».",
   "emailAuthFailed": "No se pudo {action}: {error}",
   "forgotPassword": "¿Olvidaste tu contraseña?",
