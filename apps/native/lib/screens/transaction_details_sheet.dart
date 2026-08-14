@@ -20,11 +20,17 @@ class TransactionDetailsScreen extends StatefulWidget {
     required this.transactionId,
     required this.repos,
     this.transferSide,
+    this.onResult,
   });
 
   final String transactionId;
   final AppRepositories repos;
   final TransactionDetailTransferSide? transferSide;
+
+  /// Embedded (pane) mode: when set, the screen never pops its route —
+  /// closing or tapping a filterable value reports here instead. A null
+  /// filter means plain close (e.g. after delete or the close button).
+  final void Function(TransactionFilter? filter)? onResult;
 
   @override
   State<TransactionDetailsScreen> createState() =>
@@ -360,7 +366,7 @@ class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
     try {
       await widget.repos.transactions.delete(transaction.id);
       if (!mounted) return;
-      Navigator.of(context).pop();
+      _close();
     } catch (error, stackTrace) {
       debugPrint('Error deleting transaction: $error\n$stackTrace');
       if (mounted) {
@@ -540,6 +546,17 @@ class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
     setState(() => _selectedTagIds = {..._selectedTagIds, picked.id});
   }
 
+  /// Exits the screen: reports to [TransactionDetailsScreen.onResult] when
+  /// embedded as a pane, pops the route otherwise.
+  void _close([TransactionFilter? filter]) {
+    final onResult = widget.onResult;
+    if (onResult != null) {
+      onResult(filter);
+      return;
+    }
+    Navigator.of(context).pop(filter);
+  }
+
   @override
   Widget build(BuildContext context) {
     final transaction = _transaction;
@@ -547,6 +564,15 @@ class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
 
     return Scaffold(
       appBar: AppBar(
+        // Embedded in a pane there is no route to pop, so no back button
+        // appears — offer an explicit close instead.
+        leading: widget.onResult == null
+            ? null
+            : IconButton(
+                tooltip: MaterialLocalizations.of(context).closeButtonTooltip,
+                onPressed: () => _close(),
+                icon: const Icon(Icons.close_rounded),
+              ),
         title: Text(title),
         actions: [
           if (_saving)
@@ -825,7 +851,7 @@ class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
     if (_editing) return child;
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
-      onTap: () => Navigator.of(context).pop(filter),
+      onTap: () => _close(filter),
       child: child,
     );
   }
@@ -923,8 +949,7 @@ class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
 
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
-      onTap: () =>
-          Navigator.of(context).pop(TransactionFilter(tagIds: {tag.id})),
+      onTap: () => _close(TransactionFilter(tagIds: {tag.id})),
       child: Chip(
         avatar: CircleAvatar(backgroundColor: style.avatarColor),
         label: Text(tag.name),

@@ -1,6 +1,7 @@
 import 'package:app/data/data.dart';
 import 'package:app/database.dart';
 import 'package:app/l10n/l10n.dart';
+import 'package:app/shared/adaptive_surface.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart' show ReadContext;
 
@@ -40,7 +41,9 @@ class _FilterOptions {
 
 enum _FilterEditorMode { simple, advanced }
 
-/// Opens the filter editor as a draggable bottom sheet. Resolves to the edited
+/// Opens the filter editor: a draggable bottom sheet on compact windows, a
+/// right-hand side sheet on medium/expanded ones (it re-frames live if the
+/// window is resized across the breakpoint). Resolves to the edited
 /// [TransactionFilter] when the user taps "Aplicar", or `null` if dismissed.
 ///
 /// Pass [hiddenSections] to suppress dimensions the caller edits elsewhere
@@ -58,14 +61,8 @@ Future<TransactionFilter?> showFilterSheet(
   // the sheet's own context can't reach them. Callers already inside such a
   // modal (e.g. the add-widget sheet) pass [repos] in directly.
   final resolvedRepos = repos ?? context.read<AppRepositories>();
-  return showModalBottomSheet<TransactionFilter>(
-    context: context,
-    isScrollControlled: true,
-    useSafeArea: true,
-    backgroundColor: Theme.of(context).colorScheme.surface,
-    shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-    ),
+  return presentSurface<TransactionFilter>(
+    context,
     builder: (_) => FilterSheet(
       repos: resolvedRepos,
       initial: initial,
@@ -321,89 +318,99 @@ class _FilterSheetState extends State<FilterSheet> {
 
   @override
   Widget build(BuildContext context) {
+    // All editing state lives in this State object, *above* the branch below,
+    // so it survives when the enclosing AdaptiveSurfaceRoute morphs between
+    // presentations on window resize.
+    final style =
+        AdaptiveSurfaceScope.maybeOf(context) ?? SurfaceStyle.bottomSheet;
+    if (style != SurfaceStyle.bottomSheet) {
+      // Side sheet / dialog: full-height panel, no drag affordance.
+      return _buildSheetBody(context, null);
+    }
     return DraggableScrollableSheet(
       initialChildSize: 0.85,
       minChildSize: 0.5,
       maxChildSize: 0.95,
       expand: false,
-      builder: (context, scrollController) {
-        return Padding(
-          // Lift the whole sheet above the software keyboard so the action bar
-          // and the lower form fields don't get hidden behind it.
-          padding: EdgeInsets.only(
-            bottom: MediaQuery.viewInsetsOf(context).bottom,
+      builder: _buildSheetBody,
+    );
+  }
+
+  Widget _buildSheetBody(
+    BuildContext context,
+    ScrollController? scrollController,
+  ) {
+    return Padding(
+      // Lift the whole sheet above the software keyboard so the action bar
+      // and the lower form fields don't get hidden behind it.
+      padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
+      child: Column(
+        children: [
+          _Header(
+            onReset: _reset,
+            onClose: () => Navigator.of(context).pop(),
+            canToggleMode: _canUseAdvanced,
+            mode: _mode,
+            onToggleMode: _toggleEditorMode,
           ),
-          child: Column(
-            children: [
-              _Header(
-                onReset: _reset,
-                onClose: () => Navigator.of(context).pop(),
-                canToggleMode: _canUseAdvanced,
-                mode: _mode,
-                onToggleMode: _toggleEditorMode,
-              ),
-              const Divider(height: 1),
-              Expanded(
-                child: FutureBuilder<_FilterOptions>(
-                  future: _optionsFuture,
-                  builder: (context, snapshot) {
-                    if (snapshot.connectionState == ConnectionState.waiting) {
-                      return const Center(child: CircularProgressIndicator());
-                    }
-                    if (snapshot.hasError) {
-                      return Center(
-                        child: Padding(
-                          padding: const EdgeInsets.all(24),
-                          child: Text(
-                            context.l10n.filterOptionsLoadFailed(
-                              snapshot.error!,
-                            ),
-                            textAlign: TextAlign.center,
-                          ),
-                        ),
-                      );
-                    }
-                    final options = snapshot.data!;
-                    if (_mode == _FilterEditorMode.advanced) {
-                      return _buildAdvancedForm(scrollController, options);
-                    }
-                    return _buildForm(context, scrollController, options);
-                  },
-                ),
-              ),
-              SafeArea(
-                top: false,
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: OutlinedButton(
-                          onPressed: () => Navigator.of(context).pop(),
-                          child: Text(context.l10n.cancel),
-                        ),
+          const Divider(height: 1),
+          Expanded(
+            child: FutureBuilder<_FilterOptions>(
+              future: _optionsFuture,
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+                if (snapshot.hasError) {
+                  return Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(24),
+                      child: Text(
+                        context.l10n.filterOptionsLoadFailed(snapshot.error!),
+                        textAlign: TextAlign.center,
                       ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: FilledButton(
-                          onPressed: _apply,
-                          child: Text(context.l10n.apply),
-                        ),
-                      ),
-                    ],
+                    ),
+                  );
+                }
+                final options = snapshot.data!;
+                if (_mode == _FilterEditorMode.advanced) {
+                  return _buildAdvancedForm(scrollController, options);
+                }
+                return _buildForm(context, scrollController, options);
+              },
+            ),
+          ),
+          SafeArea(
+            top: false,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      child: Text(context.l10n.cancel),
+                    ),
                   ),
-                ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: FilledButton(
+                      onPressed: _apply,
+                      child: Text(context.l10n.apply),
+                    ),
+                  ),
+                ],
               ),
-            ],
+            ),
           ),
-        );
-      },
+        ],
+      ),
     );
   }
 
   Widget _buildForm(
     BuildContext context,
-    ScrollController scrollController,
+    ScrollController? scrollController,
     _FilterOptions options,
   ) {
     final hasCurrency = _currency != null;
@@ -694,7 +701,7 @@ class _FilterSheetState extends State<FilterSheet> {
       formatDateRange(range.start, range.end, context.localeName);
 
   Widget _buildAdvancedForm(
-    ScrollController scrollController,
+    ScrollController? scrollController,
     _FilterOptions options,
   ) {
     return ListView(

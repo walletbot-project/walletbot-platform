@@ -344,6 +344,10 @@ class AppLocalizationsEs extends AppLocalizations {
   String get noTransactionsYet => 'Sin transacciones todavía';
 
   @override
+  String get selectTransactionDetail =>
+      'Seleccioná una transacción para ver su detalle';
+
+  @override
   String get today => 'Hoy';
 
   @override

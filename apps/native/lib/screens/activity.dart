@@ -7,6 +7,7 @@ import 'package:app/data/data.dart';
 import 'package:app/database.dart';
 import 'package:app/l10n/l10n.dart';
 import 'package:app/shared/app_navigation.dart';
+import 'package:app/shared/breakpoints.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:app/screens/transaction_form.dart';
@@ -40,6 +41,12 @@ class _ActivityScreenState extends State<ActivityScreen> {
   /// (we've reached the end).
   int _lastRenderedCount = 0;
 
+  /// Selection for the side-by-side detail pane (expanded windows only). On
+  /// compact/medium windows details are pushed as a route instead, so these
+  /// stay null there.
+  String? _detailTransactionId;
+  TransactionDetailTransferSide? _detailTransferSide;
+
   Future<void> _openTransactionForm() async {
     // Pushed routes sit above the account-scoped providers; re-provide them
     // so the new route keeps using the active account's data layer.
@@ -60,6 +67,15 @@ class _ActivityScreenState extends State<ActivityScreen> {
     String transactionId, {
     TransactionDetailTransferSide? transferSide,
   }) async {
+    // Expanded windows show details in the side pane; the same breakpoint
+    // gates the pane in build, so selection and layout stay in agreement.
+    if (windowSizeClassOf(context) == WindowSizeClass.expanded) {
+      setState(() {
+        _detailTransactionId = transactionId;
+        _detailTransferSide = transferSide;
+      });
+      return;
+    }
     final repos = context.read<AppRepositories>();
     // The details screen can pop back a filter (tapping its date/category/tag),
     // asking Activity to show everything matching that dimension.
@@ -76,6 +92,19 @@ class _ActivityScreenState extends State<ActivityScreen> {
     setState(() {
       _filter = result;
       _resetPagination();
+    });
+  }
+
+  /// Result handler for the embedded detail pane: closes it and, when the
+  /// pane hands back a filter (tapped date/category/tag), applies it.
+  void _onDetailResult(TransactionFilter? filter) {
+    setState(() {
+      _detailTransactionId = null;
+      _detailTransferSide = null;
+      if (filter != null) {
+        _filter = filter;
+        _resetPagination();
+      }
     });
   }
 
@@ -161,42 +190,91 @@ class _ActivityScreenState extends State<ActivityScreen> {
   @override
   Widget build(BuildContext context) {
     final repos = context.read<AppRepositories>();
+    final showDetailPane =
+        windowSizeClassOf(context) == WindowSizeClass.expanded;
 
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(context.l10n.activity),
-        actions: [
-          IconButton(
-            tooltip: context.l10n.addTransaction,
-            onPressed: _openTransactionForm,
-            icon: const Icon(Icons.add_rounded),
+    // The PageStorageKey keeps the scroll offset when the list moves between
+    // full-width and pane layouts on window resize (the storage identity is
+    // the key chain, not the tree position).
+    final list = CustomScrollView(
+      key: const PageStorageKey('activityTransactionList'),
+      controller: _scrollController,
+      slivers: [
+        const SliverToBoxAdapter(child: SizedBox(height: 8)),
+        SliverToBoxAdapter(
+          child: TransactionFiltersBar(
+            filter: _filter,
+            onChanged: _onFiltersChanged,
           ),
-        ],
-      ),
+        ),
+        const SliverToBoxAdapter(child: SizedBox(height: 16)),
+        SliverToBoxAdapter(
+          child: _FilterChips(
+            selected: _filter.types.length == 1 ? _filter.types.single : null,
+            onChanged: _updateTypeChip,
+          ),
+        ),
+        _buildTransactionsSliver(repos),
+      ],
+    );
+
+    final appBar = AppBar(
+      title: Text(context.l10n.activity),
+      actions: [
+        IconButton(
+          tooltip: context.l10n.addTransaction,
+          onPressed: _openTransactionForm,
+          icon: const Icon(Icons.add_rounded),
+        ),
+      ],
+    );
+
+    if (!showDetailPane) {
+      return Scaffold(
+        appBar: appBar,
+        body: SafeArea(child: list),
+      );
+    }
+
+    // Split layout: the Activity app bar belongs to the list column only, and
+    // the detail column brings its own (TransactionDetailsScreen's Scaffold),
+    // so the divider runs the full height of the body.
+    return Scaffold(
       body: SafeArea(
-        child: CustomScrollView(
-          controller: _scrollController,
-          slivers: [
-            const SliverToBoxAdapter(child: SizedBox(height: 8)),
-            SliverToBoxAdapter(
-              child: TransactionFiltersBar(
-                filter: _filter,
-                onChanged: _onFiltersChanged,
-              ),
+        child: Row(
+          children: [
+            SizedBox(
+              width: 400,
+              child: Scaffold(appBar: appBar, body: list),
             ),
-            const SliverToBoxAdapter(child: SizedBox(height: 16)),
-            SliverToBoxAdapter(
-              child: _FilterChips(
-                selected: _filter.types.length == 1
-                    ? _filter.types.single
-                    : null,
-                onChanged: _updateTypeChip,
-              ),
-            ),
-            _buildTransactionsSliver(repos),
+            const VerticalDivider(width: 1, thickness: 1),
+            Expanded(child: _buildDetailPane(repos)),
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildDetailPane(AppRepositories repos) {
+    final transactionId = _detailTransactionId;
+    if (transactionId == null) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: Text(
+            context.l10n.selectTransactionDetail,
+            textAlign: TextAlign.center,
+          ),
+        ),
+      );
+    }
+    return TransactionDetailsScreen(
+      // Remount per selection so the pane reloads when another row is tapped.
+      key: ValueKey('$transactionId/${_detailTransferSide?.name}'),
+      transactionId: transactionId,
+      repos: repos,
+      transferSide: _detailTransferSide,
+      onResult: _onDetailResult,
     );
   }
 

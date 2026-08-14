@@ -103,6 +103,7 @@
   "transactionsLoadFailed": "No se pudieron cargar las transacciones: {error}",
   "noTransactions": "No hay transacciones",
   "noTransactionsYet": "Sin transacciones todavía",
+  "selectTransactionDetail": "Seleccioná una transacción para ver su detalle",
   "today": "Hoy",
   "yesterday": "Ayer",
   "estimated": "{date} (estimado)",

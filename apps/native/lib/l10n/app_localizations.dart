@@ -716,6 +716,12 @@ abstract class AppLocalizations {
   /// **'No transactions yet'**
   String get noTransactionsYet;
 
+  /// No description provided for @selectTransactionDetail.
+  ///
+  /// In en, this message translates to:
+  /// **'Select a transaction to see its details'**
+  String get selectTransactionDetail;
+
   /// No description provided for @today.
   ///
   /// In en, this message translates to:

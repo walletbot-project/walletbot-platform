@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:app/components/dashboard/balance_card_widget.dart';
 import 'package:app/components/dashboard/breakdown_chart_widget.dart';
 import 'package:app/components/dashboard/dashboard_layout.dart';
@@ -76,6 +78,13 @@ class DashboardView extends StatelessWidget {
 
   static const _gap = 4.0;
 
+  /// Reflow on wide layouts: several 6-unit logical rows render side by side
+  /// per visual band once each can get at least this width, so tiles keep a
+  /// phone-like size instead of stretching. Capped at [_maxBandColumns].
+  static const _minLogicalRowWidth = 380.0;
+  static const _bandGap = 16.0;
+  static const _maxBandColumns = 3;
+
   /// Hit width of the (overlaid) between-tile insert strips. Wider than [_gap]
   /// so the seam is easy to hit while dragging, but it lives in a Stack overlay
   /// so it never widens the row's actual layout.
@@ -103,15 +112,58 @@ class DashboardView extends StatelessWidget {
       builder: (context, constraints) {
         final maxWidth = constraints.maxWidth;
         final rowCount = layout.rowCount;
-        // Identical spacing in view and edit mode (a constant [_gap] between
-        // rows, nothing at the edges) so toggling edit never shifts the layout.
-        // The new-row drop bands are overlaid inside each row (see _buildRow).
+        // Reflow, don't stretch: logical (row, col) coordinates — and the
+        // persisted layout — always stay in 6-unit terms; wide layouts only
+        // change how many logical rows sit side by side per visual band.
+        final bandColumns = math.min(
+          _maxBandColumns,
+          math.max(
+            1,
+            (maxWidth + _bandGap) ~/ (_minLogicalRowWidth + _bandGap),
+          ),
+        );
+        if (bandColumns == 1) {
+          // Identical spacing in view and edit mode (a constant [_gap] between
+          // rows, nothing at the edges) so toggling edit never shifts the
+          // layout. The new-row drop bands are overlaid inside each row (see
+          // _buildRow).
+          return Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              for (var row = 0; row < rowCount; row++) ...[
+                if (row > 0) const SizedBox(height: _gap),
+                _buildRow(context, layout, itemsById, row, maxWidth),
+              ],
+            ],
+          );
+        }
+        final logicalRowWidth =
+            (maxWidth - _bandGap * (bandColumns - 1)) / bandColumns;
         return Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            for (var row = 0; row < rowCount; row++) ...[
-              if (row > 0) const SizedBox(height: _gap),
-              _buildRow(context, layout, itemsById, row, maxWidth),
+            for (var band = 0; band * bandColumns < rowCount; band++) ...[
+              if (band > 0) const SizedBox(height: _gap),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  for (var i = 0; i < bandColumns; i++) ...[
+                    if (i > 0) const SizedBox(width: _bandGap),
+                    SizedBox(
+                      width: logicalRowWidth,
+                      child: band * bandColumns + i < rowCount
+                          ? _buildRow(
+                              context,
+                              layout,
+                              itemsById,
+                              band * bandColumns + i,
+                              logicalRowWidth,
+                            )
+                          : const SizedBox.shrink(),
+                    ),
+                  ],
+                ],
+              ),
             ],
           ],
         );

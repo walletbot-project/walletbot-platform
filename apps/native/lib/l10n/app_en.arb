@@ -113,6 +113,7 @@
   "@transactionsLoadFailed": {"placeholders": {"error": {"type": "Object"}}},
   "noTransactions": "No transactions",
   "noTransactionsYet": "No transactions yet",
+  "selectTransactionDetail": "Select a transaction to see its details",
   "today": "Today",
   "yesterday": "Yesterday",
   "estimated": "{date} (estimated)",
