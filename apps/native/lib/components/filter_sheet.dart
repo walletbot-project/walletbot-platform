@@ -63,6 +63,9 @@ Future<TransactionFilter?> showFilterSheet(
   final resolvedRepos = repos ?? context.read<AppRepositories>();
   return presentSurface<TransactionFilter>(
     context,
+    // Overlays never change with window size: surfaces adapt to desktop as
+    // divided views (see the Activity split), not as side sheets on top.
+    wide: SurfaceStyle.bottomSheet,
     builder: (_) => FilterSheet(
       repos: resolvedRepos,
       initial: initial,

@@ -8,6 +8,7 @@ import 'package:app/components/readable_time_picker.dart';
 import 'package:app/data/data.dart';
 import 'package:app/database.dart';
 import 'package:app/l10n/l10n.dart';
+import 'package:app/shared/breakpoints.dart';
 import 'package:app/shared/money.dart';
 import 'package:drift/drift.dart' show Value;
 import 'package:flutter/material.dart';
@@ -564,14 +565,24 @@ class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        // Embedded in a pane there is no route to pop, so no back button
-        // appears — offer an explicit close instead.
+        // Embedded there is no route to pop, so no back button appears on its
+        // own: offer an explicit exit — an X in the split pane, a back arrow
+        // when covering the screen (matching the pushed-page look).
         leading: widget.onResult == null
             ? null
-            : IconButton(
-                tooltip: MaterialLocalizations.of(context).closeButtonTooltip,
-                onPressed: () => _close(),
-                icon: const Icon(Icons.close_rounded),
+            : Builder(
+                builder: (context) {
+                  final split =
+                      windowSizeClassOf(context) == WindowSizeClass.expanded;
+                  final localizations = MaterialLocalizations.of(context);
+                  return IconButton(
+                    tooltip: split
+                        ? localizations.closeButtonTooltip
+                        : localizations.backButtonTooltip,
+                    onPressed: () => _close(),
+                    icon: Icon(split ? Icons.close_rounded : Icons.arrow_back),
+                  );
+                },
               ),
         title: Text(title),
         actions: [
