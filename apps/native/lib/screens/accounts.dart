@@ -40,23 +40,48 @@ class _AccountsScreenState extends State<AccountsScreen> {
   /// selection so a different account loads fresh.
   GlobalKey _detailKey = GlobalKey(debugLabel: 'accountDetail');
 
+  /// The create-account form: split pane on expanded windows, a real pushed
+  /// route on smaller ones (via [AdaptiveDetailView]'s form slot). Providers
+  /// are captured at open because the route sits above the account-scoped
+  /// tree and must be re-provided.
+  bool _formOpen = false;
+  AppRepositories? _formRepos;
+  DefaultCurrencyController? _formCurrency;
+  GlobalKey _formKey = GlobalKey(debugLabel: 'accountCreate');
+
   void _openCreate(BuildContext context) {
-    // Pushed routes sit above the account-scoped providers; re-provide them
-    // so the new route keeps using the active account's data layer.
-    final repos = context.read<AppRepositories>();
-    final defaultCurrency = context.read<DefaultCurrencyController>();
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => MultiProvider(
-          providers: [
-            Provider<AppRepositories>.value(value: repos),
-            ChangeNotifierProvider<DefaultCurrencyController>.value(
-              value: defaultCurrency,
-            ),
-          ],
-          child: const CreateAccountScreen(),
+    setState(() {
+      _formOpen = true;
+      _formRepos = context.read<AppRepositories>();
+      _formCurrency = context.read<DefaultCurrencyController>();
+      _formKey = GlobalKey(debugLabel: 'accountCreate');
+      // The pane hosts one occupant at a time.
+      _detailAccount = null;
+    });
+  }
+
+  void _closeForm() {
+    setState(() => _formOpen = false);
+  }
+
+  Widget? _buildForm(BuildContext context, {required bool inRoute}) {
+    if (!_formOpen) return null;
+    final form = CreateAccountScreen(
+      key: _formKey,
+      onClose: inRoute ? null : _closeForm,
+    );
+    if (!inRoute) return form;
+    // Route mode: pushed routes sit above the account-scoped providers;
+    // re-provide them, exactly as the original push did. The keyed form
+    // widget itself moves in/out of this wrapper on handoffs.
+    return MultiProvider(
+      providers: [
+        Provider<AppRepositories>.value(value: _formRepos!),
+        ChangeNotifierProvider<DefaultCurrencyController>.value(
+          value: _formCurrency!,
         ),
-      ),
+      ],
+      child: form,
     );
   }
 
@@ -68,6 +93,8 @@ class _AccountsScreenState extends State<AccountsScreen> {
       _detailAccount = account;
       _detailRepos = context.read<AppRepositories>();
       _detailNav = context.read<AppNavigation>();
+      // The pane hosts one occupant at a time.
+      _formOpen = false;
     });
   }
 
@@ -97,6 +124,9 @@ class _AccountsScreenState extends State<AccountsScreen> {
       hasDetail: _detailAccount != null,
       detailBuilder: _buildDetail,
       onSheetDismissed: _closeDetails,
+      hasForm: _formOpen,
+      formBuilder: _buildForm,
+      onFormDismissed: _closeForm,
       isActiveTab: isActiveTab,
       placeholder: Center(
         child: Padding(

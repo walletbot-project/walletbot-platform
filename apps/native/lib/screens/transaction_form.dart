@@ -17,7 +17,12 @@ enum TransactionFormType { income, expense, transfer }
 enum _TransferAmountField { source, destination }
 
 class TransactionFormScreen extends StatefulWidget {
-  const TransactionFormScreen({super.key});
+  const TransactionFormScreen({super.key, this.onResult});
+
+  /// Embedded (split pane) mode: when set, the screen never pops its route —
+  /// save/cancel report here instead ([saved] tells whether a transaction
+  /// was recorded).
+  final void Function(bool saved)? onResult;
 
   @override
   State<TransactionFormScreen> createState() => _TransactionFormScreenState();
@@ -473,7 +478,6 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
     }
 
     setState(() => _isSaving = true);
-    final navigator = Navigator.of(context);
 
     try {
       final amountValue = _parseAmount(_amountController.text)!;
@@ -551,7 +555,7 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
       }
 
       if (!mounted) return;
-      navigator.pop(true);
+      _close(saved: true);
     } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(
@@ -559,6 +563,17 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
       ).showSnackBar(SnackBar(content: Text(context.l10n.recordFailed(error))));
       setState(() => _isSaving = false);
     }
+  }
+
+  /// Exits the form: reports to [TransactionFormScreen.onResult] when
+  /// embedded in the split pane, pops the route with [saved] otherwise.
+  void _close({required bool saved}) {
+    final onResult = widget.onResult;
+    if (onResult != null) {
+      onResult(saved);
+      return;
+    }
+    Navigator.pop(context, saved);
   }
 
   @override
@@ -804,9 +819,7 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
                 children: [
                   Expanded(
                     child: FilledButton.tonalIcon(
-                      onPressed: _isSaving
-                          ? null
-                          : () => Navigator.pop(context),
+                      onPressed: _isSaving ? null : () => _close(saved: false),
                       icon: const Icon(Icons.close_rounded),
                       label: Text(context.l10n.cancel),
                       style: FilledButton.styleFrom(
@@ -1118,9 +1131,9 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
       final message = error is DuplicateAccountException
           ? context.l10n.accountDuplicateNameCurrency
           : context.l10n.accountCreateFailed;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(message)),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(message)));
       return null;
     }
   }

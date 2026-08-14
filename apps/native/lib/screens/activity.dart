@@ -8,6 +8,8 @@ import 'package:app/components/transaction_row.dart';
 import 'package:app/data/data.dart';
 import 'package:app/database.dart';
 import 'package:app/l10n/l10n.dart';
+import 'package:app/shared/adaptive_detail_view.dart'
+    show InstantEntranceMaterialPageRoute;
 import 'package:app/shared/app_navigation.dart';
 import 'package:app/shared/breakpoints.dart';
 import 'package:flutter/material.dart';
@@ -62,20 +64,86 @@ class _ActivityScreenState extends State<ActivityScreen> {
   /// tell a user pop (clear the selection) from a resize handoff (keep it).
   MaterialPageRoute<TransactionFilter?>? _detailRoute;
 
-  Future<void> _openTransactionForm() async {
+  /// The new-transaction form: same machinery as the detail — one source of
+  /// truth, split pane on expanded windows, a real pushed route on smaller
+  /// ones, state-preserving handoffs on resize.
+  bool _formOpen = false;
+  GlobalKey _formKey = GlobalKey(debugLabel: 'activityForm');
+  MaterialPageRoute<bool?>? _formRoute;
+
+  void _openTransactionForm() {
+    setState(() {
+      _formOpen = true;
+      _formKey = GlobalKey(debugLabel: 'activityForm');
+      // The pane hosts one occupant at a time.
+      _detailTransactionId = null;
+      _detailTransferSide = null;
+    });
+    if (windowSizeClassOf(context) != WindowSizeClass.expanded) {
+      _pushFormRoute(instant: false);
+    }
+  }
+
+  /// Presents the form as a real route (the original mobile behavior),
+  /// instant only when taking over from the split pane on window shrink.
+  void _pushFormRoute({required bool instant}) {
     // Pushed routes sit above the account-scoped providers; re-provide them
-    // so the new route keeps using the active account's data layer.
+    // so the route keeps using the active account's data layer. The keyed
+    // form widget itself moves in/out of this wrapper on handoffs.
     final repos = context.read<AppRepositories>();
-    final saved = await Navigator.of(context).push<bool>(
-      MaterialPageRoute(
-        builder: (_) => Provider<AppRepositories>.value(
-          value: repos,
-          child: const TransactionFormScreen(),
-        ),
-      ),
+    Widget buildPage(BuildContext _) => Provider<AppRepositories>.value(
+      value: repos,
+      child: _buildForm(inRoute: true) ?? const SizedBox.shrink(),
     );
-    if (!mounted || saved != true) return;
-    context.read<AppNavigation>().index = AppNavigation.activityTab;
+    final route = instant
+        ? InstantEntranceMaterialPageRoute<bool?>(builder: buildPage)
+        : MaterialPageRoute<bool?>(builder: buildPage);
+    _formRoute = route;
+    unawaited(
+      Navigator.of(context).push(route).then((saved) {
+        // Only a USER exit (back/cancel/save) reaches here with the route
+        // still owned — a resize handoff nulls _formRoute first.
+        if (!mounted || !identical(_formRoute, route)) return;
+        _formRoute = null;
+        setState(() => _formOpen = false);
+        if (saved == true) {
+          context.read<AppNavigation>().index = AppNavigation.activityTab;
+        }
+      }),
+    );
+    // Rebuild so the handoff bridge (if shown) is dropped in the same frame
+    // the route claims the GlobalKey — the Element moves, State intact.
+    setState(() {});
+  }
+
+  /// Route mode gets no [TransactionFormScreen.onResult], so the form pops
+  /// itself with its result — the original mobile behavior, unchanged.
+  Widget? _buildForm({required bool inRoute}) {
+    if (!_formOpen) return null;
+    return TransactionFormScreen(
+      key: _formKey,
+      onResult: inRoute ? null : _onFormResult,
+    );
+  }
+
+  void _onFormResult(bool saved) {
+    // The list is stream-driven, so a saved transaction shows up on its own.
+    setState(() => _formOpen = false);
+  }
+
+  /// Form counterpart of [_reconcileDetailRoute].
+  void _reconcileFormRoute() {
+    if (!mounted) return;
+    final split = windowSizeClassOf(context) == WindowSizeClass.expanded;
+    final needsRoute = !split && _formOpen;
+    final route = _formRoute;
+    if (needsRoute && route == null) {
+      _pushFormRoute(instant: true);
+    } else if (!needsRoute && route != null) {
+      _formRoute = null;
+      Navigator.of(context).removeRoute(route);
+      setState(() {});
+    }
   }
 
   void _openTransactionDetails(
@@ -89,6 +157,8 @@ class _ActivityScreenState extends State<ActivityScreen> {
       }
       _detailTransactionId = transactionId;
       _detailTransferSide = transferSide;
+      // The pane hosts one occupant at a time.
+      _formOpen = false;
     });
     if (windowSizeClassOf(context) != WindowSizeClass.expanded) {
       // Mobile: a real MaterialPageRoute, with the platform's own entrance
@@ -104,7 +174,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
   void _pushDetailRoute({required bool instant}) {
     final repos = context.read<AppRepositories>();
     final route = instant
-        ? _InstantEntranceMaterialPageRoute<TransactionFilter?>(
+        ? InstantEntranceMaterialPageRoute<TransactionFilter?>(
             builder: (_) => _buildRouteDetail(repos),
           )
         : MaterialPageRoute<TransactionFilter?>(
@@ -307,12 +377,18 @@ class _ActivityScreenState extends State<ActivityScreen> {
       ],
     );
 
-    // The mobile route follows (window class × selection); build only
+    // The mobile routes follow (window class × selection); build only
     // schedules the sync so pushes/removals happen between frames.
     final needsRoute = !showDetailPane && _detailTransactionId != null;
     if (needsRoute != (_detailRoute != null)) {
       WidgetsBinding.instance.addPostFrameCallback(
         (_) => _reconcileDetailRoute(),
+      );
+    }
+    final needsFormRoute = !showDetailPane && _formOpen;
+    if (needsFormRoute != (_formRoute != null)) {
+      WidgetsBinding.instance.addPostFrameCallback(
+        (_) => _reconcileFormRoute(),
       );
     }
 
@@ -328,12 +404,16 @@ class _ActivityScreenState extends State<ActivityScreen> {
       // and the detail column brings its own (TransactionDetailsScreen's
       // Scaffold), so the divider runs the full height of the body.
       //
-      // The pane may only claim the GlobalKey once the mobile route has
-      // released it: in the frame right after a grow — before the post-frame
-      // handoff removes the route — inflating it here would steal the
-      // Element out of the still-visible route (duplicate-key assert, hole
-      // in the route's page). The route covers the window that frame, so the
-      // placeholder is never actually seen.
+      // A pane occupant may only claim its GlobalKey once its mobile route
+      // has released it: in the frame right after a grow — before the
+      // post-frame handoff removes the route — inflating it here would steal
+      // the Element out of the still-visible route (duplicate-key assert,
+      // hole in the route's page). The route covers the window that frame,
+      // so the fallback is never actually seen. The form wins the pane; the
+      // open methods enforce one occupant at a time anyway.
+      final formPane = _formOpen && _formRoute == null
+          ? _buildForm(inRoute: false)
+          : null;
       final pane = _detailRoute == null ? detail : null;
       body = Scaffold(
         body: SafeArea(
@@ -343,19 +423,23 @@ class _ActivityScreenState extends State<ActivityScreen> {
                 child: Scaffold(appBar: appBar, body: list),
               ),
               const VerticalDivider(width: 1, thickness: 1),
-              Expanded(child: pane ?? _buildDetailPlaceholder()),
+              Expanded(child: formPane ?? pane ?? _buildDetailPlaceholder()),
             ],
           ),
         ),
       );
     } else {
-      // Small windows: the detail lives in a REAL pushed route (see
-      // _pushDetailRoute). The bridge below renders only during handoff
-      // frames — after a shrink, before the route claims the GlobalKey — so
-      // the content is built somewhere in every frame and its State
-      // survives. It paints the same page the route shows, so the swap is
-      // invisible.
+      // Small windows: detail and form live in REAL pushed routes (see
+      // _pushDetailRoute / _pushFormRoute). The bridges below render only
+      // during handoff frames — after a shrink, before the route claims the
+      // GlobalKey — so the content is built somewhere in every frame and its
+      // State survives. Each paints the same page its route shows, so the
+      // swap is invisible. User-initiated opens push synchronously, so no
+      // bridge frame exists for them.
       final bridge = _detailRoute == null ? detail : null;
+      final formBridge = _formOpen && _formRoute == null
+          ? _buildForm(inRoute: false)
+          : null;
       body = Stack(
         fit: StackFit.expand,
         children: [
@@ -364,25 +448,30 @@ class _ActivityScreenState extends State<ActivityScreen> {
             body: SafeArea(child: list),
           ),
           ?bridge,
+          ?formBridge,
         ],
       );
     }
 
-    // The route handles system back natively. This safety net covers only
+    // The routes handle system back natively. This safety net covers only
     // the transient bridge frames, and only while Activity is the visible
-    // tab: back then closes the detail instead of leaving the app.
+    // tab: back then closes the bridged occupant instead of leaving the app.
     final isActiveTab = context.select<AppNavigation, bool>(
       (nav) => nav.index == AppNavigation.activityTab,
     );
-    final interceptPop =
-        !showDetailPane &&
-        detail != null &&
-        _detailRoute == null &&
-        isActiveTab;
+    final detailBridging =
+        !showDetailPane && detail != null && _detailRoute == null;
+    final formBridging = !showDetailPane && _formOpen && _formRoute == null;
+    final interceptPop = (detailBridging || formBridging) && isActiveTab;
     return PopScope(
       canPop: !interceptPop,
       onPopInvokedWithResult: (didPop, _) {
-        if (!didPop) _onDetailResult(null);
+        if (didPop) return;
+        if (formBridging) {
+          _onFormResult(false);
+        } else {
+          _onDetailResult(null);
+        }
       },
       child: body,
     );
@@ -847,19 +936,4 @@ class _FilterChips extends StatelessWidget {
       ),
     );
   }
-}
-
-/// A [MaterialPageRoute] that appears instantly but pops with the standard
-/// platform animation. Used when the mobile detail route takes over from the
-/// split pane on window shrink: the content is already on screen, so an
-/// entrance animation would read as a glitch — while a user-initiated back
-/// must still play the normal transition.
-class _InstantEntranceMaterialPageRoute<T> extends MaterialPageRoute<T> {
-  _InstantEntranceMaterialPageRoute({required super.builder});
-
-  @override
-  Duration get transitionDuration => Duration.zero;
-
-  @override
-  Duration get reverseTransitionDuration => const Duration(milliseconds: 300);
 }

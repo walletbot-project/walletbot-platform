@@ -22,6 +22,21 @@ import 'package:flutter/material.dart';
 ///   in every frame — pane, offstage bridge, or sheet — so the Element
 ///   reparents within a frame and its State (mid-edit fields included)
 ///   survives every handoff.
+/// A [MaterialPageRoute] that appears instantly but pops with the standard
+/// platform animation. Used when a full-screen route takes over already
+/// on-screen content during a resize handoff — an entrance animation would
+/// read as a glitch — while a user-initiated back must still play the normal
+/// transition.
+class InstantEntranceMaterialPageRoute<T> extends MaterialPageRoute<T> {
+  InstantEntranceMaterialPageRoute({required super.builder});
+
+  @override
+  Duration get transitionDuration => Duration.zero;
+
+  @override
+  Duration get reverseTransitionDuration => const Duration(milliseconds: 300);
+}
+
 class AdaptiveDetailView extends StatefulWidget {
   const AdaptiveDetailView({
     super.key,
@@ -31,6 +46,9 @@ class AdaptiveDetailView extends StatefulWidget {
     required this.onSheetDismissed,
     required this.placeholder,
     required this.isActiveTab,
+    this.hasForm = false,
+    this.formBuilder,
+    this.onFormDismissed,
   });
 
   /// The always-visible view, exactly as it renders on small windows today
@@ -63,6 +81,26 @@ class AdaptiveDetailView extends StatefulWidget {
   /// back button.
   final bool isActiveTab;
 
+  /// Whether a creation/edit form is open. The form occupies the same pane
+  /// as the detail on expanded windows and is presented as a REAL full-screen
+  /// [MaterialPageRoute] on smaller ones, with the same state-preserving
+  /// resize handoffs. The pane hosts one occupant at a time: callers must
+  /// clear the detail selection when opening the form and vice versa; when
+  /// both are set the form wins.
+  final bool hasForm;
+
+  /// Builds the current form, or null when none is open. Same GlobalKey
+  /// contract as [detailBuilder]. [inRoute] is true when the form is framed
+  /// as its own pushed route (keep the original self-popping exits and any
+  /// provider re-wrapping the route needs) and false when rendered inline
+  /// (pane or handoff bridge — exits must go through callbacks).
+  final Widget? Function(BuildContext context, {required bool inRoute})?
+  formBuilder;
+
+  /// Called when the form route is closed by the user (back, or a self-pop
+  /// on save/cancel). Clear the form state here.
+  final VoidCallback? onFormDismissed;
+
   @override
   State<AdaptiveDetailView> createState() => _AdaptiveDetailViewState();
 }
@@ -78,6 +116,16 @@ class _AdaptiveDetailViewState extends State<AdaptiveDetailView> {
   /// normal entrance animation. Resize handoffs present instantly instead.
   bool _openIsUserInitiated = false;
 
+  /// The live form route, when the form is presented as one. Same ownership
+  /// protocol as [_sheetRoute].
+  MaterialPageRoute<void>? _formRoute;
+
+  /// Same as [_openIsUserInitiated], for the form. While pending it also
+  /// suppresses the form bridge: a fresh open has no State to preserve, and
+  /// skipping the bridge lets the route play its normal entrance animation
+  /// over the list, exactly like the original push.
+  bool _formOpenIsUserInitiated = false;
+
   bool get _split => windowSizeClassOf(context) == WindowSizeClass.expanded;
 
   @override
@@ -85,6 +133,9 @@ class _AdaptiveDetailViewState extends State<AdaptiveDetailView> {
     super.didUpdateWidget(oldWidget);
     if (!oldWidget.hasDetail && widget.hasDetail && !_split) {
       _openIsUserInitiated = true;
+    }
+    if (!oldWidget.hasForm && widget.hasForm && !_split) {
+      _formOpenIsUserInitiated = true;
     }
   }
 
@@ -136,13 +187,55 @@ class _AdaptiveDetailViewState extends State<AdaptiveDetailView> {
     if (!mounted) return;
     final needsSheet = !_split && widget.hasDetail;
     final route = _sheetRoute;
+    final userInitiated = _openIsUserInitiated;
+    _openIsUserInitiated = false; // consumed, whatever the decision
     if (needsSheet && route == null) {
-      _pushSheet(instant: !_openIsUserInitiated);
-      _openIsUserInitiated = false;
+      _pushSheet(instant: !userInitiated);
     } else if (!needsSheet && route != null) {
       // Null first: the completion handler must treat this as a handoff (or
       // a cleared selection), not a user dismissal.
       _sheetRoute = null;
+      Navigator.of(context).removeRoute(route);
+      setState(() {});
+    }
+  }
+
+  /// Presents the form as a real full-screen route: normal entrance for user
+  /// opens, instant when taking over from the pane on shrink. Exits always
+  /// animate normally.
+  void _pushFormRoute({required bool instant}) {
+    Widget buildPage(BuildContext routeContext) =>
+        widget.formBuilder?.call(routeContext, inRoute: true) ??
+        const SizedBox.shrink();
+    final route = instant
+        ? InstantEntranceMaterialPageRoute<void>(builder: buildPage)
+        : MaterialPageRoute<void>(builder: buildPage);
+    _formRoute = route;
+    unawaited(
+      Navigator.of(context).push(route).then((_) {
+        // Only a USER exit (back, or the form popping itself on save/cancel)
+        // reaches here with the route still owned.
+        if (!mounted || !identical(_formRoute, route)) return;
+        _formRoute = null;
+        widget.onFormDismissed?.call();
+        setState(() {});
+      }),
+    );
+    setState(() {});
+  }
+
+  /// Keeps the form route in sync with (window class × form-open), like
+  /// [_reconcileSheet] does for the detail sheet.
+  void _reconcileForm() {
+    if (!mounted) return;
+    final needsForm = !_split && widget.hasForm;
+    final route = _formRoute;
+    final userInitiated = _formOpenIsUserInitiated;
+    _formOpenIsUserInitiated = false; // consumed, whatever the decision
+    if (needsForm && route == null) {
+      _pushFormRoute(instant: !userInitiated);
+    } else if (!needsForm && route != null) {
+      _formRoute = null;
       Navigator.of(context).removeRoute(route);
       setState(() {});
     }
@@ -155,13 +248,20 @@ class _AdaptiveDetailViewState extends State<AdaptiveDetailView> {
     if (needsSheet != (_sheetRoute != null)) {
       WidgetsBinding.instance.addPostFrameCallback((_) => _reconcileSheet());
     }
+    final needsForm = !split && widget.hasForm;
+    if (needsForm != (_formRoute != null)) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _reconcileForm());
+    }
 
     if (split) {
-      // The pane may only claim the GlobalKey once the sheet has released
-      // it: in the frame right after a grow — before the post-frame handoff
-      // removes the sheet — inflating it here would steal the Element out of
-      // the still-visible sheet. The sheet covers that frame, so the
-      // placeholder is never actually seen.
+      // A pane occupant may only claim its GlobalKey once its route/sheet
+      // has released it: in the frame right after a grow — before the
+      // post-frame handoff removes it — inflating here would steal the
+      // Element out of the still-visible route. That route covers the window
+      // for that frame, so the fallback is never actually seen.
+      final form = widget.hasForm && _formRoute == null
+          ? widget.formBuilder?.call(context, inRoute: false)
+          : null;
       final detail = _sheetRoute == null
           ? widget.detailBuilder(context, inSheet: false)
           : null;
@@ -171,7 +271,7 @@ class _AdaptiveDetailViewState extends State<AdaptiveDetailView> {
             children: [
               Expanded(child: widget.list),
               const VerticalDivider(width: 1, thickness: 1),
-              Expanded(child: detail ?? widget.placeholder),
+              Expanded(child: form ?? detail ?? widget.placeholder),
             ],
           ),
         ),
@@ -186,22 +286,38 @@ class _AdaptiveDetailViewState extends State<AdaptiveDetailView> {
     final bridge = widget.hasDetail && _sheetRoute == null
         ? widget.detailBuilder(context, inSheet: true)
         : null;
+    // The form's bridge is VISIBLE (it paints the same full-screen page its
+    // route shows, so the handoff swap is invisible), and suppressed for
+    // user-initiated opens: fresh forms have no State to preserve, and the
+    // route then plays its normal entrance over the list, as always. Inline
+    // config (inRoute: false) so exits stay callback-wired even mid-bridge.
+    final formBridge =
+        widget.hasForm && _formRoute == null && !_formOpenIsUserInitiated
+        ? widget.formBuilder?.call(context, inRoute: false)
+        : null;
     final body = Stack(
       fit: StackFit.expand,
       children: [
         widget.list,
         if (bridge != null) Positioned.fill(child: Offstage(child: bridge)),
+        if (formBridge != null) Positioned.fill(child: formBridge),
       ],
     );
 
-    // The sheet handles back natively. This safety net covers only the
+    // The routes handle back natively. This safety net covers only the
     // transient bridge frames, and only while this view is visible: back
-    // then closes the detail instead of leaving the app.
-    final interceptPop = bridge != null && widget.isActiveTab;
+    // then closes the bridged occupant instead of leaving the app.
+    final interceptPop =
+        (bridge != null || formBridge != null) && widget.isActiveTab;
     return PopScope(
       canPop: !interceptPop,
       onPopInvokedWithResult: (didPop, _) {
-        if (!didPop) widget.onSheetDismissed();
+        if (didPop) return;
+        if (formBridge != null) {
+          widget.onFormDismissed?.call();
+        } else {
+          widget.onSheetDismissed();
+        }
       },
       child: body,
     );

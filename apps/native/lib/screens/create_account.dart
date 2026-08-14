@@ -17,7 +17,11 @@ List<({String label, IconData icon})> _nameSuggestions(AppLocalizations l10n) =>
     ];
 
 class CreateAccountScreen extends StatefulWidget {
-  const CreateAccountScreen({super.key});
+  const CreateAccountScreen({super.key, this.onClose});
+
+  /// Embedded (split pane) mode: when set, the screen never pops its route —
+  /// exits report here instead, and an explicit close button is shown.
+  final VoidCallback? onClose;
 
   @override
   State<CreateAccountScreen> createState() => _CreateAccountScreenState();
@@ -88,7 +92,7 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
         icon: accountIconName(_icon),
         initialBalanceCents: initialAmountCents,
       );
-      if (mounted) Navigator.of(context).pop();
+      if (mounted) _close();
     } catch (e, st) {
       debugPrint('Error creating account: $e\n$st');
       if (mounted) {
@@ -104,12 +108,34 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
     }
   }
 
+  /// Exits the screen: reports to [CreateAccountScreen.onClose] when embedded
+  /// in the split pane, pops the route otherwise.
+  void _close() {
+    final onClose = widget.onClose;
+    if (onClose != null) {
+      onClose();
+      return;
+    }
+    Navigator.of(context).pop();
+  }
+
   @override
   Widget build(BuildContext context) {
     final currency =
         _currency ?? context.watch<DefaultCurrencyController>().value;
     return Scaffold(
-      appBar: AppBar(title: Text(context.l10n.newAccount)),
+      appBar: AppBar(
+        // Embedded there is no route to pop, so no back button appears on its
+        // own — offer an explicit close instead.
+        leading: widget.onClose == null
+            ? null
+            : IconButton(
+                tooltip: MaterialLocalizations.of(context).closeButtonTooltip,
+                onPressed: _close,
+                icon: const Icon(Icons.close_rounded),
+              ),
+        title: Text(context.l10n.newAccount),
+      ),
       body: Form(
         key: _formKey,
         child: ListView(
