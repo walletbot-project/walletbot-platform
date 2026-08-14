@@ -348,6 +348,16 @@ class AppLocalizationsEs extends AppLocalizations {
       'Seleccioná una transacción para ver su detalle';
 
   @override
+  String get selectAccountDetail => 'Seleccioná una cuenta para ver su detalle';
+
+  @override
+  String get selectCategoryDetail =>
+      'Seleccioná una categoría para ver su detalle';
+
+  @override
+  String get selectTagDetail => 'Seleccioná una etiqueta para ver su detalle';
+
+  @override
   String get today => 'Hoy';
 
   @override

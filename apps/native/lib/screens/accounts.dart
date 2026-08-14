@@ -9,6 +9,7 @@ import 'package:app/data/data.dart';
 import 'package:app/database.dart';
 import 'package:app/l10n/l10n.dart';
 import 'package:app/screens/create_account.dart';
+import 'package:app/shared/adaptive_detail_view.dart';
 import 'package:app/shared/app_navigation.dart';
 import 'package:app/shared/money.dart';
 import 'package:app/user_settings/default_currency_controller.dart';
@@ -17,8 +18,27 @@ import 'package:flutter/material.dart';
 import 'package:m3e_buttons/m3e_buttons.dart';
 import 'package:provider/provider.dart';
 
-class AccountsScreen extends StatelessWidget {
+class AccountsScreen extends StatefulWidget {
   const AccountsScreen({super.key});
+
+  @override
+  State<AccountsScreen> createState() => _AccountsScreenState();
+}
+
+class _AccountsScreenState extends State<AccountsScreen> {
+  /// Selection for the account detail — one source of truth for every window
+  /// size: split pane on expanded windows, the modal bottom sheet everywhere
+  /// else (via [AdaptiveDetailView]). The data layer and navigation
+  /// controller are captured at open because the sheet route sits above the
+  /// account-scoped providers.
+  Account? _detailAccount;
+  AppRepositories? _detailRepos;
+  AppNavigation? _detailNav;
+
+  /// Pins the detail's Element so its State (mid-edit name/color/icon)
+  /// survives moving between pane and sheet on window resize. Recreated per
+  /// selection so a different account loads fresh.
+  GlobalKey _detailKey = GlobalKey(debugLabel: 'accountDetail');
 
   void _openCreate(BuildContext context) {
     // Pushed routes sit above the account-scoped providers; re-provide them
@@ -40,63 +60,93 @@ class AccountsScreen extends StatelessWidget {
     );
   }
 
-  /// Opens the account details as a draggable, scrollable modal sheet. The
-  /// sheet is a pushed route below the account-scoped providers, so the data
-  /// layer and navigation controller are captured here and handed down.
-  void _openAccountSheet(BuildContext context, Account account) {
-    final repos = context.read<AppRepositories>();
-    final nav = context.read<AppNavigation>();
-    showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true, // let the sheet grow taller than half-screen
-      showDragHandle: true,
-      builder: (_) =>
-          AccountDetailsSheet(account: account, repos: repos, nav: nav),
+  void _openAccountDetails(Account account) {
+    setState(() {
+      if (account.id != _detailAccount?.id) {
+        _detailKey = GlobalKey(debugLabel: 'accountDetail');
+      }
+      _detailAccount = account;
+      _detailRepos = context.read<AppRepositories>();
+      _detailNav = context.read<AppNavigation>();
+    });
+  }
+
+  void _closeDetails() {
+    setState(() => _detailAccount = null);
+  }
+
+  Widget? _buildDetail(BuildContext context, {required bool inSheet}) {
+    final account = _detailAccount;
+    if (account == null) return null;
+    return AccountDetailsSheet(
+      key: _detailKey,
+      account: account,
+      repos: _detailRepos!,
+      nav: _detailNav!,
+      onClose: inSheet ? null : _closeDetails,
     );
   }
 
   @override
   Widget build(BuildContext context) {
     final repos = context.read<AppRepositories>();
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(context.l10n.accounts),
-        actions: [
-          IconButton(
-            tooltip: context.l10n.newAccount,
-            onPressed: () => _openCreate(context),
-            icon: const Icon(Icons.add),
+    final isActiveTab = context.select<AppNavigation, bool>(
+      (nav) => nav.index == AppNavigation.accountsTab,
+    );
+    return AdaptiveDetailView(
+      hasDetail: _detailAccount != null,
+      detailBuilder: _buildDetail,
+      onSheetDismissed: _closeDetails,
+      isActiveTab: isActiveTab,
+      placeholder: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: Text(
+            context.l10n.selectAccountDetail,
+            textAlign: TextAlign.center,
           ),
-        ],
+        ),
       ),
-      body: StreamBuilder<List<Account>>(
-        stream: repos.accounts.watchActive(),
-        builder: (context, snapshot) {
-          if (snapshot.hasError) {
-            return _ErrorBody(error: snapshot.error.toString());
-          }
-          if (snapshot.connectionState == ConnectionState.waiting &&
-              !snapshot.hasData) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          final accounts = snapshot.data ?? const <Account>[];
-          if (accounts.isEmpty) {
-            return _EmptyBody(onCreateTap: () => _openCreate(context));
-          }
-          return ListView.separated(
-            padding: const EdgeInsets.only(left: 16, right: 16, bottom: 96),
-            itemCount: accounts.length,
-            separatorBuilder: (_, _) => const SizedBox(height: kGroupSpacing),
-            itemBuilder: (context, index) {
-              final account = accounts[index];
-              return _AccountTile(
-                account: account,
-                borderRadius: groupedRadius(index, accounts.length),
-                onTap: () => _openAccountSheet(context, account),
-              );
-            },
-          );
-        },
+      list: Scaffold(
+        appBar: AppBar(
+          title: Text(context.l10n.accounts),
+          actions: [
+            IconButton(
+              tooltip: context.l10n.newAccount,
+              onPressed: () => _openCreate(context),
+              icon: const Icon(Icons.add),
+            ),
+          ],
+        ),
+        body: StreamBuilder<List<Account>>(
+          stream: repos.accounts.watchActive(),
+          builder: (context, snapshot) {
+            if (snapshot.hasError) {
+              return _ErrorBody(error: snapshot.error.toString());
+            }
+            if (snapshot.connectionState == ConnectionState.waiting &&
+                !snapshot.hasData) {
+              return const Center(child: CircularProgressIndicator());
+            }
+            final accounts = snapshot.data ?? const <Account>[];
+            if (accounts.isEmpty) {
+              return _EmptyBody(onCreateTap: () => _openCreate(context));
+            }
+            return ListView.separated(
+              padding: const EdgeInsets.only(left: 16, right: 16, bottom: 96),
+              itemCount: accounts.length,
+              separatorBuilder: (_, _) => const SizedBox(height: kGroupSpacing),
+              itemBuilder: (context, index) {
+                final account = accounts[index];
+                return _AccountTile(
+                  account: account,
+                  borderRadius: groupedRadius(index, accounts.length),
+                  onTap: () => _openAccountDetails(account),
+                );
+              },
+            );
+          },
+        ),
       ),
     );
   }
@@ -222,11 +272,17 @@ class AccountDetailsSheet extends StatefulWidget {
     required this.account,
     required this.repos,
     required this.nav,
+    this.onClose,
   });
 
   final Account account;
   final AppRepositories repos;
   final AppNavigation nav;
+
+  /// Embedded (split pane) mode: when set, the sheet never pops a route —
+  /// exits report here instead, the drag-to-size scaffolding is dropped, and
+  /// an explicit close button is shown.
+  final VoidCallback? onClose;
 
   @override
   State<AccountDetailsSheet> createState() => _AccountDetailsSheetState();
@@ -405,7 +461,7 @@ class _AccountDetailsSheetState extends State<AccountDetailsSheet> {
     try {
       await widget.repos.accounts.archive(_accountId);
       if (!mounted) return;
-      Navigator.of(context).pop(); // close the details sheet
+      _close(); // close the details sheet
     } catch (e, st) {
       debugPrint('Error archiving account: $e\n$st');
       if (mounted) setState(() => _saving = false);
@@ -414,8 +470,19 @@ class _AccountDetailsSheetState extends State<AccountDetailsSheet> {
   }
 
   void _openAllTransactions() {
-    Navigator.of(context).pop(); // close the sheet before switching tabs
+    _close(); // close the sheet before switching tabs
     widget.nav.openActivityForAccount(_accountId);
+  }
+
+  /// Exits the sheet: reports to [AccountDetailsSheet.onClose] when embedded
+  /// in the split pane, pops the modal route otherwise.
+  void _close() {
+    final onClose = widget.onClose;
+    if (onClose != null) {
+      onClose();
+      return;
+    }
+    Navigator.of(context).pop();
   }
 
   void _showSnack(String message) {
@@ -427,6 +494,27 @@ class _AccountDetailsSheetState extends State<AccountDetailsSheet> {
 
   @override
   Widget build(BuildContext context) {
+    // Editing state lives in this State object, above the branch below, so
+    // it survives when the presentation morphs between sheet and pane.
+    if (widget.onClose != null) {
+      // Split pane: plain full-height panel with an explicit close button.
+      return Column(
+        children: [
+          Align(
+            alignment: AlignmentDirectional.topEnd,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(8, 8, 8, 0),
+              child: IconButton(
+                tooltip: MaterialLocalizations.of(context).closeButtonTooltip,
+                onPressed: _close,
+                icon: const Icon(Icons.close_rounded),
+              ),
+            ),
+          ),
+          Expanded(child: _buildSheetBody(context, null)),
+        ],
+      );
+    }
     // DraggableScrollableSheet lets the user drag the sheet between sizes while
     // its content scrolls; isScrollControlled on the modal enables the tall sizes.
     return DraggableScrollableSheet(
@@ -434,21 +522,26 @@ class _AccountDetailsSheetState extends State<AccountDetailsSheet> {
       initialChildSize: 0.6,
       minChildSize: 0.3,
       maxChildSize: 0.95,
-      builder: (context, scrollController) {
-        return ListView(
-          controller: scrollController, // wires drag-to-scroll to the sheet
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
-          children: [
-            _buildIdentityGroup(context),
-            const SizedBox(height: 12),
-            _buildActions(context),
-            const SizedBox(height: 28),
-            _buildTransactionsHeader(context),
-            const SizedBox(height: 8),
-            _buildTransactions(context),
-          ],
-        );
-      },
+      builder: _buildSheetBody,
+    );
+  }
+
+  Widget _buildSheetBody(
+    BuildContext context,
+    ScrollController? scrollController,
+  ) {
+    return ListView(
+      controller: scrollController, // wires drag-to-scroll to the sheet
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+      children: [
+        _buildIdentityGroup(context),
+        const SizedBox(height: 12),
+        _buildActions(context),
+        const SizedBox(height: 28),
+        _buildTransactionsHeader(context),
+        const SizedBox(height: 8),
+        _buildTransactions(context),
+      ],
     );
   }
 

@@ -339,8 +339,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
         body: SafeArea(
           child: Row(
             children: [
-              SizedBox(
-                width: 400,
+              Expanded(
                 child: Scaffold(appBar: appBar, body: list),
               ),
               const VerticalDivider(width: 1, thickness: 1),

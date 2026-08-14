@@ -722,6 +722,24 @@ abstract class AppLocalizations {
   /// **'Select a transaction to see its details'**
   String get selectTransactionDetail;
 
+  /// No description provided for @selectAccountDetail.
+  ///
+  /// In en, this message translates to:
+  /// **'Select an account to see its details'**
+  String get selectAccountDetail;
+
+  /// No description provided for @selectCategoryDetail.
+  ///
+  /// In en, this message translates to:
+  /// **'Select a category to see its details'**
+  String get selectCategoryDetail;
+
+  /// No description provided for @selectTagDetail.
+  ///
+  /// In en, this message translates to:
+  /// **'Select a tag to see its details'**
+  String get selectTagDetail;
+
   /// No description provided for @today.
   ///
   /// In en, this message translates to:

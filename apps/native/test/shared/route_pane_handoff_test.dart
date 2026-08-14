@@ -142,7 +142,7 @@ void main() {
   testWidgets('pane → route handoff on shrink keeps State, is a real route', (
     tester,
   ) async {
-    _resize(tester, const Size(1000, 800));
+    _resize(tester, const Size(1200, 800));
     addTearDown(tester.view.reset);
 
     await tester.pumpWidget(const MaterialApp(home: _Host()));
@@ -180,7 +180,7 @@ void main() {
     await tester.pump();
     expect(find.text('count:2'), findsOneWidget);
 
-    _resize(tester, const Size(1000, 800));
+    _resize(tester, const Size(1200, 800));
     await tester.pumpAndSettle();
 
     expect(find.text('count:2'), findsOneWidget);
