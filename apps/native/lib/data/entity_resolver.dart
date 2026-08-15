@@ -36,9 +36,13 @@ class Ambiguous<T> extends ResolveResult<T> {
 /// only), so mixed-case non-ASCII names (e.g. "CAFÉ" vs "café") may not match.
 /// Acceptable here — the agent can fall back to the list tools.
 class EntityResolver {
-  EntityResolver(this.db);
+  EntityResolver(this.db, this.defaultCurrency);
 
   final AppDatabase db;
+
+  /// The user's default currency, used to break a name-collision tie between
+  /// two accounts that differ only by currency.
+  final String Function() defaultCurrency;
 
   Future<ResolveResult<Account>> account(String idOrName) async {
     final byId = await (db.select(
@@ -53,7 +57,16 @@ class EntityResolver {
                 (t) => t.name.trim().lower().equals(normalizeName(idOrName)),
               ))
             .get();
-    return _result(matches, (a) => a.id, (a) => a.name);
+    final result = _result(matches, (a) => a.id, (a) => a.name);
+    if (result is Ambiguous<Account>) {
+      final byDefaultCurrency = matches
+          .where((a) => a.currency == defaultCurrency())
+          .toList();
+      if (byDefaultCurrency.length == 1) {
+        return Resolved(byDefaultCurrency.first);
+      }
+    }
+    return result;
   }
 
   Future<ResolveResult<Category>> category(String idOrName) async {

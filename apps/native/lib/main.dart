@@ -21,10 +21,12 @@ import 'package:app/shared/app_navigation.dart';
 import 'package:app/sync/sync_engine.dart';
 import 'package:app/telemetry/business_metrics.dart';
 import 'package:app/telemetry/telemetry_client.dart';
+import 'package:app/user_settings/default_currency_controller.dart';
 import 'package:app/voice/gemini_voice_expense_command.dart';
 import 'package:app/voice/voice_session_remote_sync.dart';
 import 'package:app/voice/voice_session_repository.dart';
 import 'package:convex_flutter/convex_flutter.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:google_sign_in/google_sign_in.dart';
@@ -48,9 +50,17 @@ Future<void> main() async {
     ),
   );
 
-  await GoogleSignIn.instance.initialize(
-    serverClientId: AppConfig.googleServerClientId,
-  );
+  // On web the client ID comes from the <meta name="google-signin-client_id">
+  // tag in web/index.html, and serverClientId is not supported (the plugin
+  // asserts it is null). A missing/invalid client ID must not prevent the app
+  // from rendering — only sign-in becomes unavailable.
+  try {
+    await GoogleSignIn.instance.initialize(
+      serverClientId: kIsWeb ? null : AppConfig.googleServerClientId,
+    );
+  } catch (e, st) {
+    debugPrint('GoogleSignIn.initialize failed: $e\n$st');
+  }
 
   // Platform + app version, resolved once and shared by the config controller
   // and the sync engine so both gates identify the client the same way.
@@ -278,6 +288,20 @@ class _AuthGate extends StatelessWidget {
           create: (_) => AppDatabase.forUser(active.id),
           dispose: (_, db) => db.close(),
         ),
+        // The user's default currency. Scoped to the account subtree (like
+        // AppDatabase above) so switching accounts never leaks a stale value.
+        // Created for local accounts too (kept purely device-local, no
+        // backend user exists to own the setting) so it's always available.
+        ChangeNotifierProvider<DefaultCurrencyController>(
+          create: (_) {
+            final controller = DefaultCurrencyController(
+              accountId: active.id,
+              isRemote: active.type == AccountType.remote,
+            );
+            unawaited(controller.load());
+            return controller;
+          },
+        ),
         // The app-facing data layer: all reads/writes from screens and the
         // voice agent go through this. Scoped to the account subtree so it is
         // recreated together with the database on account switch.
@@ -285,6 +309,7 @@ class _AuthGate extends StatelessWidget {
           create: (ctx) => AppRepositories(
             ctx.read<AppDatabase>(),
             businessMetrics: ctx.read<BusinessMetrics?>(),
+            defaultCurrency: () => ctx.read<DefaultCurrencyController>().value,
           ),
         ),
         Provider<VoiceSessionRepository>(

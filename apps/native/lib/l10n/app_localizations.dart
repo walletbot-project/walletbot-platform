@@ -1028,6 +1028,12 @@ abstract class AppLocalizations {
   /// **'Could not create the account'**
   String get accountCreateFailed;
 
+  /// No description provided for @accountDuplicateNameCurrency.
+  ///
+  /// In en, this message translates to:
+  /// **'An account with that name and currency already exists'**
+  String get accountDuplicateNameCurrency;
+
   /// No description provided for @suggestions.
   ///
   /// In en, this message translates to:
@@ -1771,6 +1777,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'You already added an account with that email'**
   String get accountAlreadyAdded;
+
+  /// No description provided for @accountExistsSignIn.
+  ///
+  /// In en, this message translates to:
+  /// **'An account with that email already exists. Sign in with your password or with Google.'**
+  String get accountExistsSignIn;
 
   /// No description provided for @emailSignInFailedGoogleHint.
   ///

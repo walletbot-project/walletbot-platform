@@ -6,6 +6,10 @@ import { inflowsByAccount, outflowsByAccount } from '../../aggregates'
 import { CLIENT_OUTDATED, isClientSupported } from '../../config/helpers'
 import { syncedTable } from '../../schema/sync'
 import { requireAuth } from '../../users/helpers'
+import {
+    reconcileAccountDuplicates,
+    resolveAccountId,
+} from '../accounts/helpers'
 
 const accountUpsert = v.object({
     id: v.string(),
@@ -228,12 +232,17 @@ async function clearTombstone(
     if (existing) await ctx.db.delete(existing._id)
 }
 
+// Key used to reconcile name+currency duplicates after a batch of account
+// upserts has been fully applied. Returned only for active accounts —
+// archived ones don't participate in the uniqueness rule.
+type AccountReconcileKey = { currency: string; name: string }
+
 async function applyAccountUpsert(
     ctx: MutationCtx,
     userId: string,
     seq: bigint,
     payload: AccountUpsert,
-): Promise<void> {
+): Promise<AccountReconcileKey | null> {
     const existing = await ctx.db
         .query('accounts')
         .withIndex('by_user_id', (q) =>
@@ -264,6 +273,13 @@ async function applyAccountUpsert(
         await ctx.db.insert('accounts', doc)
     }
     await clearTombstone(ctx, userId, 'accounts', payload.id)
+
+    // Name+currency uniqueness (WAL-148) is enforced by merging duplicates
+    // rather than rejecting the write — see reconcileAccountDuplicates,
+    // called once per unique (currency, name) after every upsert in this
+    // push has been applied.
+    if (payload.isArchived) return null
+    return { currency: payload.currency, name: payload.name }
 }
 
 async function applyCategoryUpsert(
@@ -356,10 +372,16 @@ async function applyTransactionUpsert(
     seq: bigint,
     payload: TransactionUpsert,
 ): Promise<void> {
+    // A merged-away account id (WAL-148 auto-merge) still needs to resolve
+    // to its live replacement: a dirty local row created before the device
+    // learned about the merge, or a device that hasn't pulled the merge
+    // tombstone yet, can otherwise push a reference to an id that no longer
+    // exists.
+    const accountId = await resolveAccountId(ctx, userId, payload.accountId)
     const account = await ctx.db
         .query('accounts')
         .withIndex('by_user_id', (q) =>
-            q.eq('userId', userId).eq('id', payload.accountId),
+            q.eq('userId', userId).eq('id', accountId),
         )
         .unique()
     if (!account) {
@@ -387,13 +409,15 @@ async function applyTransactionUpsert(
         }
     }
 
+    let toAccountId: string | undefined
     if (payload.type === 'transfer') {
         if (!payload.toAccountId) {
             throw new Error(
                 `transaction ${payload.id}: transfer requires toAccountId`,
             )
         }
-        if (payload.toAccountId === payload.accountId) {
+        toAccountId = await resolveAccountId(ctx, userId, payload.toAccountId)
+        if (toAccountId === accountId) {
             throw new Error(
                 `transaction ${payload.id}: source and destination accounts must differ`,
             )
@@ -401,7 +425,7 @@ async function applyTransactionUpsert(
         const toAcc = await ctx.db
             .query('accounts')
             .withIndex('by_user_id', (q) =>
-                q.eq('userId', userId).eq('id', payload.toAccountId as string),
+                q.eq('userId', userId).eq('id', toAccountId as string),
             )
             .unique()
         if (!toAcc) {
@@ -446,11 +470,11 @@ async function applyTransactionUpsert(
         date: payload.date,
         dateConfirmed: payload.dateConfirmed ?? true,
         timeStatus: payload.timeStatus ?? existing?.timeStatus ?? 'none',
-        accountId: payload.accountId,
+        accountId,
         categoryId: payload.categoryId,
         amount: payload.amount,
         currency: payload.currency,
-        toAccountId: payload.toAccountId,
+        toAccountId,
         toAmount: payload.toAmount,
         toCurrency: payload.toCurrency,
         exchangeRate: payload.exchangeRate,
@@ -772,8 +796,30 @@ export const push = mutation({
 
         // 3) Apply upserts in catalog-first order. transactionTags depends on
         //    both transactions and tags, so it goes last.
+        //
+        // Duplicate-name reconciliation (WAL-148) runs once per unique
+        // (currency, name) *after* every account upsert in this push has
+        // been written — not inline per-upsert — so an in-batch rename swap
+        // never sees a transient collision with a sibling row that hasn't
+        // reached its final name yet.
+        const dirtyAccountKeys = new Map<string, AccountReconcileKey>()
         for (const u of args.upserts.accounts ?? []) {
-            await applyAccountUpsert(ctx, userId, newSeq, u)
+            const key = await applyAccountUpsert(ctx, userId, newSeq, u)
+            if (key) {
+                dirtyAccountKeys.set(
+                    `${key.currency} ${key.name.trim().toLowerCase()}`,
+                    key,
+                )
+            }
+        }
+        for (const key of dirtyAccountKeys.values()) {
+            await reconcileAccountDuplicates(
+                ctx,
+                userId,
+                newSeq,
+                key.currency,
+                key.name,
+            )
         }
         for (const u of args.upserts.categories ?? []) {
             await applyCategoryUpsert(ctx, userId, newSeq, u)

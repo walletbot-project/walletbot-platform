@@ -27,6 +27,13 @@ export const tombstones = defineTable({
     entityId: v.string(), // the deleted row's client-side uuid
     seq: v.int64(),
     deletedAt: v.int64(),
+    // Only set for `tableName === 'accounts'` tombstones written by the
+    // duplicate-account auto-merge (WAL-148): the client id of the account
+    // this one's data was folded into. Lets `resolveAccountId` redirect a
+    // reference to the merged-away id onto the live account instead of
+    // failing a lookup. Not exposed over the sync wire — purely a
+    // server-side bookkeeping field.
+    mergedIntoId: v.optional(v.string()),
 })
     .index('by_user_seq', ['userId', 'seq'])
     .index('by_user_table_entity', ['userId', 'tableName', 'entityId'])

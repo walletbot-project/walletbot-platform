@@ -36,13 +36,27 @@ void main() {
     expect((result as Resolved<Account>).value.id, id);
   });
 
-  test('duplicate names are ambiguous, with candidates', () async {
-    await repos.accounts.create(name: 'Cash', currency: 'ARS');
-    await repos.accounts.create(name: 'cash', currency: 'USD');
-    final result = await repos.resolver.account('CASH');
-    expect(result, isA<Ambiguous<Account>>());
-    expect((result as Ambiguous<Account>).candidates, hasLength(2));
-  });
+  test(
+    'duplicate names in non-default currencies are ambiguous, with candidates',
+    () async {
+      await repos.accounts.create(name: 'Cash', currency: 'USD');
+      await repos.accounts.create(name: 'cash', currency: 'EUR');
+      final result = await repos.resolver.account('CASH');
+      expect(result, isA<Ambiguous<Account>>());
+      expect((result as Ambiguous<Account>).candidates, hasLength(2));
+    },
+  );
+
+  test(
+    'duplicate names resolve to the one matching the default currency',
+    () async {
+      final arsId = await repos.accounts.create(name: 'Cash', currency: 'ARS');
+      await repos.accounts.create(name: 'cash', currency: 'USD');
+      final result = await repos.resolver.account('CASH');
+      expect(result, isA<Resolved<Account>>());
+      expect((result as Resolved<Account>).value.id, arsId);
+    },
+  );
 
   test('archived entities do not resolve by name', () async {
     final id = await repos.categories.create(name: 'Food');

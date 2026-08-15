@@ -11,6 +11,7 @@ import 'package:app/l10n/l10n.dart';
 import 'package:app/screens/create_account.dart';
 import 'package:app/shared/app_navigation.dart';
 import 'package:app/shared/money.dart';
+import 'package:app/user_settings/default_currency_controller.dart';
 import 'package:drift/drift.dart' show Value;
 import 'package:flutter/material.dart';
 import 'package:m3e_buttons/m3e_buttons.dart';
@@ -23,10 +24,16 @@ class AccountsScreen extends StatelessWidget {
     // Pushed routes sit above the account-scoped providers; re-provide them
     // so the new route keeps using the active account's data layer.
     final repos = context.read<AppRepositories>();
+    final defaultCurrency = context.read<DefaultCurrencyController>();
     Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) => Provider<AppRepositories>.value(
-          value: repos,
+        builder: (_) => MultiProvider(
+          providers: [
+            Provider<AppRepositories>.value(value: repos),
+            ChangeNotifierProvider<DefaultCurrencyController>.value(
+              value: defaultCurrency,
+            ),
+          ],
           child: const CreateAccountScreen(),
         ),
       ),
@@ -297,7 +304,11 @@ class _AccountDetailsSheetState extends State<AccountDetailsSheet> {
       setState(() => _editing = false);
     } catch (e, st) {
       debugPrint('Error updating account: $e\n$st');
-      _showSnack(context.l10n.accountSaveFailed);
+      _showSnack(
+        e is DuplicateAccountException
+            ? context.l10n.accountDuplicateNameCurrency
+            : context.l10n.accountSaveFailed,
+      );
     } finally {
       if (mounted) setState(() => _saving = false);
     }

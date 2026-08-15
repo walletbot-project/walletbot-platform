@@ -96,6 +96,8 @@ export const en: Messages = {
         creating: 'Creating account…',
         created: 'Account created',
         createFailed: 'Could not create the account',
+        duplicateNameCurrency:
+            'An account with that name and currency already exists',
         saving: 'Saving account…',
         saved: 'Account saved',
         saveFailed: 'Could not save the account',

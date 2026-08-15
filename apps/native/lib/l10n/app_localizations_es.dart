@@ -511,6 +511,10 @@ class AppLocalizationsEs extends AppLocalizations {
   String get accountCreateFailed => 'No se pudo crear la cuenta';
 
   @override
+  String get accountDuplicateNameCurrency =>
+      'Ya existe una cuenta con ese nombre y moneda';
+
+  @override
   String get suggestions => 'Sugerencias';
 
   @override
@@ -935,6 +939,10 @@ class AppLocalizationsEs extends AppLocalizations {
   @override
   String get accountAlreadyAdded =>
       'Ya tenés una cuenta agregada con ese correo';
+
+  @override
+  String get accountExistsSignIn =>
+      'Ya existe una cuenta con ese correo. Iniciá sesión con tu contraseña o con Google.';
 
   @override
   String get emailSignInFailedGoogleHint =>

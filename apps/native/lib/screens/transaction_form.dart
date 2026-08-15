@@ -1115,9 +1115,12 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
       return account;
     } catch (error) {
       if (!mounted) return null;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(context.l10n.accountCreateFailed)));
+      final message = error is DuplicateAccountException
+          ? context.l10n.accountDuplicateNameCurrency
+          : context.l10n.accountCreateFailed;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(message)),
+      );
       return null;
     }
   }

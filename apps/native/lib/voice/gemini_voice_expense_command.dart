@@ -171,7 +171,13 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
     remoteSync?.schedule(delay: Duration.zero);
 
     _emit(VoiceConnectingEvent('Connecting to Gemini Live'));
-    await _audioPlayer.start(sampleRate: 24000);
+    final engineDiagnostics = await _audioPlayer.start(sampleRate: 24000);
+    if (engineDiagnostics != null) {
+      // iOS voice engine state (voice processing, formats, route). Persisted
+      // with the session events so failed rounds are diagnosable without a
+      // console attached — see AUDIO.md § iOS.
+      _emit(VoiceSystemEvent('Voice engine: $engineDiagnostics'));
+    }
     await _connect();
   }
 

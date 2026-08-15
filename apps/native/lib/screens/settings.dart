@@ -3,6 +3,8 @@ import 'package:app/auth/auth_controller.dart';
 import 'package:app/components/grouped_card.dart';
 import 'package:app/l10n/l10n.dart';
 import 'package:app/settings/display_settings.dart';
+import 'package:app/user_settings/default_currency_controller.dart';
+import 'package:app/widgets/currency_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -12,6 +14,7 @@ class SettingsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final settings = context.watch<DisplaySettingsController>();
+    final defaultCurrency = context.watch<DefaultCurrencyController>();
     final auth = context.watch<AuthController>();
     final active = auth.activeAccount;
     // User-account deletion only applies to server accounts with an email —
@@ -20,7 +23,7 @@ class SettingsScreen extends StatelessWidget {
         active != null && active.type == AccountType.remote
         ? active.email
         : null;
-    final tileCount = deletableEmail != null ? 3 : 2;
+    final tileCount = deletableEmail != null ? 4 : 3;
 
     return Scaffold(
       appBar: AppBar(title: Text(context.l10n.settings)),
@@ -42,13 +45,21 @@ class SettingsScreen extends StatelessWidget {
             borderRadius: groupedRadius(1, tileCount),
             onTap: () => _showThemeChoices(context, settings),
           ),
+          const SizedBox(height: kGroupSpacing),
+          _PreferenceTile(
+            icon: Icons.attach_money_rounded,
+            title: context.l10n.currency,
+            value: defaultCurrency.value,
+            borderRadius: groupedRadius(2, tileCount),
+            onTap: () => _showCurrencyChoices(context, defaultCurrency),
+          ),
           if (deletableEmail != null) ...[
             const SizedBox(height: kGroupSpacing),
             _PreferenceTile(
               icon: Icons.person_off_rounded,
               title: context.l10n.deleteUserAccount,
               value: context.l10n.deleteUserAccountDescription,
-              borderRadius: groupedRadius(2, tileCount),
+              borderRadius: groupedRadius(3, tileCount),
               destructive: true,
               onTap: () =>
                   _confirmDeleteUserAccount(context, auth, deletableEmail),
@@ -171,6 +182,24 @@ class SettingsScreen extends StatelessWidget {
         },
       ),
     );
+  }
+
+  Future<void> _showCurrencyChoices(
+    BuildContext context,
+    DefaultCurrencyController defaultCurrency,
+  ) async {
+    final picked = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (_) => CurrencyPicker(selected: defaultCurrency.value),
+    );
+    if (picked == null) return;
+    try {
+      await defaultCurrency.setValue(picked);
+    } catch (_) {
+      if (context.mounted) _showSaveError(context);
+    }
   }
 
   String _languageLabel(BuildContext context, DisplayLanguage language) =>

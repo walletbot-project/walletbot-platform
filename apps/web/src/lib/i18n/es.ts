@@ -97,6 +97,7 @@ export const es = {
         creating: 'Creando cuenta…',
         created: 'Cuenta creada',
         createFailed: 'No se pudo crear la cuenta',
+        duplicateNameCurrency: 'Ya existe una cuenta con ese nombre y moneda',
         saving: 'Guardando cuenta…',
         saved: 'Cuenta guardada',
         saveFailed: 'No se pudo guardar la cuenta',

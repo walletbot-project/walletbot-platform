@@ -18,6 +18,7 @@ import {
 import { transactions } from './schema/transactions'
 import { transactionTags } from './schema/transactionTags'
 import { deletedUsers, userDeletionRequests } from './schema/userDeletion'
+import { userSettings } from './schema/userSettings'
 import { voiceSessionEvents, voiceSessions } from './schema/voice'
 
 export default defineSchema({
@@ -39,6 +40,7 @@ export default defineSchema({
     transactionTags,
     transactions,
     userDeletionRequests,
+    userSettings,
     voiceSessionEvents,
     voiceSessions,
 })

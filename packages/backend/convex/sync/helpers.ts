@@ -32,6 +32,8 @@ export async function writeTombstone(
             | 'dashboardWidgets'
         entityId: string
         seq: bigint
+        // Only meaningful for `tableName: 'accounts'` — see schema/sync.ts.
+        mergedIntoId?: string
     },
 ): Promise<void> {
     const existing = await ctx.db
@@ -46,7 +48,13 @@ export async function writeTombstone(
 
     const now = BigInt(Date.now())
     if (existing) {
-        await ctx.db.patch(existing._id, { seq: args.seq, deletedAt: now })
+        await ctx.db.patch(existing._id, {
+            seq: args.seq,
+            deletedAt: now,
+            ...(args.mergedIntoId !== undefined && {
+                mergedIntoId: args.mergedIntoId,
+            }),
+        })
     } else {
         await ctx.db.insert('tombstones', {
             userId: args.userId,
@@ -54,6 +62,7 @@ export async function writeTombstone(
             entityId: args.entityId,
             seq: args.seq,
             deletedAt: now,
+            mergedIntoId: args.mergedIntoId,
         })
     }
 }

@@ -245,6 +245,13 @@ export const purgeUserData = internalMutation({
             async (n) =>
                 deleteRows(
                     await ctx.db
+                        .query('userSettings')
+                        .withIndex('by_user', (q) => q.eq('userId', userId))
+                        .take(n),
+                ),
+            async (n) =>
+                deleteRows(
+                    await ctx.db
                         .query('tombstones')
                         .withIndex('by_user_seq', (q) => q.eq('userId', userId))
                         .take(n),
