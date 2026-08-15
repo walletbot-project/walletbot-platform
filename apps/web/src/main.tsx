@@ -3,6 +3,7 @@ import { ConvexReactClient } from 'convex/react'
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import { RouterProvider } from 'react-router-dom'
+import { I18nProvider } from '@/components/layout/i18n-provider'
 import { authClient } from '@/lib/auth-client'
 import { router } from '@/router'
 import './index.css'
@@ -29,10 +30,12 @@ const convex = new ConvexReactClient(
 ReactDOM.createRoot(document.getElementById('root')!).render(
     <React.StrictMode>
         <ConvexBetterAuthProvider client={convex} authClient={authClient}>
-            <TooltipProvider>
-                <RouterProvider router={router} />
-            </TooltipProvider>
-            <Toaster />
+            <I18nProvider>
+                <TooltipProvider>
+                    <RouterProvider router={router} />
+                </TooltipProvider>
+                <Toaster />
+            </I18nProvider>
         </ConvexBetterAuthProvider>
     </React.StrictMode>,
 )

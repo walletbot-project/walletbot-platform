@@ -5,6 +5,7 @@ import { authComponent, createAuth } from './auth'
 import { registerAuthNativeRoutes } from './authNative/http'
 import { hashSessionSecret } from './authNative/utils'
 import { registerConfigRoutes } from './config/http'
+import { resend } from './emails/helpers'
 import { jsonResponse } from './httpHelpers'
 import { registerTelemetryRoutes } from './telemetry/http'
 
@@ -52,6 +53,17 @@ http.route({
     path: '/v1/live/token',
     method: 'POST',
     handler: liveTokenHandler,
+})
+
+// Resend delivery events (delivered / bounced / failed / complained).
+// Signature-verified via RESEND_WEBHOOK_SECRET; throws (500) until that env
+// var is set and a webhook pointing here exists in the Resend dashboard.
+http.route({
+    path: '/resend-webhook',
+    method: 'POST',
+    handler: httpAction(async (ctx, req) =>
+        resend.handleResendEventWebhook(ctx, req),
+    ),
 })
 
 export default http

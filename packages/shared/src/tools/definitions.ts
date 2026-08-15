@@ -88,7 +88,10 @@ export const toolSchemas = {
         name: z.string().describe('Display name (e.g. "BBVA", "Efectivo")'),
         currency: z
             .string()
-            .describe('ISO 4217 currency code (e.g. "ARS", "USD"). Immutable.'),
+            .optional()
+            .describe(
+                'ISO 4217 currency code (e.g. "ARS", "USD"). Immutable once set. Optional — omit it if the user does not specify one; the user\'s default currency is applied.',
+            ),
         color: z
             .string()
             .optional()

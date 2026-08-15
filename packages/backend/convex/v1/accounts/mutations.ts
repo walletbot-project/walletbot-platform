@@ -3,6 +3,8 @@ import { mutation } from '../../_generated/server'
 import { nextSeq, writeTombstone } from '../../sync/helpers'
 import { recordFinancialAccountCreated } from '../../telemetry/metrics'
 import { requireAuth } from '../../users/helpers'
+import { getDefaultCurrency } from '../users/helpers'
+import { hasDuplicateAccount } from './helpers'
 
 // Business rule: an account always has a color + icon. Convex has no
 // column-level defaults, so we fill them here when a writer omits them.
@@ -14,7 +16,7 @@ export const create = mutation({
     args: {
         id: v.string(),
         name: v.string(),
-        currency: v.string(),
+        currency: v.optional(v.string()),
         description: v.optional(v.string()),
         color: v.optional(v.string()),
         icon: v.optional(v.string()),
@@ -32,6 +34,15 @@ export const create = mutation({
             throw new Error('Account with that id already exists')
         }
 
+        const currency =
+            args.currency ?? (await getDefaultCurrency(ctx, userId))
+
+        if (await hasDuplicateAccount(ctx, userId, currency, args.name)) {
+            throw new Error(
+                'An account with that name and currency already exists',
+            )
+        }
+
         const seq = await nextSeq(ctx, userId)
         const now = BigInt(Date.now())
 
@@ -39,7 +50,7 @@ export const create = mutation({
             userId,
             id: args.id,
             name: args.name,
-            currency: args.currency,
+            currency,
             description: args.description,
             color: args.color ?? DEFAULT_ACCOUNT_COLOR,
             icon: args.icon ?? DEFAULT_ACCOUNT_ICON,
@@ -77,6 +88,24 @@ export const update = mutation({
             )
             .unique()
         if (!row) throw new Error('Account not found')
+
+        if (args.name !== undefined || args.currency !== undefined) {
+            const nextName = args.name ?? row.name
+            const nextCurrency = args.currency ?? row.currency
+            if (
+                await hasDuplicateAccount(
+                    ctx,
+                    userId,
+                    nextCurrency,
+                    nextName,
+                    row._id,
+                )
+            ) {
+                throw new Error(
+                    'An account with that name and currency already exists',
+                )
+            }
+        }
 
         const seq = await nextSeq(ctx, userId)
         const now = BigInt(Date.now())

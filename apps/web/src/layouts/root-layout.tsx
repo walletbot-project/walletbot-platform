@@ -1,6 +1,9 @@
+import { api } from '@wallet-bot/backend/api'
+import { useQuery } from 'convex/react'
 import {
     BarChart3,
     Bot,
+    Flag,
     Home,
     Landmark,
     List,
@@ -10,7 +13,7 @@ import {
     Trash2,
     User,
 } from 'lucide-react'
-import { NavLink, Outlet, useLocation } from 'react-router-dom'
+import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import {
     DropdownMenu,
@@ -37,12 +40,30 @@ import {
     SidebarTrigger,
 } from '@/components/ui/sidebar'
 import { useAuth, useUser } from '@/hooks/use-auth'
+import type { Messages } from '@/lib/i18n'
+import { useT } from '@/lib/i18n'
+import { LanguageMenu } from './language-menu'
 
 const NAV_ITEMS = [
-    { to: '/', label: 'Home', icon: Home, end: true },
-    { to: '/activity', label: 'Activity', icon: List, end: false },
-    { to: '/accounts', label: 'Cuentas', icon: Landmark, end: false },
-    { to: '/insights', label: 'Insights', icon: BarChart3, end: false },
+    { to: '/', label: (t: Messages) => t.nav.home, icon: Home, end: true },
+    {
+        to: '/activity',
+        label: (t: Messages) => t.nav.activity,
+        icon: List,
+        end: false,
+    },
+    {
+        to: '/accounts',
+        label: (t: Messages) => t.nav.accounts,
+        icon: Landmark,
+        end: false,
+    },
+    {
+        to: '/insights',
+        label: (t: Messages) => t.nav.insights,
+        icon: BarChart3,
+        end: false,
+    },
 ] as const
 
 function pathMatches(path: string, to: string, end: boolean) {
@@ -51,18 +72,21 @@ function pathMatches(path: string, to: string, end: boolean) {
 
 export function RootLayout() {
     const location = useLocation()
+    const navigate = useNavigate()
     const auth = useAuth()
     const user = useUser()
+    const t = useT()
+    const isAdmin = useQuery(api.v1.featureFlags.queries.getMyAdminStatus)
 
     const currentTitle =
         NAV_ITEMS.find((item) =>
             pathMatches(location.pathname, item.to, item.end),
-        )?.label ??
+        )?.label(t) ??
         (location.pathname.startsWith('/add/manual')
-            ? 'Añadir manualmente'
+            ? t.nav.addManually
             : location.pathname.startsWith('/add')
-              ? 'Añadir con Gasti'
-              : 'Wallet Bot')
+              ? t.nav.addWithGasti
+              : t.common.appName)
 
     const initials = (user.name || user.email)
         .split(' ')
@@ -82,10 +106,10 @@ export function RootLayout() {
                         </div>
                         <div className="flex flex-col group-data-[collapsible=icon]:hidden">
                             <span className="text-sm font-semibold">
-                                Wallet Bot
+                                {t.common.appName}
                             </span>
                             <span className="text-xs text-muted-foreground">
-                                Personal finance
+                                {t.nav.tagline}
                             </span>
                         </div>
                     </div>
@@ -93,7 +117,9 @@ export function RootLayout() {
 
                 <SidebarContent>
                     <SidebarGroup>
-                        <SidebarGroupLabel>Navigation</SidebarGroupLabel>
+                        <SidebarGroupLabel>
+                            {t.nav.navigation}
+                        </SidebarGroupLabel>
                         <SidebarGroupContent>
                             <SidebarMenu>
                                 {NAV_ITEMS.map((item) => {
@@ -103,10 +129,11 @@ export function RootLayout() {
                                         item.end,
                                     )
                                     const Icon = item.icon
+                                    const label = item.label(t)
                                     return (
                                         <SidebarMenuItem key={item.to}>
                                             <SidebarMenuButton
-                                                tooltip={item.label}
+                                                tooltip={label}
                                                 isActive={isActive}
                                                 render={
                                                     <NavLink
@@ -116,7 +143,7 @@ export function RootLayout() {
                                                 }
                                             >
                                                 <Icon className="size-4" />
-                                                <span>{item.label}</span>
+                                                <span>{label}</span>
                                             </SidebarMenuButton>
                                         </SidebarMenuItem>
                                     )
@@ -126,12 +153,12 @@ export function RootLayout() {
                     </SidebarGroup>
 
                     <SidebarGroup>
-                        <SidebarGroupLabel>Actions</SidebarGroupLabel>
+                        <SidebarGroupLabel>{t.nav.actions}</SidebarGroupLabel>
                         <SidebarGroupContent>
                             <SidebarMenu>
                                 <SidebarMenuItem>
                                     <SidebarMenuButton
-                                        tooltip="Añadir con Gasti"
+                                        tooltip={t.nav.addWithGasti}
                                         isActive={pathMatches(
                                             location.pathname,
                                             '/add',
@@ -140,12 +167,12 @@ export function RootLayout() {
                                         render={<NavLink to="/add" />}
                                     >
                                         <Bot className="size-4" />
-                                        <span>Añadir con Gasti</span>
+                                        <span>{t.nav.addWithGasti}</span>
                                     </SidebarMenuButton>
                                 </SidebarMenuItem>
                                 <SidebarMenuItem>
                                     <SidebarMenuButton
-                                        tooltip="Añadir manualmente"
+                                        tooltip={t.nav.addManually}
                                         isActive={pathMatches(
                                             location.pathname,
                                             '/add/manual',
@@ -154,7 +181,7 @@ export function RootLayout() {
                                         render={<NavLink to="/add/manual" />}
                                     >
                                         <Plus className="size-4" />
-                                        <span>Añadir manualmente</span>
+                                        <span>{t.nav.addManually}</span>
                                     </SidebarMenuButton>
                                 </SidebarMenuItem>
                             </SidebarMenu>
@@ -186,7 +213,7 @@ export function RootLayout() {
                                     </Avatar>
                                     <div className="flex min-w-0 flex-col text-left">
                                         <span className="truncate text-sm font-medium">
-                                            {user.name || 'Account'}
+                                            {user.name || t.common.account}
                                         </span>
                                         <span className="truncate text-xs text-muted-foreground">
                                             {user.email}
@@ -203,19 +230,36 @@ export function RootLayout() {
                                             {user.name || user.email}
                                         </DropdownMenuLabel>
                                     </DropdownMenuGroup>
+                                    {isAdmin && (
+                                        <>
+                                            <DropdownMenuSeparator />
+                                            <DropdownMenuItem
+                                                onClick={() =>
+                                                    navigate(
+                                                        '/admin/feature-flags',
+                                                    )
+                                                }
+                                            >
+                                                <Flag className="size-4" />
+                                                Feature flags
+                                            </DropdownMenuItem>
+                                        </>
+                                    )}
+                                    <DropdownMenuSeparator />
+                                    <LanguageMenu />
                                     <DropdownMenuSeparator />
                                     <DropdownMenuItem disabled>
                                         <RefreshCw className="size-4" />
-                                        Connect to account
+                                        {t.nav.connectToAccount}
                                     </DropdownMenuItem>
                                     <DropdownMenuItem disabled>
                                         <Trash2 className="size-4" />
-                                        Delete data
+                                        {t.nav.deleteData}
                                     </DropdownMenuItem>
                                     <DropdownMenuSeparator />
                                     <DropdownMenuItem onClick={auth.signOut}>
                                         <LogOut className="size-4" />
-                                        Sign out
+                                        {t.nav.signOut}
                                     </DropdownMenuItem>
                                 </DropdownMenuContent>
                             </DropdownMenu>

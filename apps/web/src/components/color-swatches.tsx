@@ -1,4 +1,5 @@
 import { Check } from 'lucide-react'
+import { useT } from '@/lib/i18n'
 import { cn } from '@/lib/utils'
 
 type ColorSwatchesProps = {
@@ -13,6 +14,7 @@ export function ColorSwatches({
     onChange,
     options,
 }: ColorSwatchesProps) {
+    const t = useT()
     const selectedColor = value.toUpperCase()
     return (
         <div className="flex flex-wrap gap-2">
@@ -30,7 +32,7 @@ export function ColorSwatches({
                                 : 'border-transparent hover:scale-105',
                         )}
                         style={{ backgroundColor: option }}
-                        aria-label={`Color ${option}`}
+                        aria-label={t.common.colorSwatch({ color: option })}
                         aria-pressed={isSelected}
                     >
                         {isSelected ? (

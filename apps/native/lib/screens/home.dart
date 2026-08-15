@@ -14,6 +14,7 @@ import 'package:app/shared/app_navigation.dart';
 import 'package:app/sync/sync_engine.dart';
 import 'package:app/sync/sync_status.dart';
 import 'package:app/sync/sync_status_pill.dart';
+import 'package:app/user_settings/default_currency_controller.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -174,11 +175,24 @@ class _HomeScreenState extends State<HomeScreen> {
                 ListTile(
                   leading: const Icon(Icons.settings_rounded),
                   title: Text(context.l10n.settings),
-                  onTap: () => Navigator.of(dialogContext).push(
-                    MaterialPageRoute<void>(
-                      builder: (_) => const SettingsScreen(),
-                    ),
-                  ),
+                  onTap: () {
+                    // Pushed routes sit above the account-scoped providers;
+                    // re-provide the ones SettingsScreen reads (same pattern
+                    // as accounts.dart's _openCreate).
+                    final defaultCurrency = context
+                        .read<DefaultCurrencyController>();
+                    Navigator.of(dialogContext).push(
+                      MaterialPageRoute<void>(
+                        builder: (_) =>
+                            ChangeNotifierProvider<
+                              DefaultCurrencyController
+                            >.value(
+                              value: defaultCurrency,
+                              child: const SettingsScreen(),
+                            ),
+                      ),
+                    );
+                  },
                 ),
               ],
             ),
@@ -362,11 +376,7 @@ class _HomeActionCard extends StatelessWidget {
                     color: colors.primaryContainer,
                     shape: BoxShape.circle,
                   ),
-                  child: Icon(
-                    icon,
-                    color: colors.onPrimaryContainer,
-                    size: 30,
-                  ),
+                  child: Icon(icon, color: colors.onPrimaryContainer, size: 30),
                 ),
                 const SizedBox(height: 8),
                 Text(

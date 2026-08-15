@@ -45,3 +45,22 @@ jobs:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           command: pages deploy apps/web/dist --project-name=walletbot-platform --branch=main
+
+      # The landing is a separate Pages project on its own domain (www), and
+      # takes no build-time environment: it is fully static apart from the
+      # Accept-Language redirect on `/`.
+      - name: Build landing
+        working-directory: apps/landing
+        run: pnpm run build
+
+      # `workingDirectory` matters: Wrangler discovers Pages Functions at
+      # `./functions` relative to the directory it runs in, so deploying from the
+      # repo root would silently ship the site without `functions/index.ts` — and
+      # `/` would 404 instead of redirecting.
+      - name: Deploy landing
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: apps/landing
+          command: pages deploy dist --project-name=walletbot-landing --branch=main

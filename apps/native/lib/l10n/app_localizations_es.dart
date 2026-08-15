@@ -385,6 +385,9 @@ class AppLocalizationsEs extends AppLocalizations {
   String get balanceAdjustments => 'Ajustes';
 
   @override
+  String get initialBalance => 'Balance inicial';
+
+  @override
   String get pending => 'Pendiente';
 
   @override
@@ -480,6 +483,10 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get accountCreateFailed => 'No se pudo crear la cuenta';
+
+  @override
+  String get accountDuplicateNameCurrency =>
+      'Ya existe una cuenta con ese nombre y moneda';
 
   @override
   String get suggestions => 'Sugerencias';
@@ -908,6 +915,10 @@ class AppLocalizationsEs extends AppLocalizations {
       'Ya tenés una cuenta agregada con ese correo';
 
   @override
+  String get accountExistsSignIn =>
+      'Ya existe una cuenta con ese correo. Iniciá sesión con tu contraseña o con Google.';
+
+  @override
   String get emailSignInFailedGoogleHint =>
       'No se pudo iniciar sesión. Si te registraste con Google, usá «Continuar con Google».';
 
@@ -915,6 +926,72 @@ class AppLocalizationsEs extends AppLocalizations {
   String emailAuthFailed(String action, Object error) {
     return 'No se pudo $action: $error';
   }
+
+  @override
+  String get forgotPassword => '¿Olvidaste tu contraseña?';
+
+  @override
+  String get resetPasswordTitle => 'Restablecer contraseña';
+
+  @override
+  String get resetPasswordSubtitle =>
+      'Ingresá tu correo y te enviamos un enlace para restablecerla.';
+
+  @override
+  String get sendResetLink => 'Enviar enlace';
+
+  @override
+  String resetEmailSent(String email) {
+    return 'Si existe una cuenta para $email, le enviamos un enlace para restablecer la contraseña. El enlace se abre en el navegador.';
+  }
+
+  @override
+  String get resetEmailSentReturnHint =>
+      'Cuando la restablezcas, volvé acá e iniciá sesión con tu contraseña nueva.';
+
+  @override
+  String resetRequestFailed(Object error) {
+    return 'No se pudo enviar el correo de restablecimiento: $error';
+  }
+
+  @override
+  String get backToSignIn => 'Volver a iniciar sesión';
+
+  @override
+  String get verifyEmailTitle => 'Verificá tu correo';
+
+  @override
+  String verifyEmailSent(String email) {
+    return 'Te enviamos un enlace de verificación a $email. El enlace se abre en el navegador.';
+  }
+
+  @override
+  String get verifyEmailInstructions =>
+      'Abrí el enlace para verificar tu cuenta y después volvé acá a iniciar sesión.';
+
+  @override
+  String get verifyEmailDone => 'Ya verifiqué';
+
+  @override
+  String get resendVerificationEmail => 'Reenviar correo';
+
+  @override
+  String resendVerificationCooldown(int seconds) {
+    return 'Reenviar en ${seconds}s';
+  }
+
+  @override
+  String get verificationEmailResent =>
+      'Te reenviamos el correo de verificación.';
+
+  @override
+  String resendVerificationFailed(Object error) {
+    return 'No se pudo reenviar el correo: $error';
+  }
+
+  @override
+  String get emailStillNotVerified =>
+      'Ese correo todavía no está verificado. Te enviamos un enlace nuevo.';
 
   @override
   String localAccountFailed(Object error) {
@@ -1235,10 +1312,10 @@ class AppLocalizationsEs extends AppLocalizations {
   @override
   String transactionSaved(String type, String updated, String date) {
     String _temp0 = intl.Intl.selectLogic(updated, {
-      'true': 'actualizado',
-      'other': 'registrado',
+      'true': 'Se actualizó',
+      'other': 'Se registró',
     });
-    return '$type $_temp0 · $date';
+    return '$_temp0: $type · $date';
   }
 
   @override

@@ -10,6 +10,7 @@ import {
     CollapsibleContent,
     CollapsibleTrigger,
 } from '@/components/ui/collapsible'
+import { useT } from '@/lib/i18n'
 
 function getErrorDetails(error: unknown): string {
     if (isRouteErrorResponse(error)) {
@@ -24,6 +25,7 @@ function getErrorDetails(error: unknown): string {
 export function GlobalErrorBoundary() {
     const error = useRouteError()
     const navigate = useNavigate()
+    const t = useT()
 
     if (isRouteErrorResponse(error) && error.status === 404) {
         return (
@@ -33,21 +35,20 @@ export function GlobalErrorBoundary() {
                 </div>
                 <div className="flex flex-col gap-2">
                     <h2 className="text-2xl font-semibold tracking-tight">
-                        Page not found
+                        {t.errors.pageNotFound}
                     </h2>
                     <p className="text-muted-foreground text-sm max-w-sm mx-auto">
-                        The page you're looking for doesn't exist or has been
-                        moved.
+                        {t.errors.pageNotFoundDescription}
                     </p>
                 </div>
                 <div className="flex items-center gap-3 pt-2">
                     <Button variant="outline" onClick={() => navigate(-1)}>
                         <ArrowLeft />
-                        Go back
+                        {t.common.goBack}
                     </Button>
                     <Button onClick={() => navigate('/')}>
                         <Home />
-                        Home
+                        {t.common.home}
                     </Button>
                 </div>
             </div>
@@ -63,11 +64,10 @@ export function GlobalErrorBoundary() {
             </div>
             <div className="flex flex-col gap-2">
                 <h2 className="text-2xl font-semibold tracking-tight">
-                    Something went wrong
+                    {t.errors.somethingWentWrong}
                 </h2>
                 <p className="text-muted-foreground text-sm max-w-md mx-auto">
-                    An unexpected error occurred. Try refreshing the page or
-                    heading back.
+                    {t.errors.unexpectedError}
                 </p>
             </div>
             <div className="flex items-center gap-3 pt-2">
@@ -75,11 +75,11 @@ export function GlobalErrorBoundary() {
                     variant="outline"
                     onClick={() => window.location.reload()}
                 >
-                    Refresh page
+                    {t.errors.refreshPage}
                 </Button>
                 <Button onClick={() => navigate('/')}>
                     <Home />
-                    Home
+                    {t.common.home}
                 </Button>
             </div>
             <ErrorDetails details={details} />
@@ -88,11 +88,12 @@ export function GlobalErrorBoundary() {
 }
 
 function ErrorDetails({ details }: { details: string }) {
+    const t = useT()
     return (
         <Collapsible className="w-full max-w-lg mt-2">
             <CollapsibleTrigger className="text-muted-foreground hover:text-foreground flex items-center gap-1 mx-auto text-xs cursor-pointer transition-colors">
                 <ChevronDown className="size-3.5 transition-transform in-data-panel-open:rotate-180" />
-                View error details
+                {t.errors.viewErrorDetails}
             </CollapsibleTrigger>
             <CollapsibleContent className="mt-3">
                 <pre className="bg-muted text-muted-foreground rounded-md p-4 text-left text-xs overflow-auto max-h-48 whitespace-pre-wrap wrap-break-word">

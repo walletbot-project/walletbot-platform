@@ -1,10 +1,12 @@
 import { createClient, type GenericCtx } from '@convex-dev/better-auth'
 import { convex, crossDomain } from '@convex-dev/better-auth/plugins'
+import { requireRunMutationCtx } from '@convex-dev/better-auth/utils'
 import { betterAuth } from 'better-auth/minimal'
 import { bearer } from 'better-auth/plugins'
-import { components } from './_generated/api'
+import { components, internal } from './_generated/api'
 import type { DataModel } from './_generated/dataModel'
 import authConfig from './auth.config'
+import { sendResetPasswordEmail, sendVerificationEmail } from './emails/helpers'
 
 const siteUrl = process.env.SITE_URL!
 const convexSiteUrl = process.env.CONVEX_SITE_URL
@@ -31,15 +33,91 @@ const googleIosClientId = process.env.GOOGLE_IOS_CLIENT_ID
 // as well as helper methods for general use.
 export const authComponent = createClient<DataModel>(components.betterAuth)
 
+// Emails must land on the web app regardless of which client (web or native)
+// triggered them, so the server canonicalizes the link's callbackURL. This
+// also sidesteps the crossDomain plugin's redirectTo handling entirely.
+const withWebCallback = (rawUrl: string, landingPath: string): string => {
+    const url = new URL(rawUrl)
+    url.searchParams.set('callbackURL', `${siteUrl}${landingPath}`)
+    return url.toString()
+}
+
 export const createAuth = (ctx: GenericCtx<DataModel>) => {
     return betterAuth({
         baseURL: convexSiteUrl,
         trustedOrigins: [siteUrl, 'flutter://'],
         database: authComponent.adapter(ctx),
-        // Configure simple, non-verified email/password to get started
         emailAndPassword: {
             enabled: true,
-            requireEmailVerification: false,
+            requireEmailVerification: true,
+            sendResetPassword: async ({ user, url }) => {
+                await sendResetPasswordEmail(requireRunMutationCtx(ctx), {
+                    to: user.email,
+                    name: user.name ?? null,
+                    url: withWebCallback(url, '/reset-password'),
+                })
+            },
+            onPasswordReset: async ({ user }) => {
+                // Web sessions die via revokeSessionsOnPasswordReset below;
+                // native sessions live in our own refreshTokens table.
+                await requireRunMutationCtx(ctx).runMutation(
+                    internal.authNative.mutations.revokeAllSessionTokensForUser,
+                    { userId: user.id },
+                )
+            },
+            revokeSessionsOnPasswordReset: true,
+        },
+        databaseHooks: {
+            user: {
+                create: {
+                    // Account-creation telemetry has to hang off the real insert.
+                    // With `requireEmailVerification` the sign-up endpoint always
+                    // answers `token: null` and returns a SYNTHETIC user for
+                    // already-registered emails — deliberately indistinguishable
+                    // from a genuine one — so nothing at the endpoint can tell a
+                    // new account from a duplicate attempt. This hook only runs
+                    // when a row is actually written, so duplicates never count.
+                    //
+                    // Scoped to the email path: social sign-in creates users
+                    // through `/sign-in/social`, and `googleSignIn` in
+                    // `authNative/http.ts` already records those.
+                    after: async (user, context) => {
+                        if (context?.path !== '/sign-up/email') return
+                        await requireRunMutationCtx(ctx).runMutation(
+                            internal.telemetry.mutations
+                                .recordUserAccountCreated,
+                            {
+                                userId: user.id,
+                                authMethod: 'email_password',
+                            },
+                        )
+                    },
+                },
+            },
+        },
+        emailVerification: {
+            sendVerificationEmail: async ({ user, url }) => {
+                await sendVerificationEmail(requireRunMutationCtx(ctx), {
+                    to: user.email,
+                    name: user.name ?? null,
+                    url: withWebCallback(url, '/verify-email'),
+                })
+            },
+            sendOnSignUp: true,
+            // A blocked sign-in with an unverified email re-sends the link,
+            // which is the recovery path for pre-existing unverified users.
+            sendOnSignIn: true,
+            expiresIn: 60 * 60 * 24,
+        },
+        rateLimit: {
+            enabled: true,
+            // better-auth defaults to in-memory storage, which is useless
+            // across Convex's stateless isolates.
+            storage: 'database',
+            customRules: {
+                '/request-password-reset': { window: 60, max: 3 },
+                '/send-verification-email': { window: 60, max: 3 },
+            },
         },
         socialProviders: {
             google: {
