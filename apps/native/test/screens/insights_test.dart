@@ -1,3 +1,4 @@
+import 'package:app/components/categories_view.dart';
 import 'package:app/data/data.dart';
 import 'package:app/database.dart';
 import 'package:app/l10n/l10n.dart';
@@ -114,6 +115,40 @@ void main() {
       expect(find.byType(BackButton), findsNothing);
       expect(find.byType(VerticalDivider), findsOneWidget);
       expect(find.text('Comida'), findsOneWidget);
+
+      await drainStreams(tester);
+    },
+  );
+
+  testWidgets(
+    'expanded: switching tabs slides only the list column — the divider '
+    'stays put and the open detail stays in the pane',
+    (tester) async {
+      await repos.categories.create(name: 'Food');
+      resize(tester, const Size(1200, 800));
+      addTearDown(tester.view.reset);
+
+      await tester.pumpWidget(harness());
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Food'));
+      await tester.pumpAndSettle();
+      expect(find.byType(CategoryDetailsSheet), findsOneWidget);
+
+      final dividerX = tester.getTopLeft(find.byType(VerticalDivider)).dx;
+      await tester.tap(find.text('Tags'));
+      await tester.pump(const Duration(milliseconds: 100));
+      // Mid tab transition: the pane side has not moved an inch.
+      expect(find.byType(VerticalDivider), findsOneWidget);
+      expect(tester.getTopLeft(find.byType(VerticalDivider)).dx, dividerX);
+      expect(find.byType(CategoryDetailsSheet), findsOneWidget);
+
+      await tester.pumpAndSettle();
+      // Tags page active in the list column, category detail still in the
+      // pane.
+      expect(find.text('No tags yet.'), findsOneWidget);
+      expect(find.byType(CategoryDetailsSheet), findsOneWidget);
+      expect(tester.getTopLeft(find.byType(VerticalDivider)).dx, dividerX);
 
       await drainStreams(tester);
     },

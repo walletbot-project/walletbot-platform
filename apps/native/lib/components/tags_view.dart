@@ -6,7 +6,6 @@ import 'package:app/components/transaction_row.dart';
 import 'package:app/data/data.dart';
 import 'package:app/database.dart';
 import 'package:app/l10n/l10n.dart';
-import 'package:app/shared/adaptive_detail_view.dart';
 import 'package:app/shared/app_navigation.dart';
 import 'package:app/shared/money.dart';
 import 'package:drift/drift.dart' show Value;
@@ -15,90 +14,30 @@ import 'package:m3e_buttons/m3e_buttons.dart';
 import 'package:provider/provider.dart';
 
 class TagsView extends StatefulWidget {
-  const TagsView({super.key, this.header});
+  const TagsView({super.key, required this.onSelect});
 
-  /// App bar for the list column on expanded windows, provided by the
-  /// Insights screen — see [CategoriesView.header].
-  final PreferredSizeWidget? header;
+  /// Called when a tag chip is tapped. The Insights screen owns the
+  /// selection and presents the detail — the shared split pane on expanded
+  /// windows, a modal bottom sheet everywhere else — so the pane sits
+  /// outside the sliding tab pages.
+  final void Function(Tag tag) onSelect;
 
   @override
   State<TagsView> createState() => _TagsViewState();
 }
 
+/// The tags list — one page of the Insights tab view. Pure list: all
+/// detail/creation presentation lives in the Insights screen.
 class _TagsViewState extends State<TagsView>
     with AutomaticKeepAliveClientMixin {
-  /// Selection for the tag detail — split pane on expanded windows, the
-  /// modal bottom sheet everywhere else (via [AdaptiveDetailView]). The data
-  /// layer and navigation controller are captured at open because the sheet
-  /// route sits above the account-scoped providers.
-  Tag? _detailTag;
-  AppRepositories? _detailRepos;
-  AppNavigation? _detailNav;
-
-  /// Pins the detail's Element so its State survives moving between pane and
-  /// sheet on window resize. Recreated per selection.
-  GlobalKey _detailKey = GlobalKey(debugLabel: 'tagDetail');
-
-  /// Keeps the selection (and pane) alive when the Insights tabs swipe this
-  /// view out of the TabBarView.
+  /// Keeps the list (its scroll position) alive when the Insights tabs swipe
+  /// this view out of the TabBarView.
   @override
   bool get wantKeepAlive => true;
-
-  void _openTagDetails(Tag tag) {
-    setState(() {
-      if (tag.id != _detailTag?.id) {
-        _detailKey = GlobalKey(debugLabel: 'tagDetail');
-      }
-      _detailTag = tag;
-      _detailRepos = context.read<AppRepositories>();
-      _detailNav = context.read<AppNavigation>();
-    });
-  }
-
-  void _closeDetails() {
-    setState(() => _detailTag = null);
-  }
-
-  Widget? _buildDetail(BuildContext context, {required bool inSheet}) {
-    final tag = _detailTag;
-    if (tag == null) return null;
-    return TagDetailsSheet(
-      key: _detailKey,
-      tag: tag,
-      repos: _detailRepos!,
-      nav: _detailNav!,
-      onClose: inSheet ? null : _closeDetails,
-    );
-  }
 
   @override
   Widget build(BuildContext context) {
     super.build(context);
-    final isActiveTab = context.select<AppNavigation, bool>(
-      (nav) => nav.index == AppNavigation.insightsTab,
-    );
-    final header = widget.header;
-    return AdaptiveDetailView(
-      hasDetail: _detailTag != null,
-      detailBuilder: _buildDetail,
-      onSheetDismissed: _closeDetails,
-      isActiveTab: isActiveTab,
-      placeholder: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(32),
-          child: Text(
-            context.l10n.selectTagDetail,
-            textAlign: TextAlign.center,
-          ),
-        ),
-      ),
-      list: header == null
-          ? _buildList(context)
-          : Scaffold(appBar: header, body: _buildList(context)),
-    );
-  }
-
-  Widget _buildList(BuildContext context) {
     final tags = context.read<AppRepositories>().tags;
 
     return StreamBuilder<List<TagWithCount>>(
@@ -142,7 +81,7 @@ class _TagsViewState extends State<TagsView>
                   backgroundColor: style.background,
                   label: Text(tag.name),
                   labelStyle: style.labelStyle,
-                  onPressed: () => _openTagDetails(tag),
+                  onPressed: () => widget.onSelect(tag),
                 ),
               ),
             );

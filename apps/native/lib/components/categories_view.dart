@@ -8,8 +8,6 @@ import 'package:app/components/transaction_row.dart';
 import 'package:app/data/data.dart';
 import 'package:app/database.dart';
 import 'package:app/l10n/l10n.dart';
-import 'package:app/screens/create_category.dart';
-import 'package:app/shared/adaptive_detail_view.dart';
 import 'package:app/shared/app_navigation.dart';
 import 'package:app/shared/money.dart';
 import 'package:drift/drift.dart' show Value;
@@ -18,136 +16,30 @@ import 'package:m3e_buttons/m3e_buttons.dart';
 import 'package:provider/provider.dart';
 
 class CategoriesView extends StatefulWidget {
-  const CategoriesView({super.key, this.header});
+  const CategoriesView({super.key, required this.onSelect});
 
-  /// App bar for the list column on expanded windows, provided by the
-  /// Insights screen (which owns the tab controller and the add action) so
-  /// the divided view follows the established pattern: each column carries
-  /// its own app bar, divider to the top. Null on small windows, where the
-  /// screen shows the app bar at the top level and this view renders exactly
-  /// as it always has.
-  final PreferredSizeWidget? header;
+  /// Called when a category row is tapped. The Insights screen owns the
+  /// selection and presents the detail — the shared split pane on expanded
+  /// windows, a modal bottom sheet everywhere else — so the pane sits
+  /// outside the sliding tab pages.
+  final void Function(CategoryWithCount entry) onSelect;
 
   @override
-  State<CategoriesView> createState() => CategoriesViewState();
+  State<CategoriesView> createState() => _CategoriesViewState();
 }
 
-class CategoriesViewState extends State<CategoriesView>
+/// The categories list — one page of the Insights tab view. Pure list: all
+/// detail/creation presentation lives in the Insights screen.
+class _CategoriesViewState extends State<CategoriesView>
     with AutomaticKeepAliveClientMixin {
-  /// Selection for the category detail — split pane on expanded windows, the
-  /// modal bottom sheet everywhere else (via [AdaptiveDetailView]). The data
-  /// layer and navigation controller are captured at open because the sheet
-  /// route sits above the account-scoped providers.
-  Category? _detailCategory;
-  AppRepositories? _detailRepos;
-  AppNavigation? _detailNav;
-
-  /// Pins the detail's Element so its State survives moving between pane and
-  /// sheet on window resize. Recreated per selection.
-  GlobalKey _detailKey = GlobalKey(debugLabel: 'categoryDetail');
-
-  /// The create-category form: split pane on expanded windows, a real pushed
-  /// route on smaller ones (via [AdaptiveDetailView]'s form slot). The data
-  /// layer is captured at open because the route sits above the
-  /// account-scoped providers and must be re-provided.
-  bool _formOpen = false;
-  AppRepositories? _formRepos;
-  GlobalKey _formKey = GlobalKey(debugLabel: 'categoryCreate');
-
-  /// Keeps the selection (and pane) alive when the Insights tabs swipe this
-  /// view out of the TabBarView.
+  /// Keeps the list (its scroll position) alive when the Insights tabs swipe
+  /// this view out of the TabBarView.
   @override
   bool get wantKeepAlive => true;
-
-  /// Opens the create-category form — invoked by the Insights screen's add
-  /// action (its app bar owns the button at every window size).
-  void openCreate() {
-    setState(() {
-      _formOpen = true;
-      _formRepos = context.read<AppRepositories>();
-      _formKey = GlobalKey(debugLabel: 'categoryCreate');
-      // The pane hosts one occupant at a time.
-      _detailCategory = null;
-    });
-  }
-
-  void _closeForm() {
-    setState(() => _formOpen = false);
-  }
-
-  Widget? _buildForm(BuildContext context, {required bool inRoute}) {
-    if (!_formOpen) return null;
-    final form = CreateCategoryScreen(
-      key: _formKey,
-      onClose: inRoute ? null : _closeForm,
-    );
-    if (!inRoute) return form;
-    // Route mode: pushed routes sit above the account-scoped providers;
-    // re-provide them, exactly as the original push did. The keyed form
-    // widget itself moves in/out of this wrapper on handoffs.
-    return Provider<AppRepositories>.value(value: _formRepos!, child: form);
-  }
-
-  void _openCategoryDetails(CategoryWithCount entry) {
-    setState(() {
-      if (entry.category.id != _detailCategory?.id) {
-        _detailKey = GlobalKey(debugLabel: 'categoryDetail');
-      }
-      _detailCategory = entry.category;
-      _detailRepos = context.read<AppRepositories>();
-      _detailNav = context.read<AppNavigation>();
-      // The pane hosts one occupant at a time.
-      _formOpen = false;
-    });
-  }
-
-  void _closeDetails() {
-    setState(() => _detailCategory = null);
-  }
-
-  Widget? _buildDetail(BuildContext context, {required bool inSheet}) {
-    final category = _detailCategory;
-    if (category == null) return null;
-    return CategoryDetailsSheet(
-      key: _detailKey,
-      category: category,
-      repos: _detailRepos!,
-      nav: _detailNav!,
-      onClose: inSheet ? null : _closeDetails,
-    );
-  }
 
   @override
   Widget build(BuildContext context) {
     super.build(context);
-    final isActiveTab = context.select<AppNavigation, bool>(
-      (nav) => nav.index == AppNavigation.insightsTab,
-    );
-    final header = widget.header;
-    return AdaptiveDetailView(
-      hasDetail: _detailCategory != null,
-      detailBuilder: _buildDetail,
-      onSheetDismissed: _closeDetails,
-      hasForm: _formOpen,
-      formBuilder: _buildForm,
-      onFormDismissed: _closeForm,
-      isActiveTab: isActiveTab,
-      placeholder: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(32),
-          child: Text(
-            context.l10n.selectCategoryDetail,
-            textAlign: TextAlign.center,
-          ),
-        ),
-      ),
-      list: header == null
-          ? _buildList(context)
-          : Scaffold(appBar: header, body: _buildList(context)),
-    );
-  }
-
-  Widget _buildList(BuildContext context) {
     final categories = context.read<AppRepositories>().categories;
 
     return StreamBuilder<List<CategoryWithCount>>(
@@ -190,7 +82,7 @@ class CategoriesViewState extends State<CategoriesView>
               ),
               usageCount: entry.transactionCount,
               borderRadius: groupedRadius(index, data.length),
-              onTap: () => _openCategoryDetails(entry),
+              onTap: () => widget.onSelect(entry),
             );
           },
         );
