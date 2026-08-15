@@ -77,19 +77,28 @@
     --md-app-color-positive: #43a047;
 
     /*
-     * Material elevation overlays. Flutter draws the shadow of an elevated
-     * `Material`; these are the CSS equivalents of levels 1-5.
+     * Material elevation overlays — the CSS equivalents of the shadow Flutter
+     * draws around an elevated `Material` at levels 1-5.
+     *
+     * Not the Material 3 *web* elevation tokens: those are roughly twice as
+     * dark at the edge and reach three times further than what Flutter paints,
+     * which is why the cards used to sit under a far heavier shadow than the
+     * same card in the native app. These are fits to the real thing — a
+     * `Material(elevation: N, borderRadius: 12)` rendered by the engine and
+     * measured pixel by pixel down each edge. Level 1 reproduces Flutter's
+     * profile exactly; the rest land within 2/255 of it at every sample.
      */
-    --md-sys-elevation-1:
-        0 1px 2px 0 rgb(0 0 0 / 0.3), 0 1px 3px 1px rgb(0 0 0 / 0.15);
-    --md-sys-elevation-2:
-        0 1px 2px 0 rgb(0 0 0 / 0.3), 0 2px 6px 2px rgb(0 0 0 / 0.15);
-    --md-sys-elevation-3:
-        0 4px 8px 3px rgb(0 0 0 / 0.15), 0 1px 3px 0 rgb(0 0 0 / 0.3);
-    --md-sys-elevation-4:
-        0 6px 10px 4px rgb(0 0 0 / 0.15), 0 2px 3px 0 rgb(0 0 0 / 0.3);
-    --md-sys-elevation-5:
-        0 8px 12px 6px rgb(0 0 0 / 0.15), 0 4px 4px 0 rgb(0 0 0 / 0.3);
+    --md-sys-elevation-1: 0 1px 2px -1px rgb(0 0 0 / 0.62);
+    --md-sys-elevation-2: 0 2px 5px -3px rgb(0 0 0 / 0.76);
+    --md-sys-elevation-3: 0 3px 6px -3px rgb(0 0 0 / 0.52);
+    --md-sys-elevation-4: 0 3px 6px -2px rgb(0 0 0 / 0.44);
+    --md-sys-elevation-5: 0 4px 8px -3px rgb(0 0 0 / 0.46);
+
+    /*
+     * One step past the Material scale, because Flutter's `SnackBar` is
+     * `elevation: 6` (`_SnackbarDefaultsM3`). Measured the same way.
+     */
+    --md-sys-elevation-6: 0 4px 10px -2px rgb(0 0 0 / 0.39);
 
     /*
      * Raised card surface, mirroring `raised_card.dart`: light mode leans on
@@ -299,6 +308,120 @@
 }
 
 /*
+ * Modal scrim. Material dims the content behind a dialog or a modal bottom
+ * sheet with `Colors.black54`; the shadcn primitives ship a much lighter,
+ * blurred veil. Overridden here rather than in `components/ui`, which stays
+ * untouched.
+ */
+[data-slot="dialog-overlay"],
+[data-slot="sheet-overlay"] {
+    background-color: color-mix(
+        in srgb,
+        var(--md-sys-color-scrim) 54%,
+        transparent
+    );
+    backdrop-filter: none;
+}
+
+/*
+ * Login backdrop — the CSS port of `_LoginBackdropPainter`
+ * (apps/native/lib/screens/login.dart): a faint 34px grid under two radial
+ * accents. The accent radii follow the painter's `shortestSide` factors; the
+ * ribbon on top of them is an SVG (see `auth-backdrop.tsx`), since CSS has no
+ * stroked curve.
+ */
+@utility auth-backdrop {
+    --auth-grid-line: color-mix(
+        in srgb,
+        var(--md-sys-color-outline-variant) 20%,
+        transparent
+    );
+    --auth-accent-span: min(100vw, 100dvh);
+
+    background-color: var(--md-sys-color-surface);
+    background-image:
+        radial-gradient(
+            circle calc(var(--auth-accent-span) * 0.46) at 12% 14%,
+            color-mix(
+                    in srgb,
+                    var(--md-sys-color-tertiary-container) 72%,
+                    transparent
+                )
+                0%,
+            color-mix(
+                    in srgb,
+                    var(--md-sys-color-tertiary-container) 0%,
+                    transparent
+                )
+                100%
+        ),
+        radial-gradient(
+            circle calc(var(--auth-accent-span) * 0.5) at 92% 76%,
+            color-mix(
+                    in srgb,
+                    var(--md-sys-color-secondary-container) 64%,
+                    transparent
+                )
+                0%,
+            color-mix(
+                    in srgb,
+                    var(--md-sys-color-secondary-container) 0%,
+                    transparent
+                )
+                100%
+        ),
+        repeating-linear-gradient(
+            to right,
+            var(--auth-grid-line) 0 1px,
+            transparent 1px 34px
+        ),
+        repeating-linear-gradient(
+            to bottom,
+            var(--auth-grid-line) 0 1px,
+            transparent 1px 34px
+        );
+}
+
+/*
+ * The translucent card the login flows sit on, mirroring `_Panel`: a 26dp
+ * container floated over the backdrop with a soft, far-offset shadow.
+ */
+@utility auth-panel {
+    background-color: color-mix(
+        in srgb,
+        var(--md-sys-color-surface) 92%,
+        transparent
+    );
+    border: 1px solid
+        color-mix(in srgb, var(--md-sys-color-outline-variant) 80%, transparent);
+    border-radius: 26px;
+    box-shadow: 0 18px 30px
+        color-mix(in srgb, var(--md-sys-color-shadow) 10%, transparent);
+}
+
+/*
+ * The login flows' text field, mirroring `_LoginTextField`: an outlined field
+ * given a 16dp shape and a translucent fill, with the accent-weight focus
+ * outline the native decoration uses.
+ */
+@utility auth-field {
+    --md-outlined-text-field-container-shape: 16px;
+    --md-outlined-field-outline-color: var(--md-sys-color-outline-variant);
+    --md-outlined-field-hover-outline-color: var(
+        --md-sys-color-outline-variant
+    );
+    --md-outlined-field-focus-outline-color: var(--md-sys-color-primary);
+    --md-outlined-field-focus-outline-width: 1.4px;
+
+    background-color: color-mix(
+        in srgb,
+        var(--md-sys-color-surface-container-highest) 66%,
+        transparent
+    );
+    border-radius: 16px;
+}
+
+/*
  * The hover/focus/press tint Material paints over an interactive surface —
  * the CSS stand-in for Flutter's `InkWell` overlay. Uses `currentColor`, so
  * the layer automatically takes the container's "on" color.
@@ -424,4 +547,94 @@
     line-height: 16px;
     font-weight: 500;
     letter-spacing: 0.5px;
+}
+
+/*
+ * Actify's segmented button carries the Material 3 tokens but not the set's
+ * geometry. It declares `--_shape-*` and `--_container-height` and then never
+ * reads either, so `.outline`'s `border-radius: inherit` resolves to 0 and the
+ * segments collapse to the height of their label — a row of rectangles. Its
+ * `noCheckmark` prop is inert too: the class it toggles is missing from the
+ * shipped stylesheet, so the selected segment always draws the check.
+ *
+ * Flutter's `SegmentedButton` is a stadium of equal-width 40dp segments, and
+ * the transaction form turns the check off (`showSelectedIcon: false`), so
+ * this utility puts the set back to that. Goes on `SegmentedButtonSet`; the
+ * selectors follow Actify's markup — set > div[role=presentation] > button.
+ */
+@utility m3-segmented-set {
+    /* Every segment gets the widest segment's width, as native lays them out. */
+    display: inline-grid;
+    grid-auto-flow: column;
+    grid-auto-columns: 1fr;
+
+    & > [role="presentation"] > button {
+        min-height: 40px;
+    }
+
+    /* Stadium ends; the shared inner edges stay square. `.outline` inherits. */
+    & > [role="presentation"]:first-child > button {
+        border-start-start-radius: 9999px;
+        border-end-start-radius: 9999px;
+    }
+
+    & > [role="presentation"]:last-child > button {
+        border-start-end-radius: 9999px;
+        border-end-end-radius: 9999px;
+    }
+}
+
+/*
+ * The selected checkmark, and the width its slot reserves for it. Unlayered on
+ * purpose: Actify injects its stylesheet at runtime with no cascade layer, and
+ * an unlayered declaration beats anything in a layer whatever its specificity —
+ * so these two, unlike the geometry above (which Actify leaves unset), cannot
+ * live inside `@utility`.
+ */
+.m3-segmented-set [role="presentation"] svg {
+    display: none;
+}
+
+.m3-segmented-set [role="presentation"] span:has(> svg) {
+    width: 0;
+}
+
+/*
+ * The floating action button's container. Actify's `Fab` is a bare button —
+ * its stylesheet sets `background-color: transparent` and `color: inherit`,
+ * and sizes the button to its content — and because that stylesheet is
+ * injected unlayered, the colour utilities on the element never reached it and
+ * the FAB rendered as a glyph floating on the page. These are the container
+ * Flutter gives it (`_FABDefaultsM3`): `primaryContainer` behind
+ * `onPrimaryContainer`, square. Height and corner come from Actify's size
+ * class, so `aspect-ratio` keeps this right for every size.
+ *
+ * Element-qualified so it outranks Actify's own `.fab`, which shares its
+ * specificity and whose injection order is not ours to depend on.
+ */
+button.m3-fab {
+    aspect-ratio: 1;
+    padding: 0;
+    background-color: var(--md-sys-color-primary-container);
+    color: var(--md-sys-color-on-primary-container);
+}
+
+/*
+ * Sonner's toast, dressed as the snackbar native shows. Every one of them is
+ * `SnackBar(content: Text(...))` on the M3 defaults (`_SnackbarDefaultsM3`):
+ * `inverseSurface` behind `onInverseSurface` `bodyMedium`, a 4px corner and
+ * elevation 6 — one look, so the per-type palettes sonner ships are levelled
+ * out here. Sonner injects its stylesheet unlayered too, hence the plain rule;
+ * the class is paired with sonner's own attribute purely for specificity.
+ */
+.m3-snackbar[data-sonner-toast] {
+    background: var(--md-sys-color-inverse-surface);
+    color: var(--md-sys-color-inverse-on-surface);
+    border: none;
+    border-radius: 4px;
+    box-shadow: var(--md-sys-elevation-6);
+    font-size: 14px;
+    line-height: 20px;
+    font-weight: 400;
+    letter-spacing: 0.25px;
 }

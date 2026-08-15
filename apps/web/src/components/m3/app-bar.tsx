@@ -2,7 +2,11 @@ import type { ReactNode } from 'react'
 import { cn } from '@/lib/utils'
 
 type AppBarProps = {
-    title: ReactNode
+    /**
+     * Omitted for bars that carry only actions — a detail pane's close bar, for
+     * instance, where the content below is already headed.
+     */
+    title?: ReactNode
     /** Leading slot — a back/close button, matching Flutter's `AppBar.leading`. */
     leading?: ReactNode
     /** Trailing actions, matching Flutter's `AppBar.actions`. */
@@ -34,9 +38,13 @@ export function AppBar({
                 {leading ? (
                     <div className="-ml-2 flex items-center">{leading}</div>
                 ) : null}
-                <h1 className="m3-title-large min-w-0 flex-1 truncate">
-                    {title}
-                </h1>
+                {title === undefined ? (
+                    <span className="min-w-0 flex-1" />
+                ) : (
+                    <h1 className="m3-title-large min-w-0 flex-1 truncate">
+                        {title}
+                    </h1>
+                )}
                 {actions ? (
                     <div className="flex items-center gap-1">{actions}</div>
                 ) : null}

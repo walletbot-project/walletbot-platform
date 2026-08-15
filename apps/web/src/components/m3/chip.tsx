@@ -14,10 +14,13 @@ export function ChoiceChip({
     label,
     selected,
     onSelect,
+    leading,
 }: {
     label: string
     selected: boolean
     onSelect: () => void
+    /** Optional avatar/glyph before the label, matching Flutter's `avatar`. */
+    leading?: ReactNode
 }) {
     return (
         <button
@@ -27,11 +30,13 @@ export function ChoiceChip({
             className={cn(
                 CHIP_BASE,
                 'cursor-pointer',
+                leading ? 'pl-2' : undefined,
                 selected
                     ? 'bg-secondary-container text-on-secondary-container'
                     : 'border border-outline text-on-surface-variant',
             )}
         >
+            {leading}
             {label}
         </button>
     )

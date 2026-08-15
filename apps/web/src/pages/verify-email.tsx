@@ -1,81 +1,67 @@
-import { Link, useSearchParams } from 'react-router-dom'
-import { Icon } from '@/components/m3/icon'
-
-import { Button } from '@/components/ui/button'
+import { useNavigate, useSearchParams } from 'react-router-dom'
+import {
+    AuthHeroHeader,
+    AuthPanel,
+    AuthPanelTitle,
+    AuthPrimaryButton,
+    AuthScaffold,
+} from '@/components/auth/auth-scaffold'
+import { type Messages, useT } from '@/lib/i18n'
 
 type VerifyState = {
-    icon: 'success' | 'error'
+    icon: string
     title: string
     description: string
 }
 
-const stateForError = (error: string | null): VerifyState => {
+const stateForError = (error: string | null, t: Messages): VerifyState => {
     if (error === null) {
         return {
-            icon: 'success',
-            title: '¡Listo! Tu correo fue verificado',
-            description: 'Ya podés iniciar sesión con tu cuenta.',
+            icon: 'mark_email_read',
+            title: t.auth.emailVerifiedTitle,
+            description: t.auth.emailVerifiedDescription,
         }
     }
     if (error === 'TOKEN_EXPIRED') {
         return {
-            icon: 'error',
-            title: 'El enlace venció',
-            description:
-                'Iniciá sesión y te enviamos un enlace nuevo automáticamente.',
+            icon: 'schedule',
+            title: t.auth.linkExpiredTitle,
+            description: t.auth.linkExpiredDescription,
         }
     }
     // INVALID_TOKEN, USER_NOT_FOUND, INVALID_USER, or anything unexpected.
     return {
-        icon: 'error',
-        title: 'No pudimos verificar tu correo',
-        description:
-            'El enlace no es válido. Volvé a iniciar sesión para recibir un enlace nuevo.',
+        icon: 'link_off',
+        title: t.auth.verifyFailedTitle,
+        description: t.auth.verifyFailedDescription,
     }
 }
 
 export function VerifyEmail() {
+    const t = useT()
+    const navigate = useNavigate()
     const [searchParams] = useSearchParams()
-    const state = stateForError(searchParams.get('error'))
+    const state = stateForError(searchParams.get('error'), t)
 
     return (
-        <div className="flex min-h-dvh items-center justify-center bg-surface px-5 py-6">
-            <div className="flex w-full max-w-sm flex-col items-center gap-6 px-4 text-center">
-                {state.icon === 'success' ? (
-                    <div className="rounded-full bg-surface-container-highest p-4">
-                        <Icon
-                            name="mark_email_read"
-                            filled
-                            size={24}
-                            className="text-on-surface-variant"
+        <AuthScaffold>
+            <AuthHeroHeader subtitle={t.auth.signInToContinue} />
+            <div className="mt-5.5">
+                <AuthPanel>
+                    <AuthPanelTitle
+                        icon={state.icon}
+                        title={state.title}
+                        subtitle={state.description}
+                    />
+                    <div className="mt-4">
+                        <AuthPrimaryButton
+                            submitting={false}
+                            label={t.auth.signIn}
+                            onPress={() => navigate('/login')}
                         />
                     </div>
-                ) : (
-                    <div className="rounded-full bg-destructive/10 p-4">
-                        <Icon
-                            name="error"
-                            filled
-                            size={24}
-                            className="text-error"
-                        />
-                    </div>
-                )}
-                <div className="flex flex-col gap-2">
-                    <h1 className="m3-headline-small font-semibold">
-                        {state.title}
-                    </h1>
-                    <p className="m3-body-medium text-on-surface-variant">
-                        {state.description}
-                    </p>
-                </div>
-                <Button
-                    className="w-full"
-                    nativeButton={false}
-                    render={<Link to="/login" />}
-                >
-                    Iniciar sesión
-                </Button>
+                </AuthPanel>
             </div>
-        </div>
+        </AuthScaffold>
     )
 }

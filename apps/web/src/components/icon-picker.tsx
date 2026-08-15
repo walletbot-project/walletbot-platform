@@ -1,10 +1,6 @@
 import { useState } from 'react'
+import { M3Dialog } from '@/components/m3/dialog'
 import { Icon } from '@/components/m3/icon'
-import {
-    Popover,
-    PopoverContent,
-    PopoverTrigger,
-} from '@/components/ui/popover'
 import type { IconOption } from '@/lib/account-icons'
 import { useT } from '@/lib/i18n'
 import { cn } from '@/lib/utils'
@@ -17,9 +13,10 @@ type IconPickerProps = {
 }
 
 /**
- * The tinted, tappable icon tile that opens an icon-grid popover. Used both
- * standalone (as the editable identity glyph in detail sheets) and composed
- * with ColorSwatches inside IconColorPicker for the create dialogs.
+ * The tinted, tappable icon tile that opens the icon grid. The grid is a
+ * dialog, matching the native `showIconPickerDialog`
+ * (apps/native/lib/components/icon_picker.dart) — a popover would anchor to
+ * the tile and read as a menu instead.
  */
 export function IconPicker({
     icon,
@@ -32,16 +29,13 @@ export function IconPicker({
     const active = icons.find((option) => option.name === icon) ?? icons[0]
 
     return (
-        <Popover open={open} onOpenChange={setOpen}>
-            <PopoverTrigger
-                render={
-                    <button
-                        type="button"
-                        className="flex size-14 shrink-0 items-center justify-center rounded-2xl"
-                        style={{ backgroundColor: `${color}47` }}
-                        aria-label={t.common.chooseIcon}
-                    />
-                }
+        <>
+            <button
+                type="button"
+                onClick={() => setOpen(true)}
+                className="m3-state-layer flex size-14 shrink-0 cursor-pointer items-center justify-center rounded-2xl"
+                style={{ backgroundColor: `${color}47` }}
+                aria-label={t.common.chooseIcon}
             >
                 <Icon
                     name={active.symbol}
@@ -49,9 +43,14 @@ export function IconPicker({
                     size={28}
                     style={{ color }}
                 />
-            </PopoverTrigger>
-            <PopoverContent className="w-64">
-                <div className="grid grid-cols-5 gap-1.5">
+            </button>
+
+            <M3Dialog
+                open={open}
+                onOpenChange={setOpen}
+                title={t.common.chooseIcon}
+            >
+                <div className="flex flex-wrap gap-3">
                     {icons.map(({ name, symbol, filled }) => {
                         const isSelected = name === icon
                         return (
@@ -63,14 +62,17 @@ export function IconPicker({
                                     setOpen(false)
                                 }}
                                 className={cn(
-                                    'flex size-10 items-center justify-center rounded-xl border-2 transition-colors',
+                                    'flex size-13 cursor-pointer items-center justify-center rounded-2xl border-2 transition-colors',
                                     isSelected
-                                        ? 'border-foreground'
-                                        : 'border-transparent hover:bg-accent',
+                                        ? 'border-transparent'
+                                        : 'border-transparent bg-surface-container-highest',
                                 )}
                                 style={
                                     isSelected
-                                        ? { backgroundColor: `${color}28` }
+                                        ? {
+                                              backgroundColor: `${color}47`,
+                                              borderColor: color,
+                                          }
                                         : undefined
                                 }
                                 aria-label={name}
@@ -79,14 +81,18 @@ export function IconPicker({
                                 <Icon
                                     name={symbol}
                                     filled={filled}
-                                    size={20}
-                                    style={{ color }}
+                                    size={26}
+                                    style={{
+                                        color: isSelected
+                                            ? color
+                                            : 'var(--md-sys-color-on-surface-variant)',
+                                    }}
                                 />
                             </button>
                         )
                     })}
                 </div>
-            </PopoverContent>
-        </Popover>
+            </M3Dialog>
+        </>
     )
 }

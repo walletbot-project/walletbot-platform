@@ -152,7 +152,10 @@ function FiltersSheet({
             <SheetContent
                 side="bottom"
                 showCloseButton={false}
-                className="max-h-[90dvh] gap-0 rounded-t-[28px] border-none bg-surface-container-low text-on-surface"
+                // Material 3 caps modal bottom sheets at 640dp and centres
+                // them (Flutter's `_BottomSheetDefaultsM3`), so wide windows
+                // get a column rather than a full-bleed band.
+                className="mx-auto max-h-[90dvh] w-full max-w-160 gap-0 rounded-t-[28px] border-none bg-surface-container-low text-on-surface"
             >
                 <SheetHeader className="flex-row items-center justify-between">
                     <SheetTitle>{t.activity.filters}</SheetTitle>

@@ -70,7 +70,7 @@ export function RootLayout() {
             <Fab
                 aria-label={t.nav.addWithGasti}
                 onPress={() => navigate('/add')}
-                className="bg-primary-container text-on-primary-container"
+                className="m3-fab"
             >
                 <span className="text-2xl leading-none">🤖</span>
             </Fab>

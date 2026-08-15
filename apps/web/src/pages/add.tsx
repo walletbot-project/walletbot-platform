@@ -1,5 +1,5 @@
 import { api } from '@wallet-bot/backend/api'
-import { IconButton } from 'actify'
+import { IconButton, Select, SelectOption } from 'actify'
 import { useConvex, useQuery } from 'convex/react'
 import { useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
@@ -449,19 +449,21 @@ export function Add() {
 
                     {/* Device selector */}
                     {voice.isConnected && voice.devices.length > 1 && (
-                        <select
-                            className="mx-auto w-full max-w-xs rounded-md border bg-background px-2 py-1.5 text-xs"
-                            value={voice.selectedDeviceId}
-                            onChange={(e) =>
-                                voice.handleDeviceChange(e.target.value)
+                        <Select
+                            aria-label={t.voice.microphone}
+                            variant="outlined"
+                            className="mx-auto w-full max-w-xs"
+                            selectedKey={voice.selectedDeviceId}
+                            onSelectionChange={(key) =>
+                                voice.handleDeviceChange(String(key))
                             }
                         >
                             {voice.devices.map((d) => (
-                                <option key={d.deviceId} value={d.deviceId}>
+                                <SelectOption key={d.deviceId}>
                                     {d.label || d.deviceId}
-                                </option>
+                                </SelectOption>
                             ))}
-                        </select>
+                        </Select>
                     )}
                 </div>
             </div>

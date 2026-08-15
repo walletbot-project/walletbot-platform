@@ -6,16 +6,10 @@ import { useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 import { ColorSwatches } from '@/components/color-swatches'
 import { EntityRecentTransactions } from '@/components/entity-recent-transactions'
+import { DetailPaneHeader } from '@/components/m3/detail-pane-header'
+import { DialogAction, M3Dialog } from '@/components/m3/dialog'
 import { Icon } from '@/components/m3/icon'
 import { MonthlySpend } from '@/components/monthly-spend'
-import { Button as ShadcnButton } from '@/components/ui/button'
-import {
-    Dialog,
-    DialogContent,
-    DialogFooter,
-    DialogHeader,
-    DialogTitle,
-} from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { COLOR_OPTIONS } from '@/lib/entity-colors'
 import { GROUP_SPACING, groupedRadius } from '@/lib/grouped-list'
@@ -141,139 +135,143 @@ export function TagDetail({
     const hasChildren = childTags.length > 0
 
     return (
-        <div className="flex flex-col px-4 pb-6">
-            {/* Identity hero — tags have no icon, just a color wash. */}
-            <div
-                className="flex items-center gap-3 p-5"
-                style={{
-                    backgroundColor: `${accent}24`,
-                    ...groupedRadius(0, 2),
-                }}
-            >
-                <span
-                    className="size-3 shrink-0 rounded-full"
-                    style={{ backgroundColor: accent }}
-                />
-                {editing ? (
-                    <Input
-                        value={name}
-                        onChange={(e) => setName(e.target.value)}
-                        className="bg-surface"
-                        aria-label={t.common.name}
+        <div className="flex flex-col pb-6">
+            <DetailPaneHeader onClose={onClose} />
+            <div className="flex flex-col px-4">
+                {/* Identity hero — tags have no icon, just a color wash. */}
+                <div
+                    className="flex items-center gap-3 p-5"
+                    style={{
+                        backgroundColor: `${accent}24`,
+                        ...groupedRadius(0, 2),
+                    }}
+                >
+                    <span
+                        className="size-3 shrink-0 rounded-full"
+                        style={{ backgroundColor: accent }}
                     />
-                ) : (
-                    <span className="m3-title-large min-w-0 flex-1 truncate font-semibold">
-                        {tag.name}
-                    </span>
-                )}
-            </div>
-
-            {editing ? (
-                <div className="pt-3">
-                    <ColorSwatches
-                        value={color}
-                        onChange={setColor}
-                        options={COLOR_OPTIONS}
-                    />
+                    {editing ? (
+                        <Input
+                            value={name}
+                            onChange={(e) => setName(e.target.value)}
+                            className="bg-surface"
+                            aria-label={t.common.name}
+                        />
+                    ) : (
+                        <span className="m3-title-large min-w-0 flex-1 truncate font-semibold">
+                            {tag.name}
+                        </span>
+                    )}
                 </div>
-            ) : null}
 
-            {/* Monthly spend hero. */}
-            <div
-                className="flex flex-col gap-1 bg-surface-container-high px-5 pt-4 pb-4.5"
-                style={{ marginTop: GROUP_SPACING, ...groupedRadius(1, 2) }}
-            >
-                <span className="m3-label-medium tracking-[0.8px] text-on-surface-variant">
-                    {t.insights.spentThisMonth.toUpperCase()}
-                </span>
-                <MonthlySpend spend={spend} />
-            </div>
+                {editing ? (
+                    <div className="pt-3">
+                        <ColorSwatches
+                            value={color}
+                            onChange={setColor}
+                            options={COLOR_OPTIONS}
+                        />
+                    </div>
+                ) : null}
 
-            {/* Actions. */}
-            <div className="mt-3 flex items-center gap-2">
-                <Button
-                    variant={editing ? 'filled' : 'tonal'}
-                    className="flex-1"
-                    onPress={handleToggleEditing}
-                    isDisabled={saving}
+                {/* Monthly spend hero. */}
+                <div
+                    className="flex flex-col gap-1 bg-surface-container-high px-5 pt-4 pb-4.5"
+                    style={{ marginTop: GROUP_SPACING, ...groupedRadius(1, 2) }}
                 >
-                    <Icon name={editing ? 'check' : 'edit'} size={18} />
-                    {editing ? t.common.done : t.common.edit}
-                </Button>
-                <IconButton
-                    onPress={() => setDeleteOpen(true)}
-                    isDisabled={saving}
-                    aria-label={t.common.delete}
-                    className="rounded-full bg-error-container text-on-error-container"
+                    <span className="m3-label-medium tracking-[0.8px] text-on-surface-variant">
+                        {t.insights.spentThisMonth.toUpperCase()}
+                    </span>
+                    <MonthlySpend spend={spend} />
+                </div>
+
+                {/* Actions. */}
+                <div className="mt-3 flex items-center gap-2">
+                    <Button
+                        variant={editing ? 'filled' : 'tonal'}
+                        className="flex-1"
+                        onPress={handleToggleEditing}
+                        isDisabled={saving}
+                    >
+                        <Icon name={editing ? 'check' : 'edit'} size={18} />
+                        {editing ? t.common.done : t.common.edit}
+                    </Button>
+                    <IconButton
+                        onPress={() => setDeleteOpen(true)}
+                        isDisabled={saving}
+                        aria-label={t.common.delete}
+                        className="rounded-full bg-error-container text-on-error-container"
+                    >
+                        <Icon name="delete" />
+                    </IconButton>
+                </div>
+
+                <EntityRecentTransactions
+                    title={t.insights.lastMovements}
+                    viewAllLabel={t.insights.viewAll}
+                    onViewAll={viewAllTransactions}
+                    transactions={recent}
+                />
+
+                <M3Dialog
+                    open={deleteOpen}
+                    onOpenChange={setDeleteOpen}
+                    title={
+                        hasChildren
+                            ? t.insights.tagDeleteWithChildrenTitle
+                            : t.insights.tagDeleteTitle
+                    }
+                    description={
+                        hasChildren
+                            ? undefined
+                            : t.insights.tagDeleteConfirm({ name: tag.name })
+                    }
+                    actions={
+                        <>
+                            <DialogAction
+                                label={t.common.cancel}
+                                onPress={() => setDeleteOpen(false)}
+                                isDisabled={saving}
+                            />
+                            {hasChildren ? (
+                                <DialogAction
+                                    label={t.insights.keepSubtags}
+                                    onPress={() => performDelete(false)}
+                                    isDisabled={saving}
+                                />
+                            ) : null}
+                            <DialogAction
+                                label={
+                                    hasChildren
+                                        ? t.insights.deleteEverything
+                                        : t.common.delete
+                                }
+                                onPress={() => performDelete(hasChildren)}
+                                isDisabled={saving}
+                                destructive
+                            />
+                        </>
+                    }
                 >
-                    <Icon name="delete" />
-                </IconButton>
-            </div>
-
-            <EntityRecentTransactions
-                title={t.insights.lastMovements}
-                viewAllLabel={t.insights.viewAll}
-                onViewAll={viewAllTransactions}
-                transactions={recent}
-            />
-
-            <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
-                <DialogContent>
-                    <DialogHeader>
-                        <DialogTitle>
-                            {hasChildren
-                                ? t.insights.tagDeleteWithChildrenTitle
-                                : t.insights.tagDeleteTitle}
-                        </DialogTitle>
-                    </DialogHeader>
                     {hasChildren ? (
-                        <div className="m3-body-medium flex flex-col gap-3">
+                        <div className="m3-body-medium flex flex-col gap-3 text-on-surface-variant">
                             <p>
-                                <span className="font-medium">{tag.name}</span>{' '}
+                                <span className="font-medium text-on-surface">
+                                    {tag.name}
+                                </span>{' '}
                                 {t.insights.tagDeleteWithChildrenPrompt({
                                     count: childTags.length,
                                 })}
                             </p>
-                            <ul className="list-disc pl-5 text-on-surface-variant">
+                            <ul className="list-disc pl-5">
                                 {childTags.map((child) => (
                                     <li key={child.id}>{child.name}</li>
                                 ))}
                             </ul>
                         </div>
-                    ) : (
-                        <p className="m3-body-medium text-on-surface-variant">
-                            {t.insights.tagDeleteConfirm({ name: tag.name })}
-                        </p>
-                    )}
-                    <DialogFooter>
-                        <ShadcnButton
-                            variant="outline"
-                            onClick={() => setDeleteOpen(false)}
-                            disabled={saving}
-                        >
-                            {t.common.cancel}
-                        </ShadcnButton>
-                        {hasChildren ? (
-                            <ShadcnButton
-                                variant="outline"
-                                onClick={() => performDelete(false)}
-                                disabled={saving}
-                            >
-                                {t.insights.keepSubtags}
-                            </ShadcnButton>
-                        ) : null}
-                        <ShadcnButton
-                            variant="destructive"
-                            onClick={() => performDelete(hasChildren)}
-                            disabled={saving}
-                        >
-                            {hasChildren
-                                ? t.insights.deleteEverything
-                                : t.common.delete}
-                        </ShadcnButton>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
+                    ) : null}
+                </M3Dialog>
+            </div>
         </div>
     )
 }

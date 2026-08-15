@@ -1,4 +1,5 @@
 import { api } from '@wallet-bot/backend/api'
+import { Select, SelectOption } from 'actify'
 import { useMutation, useQuery } from 'convex/react'
 import type { FunctionReturnType } from 'convex/server'
 import { type FormEvent, type ReactNode, useId, useState } from 'react'
@@ -6,16 +7,12 @@ import { useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 import { AccountIcon } from '@/components/account-icon'
 import { CategoryIcon } from '@/components/category-icon'
+import { DateField } from '@/components/m3/date-field'
+import { DialogAction, M3Dialog } from '@/components/m3/dialog'
 import { Icon } from '@/components/m3/icon'
+import { TimeField } from '@/components/m3/time-field'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import {
-    Dialog,
-    DialogContent,
-    DialogFooter,
-    DialogHeader,
-    DialogTitle,
-} from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Textarea } from '@/components/ui/textarea'
@@ -469,16 +466,16 @@ function TransactionDetailsContent({
                             attention={!dateConfirmed}
                         >
                             {editing ? (
-                                <Input
-                                    type="date"
+                                <DateField
                                     value={date}
-                                    onChange={(event) => {
-                                        setDate(event.target.value)
+                                    onChange={(next) => {
+                                        setDate(next)
                                         setDateConfirmed(true)
                                         setDateTouched(true)
                                     }}
+                                    label={t.transaction.date}
+                                    compact
                                     className="w-auto"
-                                    required
                                 />
                             ) : (
                                 <button
@@ -516,16 +513,15 @@ function TransactionDetailsContent({
                             attention={timeNeedsAttention}
                         >
                             {editing ? (
-                                <Input
-                                    type="time"
+                                <TimeField
                                     value={time}
-                                    onChange={(event) => {
-                                        setTime(event.target.value)
+                                    onChange={(next) => {
+                                        setTime(next)
                                         setTimeStatus('confirmed')
                                         setTimeTouched(true)
                                     }}
-                                    className="w-auto"
-                                    required
+                                    label={t.transaction.time}
+                                    compact
                                 />
                             ) : (
                                 formatTime(transaction.date, formatLocale)
@@ -558,6 +554,11 @@ function TransactionDetailsContent({
                                         isTransfer ? toAccountId : undefined
                                     }
                                     onChange={setAccountId}
+                                    label={
+                                        isTransfer
+                                            ? t.transaction.sourceAccount
+                                            : t.transaction.account
+                                    }
                                 />
                             ) : (
                                 <div className="space-y-1">
@@ -608,6 +609,7 @@ function TransactionDetailsContent({
                                         accounts={accounts}
                                         excludedId={accountId}
                                         onChange={setToAccountId}
+                                        label={t.transaction.destinationAccount}
                                     />
                                 ) : (
                                     <div className="space-y-1">
@@ -655,23 +657,21 @@ function TransactionDetailsContent({
                                 label={t.transaction.category}
                             >
                                 {editing ? (
-                                    <select
-                                        value={categoryId}
-                                        onChange={(event) =>
-                                            setCategoryId(event.target.value)
+                                    <Select
+                                        aria-label={t.transaction.category}
+                                        variant="outlined"
+                                        className="max-w-52"
+                                        selectedKey={categoryId}
+                                        onSelectionChange={(key) =>
+                                            setCategoryId(String(key))
                                         }
-                                        className="h-9 max-w-52 rounded-md border bg-transparent px-3 text-sm"
-                                        required
                                     >
                                         {categories.map((item) => (
-                                            <option
-                                                key={item.id}
-                                                value={item.id}
-                                            >
+                                            <SelectOption key={item.id}>
                                                 {item.name}
-                                            </option>
+                                            </SelectOption>
                                         ))}
-                                    </select>
+                                    </Select>
                                 ) : category ? (
                                     <button
                                         type="button"
@@ -794,34 +794,29 @@ function TransactionDetailsContent({
                 </footer>
             ) : null}
 
-            <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
-                <DialogContent>
-                    <DialogHeader>
-                        <DialogTitle>{t.transaction.deleteTitle}</DialogTitle>
-                    </DialogHeader>
-                    <p className="text-sm text-muted-foreground">
-                        {t.transaction.deleteConfirm({
-                            name: transaction.name,
-                        })}
-                    </p>
-                    <DialogFooter>
-                        <Button
-                            variant="outline"
-                            onClick={() => setDeleteOpen(false)}
-                            disabled={saving}
-                        >
-                            {t.common.cancel}
-                        </Button>
-                        <Button
-                            variant="destructive"
-                            onClick={() => void handleDelete()}
-                            disabled={saving}
-                        >
-                            {t.common.delete}
-                        </Button>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
+            <M3Dialog
+                open={deleteOpen}
+                onOpenChange={setDeleteOpen}
+                title={t.transaction.deleteTitle}
+                description={t.transaction.deleteConfirm({
+                    name: transaction.name,
+                })}
+                actions={
+                    <>
+                        <DialogAction
+                            label={t.common.cancel}
+                            onPress={() => setDeleteOpen(false)}
+                            isDisabled={saving}
+                        />
+                        <DialogAction
+                            label={t.common.delete}
+                            onPress={() => void handleDelete()}
+                            isDisabled={saving}
+                            destructive
+                        />
+                    </>
+                }
+            />
         </>
     )
 }
@@ -904,18 +899,21 @@ function AccountSelect({
     accounts,
     excludedId,
     onChange,
+    label,
 }: {
     value: string
     accounts: Account[]
     excludedId?: string
     onChange: (value: string) => void
+    label: string
 }) {
     return (
-        <select
-            value={value}
-            onChange={(event) => onChange(event.target.value)}
-            className="h-9 w-full rounded-md border bg-transparent px-3 text-sm"
-            required
+        <Select
+            aria-label={label}
+            variant="outlined"
+            className="w-full"
+            selectedKey={value}
+            onSelectionChange={(key) => onChange(String(key))}
         >
             {accounts
                 .filter(
@@ -924,11 +922,11 @@ function AccountSelect({
                         (!account.isArchived && account.id !== excludedId),
                 )
                 .map((account) => (
-                    <option key={account.id} value={account.id}>
-                        {account.name} · {account.currency}
-                    </option>
+                    <SelectOption key={account.id}>
+                        {`${account.name} · ${account.currency}`}
+                    </SelectOption>
                 ))}
-        </select>
+        </Select>
     )
 }
 

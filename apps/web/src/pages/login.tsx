@@ -1,17 +1,30 @@
-import { Button, CircularProgress } from 'actify'
-import { type FormEvent, useState } from 'react'
-import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { toast } from 'sonner'
+import { Button } from 'actify'
+import { type FormEvent, useEffect, useRef, useState } from 'react'
+import { useLocation, useNavigate } from 'react-router-dom'
 
 import googleIcon from '@/assets/google.svg'
-import { Icon } from '@/components/m3/icon'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Separator } from '@/components/ui/separator'
+import {
+    AuthHeroHeader,
+    AuthOrDivider,
+    AuthPanel,
+    AuthPanelTitle,
+    AuthPrimaryButton,
+    AuthScaffold,
+    AuthTextField,
+} from '@/components/auth/auth-scaffold'
 import { authClient } from '@/lib/auth-client'
 import { useT } from '@/lib/i18n'
+import { ForgotPasswordPanel } from '@/pages/auth/forgot-password-panel'
+import { VerifyPendingPanel } from '@/pages/auth/verify-pending-panel'
 
 type AuthMode = 'sign-in' | 'sign-up'
+
+/**
+ * Which panel the screen shows. `credentials` is the sign-in/sign-up form;
+ * the other two replace it entirely until the user navigates back — the same
+ * `_RemoteFlow` the native login screen switches on.
+ */
+type RemoteFlow = 'credentials' | 'forgot-password' | 'verify-pending'
 
 export function Login({ mode }: { mode: AuthMode }) {
     const location = useLocation()
@@ -21,10 +34,9 @@ export function Login({ mode }: { mode: AuthMode }) {
 
     const [loading, setLoading] = useState<'email' | 'google' | null>(null)
     const [error, setError] = useState<string | null>(null)
-    // Set after a signup, or a sign-in blocked by verification: the account
-    // exists but its email isn't verified yet, so we show the
-    // check-your-inbox panel instead of the form.
-    const [pendingEmail, setPendingEmail] = useState<string | null>(null)
+    const [flow, setFlow] = useState<RemoteFlow>('credentials')
+    /** Email echoed in the copy of the verify-pending panel. */
+    const [pendingEmail, setPendingEmail] = useState('')
 
     // Sign-in and create are separate routes; clear any stale error as the user
     // moves between them.
@@ -69,6 +81,7 @@ export function Login({ mode }: { mode: AuthMode }) {
                     // this attempt (sendOnSignIn).
                     if (result.error.code === 'EMAIL_NOT_VERIFIED') {
                         setPendingEmail(email)
+                        setFlow('verify-pending')
                         return
                     }
                     throw new Error(result.error.message ?? t.auth.authFailed)
@@ -93,6 +106,7 @@ export function Login({ mode }: { mode: AuthMode }) {
             // With email verification required there is no session yet — for
             // new and already-registered emails alike (anti-enumeration).
             setPendingEmail(email)
+            setFlow('verify-pending')
         } catch (err) {
             const message = err instanceof Error ? err.message : String(err)
             // Generic, account-independent hint so users who actually signed up
@@ -106,243 +120,183 @@ export function Login({ mode }: { mode: AuthMode }) {
         }
     }
 
-    const handleResendVerification = () => {
-        if (!pendingEmail) return
-        // No callbackURL: canonicalized server-side to /verify-email.
-        const promise = authClient
-            .sendVerificationEmail({ email: pendingEmail })
-            .then((result) => {
-                if (result.error) {
-                    throw new Error(
-                        result.error.message ?? t.auth.resendVerificationFailed,
-                    )
-                }
-            })
-        toast.promise(promise, {
-            loading: t.auth.resendingVerificationEmail,
-            success: t.auth.verificationEmailResent,
-            error: t.auth.resendVerificationFailed,
-        })
-    }
-
-    if (pendingEmail) {
-        return (
-            <div className="flex min-h-dvh items-center justify-center bg-surface">
-                <div className="flex w-full max-w-sm flex-col items-center gap-6 px-4 text-center">
-                    <div className="rounded-full bg-surface-container-highest p-4">
-                        <Icon
-                            name="mark_email_read"
-                            filled
-                            size={24}
-                            className="text-on-surface-variant"
-                        />
-                    </div>
-                    <div className="flex flex-col gap-2">
-                        <h1 className="m3-headline-small font-semibold">
-                            {t.auth.verifyEmailTitle}
-                        </h1>
-                        <p className="m3-body-medium text-on-surface-variant">
-                            {t.auth.verifyEmailSent({ email: pendingEmail })}{' '}
-                            {t.auth.verifyEmailInstructions}
-                        </p>
-                    </div>
-                    <div className="flex w-full flex-col gap-2">
-                        <Button
-                            variant="filled"
-                            className="w-full"
-                            onPress={handleResendVerification}
-                        >
-                            {t.auth.resendVerificationEmail}
-                        </Button>
-                        <Button
-                            variant="text"
-                            className="w-full"
-                            onPress={() => setPendingEmail(null)}
-                        >
-                            {t.auth.backToSignIn}
-                        </Button>
-                    </div>
-                </div>
-            </div>
-        )
+    const returnToSignIn = () => {
+        setFlow('credentials')
+        setError(null)
+        if (mode !== 'sign-in') {
+            navigate('/login', { state: location.state, replace: true })
+        }
     }
 
     return (
-        <div className="flex min-h-dvh justify-center bg-surface px-5 py-6">
-            <div className="flex w-full max-w-[480px] flex-col">
-                {/* Hero header, matching the native login's `_HeroHeader`. */}
-                <div className="flex items-center gap-3.5">
-                    <span className="flex size-14 shrink-0 items-center justify-center rounded-[18px] bg-primary text-on-primary shadow-level-3">
-                        <Icon name="account_balance_wallet" filled />
-                    </span>
-                    <div className="flex min-w-0 flex-col">
-                        <h1 className="m3-headline-medium font-black">
-                            {t.common.appName}
-                        </h1>
-                        <p className="m3-body-medium text-on-surface-variant">
-                            {t.auth.signInToContinue}
-                        </p>
+        <AuthScaffold>
+            <AuthHeroHeader subtitle={t.auth.signInToContinue} />
+            <div className="mt-5.5">
+                {flow === 'forgot-password' ? (
+                    <ForgotPasswordPanel onBack={returnToSignIn} />
+                ) : flow === 'verify-pending' ? (
+                    <VerifyPendingPanel
+                        email={pendingEmail}
+                        onSignIn={returnToSignIn}
+                    />
+                ) : (
+                    <CredentialsPanel
+                        mode={mode}
+                        loading={loading}
+                        error={error}
+                        onSubmit={handleEmailSubmit}
+                        onGoogle={handleGoogleSignIn}
+                        onModeChange={goToMode}
+                        onForgotPassword={() => {
+                            setError(null)
+                            setFlow('forgot-password')
+                        }}
+                    />
+                )}
+            </div>
+        </AuthScaffold>
+    )
+}
+
+/** The email form plus the Google action, porting `_RemoteLoginPanel`. */
+function CredentialsPanel({
+    mode,
+    loading,
+    error,
+    onSubmit,
+    onGoogle,
+    onModeChange,
+    onForgotPassword,
+}: {
+    mode: AuthMode
+    loading: 'email' | 'google' | null
+    error: string | null
+    onSubmit: (event: FormEvent<HTMLFormElement>) => void
+    onGoogle: () => void
+    onModeChange: (mode: AuthMode) => void
+    onForgotPassword: () => void
+}) {
+    const t = useT()
+    const submitting = loading !== null
+    const nameRef = useRef<HTMLDivElement>(null)
+
+    // The name field only exists in sign-up; focus it when it appears so the
+    // mode switch lands the caret where typing continues.
+    useEffect(() => {
+        if (mode !== 'sign-up') return
+        nameRef.current?.querySelector('input')?.focus()
+    }, [mode])
+
+    return (
+        <AuthPanel>
+            <AuthPanelTitle
+                icon="sync"
+                title={t.auth.withAccount}
+                subtitle={t.auth.withAccountDescription}
+            />
+
+            <form className="mt-4.5 flex flex-col gap-3" onSubmit={onSubmit}>
+                {mode === 'sign-up' ? (
+                    <div ref={nameRef}>
+                        <AuthTextField
+                            icon="badge"
+                            name="name"
+                            label={t.auth.name}
+                            autoComplete="name"
+                            isDisabled={submitting}
+                        />
                     </div>
-                </div>
+                ) : null}
 
-                <form
-                    className="mt-6 flex w-full flex-col gap-4 rounded-[28px] bg-surface-container-low p-5"
-                    onSubmit={handleEmailSubmit}
-                >
-                    {mode === 'sign-up' ? (
-                        <div className="grid gap-2">
-                            <Label htmlFor="name">{t.common.name}</Label>
-                            <div className="relative">
-                                <Icon
-                                    name="person"
-                                    filled
-                                    size={16}
-                                    className="-translate-y-1/2 pointer-events-none absolute top-1/2 left-2.5 text-on-surface-variant"
-                                />
-                                <Input
-                                    id="name"
-                                    name="name"
-                                    autoComplete="name"
-                                    placeholder={t.auth.namePlaceholder}
-                                    className="pl-8"
-                                    disabled={loading !== null}
-                                />
-                            </div>
-                        </div>
-                    ) : null}
+                <AuthTextField
+                    icon="alternate_email"
+                    name="email"
+                    type="email"
+                    label={t.auth.email}
+                    autoComplete="email"
+                    isRequired
+                    isDisabled={submitting}
+                />
 
-                    <div className="grid gap-2">
-                        <Label htmlFor="email">{t.auth.email}</Label>
-                        <div className="relative">
-                            <Icon
-                                name="mail"
-                                filled
-                                size={16}
-                                className="-translate-y-1/2 pointer-events-none absolute top-1/2 left-2.5 text-on-surface-variant"
-                            />
-                            <Input
-                                id="email"
-                                name="email"
-                                type="email"
-                                autoComplete="email"
-                                placeholder="you@example.com"
-                                className="pl-8"
-                                required
-                                disabled={loading !== null}
-                            />
-                        </div>
-                    </div>
+                <AuthTextField
+                    icon="lock"
+                    name="password"
+                    type="password"
+                    label={t.auth.password}
+                    autoComplete={
+                        mode === 'sign-in' ? 'current-password' : 'new-password'
+                    }
+                    minLength={8}
+                    isRequired
+                    isDisabled={submitting}
+                />
 
-                    <div className="grid gap-2">
-                        <Label htmlFor="password">{t.auth.password}</Label>
-                        <div className="relative">
-                            <Icon
-                                name="lock"
-                                filled
-                                size={16}
-                                className="-translate-y-1/2 pointer-events-none absolute top-1/2 left-2.5 text-on-surface-variant"
-                            />
-                            <Input
-                                id="password"
-                                name="password"
-                                type="password"
-                                autoComplete={
-                                    mode === 'sign-in'
-                                        ? 'current-password'
-                                        : 'new-password'
-                                }
-                                placeholder={
-                                    mode === 'sign-in'
-                                        ? t.auth.passwordPlaceholder
-                                        : t.auth.newPasswordPlaceholder
-                                }
-                                className="pl-8"
-                                minLength={8}
-                                required
-                                disabled={loading !== null}
-                            />
-                        </div>
-                    </div>
-
-                    {mode === 'sign-in' ? (
-                        <Link
-                            to="/forgot-password"
-                            className="m3-label-large -mt-2 self-end text-primary underline-offset-4 hover:underline"
+                {mode === 'sign-in' ? (
+                    <div className="-mt-1 flex justify-end">
+                        <Button
+                            type="button"
+                            variant="text"
+                            isDisabled={submitting}
+                            onPress={onForgotPassword}
                         >
                             {t.auth.forgotPassword}
-                        </Link>
-                    ) : null}
+                        </Button>
+                    </div>
+                ) : (
+                    <div className="h-1" />
+                )}
 
-                    {error ? (
-                        <p className="m3-body-medium rounded-lg bg-error-container px-3 py-2 text-on-error-container">
-                            {error}
-                        </p>
-                    ) : null}
+                {error ? (
+                    <p className="m3-body-medium rounded-2xl bg-error-container px-3 py-2 text-on-error-container">
+                        {error}
+                    </p>
+                ) : null}
 
-                    <Button
-                        type="submit"
-                        variant="filled"
-                        className="w-full"
-                        // The native login gives its primary action a taller,
-                        // squarer shape than the M3 default pill.
-                        style={{
-                            height: 54,
-                            '--md-filled-button-container-shape': '16px',
-                        }}
-                        isDisabled={loading !== null}
-                    >
-                        {loading === 'email' ? (
-                            <CircularProgress isIndeterminate size="xs" />
-                        ) : null}
-                        {mode === 'sign-in' ? t.auth.signIn : t.auth.signUp}
-                    </Button>
+                <AuthPrimaryButton
+                    type="submit"
+                    submitting={loading === 'email'}
+                    label={mode === 'sign-in' ? t.auth.signIn : t.auth.signUp}
+                />
 
+                <div className="flex justify-center">
                     <Button
                         type="button"
                         variant="text"
-                        className="self-center"
+                        isDisabled={submitting}
                         onPress={() =>
-                            goToMode(mode === 'sign-in' ? 'sign-up' : 'sign-in')
+                            onModeChange(
+                                mode === 'sign-in' ? 'sign-up' : 'sign-in',
+                            )
                         }
                     >
                         {mode === 'sign-in'
                             ? t.auth.needAccountSignUp
                             : t.auth.haveAccountSignIn}
                     </Button>
-                </form>
-
-                <div className="mt-4.5 flex w-full items-center gap-3">
-                    <Separator className="flex-1" />
-                    <span className="m3-label-medium font-bold text-on-surface-variant">
-                        {t.auth.or}
-                    </span>
-                    <Separator className="flex-1" />
                 </div>
+            </form>
 
-                <Button
-                    variant="outlined"
-                    className="mt-4.5 w-full"
-                    style={{
-                        height: 54,
-                        '--md-outlined-button-container-shape': '16px',
-                    }}
-                    onPress={handleGoogleSignIn}
-                    isDisabled={loading !== null}
-                >
-                    {loading === 'google' ? (
-                        <CircularProgress isIndeterminate size="xs" />
-                    ) : (
-                        <img
-                            src={googleIcon}
-                            alt="Google"
-                            className="h-5 w-5"
-                        />
-                    )}
-                    {loading === 'google'
-                        ? t.auth.signingIn
-                        : t.auth.continueWithGoogle}
-                </Button>
+            <div className="my-4.5">
+                <AuthOrDivider label={t.auth.or} />
             </div>
-        </div>
+
+            <Button
+                variant="outlined"
+                className="w-full bg-surface"
+                style={{
+                    height: 54,
+                    '--md-outlined-button-container-shape': '16px',
+                    '--md-outlined-button-outline-color':
+                        'var(--md-sys-color-outline-variant)',
+                }}
+                onPress={onGoogle}
+                isDisabled={submitting}
+            >
+                <img src={googleIcon} alt="" className="size-5" />
+                {loading === 'google'
+                    ? t.auth.signingIn
+                    : t.auth.continueWithGoogle}
+            </Button>
+        </AuthPanel>
     )
 }

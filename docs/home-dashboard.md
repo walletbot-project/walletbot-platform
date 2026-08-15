@@ -296,7 +296,13 @@ unchanged — only advanced (disjunctive) filters take the anchor+predicate path
 1. **Foundation** ✅ — Drift tables + local aggregation queries + layout/flow renderer.
 2. **Widgets** ✅ — Stat, Balance card, Transaction list, and Breakdown chart (pie / bar / line, group-by category / account / month) renderers.
 3. **Editing** ✅ — add / remove / reorder, width control, background options, and simple/advanced filter editing.
-4. **Sync** ✅ (native + Convex) — both tables wired into `SyncEngine` and the backend push/pull. **Web parity still pending.**
+4. **Sync** ✅ (native + Convex) — both tables wired into `SyncEngine` and the backend push/pull.
+5. **Web parity** ✅ — `convex/v1/dashboard/` serves layout, CRUD, seed and the
+   aggregations straight to the web client (anchor + predicate, see § Querying);
+   the filter model and the 6-unit layout engine live in
+   `packages/shared/src/dashboard/` so both clients resolve and repair a stored
+   layout identically; the UI is in `apps/web/src/pages/home/`. Web edits filters
+   in **simple mode only** — an advanced tree renders read-only there.
 
 > **Status:** the `savedFilters` + `dashboardWidgets` Drift tables persist the
 > layout and sync through the existing `SyncEngine` ↔ Convex `sync/` pipeline
@@ -320,7 +326,14 @@ unchanged — only advanced (disjunctive) filters take the anchor+predicate path
 > filters and dashboard widgets, using the same canonical filter JSON and
 > widget option JSON as the UI.
 >
-> **Still pending:** **web parity** (the web home is still a placeholder — see
-> risk R-004).
+> **Web (2026-08-15):** the same tables are read through `v1/dashboard/queries`
+> (`layout`, `stat`, `transactions`, `currencyBalance`, `breakdown`) and written
+> through `v1/dashboard/mutations`. The web seed uses the **same deterministic
+> ids** as `default_dashboard.dart`, so a device and the web app seeding one
+> fresh account converge under LWW instead of duplicating, and it refuses to
+> seed when a dashboard tombstone exists. Tile editing on web is the width
+> controls plus one-cell nudges rather than drag & drop.
+>
+> **Still pending:** the advanced (tree) filter editor on web.
 </content>
 </invoke>

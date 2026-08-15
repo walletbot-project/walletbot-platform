@@ -34,6 +34,8 @@ export const es = {
         colorSwatch: (p: { color: string }) => `Color ${p.color}`,
         nameCannotBeEmpty: 'El nombre no puede estar vacío',
         saveFailed: 'Error al guardar',
+        hour: 'Hora',
+        minute: 'Minutos',
         noResults: 'Sin resultados',
     },
 
@@ -74,8 +76,12 @@ export const es = {
 
     auth: {
         signInToContinue: 'Iniciá sesión para continuar',
+        withAccount: 'Con cuenta',
+        withAccountDescription:
+            'Usá correo o Google para sincronizar tus gastos.',
         signIn: 'Iniciar sesión',
         signUp: 'Crear cuenta',
+        name: 'Nombre',
         namePlaceholder: 'Tu nombre',
         email: 'Correo',
         password: 'Contraseña',
@@ -95,11 +101,126 @@ export const es = {
             `Te enviamos un enlace de verificación a ${p.email}.`,
         verifyEmailInstructions:
             'Abrí el enlace para verificar tu cuenta y después volvé acá a iniciar sesión.',
+        verifyEmailDone: 'Ya verifiqué',
         resendVerificationEmail: 'Reenviar correo',
+        resendVerificationCooldown: (p: { seconds: number }) =>
+            `Reenviar en ${p.seconds}s`,
         resendingVerificationEmail: 'Enviando…',
         verificationEmailResent: 'Te reenviamos el correo de verificación.',
         resendVerificationFailed: 'No se pudo reenviar el correo.',
         backToSignIn: 'Volver a iniciar sesión',
+
+        resetPasswordTitle: 'Restablecer contraseña',
+        resetPasswordSubtitle:
+            'Ingresá tu correo y te enviamos un enlace para restablecerla.',
+        sendResetLink: 'Enviar enlace',
+        sendResetLinkFailed: 'No se pudo enviar el correo',
+        resetEmailSent: (p: { email: string }) =>
+            `Si existe una cuenta para ${p.email}, le enviamos un enlace para restablecer la contraseña.`,
+        resetEmailSentReturnHint:
+            'Cuando la restablezcas, volvé acá e iniciá sesión con tu contraseña nueva.',
+
+        newPasswordTitle: 'Nueva contraseña',
+        newPasswordSubtitle: 'Elegí una contraseña nueva para tu cuenta.',
+        newPassword: 'Nueva contraseña',
+        repeatPassword: 'Repetir contraseña',
+        repeatPasswordPlaceholder: 'La misma contraseña',
+        passwordsDoNotMatch: 'Las contraseñas no coinciden',
+        resetPasswordAction: 'Restablecer contraseña',
+        resetPasswordFailed: 'No se pudo restablecer la contraseña',
+        passwordUpdated:
+            'Contraseña actualizada. Iniciá sesión con tu nueva contraseña.',
+
+        invalidLinkTitle: 'Enlace no válido',
+        invalidLinkDescription:
+            'El enlace no es válido o ya venció. Pedí uno nuevo para restablecer tu contraseña.',
+        requestNewLink: 'Pedir un enlace nuevo',
+
+        emailVerifiedTitle: '¡Listo! Tu correo fue verificado',
+        emailVerifiedDescription: 'Ya podés iniciar sesión con tu cuenta.',
+        linkExpiredTitle: 'El enlace venció',
+        linkExpiredDescription:
+            'Iniciá sesión y te enviamos un enlace nuevo automáticamente.',
+        verifyFailedTitle: 'No pudimos verificar tu correo',
+        verifyFailedDescription:
+            'El enlace no es válido. Volvé a iniciar sesión para recibir un enlace nuevo.',
+    },
+
+    dashboard: {
+        widget: 'Widget',
+        editDashboard: 'Editar tablero',
+        addWidget: 'Agregar widget',
+        editWidget: 'Editar widget',
+        emptyTitle: 'Tu tablero está vacío',
+        emptyDescription: 'Agregá un widget para empezar.',
+        saveFailed: 'No se pudo guardar el widget',
+        deleteFailed: 'No se pudo quitar el widget',
+        layoutSaveFailed: 'No se pudo actualizar el tablero',
+        noMovementsYet: 'Sin movimientos todavía',
+        partialResult: 'Resultado parcial',
+
+        widgetType: 'Tipo',
+        widgetTitle: 'Título',
+        typeStat: 'Valor',
+        typeList: 'Movimientos',
+        typeBalance: 'Saldo',
+        typeChart: 'Gráfico',
+
+        aggregation: 'Agregación',
+        aggregationSum: 'Suma',
+        aggregationNet: 'Neto',
+        aggregationCount: 'Cantidad',
+        rowLimit: 'Cantidad de filas',
+
+        groupBy: 'Agrupar por',
+        groupByCategory: 'Categoría',
+        groupByAccount: 'Cuenta',
+        groupByMonth: 'Mes',
+        chartKind: 'Tipo de gráfico',
+        chartPie: 'Torta',
+        chartBar: 'Barras',
+        chartLine: 'Líneas',
+
+        filter: 'Filtro',
+        advancedFilterReadOnly:
+            'Este filtro usa el editor avanzado. Editalo desde la app nativa.',
+        movementTypes: 'Tipos de movimiento',
+        period: 'Período',
+        currencyScope: 'Moneda',
+        presetToday: 'Hoy',
+        presetThisWeek: 'Esta semana',
+        presetThisMonth: 'Este mes',
+        presetLastMonth: 'Mes pasado',
+        presetThisYear: 'Este año',
+
+        width: 'Ancho',
+        widthThird: '1/3',
+        widthHalf: '1/2',
+        widthTwoThirds: '2/3',
+        widthFull: '1/1',
+        moveUp: 'Mover arriba',
+        moveDown: 'Mover abajo',
+        moveLeft: 'Mover a la izquierda',
+        moveRight: 'Mover a la derecha',
+        changeWidth: 'Cambiar ancho',
+
+        background: 'Fondo',
+        backgroundNone: 'Sin fondo',
+        backgroundFixed: 'Fijo',
+        backgroundValue: 'Por valor',
+        thresholdLow: 'Umbral bajo',
+        thresholdHigh: 'Umbral alto',
+        belowLow: 'Debajo del umbral bajo',
+        betweenThresholds: 'Entre umbrales',
+        aboveHigh: 'Encima del umbral alto',
+
+        defaultExpensesMonth: 'Gastos del mes',
+        defaultIncomeMonth: 'Ingresos del mes',
+        defaultMovementsMonth: 'Movimientos del mes',
+        defaultMovements: 'Movimientos',
+        defaultRecentMovements: 'Movimientos recientes',
+        defaultTotalBalance: (p: { currency: string }) =>
+            `Saldo total (${p.currency})`,
     },
 
     errors: {
@@ -119,6 +240,10 @@ export const es = {
         emptyDescription:
             'Creá tu primera cuenta para empezar a registrar tus gastos.',
         namePlaceholder: 'Ej: Efectivo, Banco Nación…',
+        suggestions: 'Sugerencias',
+        suggestionCash: 'Efectivo',
+        suggestionBank: 'Banco',
+        suggestionCard: 'Tarjeta',
         chooseCurrency: 'Elegí una moneda',
         searchCurrency: 'Buscar moneda…',
         initialBalance: 'Balance inicial (opcional)',
@@ -302,6 +427,7 @@ export const es = {
         toolCancelled: 'Cancelado',
         connectingEllipsis: 'Conectando…',
         tapToStart: 'Tocá el teléfono para empezar una conversación',
+        microphone: 'Micrófono',
         mute: 'Silenciar',
         unmute: 'Activar micrófono',
         connect: 'Conectar',
@@ -356,9 +482,12 @@ export const es = {
         incoming: 'Entra',
         swapSides: 'Invertir origen y destino',
         account: 'Cuenta',
+        newTransaction: 'Añadir movimiento',
+        select: 'Seleccionar',
         newAccount: 'Nueva cuenta',
         date: 'Fecha',
         timeOptional: 'Hora (opcional)',
+        noTime: 'Sin hora',
         removeTime: 'Quitar hora',
         title: 'Título',
         transferTitleFallback: 'Transferencia',

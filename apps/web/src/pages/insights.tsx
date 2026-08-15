@@ -13,15 +13,15 @@ import {
     type CategorySummary,
 } from '@/pages/insights/category-detail'
 import {
-    CategoryDialog,
+    CategoryForm,
     type CategoryFormValue,
-} from '@/pages/insights/category-dialog'
+} from '@/pages/insights/category-form'
 import { TagDetail, type TagSummary } from '@/pages/insights/tag-detail'
 import {
-    TagDialog,
+    TagForm,
     type TagFormValue,
     type TagOption,
-} from '@/pages/insights/tag-dialog'
+} from '@/pages/insights/tag-form'
 import { TagsView } from '@/pages/insights/tags-view'
 
 function newId() {
@@ -144,9 +144,18 @@ export function Insights() {
         setCreatingTag(false)
     }
 
+    // The divided view's pane hosts one occupant at a time, so opening a form
+    // clears the selection and vice versa (the `AdaptiveDetailView` rule).
     const handleAdd = () => {
+        setSelected(null)
         if (tab === 'categories') setCreatingCategory(true)
         else setCreatingTag(true)
+    }
+
+    const openDetail = (next: { kind: 'category' | 'tag'; id: string }) => {
+        setCreatingCategory(false)
+        setCreatingTag(false)
+        setSelected(next)
     }
 
     const list = (
@@ -177,13 +186,13 @@ export function Insights() {
                 <TabItem key="categories" title={t.insights.categories}>
                     <CategoriesView
                         categories={categories}
-                        onSelect={(id) => setSelected({ kind: 'category', id })}
+                        onSelect={(id) => openDetail({ kind: 'category', id })}
                     />
                 </TabItem>
                 <TabItem key="tags" title={t.insights.tags}>
                     <TagsView
                         tags={tags}
-                        onSelect={(id) => setSelected({ kind: 'tag', id })}
+                        onSelect={(id) => openDetail({ kind: 'tag', id })}
                     />
                 </TabItem>
             </Tabs>
@@ -203,42 +212,39 @@ export function Insights() {
         />
     ) : null
 
+    const form = creatingCategory ? (
+        <CategoryForm
+            onClose={() => setCreatingCategory(false)}
+            onSubmit={handleCreateCategory}
+        />
+    ) : creatingTag ? (
+        <TagForm
+            title={t.insights.newTag}
+            submitLabel={t.common.create}
+            parentOptions={parentOptions}
+            onClose={() => setCreatingTag(false)}
+            onSubmit={handleCreateTag}
+        />
+    ) : null
+
     return (
-        <>
-            <DividedView
-                list={list}
-                detail={detail}
-                detailTitle={
-                    selectedCategory?.name ??
-                    selectedTag?.name ??
-                    t.nav.insights
-                }
-                placeholder={
-                    <div className="flex flex-1 items-center justify-center p-8">
-                        <p className="m3-body-large max-w-xs text-center text-on-surface-variant">
-                            {tab === 'categories'
-                                ? t.insights.selectCategoryDetail
-                                : t.insights.selectTagDetail}
-                        </p>
-                    </div>
-                }
-                onDismiss={() => setSelected(null)}
-            />
-
-            <CategoryDialog
-                open={creatingCategory}
-                onOpenChange={setCreatingCategory}
-                onSubmit={handleCreateCategory}
-            />
-
-            <TagDialog
-                open={creatingTag}
-                onOpenChange={setCreatingTag}
-                title={t.insights.newTag}
-                submitLabel={t.common.create}
-                parentOptions={parentOptions}
-                onSubmit={handleCreateTag}
-            />
-        </>
+        <DividedView
+            list={list}
+            detail={detail}
+            detailTitle={
+                selectedCategory?.name ?? selectedTag?.name ?? t.nav.insights
+            }
+            placeholder={
+                <div className="flex flex-1 items-center justify-center p-8">
+                    <p className="m3-body-large max-w-xs text-center text-on-surface-variant">
+                        {tab === 'categories'
+                            ? t.insights.selectCategoryDetail
+                            : t.insights.selectTagDetail}
+                    </p>
+                </div>
+            }
+            onDismiss={() => setSelected(null)}
+            form={form}
+        />
     )
 }

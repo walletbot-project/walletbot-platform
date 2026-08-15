@@ -1,4 +1,5 @@
 import { api } from '@wallet-bot/backend/api'
+import { parseWidgetOptions } from '@wallet-bot/shared'
 import { IconButton } from 'actify'
 import { useQuery } from 'convex/react'
 import { useState } from 'react'
@@ -11,38 +12,112 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { useAuth, useUser } from '@/hooks/use-auth'
 import { GROUP_SPACING, groupedRadius } from '@/lib/grouped-list'
 import { useT } from '@/lib/i18n'
+import { Dashboard, type DashboardWidgetRow } from '@/pages/home/dashboard'
+import { WidgetSheet } from '@/pages/home/widget-sheet'
 
 export default function Home() {
     const t = useT()
     const navigate = useNavigate()
     const [menuOpen, setMenuOpen] = useState(false)
+    const [editing, setEditing] = useState(false)
+    // `null` while closed; `{ widget: null }` is the add flow.
+    const [sheet, setSheet] = useState<{
+        widget: DashboardWidgetRow | null
+        key: number
+    } | null>(null)
+
+    const layout = useQuery(api.v1.dashboard.queries.layout)
+    // A new tile lands on its own row past everything already placed.
+    const nextRow = (layout?.widgets ?? []).reduce((max, widget) => {
+        const coord = parseWidgetOptions(widget.options).layout
+        return coord ? Math.max(max, coord.row + 1) : max
+    }, 0)
+    const nextPosition = layout?.widgets.length ?? 0
+
+    const openSheet = (widget: DashboardWidgetRow | null) =>
+        setSheet({ widget, key: Date.now() })
 
     return (
         <>
             <AppBar
                 title={t.nav.home}
                 actions={
-                    <IconButton
-                        aria-label={t.settings.account}
-                        onPress={() => setMenuOpen(true)}
-                        className="text-on-surface-variant"
-                    >
-                        <Icon name="person" filled />
-                    </IconButton>
+                    editing ? (
+                        <>
+                            <IconButton
+                                aria-label={t.dashboard.addWidget}
+                                onPress={() => openSheet(null)}
+                                className="text-on-surface-variant"
+                            >
+                                <Icon name="add" />
+                            </IconButton>
+                            <IconButton
+                                aria-label={t.common.done}
+                                onPress={() => setEditing(false)}
+                                className="text-on-surface-variant"
+                            >
+                                <Icon name="check" />
+                            </IconButton>
+                        </>
+                    ) : (
+                        <>
+                            <IconButton
+                                aria-label={t.dashboard.editDashboard}
+                                onPress={() => setEditing(true)}
+                                className="text-on-surface-variant"
+                            >
+                                <Icon name="edit" />
+                            </IconButton>
+                            <IconButton
+                                aria-label={t.settings.account}
+                                onPress={() => setMenuOpen(true)}
+                                className="text-on-surface-variant"
+                            >
+                                <Icon name="person" filled />
+                            </IconButton>
+                        </>
+                    )
                 }
             />
             <div className="min-h-0 flex-1 overflow-y-auto">
                 <div className="flex flex-col p-4 pb-24">
+                    <Dashboard
+                        editing={editing}
+                        onStartEditing={() => setEditing(true)}
+                        onEditWidget={(widget) => openSheet(widget)}
+                    />
+
                     <h2 className="m3-title-medium mt-6">{t.nav.actions}</h2>
                     <div className="mt-3 flex flex-wrap gap-3">
                         <HomeActionCard
                             label={t.nav.addManually}
                             icon="add"
-                            onClick={() => navigate('/add/manual')}
+                            // The native home pushes the transaction form and
+                            // lands on Activity once it saves; on web the
+                            // Activity screen hosts the form, so we open it
+                            // there directly.
+                            onClick={() =>
+                                navigate('/activity', {
+                                    state: { createTransaction: true },
+                                })
+                            }
                         />
                     </div>
                 </div>
             </div>
+
+            {sheet ? (
+                <WidgetSheet
+                    key={sheet.key}
+                    open
+                    onOpenChange={(open) => {
+                        if (!open) setSheet(null)
+                    }}
+                    widget={sheet.widget}
+                    nextRow={nextRow}
+                    nextPosition={nextPosition}
+                />
+            ) : null}
 
             <AccountMenu open={menuOpen} onOpenChange={setMenuOpen} />
         </>

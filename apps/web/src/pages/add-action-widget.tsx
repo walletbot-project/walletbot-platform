@@ -1,4 +1,5 @@
 import { api } from '@wallet-bot/backend/api'
+import { Select, SelectOption } from 'actify'
 import { useMutation, useQuery } from 'convex/react'
 import { type FormEvent, type ReactNode, useId, useState } from 'react'
 import { toast } from 'sonner'
@@ -11,13 +12,7 @@ import { Icon } from '@/components/m3/icon'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import {
-    Sheet,
-    SheetContent,
-    SheetFooter,
-    SheetHeader,
-    SheetTitle,
-} from '@/components/ui/sheet'
+import { SheetFooter, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Textarea } from '@/components/ui/textarea'
 import type { ChatMessage, EditableToolName } from '@/hooks/use-voice'
@@ -54,6 +49,9 @@ function isTransactionToolName(
         toolName,
     )
 }
+
+/** Collection keys can't be empty strings, so "no parent" gets a sentinel. */
+const NO_PARENT = '__none__'
 
 export function ActionWidget({ message }: { message: ActionResultMessage }) {
     const { toolName, entityId } = message
@@ -234,7 +232,11 @@ function AccountActionWidget({
                 />
                 <EditButton onClick={() => setEditOpen(true)} />
             </ActionCard>
-            <ActionSheet open={editOpen} onOpenChange={setEditOpen}>
+            <ActionSheet
+                open={editOpen}
+                onOpenChange={setEditOpen}
+                title={t.actionWidget.editAccount}
+            >
                 <AccountEditContent
                     account={account}
                     onClose={() => setEditOpen(false)}
@@ -378,7 +380,11 @@ function CategoryActionWidget({
                 />
                 <EditButton onClick={() => setEditOpen(true)} />
             </ActionCard>
-            <ActionSheet open={editOpen} onOpenChange={setEditOpen}>
+            <ActionSheet
+                open={editOpen}
+                onOpenChange={setEditOpen}
+                title={t.actionWidget.editCategory}
+            >
                 <CategoryEditContent
                     category={category}
                     onClose={() => setEditOpen(false)}
@@ -520,7 +526,11 @@ function TagActionWidget({
                 />
                 <EditButton onClick={() => setEditOpen(true)} />
             </ActionCard>
-            <ActionSheet open={editOpen} onOpenChange={setEditOpen}>
+            <ActionSheet
+                open={editOpen}
+                onOpenChange={setEditOpen}
+                title={t.actionWidget.editTag}
+            >
                 <TagEditContent tag={tag} onClose={() => setEditOpen(false)} />
             </ActionSheet>
         </>
@@ -601,20 +611,28 @@ function TagEditContent({
                     label={t.actionWidget.parentTag}
                     id={`${formId}-parent`}
                 >
-                    <select
+                    <Select
                         id={`${formId}-parent`}
-                        value={parentId}
-                        onChange={(event) => setParentId(event.target.value)}
-                        disabled={tags === undefined}
-                        className="h-9 w-full rounded-md border bg-transparent px-3 text-sm outline-none focus-visible:border-primary disabled:opacity-50"
+                        aria-label={t.actionWidget.parentTag}
+                        variant="outlined"
+                        className="w-full"
+                        isDisabled={tags === undefined}
+                        selectedKey={parentId === '' ? NO_PARENT : parentId}
+                        onSelectionChange={(key) =>
+                            setParentId(key === NO_PARENT ? '' : String(key))
+                        }
                     >
-                        <option value="">{t.actionWidget.noParentTag}</option>
-                        {parentOptions?.map((item) => (
-                            <option key={item.id} value={item.id}>
-                                {item.name}
-                            </option>
-                        ))}
-                    </select>
+                        {[
+                            <SelectOption key={NO_PARENT}>
+                                {t.actionWidget.noParentTag}
+                            </SelectOption>,
+                            ...(parentOptions ?? []).map((item) => (
+                                <SelectOption key={item.id}>
+                                    {item.name}
+                                </SelectOption>
+                            )),
+                        ]}
+                    </Select>
                 </EditField>
                 <EditField
                     label={t.common.description}
@@ -648,18 +666,20 @@ function TagEditContent({
 function ActionSheet({
     open,
     onOpenChange,
+    title,
     children,
 }: {
     open: boolean
     onOpenChange: (open: boolean) => void
+    title: string
     children: ReactNode
 }) {
+    // The native voice widget edits in a modal bottom sheet
+    // (voice_action_widget.dart), not a side sheet.
     return (
-        <Sheet open={open} onOpenChange={onOpenChange}>
-            <SheetContent side="right" className="w-full sm:max-w-md">
-                {children}
-            </SheetContent>
-        </Sheet>
+        <BottomSheet open={open} onOpenChange={onOpenChange} title={title}>
+            <div className="flex min-h-0 flex-1 flex-col">{children}</div>
+        </BottomSheet>
     )
 }
 

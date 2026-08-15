@@ -8,16 +8,10 @@ import { CategoryIcon } from '@/components/category-icon'
 import { ColorSwatches } from '@/components/color-swatches'
 import { EntityRecentTransactions } from '@/components/entity-recent-transactions'
 import { IconPicker } from '@/components/icon-picker'
+import { DetailPaneHeader } from '@/components/m3/detail-pane-header'
+import { DialogAction, M3Dialog } from '@/components/m3/dialog'
 import { Icon } from '@/components/m3/icon'
 import { MonthlySpend } from '@/components/monthly-spend'
-import { Button as ShadcnButton } from '@/components/ui/button'
-import {
-    Dialog,
-    DialogContent,
-    DialogFooter,
-    DialogHeader,
-    DialogTitle,
-} from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { CATEGORY_ICONS } from '@/lib/category-icons'
 import {
@@ -154,134 +148,130 @@ export function CategoryDetail({
     }
 
     return (
-        <div className="flex flex-col px-4 pb-6">
-            {/* Identity hero — tinted by the category's accent color. */}
-            <div
-                className="flex items-center gap-4 p-5"
-                style={{
-                    backgroundColor: `${accent}24`,
-                    ...groupedRadius(0, 2),
-                }}
-            >
-                {editing ? (
-                    <IconPicker
-                        icon={icon}
-                        color={color}
-                        onIconChange={setIcon}
-                        icons={CATEGORY_ICONS}
-                    />
-                ) : (
-                    <span
-                        className="flex size-15 shrink-0 items-center justify-center rounded-[20px]"
-                        style={{ backgroundColor: `${accent}47` }}
-                    >
-                        <CategoryIcon
-                            name={category.icon}
-                            size={30}
-                            color={accent}
+        <div className="flex flex-col pb-6">
+            <DetailPaneHeader onClose={onClose} />
+            <div className="flex flex-col px-4">
+                {/* Identity hero — tinted by the category's accent color. */}
+                <div
+                    className="flex items-center gap-4 p-5"
+                    style={{
+                        backgroundColor: `${accent}24`,
+                        ...groupedRadius(0, 2),
+                    }}
+                >
+                    {editing ? (
+                        <IconPicker
+                            icon={icon}
+                            color={color}
+                            onIconChange={setIcon}
+                            icons={CATEGORY_ICONS}
                         />
-                    </span>
-                )}
-                {editing ? (
-                    <Input
-                        value={name}
-                        onChange={(e) => setName(e.target.value)}
-                        className="bg-surface"
-                        aria-label={t.common.name}
-                    />
-                ) : (
-                    <div className="flex min-w-0 flex-1 flex-col">
-                        <span className="m3-title-large truncate font-semibold">
-                            {category.name}
+                    ) : (
+                        <span
+                            className="flex size-15 shrink-0 items-center justify-center rounded-[20px]"
+                            style={{ backgroundColor: `${accent}47` }}
+                        >
+                            <CategoryIcon
+                                name={category.icon}
+                                size={30}
+                                color={accent}
+                            />
                         </span>
-                        {category.description ? (
-                            <span className="m3-body-medium truncate text-on-surface-variant">
-                                {category.description}
+                    )}
+                    {editing ? (
+                        <Input
+                            value={name}
+                            onChange={(e) => setName(e.target.value)}
+                            className="bg-surface"
+                            aria-label={t.common.name}
+                        />
+                    ) : (
+                        <div className="flex min-w-0 flex-1 flex-col">
+                            <span className="m3-title-large truncate font-semibold">
+                                {category.name}
                             </span>
-                        ) : null}
-                    </div>
-                )}
-            </div>
-
-            {editing ? (
-                <div className="pt-3">
-                    <ColorSwatches
-                        value={color}
-                        onChange={setColor}
-                        options={COLOR_OPTIONS}
-                    />
+                            {category.description ? (
+                                <span className="m3-body-medium truncate text-on-surface-variant">
+                                    {category.description}
+                                </span>
+                            ) : null}
+                        </div>
+                    )}
                 </div>
-            ) : null}
 
-            {/* Monthly spend hero. */}
-            <div
-                className="flex flex-col gap-1 bg-surface-container-high px-5 pt-4 pb-4.5"
-                style={{ marginTop: GROUP_SPACING, ...groupedRadius(1, 2) }}
-            >
-                <span className="m3-label-medium tracking-[0.8px] text-on-surface-variant">
-                    {t.insights.spentThisMonth.toUpperCase()}
-                </span>
-                <MonthlySpend spend={spend} />
-            </div>
+                {editing ? (
+                    <div className="pt-3">
+                        <ColorSwatches
+                            value={color}
+                            onChange={setColor}
+                            options={COLOR_OPTIONS}
+                        />
+                    </div>
+                ) : null}
 
-            {/* Actions. */}
-            <div className="mt-3 flex items-center gap-2">
-                <Button
-                    variant={editing ? 'filled' : 'tonal'}
-                    className="flex-1"
-                    onPress={handleToggleEditing}
-                    isDisabled={saving}
+                {/* Monthly spend hero. */}
+                <div
+                    className="flex flex-col gap-1 bg-surface-container-high px-5 pt-4 pb-4.5"
+                    style={{ marginTop: GROUP_SPACING, ...groupedRadius(1, 2) }}
                 >
-                    <Icon name={editing ? 'check' : 'edit'} size={18} />
-                    {editing ? t.common.done : t.common.edit}
-                </Button>
-                <IconButton
-                    onPress={() => setDeleteOpen(true)}
-                    isDisabled={saving}
-                    aria-label={t.common.delete}
-                    className="rounded-full bg-error-container text-on-error-container"
-                >
-                    <Icon name="delete" />
-                </IconButton>
+                    <span className="m3-label-medium tracking-[0.8px] text-on-surface-variant">
+                        {t.insights.spentThisMonth.toUpperCase()}
+                    </span>
+                    <MonthlySpend spend={spend} />
+                </div>
+
+                {/* Actions. */}
+                <div className="mt-3 flex items-center gap-2">
+                    <Button
+                        variant={editing ? 'filled' : 'tonal'}
+                        className="flex-1"
+                        onPress={handleToggleEditing}
+                        isDisabled={saving}
+                    >
+                        <Icon name={editing ? 'check' : 'edit'} size={18} />
+                        {editing ? t.common.done : t.common.edit}
+                    </Button>
+                    <IconButton
+                        onPress={() => setDeleteOpen(true)}
+                        isDisabled={saving}
+                        aria-label={t.common.delete}
+                        className="rounded-full bg-error-container text-on-error-container"
+                    >
+                        <Icon name="delete" />
+                    </IconButton>
+                </div>
+
+                <EntityRecentTransactions
+                    title={t.insights.lastMovements}
+                    viewAllLabel={t.insights.viewAll}
+                    onViewAll={viewAllTransactions}
+                    transactions={recent}
+                />
+
+                <M3Dialog
+                    open={deleteOpen}
+                    onOpenChange={setDeleteOpen}
+                    title={t.insights.categoryDeleteTitle}
+                    description={t.insights.categoryDeleteConfirm({
+                        name: category.name,
+                    })}
+                    actions={
+                        <>
+                            <DialogAction
+                                label={t.common.cancel}
+                                onPress={() => setDeleteOpen(false)}
+                                isDisabled={saving}
+                            />
+                            <DialogAction
+                                label={t.common.delete}
+                                onPress={handleDelete}
+                                isDisabled={saving}
+                                destructive
+                            />
+                        </>
+                    }
+                />
             </div>
-
-            <EntityRecentTransactions
-                title={t.insights.lastMovements}
-                viewAllLabel={t.insights.viewAll}
-                onViewAll={viewAllTransactions}
-                transactions={recent}
-            />
-
-            <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
-                <DialogContent>
-                    <DialogHeader>
-                        <DialogTitle>
-                            {t.insights.categoryDeleteTitle}
-                        </DialogTitle>
-                    </DialogHeader>
-                    <p className="m3-body-medium text-on-surface-variant">
-                        {t.insights.categoryDeleteConfirm({
-                            name: category.name,
-                        })}
-                    </p>
-                    <DialogFooter>
-                        <ShadcnButton
-                            variant="outline"
-                            onClick={() => setDeleteOpen(false)}
-                            disabled={saving}
-                        >
-                            {t.common.cancel}
-                        </ShadcnButton>
-                        <ShadcnButton
-                            variant="destructive"
-                            onClick={handleDelete}
-                            disabled={saving}
-                        >
-                            {t.common.delete}
-                        </ShadcnButton>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
         </div>
     )
 }

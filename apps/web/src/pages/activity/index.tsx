@@ -2,7 +2,7 @@ import { api } from '@wallet-bot/backend/api'
 import { CircularProgress, IconButton } from 'actify'
 import { usePaginatedQuery, useQuery } from 'convex/react'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useLocation, useNavigate } from 'react-router-dom'
+import { useLocation } from 'react-router-dom'
 import { AppBar } from '@/components/m3/app-bar'
 import { DividedView } from '@/components/m3/divided-view'
 import { Icon } from '@/components/m3/icon'
@@ -13,6 +13,7 @@ import {
     normalizeColor,
 } from '@/lib/entity-colors'
 import { useFormatLocale, useT } from '@/lib/i18n'
+import { TransactionForm } from '@/pages/add-manual'
 import { FilterChips } from './filter-chips'
 import {
     buildListEntries,
@@ -42,7 +43,6 @@ export function Activity() {
     // A details view can deep-link here with a pre-applied entity filter,
     // passed via the router location state (see the account/category/tag details).
     const location = useLocation()
-    const navigate = useNavigate()
     const t = useT()
     const formatLocale = useFormatLocale()
     const [filters, setFilters] = useState<TransactionFilters>(() => {
@@ -63,6 +63,26 @@ export function Activity() {
         id: string
         transferSide?: TransactionTransferSide
     } | null>(null)
+    // The new-transaction form lives in the divided view's pane, like the
+    // native Activity screen. Home hands it over through the router state.
+    const [creating, setCreating] = useState(
+        () =>
+            (location.state as { createTransaction?: boolean } | null)
+                ?.createTransaction === true,
+    )
+
+    // The pane hosts one occupant at a time.
+    const openCreate = () => {
+        setSelectedTransaction(null)
+        setCreating(true)
+    }
+    const openDetail = (next: {
+        id: string
+        transferSide?: TransactionTransferSide
+    }) => {
+        setCreating(false)
+        setSelectedTransaction(next)
+    }
     const accounts = useQuery(api.v1.accounts.queries.list, {
         includeArchived: true,
     })
@@ -148,7 +168,7 @@ export function Activity() {
                 actions={
                     <IconButton
                         aria-label={t.activity.addTransaction}
-                        onPress={() => navigate('/add/manual')}
+                        onPress={openCreate}
                         className="text-on-surface-variant"
                     >
                         <Icon name="add" />
@@ -254,7 +274,7 @@ export function Activity() {
                                                 : []),
                                         ]}
                                         onClick={() =>
-                                            setSelectedTransaction({
+                                            openDetail({
                                                 id: entry.txn.id,
                                                 transferSide:
                                                     entry.transferSide,
@@ -302,6 +322,16 @@ export function Activity() {
                 </div>
             }
             onDismiss={() => setSelectedTransaction(null)}
+            form={
+                creating ? (
+                    <TransactionForm
+                        onClose={() => setCreating(false)}
+                        // The list is query-driven, so a saved transaction
+                        // shows up on its own — just close the form.
+                        onSaved={() => setCreating(false)}
+                    />
+                ) : null
+            }
         />
     )
 }

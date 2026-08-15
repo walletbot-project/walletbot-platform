@@ -16,9 +16,9 @@ import {
 } from '@/pages/accounts/account-detail'
 import { accountErrorMessage } from '@/pages/accounts/account-errors'
 import {
-    AccountFormDialog,
+    AccountForm,
     type AccountFormValue,
-} from '@/pages/accounts/account-form-dialog'
+} from '@/pages/accounts/account-form'
 import { AccountTile } from '@/pages/accounts/account-tile'
 
 function newId() {
@@ -35,6 +35,17 @@ export function Accounts() {
 
     const [creating, setCreating] = useState(false)
     const [selectedId, setSelectedId] = useState<string | null>(null)
+
+    // The divided view's pane hosts one occupant at a time, so opening either
+    // side clears the other — the same rule `AdaptiveDetailView` enforces.
+    const openCreate = () => {
+        setSelectedId(null)
+        setCreating(true)
+    }
+    const openDetail = (id: string) => {
+        setCreating(false)
+        setSelectedId(id)
+    }
 
     // Derive the open account from the live query so edits saved in the detail
     // are reflected immediately (a stored snapshot would go stale on save).
@@ -88,7 +99,7 @@ export function Accounts() {
                 actions={
                     <IconButton
                         aria-label={t.accounts.newAccount}
-                        onPress={() => setCreating(true)}
+                        onPress={openCreate}
                         className="text-on-surface-variant"
                     >
                         <Icon name="add" />
@@ -99,7 +110,7 @@ export function Accounts() {
                 {accounts === undefined ? (
                     <AccountsSkeleton />
                 ) : accounts.length === 0 ? (
-                    <EmptyState t={t} onCreate={() => setCreating(true)} />
+                    <EmptyState t={t} onCreate={openCreate} />
                 ) : (
                     <div
                         className="flex flex-col px-4 pb-24"
@@ -113,7 +124,7 @@ export function Accounts() {
                                 icon={account.icon}
                                 color={account.color}
                                 radius={groupedRadius(index, accounts.length)}
-                                onClick={() => setSelectedId(account.id)}
+                                onClick={() => openDetail(account.id)}
                             />
                         ))}
                     </div>
@@ -123,34 +134,34 @@ export function Accounts() {
     )
 
     return (
-        <>
-            <DividedView
-                list={list}
-                detail={
-                    selected ? (
-                        <AccountDetail
-                            account={selected}
-                            onClose={() => setSelectedId(null)}
-                        />
-                    ) : null
-                }
-                detailTitle={selected?.name ?? t.nav.accounts}
-                placeholder={
-                    <div className="flex flex-1 items-center justify-center p-8">
-                        <p className="m3-body-large max-w-xs text-center text-on-surface-variant">
-                            {t.accounts.selectDetail}
-                        </p>
-                    </div>
-                }
-                onDismiss={() => setSelectedId(null)}
-            />
-
-            <AccountFormDialog
-                open={creating}
-                onOpenChange={setCreating}
-                onSubmit={handleCreate}
-            />
-        </>
+        <DividedView
+            list={list}
+            detail={
+                selected ? (
+                    <AccountDetail
+                        account={selected}
+                        onClose={() => setSelectedId(null)}
+                    />
+                ) : null
+            }
+            detailTitle={selected?.name ?? t.nav.accounts}
+            placeholder={
+                <div className="flex flex-1 items-center justify-center p-8">
+                    <p className="m3-body-large max-w-xs text-center text-on-surface-variant">
+                        {t.accounts.selectDetail}
+                    </p>
+                </div>
+            }
+            onDismiss={() => setSelectedId(null)}
+            form={
+                creating ? (
+                    <AccountForm
+                        onClose={() => setCreating(false)}
+                        onSubmit={handleCreate}
+                    />
+                ) : null
+            }
+        />
     )
 }
 
