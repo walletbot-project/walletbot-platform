@@ -15,7 +15,11 @@ import 'package:m3e_buttons/m3e_buttons.dart';
 import 'package:provider/provider.dart';
 
 class TagsView extends StatefulWidget {
-  const TagsView({super.key});
+  const TagsView({super.key, this.header});
+
+  /// App bar for the list column on expanded windows, provided by the
+  /// Insights screen — see [CategoriesView.header].
+  final PreferredSizeWidget? header;
 
   @override
   State<TagsView> createState() => _TagsViewState();
@@ -73,6 +77,7 @@ class _TagsViewState extends State<TagsView>
     final isActiveTab = context.select<AppNavigation, bool>(
       (nav) => nav.index == AppNavigation.insightsTab,
     );
+    final header = widget.header;
     return AdaptiveDetailView(
       hasDetail: _detailTag != null,
       detailBuilder: _buildDetail,
@@ -87,7 +92,9 @@ class _TagsViewState extends State<TagsView>
           ),
         ),
       ),
-      list: _buildList(context),
+      list: header == null
+          ? _buildList(context)
+          : Scaffold(appBar: header, body: _buildList(context)),
     );
   }
 

@@ -8,6 +8,7 @@ import 'package:app/components/transaction_row.dart';
 import 'package:app/data/data.dart';
 import 'package:app/database.dart';
 import 'package:app/l10n/l10n.dart';
+import 'package:app/screens/create_category.dart';
 import 'package:app/shared/adaptive_detail_view.dart';
 import 'package:app/shared/app_navigation.dart';
 import 'package:app/shared/money.dart';
@@ -17,13 +18,21 @@ import 'package:m3e_buttons/m3e_buttons.dart';
 import 'package:provider/provider.dart';
 
 class CategoriesView extends StatefulWidget {
-  const CategoriesView({super.key});
+  const CategoriesView({super.key, this.header});
+
+  /// App bar for the list column on expanded windows, provided by the
+  /// Insights screen (which owns the tab controller and the add action) so
+  /// the divided view follows the established pattern: each column carries
+  /// its own app bar, divider to the top. Null on small windows, where the
+  /// screen shows the app bar at the top level and this view renders exactly
+  /// as it always has.
+  final PreferredSizeWidget? header;
 
   @override
-  State<CategoriesView> createState() => _CategoriesViewState();
+  State<CategoriesView> createState() => CategoriesViewState();
 }
 
-class _CategoriesViewState extends State<CategoriesView>
+class CategoriesViewState extends State<CategoriesView>
     with AutomaticKeepAliveClientMixin {
   /// Selection for the category detail — split pane on expanded windows, the
   /// modal bottom sheet everywhere else (via [AdaptiveDetailView]). The data
@@ -37,10 +46,47 @@ class _CategoriesViewState extends State<CategoriesView>
   /// sheet on window resize. Recreated per selection.
   GlobalKey _detailKey = GlobalKey(debugLabel: 'categoryDetail');
 
+  /// The create-category form: split pane on expanded windows, a real pushed
+  /// route on smaller ones (via [AdaptiveDetailView]'s form slot). The data
+  /// layer is captured at open because the route sits above the
+  /// account-scoped providers and must be re-provided.
+  bool _formOpen = false;
+  AppRepositories? _formRepos;
+  GlobalKey _formKey = GlobalKey(debugLabel: 'categoryCreate');
+
   /// Keeps the selection (and pane) alive when the Insights tabs swipe this
   /// view out of the TabBarView.
   @override
   bool get wantKeepAlive => true;
+
+  /// Opens the create-category form — invoked by the Insights screen's add
+  /// action (its app bar owns the button at every window size).
+  void openCreate() {
+    setState(() {
+      _formOpen = true;
+      _formRepos = context.read<AppRepositories>();
+      _formKey = GlobalKey(debugLabel: 'categoryCreate');
+      // The pane hosts one occupant at a time.
+      _detailCategory = null;
+    });
+  }
+
+  void _closeForm() {
+    setState(() => _formOpen = false);
+  }
+
+  Widget? _buildForm(BuildContext context, {required bool inRoute}) {
+    if (!_formOpen) return null;
+    final form = CreateCategoryScreen(
+      key: _formKey,
+      onClose: inRoute ? null : _closeForm,
+    );
+    if (!inRoute) return form;
+    // Route mode: pushed routes sit above the account-scoped providers;
+    // re-provide them, exactly as the original push did. The keyed form
+    // widget itself moves in/out of this wrapper on handoffs.
+    return Provider<AppRepositories>.value(value: _formRepos!, child: form);
+  }
 
   void _openCategoryDetails(CategoryWithCount entry) {
     setState(() {
@@ -50,6 +96,8 @@ class _CategoriesViewState extends State<CategoriesView>
       _detailCategory = entry.category;
       _detailRepos = context.read<AppRepositories>();
       _detailNav = context.read<AppNavigation>();
+      // The pane hosts one occupant at a time.
+      _formOpen = false;
     });
   }
 
@@ -75,10 +123,14 @@ class _CategoriesViewState extends State<CategoriesView>
     final isActiveTab = context.select<AppNavigation, bool>(
       (nav) => nav.index == AppNavigation.insightsTab,
     );
+    final header = widget.header;
     return AdaptiveDetailView(
       hasDetail: _detailCategory != null,
       detailBuilder: _buildDetail,
       onSheetDismissed: _closeDetails,
+      hasForm: _formOpen,
+      formBuilder: _buildForm,
+      onFormDismissed: _closeForm,
       isActiveTab: isActiveTab,
       placeholder: Center(
         child: Padding(
@@ -89,7 +141,9 @@ class _CategoriesViewState extends State<CategoriesView>
           ),
         ),
       ),
-      list: _buildList(context),
+      list: header == null
+          ? _buildList(context)
+          : Scaffold(appBar: header, body: _buildList(context)),
     );
   }
 
