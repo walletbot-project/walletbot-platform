@@ -39,5 +39,18 @@ end
 post_install do |installer|
   installer.pods_project.targets.each do |target|
     flutter_additional_ios_build_settings(target)
+
+    # permission_handler_apple compiles every permission strategy out unless
+    # its macro is set (PermissionHandlerEnums.h defaults them to 0). Without
+    # this, Permission.microphone.request() returns denied WITHOUT ever
+    # prompting. Add more macros here if the app adopts more permissions.
+    target.build_configurations.each do |config|
+      config.build_settings['GCC_PREPROCESSOR_DEFINITIONS'] ||= [
+        '$(inherited)',
+
+        ## dart: PermissionGroup.microphone
+        'PERMISSION_MICROPHONE=1',
+      ]
+    end
   end
 end
