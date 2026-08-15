@@ -1,4 +1,4 @@
-import { Check } from 'lucide-react'
+import { Icon } from '@/components/m3/icon'
 import { useT } from '@/lib/i18n'
 import { cn } from '@/lib/utils'
 
@@ -36,7 +36,11 @@ export function ColorSwatches({
                         aria-pressed={isSelected}
                     >
                         {isSelected ? (
-                            <Check className="size-4 text-white drop-shadow-sm" />
+                            <Icon
+                                name="check"
+                                size={16}
+                                className="text-white drop-shadow-sm"
+                            />
                         ) : null}
                     </button>
                 )

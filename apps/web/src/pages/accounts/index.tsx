@@ -1,15 +1,19 @@
 import { api } from '@wallet-bot/backend/api'
+import { Button, IconButton } from 'actify'
 import { useMutation, useQuery } from 'convex/react'
-import { Landmark, Plus } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { toast } from 'sonner'
-import { Button } from '@/components/ui/button'
+import { AppBar } from '@/components/m3/app-bar'
+import { DividedView } from '@/components/m3/divided-view'
+import { Icon } from '@/components/m3/icon'
+import { StateMessage } from '@/components/m3/state-message'
 import { Skeleton } from '@/components/ui/skeleton'
+import { GROUP_SPACING, groupedRadius } from '@/lib/grouped-list'
 import { type Messages, useT } from '@/lib/i18n'
 import {
-    AccountDetailsSheet,
+    AccountDetail,
     type AccountSummary,
-} from '@/pages/accounts/account-details-sheet'
+} from '@/pages/accounts/account-detail'
 import { accountErrorMessage } from '@/pages/accounts/account-errors'
 import {
     AccountFormDialog,
@@ -32,7 +36,7 @@ export function Accounts() {
     const [creating, setCreating] = useState(false)
     const [selectedId, setSelectedId] = useState<string | null>(null)
 
-    // Derive the open account from the live query so edits saved in the sheet
+    // Derive the open account from the live query so edits saved in the detail
     // are reflected immediately (a stored snapshot would go stale on save).
     const selected: AccountSummary | null = useMemo(() => {
         if (selectedId === null || accounts === undefined) return null
@@ -77,77 +81,100 @@ export function Accounts() {
         setCreating(false)
     }
 
-    return (
-        <div className="flex flex-1 flex-col">
-            <div className="flex items-center justify-end border-b px-4 py-2">
-                <Button size="sm" onClick={() => setCreating(true)}>
-                    <Plus data-icon="inline-start" />
-                    {t.accounts.newAccount}
-                </Button>
-            </div>
-
-            <div className="flex-1 p-4">
+    const list = (
+        <>
+            <AppBar
+                title={t.nav.accounts}
+                actions={
+                    <IconButton
+                        aria-label={t.accounts.newAccount}
+                        onPress={() => setCreating(true)}
+                        className="text-on-surface-variant"
+                    >
+                        <Icon name="add" />
+                    </IconButton>
+                }
+            />
+            <div className="min-h-0 flex-1 overflow-y-auto">
                 {accounts === undefined ? (
                     <AccountsSkeleton />
                 ) : accounts.length === 0 ? (
                     <EmptyState t={t} onCreate={() => setCreating(true)} />
                 ) : (
-                    <ul className="divide-y overflow-hidden rounded-md border bg-card">
-                        {accounts.map((account) => (
-                            <li key={account.id}>
-                                <AccountTile
-                                    id={account.id}
-                                    name={account.name}
-                                    icon={account.icon}
-                                    color={account.color}
-                                    onClick={() => setSelectedId(account.id)}
-                                />
-                            </li>
+                    <div
+                        className="flex flex-col px-4 pb-24"
+                        style={{ gap: GROUP_SPACING }}
+                    >
+                        {accounts.map((account, index) => (
+                            <AccountTile
+                                key={account.id}
+                                id={account.id}
+                                name={account.name}
+                                icon={account.icon}
+                                color={account.color}
+                                radius={groupedRadius(index, accounts.length)}
+                                onClick={() => setSelectedId(account.id)}
+                            />
                         ))}
-                    </ul>
+                    </div>
                 )}
             </div>
+        </>
+    )
+
+    return (
+        <>
+            <DividedView
+                list={list}
+                detail={
+                    selected ? (
+                        <AccountDetail
+                            account={selected}
+                            onClose={() => setSelectedId(null)}
+                        />
+                    ) : null
+                }
+                detailTitle={selected?.name ?? t.nav.accounts}
+                placeholder={
+                    <div className="flex flex-1 items-center justify-center p-8">
+                        <p className="m3-body-large max-w-xs text-center text-on-surface-variant">
+                            {t.accounts.selectDetail}
+                        </p>
+                    </div>
+                }
+                onDismiss={() => setSelectedId(null)}
+            />
 
             <AccountFormDialog
                 open={creating}
                 onOpenChange={setCreating}
                 onSubmit={handleCreate}
             />
-
-            <AccountDetailsSheet
-                account={selected}
-                open={selectedId !== null}
-                onOpenChange={(open) => {
-                    if (!open) setSelectedId(null)
-                }}
-            />
-        </div>
+        </>
     )
 }
 
 function EmptyState({ t, onCreate }: { t: Messages; onCreate: () => void }) {
     return (
-        <div className="flex flex-col items-center justify-center gap-4 py-16 text-center">
-            <Landmark className="size-12 text-muted-foreground" />
-            <div className="flex flex-col gap-1">
-                <p className="font-medium">{t.accounts.emptyTitle}</p>
-                <p className="text-sm text-muted-foreground">
-                    {t.accounts.emptyDescription}
-                </p>
-            </div>
-            <Button onClick={onCreate}>
-                <Plus data-icon="inline-start" />
-                {t.accounts.createAccount}
-            </Button>
-        </div>
+        <StateMessage
+            icon="account_balance_wallet"
+            title={t.accounts.emptyTitle}
+            detail={t.accounts.emptyDescription}
+            action={
+                <Button variant="filled" onPress={onCreate}>
+                    <Icon name="add" size={18} />
+                    {t.accounts.createAccount}
+                </Button>
+            }
+        />
     )
 }
 
 function AccountsSkeleton() {
     return (
-        <div className="space-y-2">
+        <div className="flex flex-col gap-group-seam px-4">
             {Array.from({ length: 5 }).map((_, i) => (
-                <Skeleton key={i} className="h-16 w-full" />
+                <Skeleton key={i} className="h-18 w-full rounded-lg" />
             ))}
         </div>
     )

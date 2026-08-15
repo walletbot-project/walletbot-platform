@@ -1,5 +1,5 @@
-import { Check } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
+import { Icon } from '@/components/m3/icon'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Combobox } from '@/components/ui/combobox'
@@ -147,7 +147,11 @@ export function TagDialog({
                                         aria-pressed={isSelected}
                                     >
                                         {isSelected ? (
-                                            <Check className="size-4 text-foreground" />
+                                            <Icon
+                                                name="check"
+                                                size={16}
+                                                className="text-on-surface"
+                                            />
                                         ) : null}
                                     </button>
                                 )

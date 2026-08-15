@@ -1,7 +1,7 @@
-import { HelpCircle } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { AccountIcon } from '@/components/account-icon'
 import { CategoryIcon } from '@/components/category-icon'
+import { Icon } from '@/components/m3/icon'
 import { useFormatLocale, useT } from '@/lib/i18n'
 import { formatMoney } from '@/lib/money'
 import { cn } from '@/lib/utils'
@@ -29,6 +29,12 @@ type TransactionRowProps = {
     onClick?: () => void
 }
 
+/**
+ * One transaction, on the app's raised card surface. Mirrors the native
+ * `TransactionRow` widget: title and signed amount on the first line, an
+ * optional description under it, and a row of tinted entity glyphs with the
+ * time (and an attention marker when the date or time is only estimated).
+ */
 export function TransactionRow({
     title,
     amountCents,
@@ -53,16 +59,14 @@ export function TransactionRow({
 
     const content = (
         <>
-            <div className="flex items-start justify-between gap-3">
-                <span className="min-w-0 flex-1 truncate text-base font-medium text-foreground">
+            <div className="flex items-start gap-3">
+                <span className="min-w-0 flex-1 truncate text-base font-medium">
                     {title}
                 </span>
                 <span
                     className={cn(
                         'shrink-0 text-base font-semibold tabular-nums',
-                        isPositive
-                            ? 'text-green-600 dark:text-green-500'
-                            : 'text-foreground',
+                        isPositive ? 'text-positive' : 'text-on-surface',
                     )}
                 >
                     {amount}
@@ -70,14 +74,14 @@ export function TransactionRow({
             </div>
 
             {description ? (
-                <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                <p className="mt-0.5 truncate text-[13px] text-on-surface-variant">
                     {description}
                 </p>
             ) : null}
 
             {identities.length > 0 || timeLabel || showAttention ? (
-                <div className="mt-2 flex items-center justify-between gap-3">
-                    <div className="flex min-w-0 items-center gap-1.5">
+                <div className="mt-1.5 flex items-center gap-3">
+                    <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
                         {identities.map((identity) => (
                             <IdentityIcon
                                 key={`${identity.type}-${identity.label}`}
@@ -87,18 +91,21 @@ export function TransactionRow({
                     </div>
                     <div className="flex shrink-0 items-center gap-1">
                         {showAttention ? (
-                            <HelpCircle
-                                className="size-4 text-amber-600 dark:text-amber-500"
+                            <span
+                                role="img"
                                 aria-label={t.activity.estimatedDateOrTime}
-                            />
+                                className="flex text-attention"
+                            >
+                                <Icon name="help" size={15} />
+                            </span>
                         ) : null}
                         {timeLabel ? (
                             <span
                                 className={cn(
                                     'text-xs font-medium tabular-nums',
                                     timeNeedsAttention
-                                        ? 'text-amber-700 dark:text-amber-500'
-                                        : 'text-muted-foreground',
+                                        ? 'text-attention'
+                                        : 'text-on-surface-variant',
                                 )}
                             >
                                 {timeLabel}
@@ -111,14 +118,11 @@ export function TransactionRow({
     )
 
     const className =
-        'w-full rounded-xl border bg-card px-4 py-3 text-left shadow-xs transition-colors'
+        'm3-raised-card w-full rounded-xl px-4 py-3.5 text-left text-on-surface'
     return onClick ? (
         <button
             type="button"
-            className={cn(
-                className,
-                'hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-            )}
+            className={cn(className, 'm3-state-layer cursor-pointer')}
             onClick={onClick}
         >
             {content}
@@ -134,7 +138,7 @@ function IdentityIcon({ identity }: { identity: TransactionRowIdentity }) {
         icon = (
             <AccountIcon
                 name={identity.icon}
-                className="size-3.5"
+                size={15}
                 color={identity.color}
             />
         )
@@ -142,7 +146,7 @@ function IdentityIcon({ identity }: { identity: TransactionRowIdentity }) {
         icon = (
             <CategoryIcon
                 name={identity.icon}
-                className="size-3.5"
+                size={15}
                 color={identity.color}
             />
         )

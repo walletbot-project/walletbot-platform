@@ -1,23 +1,12 @@
 import { api } from '@wallet-bot/backend/api'
 import { useMutation, useQuery } from 'convex/react'
 import type { FunctionReturnType } from 'convex/server'
-import {
-    CalendarDays,
-    Check,
-    Clock3,
-    FileText,
-    HelpCircle,
-    Pencil,
-    Tags,
-    Trash2,
-    WalletCards,
-    X,
-} from 'lucide-react'
 import { type FormEvent, type ReactNode, useId, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 import { AccountIcon } from '@/components/account-icon'
 import { CategoryIcon } from '@/components/category-icon'
+import { Icon } from '@/components/m3/icon'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
@@ -28,13 +17,6 @@ import {
     DialogTitle,
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
-import {
-    Sheet,
-    SheetContent,
-    SheetFooter,
-    SheetHeader,
-    SheetTitle,
-} from '@/components/ui/sheet'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Textarea } from '@/components/ui/textarea'
 import {
@@ -64,53 +46,48 @@ type AccountBalance = FunctionReturnType<
     typeof api.v1.transactions.queries.balanceAroundTransaction
 >
 
-type TransactionDetailsSheetProps = {
-    transactionId: string | null
+type TransactionDetailProps = {
+    transactionId: string
     transferSide?: TransactionTransferSide
-    open: boolean
-    onOpenChange: (open: boolean) => void
     initialEditing?: boolean
     // When provided, the read-mode date/category/tag chips apply the filter in
     // place (used by the Activity page, which owns the filter state). Without
     // it, they deep-link to /activity via the router.
     onApplyFilter?: (filters: Partial<TransactionFilters>) => void
+    onClose: () => void
 }
 
-export function TransactionDetailsSheet({
+/**
+ * A transaction's details, with an inline edit mode. Presentation-agnostic —
+ * `DividedView` renders it in the split pane on expanded windows and inside a
+ * modal bottom sheet everywhere else, matching the native detail screen.
+ */
+export function TransactionDetail({
     transactionId,
     transferSide,
-    open,
-    onOpenChange,
     initialEditing = false,
     onApplyFilter,
-}: TransactionDetailsSheetProps) {
+    onClose,
+}: TransactionDetailProps) {
     const t = useT()
-    const transaction = useQuery(
-        api.v1.transactions.queries.get,
-        open && transactionId ? { id: transactionId } : 'skip',
-    )
-    const accounts = useQuery(
-        api.v1.accounts.queries.list,
-        open ? { includeArchived: true } : 'skip',
-    )
-    const categories = useQuery(
-        api.v1.categories.queries.listActive,
-        open ? {} : 'skip',
-    )
+    const transaction = useQuery(api.v1.transactions.queries.get, {
+        id: transactionId,
+    })
+    const accounts = useQuery(api.v1.accounts.queries.list, {
+        includeArchived: true,
+    })
+    const categories = useQuery(api.v1.categories.queries.listActive)
     const currentCategory = useQuery(
         api.v1.categories.queries.get,
-        open && transaction?.categoryId
-            ? { id: transaction.categoryId }
-            : 'skip',
+        transaction?.categoryId ? { id: transaction.categoryId } : 'skip',
     )
-    const tags = useQuery(api.v1.tags.queries.listActive, open ? {} : 'skip')
+    const tags = useQuery(api.v1.tags.queries.listActive)
 
     const isLoading =
         transaction === undefined ||
         accounts === undefined ||
         categories === undefined ||
-        (transaction !== undefined &&
-            transaction !== null &&
+        (transaction !== null &&
             transaction.categoryId !== '' &&
             currentCategory === undefined) ||
         tags === undefined
@@ -122,34 +99,26 @@ export function TransactionDetailsSheet({
             ? [...categories, currentCategory]
             : categories
 
+    if (isLoading) return <TransactionDetailsSkeleton />
+    if (transaction === null) {
+        return (
+            <div className="m3-body-large flex flex-1 items-center justify-center p-8 text-on-surface-variant">
+                {t.transaction.gone}
+            </div>
+        )
+    }
     return (
-        <Sheet open={open} onOpenChange={onOpenChange}>
-            <SheetContent
-                side="right"
-                className="w-full gap-0 p-0 sm:max-w-lg"
-                showCloseButton={false}
-            >
-                {isLoading ? (
-                    <TransactionDetailsSkeleton />
-                ) : transaction === null ? (
-                    <div className="flex flex-1 items-center justify-center p-8 text-sm text-muted-foreground">
-                        {t.transaction.gone}
-                    </div>
-                ) : (
-                    <TransactionDetailsContent
-                        key={`${transaction.id}-${transaction.updatedAt}`}
-                        transaction={transaction}
-                        accounts={accounts}
-                        categories={categoryOptions ?? categories}
-                        tags={tags}
-                        transferSide={transferSide}
-                        initialEditing={initialEditing}
-                        onApplyFilter={onApplyFilter}
-                        onClose={() => onOpenChange(false)}
-                    />
-                )}
-            </SheetContent>
-        </Sheet>
+        <TransactionDetailsContent
+            key={`${transaction.id}-${transaction.updatedAt}`}
+            transaction={transaction}
+            accounts={accounts}
+            categories={categoryOptions ?? categories}
+            tags={tags}
+            transferSide={transferSide}
+            initialEditing={initialEditing}
+            onApplyFilter={onApplyFilter}
+            onClose={onClose}
+        />
     )
 }
 
@@ -354,12 +323,12 @@ function TransactionDetailsContent({
 
     return (
         <>
-            <SheetHeader className="flex-row items-center border-b">
-                <SheetTitle className="flex-1">
+            <header className="flex flex-row items-center gap-1 border-b p-4">
+                <h2 className="m3-title-large flex-1">
                     {editing
                         ? t.transaction.editActivity
                         : t.transaction.detail}
-                </SheetTitle>
+                </h2>
                 {editing ? (
                     // Keep the edit button's space occupied. Besides avoiding
                     // header movement, this prevents the event that opened the
@@ -373,7 +342,7 @@ function TransactionDetailsContent({
                         onClick={() => setEditing(true)}
                         aria-label={t.common.edit}
                     >
-                        <Pencil />
+                        <Icon name="edit" />
                     </Button>
                 )}
                 <Button
@@ -384,7 +353,7 @@ function TransactionDetailsContent({
                     disabled={saving}
                     aria-label={t.common.delete}
                 >
-                    <Trash2 />
+                    <Icon name="delete" />
                 </Button>
                 <Button
                     type="button"
@@ -394,9 +363,9 @@ function TransactionDetailsContent({
                     disabled={saving}
                     aria-label={t.common.close}
                 >
-                    <X />
+                    <Icon name="close" />
                 </Button>
-            </SheetHeader>
+            </header>
 
             <form
                 id={formId}
@@ -411,7 +380,7 @@ function TransactionDetailsContent({
                         >
                             <CategoryIcon
                                 name={category?.icon}
-                                className="size-8"
+                                size={32}
                                 color={categoryColor}
                             />
                         </span>
@@ -466,7 +435,7 @@ function TransactionDetailsContent({
 
                     <div className="divide-y px-6">
                         <ReceiptRow
-                            icon={<FileText />}
+                            icon={<Icon name="description" filled />}
                             label={t.common.description}
                             stacked
                         >
@@ -487,9 +456,9 @@ function TransactionDetailsContent({
                         <ReceiptRow
                             icon={
                                 dateConfirmed ? (
-                                    <CalendarDays />
+                                    <Icon name="calendar_month" filled />
                                 ) : (
-                                    <HelpCircle />
+                                    <Icon name="help" />
                                 )
                             }
                             label={
@@ -533,7 +502,11 @@ function TransactionDetailsContent({
 
                         <ReceiptRow
                             icon={
-                                timeNeedsAttention ? <HelpCircle /> : <Clock3 />
+                                timeNeedsAttention ? (
+                                    <Icon name="help" />
+                                ) : (
+                                    <Icon name="schedule" />
+                                )
                             }
                             label={
                                 timeNeedsAttention
@@ -563,7 +536,7 @@ function TransactionDetailsContent({
                             icon={
                                 <AccountIcon
                                     name={account?.icon}
-                                    className="size-4"
+                                    size={16}
                                     color={normalizeColor(
                                         account?.color,
                                         ACCOUNT_DEFAULT_COLOR,
@@ -620,7 +593,12 @@ function TransactionDetailsContent({
 
                         {isTransfer ? (
                             <ReceiptRow
-                                icon={<WalletCards />}
+                                icon={
+                                    <Icon
+                                        name="account_balance_wallet"
+                                        filled
+                                    />
+                                }
                                 label={t.transaction.destinationAccount}
                                 stacked
                             >
@@ -670,7 +648,7 @@ function TransactionDetailsContent({
                                 icon={
                                     <CategoryIcon
                                         name={category?.icon}
-                                        className="size-4"
+                                        size={16}
                                         color={categoryColor}
                                     />
                                 }
@@ -711,7 +689,7 @@ function TransactionDetailsContent({
                         ) : null}
 
                         <ReceiptRow
-                            icon={<Tags />}
+                            icon={<Icon name="sell" filled />}
                             label={t.transaction.tags}
                             stacked
                         >
@@ -803,17 +781,17 @@ function TransactionDetailsContent({
             </form>
 
             {editing ? (
-                <SheetFooter className="border-t bg-background">
+                <footer className="mt-auto border-t bg-surface p-4">
                     <Button
                         type="submit"
                         form={formId}
                         disabled={saving}
                         className="w-full"
                     >
-                        <Check />
+                        <Icon name="check" />
                         {saving ? t.common.saving : t.transaction.saveChanges}
                     </Button>
-                </SheetFooter>
+                </footer>
             ) : null}
 
             <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>

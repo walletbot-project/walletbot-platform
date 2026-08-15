@@ -1,5 +1,4 @@
-import { Loader2 } from 'lucide-react'
-import { Button } from '@/components/ui/button'
+import { Button, CircularProgress } from 'actify'
 import { useFormatLocale, useT } from '@/lib/i18n'
 import {
     type ActivityTransaction,
@@ -41,19 +40,19 @@ export function EntityRecentTransactions({
     const t = useT()
     const formatLocale = useFormatLocale()
     return (
-        <section className="flex flex-col gap-2">
+        <section className="mt-7 flex flex-col gap-2">
             <div className="flex items-center justify-between gap-2">
-                <h3 className="text-base font-medium">{title}</h3>
-                <Button variant="ghost" size="sm" onClick={onViewAll}>
+                <h3 className="m3-title-medium">{title}</h3>
+                <Button variant="text" onPress={onViewAll}>
                     {viewAllLabel}
                 </Button>
             </div>
             {transactions === undefined ? (
                 <div className="flex justify-center py-6">
-                    <Loader2 className="size-5 animate-spin text-muted-foreground" />
+                    <CircularProgress isIndeterminate />
                 </div>
             ) : transactions.length === 0 ? (
-                <p className="py-4 text-sm text-muted-foreground">
+                <p className="m3-body-medium py-4 text-on-surface-variant">
                     {t.activity.noMovementsYet}
                 </p>
             ) : (

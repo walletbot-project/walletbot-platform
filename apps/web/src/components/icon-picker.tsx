@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Icon } from '@/components/m3/icon'
 import {
     Popover,
     PopoverContent,
@@ -28,7 +29,7 @@ export function IconPicker({
 }: IconPickerProps) {
     const t = useT()
     const [open, setOpen] = useState(false)
-    const ActiveIcon = icons.find((i) => i.name === icon)?.Icon ?? icons[0].Icon
+    const active = icons.find((option) => option.name === icon) ?? icons[0]
 
     return (
         <Popover open={open} onOpenChange={setOpen}>
@@ -42,11 +43,16 @@ export function IconPicker({
                     />
                 }
             >
-                <ActiveIcon className="size-7" style={{ color }} />
+                <Icon
+                    name={active.symbol}
+                    filled={active.filled}
+                    size={28}
+                    style={{ color }}
+                />
             </PopoverTrigger>
             <PopoverContent className="w-64">
                 <div className="grid grid-cols-5 gap-1.5">
-                    {icons.map(({ name, Icon }) => {
+                    {icons.map(({ name, symbol, filled }) => {
                         const isSelected = name === icon
                         return (
                             <button
@@ -70,7 +76,12 @@ export function IconPicker({
                                 aria-label={name}
                                 aria-pressed={isSelected}
                             >
-                                <Icon className="size-5" style={{ color }} />
+                                <Icon
+                                    name={symbol}
+                                    filled={filled}
+                                    size={20}
+                                    style={{ color }}
+                                />
                             </button>
                         )
                     })}

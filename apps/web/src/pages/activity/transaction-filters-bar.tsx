@@ -1,9 +1,9 @@
 import { api } from '@wallet-bot/backend/api'
 import { useQuery } from 'convex/react'
-import { CalendarDays, Search, SlidersHorizontal, X } from 'lucide-react'
 import { useState } from 'react'
 import type { DateRange } from 'react-day-picker'
-import { Badge } from '@/components/ui/badge'
+import { ChoiceChip, InputChip } from '@/components/m3/chip'
+import { Icon } from '@/components/m3/icon'
 import { Button } from '@/components/ui/button'
 import { Calendar } from '@/components/ui/calendar'
 import { Input } from '@/components/ui/input'
@@ -23,7 +23,6 @@ import {
     SheetTrigger,
 } from '@/components/ui/sheet'
 import { type Messages, useFormatLocale, useT } from '@/lib/i18n'
-import { cn } from '@/lib/utils'
 import {
     advancedFilterCount,
     EMPTY_FILTERS,
@@ -49,17 +48,21 @@ export function TransactionFiltersBar({
     const tags = useQuery(api.v1.tags.queries.listActive)
 
     return (
-        <div className="flex flex-col gap-3">
-            <div className="flex items-center gap-2">
+        <div className="flex flex-col gap-2.5">
+            <div className="flex items-center gap-2 px-4">
                 <div className="relative flex-1">
-                    <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
+                    <Icon
+                        name="search"
+                        filled
+                        className="pointer-events-none absolute top-1/2 left-4 -translate-y-1/2 text-on-surface-variant"
+                    />
                     <Input
                         value={filters.search}
                         onChange={(e) =>
                             onChange({ ...filters, search: e.target.value })
                         }
                         placeholder={t.activity.search}
-                        className="rounded-full pl-9"
+                        className="h-13 rounded-[32px] border-none bg-surface-container-highest pr-5 pl-13 text-on-surface shadow-none"
                     />
                 </div>
                 <FiltersSheet
@@ -132,23 +135,25 @@ function FiltersSheet({
         <Sheet open={open} onOpenChange={handleOpenChange}>
             <SheetTrigger
                 render={
-                    <Button
+                    <button
                         type="button"
-                        variant="outline"
-                        size="icon"
-                        className="relative shrink-0"
+                        className="m3-state-layer relative flex size-10 shrink-0 cursor-pointer items-center justify-center rounded-full bg-secondary-container text-on-secondary-container"
                         aria-label={t.activity.filters}
                     />
                 }
             >
-                <SlidersHorizontal />
+                <Icon name="tune" filled />
                 {count > 0 ? (
-                    <span className="absolute -top-1.5 -right-1.5 flex size-4 items-center justify-center rounded-full bg-primary text-[10px] font-bold text-primary-foreground">
+                    <span className="absolute -top-0.5 -right-0.5 flex min-h-4.5 min-w-4.5 items-center justify-center rounded-[10px] bg-primary px-1.5 text-[11px] font-bold text-on-primary">
                         {count}
                     </span>
                 ) : null}
             </SheetTrigger>
-            <SheetContent side="right" className="w-full gap-0 sm:max-w-md">
+            <SheetContent
+                side="bottom"
+                showCloseButton={false}
+                className="max-h-[90dvh] gap-0 rounded-t-[28px] border-none bg-surface-container-low text-on-surface"
+            >
                 <SheetHeader className="flex-row items-center justify-between">
                     <SheetTitle>{t.activity.filters}</SheetTitle>
                     <Button
@@ -244,7 +249,7 @@ function FiltersSheet({
 }
 
 function SectionTitle({ children }: { children: React.ReactNode }) {
-    return <h3 className="text-sm font-semibold text-foreground">{children}</h3>
+    return <h3 className="m3-title-small text-on-surface">{children}</h3>
 }
 
 type DateRangeFieldProps = {
@@ -273,7 +278,10 @@ function DateRangeField({ range, onSelect, onClear }: DateRangeFieldProps) {
                         />
                     }
                 >
-                    <CalendarDays className="text-muted-foreground" />
+                    <Icon
+                        name="calendar_month"
+                        className="text-on-surface-variant"
+                    />
                     <span className="truncate">{label}</span>
                 </PopoverTrigger>
                 <PopoverContent className="w-auto p-0" align="start">
@@ -294,7 +302,7 @@ function DateRangeField({ range, onSelect, onClear }: DateRangeFieldProps) {
                     aria-label={t.activity.clearRange}
                     onClick={onClear}
                 >
-                    <X />
+                    <Icon name="close" size={20} />
                 </Button>
             ) : null}
         </div>
@@ -315,32 +323,29 @@ function TogglePicker({
     emptyText,
 }: TogglePickerProps) {
     if (entities.length === 0) {
-        return <p className="text-sm text-muted-foreground">{emptyText}</p>
+        return (
+            <p className="m3-body-medium text-on-surface-variant">
+                {emptyText}
+            </p>
+        )
     }
     return (
         <div className="flex flex-wrap gap-2">
             {entities.map((entity) => {
                 const isSelected = selected.includes(entity.id)
                 return (
-                    <Button
+                    <ChoiceChip
                         key={entity.id}
-                        type="button"
-                        size="sm"
-                        variant={isSelected ? 'secondary' : 'outline'}
-                        className={cn(
-                            'rounded-full',
-                            isSelected && 'border-primary',
-                        )}
-                        onClick={() =>
+                        label={entity.name}
+                        selected={isSelected}
+                        onSelect={() =>
                             onChange(
                                 isSelected
                                     ? selected.filter((id) => id !== entity.id)
                                     : [...selected, entity.id],
                             )
                         }
-                    >
-                        {entity.name}
-                    </Button>
+                    />
                 )
             })}
         </div>
@@ -412,25 +417,15 @@ function ActiveFilterChips({
     }
 
     return (
-        <div className="flex flex-wrap gap-2">
+        <div className="flex gap-2 overflow-x-auto px-4">
             {chips.map((chip) => (
-                <Badge
+                <InputChip
                     key={chip.key}
-                    variant="secondary"
-                    className="gap-1 py-1 pr-1 pl-2.5"
+                    onRemove={chip.onRemove}
+                    removeLabel={t.activity.removeFilter({ label: chip.label })}
                 >
                     {chip.label}
-                    <button
-                        type="button"
-                        aria-label={t.activity.removeFilter({
-                            label: chip.label,
-                        })}
-                        onClick={chip.onRemove}
-                        className="rounded-full p-0.5 hover:bg-foreground/10"
-                    >
-                        <X className="size-3" />
-                    </button>
-                </Badge>
+                </InputChip>
             ))}
         </div>
     )

@@ -1,19 +1,13 @@
 import { api } from '@wallet-bot/backend/api'
 import { useMutation, useQuery } from 'convex/react'
-import {
-    ArrowDownLeft,
-    ArrowLeftRight,
-    ArrowUpRight,
-    Pencil,
-    Scale,
-    Tag,
-} from 'lucide-react'
 import { type FormEvent, type ReactNode, useId, useState } from 'react'
 import { toast } from 'sonner'
 import { AccountIcon } from '@/components/account-icon'
 import { CategoryIcon } from '@/components/category-icon'
 import { ColorSwatches } from '@/components/color-swatches'
 import { IconPicker } from '@/components/icon-picker'
+import { BottomSheet } from '@/components/m3/bottom-sheet'
+import { Icon } from '@/components/m3/icon'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -39,7 +33,7 @@ import { type Messages, useFormatLocale, useT } from '@/lib/i18n'
 import { normalizeTagColor } from '@/lib/tag-colors'
 import { cn } from '@/lib/utils'
 import { accountErrorMessage } from '@/pages/accounts/account-errors'
-import { TransactionDetailsSheet } from './activity/transaction-details-sheet'
+import { TransactionDetail } from './activity/transaction-detail'
 
 type ActionResultMessage = Extract<ChatMessage, { kind: 'action-result' }>
 
@@ -143,7 +137,7 @@ function TransactionActionWidget({
     const toAccount = txn.toAccountId
         ? accounts.find((item) => item.id === txn.toAccountId)
         : undefined
-    const { Icon, iconCls, label } = txnTypeConfig(txn.type, t)
+    const { icon, iconCls, label } = txnTypeConfig(txn.type, t)
     const amount =
         txn.type === 'transfer' &&
         txn.toAmount !== undefined &&
@@ -163,7 +157,12 @@ function TransactionActionWidget({
         <>
             <ActionCard>
                 <div className={cn('rounded-full p-1.5', iconCls.bg)}>
-                    <Icon className={cn('size-4', iconCls.text)} />
+                    <Icon
+                        name={icon}
+                        filled
+                        size={16}
+                        className={iconCls.text}
+                    />
                 </div>
                 <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-medium">{txn.name}</p>
@@ -180,12 +179,19 @@ function TransactionActionWidget({
                 </div>
                 <EditButton onClick={() => setEditOpen(true)} />
             </ActionCard>
-            <TransactionDetailsSheet
-                transactionId={txn.id}
+            <BottomSheet
                 open={editOpen}
                 onOpenChange={setEditOpen}
-                initialEditing
-            />
+                title={t.transaction.editActivity}
+            >
+                {editOpen ? (
+                    <TransactionDetail
+                        transactionId={txn.id}
+                        initialEditing
+                        onClose={() => setEditOpen(false)}
+                    />
+                ) : null}
+            </BottomSheet>
         </>
     )
 }
@@ -217,11 +223,7 @@ function AccountActionWidget({
         <>
             <ActionCard>
                 <EntityIcon color={accent}>
-                    <AccountIcon
-                        name={account.icon}
-                        className="size-4"
-                        color={accent}
-                    />
+                    <AccountIcon name={account.icon} size={16} color={accent} />
                 </EntityIcon>
                 <ActionCopy
                     title={account.name}
@@ -364,7 +366,7 @@ function CategoryActionWidget({
                 <EntityIcon color={accent}>
                     <CategoryIcon
                         name={category.icon}
-                        className="size-4"
+                        size={16}
                         color={accent}
                     />
                 </EntityIcon>
@@ -505,7 +507,12 @@ function TagActionWidget({
         <>
             <ActionCard>
                 <EntityIcon color={accent}>
-                    <Tag className="size-4" style={{ color: accent }} />
+                    <Icon
+                        name="sell"
+                        filled
+                        size={16}
+                        style={{ color: accent }}
+                    />
                 </EntityIcon>
                 <ActionCopy
                     title={tag.name}
@@ -712,7 +719,7 @@ function EditButton({ onClick }: { onClick: () => void }) {
             className="shrink-0 gap-1.5"
             onClick={onClick}
         >
-            <Pencil className="size-3.5" />
+            <Icon name="edit" size={14} />
             {t.common.edit}
         </Button>
     )
@@ -808,7 +815,7 @@ function txnTypeConfig(type: TxnType, t: Messages) {
     switch (type) {
         case 'expense':
             return {
-                Icon: ArrowDownLeft,
+                icon: 'arrow_downward',
                 iconCls: {
                     bg: 'bg-red-100 dark:bg-red-900/30',
                     text: 'text-red-600 dark:text-red-400',
@@ -817,7 +824,7 @@ function txnTypeConfig(type: TxnType, t: Messages) {
             }
         case 'income':
             return {
-                Icon: ArrowUpRight,
+                icon: 'arrow_upward',
                 iconCls: {
                     bg: 'bg-green-100 dark:bg-green-900/30',
                     text: 'text-green-600 dark:text-green-400',
@@ -826,7 +833,7 @@ function txnTypeConfig(type: TxnType, t: Messages) {
             }
         case 'transfer':
             return {
-                Icon: ArrowLeftRight,
+                icon: 'swap_horiz',
                 iconCls: {
                     bg: 'bg-blue-100 dark:bg-blue-900/30',
                     text: 'text-blue-600 dark:text-blue-400',
@@ -835,7 +842,7 @@ function txnTypeConfig(type: TxnType, t: Messages) {
             }
         case 'balance_adjustment':
             return {
-                Icon: Scale,
+                icon: 'balance',
                 iconCls: {
                     bg: 'bg-amber-100 dark:bg-amber-900/30',
                     text: 'text-amber-700 dark:text-amber-400',

@@ -1,13 +1,14 @@
 import { api } from '@wallet-bot/backend/api'
+import { Button, IconButton } from 'actify'
 import { useMutation, useQuery } from 'convex/react'
-import { Check, Pencil, Trash2 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 import { ColorSwatches } from '@/components/color-swatches'
 import { EntityRecentTransactions } from '@/components/entity-recent-transactions'
+import { Icon } from '@/components/m3/icon'
 import { MonthlySpend } from '@/components/monthly-spend'
-import { Button } from '@/components/ui/button'
+import { Button as ShadcnButton } from '@/components/ui/button'
 import {
     Dialog,
     DialogContent,
@@ -16,8 +17,8 @@ import {
     DialogTitle,
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
-import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet'
 import { COLOR_OPTIONS } from '@/lib/entity-colors'
+import { GROUP_SPACING, groupedRadius } from '@/lib/grouped-list'
 import { useT } from '@/lib/i18n'
 import { normalizeTagColor } from '@/lib/tag-colors'
 
@@ -28,24 +29,29 @@ export type TagSummary = {
     parentId?: string
 }
 
-export function TagDetailsSheet({
+/**
+ * A tag's details: a color-washed identity hero, the monthly-spend hero, an
+ * edit/delete action row, and the five most recent transactions — the same
+ * shape as the account and category details, matching the native tag sheet.
+ *
+ * Presentation-agnostic — `DividedView` renders it inline in the split pane on
+ * expanded windows and inside a modal bottom sheet everywhere else.
+ */
+export function TagDetail({
     tag,
     childTags,
-    open,
-    onOpenChange,
+    onClose,
 }: {
-    tag: TagSummary | null
+    tag: TagSummary
     /** Direct sub-tags, used to decide the delete flow. */
     childTags: TagSummary[]
-    open: boolean
-    onOpenChange: (open: boolean) => void
+    onClose: () => void
 }) {
     const navigate = useNavigate()
     const t = useT()
     const updateTag = useMutation(api.v1.tags.mutations.update)
     const archiveTag = useMutation(api.v1.tags.mutations.archive)
 
-    const tagId = tag?.id ?? ''
     const [monthWindow] = useState(() => {
         const now = new Date()
         const from = new Date(now.getFullYear(), now.getMonth(), 1)
@@ -56,37 +62,32 @@ export function TagDetailsSheet({
         }
     })
 
-    const spend = useQuery(
-        api.v1.tags.queries.spendByCurrency,
-        tag ? { id: tagId, ...monthWindow } : 'skip',
-    )
-    const recent = useQuery(
-        api.v1.tags.queries.recentTransactions,
-        tag ? { id: tagId, limit: 5 } : 'skip',
-    )
+    const spend = useQuery(api.v1.tags.queries.spendByCurrency, {
+        id: tag.id,
+        ...monthWindow,
+    })
+    const recent = useQuery(api.v1.tags.queries.recentTransactions, {
+        id: tag.id,
+        limit: 5,
+    })
 
     const [editing, setEditing] = useState(false)
     const [saving, setSaving] = useState(false)
-    const [name, setName] = useState('')
-    const [color, setColor] = useState(normalizeTagColor(undefined))
+    const [name, setName] = useState(tag.name)
+    const [color, setColor] = useState(normalizeTagColor(tag.color))
     const [deleteOpen, setDeleteOpen] = useState(false)
 
     // Re-seed the editable identity only when a *different* tag opens. Keying
     // on the id (not the object) keeps live query updates — e.g. the refreshed
     // values right after a save — from clobbering in-progress edits.
-    const [seededId, setSeededId] = useState<string | null>(null)
+    const [seededId, setSeededId] = useState(tag.id)
     useEffect(() => {
-        const id = tag?.id ?? null
-        if (id === seededId) return
-        setSeededId(id)
-        if (tag) {
-            setName(tag.name)
-            setColor(normalizeTagColor(tag.color))
-            setEditing(false)
-        }
+        if (tag.id === seededId) return
+        setSeededId(tag.id)
+        setName(tag.name)
+        setColor(normalizeTagColor(tag.color))
+        setEditing(false)
     }, [tag, seededId])
-
-    if (!tag) return null
 
     const accent = editing ? color : normalizeTagColor(tag.color)
 
@@ -126,102 +127,95 @@ export function TagDetailsSheet({
         try {
             await promise
             setDeleteOpen(false)
-            onOpenChange(false)
+            onClose()
         } finally {
             setSaving(false)
         }
     }
 
-    const requestDelete = () => {
-        // No sub-tags → straight confirm; otherwise ask what happens to them.
-        setDeleteOpen(true)
-    }
-
     const viewAllTransactions = () => {
-        onOpenChange(false)
+        onClose()
         navigate('/activity', { state: { tagIds: [tag.id] } })
     }
 
     const hasChildren = childTags.length > 0
 
     return (
-        <Sheet open={open} onOpenChange={onOpenChange}>
-            <SheetContent side="right" className="w-full gap-0 p-0 sm:max-w-md">
-                <SheetTitle className="sr-only">{tag.name}</SheetTitle>
-                <div className="flex flex-1 flex-col gap-3 overflow-y-auto p-4">
-                    {/* Identity hero — tags have no icon, just a color wash. */}
-                    <div
-                        className="flex items-center gap-3 rounded-2xl p-5"
-                        style={{ backgroundColor: `${accent}24` }}
-                    >
-                        <span
-                            className="size-3 shrink-0 rounded-full"
-                            style={{ backgroundColor: accent }}
-                        />
-                        {editing ? (
-                            <Input
-                                value={name}
-                                onChange={(e) => setName(e.target.value)}
-                                className="bg-background"
-                                aria-label={t.common.name}
-                            />
-                        ) : (
-                            <span className="min-w-0 flex-1 truncate text-xl font-semibold">
-                                {tag.name}
-                            </span>
-                        )}
-                    </div>
+        <div className="flex flex-col px-4 pb-6">
+            {/* Identity hero — tags have no icon, just a color wash. */}
+            <div
+                className="flex items-center gap-3 p-5"
+                style={{
+                    backgroundColor: `${accent}24`,
+                    ...groupedRadius(0, 2),
+                }}
+            >
+                <span
+                    className="size-3 shrink-0 rounded-full"
+                    style={{ backgroundColor: accent }}
+                />
+                {editing ? (
+                    <Input
+                        value={name}
+                        onChange={(e) => setName(e.target.value)}
+                        className="bg-surface"
+                        aria-label={t.common.name}
+                    />
+                ) : (
+                    <span className="m3-title-large min-w-0 flex-1 truncate font-semibold">
+                        {tag.name}
+                    </span>
+                )}
+            </div>
 
-                    {editing ? (
-                        <ColorSwatches
-                            value={color}
-                            onChange={setColor}
-                            options={COLOR_OPTIONS}
-                        />
-                    ) : null}
-
-                    {/* Monthly spend hero. */}
-                    <div className="flex flex-col gap-1 rounded-2xl border bg-card p-5">
-                        <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                            {t.insights.spentThisMonth}
-                        </span>
-                        <MonthlySpend spend={spend} />
-                    </div>
-
-                    {/* Actions. */}
-                    <div className="flex items-center gap-2">
-                        <Button
-                            variant={editing ? 'default' : 'secondary'}
-                            className="flex-1"
-                            onClick={handleToggleEditing}
-                            disabled={saving}
-                        >
-                            {editing ? (
-                                <Check data-icon="inline-start" />
-                            ) : (
-                                <Pencil data-icon="inline-start" />
-                            )}
-                            {editing ? t.common.done : t.common.edit}
-                        </Button>
-                        <Button
-                            variant="destructive"
-                            size="icon"
-                            onClick={requestDelete}
-                            disabled={saving}
-                            aria-label={t.common.delete}
-                        >
-                            <Trash2 />
-                        </Button>
-                    </div>
-
-                    <EntityRecentTransactions
-                        title={t.insights.lastMovements}
-                        viewAllLabel={t.insights.viewAll}
-                        onViewAll={viewAllTransactions}
-                        transactions={recent}
+            {editing ? (
+                <div className="pt-3">
+                    <ColorSwatches
+                        value={color}
+                        onChange={setColor}
+                        options={COLOR_OPTIONS}
                     />
                 </div>
-            </SheetContent>
+            ) : null}
+
+            {/* Monthly spend hero. */}
+            <div
+                className="flex flex-col gap-1 bg-surface-container-high px-5 pt-4 pb-4.5"
+                style={{ marginTop: GROUP_SPACING, ...groupedRadius(1, 2) }}
+            >
+                <span className="m3-label-medium tracking-[0.8px] text-on-surface-variant">
+                    {t.insights.spentThisMonth.toUpperCase()}
+                </span>
+                <MonthlySpend spend={spend} />
+            </div>
+
+            {/* Actions. */}
+            <div className="mt-3 flex items-center gap-2">
+                <Button
+                    variant={editing ? 'filled' : 'tonal'}
+                    className="flex-1"
+                    onPress={handleToggleEditing}
+                    isDisabled={saving}
+                >
+                    <Icon name={editing ? 'check' : 'edit'} size={18} />
+                    {editing ? t.common.done : t.common.edit}
+                </Button>
+                <IconButton
+                    onPress={() => setDeleteOpen(true)}
+                    isDisabled={saving}
+                    aria-label={t.common.delete}
+                    className="rounded-full bg-error-container text-on-error-container"
+                >
+                    <Icon name="delete" />
+                </IconButton>
+            </div>
+
+            <EntityRecentTransactions
+                title={t.insights.lastMovements}
+                viewAllLabel={t.insights.viewAll}
+                onViewAll={viewAllTransactions}
+                transactions={recent}
+            />
 
             <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
                 <DialogContent>
@@ -233,42 +227,42 @@ export function TagDetailsSheet({
                         </DialogTitle>
                     </DialogHeader>
                     {hasChildren ? (
-                        <div className="flex flex-col gap-3 text-sm">
+                        <div className="m3-body-medium flex flex-col gap-3">
                             <p>
                                 <span className="font-medium">{tag.name}</span>{' '}
                                 {t.insights.tagDeleteWithChildrenPrompt({
                                     count: childTags.length,
                                 })}
                             </p>
-                            <ul className="list-disc pl-5 text-muted-foreground">
-                                {childTags.map((c) => (
-                                    <li key={c.id}>{c.name}</li>
+                            <ul className="list-disc pl-5 text-on-surface-variant">
+                                {childTags.map((child) => (
+                                    <li key={child.id}>{child.name}</li>
                                 ))}
                             </ul>
                         </div>
                     ) : (
-                        <p className="text-sm text-muted-foreground">
+                        <p className="m3-body-medium text-on-surface-variant">
                             {t.insights.tagDeleteConfirm({ name: tag.name })}
                         </p>
                     )}
                     <DialogFooter>
-                        <Button
+                        <ShadcnButton
                             variant="outline"
                             onClick={() => setDeleteOpen(false)}
                             disabled={saving}
                         >
                             {t.common.cancel}
-                        </Button>
+                        </ShadcnButton>
                         {hasChildren ? (
-                            <Button
+                            <ShadcnButton
                                 variant="outline"
                                 onClick={() => performDelete(false)}
                                 disabled={saving}
                             >
                                 {t.insights.keepSubtags}
-                            </Button>
+                            </ShadcnButton>
                         ) : null}
-                        <Button
+                        <ShadcnButton
                             variant="destructive"
                             onClick={() => performDelete(hasChildren)}
                             disabled={saving}
@@ -276,10 +270,10 @@ export function TagDetailsSheet({
                             {hasChildren
                                 ? t.insights.deleteEverything
                                 : t.common.delete}
-                        </Button>
+                        </ShadcnButton>
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
-        </Sheet>
+        </div>
     )
 }

@@ -1,8 +1,11 @@
 import { api } from '@wallet-bot/backend/api'
+import { CircularProgress, IconButton } from 'actify'
 import { usePaginatedQuery, useQuery } from 'convex/react'
-import { Loader2 } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useLocation } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
+import { AppBar } from '@/components/m3/app-bar'
+import { DividedView } from '@/components/m3/divided-view'
+import { Icon } from '@/components/m3/icon'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
     ACCOUNT_DEFAULT_COLOR,
@@ -24,7 +27,7 @@ import {
     type TransactionType,
     transactionTimeStatus,
 } from './helpers'
-import { TransactionDetailsSheet } from './transaction-details-sheet'
+import { TransactionDetail } from './transaction-detail'
 import { TransactionFiltersBar } from './transaction-filters-bar'
 import { TransactionRow } from './transaction-row'
 
@@ -36,9 +39,10 @@ const AUTO_LOAD_CAP = 1_000
 const PAGE_SIZE = 50
 
 export function Activity() {
-    // A details sheet can deep-link here with a pre-applied entity filter,
-    // passed via the router location state (see the account/category/tag sheets).
+    // A details view can deep-link here with a pre-applied entity filter,
+    // passed via the router location state (see the account/category/tag details).
     const location = useLocation()
+    const navigate = useNavigate()
     const t = useT()
     const formatLocale = useFormatLocale()
     const [filters, setFilters] = useState<TransactionFilters>(() => {
@@ -137,142 +141,176 @@ export function Activity() {
         return () => observer.disconnect()
     }, [status, loadMore])
 
-    return (
-        <div className="flex flex-1 flex-col">
-            <div className="mx-auto flex w-full max-w-2xl flex-1 flex-col gap-4 p-4">
-                <TransactionFiltersBar
-                    filters={filters}
-                    onChange={setFilters}
-                />
-                <FilterChips selected={type} onChange={setType} />
+    const list = (
+        <>
+            <AppBar
+                title={t.nav.activity}
+                actions={
+                    <IconButton
+                        aria-label={t.activity.addTransaction}
+                        onPress={() => navigate('/add/manual')}
+                        className="text-on-surface-variant"
+                    >
+                        <Icon name="add" />
+                    </IconButton>
+                }
+            />
+            <div className="min-h-0 flex-1 overflow-y-auto">
+                <div className="flex flex-col gap-4 pt-2 pb-20">
+                    <TransactionFiltersBar
+                        filters={filters}
+                        onChange={setFilters}
+                    />
+                    <FilterChips selected={type} onChange={setType} />
 
-                {status === 'LoadingFirstPage' ? (
-                    <ListSkeleton />
-                ) : entries.length === 0 && status === 'Exhausted' ? (
-                    <p className="py-12 text-center text-sm text-muted-foreground">
-                        {t.activity.noTransactions}
-                    </p>
-                ) : (
-                    <div className="flex flex-col gap-2">
-                        {entries.map((entry) =>
-                            entry.kind === 'header' ? (
-                                <h2
-                                    key={entry.key}
-                                    className="px-1 pt-3 text-sm font-bold text-foreground first:pt-0"
-                                >
-                                    {entry.label}
-                                </h2>
-                            ) : (
-                                <TransactionRow
-                                    key={entry.key}
-                                    title={entry.title}
-                                    amountCents={entry.amountCents}
-                                    currency={entry.currency}
-                                    dateConfirmed={entry.txn.dateConfirmed}
-                                    timeLabel={formatTransactionTime(
-                                        entry.txn.date,
-                                        formatLocale,
-                                    )}
-                                    timeStatus={transactionTimeStatus(
-                                        entry.txn,
-                                    )}
-                                    description={estimatedDescription(
-                                        entry.txn,
-                                        t,
-                                        formatLocale,
-                                    )}
-                                    identities={[
-                                        ...(accountsById.has(entry.accountId)
-                                            ? [
-                                                  {
-                                                      type: 'account' as const,
-                                                      label: t.activity.accountIdentity(
-                                                          {
-                                                              name: accountsById.get(
-                                                                  entry.accountId,
-                                                              )!.name,
-                                                          },
-                                                      ),
-                                                      icon: accountsById.get(
-                                                          entry.accountId,
-                                                      )!.icon,
-                                                      color: normalizeColor(
-                                                          accountsById.get(
+                    {status === 'LoadingFirstPage' ? (
+                        <ListSkeleton />
+                    ) : entries.length === 0 && status === 'Exhausted' ? (
+                        <p className="m3-body-large py-12 text-center text-on-surface-variant">
+                            {t.activity.noTransactions}
+                        </p>
+                    ) : (
+                        <div className="flex flex-col gap-2.5 px-4">
+                            {entries.map((entry) =>
+                                entry.kind === 'header' ? (
+                                    <h2
+                                        key={entry.key}
+                                        className="pt-2 text-base font-bold first:pt-0"
+                                    >
+                                        {entry.label}
+                                    </h2>
+                                ) : (
+                                    <TransactionRow
+                                        key={entry.key}
+                                        title={entry.title}
+                                        amountCents={entry.amountCents}
+                                        currency={entry.currency}
+                                        dateConfirmed={entry.txn.dateConfirmed}
+                                        timeLabel={formatTransactionTime(
+                                            entry.txn.date,
+                                            formatLocale,
+                                        )}
+                                        timeStatus={transactionTimeStatus(
+                                            entry.txn,
+                                        )}
+                                        description={estimatedDescription(
+                                            entry.txn,
+                                            t,
+                                            formatLocale,
+                                        )}
+                                        identities={[
+                                            ...(accountsById.has(
+                                                entry.accountId,
+                                            )
+                                                ? [
+                                                      {
+                                                          type: 'account' as const,
+                                                          label: t.activity.accountIdentity(
+                                                              {
+                                                                  name: accountsById.get(
+                                                                      entry.accountId,
+                                                                  )!.name,
+                                                              },
+                                                          ),
+                                                          icon: accountsById.get(
                                                               entry.accountId,
-                                                          )!.color,
-                                                          ACCOUNT_DEFAULT_COLOR,
-                                                      ),
-                                                  },
-                                              ]
-                                            : []),
-                                        ...(categoriesById.has(
-                                            entry.txn.categoryId,
-                                        )
-                                            ? [
-                                                  {
-                                                      type: 'category' as const,
-                                                      label: t.activity.categoryIdentity(
-                                                          {
-                                                              name: categoriesById.get(
-                                                                  entry.txn
-                                                                      .categoryId,
-                                                              )!.name,
-                                                          },
-                                                      ),
-                                                      icon: categoriesById.get(
-                                                          entry.txn.categoryId,
-                                                      )!.icon,
-                                                      color: normalizeColor(
-                                                          categoriesById.get(
+                                                          )!.icon,
+                                                          color: normalizeColor(
+                                                              accountsById.get(
+                                                                  entry.accountId,
+                                                              )!.color,
+                                                              ACCOUNT_DEFAULT_COLOR,
+                                                          ),
+                                                      },
+                                                  ]
+                                                : []),
+                                            ...(categoriesById.has(
+                                                entry.txn.categoryId,
+                                            )
+                                                ? [
+                                                      {
+                                                          type: 'category' as const,
+                                                          label: t.activity.categoryIdentity(
+                                                              {
+                                                                  name: categoriesById.get(
+                                                                      entry.txn
+                                                                          .categoryId,
+                                                                  )!.name,
+                                                              },
+                                                          ),
+                                                          icon: categoriesById.get(
                                                               entry.txn
                                                                   .categoryId,
-                                                          )!.color,
-                                                          CATEGORY_DEFAULT_COLOR,
-                                                      ),
-                                                  },
-                                              ]
-                                            : []),
-                                    ]}
-                                    onClick={() =>
-                                        setSelectedTransaction({
-                                            id: entry.txn.id,
-                                            transferSide: entry.transferSide,
-                                        })
-                                    }
-                                />
-                            ),
-                        )}
-                    </div>
-                )}
+                                                          )!.icon,
+                                                          color: normalizeColor(
+                                                              categoriesById.get(
+                                                                  entry.txn
+                                                                      .categoryId,
+                                                              )!.color,
+                                                              CATEGORY_DEFAULT_COLOR,
+                                                          ),
+                                                      },
+                                                  ]
+                                                : []),
+                                        ]}
+                                        onClick={() =>
+                                            setSelectedTransaction({
+                                                id: entry.txn.id,
+                                                transferSide:
+                                                    entry.transferSide,
+                                            })
+                                        }
+                                    />
+                                ),
+                            )}
+                        </div>
+                    )}
 
-                {status === 'LoadingMore' ? (
-                    <div className="flex justify-center py-4">
-                        <Loader2 className="size-5 animate-spin text-muted-foreground" />
-                    </div>
-                ) : null}
+                    {status === 'LoadingMore' ? (
+                        <div className="flex justify-center py-6">
+                            <CircularProgress isIndeterminate />
+                        </div>
+                    ) : null}
 
-                <div ref={sentinelRef} aria-hidden className="h-1" />
+                    <div ref={sentinelRef} aria-hidden className="h-1" />
+                </div>
             </div>
-            <TransactionDetailsSheet
-                transactionId={selectedTransaction?.id ?? null}
-                transferSide={selectedTransaction?.transferSide}
-                open={selectedTransaction !== null}
-                onApplyFilter={(next) =>
-                    setFilters({ ...EMPTY_FILTERS, ...next })
-                }
-                onOpenChange={(open) => {
-                    if (!open) setSelectedTransaction(null)
-                }}
-            />
-        </div>
+        </>
+    )
+
+    return (
+        <DividedView
+            list={list}
+            detail={
+                selectedTransaction ? (
+                    <TransactionDetail
+                        transactionId={selectedTransaction.id}
+                        transferSide={selectedTransaction.transferSide}
+                        onApplyFilter={(next) =>
+                            setFilters({ ...EMPTY_FILTERS, ...next })
+                        }
+                        onClose={() => setSelectedTransaction(null)}
+                    />
+                ) : null
+            }
+            detailTitle={t.transaction.detail}
+            placeholder={
+                <div className="flex flex-1 items-center justify-center p-8">
+                    <p className="m3-body-large max-w-xs text-center text-on-surface-variant">
+                        {t.activity.selectDetail}
+                    </p>
+                </div>
+            }
+            onDismiss={() => setSelectedTransaction(null)}
+        />
     )
 }
 
 function ListSkeleton() {
     return (
-        <div className="flex flex-col gap-2">
+        <div className="flex flex-col gap-2.5 px-4">
             {Array.from({ length: 6 }).map((_, i) => (
-                <Skeleton key={i} className="h-14 w-full rounded-xl" />
+                <Skeleton key={i} className="h-20 w-full rounded-xl" />
             ))}
         </div>
     )

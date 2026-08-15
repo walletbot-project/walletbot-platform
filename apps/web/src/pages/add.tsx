@@ -1,19 +1,10 @@
 import { api } from '@wallet-bot/backend/api'
+import { IconButton } from 'actify'
 import { useConvex, useQuery } from 'convex/react'
-import {
-    AlertCircle,
-    CheckCircle2,
-    Hourglass,
-    Info,
-    Mic,
-    MicOff,
-    Phone,
-    PhoneOff,
-    Sparkles,
-    Wrench,
-    XCircle,
-} from 'lucide-react'
 import { useEffect, useRef } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { AppBar } from '@/components/m3/app-bar'
+import { Icon } from '@/components/m3/icon'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import { type ChatMessage, useVoice } from '@/hooks/use-voice'
@@ -110,7 +101,7 @@ function AgentBubble({
             <div className="flex max-w-[82%] items-start gap-2">
                 <Avatar size="sm" className="mt-5 size-7">
                     <AvatarFallback className="bg-secondary text-secondary-foreground">
-                        <Sparkles className="size-3.5" />
+                        <Icon name="auto_awesome" filled size={14} />
                     </AvatarFallback>
                 </Avatar>
                 <div className="flex flex-col items-start gap-1">
@@ -155,12 +146,12 @@ function ToolCard({
 }) {
     const t = useT()
     const status = message.status
-    const StatusIcon =
+    const statusIcon =
         status === 'pending'
-            ? Hourglass
+            ? 'hourglass_top'
             : status === 'completed'
-              ? CheckCircle2
-              : XCircle
+              ? 'check_circle'
+              : 'cancel'
     const statusColor =
         status === 'pending'
             ? 'text-amber-600 dark:text-amber-400'
@@ -178,7 +169,12 @@ function ToolCard({
         <div className="flex justify-center">
             <div className="w-full max-w-[92%] rounded-lg border bg-card p-3 text-sm">
                 <div className="flex items-center gap-2">
-                    <Wrench className="size-3.5 text-muted-foreground" />
+                    <Icon
+                        name="build"
+                        filled
+                        size={14}
+                        className="text-on-surface-variant"
+                    />
                     <span className="text-xs uppercase tracking-wider text-muted-foreground">
                         {t.voice.tool}
                     </span>
@@ -191,7 +187,7 @@ function ToolCard({
                             statusColor,
                         )}
                     >
-                        <StatusIcon className="size-3.5" />
+                        <Icon name={statusIcon} filled size={14} />
                         {statusLabel}
                     </span>
                 </div>
@@ -230,12 +226,12 @@ function SystemLine({
 }: {
     message: Extract<ChatMessage, { kind: 'system' }>
 }) {
-    const Icon =
+    const icon =
         message.level === 'error'
-            ? AlertCircle
+            ? 'error'
             : message.level === 'success'
-              ? CheckCircle2
-              : Info
+              ? 'check_circle'
+              : 'info'
     const color =
         message.level === 'error'
             ? 'text-destructive'
@@ -245,7 +241,7 @@ function SystemLine({
     return (
         <div className="flex justify-center">
             <div className={cn('flex items-center gap-1.5 text-xs', color)}>
-                <Icon className="size-3.5" />
+                <Icon name={icon} filled size={14} />
                 <span>{message.message}</span>
             </div>
         </div>
@@ -317,7 +313,7 @@ function EmptyState({ isConnecting }: { isConnecting: boolean }) {
     const t = useT()
     return (
         <div className="flex flex-1 flex-col items-center justify-center gap-3 text-muted-foreground">
-            <Mic className="size-12 opacity-50" />
+            <Icon name="mic" filled size={48} className="opacity-50" />
             <p className="text-sm">
                 {isConnecting ? t.voice.connectingEllipsis : t.voice.tapToStart}
             </p>
@@ -329,6 +325,7 @@ function EmptyState({ isConnecting }: { isConnecting: boolean }) {
 
 export function Add() {
     const t = useT()
+    const navigate = useNavigate()
     const client = useConvex()
     const voice = useVoice({ context: { client } })
     const flags = useQuery(api.v1.featureFlags.queries.getMyFlags)
@@ -350,15 +347,23 @@ export function Add() {
     }, [voice.messages])
 
     return (
-        <div className="flex flex-1 flex-col">
-            {/* Sub-header with status */}
-            <div className="flex items-center justify-between gap-2 border-b bg-background/50 px-4 py-2">
-                <h2 className="text-sm font-medium">{t.voice.title}</h2>
-                <StatusPill status={status} />
-            </div>
+        <>
+            <AppBar
+                title={t.voice.title}
+                leading={
+                    <IconButton
+                        aria-label={t.common.goBack}
+                        onPress={() => navigate(-1)}
+                        className="text-on-surface-variant"
+                    >
+                        <Icon name="arrow_back" />
+                    </IconButton>
+                }
+                actions={<StatusPill status={status} />}
+            />
 
             {/* Messages — natural flow, footer is sticky over them */}
-            <div className="flex flex-1 flex-col gap-3 px-4 py-6 pb-40">
+            <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-4 py-6 pb-40">
                 {voice.messages.length === 0 ? (
                     <EmptyState isConnecting={voice.isConnecting} />
                 ) : (
@@ -410,9 +415,9 @@ export function Add() {
                                 )}
                             >
                                 {voice.isMuted ? (
-                                    <MicOff className="size-5" />
+                                    <Icon name="mic_off" filled size={20} />
                                 ) : (
-                                    <Mic className="size-5" />
+                                    <Icon name="mic" filled size={20} />
                                 )}
                             </Button>
                         )}
@@ -426,7 +431,7 @@ export function Add() {
                                 aria-label={t.voice.disconnect}
                                 className="size-14 rounded-full"
                             >
-                                <PhoneOff className="size-6" />
+                                <Icon name="call_end" filled size={24} />
                             </Button>
                         ) : (
                             <Button
@@ -437,7 +442,7 @@ export function Add() {
                                 aria-label={t.voice.connect}
                                 className="size-14 rounded-full"
                             >
-                                <Phone className="size-6" />
+                                <Icon name="call" filled size={24} />
                             </Button>
                         )}
                     </div>
@@ -460,6 +465,6 @@ export function Add() {
                     )}
                 </div>
             </div>
-        </div>
+        </>
     )
 }

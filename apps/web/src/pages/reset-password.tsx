@@ -1,7 +1,8 @@
-import { CircleAlert, LoaderCircle, Lock } from 'lucide-react'
+import { CircularProgress } from 'actify'
 import { type FormEvent, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
+import { Icon } from '@/components/m3/icon'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -69,16 +70,21 @@ export function ResetPassword() {
 
     if (invalidLink) {
         return (
-            <div className="flex min-h-screen items-center justify-center bg-background">
+            <div className="flex min-h-dvh items-center justify-center bg-surface px-5 py-6">
                 <div className="flex w-full max-w-sm flex-col items-center gap-6 px-4 text-center">
                     <div className="rounded-full bg-destructive/10 p-4">
-                        <CircleAlert className="size-6 text-destructive" />
+                        <Icon
+                            name="error"
+                            filled
+                            size={24}
+                            className="text-error"
+                        />
                     </div>
                     <div className="flex flex-col gap-2">
-                        <h1 className="text-2xl font-semibold tracking-tight">
+                        <h1 className="m3-headline-small font-semibold">
                             Enlace no válido
                         </h1>
-                        <p className="text-sm text-muted-foreground">
+                        <p className="m3-body-medium text-on-surface-variant">
                             El enlace no es válido o ya venció. Pedí uno nuevo
                             para restablecer tu contraseña.
                         </p>
@@ -95,13 +101,13 @@ export function ResetPassword() {
     }
 
     return (
-        <div className="flex min-h-screen items-center justify-center bg-background">
+        <div className="flex min-h-dvh items-center justify-center bg-surface px-5 py-6">
             <div className="flex w-full max-w-sm flex-col items-center gap-6 px-4">
                 <div className="flex flex-col items-center gap-2 text-center">
-                    <h1 className="text-2xl font-semibold tracking-tight">
+                    <h1 className="m3-headline-small font-semibold">
                         Nueva contraseña
                     </h1>
-                    <p className="text-sm text-muted-foreground">
+                    <p className="m3-body-medium text-on-surface-variant">
                         Elegí una contraseña nueva para tu cuenta.
                     </p>
                 </div>
@@ -113,7 +119,12 @@ export function ResetPassword() {
                     <div className="grid gap-2">
                         <Label htmlFor="password">Nueva contraseña</Label>
                         <div className="relative">
-                            <Lock className="-translate-y-1/2 pointer-events-none absolute top-1/2 left-2.5 size-4 text-muted-foreground" />
+                            <Icon
+                                name="lock"
+                                filled
+                                size={16}
+                                className="-translate-y-1/2 pointer-events-none absolute top-1/2 left-2.5 text-on-surface-variant"
+                            />
                             <Input
                                 id="password"
                                 name="password"
@@ -131,7 +142,12 @@ export function ResetPassword() {
                     <div className="grid gap-2">
                         <Label htmlFor="confirm">Repetir contraseña</Label>
                         <div className="relative">
-                            <Lock className="-translate-y-1/2 pointer-events-none absolute top-1/2 left-2.5 size-4 text-muted-foreground" />
+                            <Icon
+                                name="lock"
+                                filled
+                                size={16}
+                                className="-translate-y-1/2 pointer-events-none absolute top-1/2 left-2.5 text-on-surface-variant"
+                            />
                             <Input
                                 id="confirm"
                                 name="confirm"
@@ -154,7 +170,7 @@ export function ResetPassword() {
 
                     <Button type="submit" className="w-full" disabled={loading}>
                         {loading ? (
-                            <LoaderCircle className="animate-spin" />
+                            <CircularProgress isIndeterminate size="xs" />
                         ) : null}
                         Restablecer contraseña
                     </Button>

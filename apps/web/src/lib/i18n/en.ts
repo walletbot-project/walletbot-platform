@@ -54,6 +54,21 @@ export const en: Messages = {
         languageEnglish: 'English',
     },
 
+    settings: {
+        title: 'Settings',
+        account: 'Account',
+        language: 'Language',
+        languageDescription: 'Choose the language used throughout the app.',
+        theme: 'Theme',
+        themeDescription: 'Choose how the app looks on this device.',
+        systemDefault: 'System default',
+        lightTheme: 'Light',
+        darkTheme: 'Dark',
+        english: 'English',
+        spanish: 'Spanish',
+        featureFlags: 'Feature flags',
+    },
+
     auth: {
         signInToContinue: 'Sign in to continue',
         signIn: 'Sign in',
@@ -69,6 +84,18 @@ export const en: Messages = {
         authFailed: 'Could not sign you in',
         googleHint: (p) =>
             `${p.message}. If you signed up with Google, use "Continue with Google".`,
+        forgotPassword: 'Forgot your password?',
+        needAccountSignUp: 'Need an account? Sign up',
+        haveAccountSignIn: 'Already have an account? Sign in',
+        verifyEmailTitle: 'Verify your email',
+        verifyEmailSent: (p) => `We sent a verification link to ${p.email}.`,
+        verifyEmailInstructions:
+            'Open the link to verify your account, then come back here and sign in.',
+        resendVerificationEmail: 'Resend email',
+        resendingVerificationEmail: 'Sending…',
+        verificationEmailResent: 'Verification email sent again.',
+        resendVerificationFailed: 'Could not resend the email.',
+        backToSignIn: 'Back to sign in',
     },
 
     errors: {
@@ -113,6 +140,7 @@ export const en: Messages = {
         deleteTitle: 'Delete account',
         deleteConfirm: (p) =>
             `Delete "${p.name}"? It will no longer appear in your accounts.`,
+        selectDetail: 'Select an account to see its details',
         lastTransactions: 'Latest transactions',
         viewAll: 'View all',
     },
@@ -141,6 +169,8 @@ export const en: Messages = {
         typeTransfer: 'Transfers',
         typeBalanceAdjustment: 'Adjustments',
         noTransactions: 'No transactions',
+        addTransaction: 'Add transaction',
+        selectDetail: 'Select a transaction to see its details',
         today: 'Today',
         yesterday: 'Yesterday',
         estimatedDay: (p) => `${p.weekday} (estimated)`,
@@ -195,6 +225,14 @@ export const en: Messages = {
             p.count === 1
                 ? '+ 1 other currency'
                 : `+ ${p.count} other currencies`,
+        movementCount: (p) =>
+            p.count === 0
+                ? 'No movements'
+                : p.count === 1
+                  ? '1 movement'
+                  : `${p.count} movements`,
+        selectCategoryDetail: 'Select a category to see its details',
+        selectTagDetail: 'Select a tag to see its details',
         lastMovements: 'Latest transactions',
         viewAll: 'View all',
 

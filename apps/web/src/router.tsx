@@ -106,6 +106,13 @@ export const router = createBrowserRouter([
                                     })),
                             },
                             {
+                                path: '/settings',
+                                lazy: () =>
+                                    import('@/pages/settings').then((m) => ({
+                                        Component: m.Settings,
+                                    })),
+                            },
+                            {
                                 path: '/admin/feature-flags',
                                 lazy: () =>
                                     import('@/pages/admin/feature-flags').then(

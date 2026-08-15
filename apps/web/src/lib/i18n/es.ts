@@ -56,6 +56,22 @@ export const es = {
         languageEnglish: 'English',
     },
 
+    settings: {
+        title: 'Configuración',
+        account: 'Cuenta',
+        language: 'Idioma',
+        languageDescription:
+            'Elegí el idioma que se usa en toda la aplicación.',
+        theme: 'Tema',
+        themeDescription: 'Elegí cómo se ve la aplicación en este dispositivo.',
+        systemDefault: 'Predeterminado del sistema',
+        lightTheme: 'Claro',
+        darkTheme: 'Oscuro',
+        english: 'Inglés',
+        spanish: 'Español',
+        featureFlags: 'Feature flags',
+    },
+
     auth: {
         signInToContinue: 'Iniciá sesión para continuar',
         signIn: 'Iniciar sesión',
@@ -71,6 +87,19 @@ export const es = {
         authFailed: 'No se pudo autenticar',
         googleHint: (p: { message: string }) =>
             `${p.message}. Si te registraste con Google, usá "Continuar con Google".`,
+        forgotPassword: '¿Olvidaste tu contraseña?',
+        needAccountSignUp: '¿Necesitás una cuenta? Registrate',
+        haveAccountSignIn: '¿Ya tenés cuenta? Iniciá sesión',
+        verifyEmailTitle: 'Verificá tu correo',
+        verifyEmailSent: (p: { email: string }) =>
+            `Te enviamos un enlace de verificación a ${p.email}.`,
+        verifyEmailInstructions:
+            'Abrí el enlace para verificar tu cuenta y después volvé acá a iniciar sesión.',
+        resendVerificationEmail: 'Reenviar correo',
+        resendingVerificationEmail: 'Enviando…',
+        verificationEmailResent: 'Te reenviamos el correo de verificación.',
+        resendVerificationFailed: 'No se pudo reenviar el correo.',
+        backToSignIn: 'Volver a iniciar sesión',
     },
 
     errors: {
@@ -113,6 +142,7 @@ export const es = {
         deleteTitle: 'Eliminar cuenta',
         deleteConfirm: (p: { name: string }) =>
             `¿Seguro que querés eliminar "${p.name}"? Dejará de aparecer en tus cuentas.`,
+        selectDetail: 'Seleccioná una cuenta para ver su detalle',
         lastTransactions: 'Últimas transacciones',
         viewAll: 'Ver todas',
     },
@@ -142,6 +172,8 @@ export const es = {
         typeTransfer: 'Transferencias',
         typeBalanceAdjustment: 'Ajustes',
         noTransactions: 'No hay transacciones',
+        addTransaction: 'Agregar transacción',
+        selectDetail: 'Seleccioná una transacción para ver su detalle',
         today: 'Hoy',
         yesterday: 'Ayer',
         estimatedDay: (p: { weekday: string }) => `${p.weekday} (estimado)`,
@@ -195,6 +227,14 @@ export const es = {
         noSpendThisMonth: 'Sin gastos este mes',
         otherCurrencies: (p: { count: number }) =>
             p.count === 1 ? '+ 1 otra moneda' : `+ ${p.count} otras monedas`,
+        movementCount: (p: { count: number }) =>
+            p.count === 0
+                ? 'Sin movimientos'
+                : p.count === 1
+                  ? '1 movimiento'
+                  : `${p.count} movimientos`,
+        selectCategoryDetail: 'Seleccioná una categoría para ver su detalle',
+        selectTagDetail: 'Seleccioná una etiqueta para ver su detalle',
         lastMovements: 'Últimos movimientos',
         viewAll: 'Ver todos',
 

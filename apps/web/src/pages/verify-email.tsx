@@ -1,5 +1,5 @@
-import { CircleAlert, MailCheck } from 'lucide-react'
 import { Link, useSearchParams } from 'react-router-dom'
+import { Icon } from '@/components/m3/icon'
 
 import { Button } from '@/components/ui/button'
 
@@ -39,26 +39,40 @@ export function VerifyEmail() {
     const state = stateForError(searchParams.get('error'))
 
     return (
-        <div className="flex min-h-screen items-center justify-center bg-background">
+        <div className="flex min-h-dvh items-center justify-center bg-surface px-5 py-6">
             <div className="flex w-full max-w-sm flex-col items-center gap-6 px-4 text-center">
                 {state.icon === 'success' ? (
-                    <div className="rounded-full bg-muted p-4">
-                        <MailCheck className="size-6 text-muted-foreground" />
+                    <div className="rounded-full bg-surface-container-highest p-4">
+                        <Icon
+                            name="mark_email_read"
+                            filled
+                            size={24}
+                            className="text-on-surface-variant"
+                        />
                     </div>
                 ) : (
                     <div className="rounded-full bg-destructive/10 p-4">
-                        <CircleAlert className="size-6 text-destructive" />
+                        <Icon
+                            name="error"
+                            filled
+                            size={24}
+                            className="text-error"
+                        />
                     </div>
                 )}
                 <div className="flex flex-col gap-2">
-                    <h1 className="text-2xl font-semibold tracking-tight">
+                    <h1 className="m3-headline-small font-semibold">
                         {state.title}
                     </h1>
-                    <p className="text-sm text-muted-foreground">
+                    <p className="m3-body-medium text-on-surface-variant">
                         {state.description}
                     </p>
                 </div>
-                <Button className="w-full" render={<Link to="/login" />}>
+                <Button
+                    className="w-full"
+                    nativeButton={false}
+                    render={<Link to="/login" />}
+                >
                     Iniciar sesión
                 </Button>
             </div>

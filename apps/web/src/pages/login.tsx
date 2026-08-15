@@ -1,10 +1,10 @@
-import { LoaderCircle, Lock, Mail, MailCheck, UserRound } from 'lucide-react'
+import { Button, CircularProgress } from 'actify'
 import { type FormEvent, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 
 import googleIcon from '@/assets/google.svg'
-import { Button } from '@/components/ui/button'
+import { Icon } from '@/components/m3/icon'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Separator } from '@/components/ui/separator'
@@ -71,9 +71,7 @@ export function Login({ mode }: { mode: AuthMode }) {
                         setPendingEmail(email)
                         return
                     }
-                    throw new Error(
-                        result.error.message ?? 'No se pudo autenticar',
-                    )
+                    throw new Error(result.error.message ?? t.auth.authFailed)
                 }
 
                 navigate(from, { replace: true })
@@ -116,47 +114,52 @@ export function Login({ mode }: { mode: AuthMode }) {
             .then((result) => {
                 if (result.error) {
                     throw new Error(
-                        result.error.message ?? 'No se pudo reenviar el correo',
+                        result.error.message ?? t.auth.resendVerificationFailed,
                     )
                 }
             })
         toast.promise(promise, {
-            loading: 'Enviando…',
-            success: 'Correo reenviado. Revisá tu bandeja.',
-            error: 'No se pudo reenviar el correo.',
+            loading: t.auth.resendingVerificationEmail,
+            success: t.auth.verificationEmailResent,
+            error: t.auth.resendVerificationFailed,
         })
     }
 
     if (pendingEmail) {
         return (
-            <div className="flex min-h-screen items-center justify-center bg-background">
+            <div className="flex min-h-dvh items-center justify-center bg-surface">
                 <div className="flex w-full max-w-sm flex-col items-center gap-6 px-4 text-center">
-                    <div className="rounded-full bg-muted p-4">
-                        <MailCheck className="size-6 text-muted-foreground" />
+                    <div className="rounded-full bg-surface-container-highest p-4">
+                        <Icon
+                            name="mark_email_read"
+                            filled
+                            size={24}
+                            className="text-on-surface-variant"
+                        />
                     </div>
                     <div className="flex flex-col gap-2">
-                        <h1 className="text-2xl font-semibold tracking-tight">
-                            Verificá tu correo
+                        <h1 className="m3-headline-small font-semibold">
+                            {t.auth.verifyEmailTitle}
                         </h1>
-                        <p className="text-sm text-muted-foreground">
-                            Te enviamos un correo a {pendingEmail}. Abrí el
-                            enlace para verificar tu cuenta y después iniciá
-                            sesión.
+                        <p className="m3-body-medium text-on-surface-variant">
+                            {t.auth.verifyEmailSent({ email: pendingEmail })}{' '}
+                            {t.auth.verifyEmailInstructions}
                         </p>
                     </div>
                     <div className="flex w-full flex-col gap-2">
                         <Button
+                            variant="filled"
                             className="w-full"
-                            onClick={handleResendVerification}
+                            onPress={handleResendVerification}
                         >
-                            Reenviar correo
+                            {t.auth.resendVerificationEmail}
                         </Button>
                         <Button
-                            variant="ghost"
+                            variant="text"
                             className="w-full"
-                            onClick={() => setPendingEmail(null)}
+                            onPress={() => setPendingEmail(null)}
                         >
-                            Volver
+                            {t.auth.backToSignIn}
                         </Button>
                     </div>
                 </div>
@@ -165,47 +168,37 @@ export function Login({ mode }: { mode: AuthMode }) {
     }
 
     return (
-        <div className="flex min-h-screen items-center justify-center bg-background">
-            <div className="flex w-full max-w-sm flex-col items-center gap-6 px-4">
-                <div className="flex flex-col items-center gap-2">
-                    <h1 className="text-2xl font-semibold tracking-tight">
-                        {t.common.appName}
-                    </h1>
-                    <p className="text-sm text-muted-foreground">
-                        {t.auth.signInToContinue}
-                    </p>
-                </div>
-
-                <div className="grid w-full grid-cols-2 rounded-lg border border-border bg-muted/40 p-1">
-                    <Button
-                        type="button"
-                        variant={mode === 'sign-in' ? 'secondary' : 'ghost'}
-                        size="sm"
-                        aria-pressed={mode === 'sign-in'}
-                        onClick={() => goToMode('sign-in')}
-                    >
-                        {t.auth.signIn}
-                    </Button>
-                    <Button
-                        type="button"
-                        variant={mode === 'sign-up' ? 'secondary' : 'ghost'}
-                        size="sm"
-                        aria-pressed={mode === 'sign-up'}
-                        onClick={() => goToMode('sign-up')}
-                    >
-                        {t.auth.signUp}
-                    </Button>
+        <div className="flex min-h-dvh justify-center bg-surface px-5 py-6">
+            <div className="flex w-full max-w-[480px] flex-col">
+                {/* Hero header, matching the native login's `_HeroHeader`. */}
+                <div className="flex items-center gap-3.5">
+                    <span className="flex size-14 shrink-0 items-center justify-center rounded-[18px] bg-primary text-on-primary shadow-level-3">
+                        <Icon name="account_balance_wallet" filled />
+                    </span>
+                    <div className="flex min-w-0 flex-col">
+                        <h1 className="m3-headline-medium font-black">
+                            {t.common.appName}
+                        </h1>
+                        <p className="m3-body-medium text-on-surface-variant">
+                            {t.auth.signInToContinue}
+                        </p>
+                    </div>
                 </div>
 
                 <form
-                    className="flex w-full flex-col gap-4"
+                    className="mt-6 flex w-full flex-col gap-4 rounded-[28px] bg-surface-container-low p-5"
                     onSubmit={handleEmailSubmit}
                 >
                     {mode === 'sign-up' ? (
                         <div className="grid gap-2">
                             <Label htmlFor="name">{t.common.name}</Label>
                             <div className="relative">
-                                <UserRound className="-translate-y-1/2 pointer-events-none absolute top-1/2 left-2.5 size-4 text-muted-foreground" />
+                                <Icon
+                                    name="person"
+                                    filled
+                                    size={16}
+                                    className="-translate-y-1/2 pointer-events-none absolute top-1/2 left-2.5 text-on-surface-variant"
+                                />
                                 <Input
                                     id="name"
                                     name="name"
@@ -221,7 +214,12 @@ export function Login({ mode }: { mode: AuthMode }) {
                     <div className="grid gap-2">
                         <Label htmlFor="email">{t.auth.email}</Label>
                         <div className="relative">
-                            <Mail className="-translate-y-1/2 pointer-events-none absolute top-1/2 left-2.5 size-4 text-muted-foreground" />
+                            <Icon
+                                name="mail"
+                                filled
+                                size={16}
+                                className="-translate-y-1/2 pointer-events-none absolute top-1/2 left-2.5 text-on-surface-variant"
+                            />
                             <Input
                                 id="email"
                                 name="email"
@@ -238,7 +236,12 @@ export function Login({ mode }: { mode: AuthMode }) {
                     <div className="grid gap-2">
                         <Label htmlFor="password">{t.auth.password}</Label>
                         <div className="relative">
-                            <Lock className="-translate-y-1/2 pointer-events-none absolute top-1/2 left-2.5 size-4 text-muted-foreground" />
+                            <Icon
+                                name="lock"
+                                filled
+                                size={16}
+                                className="-translate-y-1/2 pointer-events-none absolute top-1/2 left-2.5 text-on-surface-variant"
+                            />
                             <Input
                                 id="password"
                                 name="password"
@@ -264,46 +267,70 @@ export function Login({ mode }: { mode: AuthMode }) {
                     {mode === 'sign-in' ? (
                         <Link
                             to="/forgot-password"
-                            className="-mt-2 self-end text-xs text-muted-foreground underline-offset-4 hover:underline"
+                            className="m3-label-large -mt-2 self-end text-primary underline-offset-4 hover:underline"
                         >
-                            ¿Olvidaste tu contraseña?
+                            {t.auth.forgotPassword}
                         </Link>
                     ) : null}
 
                     {error ? (
-                        <p className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                        <p className="m3-body-medium rounded-lg bg-error-container px-3 py-2 text-on-error-container">
                             {error}
                         </p>
                     ) : null}
 
                     <Button
                         type="submit"
+                        variant="filled"
                         className="w-full"
-                        disabled={loading !== null}
+                        // The native login gives its primary action a taller,
+                        // squarer shape than the M3 default pill.
+                        style={{
+                            height: 54,
+                            '--md-filled-button-container-shape': '16px',
+                        }}
+                        isDisabled={loading !== null}
                     >
                         {loading === 'email' ? (
-                            <LoaderCircle className="animate-spin" />
+                            <CircularProgress isIndeterminate size="xs" />
                         ) : null}
                         {mode === 'sign-in' ? t.auth.signIn : t.auth.signUp}
                     </Button>
+
+                    <Button
+                        type="button"
+                        variant="text"
+                        className="self-center"
+                        onPress={() =>
+                            goToMode(mode === 'sign-in' ? 'sign-up' : 'sign-in')
+                        }
+                    >
+                        {mode === 'sign-in'
+                            ? t.auth.needAccountSignUp
+                            : t.auth.haveAccountSignIn}
+                    </Button>
                 </form>
 
-                <div className="flex w-full items-center gap-3">
+                <div className="mt-4.5 flex w-full items-center gap-3">
                     <Separator className="flex-1" />
-                    <span className="text-xs text-muted-foreground">
+                    <span className="m3-label-medium font-bold text-on-surface-variant">
                         {t.auth.or}
                     </span>
                     <Separator className="flex-1" />
                 </div>
 
                 <Button
-                    variant="outline"
-                    className="w-full"
-                    onClick={handleGoogleSignIn}
-                    disabled={loading !== null}
+                    variant="outlined"
+                    className="mt-4.5 w-full"
+                    style={{
+                        height: 54,
+                        '--md-outlined-button-container-shape': '16px',
+                    }}
+                    onPress={handleGoogleSignIn}
+                    isDisabled={loading !== null}
                 >
                     {loading === 'google' ? (
-                        <LoaderCircle className="animate-spin" />
+                        <CircularProgress isIndeterminate size="xs" />
                     ) : (
                         <img
                             src={googleIcon}

@@ -1,10 +1,12 @@
 import { api } from '@wallet-bot/backend/api'
 import { parseAmountToCents, parseTransactionDate } from '@wallet-bot/shared'
+import { CircularProgress, IconButton } from 'actify'
 import { useMutation, useQuery } from 'convex/react'
-import { Check, Loader2, Plus, Repeat2, X } from 'lucide-react'
 import { type FormEvent, type ReactNode, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
+import { AppBar } from '@/components/m3/app-bar'
+import { Icon } from '@/components/m3/icon'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
@@ -46,10 +48,15 @@ const MOVEMENT_TYPES: readonly MovementType[] = [
     'transfer',
 ]
 
+/**
+ * Accent per movement type. These sit outside the seeded color scheme on
+ * purpose — they are the same three literals the native transaction form uses
+ * for its type segmented button (apps/native/lib/screens/transaction_form.dart).
+ */
 const SELECTED_COLORS: Record<MovementType, string> = {
-    income: 'bg-[#5EF06A]',
+    income: 'bg-[#00E676] text-black',
     expense: 'bg-[#FF3744] text-white',
-    transfer: 'bg-[#6DE7D8]',
+    transfer: 'bg-[#6DE7D8] text-black',
 }
 
 function typeCopy(type: MovementType, t: Messages) {
@@ -642,301 +649,330 @@ export function AddManual() {
         return true
     }
 
+    const appBar = (
+        <AppBar
+            title={config.title}
+            leading={
+                <IconButton
+                    aria-label={t.common.goBack}
+                    onPress={() => navigate(-1)}
+                    className="text-on-surface-variant"
+                >
+                    <Icon name="arrow_back" />
+                </IconButton>
+            }
+        />
+    )
+
     if (isLoading) {
         return (
-            <div className="flex min-h-full items-center justify-center bg-[#FFF8F8] px-4 py-10">
-                <Loader2 className="size-6 animate-spin text-muted-foreground" />
-            </div>
+            <>
+                {appBar}
+                <div className="flex min-h-0 flex-1 items-center justify-center bg-surface px-4 py-10">
+                    <CircularProgress isIndeterminate />
+                </div>
+            </>
         )
     }
 
     return (
-        <div className="flex min-h-full justify-center bg-[#FFF8F8] px-4 py-10">
-            <form
-                onSubmit={(event) => void submit(event)}
-                className="flex w-full max-w-xl flex-col gap-10"
-            >
-                <header className="space-y-6 text-center">
-                    <div className="inline-flex rounded-full border border-[#D9D0D6] bg-white p-1 shadow-sm">
-                        {MOVEMENT_TYPES.map((item) => (
-                            <button
-                                key={item}
-                                type="button"
-                                onClick={() => changeType(item)}
-                                className={cn(
-                                    'rounded-full px-4 py-2 text-sm font-bold text-black transition-colors',
-                                    type === item
-                                        ? SELECTED_COLORS[item]
-                                        : 'hover:bg-[#FFF4F6]',
-                                )}
-                            >
-                                {typeCopy(item, t).label}
-                            </button>
-                        ))}
-                    </div>
+        <>
+            {appBar}
+            <div className="flex min-h-0 flex-1 justify-center overflow-y-auto bg-surface px-4 py-10">
+                <form
+                    onSubmit={(event) => void submit(event)}
+                    className="flex w-full max-w-xl flex-col gap-10"
+                >
+                    <header className="space-y-6 text-center">
+                        <div className="inline-flex rounded-full border border-outline-variant bg-surface-container-lowest p-1 shadow-sm">
+                            {MOVEMENT_TYPES.map((item) => (
+                                <button
+                                    key={item}
+                                    type="button"
+                                    onClick={() => changeType(item)}
+                                    className={cn(
+                                        'rounded-full px-4 py-2 text-sm font-bold text-on-surface transition-colors',
+                                        type === item
+                                            ? SELECTED_COLORS[item]
+                                            : 'hover:bg-on-surface/8',
+                                    )}
+                                >
+                                    {typeCopy(item, t).label}
+                                </button>
+                            ))}
+                        </div>
 
-                    <div className="space-y-3">
-                        <h1 className="text-3xl font-black tracking-tight text-black">
-                            {config.title}
-                        </h1>
-                        <p className="text-sm text-muted-foreground">
+                        <p className="m3-body-medium text-on-surface-variant">
                             {config.description}
                         </p>
-                    </div>
-                </header>
+                    </header>
 
-                {type === 'transfer' ? (
-                    <TransferAmounts
-                        accounts={accountOptions}
-                        sourceAmount={amount}
-                        destinationAmount={destinationAmount}
-                        sourceAccountId={accountId}
-                        destinationAccountId={destinationAccountId}
-                        onSourceAmountChange={updateSourceAmount}
-                        onDestinationAmountChange={updateDestinationAmount}
-                        onSourceAccountChange={updateSourceAccount}
-                        onDestinationAccountChange={updateDestinationAccount}
-                        onSwap={swapTransferSides}
-                        date={date}
-                        onDateChange={setDate}
-                        time={time}
-                        onTimeChange={setTime}
-                    />
-                ) : (
+                    {type === 'transfer' ? (
+                        <TransferAmounts
+                            accounts={accountOptions}
+                            sourceAmount={amount}
+                            destinationAmount={destinationAmount}
+                            sourceAccountId={accountId}
+                            destinationAccountId={destinationAccountId}
+                            onSourceAmountChange={updateSourceAmount}
+                            onDestinationAmountChange={updateDestinationAmount}
+                            onSourceAccountChange={updateSourceAccount}
+                            onDestinationAccountChange={
+                                updateDestinationAccount
+                            }
+                            onSwap={swapTransferSides}
+                            date={date}
+                            onDateChange={setDate}
+                            time={time}
+                            onTimeChange={setTime}
+                        />
+                    ) : (
+                        <section className="space-y-5">
+                            <div className="space-y-2">
+                                <Label
+                                    htmlFor="amount"
+                                    className="text-base font-bold"
+                                >
+                                    {config.amountLabel}
+                                </Label>
+                                <div className="relative">
+                                    <Input
+                                        id="amount"
+                                        inputMode="decimal"
+                                        value={amount}
+                                        onFocus={() => {
+                                            if (amount === '0') setAmount('')
+                                        }}
+                                        onBlur={() => {
+                                            if (amount.trim() === '')
+                                                setAmount('0')
+                                        }}
+                                        onChange={(event) =>
+                                            setAmount(
+                                                normalizeAmountInput(
+                                                    event.target.value,
+                                                ),
+                                            )
+                                        }
+                                        placeholder="0,00"
+                                        className="h-16 rounded-xl border-outline-variant bg-surface-container-lowest px-20 text-center text-4xl font-normal text-on-surface shadow-sm"
+                                        required
+                                    />
+                                    <span className="absolute top-1/2 right-4 -translate-y-1/2 text-sm font-bold text-muted-foreground">
+                                        {selectedAccount?.currency}
+                                    </span>
+                                </div>
+                            </div>
+
+                            <div className="grid gap-5 sm:grid-cols-2">
+                                <Field
+                                    label={t.addManual.account}
+                                    htmlFor="account"
+                                    action={
+                                        <div className="flex items-center gap-2">
+                                            <Button
+                                                type="button"
+                                                variant="outline"
+                                                size="sm"
+                                                className="h-8 rounded-full"
+                                                onClick={() => setAccountId('')}
+                                                disabled={!accountId}
+                                            >
+                                                <Icon name="close" size={12} />
+                                            </Button>
+                                            <Button
+                                                type="button"
+                                                variant="outline"
+                                                size="sm"
+                                                className="h-8 rounded-full"
+                                                onClick={() =>
+                                                    setIsCreateAccountOpen(true)
+                                                }
+                                            >
+                                                <Icon name="add" size={12} />
+                                                {t.addManual.newAccount}
+                                            </Button>
+                                        </div>
+                                    }
+                                >
+                                    <AccountSelect
+                                        id="account"
+                                        value={accountId}
+                                        onChange={setAccountId}
+                                        accounts={accountOptions}
+                                    />
+                                </Field>
+
+                                <Field label={t.addManual.date} htmlFor="date">
+                                    <DateInput
+                                        value={date}
+                                        onChange={setDate}
+                                    />
+                                </Field>
+
+                                <Field
+                                    label={t.addManual.timeOptional}
+                                    htmlFor="time"
+                                >
+                                    <TimeInput
+                                        value={time}
+                                        onChange={setTime}
+                                    />
+                                </Field>
+                            </div>
+                        </section>
+                    )}
+
                     <section className="space-y-5">
-                        <div className="space-y-2">
-                            <Label
-                                htmlFor="amount"
-                                className="text-base font-bold"
-                            >
-                                {config.amountLabel}
-                            </Label>
-                            <div className="relative">
-                                <Input
-                                    id="amount"
-                                    inputMode="decimal"
-                                    value={amount}
-                                    onFocus={() => {
-                                        if (amount === '0') setAmount('')
-                                    }}
-                                    onBlur={() => {
-                                        if (amount.trim() === '') setAmount('0')
-                                    }}
-                                    onChange={(event) =>
-                                        setAmount(
-                                            normalizeAmountInput(
-                                                event.target.value,
-                                            ),
-                                        )
-                                    }
-                                    placeholder="0,00"
-                                    className="h-16 rounded-xl border-[#D9D0D6] bg-white px-20 text-center text-4xl font-normal text-black shadow-sm"
-                                    required
-                                />
-                                <span className="absolute top-1/2 right-4 -translate-y-1/2 text-sm font-bold text-muted-foreground">
-                                    {selectedAccount?.currency}
-                                </span>
-                            </div>
-                        </div>
-
-                        <div className="grid gap-5 sm:grid-cols-2">
-                            <Field
-                                label={t.addManual.account}
-                                htmlFor="account"
-                                action={
-                                    <div className="flex items-center gap-2">
-                                        <Button
-                                            type="button"
-                                            variant="outline"
-                                            size="sm"
-                                            className="h-8 rounded-full"
-                                            onClick={() => setAccountId('')}
-                                            disabled={!accountId}
-                                        >
-                                            <X className="size-3" />
-                                        </Button>
-                                        <Button
-                                            type="button"
-                                            variant="outline"
-                                            size="sm"
-                                            className="h-8 rounded-full"
-                                            onClick={() =>
-                                                setIsCreateAccountOpen(true)
-                                            }
-                                        >
-                                            <Plus className="size-3" />
-                                            {t.addManual.newAccount}
-                                        </Button>
-                                    </div>
+                        <Field label={t.addManual.title} htmlFor="title">
+                            <Input
+                                id="title"
+                                value={title}
+                                onChange={(event) =>
+                                    setTitle(event.target.value)
                                 }
-                            >
-                                <AccountSelect
-                                    id="account"
-                                    value={accountId}
-                                    onChange={setAccountId}
-                                    accounts={accountOptions}
-                                />
-                            </Field>
+                                placeholder={
+                                    type === 'transfer'
+                                        ? t.addManual.titlePlaceholderTransfer
+                                        : type === 'income'
+                                          ? t.addManual.titlePlaceholderIncome
+                                          : t.addManual.titlePlaceholderExpense
+                                }
+                                className="h-11 rounded-xl border-outline-variant bg-surface-container-lowest"
+                                required={type !== 'transfer'}
+                            />
+                        </Field>
 
-                            <Field label={t.addManual.date} htmlFor="date">
-                                <DateInput value={date} onChange={setDate} />
-                            </Field>
-
-                            <Field
-                                label={t.addManual.timeOptional}
-                                htmlFor="time"
-                            >
-                                <TimeInput value={time} onChange={setTime} />
-                            </Field>
-                        </div>
-                    </section>
-                )}
-
-                <section className="space-y-5">
-                    <Field label={t.addManual.title} htmlFor="title">
-                        <Input
-                            id="title"
-                            value={title}
-                            onChange={(event) => setTitle(event.target.value)}
-                            placeholder={
-                                type === 'transfer'
-                                    ? t.addManual.titlePlaceholderTransfer
-                                    : type === 'income'
-                                      ? t.addManual.titlePlaceholderIncome
-                                      : t.addManual.titlePlaceholderExpense
-                            }
-                            className="h-11 rounded-xl border-[#D9D0D6] bg-white"
-                            required={type !== 'transfer'}
-                        />
-                    </Field>
-
-                    <Field
-                        label={t.addManual.description}
-                        htmlFor="description"
-                    >
-                        <Textarea
-                            id="description"
-                            value={description}
-                            onChange={(event) =>
-                                setDescription(event.target.value)
-                            }
-                            placeholder={t.addManual.descriptionPlaceholder}
-                            rows={3}
-                            className="rounded-xl border-[#D9D0D6] bg-white"
-                        />
-                    </Field>
-
-                    <Field
-                        label={t.addManual.category}
-                        htmlFor="category"
-                        action={
-                            <div className="flex items-center gap-2">
-                                <Button
-                                    type="button"
-                                    variant="outline"
-                                    size="sm"
-                                    className="h-8 rounded-full"
-                                    onClick={() => setCategoryId('')}
-                                    disabled={!categoryId}
-                                >
-                                    <X className="size-3" />
-                                </Button>
-                                <Button
-                                    type="button"
-                                    variant="outline"
-                                    size="sm"
-                                    className="h-8 rounded-full"
-                                    onClick={() =>
-                                        setIsCreateCategoryOpen(true)
-                                    }
-                                >
-                                    <Plus className="size-3" />
-                                    {t.addManual.newCategory}
-                                </Button>
-                            </div>
-                        }
-                    >
-                        <select
-                            id="category"
-                            value={categoryId}
-                            onChange={(event) =>
-                                setCategoryId(event.target.value)
-                            }
-                            className="h-11 w-full rounded-xl border border-[#D9D0D6] bg-white px-3 text-sm outline-none focus-visible:border-[#21C4B6] focus-visible:ring-3 focus-visible:ring-[#21C4B6]/30"
-                            required
+                        <Field
+                            label={t.addManual.description}
+                            htmlFor="description"
                         >
-                            <option value="">{t.addManual.unselected}</option>
-                            {categoryOptions.map((item) => (
-                                <option key={item.id} value={item.id}>
-                                    {item.name}
+                            <Textarea
+                                id="description"
+                                value={description}
+                                onChange={(event) =>
+                                    setDescription(event.target.value)
+                                }
+                                placeholder={t.addManual.descriptionPlaceholder}
+                                rows={3}
+                                className="rounded-xl border-outline-variant bg-surface-container-lowest"
+                            />
+                        </Field>
+
+                        <Field
+                            label={t.addManual.category}
+                            htmlFor="category"
+                            action={
+                                <div className="flex items-center gap-2">
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        className="h-8 rounded-full"
+                                        onClick={() => setCategoryId('')}
+                                        disabled={!categoryId}
+                                    >
+                                        <Icon name="close" size={12} />
+                                    </Button>
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        className="h-8 rounded-full"
+                                        onClick={() =>
+                                            setIsCreateCategoryOpen(true)
+                                        }
+                                    >
+                                        <Icon name="add" size={12} />
+                                        {t.addManual.newCategory}
+                                    </Button>
+                                </div>
+                            }
+                        >
+                            <select
+                                id="category"
+                                value={categoryId}
+                                onChange={(event) =>
+                                    setCategoryId(event.target.value)
+                                }
+                                className="h-11 w-full rounded-xl border border-outline-variant bg-surface-container-lowest px-3 text-sm outline-none focus-visible:border-primary focus-visible:ring-3 focus-visible:ring-primary/30"
+                                required
+                            >
+                                <option value="">
+                                    {t.addManual.unselected}
                                 </option>
-                            ))}
-                        </select>
-                    </Field>
-                </section>
+                                {categoryOptions.map((item) => (
+                                    <option key={item.id} value={item.id}>
+                                        {item.name}
+                                    </option>
+                                ))}
+                            </select>
+                        </Field>
+                    </section>
 
-                <TagsField
-                    tags={tags}
-                    availableTags={knownTags}
-                    tagInput={tagInput}
-                    onTagInputChange={setTagInput}
-                    onAddTag={addTag}
-                    onRemoveTag={(name) =>
-                        setTags((current) =>
-                            current.filter((tag) => tag.name !== name),
-                        )
-                    }
+                    <TagsField
+                        tags={tags}
+                        availableTags={knownTags}
+                        tagInput={tagInput}
+                        onTagInputChange={setTagInput}
+                        onAddTag={addTag}
+                        onRemoveTag={(name) =>
+                            setTags((current) =>
+                                current.filter((tag) => tag.name !== name),
+                            )
+                        }
+                    />
+
+                    {saved ? (
+                        <div className="rounded-xl bg-secondary-container px-4 py-3 text-sm font-medium text-on-secondary-container">
+                            {t.addManual.savedNote}
+                        </div>
+                    ) : null}
+
+                    <footer className="flex gap-3 pt-2">
+                        <Button
+                            type="button"
+                            variant="outline"
+                            className="h-12 flex-1 rounded-xl border-error-container bg-error-container text-on-error-container hover:opacity-90"
+                            onClick={() => resetFields()}
+                            disabled={isSaving}
+                        >
+                            <Icon name="close" size={16} />
+                            {t.common.cancel}
+                        </Button>
+                        <Button
+                            type="submit"
+                            className="h-12 flex-1 rounded-xl bg-primary-container text-on-primary-container hover:opacity-90"
+                            disabled={isSaving}
+                        >
+                            {isSaving ? (
+                                <CircularProgress isIndeterminate size="xs" />
+                            ) : (
+                                <Icon name="check" size={16} />
+                            )}
+                            {t.addManual.submit}
+                        </Button>
+                    </footer>
+                </form>
+                <TagColorDialog
+                    tagName={pendingTagName}
+                    selectedColor={pendingTagColor}
+                    onSelectedColorChange={setPendingTagColor}
+                    onCancel={() => setPendingTagName(null)}
+                    onCreate={createPendingTag}
                 />
-
-                {saved ? (
-                    <div className="rounded-xl border border-[#21C4B6]/30 bg-[#21C4B6]/10 px-4 py-3 text-sm font-medium text-[#11796F]">
-                        {t.addManual.savedNote}
-                    </div>
-                ) : null}
-
-                <footer className="flex gap-3 pt-2">
-                    <Button
-                        type="button"
-                        variant="outline"
-                        className="h-12 flex-1 rounded-xl border-[#F0C9CE] bg-[#F0C9CE] text-black hover:bg-[#E9B9C0]"
-                        onClick={() => resetFields()}
-                        disabled={isSaving}
-                    >
-                        <X className="size-4" />
-                        {t.common.cancel}
-                    </Button>
-                    <Button
-                        type="submit"
-                        className="h-12 flex-1 rounded-xl bg-[#21C4B6] text-white hover:bg-[#1BAEA2]"
-                        disabled={isSaving}
-                    >
-                        {isSaving ? (
-                            <Loader2 className="size-4 animate-spin" />
-                        ) : (
-                            <Check className="size-4" />
-                        )}
-                        {t.addManual.submit}
-                    </Button>
-                </footer>
-            </form>
-            <TagColorDialog
-                tagName={pendingTagName}
-                selectedColor={pendingTagColor}
-                onSelectedColorChange={setPendingTagColor}
-                onCancel={() => setPendingTagName(null)}
-                onCreate={createPendingTag}
-            />
-            <CreateAccountDialog
-                open={isCreateAccountOpen}
-                onOpenChange={setIsCreateAccountOpen}
-                onCreate={addAccount}
-            />
-            <CreateCategoryDialog
-                open={isCreateCategoryOpen}
-                onOpenChange={setIsCreateCategoryOpen}
-                onCreate={addCategory}
-            />
-        </div>
+                <CreateAccountDialog
+                    open={isCreateAccountOpen}
+                    onOpenChange={setIsCreateAccountOpen}
+                    onCreate={addAccount}
+                />
+                <CreateCategoryDialog
+                    open={isCreateCategoryOpen}
+                    onOpenChange={setIsCreateCategoryOpen}
+                    onCreate={addCategory}
+                />
+            </div>
+        </>
     )
 }
 
@@ -997,9 +1033,9 @@ function TransferAmounts({
                         variant="outline"
                         onClick={onSwap}
                         aria-label={t.addManual.swapSides}
-                        className="size-11 rounded-full border-[#D9D0D6] bg-[#E7FFFA] p-0 text-black hover:bg-[#CFFFF7]"
+                        className="size-11 rounded-full border-outline-variant bg-primary-container/40 p-0 text-on-surface hover:bg-primary-container/60"
                     >
-                        <Repeat2 className="size-5" />
+                        <Icon name="swap_vert" filled size={20} />
                     </Button>
                 </div>
                 <TransferSide
@@ -1044,7 +1080,7 @@ function TransferSide({
 }) {
     return (
         <div className="space-y-3">
-            <Label className="block text-base font-black text-black">
+            <Label className="block text-base font-black text-on-surface">
                 {label}
             </Label>
             <div className="relative">
@@ -1061,7 +1097,7 @@ function TransferSide({
                         onAmountChange(normalizeAmountInput(event.target.value))
                     }
                     placeholder="0,00"
-                    className="h-13 rounded-xl border-[#D9D0D6] bg-white px-14 text-center text-2xl font-normal text-black shadow-sm"
+                    className="h-13 rounded-xl border-outline-variant bg-surface-container-lowest px-14 text-center text-2xl font-normal text-on-surface shadow-sm"
                     required
                 />
                 <span className="absolute top-1/2 right-3 -translate-y-1/2 text-xs font-bold text-muted-foreground">
@@ -1110,15 +1146,15 @@ function TagsField({
                             }
                         }}
                         placeholder={t.addManual.addTag}
-                        className="h-11 rounded-xl border-[#D9D0D6] bg-white"
+                        className="h-11 rounded-xl border-outline-variant bg-surface-container-lowest"
                     />
                     <Button
                         type="button"
                         variant="outline"
                         onClick={() => onAddTag(tagInput)}
-                        className="h-11 rounded-xl border-[#D9D0D6] bg-white"
+                        className="h-11 rounded-xl border-outline-variant bg-surface-container-lowest"
                     >
-                        <Plus className="size-4" />
+                        <Icon name="add" size={16} />
                     </Button>
                 </div>
             </Field>
@@ -1147,7 +1183,7 @@ function TagsField({
                         <Badge
                             key={tag.id ?? tag.name}
                             variant="secondary"
-                            className="h-7 gap-1 rounded-full text-black"
+                            className="h-7 gap-1 rounded-full text-on-surface"
                             style={{ backgroundColor: tag.color }}
                         >
                             {tag.name}
@@ -1155,7 +1191,7 @@ function TagsField({
                                 type="button"
                                 onClick={() => onRemoveTag(tag.name)}
                             >
-                                <X className="size-3" />
+                                <Icon name="close" size={12} />
                             </button>
                         </Badge>
                     ))}
@@ -1218,7 +1254,11 @@ function TagColorDialog({
                                 style={{ backgroundColor: color }}
                             >
                                 {color === selectedColor ? (
-                                    <Check className="size-5 text-black" />
+                                    <Icon
+                                        name="check"
+                                        size={20}
+                                        className="text-on-surface"
+                                    />
                                 ) : null}
                             </button>
                         ))}
@@ -1233,7 +1273,7 @@ function TagColorDialog({
                         </Button>
                         <Button
                             type="submit"
-                            className="bg-[#21C4B6] text-white hover:bg-[#1BAEA2]"
+                            className="bg-primary-container text-on-primary-container hover:opacity-90"
                             autoFocus
                         >
                             {t.common.create}
@@ -1262,7 +1302,7 @@ function AccountSelect({
             id={id}
             value={value}
             onChange={(event) => onChange(event.target.value)}
-            className="h-11 w-full rounded-xl border border-[#D9D0D6] bg-white px-3 text-sm outline-none focus-visible:border-[#21C4B6] focus-visible:ring-3 focus-visible:ring-[#21C4B6]/30"
+            className="h-11 w-full rounded-xl border border-outline-variant bg-surface-container-lowest px-3 text-sm outline-none focus-visible:border-primary focus-visible:ring-3 focus-visible:ring-primary/30"
         >
             <option value="">{t.addManual.unselected}</option>
             {accounts.map((account) => (
@@ -1287,7 +1327,7 @@ function DateInput({
             type="date"
             value={value}
             onChange={(event) => onChange(event.target.value)}
-            className="h-11 rounded-xl border-[#D9D0D6] bg-white"
+            className="h-11 rounded-xl border-outline-variant bg-surface-container-lowest"
             required
         />
     )
@@ -1308,18 +1348,18 @@ function TimeInput({
                 type="time"
                 value={value}
                 onChange={(event) => onChange(event.target.value)}
-                className="h-11 rounded-xl border-[#D9D0D6] bg-white"
+                className="h-11 rounded-xl border-outline-variant bg-surface-container-lowest"
             />
             {value ? (
                 <Button
                     type="button"
                     variant="outline"
                     size="icon"
-                    className="h-11 w-11 shrink-0 rounded-xl border-[#D9D0D6] bg-white"
+                    className="h-11 w-11 shrink-0 rounded-xl border-outline-variant bg-surface-container-lowest"
                     onClick={() => onChange('')}
                     aria-label={t.addManual.removeTime}
                 >
-                    <X className="size-4" />
+                    <Icon name="close" size={16} />
                 </Button>
             ) : null}
         </div>
@@ -1342,7 +1382,7 @@ function Field({
             <div className="flex items-center justify-between gap-3">
                 <Label
                     htmlFor={htmlFor}
-                    className="text-base font-bold text-black"
+                    className="text-base font-bold text-on-surface"
                 >
                     {label}
                 </Label>
@@ -1415,7 +1455,7 @@ function CreateAccountDialog({
                                         .value as (typeof MOCK_CURRENCIES)[number],
                                 )
                             }
-                            className="h-11 w-full rounded-xl border border-[#D9D0D6] bg-white px-3 text-sm outline-none focus-visible:border-[#21C4B6] focus-visible:ring-3 focus-visible:ring-[#21C4B6]/30"
+                            className="h-11 w-full rounded-xl border border-outline-variant bg-surface-container-lowest px-3 text-sm outline-none focus-visible:border-primary focus-visible:ring-3 focus-visible:ring-primary/30"
                         >
                             {MOCK_CURRENCIES.map((option) => (
                                 <option key={option} value={option}>
