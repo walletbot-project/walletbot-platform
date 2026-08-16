@@ -1,7 +1,7 @@
 import 'package:app/data/data.dart';
 import 'package:app/database.dart';
 import 'package:app/l10n/l10n.dart';
-import 'package:app/shared/adaptive_surface.dart';
+import 'package:app/shared/adaptive_modal.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart' show ReadContext;
 
@@ -42,9 +42,9 @@ class _FilterOptions {
 enum _FilterEditorMode { simple, advanced }
 
 /// Opens the filter editor: a draggable bottom sheet on compact windows, a
-/// right-hand side sheet on medium/expanded ones (it re-frames live if the
-/// window is resized across the breakpoint). Resolves to the edited
-/// [TransactionFilter] when the user taps "Aplicar", or `null` if dismissed.
+/// centered dialog on medium/expanded ones (it re-frames live if the window is
+/// resized across the breakpoint). Resolves to the edited [TransactionFilter]
+/// when the user taps "Aplicar", or `null` if dismissed.
 ///
 /// Pass [hiddenSections] to suppress dimensions the caller edits elsewhere
 /// (e.g. the activity bar owns type + text). Hidden sections keep their
@@ -61,11 +61,9 @@ Future<TransactionFilter?> showFilterSheet(
   // the sheet's own context can't reach them. Callers already inside such a
   // modal (e.g. the add-widget sheet) pass [repos] in directly.
   final resolvedRepos = repos ?? context.read<AppRepositories>();
-  return presentSurface<TransactionFilter>(
+  return showAdaptiveModal<TransactionFilter>(
     context,
-    // Overlays never change with window size: surfaces adapt to desktop as
-    // divided views (see the Activity split), not as side sheets on top.
-    wide: SurfaceStyle.bottomSheet,
+    isScrollControlled: true,
     builder: (_) => FilterSheet(
       repos: resolvedRepos,
       initial: initial,
@@ -325,9 +323,10 @@ class _FilterSheetState extends State<FilterSheet> {
     // so it survives when the enclosing AdaptiveSurfaceRoute morphs between
     // presentations on window resize.
     final style =
-        AdaptiveSurfaceScope.maybeOf(context) ?? SurfaceStyle.bottomSheet;
-    if (style != SurfaceStyle.bottomSheet) {
-      // Side sheet / dialog: full-height panel, no drag affordance.
+        AdaptiveModalScope.maybeOf(context) ?? AdaptiveModalStyle.bottomSheet;
+    if (style == AdaptiveModalStyle.dialog) {
+      // Dialog: the route already caps the height, so the body just fills it —
+      // no drag-to-size affordance.
       return _buildSheetBody(context, null);
     }
     return DraggableScrollableSheet(

@@ -8,6 +8,7 @@ import 'package:app/components/filter_sheet.dart';
 import 'package:app/data/data.dart';
 import 'package:app/database.dart';
 import 'package:app/l10n/l10n.dart';
+import 'package:app/shared/adaptive_modal.dart';
 import 'package:drift/drift.dart' show Value;
 import 'package:flutter/material.dart';
 
@@ -51,12 +52,12 @@ Future<bool> _showWidgetSheet(
   DashboardLayoutCoord? at,
   int? maxUnits,
 }) async {
-  final saved = await showModalBottomSheet<bool>(
-    context: context,
+  final saved = await showAdaptiveModal<bool>(
+    context,
     isScrollControlled: true,
     useSafeArea: true,
     backgroundColor: Theme.of(context).colorScheme.surface,
-    shape: const RoundedRectangleBorder(
+    sheetShape: const RoundedRectangleBorder(
       borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
     ),
     builder: (_) => _WidgetSheet(

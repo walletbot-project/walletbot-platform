@@ -1,4 +1,5 @@
 import 'package:app/l10n/l10n.dart';
+import 'package:app/shared/adaptive_modal.dart';
 import 'package:flutter/material.dart';
 
 // ISO 4217 codes — language-neutral and sorted alphabetically. Mirrored from
@@ -95,73 +96,84 @@ class _CurrencyPickerState extends State<CurrencyPicker> {
 
   @override
   Widget build(BuildContext context) {
-    final filtered = _filtered;
-
+    // Framed as a dialog the route already caps the height, so the body just
+    // fills it — the drag-to-size scaffolding belongs to the sheet only.
+    final style =
+        AdaptiveModalScope.maybeOf(context) ?? AdaptiveModalStyle.bottomSheet;
+    if (style == AdaptiveModalStyle.dialog) {
+      return _buildBody(context, null);
+    }
     return DraggableScrollableSheet(
       initialChildSize: 0.7,
       minChildSize: 0.4,
       maxChildSize: 0.9,
       expand: false,
-      builder: (context, scrollController) => Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
+      builder: _buildBody,
+    );
+  }
+
+  Widget _buildBody(BuildContext context, ScrollController? scrollController) {
+    final filtered = _filtered;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            context.l10n.chooseCurrency,
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _searchController,
+            decoration: InputDecoration(
+              hintText: context.l10n.searchCurrency,
+              prefixIcon: const Icon(Icons.search),
+              border: const OutlineInputBorder(),
+              isDense: true,
+            ),
+            onChanged: (v) => setState(() => _query = v),
+          ),
+          if (_query.isEmpty) ...[
+            const SizedBox(height: 16),
             Text(
-              context.l10n.chooseCurrency,
-              style: Theme.of(context).textTheme.titleMedium,
+              context.l10n.mostUsed,
+              style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
             ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: _searchController,
-              decoration: InputDecoration(
-                hintText: context.l10n.searchCurrency,
-                prefixIcon: const Icon(Icons.search),
-                border: const OutlineInputBorder(),
-                isDense: true,
-              ),
-              onChanged: (v) => setState(() => _query = v),
-            ),
-            if (_query.isEmpty) ...[
-              const SizedBox(height: 16),
-              Text(
-                context.l10n.mostUsed,
-                style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Wrap(
-                spacing: 8,
-                children: [
-                  for (final code in suggestedCurrencies)
-                    FilterChip(
-                      label: Text(code),
-                      selected: widget.selected == code,
-                      onSelected: (_) => Navigator.of(context).pop(code),
-                    ),
-                ],
-              ),
-              const Divider(height: 24),
-            ] else
-              const SizedBox(height: 8),
-            Expanded(
-              child: ListView.builder(
-                controller: scrollController,
-                itemCount: filtered.length,
-                itemBuilder: (context, i) {
-                  final code = filtered[i];
-                  return ListTile(
-                    dense: true,
-                    title: Text(code),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              children: [
+                for (final code in suggestedCurrencies)
+                  FilterChip(
+                    label: Text(code),
                     selected: widget.selected == code,
-                    onTap: () => Navigator.of(context).pop(code),
-                  );
-                },
-              ),
+                    onSelected: (_) => Navigator.of(context).pop(code),
+                  ),
+              ],
             ),
-          ],
-        ),
+            const Divider(height: 24),
+          ] else
+            const SizedBox(height: 8),
+          Expanded(
+            child: ListView.builder(
+              controller: scrollController,
+              itemCount: filtered.length,
+              itemBuilder: (context, i) {
+                final code = filtered[i];
+                return ListTile(
+                  dense: true,
+                  title: Text(code),
+                  selected: widget.selected == code,
+                  onTap: () => Navigator.of(context).pop(code),
+                );
+              },
+            ),
+          ),
+        ],
       ),
     );
   }

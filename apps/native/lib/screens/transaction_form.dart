@@ -8,6 +8,7 @@ import 'package:app/components/readable_time_picker.dart';
 import 'package:app/data/data.dart';
 import 'package:app/database.dart';
 import 'package:app/l10n/l10n.dart';
+import 'package:app/shared/adaptive_modal.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -206,8 +207,8 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
     final selectedAccount = destination
         ? _selectedDestinationAccount
         : _selectedAccount;
-    final account = await showModalBottomSheet<Account>(
-      context: context,
+    final account = await showAdaptiveModal<Account>(
+      context,
       showDragHandle: true,
       builder: (context) {
         return SafeArea(
@@ -253,8 +254,8 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
   Future<void> _pickCategory() async {
     await _commitInlineEditing();
     if (!mounted) return;
-    final category = await showModalBottomSheet<Category>(
-      context: context,
+    final category = await showAdaptiveModal<Category>(
+      context,
       showDragHandle: true,
       builder: (context) {
         return SafeArea(
@@ -344,8 +345,8 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
           ),
         )
         .toList();
-    final tag = await showModalBottomSheet<_FormTag>(
-      context: context,
+    final tag = await showAdaptiveModal<_FormTag>(
+      context,
       showDragHandle: true,
       builder: (context) {
         return SafeArea(

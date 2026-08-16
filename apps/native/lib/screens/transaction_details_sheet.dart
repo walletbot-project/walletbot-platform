@@ -8,6 +8,7 @@ import 'package:app/components/readable_time_picker.dart';
 import 'package:app/data/data.dart';
 import 'package:app/database.dart';
 import 'package:app/l10n/l10n.dart';
+import 'package:app/shared/adaptive_modal.dart';
 import 'package:app/shared/breakpoints.dart';
 import 'package:app/shared/money.dart';
 import 'package:drift/drift.dart' show Value;
@@ -433,8 +434,8 @@ class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
     final currentAccount = destination
         ? _selectedDestinationAccount
         : _selectedAccount;
-    final picked = await showModalBottomSheet<Account>(
-      context: context,
+    final picked = await showAdaptiveModal<Account>(
+      context,
       showDragHandle: true,
       builder: (context) {
         return SafeArea(
@@ -491,8 +492,8 @@ class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
         if (!category.archived) category,
     ];
     if (activeCategories.isEmpty) return;
-    final picked = await showModalBottomSheet<Category>(
-      context: context,
+    final picked = await showAdaptiveModal<Category>(
+      context,
       showDragHandle: true,
       builder: (context) {
         return SafeArea(
@@ -519,8 +520,8 @@ class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
 
   Future<void> _pickTag() async {
     final available = _availableTags;
-    final picked = await showModalBottomSheet<Tag>(
-      context: context,
+    final picked = await showAdaptiveModal<Tag>(
+      context,
       showDragHandle: true,
       builder: (context) {
         return SafeArea(

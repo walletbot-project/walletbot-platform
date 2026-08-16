@@ -1,6 +1,7 @@
 import 'package:app/components/grouped_card.dart';
 import 'package:app/l10n/l10n.dart';
 import 'package:app/settings/display_settings.dart';
+import 'package:app/shared/adaptive_modal.dart';
 import 'package:app/user_settings/default_currency_controller.dart';
 import 'package:app/widgets/currency_picker.dart';
 import 'package:flutter/material.dart';
@@ -51,8 +52,8 @@ class SettingsScreen extends StatelessWidget {
     BuildContext context,
     DisplaySettingsController settings,
   ) {
-    return showModalBottomSheet<void>(
-      context: context,
+    return showAdaptiveModal<void>(
+      context,
       isScrollControlled: true,
       showDragHandle: true,
       builder: (sheetContext) => _SelectionSheet<DisplayLanguage>(
@@ -88,8 +89,8 @@ class SettingsScreen extends StatelessWidget {
     BuildContext context,
     DisplaySettingsController settings,
   ) {
-    return showModalBottomSheet<void>(
-      context: context,
+    return showAdaptiveModal<void>(
+      context,
       isScrollControlled: true,
       showDragHandle: true,
       builder: (sheetContext) => _SelectionSheet<DisplayTheme>(
@@ -125,8 +126,8 @@ class SettingsScreen extends StatelessWidget {
     BuildContext context,
     DefaultCurrencyController defaultCurrency,
   ) async {
-    final picked = await showModalBottomSheet<String>(
-      context: context,
+    final picked = await showAdaptiveModal<String>(
+      context,
       isScrollControlled: true,
       showDragHandle: true,
       builder: (_) => CurrencyPicker(selected: defaultCurrency.value),
