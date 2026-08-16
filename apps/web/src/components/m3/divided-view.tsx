@@ -10,11 +10,11 @@ type DividedViewProps = {
     list: ReactNode
     /**
      * The detail for the current selection, or null when nothing is selected.
-     * Rendered inline in the right pane on expanded windows, and as a modal
-     * bottom sheet on everything smaller.
+     * Rendered inline in the right pane on expanded windows, and as an overlay
+     * — dialog or bottom sheet, by window size class — on everything smaller.
      */
     detail: ReactNode
-    /** Accessible name for the sheet presentation of the detail. */
+    /** Accessible name for the overlay presentation of the detail. */
     detailTitle: string
     /** Shown in the right pane when nothing is selected. */
     placeholder: ReactNode
@@ -33,15 +33,19 @@ type DividedViewProps = {
  * The large-screen divided view, mirroring `AdaptiveDetailView` in the native
  * app (apps/native/lib/shared/adaptive_detail_view.dart).
  *
- * - **Small windows: nothing changes.** The list renders full-width, the
- *   detail is presented as a modal bottom sheet, and a form covers the window
- *   the way the native pushed route does.
+ * The detail has the same three framings the native pane does:
+ *
+ * - **Compact windows: a modal bottom sheet.** The list renders full-width and
+ *   a form covers the window, the way the native pushed route does.
+ * - **Medium windows: a dialog.** Too narrow to divide, too wide for a sheet —
+ *   `BottomSheet` switches framing on its own at that breakpoint, so the pane
+ *   presentation (app bar and all) is what the dialog holds.
  * - **Expanded windows: the divided view.** The list takes the left half, a
  *   full-height divider follows, and the form or detail renders inline in the
  *   right half — never an overlay on top.
  *
- * Both presentations mount the same nodes, so a selection carried across a
- * resize keeps rendering; only the framing around it changes.
+ * All three mount the same nodes, so a selection carried across a resize keeps
+ * rendering; only the framing around it changes.
  */
 export function DividedView({
     list,
@@ -90,6 +94,11 @@ export function DividedView({
                     if (!open) onDismiss()
                 }}
                 title={detailTitle}
+                // In dialog framing the detail keeps the pane presentation,
+                // which heads itself with an app bar, so it needs no inset of
+                // its own — `AdaptiveDetailView` passes `EdgeInsets.zero` here
+                // for the same reason.
+                dialogPadded={false}
             >
                 {detail}
             </BottomSheet>
