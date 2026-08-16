@@ -48,8 +48,8 @@ function pathMatches(path: string, to: string, end: boolean) {
 /**
  * The app shell, mirroring the native `Scaffold` in `apps/native/lib/main.dart`:
  * a bottom navigation bar with a centre-docked voice FAB on compact windows,
- * and a navigation rail carrying the FAB in its leading slot from medium
- * windows up.
+ * and a navigation rail carrying the FAB in the middle of its destinations from
+ * medium windows up.
  */
 export function RootLayout() {
     const location = useLocation()
@@ -88,7 +88,7 @@ export function RootLayout() {
             <div className="flex h-dvh w-full overflow-hidden bg-surface">
                 <NavigationRail
                     destinations={destinations}
-                    leading={voiceFab}
+                    agentButton={voiceFab}
                 />
                 <div
                     aria-hidden

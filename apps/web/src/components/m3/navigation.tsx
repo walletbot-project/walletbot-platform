@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import { Fragment, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { cn } from '@/lib/utils'
 import { Icon } from './icon'
@@ -72,28 +72,38 @@ function NavigationBarItem({
 }
 
 /**
+ * The destination the voice FAB is wedged in front of, so it lands between
+ * Activity and Accounts — `_AgentCenteredRail._splitIndex` in
+ * `apps/native/lib/main.dart`.
+ */
+const AGENT_SPLIT_INDEX = 2
+
+/**
  * M3 navigation rail — the medium/expanded-window destination switcher,
  * matching the `NavigationRail` in `apps/native/lib/main.dart`: 80dp wide,
- * `labelType: all`, and a leading slot that holds the voice FAB.
+ * `labelType: all`, and the voice FAB in the middle of the destination list
+ * rather than above it, mirroring the centre-docked FAB of the compact bottom
+ * bar.
  */
 export function NavigationRail({
     destinations,
-    leading,
+    agentButton,
 }: {
     destinations: readonly NavigationDestination[]
-    leading?: ReactNode
+    agentButton?: ReactNode
 }) {
     return (
         <nav
             aria-label="Primary"
             className="flex w-20 shrink-0 flex-col items-center gap-3 overflow-y-auto bg-surface py-2"
         >
-            {leading ? <div className="pt-2 pb-4">{leading}</div> : null}
-            {destinations.map((destination) => (
-                <NavigationRailItem
-                    key={destination.to}
-                    destination={destination}
-                />
+            {destinations.map((destination, index) => (
+                <Fragment key={destination.to}>
+                    {agentButton && index === AGENT_SPLIT_INDEX ? (
+                        <div className="pt-2 pb-3">{agentButton}</div>
+                    ) : null}
+                    <NavigationRailItem destination={destination} />
+                </Fragment>
             ))}
         </nav>
     )
