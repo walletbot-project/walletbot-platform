@@ -4,6 +4,7 @@ import 'package:app/components/color_utils.dart';
 import 'package:app/components/icon_picker.dart';
 import 'package:app/data/data.dart';
 import 'package:app/l10n/l10n.dart';
+import 'package:app/shared/adaptive_modal.dart';
 import 'package:app/user_settings/default_currency_controller.dart';
 import 'package:app/widgets/currency_picker.dart';
 import 'package:flutter/material.dart';
@@ -54,8 +55,8 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
   }
 
   Future<void> _pickCurrency(String currency) async {
-    final picked = await showModalBottomSheet<String>(
-      context: context,
+    final picked = await showAdaptiveModal<String>(
+      context,
       isScrollControlled: true,
       showDragHandle: true,
       builder: (_) => CurrencyPicker(selected: currency),

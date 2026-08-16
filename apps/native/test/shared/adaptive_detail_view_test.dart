@@ -232,6 +232,79 @@ void main() {
     expect(find.text('placeholder'), findsOneWidget);
   });
 
+  testWidgets('medium window frames the detail as a real dialog', (
+    tester,
+  ) async {
+    _resize(tester, const Size(800, 800));
+    addTearDown(tester.view.reset);
+
+    await tester.pumpWidget(const MaterialApp(home: _Harness()));
+    await tester.tap(find.text('open'));
+    await tester.pumpAndSettle();
+
+    // Too narrow to split, too wide for a bottom sheet: the panel
+    // presentation (mode:pane) inside a real dialog route.
+    expect(find.byType(Dialog), findsOneWidget);
+    expect(find.byType(BottomSheet), findsNothing);
+    expect(find.text('mode:pane'), findsOneWidget);
+    expect(find.text('placeholder'), findsNothing);
+  });
+
+  testWidgets('sheet → dialog → pane handoffs all keep State', (tester) async {
+    _resize(tester, const Size(500, 800));
+    addTearDown(tester.view.reset);
+
+    await tester.pumpWidget(const MaterialApp(home: _Harness()));
+    await tester.tap(find.text('open'));
+    await tester.pumpAndSettle();
+    expect(find.byType(BottomSheet), findsOneWidget);
+
+    await tester.tap(find.text('inc'));
+    await tester.pump();
+    await tester.tap(find.text('inc'));
+    await tester.pump();
+    expect(find.text('count:2'), findsOneWidget);
+
+    // Sheet → dialog.
+    _resize(tester, const Size(800, 800));
+    await tester.pumpAndSettle();
+    expect(find.text('count:2'), findsOneWidget);
+    expect(find.byType(Dialog), findsOneWidget);
+    expect(find.byType(BottomSheet), findsNothing);
+
+    // Dialog → pane.
+    _resize(tester, const Size(1200, 800));
+    await tester.pumpAndSettle();
+    expect(find.text('count:2'), findsOneWidget);
+    expect(find.byType(Dialog), findsNothing);
+    expect(find.byType(VerticalDivider), findsOneWidget);
+
+    // All the way back down, in one step.
+    _resize(tester, const Size(500, 800));
+    await tester.pumpAndSettle();
+    expect(find.text('count:2'), findsOneWidget);
+    expect(find.byType(BottomSheet), findsOneWidget);
+  });
+
+  testWidgets('dismissing the dialog clears the selection', (tester) async {
+    _resize(tester, const Size(800, 800));
+    addTearDown(tester.view.reset);
+
+    await tester.pumpWidget(const MaterialApp(home: _Harness()));
+    await tester.tap(find.text('open'));
+    await tester.pumpAndSettle();
+    expect(find.byType(Dialog), findsOneWidget);
+
+    await tester.tapAt(const Offset(10, 10)); // scrim, outside the dialog
+    await tester.pumpAndSettle();
+    expect(find.byType(Dialog), findsNothing);
+
+    // Selection was cleared, not merely hidden: growing shows the empty pane.
+    _resize(tester, const Size(1200, 800));
+    await tester.pumpAndSettle();
+    expect(find.text('placeholder'), findsOneWidget);
+  });
+
   testWidgets('scrim dismissal clears the selection', (tester) async {
     _resize(tester, const Size(500, 800));
     addTearDown(tester.view.reset);

@@ -8,7 +8,9 @@ import 'package:app/components/dashboard/stat_widget.dart';
 import 'package:app/components/dashboard/transaction_list_widget.dart';
 import 'package:app/database.dart';
 import 'package:app/l10n/l10n.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 class DashboardViewItem {
   const DashboardViewItem({required this.row, required this.spec});
@@ -390,6 +392,8 @@ class DashboardView extends StatelessWidget {
             onDelete: onDeleteItem == null ? null : () => onDeleteItem!(item),
           )
         : null;
+    final canDrag = editing && (onPlaceInCell != null || onSwap != null);
+
     final child = _DashboardEditableFrame(
       selected: selected,
       child: Material(
@@ -397,6 +401,10 @@ class DashboardView extends StatelessWidget {
         borderRadius: BorderRadius.circular(8),
         clipBehavior: Clip.antiAlias,
         child: InkWell(
+          // A tile that can be picked up should say so before the pointer goes
+          // down; with a mouse the grab cursor is the only hint that edit mode
+          // supports drag-and-drop at all.
+          mouseCursor: canDrag ? SystemMouseCursors.grab : null,
           onTap: onTapItem == null ? null : () => onTapItem!(item),
           onLongPress: onLongPressItem == null
               ? null
@@ -437,13 +445,11 @@ class DashboardView extends StatelessWidget {
       },
     );
 
-    final canDrag = editing && (onPlaceInCell != null || onSwap != null);
-
     return _FloatingMenuAnchor(
       show: selected,
       alignRight: _alignMenuRight(placement),
       menu: menu,
-      child: LongPressDraggable<String>(
+      child: _MouseFriendlyDraggable<String>(
         data: item.row.id,
         maxSimultaneousDrags: canDrag ? null : 0,
         dragAnchorStrategy: pointerDragAnchorStrategy,
@@ -476,6 +482,105 @@ class DashboardView extends StatelessWidget {
       ChartWidgetSpec() => BreakdownChartWidget(spec: spec),
     };
   }
+}
+
+/// A [LongPressDraggable] that a mouse can start dragging straight away.
+///
+/// Touch (and stylus, and trackpad pans) keep the long-press delay: the
+/// dashboard renders inside the home `ListView`, and an immediate touch drag
+/// would beat that list's own scroll drag in the gesture arena, leaving the
+/// page unscrollable anywhere a tile sits. A mouse has no such conflict —
+/// [ScrollBehavior.dragDevices] excludes [PointerDeviceKind.mouse], so
+/// press-and-drag with a mouse never scrolls a `Scrollable` — which makes the
+/// half-second hold pure friction on desktop.
+class _MouseFriendlyDraggable<T extends Object> extends LongPressDraggable<T> {
+  const _MouseFriendlyDraggable({
+    required super.child,
+    required super.feedback,
+    super.data,
+    super.childWhenDragging,
+    super.dragAnchorStrategy,
+    super.maxSimultaneousDrags,
+  });
+
+  @override
+  DelayedMultiDragGestureRecognizer createRecognizer(
+    GestureMultiDragStartCallback onStart,
+  ) {
+    final recognizer = _MouseImmediateMultiDragGestureRecognizer(
+      delay: delay,
+      allowedButtonsFilter: allowedButtonsFilter,
+    );
+    return recognizer
+      ..onStart = (Offset position) {
+        final result = onStart(position);
+        // Same contract as [LongPressDraggable], minus the buzz for a pointer
+        // that never waited out a long press to get here.
+        if (result != null &&
+            hapticFeedbackOnStart &&
+            recognizer.lastPointerKind != PointerDeviceKind.mouse) {
+          HapticFeedback.selectionClick();
+        }
+        return result;
+      };
+  }
+}
+
+/// [DelayedMultiDragGestureRecognizer] that drops the delay for mouse pointers
+/// and keeps it for every other device kind.
+class _MouseImmediateMultiDragGestureRecognizer
+    extends DelayedMultiDragGestureRecognizer {
+  _MouseImmediateMultiDragGestureRecognizer({
+    required super.delay,
+    super.allowedButtonsFilter,
+  });
+
+  /// Kind of the most recent pointer this recognizer took charge of. Read back
+  /// by [_MouseFriendlyDraggable] to decide whether the drag that just started
+  /// earned haptics — `onStart` only carries a position.
+  PointerDeviceKind? lastPointerKind;
+
+  @override
+  MultiDragPointerState createNewPointerState(PointerDownEvent event) {
+    lastPointerKind = event.kind;
+    if (event.kind != PointerDeviceKind.mouse) {
+      return super.createNewPointerState(event);
+    }
+    return _ImmediateDragPointerState(
+      event.position,
+      event.kind,
+      gestureSettings,
+    );
+  }
+}
+
+/// Per-pointer state that claims the drag as soon as the pointer travels past
+/// [_slop] — the mouse counterpart of the framework's private immediate
+/// multi-drag state.
+class _ImmediateDragPointerState extends MultiDragPointerState {
+  _ImmediateDragPointerState(
+    super.initialPosition,
+    super.kind,
+    super.gestureSettings,
+  );
+
+  /// Flutter's precise-pointer hit slop is a single logical pixel, which suits
+  /// a dedicated drag handle but is far too twitchy for a tile that is *also* a
+  /// tap target: a click carrying a pixel of hand jitter would turn into a drag
+  /// that lands back on itself (a no-op) and swallow the selection tap. Still
+  /// well under [kTouchSlop], so a deliberate mouse drag feels immediate.
+  static const double _slop = 6;
+
+  @override
+  void checkForResolutionAfterMove() {
+    if (pendingDelta!.distance > _slop) {
+      resolve(GestureDisposition.accepted);
+    }
+  }
+
+  @override
+  void accepted(GestureMultiDragStartCallback starter) =>
+      starter(initialPosition);
 }
 
 /// The merged dashed visual filling a contiguous empty run in editing mode. Tap

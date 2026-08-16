@@ -1,7 +1,23 @@
 import 'dart:async';
 
+import 'package:app/shared/adaptive_modal.dart';
 import 'package:app/shared/breakpoints.dart';
 import 'package:flutter/material.dart';
+
+/// How the detail is framed at the current window size.
+///
+/// - [sheet] — compact: a real modal bottom sheet, exactly as on phones today.
+/// - [dialog] — medium: a real dialog, for tablets and half-width desktop
+///   windows that are too narrow to split but too wide for a bottom sheet.
+/// - [pane] — expanded: inline in the divided view, never an overlay.
+enum DetailFraming { sheet, dialog, pane }
+
+DetailFraming _framingFor(BuildContext context) =>
+    switch (windowSizeClassOf(context)) {
+      WindowSizeClass.compact => DetailFraming.sheet,
+      WindowSizeClass.medium => DetailFraming.dialog,
+      WindowSizeClass.expanded => DetailFraming.pane,
+    };
 
 /// Divided-view host implementing the app's large-screen pattern (see the
 /// Activity screen, where the choreography originated, and
@@ -13,6 +29,9 @@ import 'package:flutter/material.dart';
 ///   constructed precisely the way `showModalBottomSheet(isScrollControlled:
 ///   true, showDragHandle: true)` does it, so transition, scrim, drag
 ///   behavior, back handling, and semantics are the platform's own.
+/// - **Medium windows: a real dialog.** Too narrow to split, too wide for a
+///   bottom sheet. Same route-swap choreography as every other handoff, so
+///   the detail's State survives crossing the breakpoint in either direction.
 /// - **Expanded windows: the divided view.** The list takes the left half of
 ///   the window, a full-height divider, and the detail renders inline in the
 ///   right half. Never an overlay on top.
@@ -106,10 +125,15 @@ class AdaptiveDetailView extends StatefulWidget {
 }
 
 class _AdaptiveDetailViewState extends State<AdaptiveDetailView> {
-  /// The live sheet route, when the detail is presented as one. Nulled
-  /// BEFORE a programmatic removal so the completion handler can tell a user
-  /// dismissal (report it) from a resize handoff (keep the selection).
-  ModalBottomSheetRoute<void>? _sheetRoute;
+  /// The live overlay route, when the detail is presented as one (sheet or
+  /// dialog). Nulled BEFORE a programmatic removal so the completion handler
+  /// can tell a user dismissal (report it) from a resize handoff (keep the
+  /// selection).
+  ModalRoute<void>? _sheetRoute;
+
+  /// Which framing [_sheetRoute] was built for, so a medium⇄compact resize is
+  /// recognised as a swap even though a route is already up.
+  DetailFraming? _sheetRouteFraming;
 
   /// Set when [AdaptiveDetailView.hasDetail] flips on while the window is
   /// small: the upcoming sheet is a user-initiated open and must play the
@@ -126,7 +150,9 @@ class _AdaptiveDetailViewState extends State<AdaptiveDetailView> {
   /// over the list, exactly like the original push.
   bool _formOpenIsUserInitiated = false;
 
-  bool get _split => windowSizeClassOf(context) == WindowSizeClass.expanded;
+  DetailFraming get _framing => _framingFor(context);
+
+  bool get _split => _framing == DetailFraming.pane;
 
   @override
   void didUpdateWidget(AdaptiveDetailView oldWidget) {
@@ -139,33 +165,45 @@ class _AdaptiveDetailViewState extends State<AdaptiveDetailView> {
     }
   }
 
-  /// Presents the detail as a real modal bottom sheet route — the exact
-  /// construction `showModalBottomSheet` performs. [instant] zeroes only the
-  /// entrance (used when the sheet takes over from the pane on shrink);
-  /// dismissal always plays the standard exit animation.
-  void _pushSheet({required bool instant}) {
+  /// Presents the detail as a real overlay route for [framing] — the exact
+  /// construction `showModalBottomSheet` / `showDialog` performs, shared with
+  /// [showAdaptiveModal]. [instant] zeroes only the entrance (used when the
+  /// route takes over content already on screen); dismissal always plays the
+  /// standard exit animation.
+  void _pushSheet(DetailFraming framing, {required bool instant}) {
     final navigator = Navigator.of(context);
-    final localizations = MaterialLocalizations.of(context);
-    final route = ModalBottomSheetRoute<void>(
-      builder: (sheetContext) =>
-          widget.detailBuilder(sheetContext, inSheet: true) ??
-          const SizedBox.shrink(),
-      capturedThemes: InheritedTheme.capture(
-        from: context,
-        to: navigator.context,
-      ),
-      isScrollControlled: true,
-      showDragHandle: true,
-      barrierLabel: localizations.scrimLabel,
-      barrierOnTapHint: localizations.scrimOnTapHint(
-        localizations.bottomSheetLabel,
-      ),
-      modalBarrierColor: Theme.of(context).bottomSheetTheme.modalBarrierColor,
-      sheetAnimationStyle: instant
-          ? const AnimationStyle(duration: Duration.zero)
-          : null,
+    final capturedThemes = InheritedTheme.capture(
+      from: context,
+      to: navigator.context,
     );
+    Widget buildContent(BuildContext routeContext) =>
+        widget.detailBuilder(
+          routeContext,
+          inSheet: framing == DetailFraming.sheet,
+        ) ??
+        const SizedBox.shrink();
+
+    final route = framing == DetailFraming.sheet
+        ? buildAdaptiveSheetRoute<void>(
+            context,
+            builder: buildContent,
+            capturedThemes: capturedThemes,
+            isScrollControlled: true,
+            showDragHandle: true,
+            instant: instant,
+          )
+        // Dialog mode gets the panel presentation (inSheet: false), which
+        // brings its own app bar — so no extra inset, or the bar would float
+        // off the dialog's top edge.
+        : buildAdaptiveDialogRoute<void>(
+            context,
+            builder: buildContent,
+            capturedThemes: capturedThemes,
+            padding: EdgeInsets.zero,
+            instant: instant,
+          );
     _sheetRoute = route;
+    _sheetRouteFraming = framing;
     unawaited(
       navigator.push(route).then((_) {
         // Only a USER dismissal reaches here with the route still owned — a
@@ -181,20 +219,30 @@ class _AdaptiveDetailViewState extends State<AdaptiveDetailView> {
     setState(() {});
   }
 
-  /// Keeps the sheet route in sync with (window class × selection).
+  /// Keeps the overlay route in sync with (window class × selection).
   /// Idempotent; runs post-frame, scheduled by build on mismatch.
   void _reconcileSheet() {
     if (!mounted) return;
-    final needsSheet = !_split && widget.hasDetail;
+    final framing = _framing;
+    final needsSheet = framing != DetailFraming.pane && widget.hasDetail;
     final route = _sheetRoute;
     final userInitiated = _openIsUserInitiated;
     _openIsUserInitiated = false; // consumed, whatever the decision
-    if (needsSheet && route == null) {
-      _pushSheet(instant: !userInitiated);
+    if (needsSheet && route != null && _sheetRouteFraming != framing) {
+      // Crossed the sheet⇄dialog breakpoint with the detail open. Remove and
+      // push in this one callback: both mark the overlay dirty, so they land
+      // in a single build pass and the GlobalKey'd detail reparents straight
+      // from one route to the other, State intact and no scrim flicker.
+      _sheetRoute = null;
+      Navigator.of(context).removeRoute(route);
+      _pushSheet(framing, instant: true);
+    } else if (needsSheet && route == null) {
+      _pushSheet(framing, instant: !userInitiated);
     } else if (!needsSheet && route != null) {
       // Null first: the completion handler must treat this as a handoff (or
       // a cleared selection), not a user dismissal.
       _sheetRoute = null;
+      _sheetRouteFraming = null;
       Navigator.of(context).removeRoute(route);
       setState(() {});
     }
@@ -243,9 +291,13 @@ class _AdaptiveDetailViewState extends State<AdaptiveDetailView> {
 
   @override
   Widget build(BuildContext context) {
-    final split = _split;
+    final framing = _framing;
+    final split = framing == DetailFraming.pane;
     final needsSheet = !split && widget.hasDetail;
-    if (needsSheet != (_sheetRoute != null)) {
+    // Reconcile on presence AND on framing: with the detail open, crossing
+    // the sheet⇄dialog breakpoint leaves a route up but the wrong kind.
+    if (needsSheet != (_sheetRoute != null) ||
+        (needsSheet && _sheetRouteFraming != framing)) {
       WidgetsBinding.instance.addPostFrameCallback((_) => _reconcileSheet());
     }
     final needsForm = !split && widget.hasForm;
@@ -284,7 +336,7 @@ class _AdaptiveDetailViewState extends State<AdaptiveDetailView> {
     // detail is built somewhere in every frame and its State survives. It
     // paints nothing.
     final bridge = widget.hasDetail && _sheetRoute == null
-        ? widget.detailBuilder(context, inSheet: true)
+        ? widget.detailBuilder(context, inSheet: framing == DetailFraming.sheet)
         : null;
     // The form's bridge is VISIBLE (it paints the same full-screen page its
     // route shows, so the handoff swap is invisible), and suppressed for
