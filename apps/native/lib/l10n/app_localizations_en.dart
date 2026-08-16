@@ -354,6 +354,15 @@ class AppLocalizationsEn extends AppLocalizations {
   String get selectTagDetail => 'Select a tag to see its details';
 
   @override
+  String get accountDetails => 'Account details';
+
+  @override
+  String get categoryDetails => 'Category details';
+
+  @override
+  String get tagDetails => 'Tag details';
+
+  @override
   String get today => 'Today';
 
   @override

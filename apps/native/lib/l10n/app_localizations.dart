@@ -740,6 +740,24 @@ abstract class AppLocalizations {
   /// **'Select a tag to see its details'**
   String get selectTagDetail;
 
+  /// No description provided for @accountDetails.
+  ///
+  /// In en, this message translates to:
+  /// **'Account details'**
+  String get accountDetails;
+
+  /// No description provided for @categoryDetails.
+  ///
+  /// In en, this message translates to:
+  /// **'Category details'**
+  String get categoryDetails;
+
+  /// No description provided for @tagDetails.
+  ///
+  /// In en, this message translates to:
+  /// **'Tag details'**
+  String get tagDetails;
+
   /// No description provided for @today.
   ///
   /// In en, this message translates to:

@@ -292,22 +292,21 @@ class _CategoryDetailsSheetState extends State<CategoryDetailsSheet> {
     // Editing state lives in this State object, above the branch below, so
     // it survives when the presentation morphs between sheet and pane.
     if (widget.onClose != null) {
-      // Split pane: plain full-height panel with an explicit close button.
-      return Column(
-        children: [
-          Align(
-            alignment: AlignmentDirectional.topEnd,
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(8, 8, 8, 0),
-              child: IconButton(
-                tooltip: MaterialLocalizations.of(context).closeButtonTooltip,
-                onPressed: _close,
-                icon: const Icon(Icons.close_rounded),
-              ),
-            ),
+      // Panel presentation (split pane or dialog): a standard app bar, so the
+      // pane's content starts at the same height as the list column's beside
+      // it, and the close button matches every other panel in the app.
+      // Embedded there is no route to pop, so no back button appears on its
+      // own — offer an explicit close instead.
+      return Scaffold(
+        appBar: AppBar(
+          leading: IconButton(
+            tooltip: MaterialLocalizations.of(context).closeButtonTooltip,
+            onPressed: _close,
+            icon: const Icon(Icons.close_rounded),
           ),
-          Expanded(child: _buildSheetBody(context, null)),
-        ],
+          title: Text(context.l10n.categoryDetails),
+        ),
+        body: _buildSheetBody(context, null),
       );
     }
     return DraggableScrollableSheet(
