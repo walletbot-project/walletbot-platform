@@ -332,7 +332,12 @@ unchanged — only advanced (disjunctive) filters take the anchor+predicate path
 > ids** as `default_dashboard.dart`, so a device and the web app seeding one
 > fresh account converge under LWW instead of duplicating, and it refuses to
 > seed when a dashboard tombstone exists. Tile editing on web is the width
-> controls plus one-cell nudges rather than drag & drop.
+> controls, the one-cell nudges, and drag & drop (2026-08-16): a tile can be
+> dropped on another to swap the two, or on a free unit to move there and shrink
+> to the run, matching `DashboardGridLayout.swap` and `_UnitDropTarget`. As on
+> native, a mouse starts dragging on movement while touch waits out a hold, so
+> the page keeps its scroll. The between-rows and between-tiles insert zones
+> (`_NewRowDropZone`, `_RowInsertZone`) are still native-only.
 >
 > **Still pending:** the advanced (tree) filter editor on web.
 </content>
