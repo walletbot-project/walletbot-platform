@@ -180,7 +180,10 @@ export function AccountDetail({
 
     return (
         <div className="flex flex-col pb-6">
-            <DetailPaneHeader onClose={onClose} />
+            <DetailPaneHeader
+                title={t.accounts.accountDetails}
+                onClose={onClose}
+            />
             <div className="flex flex-col px-4">
                 {/*
                  * Identity hero — tinted by the account's accent so the whole block

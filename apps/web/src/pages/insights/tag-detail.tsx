@@ -136,7 +136,7 @@ export function TagDetail({
 
     return (
         <div className="flex flex-col pb-6">
-            <DetailPaneHeader onClose={onClose} />
+            <DetailPaneHeader title={t.insights.tagDetails} onClose={onClose} />
             <div className="flex flex-col px-4">
                 {/* Identity hero — tags have no icon, just a color wash. */}
                 <div

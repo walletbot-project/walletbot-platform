@@ -227,6 +227,7 @@ export const en: Messages = {
     },
 
     accounts: {
+        accountDetails: 'Account details',
         newAccount: 'New account',
         createAccount: 'Create account',
         emptyTitle: "You don't have any accounts yet",
@@ -354,6 +355,8 @@ export const en: Messages = {
                   : `${p.count} movements`,
         selectCategoryDetail: 'Select a category to see its details',
         selectTagDetail: 'Select a tag to see its details',
+        categoryDetails: 'Category details',
+        tagDetails: 'Tag details',
         lastMovements: 'Latest transactions',
         viewAll: 'View all',
 

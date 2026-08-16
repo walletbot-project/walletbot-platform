@@ -234,6 +234,7 @@ export const es = {
     },
 
     accounts: {
+        accountDetails: 'Detalle de cuenta',
         newAccount: 'Nueva cuenta',
         createAccount: 'Crear cuenta',
         emptyTitle: 'No tenés cuentas aún',
@@ -360,6 +361,8 @@ export const es = {
                   : `${p.count} movimientos`,
         selectCategoryDetail: 'Seleccioná una categoría para ver su detalle',
         selectTagDetail: 'Seleccioná una etiqueta para ver su detalle',
+        categoryDetails: 'Detalle de categoría',
+        tagDetails: 'Detalle de etiqueta',
         lastMovements: 'Últimos movimientos',
         viewAll: 'Ver todos',
 

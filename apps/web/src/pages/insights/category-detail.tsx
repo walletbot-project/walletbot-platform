@@ -149,7 +149,10 @@ export function CategoryDetail({
 
     return (
         <div className="flex flex-col pb-6">
-            <DetailPaneHeader onClose={onClose} />
+            <DetailPaneHeader
+                title={t.insights.categoryDetails}
+                onClose={onClose}
+            />
             <div className="flex flex-col px-4">
                 {/* Identity hero — tinted by the category's accent color. */}
                 <div
