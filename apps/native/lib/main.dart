@@ -482,39 +482,11 @@ class _AppMainState extends State<AppMain> {
       body: useRail
           ? Row(
               children: [
-                NavigationRail(
+                _AgentCenteredRail(
                   selectedIndex: selectedIndex,
                   onDestinationSelected: (value) =>
                       context.read<AppNavigation>().index = value,
-                  labelType: NavigationRailLabelType.all,
-                  leading: Padding(
-                    padding: const EdgeInsets.only(top: 8, bottom: 16),
-                    child: FloatingActionButton(
-                      heroTag: 'voiceFab',
-                      elevation: 0,
-                      onPressed: _openVoice,
-                      tooltip: context.l10n.voiceCommands,
-                      child: const Text('🤖'),
-                    ),
-                  ),
-                  destinations: [
-                    NavigationRailDestination(
-                      icon: const Icon(Icons.home_rounded),
-                      label: Text(context.l10n.home),
-                    ),
-                    NavigationRailDestination(
-                      icon: const Icon(Icons.calendar_view_month_rounded),
-                      label: Text(context.l10n.activity),
-                    ),
-                    NavigationRailDestination(
-                      icon: const Icon(Icons.account_balance_rounded),
-                      label: Text(context.l10n.accounts),
-                    ),
-                    NavigationRailDestination(
-                      icon: const Icon(Icons.stacked_line_chart_rounded),
-                      label: Text(context.l10n.insights),
-                    ),
-                  ],
+                  onOpenVoice: _openVoice,
                 ),
                 const VerticalDivider(width: 1, thickness: 1),
                 Expanded(child: tabs),
@@ -555,6 +527,92 @@ class _AppMainState extends State<AppMain> {
               ],
             ),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
+    );
+  }
+}
+
+/// Navigation rail whose voice-agent button sits between the second and third
+/// destination, mirroring the centre-docked FAB of the compact bottom bar.
+///
+/// [NavigationRail] has no slot between destinations, so the four destinations
+/// are split across two rails with the button in the gap. Both halves stay
+/// top-aligned, like a single rail: the upper one is sized to its content with
+/// [IntrinsicHeight] (a rail always fills the height it is given), the lower one
+/// takes the remaining space. Both paint the same surface, and [IntrinsicWidth]
+/// keeps the two halves the same width whatever the labels measure in the
+/// active locale.
+class _AgentCenteredRail extends StatelessWidget {
+  const _AgentCenteredRail({
+    required this.selectedIndex,
+    required this.onDestinationSelected,
+    required this.onOpenVoice,
+  });
+
+  static const int _splitIndex = 2;
+
+  final int selectedIndex;
+  final ValueChanged<int> onDestinationSelected;
+  final VoidCallback onOpenVoice;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = context.l10n;
+    return IntrinsicWidth(
+      child: Column(
+        children: [
+          IntrinsicHeight(
+            child: NavigationRail(
+              selectedIndex: selectedIndex < _splitIndex ? selectedIndex : null,
+              onDestinationSelected: onDestinationSelected,
+              labelType: NavigationRailLabelType.all,
+              groupAlignment: -1,
+              destinations: [
+                NavigationRailDestination(
+                  icon: const Icon(Icons.home_rounded),
+                  label: Text(l10n.home),
+                ),
+                NavigationRailDestination(
+                  icon: const Icon(Icons.calendar_view_month_rounded),
+                  label: Text(l10n.activity),
+                ),
+              ],
+            ),
+          ),
+          // 8 above + the destination's built-in 12 below it, 12 below + the
+          // lower rail's 8 leading spacer: an even 20px gap on both sides.
+          Padding(
+            padding: const EdgeInsets.only(top: 8, bottom: 12),
+            child: FloatingActionButton(
+              heroTag: 'voiceFab',
+              elevation: 0,
+              onPressed: onOpenVoice,
+              tooltip: l10n.voiceCommands,
+              child: const Text('🤖'),
+            ),
+          ),
+          Expanded(
+            child: NavigationRail(
+              selectedIndex: selectedIndex >= _splitIndex
+                  ? selectedIndex - _splitIndex
+                  : null,
+              onDestinationSelected: (value) =>
+                  onDestinationSelected(value + _splitIndex),
+              labelType: NavigationRailLabelType.all,
+              groupAlignment: -1,
+              destinations: [
+                NavigationRailDestination(
+                  icon: const Icon(Icons.account_balance_rounded),
+                  label: Text(l10n.accounts),
+                ),
+                NavigationRailDestination(
+                  icon: const Icon(Icons.stacked_line_chart_rounded),
+                  label: Text(l10n.insights),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
