@@ -10,6 +10,7 @@ import {
     resolvePlacements,
     WIDTH_UNITS,
     type WidgetPlacement,
+    widthForUnits,
     writeLayout,
 } from '@wallet-bot/shared'
 import { IconButton } from 'actify'
@@ -22,6 +23,11 @@ import { useElementWidth } from '@/hooks/use-element-width'
 import { type Messages, useT } from '@/lib/i18n'
 import { cn } from '@/lib/utils'
 import { defaultDashboardSeed } from '@/pages/home/default-dashboard'
+import {
+    type DropTarget,
+    type TileDrag,
+    useTileDrag,
+} from '@/pages/home/use-tile-drag'
 import {
     BalanceCardWidget,
     BreakdownChartWidget,
@@ -165,6 +171,26 @@ export function Dashboard({
         [specs, saveLayout, t],
     )
 
+    const { drag, startTracking, wasDragged } = useTileDrag(
+        useCallback(
+            (draggedId: string, target: DropTarget) => {
+                const next =
+                    target.kind === 'tile'
+                        ? swapPlacements(placements, draggedId, target.id)
+                        : placeInCell(
+                              placements,
+                              draggedId,
+                              target.row,
+                              target.col,
+                          )
+                // A drop the layout can't take is simply refused, the way the
+                // native drag targets reject it before it lands.
+                if (next) void persist(next)
+            },
+            [placements, persist],
+        ),
+    )
+
     if (layout === undefined) return <DashboardSkeleton />
 
     if (specs.length === 0) {
@@ -199,18 +225,83 @@ export function Dashboard({
                 gap: TILE_GAP,
             }}
         >
+            {/*
+             * The free runs of the row, as drop targets. They only appear while
+             * a tile is in the air — outside a drag they would be a dashed box
+             * that does nothing — and each unit of a run is its own target, so
+             * a dropped tile lands on the exact unit under the pointer and
+             * shrinks to the run (`_gapPlaceholder` + `_UnitDropTarget`).
+             */}
+            {drag === null
+                ? null
+                : freeRuns(placements, rowIndex).map((run) => (
+                      <div
+                          key={`gap-${rowIndex}-${run.from}`}
+                          className="relative rounded-lg border border-outline-variant border-dashed"
+                          style={{
+                              gridRow: 1,
+                              gridColumn: `${run.from + 1} / span ${run.to - run.from}`,
+                          }}
+                      >
+                          <div
+                              className="absolute inset-0 grid"
+                              style={{
+                                  gridTemplateColumns: `repeat(${run.to - run.from}, minmax(0, 1fr))`,
+                                  gap: TILE_GAP,
+                              }}
+                          >
+                              {Array.from(
+                                  { length: run.to - run.from },
+                                  (_, offset) => {
+                                      const col = run.from + offset
+                                      return (
+                                          <div
+                                              key={col}
+                                              data-drop-kind="cell"
+                                              data-drop-row={rowIndex}
+                                              data-drop-col={col}
+                                              className={cn(
+                                                  'm-0.5 rounded-lg',
+                                                  isOverCell(
+                                                      drag,
+                                                      rowIndex,
+                                                      col,
+                                                  ) && 'bg-primary/16',
+                                              )}
+                                          />
+                                      )
+                                  },
+                              )}
+                          </div>
+                      </div>
+                  ))}
             {placements
                 .filter((placement) => placement.row === rowIndex)
                 .sort((a, b) => a.col - b.col)
                 .map((placement) => {
                     const entry = specById.get(placement.id)
                     if (!entry) return null
+                    const isDragged = drag?.id === placement.id
+                    const isDropTarget =
+                        drag?.over?.kind === 'tile' &&
+                        drag.over.id === placement.id
                     return (
                         <div
                             key={placement.id}
-                            className="relative min-w-0"
+                            data-drop-kind={editing ? 'tile' : undefined}
+                            data-drop-id={editing ? placement.id : undefined}
+                            className={cn(
+                                'relative min-w-0 rounded-lg transition-shadow',
+                                isDragged && 'opacity-35',
+                            )}
                             style={{
+                                gridRow: 1,
                                 gridColumn: `${placement.col + 1} / span ${WIDTH_UNITS[placement.width]}`,
+                                // The glow the native tile drag target paints
+                                // while another tile hovers over it.
+                                boxShadow: isDropTarget
+                                    ? '0 0 16px 2px color-mix(in srgb, var(--md-sys-color-primary) 22%, transparent)'
+                                    : undefined,
                             }}
                         >
                             <WidgetBody spec={entry.spec} />
@@ -218,9 +309,13 @@ export function Dashboard({
                                 <>
                                     {/*
                                      * In edit mode the tile is a selection
-                                     * target, not a live widget — the same
-                                     * thing the native `InkWell(onTap:
-                                     * onTapItem)` does over the content.
+                                     * target and a drag handle, not a live
+                                     * widget — the same thing the native
+                                     * `InkWell(onTap: onTapItem)` inside
+                                     * `_MouseFriendlyDraggable` does over the
+                                     * content. The grab cursor is the only hint
+                                     * a mouse gets that the board rearranges by
+                                     * dragging.
                                      */}
                                     <button
                                         type="button"
@@ -231,11 +326,17 @@ export function Dashboard({
                                             entry.spec.options.title ||
                                             t.dashboard.widget
                                         }
-                                        onClick={() =>
-                                            setSelectedId(placement.id)
+                                        onPointerDown={(event) =>
+                                            startTracking(event, placement.id)
                                         }
+                                        onClick={() => {
+                                            // The click that closes a drag is
+                                            // not a selection.
+                                            if (wasDragged()) return
+                                            setSelectedId(placement.id)
+                                        }}
                                         className={cn(
-                                            'absolute inset-0 cursor-pointer rounded-lg border-2',
+                                            'absolute inset-0 cursor-grab rounded-lg border-2',
                                             placement.id === selectedId
                                                 ? 'border-primary'
                                                 : 'border-transparent',
@@ -288,6 +389,14 @@ export function Dashboard({
                   ),
               )
 
+    const preview =
+        drag === null ? null : (
+            <DragPreview
+                drag={drag}
+                spec={specById.get(drag.id)?.spec ?? null}
+            />
+        )
+
     if (bandColumns === 1) {
         return (
             <div
@@ -298,6 +407,7 @@ export function Dashboard({
                 {Array.from({ length: rowCount }, (_, rowIndex) => (
                     <div key={rowIndex}>{renderRow(rowIndex)}</div>
                 ))}
+                {preview}
             </div>
         )
     }
@@ -330,8 +440,213 @@ export function Dashboard({
                     })}
                 </div>
             ))}
+            {preview}
         </div>
     )
+}
+
+/** Whether the drag is hovering the empty unit at (`row`, `col`). */
+function isOverCell(drag: TileDrag | null, row: number, col: number): boolean {
+    return (
+        drag?.over?.kind === 'cell' &&
+        drag.over.row === row &&
+        drag.over.col === col
+    )
+}
+
+type UnitRun = { from: number; to: number }
+
+/**
+ * The contiguous runs of unoccupied units in `row`. The dragged tile still
+ * holds its own units while it is in the air — as native's `childWhenDragging`
+ * keeps its slot — so its origin is not offered back to it as a gap.
+ */
+function freeRuns(placements: WidgetPlacement[], row: number): UnitRun[] {
+    const occupied = rowOccupancy(placements, row)
+    const runs: UnitRun[] = []
+    let from: number | null = null
+    for (let unit = 0; unit <= GRID_UNITS; unit++) {
+        const free = unit < GRID_UNITS && !occupied[unit]
+        if (free && from === null) from = unit
+        if (!free && from !== null) {
+            runs.push({ from, to: unit })
+            from = null
+        }
+    }
+    return runs
+}
+
+/** Per-unit occupancy of `row`, `ignoreId` treated as absent. */
+function rowOccupancy(
+    placements: WidgetPlacement[],
+    row: number,
+    ignoreId?: string,
+): boolean[] {
+    const occupied = new Array<boolean>(GRID_UNITS).fill(false)
+    for (const placement of placements) {
+        if (placement.row !== row || placement.id === ignoreId) continue
+        const end = Math.min(
+            placement.col + WIDTH_UNITS[placement.width],
+            GRID_UNITS,
+        )
+        for (let unit = placement.col; unit < end; unit++) occupied[unit] = true
+    }
+    return occupied
+}
+
+/**
+ * The widest width that fits from (`row`, `col`) up to the next occupied unit
+ * or the grid edge, or null when the unit is taken — `DashboardGridLayout
+ * .fitWidth`.
+ */
+function fitWidth(
+    placements: WidgetPlacement[],
+    row: number,
+    col: number,
+    ignoreId: string,
+): DashboardWidth | null {
+    if (col < 0 || col >= GRID_UNITS) return null
+    const occupied = rowOccupancy(placements, row, ignoreId)
+    if (occupied[col]) return null
+    let free = 0
+    for (let unit = col; unit < GRID_UNITS && !occupied[unit]; unit++) free++
+    return widthForUnits(free)
+}
+
+/**
+ * Moves a tile onto a free unit, porting `_UnitDropTarget`: it keeps its width
+ * unless the free run starting there is narrower, in which case it shrinks to
+ * fit. Null when the unit can't take it.
+ */
+function placeInCell(
+    placements: WidgetPlacement[],
+    id: string,
+    row: number,
+    col: number,
+): WidgetPlacement[] | null {
+    const dragged = placements.find((placement) => placement.id === id)
+    if (!dragged) return null
+    const fit = fitWidth(placements, row, col, id)
+    if (fit === null) return null
+    const width =
+        WIDTH_UNITS[fit] < WIDTH_UNITS[dragged.width] ? fit : dragged.width
+    if (!isSpanFree(placements, row, col, WIDTH_UNITS[width], id)) return null
+    return placements.map((placement) =>
+        placement.id === id ? { ...placement, row, col, width } : placement,
+    )
+}
+
+/**
+ * Exchanges two tiles' slots, porting `DashboardGridLayout.swap`: each has to
+ * fit where the other sat without overlapping a third tile, or the drop is
+ * refused.
+ */
+function swapPlacements(
+    placements: WidgetPlacement[],
+    aId: string,
+    bId: string,
+): WidgetPlacement[] | null {
+    if (aId === bId) return null
+    const a = placements.find((placement) => placement.id === aId)
+    const b = placements.find((placement) => placement.id === bId)
+    if (!a || !b) return null
+    const moving = new Set([aId, bId])
+    if (
+        !spanFreeIgnoring(
+            placements,
+            b.row,
+            b.col,
+            WIDTH_UNITS[a.width],
+            moving,
+        )
+    ) {
+        return null
+    }
+    if (
+        !spanFreeIgnoring(
+            placements,
+            a.row,
+            a.col,
+            WIDTH_UNITS[b.width],
+            moving,
+        )
+    ) {
+        return null
+    }
+    return placements.map((placement) => {
+        if (placement.id === aId)
+            return { ...placement, row: b.row, col: b.col }
+        if (placement.id === bId)
+            return { ...placement, row: a.row, col: a.col }
+        return placement
+    })
+}
+
+/**
+ * `isSpanFree`, but with a set of tiles set aside rather than one — a swap has
+ * two tiles in flight and neither may block the other's destination.
+ */
+function spanFreeIgnoring(
+    placements: WidgetPlacement[],
+    row: number,
+    col: number,
+    units: number,
+    ignore: ReadonlySet<string>,
+): boolean {
+    if (col < 0 || col + units > GRID_UNITS) return false
+    return !placements.some(
+        (placement) =>
+            !ignore.has(placement.id) &&
+            placement.row === row &&
+            col < placement.col + WIDTH_UNITS[placement.width] &&
+            placement.col < col + units,
+    )
+}
+
+/**
+ * The tile that follows the pointer, porting `_DashboardDragPreview`: not the
+ * live widget but a card naming it, so a drag costs nothing to render and the
+ * board underneath stays the thing being read. Anchored at the pointer, the way
+ * `pointerDragAnchorStrategy` anchors the native feedback.
+ */
+function DragPreview({
+    drag,
+    spec,
+}: {
+    drag: TileDrag
+    spec: WidgetSpec | null
+}) {
+    const t = useT()
+    if (!spec) return null
+    return (
+        <div
+            className="pointer-events-none fixed z-50 rounded-lg border-2 border-primary bg-surface shadow-level-4"
+            style={{ left: drag.x, top: drag.y, width: drag.width }}
+        >
+            <div className="flex min-h-32 items-center gap-2.5 rounded-md bg-primary/6 p-4">
+                <Icon
+                    name={previewIcon(spec.type)}
+                    className="shrink-0 text-primary"
+                />
+                <span className="m3-title-small min-w-0 flex-1 truncate font-extrabold text-on-surface">
+                    {spec.options.title || t.dashboard.widget}
+                </span>
+            </div>
+        </div>
+    )
+}
+
+function previewIcon(type: string): string {
+    switch (type) {
+        case 'list':
+            return 'receipt_long'
+        case 'balance':
+            return 'account_balance_wallet'
+        case 'chart':
+            return 'donut_large'
+        default:
+            return 'calculate'
+    }
 }
 
 function normalizeWidth(width: string): DashboardWidth {
