@@ -593,6 +593,16 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
 
     return Scaffold(
       resizeToAvoidBottomInset: true,
+      // The close action routes through _close, so it works in both
+      // presentations: reporting to onResult when embedded in the Activity
+      // split pane, popping the route otherwise.
+      appBar: AppBar(
+        leading: IconButton(
+          tooltip: MaterialLocalizations.of(context).closeButtonTooltip,
+          onPressed: _isSaving ? null : () => _close(saved: false),
+          icon: const Icon(Icons.close_rounded),
+        ),
+      ),
       body: SafeArea(
         child: Form(
           key: _formKey,
