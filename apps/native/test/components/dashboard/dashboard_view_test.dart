@@ -4,6 +4,7 @@ import 'package:app/data/data.dart';
 import 'package:app/database.dart';
 import 'package:app/l10n/l10n.dart';
 import 'package:drift/native.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
@@ -187,6 +188,127 @@ void main() {
     handle.dispose();
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pump(const Duration(milliseconds: 1));
+  });
+
+  // Edit mode is driven by drag-and-drop, and the tiles used to be
+  // `LongPressDraggable`s: with a mouse you had to press and hold half a second
+  // on every tile before it would move, which reads as "dragging is broken" on
+  // desktop. Mouse pointers now start dragging on movement instead. The three
+  // tests below pin the whole trade-off — mouse drags immediately, touch still
+  // waits (or the enclosing home `ListView` would stop scrolling), and a click
+  // with a little hand jitter is still a click.
+  group('drag start', () {
+    late String? swapped;
+    late String? tapped;
+
+    Future<void> pumpTwoTiles(WidgetTester tester) async {
+      swapped = null;
+      tapped = null;
+      final items = [
+        for (final (index, col) in const [0, 2].indexed)
+          DashboardViewItem(
+            row: _row('stat-$index', index, 'third', 1, col),
+            spec: StatWidgetSpec(
+              title: 'stat-$index',
+              filter: const TransactionFilter(),
+              aggregation: StatAggregation.count,
+              width: DashboardWidth.third,
+            ),
+          ),
+      ];
+      await tester.pumpWidget(
+        Provider<AppRepositories>.value(
+          value: repos,
+          child: MaterialApp(
+            locale: const Locale('en'),
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            home: Scaffold(
+              body: Align(
+                alignment: Alignment.topCenter,
+                child: SizedBox(
+                  width: 416,
+                  child: DashboardView(
+                    items: items,
+                    editing: true,
+                    onTapItem: (item) => tapped = item.row.id,
+                    onSwap: (draggedId, targetId) => swapped = targetId,
+                    onPlaceInCell: (_, _, _, _) {},
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+    }
+
+    Future<void> disposeStreams(WidgetTester tester) async {
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump(const Duration(milliseconds: 1));
+    }
+
+    testWidgets('a mouse drags a tile without holding it down first', (
+      tester,
+    ) async {
+      await pumpTwoTiles(tester);
+
+      final gesture = await tester.startGesture(
+        tester.getCenter(find.text('stat-0')),
+        kind: PointerDeviceKind.mouse,
+      );
+      // Deliberately no `pump(kLongPressTimeout)`: the drag has to be live off
+      // the movement alone, which is the whole point of the change.
+      await gesture.moveTo(tester.getCenter(find.text('stat-1')));
+      await tester.pump();
+      await gesture.up();
+      await tester.pumpAndSettle();
+
+      expect(swapped, 'stat-1');
+
+      await disposeStreams(tester);
+    });
+
+    testWidgets('touch still waits for the long press before dragging', (
+      tester,
+    ) async {
+      await pumpTwoTiles(tester);
+
+      final gesture = await tester.startGesture(
+        tester.getCenter(find.text('stat-0')),
+        kind: PointerDeviceKind.touch,
+      );
+      await gesture.moveTo(tester.getCenter(find.text('stat-1')));
+      await tester.pump();
+      await gesture.up();
+      await tester.pumpAndSettle();
+
+      // A finger that moves straight away is scrolling the home list, not
+      // rearranging the dashboard.
+      expect(swapped, isNull);
+
+      await disposeStreams(tester);
+    });
+
+    testWidgets('a click carrying a few pixels of jitter still selects', (
+      tester,
+    ) async {
+      await pumpTwoTiles(tester);
+
+      final gesture = await tester.startGesture(
+        tester.getCenter(find.text('stat-0')),
+        kind: PointerDeviceKind.mouse,
+      );
+      await gesture.moveBy(const Offset(2, 1));
+      await gesture.up();
+      await tester.pumpAndSettle();
+
+      expect(tapped, 'stat-0');
+      expect(swapped, isNull);
+
+      await disposeStreams(tester);
+    });
   });
 }
 

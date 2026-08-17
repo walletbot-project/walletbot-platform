@@ -13,25 +13,31 @@ import 'package:flutter/material.dart';
 import 'package:m3e_buttons/m3e_buttons.dart';
 import 'package:provider/provider.dart';
 
-class TagsView extends StatelessWidget {
-  const TagsView({super.key});
+class TagsView extends StatefulWidget {
+  const TagsView({super.key, required this.onSelect});
 
-  /// Opens the tag details as a draggable, scrollable modal sheet. The sheet is
-  /// a pushed route below the account-scoped providers, so the data layer and
-  /// navigation controller are captured here and handed down.
-  void _openTagSheet(BuildContext context, Tag tag) {
-    final repos = context.read<AppRepositories>();
-    final nav = context.read<AppNavigation>();
-    showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      showDragHandle: true,
-      builder: (_) => TagDetailsSheet(tag: tag, repos: repos, nav: nav),
-    );
-  }
+  /// Called when a tag chip is tapped. The Insights screen owns the
+  /// selection and presents the detail — the shared split pane on expanded
+  /// windows, a modal bottom sheet everywhere else — so the pane sits
+  /// outside the sliding tab pages.
+  final void Function(Tag tag) onSelect;
+
+  @override
+  State<TagsView> createState() => _TagsViewState();
+}
+
+/// The tags list — one page of the Insights tab view. Pure list: all
+/// detail/creation presentation lives in the Insights screen.
+class _TagsViewState extends State<TagsView>
+    with AutomaticKeepAliveClientMixin {
+  /// Keeps the list (its scroll position) alive when the Insights tabs swipe
+  /// this view out of the TabBarView.
+  @override
+  bool get wantKeepAlive => true;
 
   @override
   Widget build(BuildContext context) {
+    super.build(context);
     final tags = context.read<AppRepositories>().tags;
 
     return StreamBuilder<List<TagWithCount>>(
@@ -75,7 +81,7 @@ class TagsView extends StatelessWidget {
                   backgroundColor: style.background,
                   label: Text(tag.name),
                   labelStyle: style.labelStyle,
-                  onPressed: () => _openTagSheet(context, tag),
+                  onPressed: () => widget.onSelect(tag),
                 ),
               ),
             );
@@ -135,11 +141,17 @@ class TagDetailsSheet extends StatefulWidget {
     required this.tag,
     required this.repos,
     required this.nav,
+    this.onClose,
   });
 
   final Tag tag;
   final AppRepositories repos;
   final AppNavigation nav;
+
+  /// Embedded (split pane) mode: when set, the sheet never pops a route —
+  /// exits report here instead, the drag-to-size scaffolding is dropped, and
+  /// an explicit close button is shown.
+  final VoidCallback? onClose;
 
   @override
   State<TagDetailsSheet> createState() => _TagDetailsSheetState();
@@ -287,7 +299,7 @@ class _TagDetailsSheetState extends State<TagDetailsSheet> {
     try {
       await widget.repos.tags.archive(_tagId, mode: mode);
       if (!mounted) return;
-      Navigator.of(context).pop(); // close the details sheet
+      _close(); // close the details sheet
     } catch (e, st) {
       debugPrint('Error archiving tag: $e\n$st');
       if (mounted) setState(() => _saving = false);
@@ -295,32 +307,68 @@ class _TagDetailsSheetState extends State<TagDetailsSheet> {
   }
 
   void _openAllTransactions() {
-    Navigator.of(context).pop(); // close the sheet before switching tabs
+    _close(); // close the sheet before switching tabs
     widget.nav.openActivityForTag(_tagId);
+  }
+
+  /// Exits the sheet: reports to [TagDetailsSheet.onClose] when embedded in
+  /// the split pane, pops the modal route otherwise.
+  void _close() {
+    final onClose = widget.onClose;
+    if (onClose != null) {
+      onClose();
+      return;
+    }
+    Navigator.of(context).pop();
   }
 
   @override
   Widget build(BuildContext context) {
+    // Editing state lives in this State object, above the branch below, so
+    // it survives when the presentation morphs between sheet and pane.
+    if (widget.onClose != null) {
+      // Panel presentation (split pane or dialog): a standard app bar, so the
+      // pane's content starts at the same height as the list column's beside
+      // it, and the close button matches every other panel in the app.
+      // Embedded there is no route to pop, so no back button appears on its
+      // own — offer an explicit close instead.
+      return Scaffold(
+        appBar: AppBar(
+          leading: IconButton(
+            tooltip: MaterialLocalizations.of(context).closeButtonTooltip,
+            onPressed: _close,
+            icon: const Icon(Icons.close_rounded),
+          ),
+          title: Text(context.l10n.tagDetails),
+        ),
+        body: _buildSheetBody(context, null),
+      );
+    }
     return DraggableScrollableSheet(
       expand: false,
       initialChildSize: 0.6,
       minChildSize: 0.3,
       maxChildSize: 0.95,
-      builder: (context, scrollController) {
-        return ListView(
-          controller: scrollController,
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
-          children: [
-            _buildIdentityGroup(context),
-            const SizedBox(height: 12),
-            _buildActions(context),
-            const SizedBox(height: 28),
-            _buildTransactionsHeader(context),
-            const SizedBox(height: 8),
-            _buildTransactions(context),
-          ],
-        );
-      },
+      builder: _buildSheetBody,
+    );
+  }
+
+  Widget _buildSheetBody(
+    BuildContext context,
+    ScrollController? scrollController,
+  ) {
+    return ListView(
+      controller: scrollController,
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+      children: [
+        _buildIdentityGroup(context),
+        const SizedBox(height: 12),
+        _buildActions(context),
+        const SizedBox(height: 28),
+        _buildTransactionsHeader(context),
+        const SizedBox(height: 8),
+        _buildTransactions(context),
+      ],
     );
   }
 
