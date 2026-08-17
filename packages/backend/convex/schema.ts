@@ -19,6 +19,11 @@ import { transactions } from './schema/transactions'
 import { transactionTags } from './schema/transactionTags'
 import { userSettings } from './schema/userSettings'
 import { voiceSessionEvents, voiceSessions } from './schema/voice'
+import {
+    whatsappConversations,
+    whatsappInboundMessages,
+    whatsappOutboundMessages,
+} from './schema/whatsapp'
 
 export default defineSchema({
     accounts,
@@ -40,4 +45,7 @@ export default defineSchema({
     userSettings,
     voiceSessionEvents,
     voiceSessions,
+    whatsappConversations,
+    whatsappInboundMessages,
+    whatsappOutboundMessages,
 })

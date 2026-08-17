@@ -40,6 +40,7 @@ import type * as schema_transactionTags from "../schema/transactionTags.js";
 import type * as schema_transactions from "../schema/transactions.js";
 import type * as schema_userSettings from "../schema/userSettings.js";
 import type * as schema_voice from "../schema/voice.js";
+import type * as schema_whatsapp from "../schema/whatsapp.js";
 import type * as sync_helpers from "../sync/helpers.js";
 import type * as telemetry_actions from "../telemetry/actions.js";
 import type * as telemetry_catalog from "../telemetry/catalog.js";
@@ -70,6 +71,11 @@ import type * as v1_users_helpers from "../v1/users/helpers.js";
 import type * as v1_users_mutations from "../v1/users/mutations.js";
 import type * as v1_users_queries from "../v1/users/queries.js";
 import type * as v1_voice_sessions from "../v1/voice/sessions.js";
+import type * as whatsapp_helpers from "../whatsapp/helpers.js";
+import type * as whatsapp_http from "../whatsapp/http.js";
+import type * as whatsapp_internal from "../whatsapp/internal.js";
+import type * as whatsapp_nodeActions from "../whatsapp/nodeActions.js";
+import type * as whatsapp_utils from "../whatsapp/utils.js";
 
 import type {
   ApiFromModules,
@@ -110,6 +116,7 @@ declare const fullApi: ApiFromModules<{
   "schema/transactions": typeof schema_transactions;
   "schema/userSettings": typeof schema_userSettings;
   "schema/voice": typeof schema_voice;
+  "schema/whatsapp": typeof schema_whatsapp;
   "sync/helpers": typeof sync_helpers;
   "telemetry/actions": typeof telemetry_actions;
   "telemetry/catalog": typeof telemetry_catalog;
@@ -140,6 +147,11 @@ declare const fullApi: ApiFromModules<{
   "v1/users/mutations": typeof v1_users_mutations;
   "v1/users/queries": typeof v1_users_queries;
   "v1/voice/sessions": typeof v1_voice_sessions;
+  "whatsapp/helpers": typeof whatsapp_helpers;
+  "whatsapp/http": typeof whatsapp_http;
+  "whatsapp/internal": typeof whatsapp_internal;
+  "whatsapp/nodeActions": typeof whatsapp_nodeActions;
+  "whatsapp/utils": typeof whatsapp_utils;
 }>;
 
 /**

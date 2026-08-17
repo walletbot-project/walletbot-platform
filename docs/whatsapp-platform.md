@@ -158,14 +158,22 @@ Established 2026-08-16.
 | Business Portfolio | `2124859685088995` ("Wallet Bot") |
 | Meta App | `2576911202751949` ("Wallet Bot") |
 | WABA | `1042220975475427` ("Wallet Bot") — `account_review_status: APPROVED` |
-| Phone Number ID | `1290033147525120` |
-| Phone number | `+1 555-440-3681` (Meta **test** number) |
+| **Phone Number ID (live)** | **`1324548857400869`** |
+| **Phone number (live)** | **`+54 9 11 2399-1858`** — self-supplied, `CONNECTED`, `CLOUD_API` |
+| Phone Number ID (test) | `1290033147525120` — `+1 555-440-3681`, inbound-only, cannot send (see Part 7) |
 | System User | `walletbot-api` (`61593205330048`), role Admin, token never expires |
-| Second WABA | `1098896139326514` ("Test WhatsApp Business Account") — number `+1 555-668-8660`, unverified, **unusable** |
+| Two-step PIN | set during registration; stored locally at `~/.wa_pin` |
+| Second WABA | `1098896139326514` ("Test WhatsApp Business Account") — `+1 555-668-8660`, `PENDING`/`NOT_VERIFIED`, **unusable**, and at its phone-number limit |
 
-Both numbers are `+1 555` test numbers, which means **the portfolio's test
-number quota (two) is fully spent.** That is why "Solicitar número de prueba"
-does nothing — there is nothing left to grant.
+The portfolio's `+1 555` test-number quota (two) is fully spent, which is why
+"Solicitar número de prueba" does nothing — there is nothing left to grant. That
+stopped mattering once a real number was added: **`+54 9 11 2399-1858` is the
+number that works.** The 555 number is kept because it still receives inbound
+and is a useful second conversation for testing; it just cannot reply.
+
+Adding a real number is what finally removed three limits at once: the ≤5
+recipient allow-list, the `131037` display-name wall, and the non-migratable
+dead end of a 555 number.
 
 ### Convex environment variables
 
@@ -175,31 +183,26 @@ Set on **both** `dev:proficient-finch-671` and prod:
 | --- | --- | --- |
 | `WHATSAPP_ACCESS_TOKEN` | System user token | Chat SDK (auto-detected) |
 | `WHATSAPP_TOKEN` | Same token | Our own code |
-| `WHATSAPP_PHONE_NUMBER_ID` | `1290033147525120` | Both |
+| `WHATSAPP_PHONE_NUMBER_ID` | `1324548857400869` | Both |
 | `WHATSAPP_WABA_ID` | `1042220975475427` | Our own code |
 | `WHATSAPP_APP_ID` | `2576911202751949` | Our own code |
 | `WHATSAPP_VERIFY_TOKEN` | 32-byte random hex | Webhook handshake |
 | `WHATSAPP_GRAPH_VERSION` | `v23.0` | Our own code |
-| `WHATSAPP_APP_SECRET` | ⚠️ **NOT SET** | Webhook signature verification |
+| `WHATSAPP_APP_SECRET` | 32-char app secret | Webhook signature verification (R-020) |
+
+All eight are set on both `dev:proficient-finch-671` and prod.
 
 `WHATSAPP_ACCESS_TOKEN` and `WHATSAPP_TOKEN` deliberately hold the same value:
-Chat SDK auto-detects the former, our own helpers can use either. If you rotate
-the token, **rotate both**.
+Chat SDK auto-detects the former (see Part 9), our own helpers read the former.
+If you rotate the token, **rotate both, on both deployments** — see R-023.
 
-> ⚠️ **`WHATSAPP_APP_SECRET` is still missing and is a blocker for receiving
-> messages.** Get it from App Dashboard → Settings → Basic → App Secret →
-> "Mostrar" (requires re-entering your Facebook password, which is why it could
-> not be automated). Then:
->
-> ```bash
-> cd packages/backend
-> npx convex env set        WHATSAPP_APP_SECRET '<secret>'
-> npx convex env set --prod WHATSAPP_APP_SECRET '<secret>'
-> ```
->
-> Without it you cannot verify `X-Hub-Signature-256`, which means anyone who
-> learns the webhook URL can inject fabricated messages straight into the AI
-> agent. Do not ship the webhook without it.
+`WHATSAPP_APP_SECRET` comes from App Dashboard → Settings → Basic → App Secret →
+"Mostrar", which requires re-entering your Facebook password and is therefore the
+one value that cannot be scripted. It is a **deploy prerequisite**: the webhook
+fails closed without it (`500`, nothing enqueued), because without it there is no
+way to tell Meta from an attacker and the payload feeds straight into the agent.
+Note it doubles as half of the app access token (`{app-id}|{app-secret}`) used to
+configure webhooks by API — see Part 11.
 
 ### Webhook URL
 
@@ -266,6 +269,49 @@ curl -s "https://graph.facebook.com/v23.0/<WABA_ID>/phone_numbers\
 
 You want `status: CONNECTED`, `code_verification_status: VERIFIED`, and
 `platform_type: CLOUD_API`. The `id` is your `phone_number_id`.
+
+### 5b. Adding a real (non-555) phone number
+
+The path that actually works. Do this instead of fighting a test number.
+
+**Prerequisite:** the number must not be tied to an existing WhatsApp account.
+If it has WhatsApp today, delete that account first (app → Settings → Account →
+Delete my account). It also becomes unusable in the regular WhatsApp app
+afterwards, so use a spare line, not a personal one.
+
+1. WhatsApp Manager → **Números de teléfono** → *Agregar número de teléfono*.
+   Confirm you are on the right WABA first — the selector defaults to whichever
+   WABA it feels like, and the Test WABA will reject you with *"This WhatsApp
+   account has reached its phone number limit"*.
+2. Set the display name, then verify by SMS or voice. For Argentine numbers, if
+   the SMS never arrives, use the **voice call** option.
+3. Ownership verification gives you `code_verification_status: VERIFIED`, but the
+   number is still `status: PENDING` and `platform_type: NOT_APPLICABLE`. **It
+   cannot send yet.** Registration is a separate step:
+
+```bash
+curl -X POST "https://graph.facebook.com/v23.0/<NEW_PHONE_NUMBER_ID>/register" \
+  -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+  -d '{"messaging_product":"whatsapp","pin":"<6 digits>"}'
+```
+
+   Keep that PIN — it is the two-step verification PIN, required for any future
+   re-registration.
+
+4. Confirm `status: CONNECTED` and `platform_type: CLOUD_API`, then point the
+   backend at it:
+
+```bash
+npx convex env set        WHATSAPP_PHONE_NUMBER_ID <NEW_PHONE_NUMBER_ID>
+npx convex env set --prod WHATSAPP_PHONE_NUMBER_ID <NEW_PHONE_NUMBER_ID>
+```
+
+No new asset assignment is needed if the number joins a WABA the system user
+already controls, and no webhook change is needed either — the app is subscribed
+at the **WABA** level, so a new number under it is covered automatically.
+
+A new number has **no 24-hour window with anyone**, including people who
+messaged your old number. Message the new number first, then it can reply.
 
 ### 6. Send a test message
 
@@ -398,12 +444,78 @@ Manage phone number list. Sending to anything else returns `131030`.
 | Code | Meaning | Fix |
 | --- | --- | --- |
 | `131030` | Recipient not in allow-list | Add to allow-list, or go to production |
+| `131037` | Display name not approved | See the warning below — affects `555` numbers |
 | `131047` | Outside 24h window | Send an approved template |
 | `131026` | Recipient can't receive (no WhatsApp / wrong ID) | Check `wa_id` — often the Part 6 bug |
 | `132000` | Template param count mismatch | Match the approved template exactly |
 | `133010` | Number not registered | Call the `register` endpoint |
 | `100` | Invalid parameter | Usually a wrong `phone_number_id` |
 | `190` | Token expired/invalid | Rotate; a system user token set to "Never" shouldn't hit this |
+
+### `name_status` does not mean the display name is approved
+
+> ⚠️ **Hit on 2026-08-17, after sends had been working.** `+1 555-440-3681`
+> reported every green light — `status: CONNECTED`, `code_verification_status:
+> VERIFIED`, `quality_rating: GREEN`, `name_status: AVAILABLE_WITHOUT_REVIEW`,
+> `new_name_status: NONE` — and WhatsApp Manager showed it as *Conectado* with
+> *Alta* quality. Every send still failed:
+>
+> ```
+> 131037 — WhatsApp provided number needs display name approval before message can be sent
+> ```
+>
+> **`AVAILABLE_WITHOUT_REVIEW` means the name *string* is available to claim
+> without review. It does not mean the display name has been approved.** There is
+> no API field that reports "this 555 number may send"; we read that status as an
+> all-clear and it was not one.
+>
+> Meta requires every `+1 555` test number to have an *approved* display name
+> before sending. What makes it genuinely hard to diagnose is that **it starts
+> failing after sends have been working.** The exact history on this number:
+>
+> | When | Sends | Result |
+> | --- | --- | --- |
+> | 2026-08-16 | 2 | delivered (confirmed on a handset and in Meta's analytics) |
+> | 2026-08-17 13:00 | 1 | delivered (`analytics` half-hour bucket: `sent: 1, delivered: 1`) |
+> | 2026-08-17 13:08 onward | all | `131037`, every time |
+>
+> Three successful sends, then a hard stop, with no state change visible in any
+> API field. **We could not determine the trigger.** What we ruled out:
+>
+> - **Not the app subscription.** The failure began minutes after
+>   `POST /{waba-id}/subscribed_apps`, which looked causal. Tested by
+>   unsubscribing and sending again: still `131037`. Coincidence.
+> - **Not our code.** The error reproduces from a bare `curl`.
+> - **Not a visible status change.** `name_status`, `new_name_status`, `status`,
+>   `code_verification_status`, `quality_rating`, `account_mode` and every other
+>   field Meta exposes on a phone number read identically before and after.
+> - **No audit trail available.** `GET /{waba-id}/activities` returns `{"data":[]}`,
+>   and WABA-level review fields require Business Solution Provider permission.
+>
+> A plausible-but-unproven reading is that Meta allows a small number of sends
+> before enforcing the approval. Operationally it does not matter: the fix is the
+> same either way. Just do not expect a working 555 number to keep working, and
+> do not treat early successful sends as evidence the number is properly set up.
+>
+> Also note `POST /{phone-number-id}` with `new_display_name` set to the *current*
+> name returns `{"success": true}` while changing nothing — `new_name_status`
+> stays `NONE` and no review is triggered. It is not a way to request approval.
+> WhatsApp Manager refuses an unchanged name too, so there is no way to
+> "resubmit" the name you already have. Submitting a *different* name via the API
+> does register (`new_name_status` moves off `NONE`) but does not apply, and does
+> not unblock sending.
+>
+> **How we resolved it: we stopped trying.** We added a self-supplied number
+> (`+54 9 11 2399-1858`), registered it for Cloud API, and it sent immediately.
+> Total time from decision to working: minutes. Time spent fighting the 555
+> number beforehand: hours. **If a 555 number wedges like this, add a real number
+> rather than debugging it.** The 555 number remains stuck and is now used only
+> for inbound testing.
+>
+> **Fix:** WhatsApp Manager → Números de teléfono → hover the **Nombre** column →
+> pencil icon → set a display name → submit. Review takes minutes to 48 hours.
+> The edit control is revealed on CSS `:hover`, so it cannot be automated through
+> DOM events.
 
 ### Quality rating
 
@@ -571,8 +683,17 @@ lives.
 
 Chat SDK earns its dependencies when you want **more than one platform**. If
 Telegram or Slack is on the roadmap, adopt it early rather than porting a
-hand-rolled WhatsApp integration later. Worth an explicit decision before
-writing the handler.
+hand-rolled WhatsApp integration later.
+
+### Decision: not adopted (2026-08-17)
+
+Hand-rolled in Convex instead — see Part 12. The deciding factor was not the
+Redis dependency but the **lock semantics**. Chat SDK offers
+`onLockConflict: 'drop' | 'force'`: drop the incoming message, or force-release
+and let two handlers run concurrently on one thread. The behaviour we need is
+neither — queue the message and fold it into the next turn — so we would have
+been fighting the framework on the one thing this feature is entirely about.
+Revisit if a second platform lands.
 
 ---
 
@@ -636,18 +757,78 @@ unambiguous.
 
 ### Verified working
 
-**Outbound messaging is confirmed end to end** (2026-08-16). A message sent via
+**Outbound messaging** (2026-08-16). A message sent via
 `POST /1290033147525120/messages` with the `walletbot-api` system user token was
-received on a real handset, inside an open 24-hour window. The credentials, the
-asset wiring, and the number are all good.
+received on a real handset, inside an open 24-hour window. Credentials, asset
+wiring, and the number are all good.
 
-### Blockers before receiving messages
+**The webhook is live** (2026-08-17). `WHATSAPP_APP_SECRET` is set on both
+deployments, the callback URL is registered and `active: true`, and the app is
+subscribed to the WABA. Meta only marks a subscription active *after*
+successfully calling the `GET` handshake, so our handler has been validated by
+Meta itself.
 
-1. **`WHATSAPP_APP_SECRET` is not set.** Required by any webhook
-   implementation, hand-rolled or Chat SDK. See Part 4.
-2. **No app subscribed to the WABA.** `subscribed_apps` is `[]` (Part 8).
-3. **No webhook handler exists.** Nothing is implemented at
-   `/v1/whatsapp/webhook` yet.
+```
+callback_url: https://proficient-finch-671.convex.site/v1/whatsapp/webhook
+active:       true
+fields:       [messages]
+```
+
+**The queue and the agent loop** (2026-08-17). A signed synthetic payload with
+three messages produced three inbound rows sharing one `claimedByRunId`, a
+single outbound reply listing all three, and a conversation returned to `idle`.
+Coalescing verified against the real database. See Part 12 for the test recipes.
+
+**Real inbound, end to end** (2026-08-17). A message sent from an actual handset
+was received, HMAC-verified against **Meta's own signature**, enqueued, claimed,
+processed, and the conversation released to `idle`. The reply then failed with
+`131037` and was recorded in `whatsappOutboundMessages` with its error code —
+visibly, rather than vanishing, which is precisely what R-021's mitigation
+exists for.
+
+**Working end to end** (2026-08-17). On `+54 9 11 2399-1858`: a real message from
+a handset was received, verified, queued, answered by the agent, and the reply
+reached `status: read` in `whatsappOutboundMessages` — the full
+`sent → delivered → read` lifecycle, applied by status webhooks through
+`applyStatusUpdates`. Nothing in the loop is silent any more.
+
+### Watch out: Meta itself will message your number
+
+The first inbound the live number received was **not** from a human. Meta's own
+onboarding bot (`16465894168`) sent a *"Continue setting up your account"*
+notification, our agent dutifully treated it as a user turn, generated a reply,
+and delivered it.
+
+Harmless with a stub, wasteful with an LLM, and confusing once the agent has
+tools — a system notification is not a user asking for something. **Before the
+real agent ships, filter inbound by sender**: ignore or route separately anything
+that is not a linked, known user. `whatsappConversations.userId` is the natural
+place to gate this.
+
+### Configure webhooks by API, not by dashboard
+
+The App Dashboard's webhook panel is a React SPA that resists automation and
+hides state. Everything it does is available on the Graph API using an **app
+access token** (`{app-id}|{app-secret}`), which is deterministic and
+inspectable:
+
+```bash
+APP_TOKEN="2576911202751949|$WHATSAPP_APP_SECRET"
+
+# set callback URL + verify token + subscribed fields
+curl -X POST "https://graph.facebook.com/v23.0/2576911202751949/subscriptions" \
+  -d "object=whatsapp_business_account" \
+  -d "callback_url=https://<deployment>.convex.site/v1/whatsapp/webhook" \
+  -d "verify_token=$WHATSAPP_VERIFY_TOKEN" \
+  -d "fields=messages" \
+  -d "access_token=$APP_TOKEN"
+
+# read it back — `active: true` proves the handshake succeeded
+curl -s "https://graph.facebook.com/v23.0/2576911202751949/subscriptions?access_token=$APP_TOKEN"
+```
+
+Switching the callback between dev and prod is one call, which matters given
+Meta allows only one per app.
 
 ### Warnings
 
@@ -669,17 +850,170 @@ asset wiring, and the number are all good.
 - **`account_review_status: APPROVED`** applies to the WABA, not the business.
   They are separate reviews.
 
+### Tracked in the risk register
+
+Five entries in `docs/riesgos.md` came out of this work. They are the durable
+version of the warnings above:
+
+| ID | Risk | Prob. | Impact |
+| --- | --- | --- | --- |
+| **R-019** | At-least-once turns duplicate **side effects** once the agent can write | Media | Alto |
+| **R-020** | The webhook is a public, unauthenticated ingress into the agent | Baja | Crítico |
+| **R-021** | The 24h window drops outbound silently | Alta | Medio |
+| **R-022** | `wa_id` is not "E.164 without the `+`" | Media | Medio |
+| **R-023** | Never-expiring token shared across dev and prod | Baja | Alto |
+
+**R-019 is the one with a hard precondition.** The turn claims a batch, replies,
+*then* marks it processed. If the action dies in between, the reaper requeues and
+the batch runs twice. While the agent only emits text that costs a duplicate
+message. The moment it gets a tool that writes to `transactions`, the same window
+duplicates the *financial record* — landing on R-001 and R-005, with the user
+having to notice and undo something they never created. **Before giving the agent
+any write tool: derive an idempotency key from the claimed `wamid`s and check it
+inside the mutation that creates the movement, so a retry is a no-op.**
+
 ### Suggested next steps
 
-1. Set `WHATSAPP_APP_SECRET` (unblocks everything else).
-2. Decide Chat SDK vs a hand-rolled Convex handler (Part 9).
-3. Implement `GET`/`POST /v1/whatsapp/webhook` with signature verification.
-4. `POST /<WABA_ID>/subscribed_apps`.
-5. Add the contact model with `waId` as the match key (Part 6).
-6. Add your own number to the recipient allow-list for testing.
-7. Create at least one approved template if the agent should ever initiate.
-8. Consider a Convex workflow for the agent turn, per `CLAUDE.md` — inbound
-   handling must ack fast and process asynchronously.
+1. Decide how a `wa_id` maps to a Wallet Bot `userId` — a linking code, a phone
+   match, or an onboarding conversation. The queue is agnostic; the agent is
+   blocked on it (`whatsappConversations.userId` is optional and unset today).
+2. Replace the stub `generateReply` in `whatsapp/nodeActions.ts` with the real
+   agent.
+3. Implement the R-019 idempotency key **before** the agent gets write tools.
+4. Filter inbound by sender so Meta's own notifications don't trigger agent
+   turns (see above).
+5. Create at least one approved template if the agent should ever initiate
+   rather than only reply.
+6. Decide the dev/prod callback split — one Meta app per environment, or accept
+   that only one receives messages. Both deployments currently point at the same
+   number and the same WABA.
+7. **Add a payment method** to the WABA (`No se encontró ningún método de pago`).
+   User-initiated service conversations have a free allowance, so testing is
+   fine, but templates and volume are not.
+8. **Complete business verification** (`No verificado`). Not needed to start;
+   it caps the number at **250 unique recipients / 24h**.
+9. Consider subscribing to the `phone_number_name_update` webhook field — it
+   reports display-name approval, which is the signal we had no visibility into
+   during the `131037` incident. We currently subscribe to `messages` only.
+
+---
+
+## Part 12 — The implementation
+
+What actually exists in the backend, and how to test it.
+
+### Files
+
+| File | Role |
+| --- | --- |
+| `convex/schema/whatsapp.ts` | `whatsappConversations` (the lock), `whatsappInboundMessages` (the queue), `whatsappOutboundMessages` (delivery log) |
+| `convex/whatsapp/http.ts` | `registerWhatsappRoutes` — `GET` handshake, `POST` events |
+| `convex/whatsapp/utils.ts` | HMAC verification, defensive payload parsing |
+| `convex/whatsapp/internal.ts` | `enqueueInbound`, `claimOrRelease`, `finishBatch`, `recordOutbound`, `applyStatusUpdates`, `handOffTurn`, `releaseStuckTurns` |
+| `convex/whatsapp/helpers.ts` | `sendText`, `windowIsOpen`, `chunkBody` |
+| `convex/whatsapp/nodeActions.ts` | `runAgentTurn` — the drain loop |
+
+Registered in `schema.ts`, `http.ts`, and `crons.ts` (reaper, every 5 minutes).
+
+### How the coalescing works
+
+```
+Meta ──POST──► httpAction ─────────────────────────────► 200 OK (~ms, no LLM)
+                  │ verify signature over the RAW body
+                  ▼
+            enqueueInbound   ◄── ONE TRANSACTION
+                  │ dedupe on wamid; insert as pending
+                  │ if status == idle → processing + schedule turn
+                  │ else            → nothing; the live turn drains it
+                  ▼
+            runAgentTurn (loops)
+                  │ claimOrRelease(runId)
+                  │   fenced?   → stop (someone else owns this)
+                  │   released? → stop (queue empty, lock idle)
+                  │   batch?    → agent over ALL of it, send, finish
+                  └── loop: messages that arrived during the LLM call
+```
+
+**Why there is no lock server.** Convex mutations are serializable transactions,
+so "is a turn running?" and "start a turn" happen atomically. Two webhooks
+landing at the same instant cannot both start a worker.
+
+**Why claim and release are one mutation.** Splitting them reopens the classic
+lost-wakeup: a message arriving between "queue looks empty" and "set idle" finds
+the conversation still `processing`, declines to start a turn, and waits forever
+for a worker that already exited. Deciding both inside one transaction removes
+the window entirely.
+
+**Why `runId` exists.** If a turn's action dies, the reaper releases the lock. A
+zombie that resumes later carries a stale `runId`, fails `claimOrRelease`, and
+cannot touch state a newer turn now owns.
+
+**Why `handOffTurn` exists.** Convex actions have an execution limit. After 20
+loops a busy conversation mints a fresh `runId` and schedules a new action rather
+than being killed while still holding the lock.
+
+### Testing without Meta
+
+The `GET` handshake:
+
+```bash
+# expect the challenge echoed back
+curl -s "https://<deployment>.convex.site/v1/whatsapp/webhook\
+?hub.mode=subscribe&hub.verify_token=$WHATSAPP_VERIFY_TOKEN&hub.challenge=ping123"
+
+# expect 403
+curl -s -o /dev/null -w '%{http_code}\n' "https://<deployment>.convex.site/v1/whatsapp/webhook\
+?hub.mode=subscribe&hub.verify_token=wrong&hub.challenge=x"
+```
+
+A rejected handshake logs `whatsapp webhook verification rejected`. If you see
+that while configuring the callback URL for real, the verify token you supplied
+does not match `WHATSAPP_VERIFY_TOKEN`.
+
+A signed synthetic delivery — this is the one that exercises the whole pipeline.
+Write the payload to a file so the HMAC covers the exact bytes sent:
+
+```bash
+S=$(npx convex env get WHATSAPP_APP_SECRET)   # from packages/backend
+TS=$(date +%s)
+cat > /tmp/wh.json <<JSON
+{"object":"whatsapp_business_account","entry":[{"id":"1042220975475427","changes":[{"field":"messages","value":{
+"messaging_product":"whatsapp",
+"metadata":{"display_phone_number":"+54 9 11 2399-1858","phone_number_id":"1324548857400869"},
+"contacts":[{"profile":{"name":"Test"},"wa_id":"<YOUR_WA_ID>"}],
+"messages":[
+{"from":"<YOUR_WA_ID>","id":"wamid.TEST-$TS-1","timestamp":"$TS","type":"text","text":{"body":"hola"}},
+{"from":"<YOUR_WA_ID>","id":"wamid.TEST-$TS-2","timestamp":"$TS","type":"text","text":{"body":"segundo"}},
+{"from":"<YOUR_WA_ID>","id":"wamid.TEST-$TS-3","timestamp":"$TS","type":"text","text":{"body":"tercero"}}]}}]}]}
+JSON
+
+SIG=$(openssl dgst -sha256 -hmac "$S" -hex < /tmp/wh.json | awk '{print $NF}')
+curl -s -X POST "https://<deployment>.convex.site/v1/whatsapp/webhook" \
+  -H 'Content-Type: application/json' -H "X-Hub-Signature-256: sha256=$SIG" \
+  --data-binary @/tmp/wh.json
+```
+
+Then inspect the result:
+
+```bash
+npx convex data whatsappConversations      # status should be back to idle
+npx convex data whatsappInboundMessages    # 3 rows, ONE shared claimedByRunId
+npx convex data whatsappOutboundMessages   # exactly ONE reply
+```
+
+`wamid`s must be unique per run or dedupe correctly skips them — hence `$TS`.
+
+**Two caveats on synthetic tests.** A forged payload resets *our* tracked 24-hour
+window but not Meta's, so `windowIsOpen` passes while the real send may still be
+discarded; check `whatsappOutboundMessages.status`. And the recipient must be on
+the test number's allow-list or the send fails with `131030`.
+
+### Testing with Meta
+
+Message the business number from a real handset. That is the only path that
+exercises Meta's signature generation, the real service window, and delivery
+statuses. Watch the Convex logs for the turn and `whatsappOutboundMessages` for
+the status transitions.
 
 ---
 

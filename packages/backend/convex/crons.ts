@@ -56,4 +56,15 @@ crons.interval(
     },
 )
 
+// A WhatsApp agent turn that dies mid-flight leaves its conversation stuck in
+// `processing`, and every later message then writes a row without starting a
+// turn — the user is silently ignored forever. This is the only thing that
+// recovers from that.
+crons.interval(
+    'release stuck whatsapp agent turns',
+    { minutes: 5 },
+    internal.whatsapp.internal.releaseStuckTurns,
+    {},
+)
+
 export default crons

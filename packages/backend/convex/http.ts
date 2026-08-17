@@ -8,6 +8,7 @@ import { registerConfigRoutes } from './config/http'
 import { resend } from './emails/helpers'
 import { jsonResponse } from './httpHelpers'
 import { registerTelemetryRoutes } from './telemetry/http'
+import { registerWhatsappRoutes } from './whatsapp/http'
 
 const http = httpRouter()
 
@@ -22,6 +23,11 @@ registerTelemetryRoutes(http)
 // - `/v1/config` = device/client-version layer (unauthenticated)
 // - `/v1/account-config` = account layer (remote session token or local label)
 registerConfigRoutes(http)
+
+// WhatsApp Cloud API webhook: GET verification handshake + POST events.
+// Signature-verified via WHATSAPP_APP_SECRET; fails closed (500) until that env
+// var is set, so an unverified payload can never reach the agent.
+registerWhatsappRoutes(http)
 
 const liveTokenHandler = httpAction(async (ctx, req) => {
     const authorization = req.headers.get('authorization')
