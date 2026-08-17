@@ -124,20 +124,6 @@ class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
     _balances = await _loadBalances(transaction);
     if (!mounted) return;
 
-    if (transaction != null &&
-        transaction.type == 'transfer' &&
-        transaction.toCurrency != null &&
-        transaction.toCurrency != transaction.currency) {
-      debugPrint(
-        '[TransferDetail] cross-currency transfer '
-        'currency=${transaction.currency} '
-        'toCurrency=${transaction.toCurrency} '
-        'amount=${transaction.amount} '
-        'toAmount=${transaction.toAmount} '
-        'exchangeRate=${transaction.exchangeRate}',
-      );
-    }
-
     setState(() => _loading = false);
   }
 
@@ -954,9 +940,9 @@ class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
   }
 
   /// Read-only "tipo de cambio" row for cross-currency transfers, shaped as
-  /// `1 <strong> → <rate> <weak>`. The rate is recomputed from the two amounts
-  /// (not read from the stored field) so legacy rows show the current rule too.
-  /// Returns null for same-currency transfers and non-transfers.
+  /// `1 <strong> → <rate> <weak>`. Prefers the stored `exchangeRate` (backfilled
+  /// to the current rule) and only recomputes from the amounts as a fallback for
+  /// rows without one. Returns null for same-currency transfers and non-transfers.
   _ReceiptRow? _exchangeRateRow(Transaction t) {
     if (t.type != 'transfer') return null;
     final toCurrency = t.toCurrency;
@@ -966,7 +952,7 @@ class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
     }
     final sourceCents = t.amount.toDouble();
     final destCents = toAmount.toDouble();
-    final rate = computeExchangeRate(sourceCents, destCents);
+    final rate = t.exchangeRate ?? computeExchangeRate(sourceCents, destCents);
     if (rate == null) return null;
 
     // The rate is always >= 1; its base is the stronger currency — the leg with
@@ -978,7 +964,7 @@ class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
 
     return _ReceiptRow(
       icon: Icons.currency_exchange_rounded,
-      label: 'Tipo de cambio',
+      label: context.l10n.exchangeRate,
       value: Text(
         '1 $baseCurrency  →  ${formatExchangeRate(rate)} '
         '$quoteCurrency',

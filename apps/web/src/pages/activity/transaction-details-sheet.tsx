@@ -993,11 +993,12 @@ function displayAmount(
 }
 
 /// Read-only "tipo de cambio" display data for a cross-currency transfer, shaped
-/// as `1 <base> → <rate> <quote>`. The rate is recomputed from the two amounts
-/// (not read from the stored field) so legacy rows follow the current rule too.
-/// The base is the stronger currency — the leg with the smaller amount, since
-/// fewer of its units carry the same value (comparing cents works because both
-/// legs are scaled by the same factor of 100). Returns null when not applicable.
+/// as `1 <base> → <rate> <quote>`. Prefers the stored `exchangeRate` (backfilled
+/// to the current rule) and only recomputes from the amounts as a fallback for
+/// rows without one. The base is the stronger currency — the leg with the
+/// smaller amount, since fewer of its units carry the same value (comparing
+/// cents works because both legs are scaled by the same factor of 100). Returns
+/// null when not applicable.
 function crossCurrencyExchangeRate(
     transaction: Transaction,
 ): { base: string; quote: string; rate: number } | null {
@@ -1008,7 +1009,8 @@ function crossCurrencyExchangeRate(
     }
     const sourceCents = Number(amount)
     const destCents = Number(toAmount)
-    const rate = computeExchangeRate(sourceCents, destCents)
+    const rate =
+        transaction.exchangeRate ?? computeExchangeRate(sourceCents, destCents)
     if (rate == null) return null
     const sourceIsBase = sourceCents <= destCents
     return {
