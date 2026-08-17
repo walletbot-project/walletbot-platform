@@ -95,9 +95,11 @@ class AdaptiveDetailView extends StatefulWidget {
   /// Shown in the right pane when nothing is selected.
   final Widget placeholder;
 
-  /// Whether this view is the one the user is looking at. Gates the
-  /// bridge-frame back-button safety net so a hidden tab never swallows the
-  /// back button.
+  /// Whether this view is the one the user is looking at. The sheet, dialog
+  /// and form routes are pushed on the SHARED navigator, above every tab, so
+  /// a hidden view must not own one — it would cover whatever tab is actually
+  /// on screen. Also gates the bridge-frame back-button safety net so a
+  /// hidden tab never swallows the back button.
   final bool isActiveTab;
 
   /// Whether a creation/edit form is open. The form occupies the same pane
@@ -154,13 +156,30 @@ class _AdaptiveDetailViewState extends State<AdaptiveDetailView> {
 
   bool get _split => _framing == DetailFraming.pane;
 
+  /// Whether the detail should currently be an overlay route.
+  ///
+  /// Hidden views own no route: the routes live on the shared navigator, so a
+  /// hidden view holding one would push it over whatever tab the user is
+  /// looking at — e.g. leaving a detail open here, switching to Home, then
+  /// shrinking the window would slam this detail over Home. Instead the
+  /// occupant stays in the offstage bridge (State intact, painting nothing
+  /// inside the hidden tab) and is re-presented when the user returns here.
+  bool get _needsSheet => !_split && widget.hasDetail && widget.isActiveTab;
+
+  /// Same rule as [_needsSheet], for the form's full-screen route.
+  bool get _needsForm => !_split && widget.hasForm && widget.isActiveTab;
+
   @override
   void didUpdateWidget(AdaptiveDetailView oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (!oldWidget.hasDetail && widget.hasDetail && !_split) {
+    // Only the visible view can be opened by the user, and only then is a
+    // route pushed in response — marking a hidden view's open as
+    // user-initiated would leave the flag pending (nothing reconciles it) and
+    // keep its form bridge suppressed, losing the form's State.
+    if (!oldWidget.hasDetail && widget.hasDetail && _needsSheet) {
       _openIsUserInitiated = true;
     }
-    if (!oldWidget.hasForm && widget.hasForm && !_split) {
+    if (!oldWidget.hasForm && widget.hasForm && _needsForm) {
       _formOpenIsUserInitiated = true;
     }
   }
@@ -219,12 +238,12 @@ class _AdaptiveDetailViewState extends State<AdaptiveDetailView> {
     setState(() {});
   }
 
-  /// Keeps the overlay route in sync with (window class × selection).
-  /// Idempotent; runs post-frame, scheduled by build on mismatch.
+  /// Keeps the overlay route in sync with (window class × selection × tab
+  /// visibility). Idempotent; runs post-frame, scheduled by build on mismatch.
   void _reconcileSheet() {
     if (!mounted) return;
     final framing = _framing;
-    final needsSheet = framing != DetailFraming.pane && widget.hasDetail;
+    final needsSheet = _needsSheet;
     final route = _sheetRoute;
     final userInitiated = _openIsUserInitiated;
     _openIsUserInitiated = false; // consumed, whatever the decision
@@ -276,7 +295,7 @@ class _AdaptiveDetailViewState extends State<AdaptiveDetailView> {
   /// [_reconcileSheet] does for the detail sheet.
   void _reconcileForm() {
     if (!mounted) return;
-    final needsForm = !_split && widget.hasForm;
+    final needsForm = _needsForm;
     final route = _formRoute;
     final userInitiated = _formOpenIsUserInitiated;
     _formOpenIsUserInitiated = false; // consumed, whatever the decision
@@ -293,14 +312,14 @@ class _AdaptiveDetailViewState extends State<AdaptiveDetailView> {
   Widget build(BuildContext context) {
     final framing = _framing;
     final split = framing == DetailFraming.pane;
-    final needsSheet = !split && widget.hasDetail;
+    final needsSheet = _needsSheet;
     // Reconcile on presence AND on framing: with the detail open, crossing
     // the sheet⇄dialog breakpoint leaves a route up but the wrong kind.
     if (needsSheet != (_sheetRoute != null) ||
         (needsSheet && _sheetRouteFraming != framing)) {
       WidgetsBinding.instance.addPostFrameCallback((_) => _reconcileSheet());
     }
-    final needsForm = !split && widget.hasForm;
+    final needsForm = _needsForm;
     if (needsForm != (_formRoute != null)) {
       WidgetsBinding.instance.addPostFrameCallback((_) => _reconcileForm());
     }
