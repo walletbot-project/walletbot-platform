@@ -73,6 +73,131 @@ Sources:
 - Backend Convex transaction mutation for web/direct Convex writes.
 - Native app repository writes for offline-first native flows.
 
+### `business.users.registered_total`
+
+Records the current total number of registered Better Auth users.
+
+Attributes: none.
+
+Sources:
+
+- Backend daily Convex cron `record registered users total`.
+- Manual backend action `telemetry/actions:recordRegisteredUsersTotalNow` for
+  tests and dashboard backfill checks.
+
+This metric is a gauge because it represents current state, not new
+registrations during a period.
+
+### `business.user_accounts.signed_in_count`
+
+Counts successful user sign-ins.
+
+Attributes:
+
+- `auth_method`: `email_password`, `google`, or `apple`
+- `client_platform`: `native` or `web`
+
+Sources:
+
+- Backend native auth routes after successful email/password or Google sign-in.
+
+Native sign-ups continue to use `business.user_accounts.created_count`; they
+are not counted as sign-ins unless the user later performs a sign-in flow.
+
+### `agent.session.cost_usd`
+
+Records the estimated USD cost reported by Gemini Live usage metadata for an
+agent interaction. Native emits this gauge whenever Gemini Live sends
+`usageMetadata`, which happens after completed turns/interactions rather than
+only when the logical session is explicitly ended.
+
+Attributes:
+
+- `model`: stable model name, such as `gemini-3.1-flash-live-preview`
+- `mode`: `voice`, `text`, or `mixed`
+- `cost_source`: `estimated`, `provider_usage`, or `reconciled`
+
+Sources:
+
+- Native Gemini Live usage metadata after completed turns/interactions.
+
+The voice session id is sent as the metric envelope `sessionId`, not as a
+metric attribute, so dashboards can detect expensive sessions without creating
+high-cardinality Grafana series.
+
+For authenticated users, backend also stores each accepted cost sample in
+`agentUsageSamples` and rolls it up into `agentUsageMonthly` by
+`userId + month + model + mode`. The native client sends a low-cardinality
+metric plus a non-label `sampleId`; backend uses `sampleId` for idempotency
+without exporting it as a Grafana label.
+
+### `agent.user.monthly_cost_usd`
+
+Records the current accumulated estimated AI cost for each user in the current
+UTC month. It is emitted every 6 hours from the backend rollup table.
+
+Attributes:
+
+- `user_id`: application user id
+- `month`: UTC month in `YYYY-MM` format
+- `model`: stable model name
+- `mode`: `voice`, `text`, or `mixed`
+
+Sources:
+
+- Backend Convex cron `record agent monthly usage`, reading
+  `agentUsageMonthly`.
+- Manual backend action `telemetry/actions:recordAgentMonthlyUsageNow` for
+  tests and dashboard refresh checks.
+
+This metric is a gauge because it represents the latest monthly accumulated
+state, not the delta since the previous export.
+
+### `agent.interactions.completed_count`
+
+Counts completed agent interactions. Native emits it together with
+`agent.session.cost_usd` only when the estimated cost differs from the previous
+usage metadata sample, so repeated identical samples are not counted again.
+
+Attributes:
+
+- `model`: stable model name
+- `mode`: `voice`, `text`, or `mixed`
+- `interaction_type`: `voice`, `text`, `mixed`, or `tool`
+
+Sources:
+
+- Native Gemini Live usage metadata after completed turns/interactions.
+
+### `agent.session.cost_outlier_count`
+
+Counts agent sessions whose estimated USD cost exceeded a configured threshold.
+
+Attributes:
+
+- `model`: stable model name
+- `mode`: `voice`, `text`, or `mixed`
+- `threshold_usd`: `0.01`, `0.05`, `0.10`, `0.50`, or `1.00`
+
+Sources:
+
+- Native Gemini Live usage metadata at session end.
+
+### `agent.session.cost_bucket_count`
+
+Counts agent sessions by estimated USD cost bucket.
+
+Attributes:
+
+- `model`: stable model name
+- `mode`: `voice`, `text`, or `mixed`
+- `cost_bucket`: `0-0.01`, `0.01-0.05`, `0.05-0.10`,
+  `0.10-0.50`, `0.50-1.00`, or `1.00+`
+
+Sources:
+
+- Native Gemini Live usage metadata at session end.
+
 ## Architecture
 
 ### Native
@@ -114,6 +239,8 @@ This feature adds Convex-only telemetry tables:
 - `telemetryEvents`
 - `telemetryMetrics`
 - `telemetryMetricSeries`
+- `agentUsageSamples`
+- `agentUsageMonthly`
 
 There are no native Drift schema changes.
 
@@ -136,6 +263,9 @@ by cron.
 ## Operational Notes
 
 - Metrics are counters with unit `count`.
+- Agent session cost uses a `gauge` with unit `usd`; outlier and bucket metrics
+  use counters with unit `count`.
+- Registered user total uses a `gauge` with unit `count`.
 - Attribute values are validated against the catalog on HTTP ingestion.
 - Metric delivery is best-effort on native and backend.
 - Native stores a stable `telemetry_installation_id` in secure storage for

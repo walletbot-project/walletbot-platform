@@ -11,6 +11,14 @@ const authMethod = v.union(
     v.literal('local'),
 )
 
+const signInAuthMethod = v.union(
+    v.literal('email_password'),
+    v.literal('google'),
+    v.literal('apple'),
+)
+
+const clientPlatform = v.union(v.literal('native'), v.literal('web'))
+
 const metricSeriesKey = (metric: {
     name: string
     source: string
@@ -98,6 +106,43 @@ export const recordUserAccountCreated = internalMutation({
         } catch (error) {
             console.warn('telemetry metric failed', {
                 metric: 'business.user_accounts.created_count',
+                userId: args.userId,
+                error: error instanceof Error ? error.message : String(error),
+            })
+            return { accepted: 0 }
+        }
+    },
+})
+
+export const recordUserAccountSignedIn = internalMutation({
+    args: {
+        userId: v.string(),
+        authMethod: signInAuthMethod,
+        clientPlatform,
+    },
+    handler: async (ctx, args) => {
+        try {
+            return await insertMetricBatch(ctx, {
+                receivedAt: Date.now(),
+                metrics: [
+                    {
+                        name: 'business.user_accounts.signed_in_count',
+                        timestamp: Date.now(),
+                        source: 'backend',
+                        type: 'counter',
+                        value: 1,
+                        unit: 'count',
+                        userId: args.userId,
+                        attributes: {
+                            auth_method: args.authMethod,
+                            client_platform: args.clientPlatform,
+                        },
+                    },
+                ],
+            })
+        } catch (error) {
+            console.warn('telemetry metric failed', {
+                metric: 'business.user_accounts.signed_in_count',
                 userId: args.userId,
                 error: error instanceof Error ? error.message : String(error),
             })
@@ -216,6 +261,23 @@ export const reserveMetricExports = internalMutation({
                     exportStatus: 'exporting' as const,
                     cumulativeValue: metric.reservedCumulativeValue,
                     cumulativeStartTime: metric.reservedCumulativeStartTime,
+                })
+                continue
+            }
+
+            if (metric.type === 'gauge') {
+                await ctx.db.patch(metric._id, {
+                    exportStatus: 'exporting',
+                    reservedCumulativeValue: metric.value,
+                    reservedCumulativeStartTime: metric.timestamp,
+                })
+                reserved.push({
+                    ...metric,
+                    exportStatus: 'exporting' as const,
+                    reservedCumulativeValue: metric.value,
+                    reservedCumulativeStartTime: metric.timestamp,
+                    cumulativeValue: metric.value,
+                    cumulativeStartTime: metric.timestamp,
                 })
                 continue
             }

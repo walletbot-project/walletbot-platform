@@ -49,4 +49,18 @@ crons.interval(
     },
 )
 
+crons.daily(
+    'record registered users total',
+    { hourUTC: 3, minuteUTC: 0 },
+    internal.telemetry.actions.recordRegisteredUsersTotal,
+    {},
+)
+
+crons.interval(
+    'record agent monthly usage',
+    { hours: 6 },
+    internal.telemetry.actions.recordAgentMonthlyUsage,
+    {},
+)
+
 export default crons

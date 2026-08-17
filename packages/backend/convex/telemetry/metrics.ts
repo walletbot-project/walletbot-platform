@@ -6,6 +6,81 @@ type CreatedBy = 'form' | 'agent'
 type IngestPath = 'direct_mutation'
 type AuthMethod = 'email_password' | 'google' | 'apple' | 'local'
 
+const monthFromTimestamp = (timestamp: number): string => {
+    const date = new Date(timestamp)
+    const month = `${date.getUTCMonth() + 1}`.padStart(2, '0')
+    return `${date.getUTCFullYear()}-${month}`
+}
+
+const stringAttribute = (
+    attributes: Record<string, MetricAttributeValue> | undefined,
+    key: string,
+): string | undefined => {
+    const value = attributes?.[key]
+    return typeof value === 'string' && value.length > 0 ? value : undefined
+}
+
+const recordAgentUsageMonthly = async (
+    ctx: MutationCtx,
+    metric: MetricInput,
+): Promise<void> => {
+    if (metric.name !== 'agent.session.cost_usd') return
+    if (!metric.userId || !metric.sampleId || metric.value <= 0) return
+
+    const model = stringAttribute(metric.attributes, 'model') ?? 'unknown'
+    const mode = stringAttribute(metric.attributes, 'mode') ?? 'mixed'
+    const sampleKey = JSON.stringify({
+        userId: metric.userId,
+        metric: metric.name,
+        sampleId: metric.sampleId,
+    })
+
+    const existingSample = await ctx.db
+        .query('agentUsageSamples')
+        .withIndex('by_sampleKey', (q) => q.eq('sampleKey', sampleKey))
+        .unique()
+    if (existingSample) return
+
+    const month = monthFromTimestamp(metric.timestamp)
+    const now = Date.now()
+    await ctx.db.insert('agentUsageSamples', {
+        sampleKey,
+        userId: metric.userId,
+        month,
+        ...(metric.sessionId ? { sessionId: metric.sessionId } : {}),
+        ...(metric.sampleId ? { interactionId: metric.sampleId } : {}),
+        model,
+        mode,
+        costUsd: metric.value,
+        occurredAt: metric.timestamp,
+        createdAt: now,
+    })
+
+    const key = JSON.stringify({ userId: metric.userId, month, model, mode })
+    const existingRollup = await ctx.db
+        .query('agentUsageMonthly')
+        .withIndex('by_key', (q) => q.eq('key', key))
+        .unique()
+    if (existingRollup) {
+        await ctx.db.patch(existingRollup._id, {
+            estimatedCostUsd: existingRollup.estimatedCostUsd + metric.value,
+            interactionCount: existingRollup.interactionCount + 1,
+            updatedAt: now,
+        })
+    } else {
+        await ctx.db.insert('agentUsageMonthly', {
+            key,
+            userId: metric.userId,
+            month,
+            model,
+            mode,
+            estimatedCostUsd: metric.value,
+            interactionCount: 1,
+            updatedAt: now,
+        })
+    }
+}
+
 const recordMetric = async (
     ctx: MutationCtx,
     metric: {
@@ -120,6 +195,7 @@ export const insertMetricBatch = async (
     args: { metrics: MetricInput[]; receivedAt: number },
 ): Promise<{ accepted: number }> => {
     for (const metric of args.metrics) {
+        await recordAgentUsageMonthly(ctx, metric)
         await ctx.db.insert('telemetryMetrics', {
             ...metric,
             receivedAt: args.receivedAt,

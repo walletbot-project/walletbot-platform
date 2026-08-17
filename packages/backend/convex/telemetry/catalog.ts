@@ -11,6 +11,13 @@ export const metricNames = new Set<MetricName>([
     'business.financial_accounts.created_count',
     'business.movements.created_count',
     'business.transfers.created_count',
+    'business.users.registered_total',
+    'business.user_accounts.signed_in_count',
+    'agent.session.cost_usd',
+    'agent.user.monthly_cost_usd',
+    'agent.interactions.completed_count',
+    'agent.session.cost_outlier_count',
+    'agent.session.cost_bucket_count',
 ])
 
 export const metricSources = new Set<MetricSource>(['web', 'native', 'backend'])
@@ -21,7 +28,7 @@ export const metricTypes = new Set<MetricType>([
     'histogram',
 ])
 
-export const metricUnits = new Set<MetricUnit>(['count', 'ms'])
+export const metricUnits = new Set<MetricUnit>(['count', 'ms', 'usd'])
 
 export const metricCatalog: Record<
     MetricName,
@@ -67,6 +74,72 @@ export const metricCatalog: Record<
             created_by: new Set(['form', 'agent']),
             ingest_path: new Set(['direct_mutation', 'direct_client']),
             cross_currency: new Set([true, false]),
+        },
+    },
+    'business.users.registered_total': {
+        type: 'gauge',
+        unit: 'count',
+        attributes: {},
+    },
+    'business.user_accounts.signed_in_count': {
+        type: 'counter',
+        unit: 'count',
+        attributes: {
+            auth_method: new Set(['email_password', 'google', 'apple']),
+            client_platform: new Set(['native', 'web']),
+        },
+    },
+    'agent.session.cost_usd': {
+        type: 'gauge',
+        unit: 'usd',
+        attributes: {
+            model: 'string',
+            mode: new Set(['voice', 'text', 'mixed']),
+            cost_source: new Set(['provider_usage', 'estimated', 'reconciled']),
+        },
+    },
+    'agent.user.monthly_cost_usd': {
+        type: 'gauge',
+        unit: 'usd',
+        attributes: {
+            user_id: 'string',
+            month: 'string',
+            model: 'string',
+            mode: new Set(['voice', 'text', 'mixed']),
+        },
+    },
+    'agent.interactions.completed_count': {
+        type: 'counter',
+        unit: 'count',
+        attributes: {
+            model: 'string',
+            mode: new Set(['voice', 'text', 'mixed']),
+            interaction_type: new Set(['voice', 'text', 'mixed', 'tool']),
+        },
+    },
+    'agent.session.cost_outlier_count': {
+        type: 'counter',
+        unit: 'count',
+        attributes: {
+            model: 'string',
+            mode: new Set(['voice', 'text', 'mixed']),
+            threshold_usd: new Set(['0.01', '0.05', '0.10', '0.50', '1.00']),
+        },
+    },
+    'agent.session.cost_bucket_count': {
+        type: 'counter',
+        unit: 'count',
+        attributes: {
+            model: 'string',
+            mode: new Set(['voice', 'text', 'mixed']),
+            cost_bucket: new Set([
+                '0-0.01',
+                '0.01-0.05',
+                '0.05-0.10',
+                '0.10-0.50',
+                '0.50-1.00',
+                '1.00+',
+            ]),
         },
     },
 }

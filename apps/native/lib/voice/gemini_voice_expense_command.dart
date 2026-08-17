@@ -1,14 +1,15 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
-import 'dart:typed_data';
 
 import 'package:convex_flutter/convex_flutter.dart';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:web_socket_channel/web_socket_channel.dart';
 
 import '../data/data.dart';
 import '../sync/wire.dart';
+import '../telemetry/agent_metrics.dart';
 import 'pcm_audio_player.dart';
 import 'tool_executors.dart';
 import 'voice_event.dart';
@@ -21,6 +22,7 @@ class GeminiVoiceExpenseCommandFactory implements VoiceExpenseCommandFactory {
     required this.repositories,
     required this.sessionRepository,
     this.remoteSync,
+    this.agentMetrics,
     this.useAuthenticatedTokenAction = false,
     this.sessionToken,
     ConvexClient? convexClient,
@@ -32,6 +34,7 @@ class GeminiVoiceExpenseCommandFactory implements VoiceExpenseCommandFactory {
   final AppRepositories repositories;
   final VoiceSessionRepository sessionRepository;
   final VoiceSessionRemoteSync? remoteSync;
+  final AgentMetrics? agentMetrics;
   final bool useAuthenticatedTokenAction;
   final String? sessionToken;
   final ConvexClient convexClient;
@@ -55,6 +58,7 @@ class GeminiVoiceExpenseCommandFactory implements VoiceExpenseCommandFactory {
       repositories: repositories,
       sessionRepository: sessionRepository,
       remoteSync: remoteSync,
+      agentMetrics: agentMetrics,
       useAuthenticatedTokenAction: useAuthenticatedTokenAction,
       sessionToken: sessionToken,
       convexClient: convexClient,
@@ -81,6 +85,7 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
     required this.repositories,
     required this.sessionRepository,
     required this.remoteSync,
+    required this.agentMetrics,
     required this.useAuthenticatedTokenAction,
     required this.sessionToken,
     required this.convexClient,
@@ -98,6 +103,7 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
   final AppRepositories repositories;
   final VoiceSessionRepository sessionRepository;
   final VoiceSessionRemoteSync? remoteSync;
+  final AgentMetrics? agentMetrics;
   final bool useAuthenticatedTokenAction;
   final String? sessionToken;
   final ConvexClient convexClient;
@@ -133,8 +139,14 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
   int _connectionGeneration = 0;
   int _reconnectAttempt = 0;
   int _inputChunks = 0;
+  int _textMessages = 0;
   int _outputAudioChunks = 0;
   int _outputAudioBytes = 0;
+  bool _sessionCostMetricSent = false;
+  bool _toolCallSinceLastUsage = false;
+  int _interactionSequence = 0;
+  double? _lastInteractionTotalCostUsd;
+  Map<String, Object?>? _latestUsageMetadata;
 
   @override
   String get label => 'Gemini Live voice expense command';
@@ -379,6 +391,7 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
     if (!isActive) return;
     final trimmed = text.trim();
     if (trimmed.isEmpty) return;
+    _textMessages += 1;
     await endAudioStream();
     recordClientEvent('send_message', {
       'interactionModality': 'text',
@@ -435,6 +448,7 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
         'Sent $_inputChunks input chunks, received $_outputAudioChunks audio '
         'chunks ($_outputAudioBytes bytes).';
     _emit(VoiceSystemEvent(summary));
+    _recordSessionCostMetric();
     final sessionId = _sessionId;
     if (sessionId != null) await sessionRepository.endExplicitly(sessionId);
     await sessionRepository.flush();
@@ -454,6 +468,7 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
     await _audioPlayer.stop();
     final sessionId = _sessionId;
     if (!_explicitlyStopped && sessionId != null) {
+      _recordSessionCostMetric();
       await sessionRepository.markStatus(sessionId, 'suspended');
     }
     await sessionRepository.flush();
@@ -490,7 +505,10 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
 
     final usage = message['usageMetadata'];
     if (usage is Map) {
-      _emit(VoiceUsageMetadataEvent(usage.cast<String, Object?>()));
+      final metadata = usage.cast<String, Object?>();
+      _latestUsageMetadata = metadata;
+      _recordInteractionCostMetric(metadata);
+      _emit(VoiceUsageMetadataEvent(metadata));
     }
 
     final resumption = message['sessionResumptionUpdate'];
@@ -650,6 +668,7 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
           ? rawArgs.cast<String, dynamic>()
           : <String, dynamic>{};
       _emit(VoiceToolCallEvent(id: id, name: name, args: args));
+      _toolCallSinceLastUsage = true;
       if (_cancelledToolIds.contains(id)) continue;
 
       final result = await _executors.execute(name, args);
@@ -748,6 +767,60 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
     _emit(VoiceConnectingEvent('Reconnecting to Gemini Live ($reason)'));
     await _closeSocket(invalidateGeneration: true);
     await _connect();
+  }
+
+  void _recordSessionCostMetric() {
+    if (_sessionCostMetricSent) return;
+    final usage = _latestUsageMetadata;
+    final sessionId = _sessionId;
+    if (usage == null || sessionId == null) return;
+    _sessionCostMetricSent = true;
+    agentMetrics?.recordSessionCostFromUsageBestEffort(
+      sessionId: sessionId,
+      model: _model,
+      mode: _sessionMode(),
+      usage: usage,
+    );
+  }
+
+  void _recordInteractionCostMetric(Map<String, Object?> usage) {
+    final sessionId = _sessionId;
+    if (sessionId == null) return;
+    final metrics = agentMetrics;
+    if (metrics == null) return;
+    final totalCostUsd = metrics.estimateSessionCostUsd(usage);
+    if (totalCostUsd == null) return;
+    final previousTotalCostUsd = _lastInteractionTotalCostUsd;
+    if (totalCostUsd == previousTotalCostUsd) return;
+    final interactionCostUsd =
+        previousTotalCostUsd == null || totalCostUsd < previousTotalCostUsd
+        ? totalCostUsd
+        : totalCostUsd - previousTotalCostUsd;
+    _lastInteractionTotalCostUsd = totalCostUsd;
+    if (interactionCostUsd <= 0) return;
+    final interactionType = _interactionType();
+    _interactionSequence += 1;
+    final sampleId = '$sessionId:$_interactionSequence';
+    _toolCallSinceLastUsage = false;
+    metrics.recordInteractionCostBestEffort(
+      sessionId: sessionId,
+      sampleId: sampleId,
+      model: _model,
+      mode: _sessionMode(),
+      interactionType: interactionType,
+      costUsd: interactionCostUsd,
+    );
+  }
+
+  String _interactionType() {
+    if (_toolCallSinceLastUsage) return 'tool';
+    return _sessionMode();
+  }
+
+  String _sessionMode() {
+    if (_inputChunks > 0 && _textMessages > 0) return 'mixed';
+    if (_inputChunks > 0) return 'voice';
+    return 'text';
   }
 
   Future<void> _closeSocket({required bool invalidateGeneration}) async {

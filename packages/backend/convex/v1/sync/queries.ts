@@ -34,6 +34,8 @@ type SyncedTable = (typeof SYNCED_TABLES)[number]
 export const getCounter = query({
     args: {},
     handler: async (ctx): Promise<bigint> => {
+        const identity = await ctx.auth.getUserIdentity()
+        if (!identity) return 0n
         const userId = await requireAuth(ctx)
         const row = await ctx.db
             .query('syncCounters')

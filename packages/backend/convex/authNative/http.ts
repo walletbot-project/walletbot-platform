@@ -132,11 +132,22 @@ const googleSignIn = httpAction(async (ctx, req) => {
     }
 
     if (isNewSocialUserResult(result)) {
-        await ctx.runMutation(internal.telemetry.mutations.recordUserAccountCreated, {
+        await ctx.runMutation(
+            internal.telemetry.mutations.recordUserAccountCreated,
+            {
+                userId: result.user.id,
+                authMethod: 'google',
+            },
+        )
+    }
+    await ctx.runMutation(
+        internal.telemetry.mutations.recordUserAccountSignedIn,
+        {
             userId: result.user.id,
             authMethod: 'google',
-        })
-    }
+            clientPlatform: 'native',
+        },
+    )
 
     return issueNativeSession(ctx, req, result.user)
 })
@@ -173,6 +184,14 @@ const emailSignIn = httpAction(async (ctx, req) => {
             },
             headers,
         })
+        await ctx.runMutation(
+            internal.telemetry.mutations.recordUserAccountSignedIn,
+            {
+                userId: result.user.id,
+                authMethod: 'email_password',
+                clientPlatform: 'native',
+            },
+        )
         return issueNativeSession(ctx, req, result.user)
     } catch (err) {
         const message = err instanceof Error ? err.message : String(err)

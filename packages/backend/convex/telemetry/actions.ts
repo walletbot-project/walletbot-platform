@@ -1,6 +1,9 @@
-import { internal } from '../_generated/api'
+import { v } from 'convex/values'
+import { components, internal } from '../_generated/api'
 import type { Doc } from '../_generated/dataModel'
-import { internalAction } from '../_generated/server'
+import type { ActionCtx } from '../_generated/server'
+import { action, internalAction } from '../_generated/server'
+import type { MetricInput } from './types'
 
 const defaultServiceName = 'walletbot-backend'
 const exportBatchSize = 50
@@ -35,6 +38,17 @@ const resourceAttributes = (): Array<{
         attributes['service.name'] ??
         process.env.OTEL_SERVICE_NAME?.trim() ??
         defaultServiceName
+    attributes['service.namespace'] =
+        attributes['service.namespace'] ?? 'walletbot'
+    const deploymentEnvironment =
+        process.env.WALLETBOT_ENV?.trim() ||
+        process.env.APP_ENV?.trim() ||
+        process.env.NODE_ENV?.trim() ||
+        process.env.CONVEX_DEPLOYMENT?.trim()
+    if (deploymentEnvironment) {
+        attributes['deployment.environment'] =
+            attributes['deployment.environment'] ?? deploymentEnvironment
+    }
 
     return Object.entries(attributes)
         .filter(([key, value]) => key.trim().length > 0 && value.length > 0)
@@ -200,6 +214,136 @@ const toOtlpMetricsPayload = (metrics: Array<ReservedMetricExport>) => {
         ],
     }
 }
+
+const countRegisteredUsers = async (ctx: ActionCtx): Promise<number> => {
+    let cursor: string | null = null
+    let count = 0
+    do {
+        const page = (await ctx.runQuery(
+            components.betterAuth.adapter.findMany,
+            {
+                model: 'user',
+                paginationOpts: { cursor, numItems: 100 },
+            },
+        )) as { docs: unknown[]; continueCursor?: string; isDone: boolean }
+        count += page.docs.length
+        cursor = page.isDone ? null : (page.continueCursor ?? null)
+    } while (cursor !== null)
+    return count
+}
+
+const recordRegisteredUsersTotalMetric = async (
+    ctx: ActionCtx,
+): Promise<{ count: number; accepted: number }> => {
+    const count = await countRegisteredUsers(ctx)
+    const result: { accepted: number } = await ctx.runMutation(
+        internal.telemetry.mutations.insertMetricBatchMutation,
+        {
+            receivedAt: Date.now(),
+            metrics: [
+                {
+                    name: 'business.users.registered_total',
+                    timestamp: Date.now(),
+                    source: 'backend',
+                    type: 'gauge',
+                    value: count,
+                    unit: 'count',
+                    attributes: {},
+                },
+            ],
+        },
+    )
+    return { count, accepted: result.accepted }
+}
+
+const currentMonth = (): string => {
+    const date = new Date()
+    const month = `${date.getUTCMonth() + 1}`.padStart(2, '0')
+    return `${date.getUTCFullYear()}-${month}`
+}
+
+const normalizeAgentMode = (mode: string): 'voice' | 'text' | 'mixed' => {
+    if (mode === 'voice' || mode === 'text' || mode === 'mixed') return mode
+    return 'mixed'
+}
+
+const recordAgentMonthlyUsageMetric = async (
+    ctx: ActionCtx,
+    month = currentMonth(),
+): Promise<{ rows: number; accepted: number }> => {
+    const rows: Array<{
+        userId: string
+        month: string
+        model: string
+        mode: string
+        estimatedCostUsd: number
+    }> = await ctx.runQuery(
+        internal.agentUsage.queries.listMonthlyUsageForTelemetry,
+        { month },
+    )
+
+    if (rows.length === 0) return { rows: 0, accepted: 0 }
+
+    const now = Date.now()
+    const metrics: MetricInput[] = rows.map((row) => {
+        const mode = normalizeAgentMode(row.mode)
+        return {
+            name: 'agent.user.monthly_cost_usd',
+            timestamp: now,
+            source: 'backend',
+            type: 'gauge',
+            value: row.estimatedCostUsd,
+            unit: 'usd',
+            userId: row.userId,
+            attributes: {
+                user_id: row.userId,
+                month: row.month,
+                model: row.model,
+                mode,
+            },
+        }
+    })
+    const result: { accepted: number } = await ctx.runMutation(
+        internal.telemetry.mutations.insertMetricBatchMutation,
+        {
+            receivedAt: now,
+            metrics,
+        },
+    )
+    return { rows: rows.length, accepted: result.accepted }
+}
+
+export const recordRegisteredUsersTotal = internalAction({
+    args: {},
+    handler: async (ctx) => recordRegisteredUsersTotalMetric(ctx),
+})
+
+export const recordRegisteredUsersTotalNow = action({
+    args: { adminToken: v.string() },
+    handler: async (ctx, args) => {
+        const expected = process.env.TELEMETRY_ADMIN_TOKEN?.trim()
+        if (!expected || args.adminToken !== expected) {
+            throw new Error('Unauthorized')
+        }
+        return recordRegisteredUsersTotalMetric(ctx)
+    },
+})
+
+export const recordAgentMonthlyUsage = internalAction({
+    args: {},
+    handler: async (ctx) => recordAgentMonthlyUsageMetric(ctx),
+})
+
+export const recordAgentMonthlyUsageNow = action({
+    args: { adminToken: v.string(), month: v.optional(v.string()) },
+    handler: async (ctx, args) => {
+        const expected = process.env.TELEMETRY_ADMIN_TOKEN?.trim()
+        if (!expected || args.adminToken !== expected) {
+            throw new Error('Unauthorized')
+        }
+        return recordAgentMonthlyUsageMetric(ctx, args.month)
+    },
+})
 
 const otlpSignalEndpoint = (
     signal: 'logs' | 'metrics',

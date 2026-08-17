@@ -19,6 +19,7 @@ import 'package:app/screens/voice.dart';
 import 'package:app/settings/display_settings.dart';
 import 'package:app/shared/app_navigation.dart';
 import 'package:app/sync/sync_engine.dart';
+import 'package:app/telemetry/agent_metrics.dart';
 import 'package:app/telemetry/business_metrics.dart';
 import 'package:app/telemetry/telemetry_client.dart';
 import 'package:app/voice/gemini_voice_expense_command.dart';
@@ -166,6 +167,10 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
           Provider<BusinessMetrics>(
             create: (_) => BusinessMetrics(widget.telemetry!),
           ),
+        if (widget.telemetry != null)
+          Provider<AgentMetrics>(
+            create: (_) => AgentMetrics(widget.telemetry!),
+          ),
       ],
       child: _TelemetryStarter(
         child: Consumer<DisplaySettingsController>(
@@ -276,6 +281,7 @@ class _AuthGate extends StatelessWidget {
             remoteSync: active.type == AccountType.remote
                 ? ctx.read<VoiceSessionRemoteSync>()
                 : null,
+            agentMetrics: ctx.read<AgentMetrics?>(),
             useAuthenticatedTokenAction: active.type == AccountType.remote,
             sessionToken: active.sessionToken,
             convexSiteUrl: AppConfig.convexSiteUrl,

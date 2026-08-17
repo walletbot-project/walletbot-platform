@@ -15,6 +15,7 @@ export const telemetryEventInput = v.object({
     properties: v.any(),
     installationId: v.optional(v.string()),
     sessionId: v.optional(v.string()),
+    sampleId: v.optional(v.string()),
     userId: v.optional(v.string()),
     appVersion: v.optional(v.string()),
     platform: v.optional(telemetryPlatform),
@@ -25,6 +26,13 @@ export const metricName = v.union(
     v.literal('business.financial_accounts.created_count'),
     v.literal('business.movements.created_count'),
     v.literal('business.transfers.created_count'),
+    v.literal('business.users.registered_total'),
+    v.literal('business.user_accounts.signed_in_count'),
+    v.literal('agent.session.cost_usd'),
+    v.literal('agent.user.monthly_cost_usd'),
+    v.literal('agent.interactions.completed_count'),
+    v.literal('agent.session.cost_outlier_count'),
+    v.literal('agent.session.cost_bucket_count'),
 )
 
 export const metricSource = v.union(
@@ -39,7 +47,11 @@ export const metricType = v.union(
     v.literal('histogram'),
 )
 
-export const metricUnit = v.union(v.literal('count'), v.literal('ms'))
+export const metricUnit = v.union(
+    v.literal('count'),
+    v.literal('ms'),
+    v.literal('usd'),
+)
 
 export const metricInput = v.object({
     name: metricName,
@@ -51,6 +63,7 @@ export const metricInput = v.object({
     attributes: v.optional(v.any()),
     installationId: v.optional(v.string()),
     sessionId: v.optional(v.string()),
+    sampleId: v.optional(v.string()),
     userId: v.optional(v.string()),
     appVersion: v.optional(v.string()),
     platform: v.optional(telemetryPlatform),
