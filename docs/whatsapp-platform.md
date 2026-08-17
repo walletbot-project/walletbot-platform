@@ -189,8 +189,16 @@ Set on **both** `dev:proficient-finch-671` and prod:
 | `WHATSAPP_VERIFY_TOKEN` | 32-byte random hex | Webhook handshake |
 | `WHATSAPP_GRAPH_VERSION` | `v23.0` | Our own code |
 | `WHATSAPP_APP_SECRET` | 32-char app secret | Webhook signature verification (R-020) |
+| `WHATSAPP_BUSINESS_NUMBER` | `5491123991858` | `wa.me` deep link in the account-linking flow |
 
-All eight are set on both `dev:proficient-finch-671` and prod.
+All nine are set on both `dev:proficient-finch-671` and prod.
+
+`WHATSAPP_BUSINESS_NUMBER` is the **dialable** number without the `+`, not the
+`wa_id` — `wa.me` wants what a human would dial. For this number the two happen
+to coincide; for many Argentine numbers they do not, so do not derive one from
+the other (Part 6). It is the only optional variable here: with it unset,
+`createLinkCode` still returns a code and simply omits the deep link, and
+`linkStatus` reports `available: false` so a client can hide the entry point.
 
 `WHATSAPP_ACCESS_TOKEN` and `WHATSAPP_TOKEN` deliberately hold the same value:
 Chat SDK auto-detects the former (see Part 9), our own helpers read the former.
@@ -874,16 +882,30 @@ inside the mutation that creates the movement, so a retry is a no-op.**
 
 ### Suggested next steps
 
-1. Decide how a `wa_id` maps to a Wallet Bot `userId` — a linking code, a phone
-   match, or an onboarding conversation. The queue is agnostic; the agent is
-   blocked on it (`whatsappConversations.userId` is optional and unset today).
+1. ~~Decide how a `wa_id` maps to a Wallet Bot `userId`~~ — **done
+   (2026-08-17)**: a short-lived link code minted from an authenticated session
+   and sent by the user over WhatsApp, with the native UI in the user/accounts
+   menu. See Part 12 § Identity. Web parity is still open.
 2. Replace the stub `generateReply` in `whatsapp/nodeActions.ts` with the real
-   agent.
+   agent. It needs a server-side tool executor: the 40 tool schemas in
+   `packages/shared/src/tools/` are reusable as-is, but the executor
+   (`apps/native/lib/voice/tool_executors.dart`) runs on the device against
+   Drift, and there is no Convex equivalent. The `v1/*` mutations exist but are
+   all `requireAuth`-gated, so they need internal `userId`-taking variants that
+   still go through `nextSeq` — otherwise the agent's writes never sync to the
+   phone.
 3. Implement the R-019 idempotency key **before** the agent gets write tools.
-4. Filter inbound by sender so Meta's own notifications don't trigger agent
-   turns (see above).
+   Cheaper than it looks: the create mutations already take a client-supplied
+   `id: v.string()` and already record `createdBy: 'agent'`, so a UUID derived
+   from the claimed `wamid`s makes a replay hit `assertNoExistingId` instead of
+   writing a second expense. That helper currently *throws*, so the executor
+   should treat "already exists" as success rather than reporting an error.
+4. ~~Filter inbound by sender~~ — **done**: the identity gate in `runAgentTurn`
+   means an unlinked sender, Meta's own bot included, never reaches the agent.
+   It still costs one cheap turn and one fixed-copy reply.
 5. Create at least one approved template if the agent should ever initiate
-   rather than only reply.
+   rather than only reply. Not needed for linking — that flow is deliberately
+   user-initiated (Part 12 § Identity).
 6. Decide the dev/prod callback split — one Meta app per environment, or accept
    that only one receives messages. Both deployments currently point at the same
    number and the same WABA.
@@ -906,14 +928,17 @@ What actually exists in the backend, and how to test it.
 
 | File | Role |
 | --- | --- |
-| `convex/schema/whatsapp.ts` | `whatsappConversations` (the lock), `whatsappInboundMessages` (the queue), `whatsappOutboundMessages` (delivery log) |
+| `convex/schema/whatsapp.ts` | `whatsappConversations` (the lock), `whatsappInboundMessages` (the queue), `whatsappOutboundMessages` (delivery log), `whatsappLinkCodes` (identity) |
 | `convex/whatsapp/http.ts` | `registerWhatsappRoutes` — `GET` handshake, `POST` events |
 | `convex/whatsapp/utils.ts` | HMAC verification, defensive payload parsing |
-| `convex/whatsapp/internal.ts` | `enqueueInbound`, `claimOrRelease`, `finishBatch`, `recordOutbound`, `applyStatusUpdates`, `handOffTurn`, `releaseStuckTurns` |
+| `convex/whatsapp/internal.ts` | `enqueueInbound`, `claimOrRelease`, `finishBatch`, `recordOutbound`, `applyStatusUpdates`, `handOffTurn`, `releaseStuckTurns`, `tryLink`, `purgeExpiredLinkCodes` |
 | `convex/whatsapp/helpers.ts` | `sendText`, `windowIsOpen`, `chunkBody` |
-| `convex/whatsapp/nodeActions.ts` | `runAgentTurn` — the drain loop |
+| `convex/whatsapp/linking.ts` | Pure link-code logic: generation, normalisation, extraction, reply copy, deep link |
+| `convex/whatsapp/nodeActions.ts` | `runAgentTurn` — the drain loop and the identity gate |
+| `convex/v1/whatsapp/mutations.ts` | `createLinkCode`, `unlink` — the authenticated half of linking |
+| `convex/v1/whatsapp/queries.ts` | `linkStatus` — which numbers are connected |
 
-Registered in `schema.ts`, `http.ts`, and `crons.ts` (reaper, every 5 minutes).
+Registered in `schema.ts`, `http.ts`, and `crons.ts` (reaper every 5 minutes, link-code purge hourly).
 
 ### How the coalescing works
 
@@ -952,7 +977,108 @@ cannot touch state a newer turn now owns.
 loops a busy conversation mints a fresh `runId` and schedules a new action rather
 than being killed while still holding the lock.
 
+### Identity: linking a `wa_id` to an account
+
+A `wa_id` proves nothing. The webhook is public and unauthenticated, so anyone
+who knows the business number can send it a message claiming to be anyone. That
+makes `whatsappConversations.userId` the authorization boundary for the entire
+feature — not a convenience field.
+
+`runAgentTurn` gates on it. A conversation with no `userId` never reaches the
+model, a tool, or any account data; the only thing it can do is present a link
+code and get a fixed reply.
+
+**The flow is user-initiated on purpose.**
+
+```
+app (authenticated)                WhatsApp                    backend
+────────────────────               ────────                    ───────
+createLinkCode ──────────────────────────────────────────► mint code (10 min, single use)
+   ◄── code + wa.me deep link
+   user taps the deep link
+        │
+        └─► WhatsApp opens with the code prefilled
+              user taps send ─────────────────────────────► webhook (inbound)
+                                                              enqueue → turn
+                                                              userId == null
+                                                              → tryLink(candidates)
+              ◄──────────────── "✅ vinculado" ──────────── set userId, consume code
+```
+
+Nothing here is business-initiated, and that is deliberate. A message Wallet Bot
+sends first would be an out-of-window, template-only send — the failure mode in
+Part 7, where Meta returns `200` and a `wamid` and silently discards it. Because
+the user taps send, they open the 24-hour service window themselves and every
+reply is free-form and deliverable. It also means the flow needs no approved
+template, so it works today, on a WABA with zero templates.
+
+The `wa.me` deep link is what makes that ergonomic: it opens WhatsApp with the
+code already typed, so "user-initiated" costs one tap instead of asking someone
+to copy a code between apps. Note it takes the **dialable** number
+(`WHATSAPP_BUSINESS_NUMBER`), not the `wa_id` — see Part 6.
+
+**Design notes worth keeping.**
+
+- The code is stored in plain text. Hashing looks safer but buys nothing: 8
+  characters over a 32-symbol alphabet is ~1.1e12 preimages, exhaustible in far
+  less than the code's 10-minute life. The real controls are the TTL, single
+  use, and the attempt limit.
+- Codes always contain at least one digit and at least one letter, and
+  extraction requires the same. Without that rule a message like `VINCULAR`
+  parses as a code — Crockford aliasing maps `I`→`1` and `U`→`V` — and burns one
+  of a legitimate user's five attempts.
+- Uniqueness is enforced when minting, not assumed from randomness, so the
+  `by_code` lookup can use `.unique()` and a collision can never resolve one
+  user's code to another user's account.
+- Five wrong codes → 15-minute block, answered with **silence**. Replying would
+  turn the limit into a free oracle. Re-sending your own already-used code, or
+  an expired one, is not counted — that is what a confused user does.
+- Replies are **one language, never two**. There is no account yet and so no
+  stored locale, so `replyLanguageFor` picks from the sender's country code
+  against a hard-coded table. Spanish-speaking Latin America plus Spain get
+  Spanish; everything else gets English. Two consequences are intentional:
+  **Brazil gets English** (Latin America, but the dividing line is Spanish, not
+  geography), and **the Dominican Republic and Puerto Rico get English**
+  because their numbers are +1 and cannot be told apart from any other NANP
+  number without an area-code table. Once linked, the agent follows the user's
+  own words instead and the table stops mattering.
+- `unlink` revokes pending codes. Otherwise a code minted just before
+  unlinking stays live and could silently re-link the number.
+
+**Native UI (2026-08-17).** Reachable from the user/accounts menu
+(`screens/home.dart`), which pushes `screens/whatsapp_link.dart`. State lives in
+`whatsapp/whatsapp_link_controller.dart`.
+
+Two things about it are worth knowing before changing it:
+
+- **It caches nothing**, unlike `DefaultCurrencyController`. That controller
+  caches because a default currency is needed offline to prefill a form; link
+  state is only read on a screen that cannot act without the network, and a
+  cached code would be a stale credential. Offline shows an error with a retry
+  rather than a plausible-looking empty list.
+- **`isRemote` gates every call.** A local-only account has no backend user, so
+  the screen explains that instead of offering a button that would fail. The
+  test asserts no query is issued at all, so the gate cannot rot into a purely
+  visual one.
+
+The controller depends on a two-method `WhatsappLinkApi` rather than
+`ConvexClient` directly. `ConvexClient` has a private constructor and an
+`instance` getter that throws under `flutter test`, so it cannot be faked;
+narrowing the dependency is what makes the parsing and state machine testable.
+`ConvexLinkApi` is the one production implementation.
+
+**Still missing:** the web UI — nothing in `apps/web` calls these functions, so
+linking is native-only for now. There is also no notification to the user when
+their account gets linked to a new number (R-024).
+
 ### Testing without Meta
+
+The pure link logic has no Convex or Node dependencies, so it runs directly:
+
+```bash
+# 38 assertions incl. 20k generated codes round-tripping through the display form
+node --experimental-strip-types /path/to/link-test.ts
+```
 
 The `GET` handshake:
 

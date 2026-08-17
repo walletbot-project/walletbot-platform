@@ -67,4 +67,14 @@ crons.interval(
     {},
 )
 
+// Link codes are credentials for binding a phone number to an account. They
+// stop being useful minutes after they are minted, so the table is kept small
+// and stale rows are dropped rather than left lying around.
+crons.interval(
+    'purge expired whatsapp link codes',
+    { hours: 1 },
+    internal.whatsapp.internal.purgeExpiredLinkCodes,
+    {},
+)
+
 export default crons

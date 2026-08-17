@@ -22,6 +22,7 @@ import { voiceSessionEvents, voiceSessions } from './schema/voice'
 import {
     whatsappConversations,
     whatsappInboundMessages,
+    whatsappLinkCodes,
     whatsappOutboundMessages,
 } from './schema/whatsapp'
 
@@ -47,5 +48,6 @@ export default defineSchema({
     voiceSessions,
     whatsappConversations,
     whatsappInboundMessages,
+    whatsappLinkCodes,
     whatsappOutboundMessages,
 })

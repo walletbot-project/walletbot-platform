@@ -10,6 +10,7 @@ import 'package:app/l10n/l10n.dart';
 import 'package:app/screens/login.dart';
 import 'package:app/screens/settings.dart';
 import 'package:app/screens/transaction_form.dart';
+import 'package:app/screens/whatsapp_link.dart';
 import 'package:app/shared/app_navigation.dart';
 import 'package:app/sync/sync_engine.dart';
 import 'package:app/sync/sync_status.dart';
@@ -167,6 +168,25 @@ class _HomeScreenState extends State<HomeScreen> {
                           accountId: previousId,
                           child: const LoginScreen(canDismiss: true),
                         ),
+                      ),
+                    );
+                  },
+                ),
+                const Divider(),
+                ListTile(
+                  leading: const Icon(Icons.chat_bubble_outline_rounded),
+                  title: Text(context.l10n.whatsappTitle),
+                  onTap: () {
+                    // WhatsappLinkScreen owns its own controller (it caches
+                    // nothing), so unlike Settings there is nothing to
+                    // re-provide across the pushed route. It does need to know
+                    // whether this account has a backend user at all: a local
+                    // account has nothing to link.
+                    final isRemote =
+                        auth.activeAccount?.type == AccountType.remote;
+                    Navigator.of(dialogContext).push(
+                      MaterialPageRoute<void>(
+                        builder: (_) => WhatsappLinkScreen(isRemote: isRemote),
                       ),
                     );
                   },

@@ -71,9 +71,12 @@ import type * as v1_users_helpers from "../v1/users/helpers.js";
 import type * as v1_users_mutations from "../v1/users/mutations.js";
 import type * as v1_users_queries from "../v1/users/queries.js";
 import type * as v1_voice_sessions from "../v1/voice/sessions.js";
+import type * as v1_whatsapp_mutations from "../v1/whatsapp/mutations.js";
+import type * as v1_whatsapp_queries from "../v1/whatsapp/queries.js";
 import type * as whatsapp_helpers from "../whatsapp/helpers.js";
 import type * as whatsapp_http from "../whatsapp/http.js";
 import type * as whatsapp_internal from "../whatsapp/internal.js";
+import type * as whatsapp_linking from "../whatsapp/linking.js";
 import type * as whatsapp_nodeActions from "../whatsapp/nodeActions.js";
 import type * as whatsapp_utils from "../whatsapp/utils.js";
 
@@ -147,9 +150,12 @@ declare const fullApi: ApiFromModules<{
   "v1/users/mutations": typeof v1_users_mutations;
   "v1/users/queries": typeof v1_users_queries;
   "v1/voice/sessions": typeof v1_voice_sessions;
+  "v1/whatsapp/mutations": typeof v1_whatsapp_mutations;
+  "v1/whatsapp/queries": typeof v1_whatsapp_queries;
   "whatsapp/helpers": typeof whatsapp_helpers;
   "whatsapp/http": typeof whatsapp_http;
   "whatsapp/internal": typeof whatsapp_internal;
+  "whatsapp/linking": typeof whatsapp_linking;
   "whatsapp/nodeActions": typeof whatsapp_nodeActions;
   "whatsapp/utils": typeof whatsapp_utils;
 }>;

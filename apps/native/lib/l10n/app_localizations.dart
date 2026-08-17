@@ -2521,6 +2521,138 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Tap to try again'**
   String get tapToRetry;
+
+  /// No description provided for @whatsappTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'WhatsApp'**
+  String get whatsappTitle;
+
+  /// No description provided for @whatsappLocalAccountTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Not available for local accounts'**
+  String get whatsappLocalAccountTitle;
+
+  /// No description provided for @whatsappLocalAccountBody.
+  ///
+  /// In en, this message translates to:
+  /// **'This space only lives on your device, so there is no account to link. Sign in to sync it first.'**
+  String get whatsappLocalAccountBody;
+
+  /// No description provided for @whatsappLoadFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not load your WhatsApp status'**
+  String get whatsappLoadFailed;
+
+  /// No description provided for @whatsappUnavailableTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Not available yet'**
+  String get whatsappUnavailableTitle;
+
+  /// No description provided for @whatsappUnavailableBody.
+  ///
+  /// In en, this message translates to:
+  /// **'WhatsApp is not configured on this server. Try again later.'**
+  String get whatsappUnavailableBody;
+
+  /// No description provided for @whatsappNotConnectedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Not connected'**
+  String get whatsappNotConnectedTitle;
+
+  /// No description provided for @whatsappNotConnectedBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Link your number to record expenses by chatting with Wallet Bot on WhatsApp.'**
+  String get whatsappNotConnectedBody;
+
+  /// No description provided for @whatsappConnect.
+  ///
+  /// In en, this message translates to:
+  /// **'Connect WhatsApp'**
+  String get whatsappConnect;
+
+  /// No description provided for @whatsappCodeLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Your linking code'**
+  String get whatsappCodeLabel;
+
+  /// No description provided for @whatsappCodeExpiryHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Valid for 10 minutes, and can be used once.'**
+  String get whatsappCodeExpiryHint;
+
+  /// No description provided for @whatsappOpenWhatsapp.
+  ///
+  /// In en, this message translates to:
+  /// **'Open WhatsApp'**
+  String get whatsappOpenWhatsapp;
+
+  /// No description provided for @whatsappCopyCode.
+  ///
+  /// In en, this message translates to:
+  /// **'Copy code'**
+  String get whatsappCopyCode;
+
+  /// No description provided for @whatsappCodeCopied.
+  ///
+  /// In en, this message translates to:
+  /// **'Code copied'**
+  String get whatsappCodeCopied;
+
+  /// No description provided for @whatsappCodeFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not create a linking code'**
+  String get whatsappCodeFailed;
+
+  /// No description provided for @whatsappOpenFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not open WhatsApp. Copy the code and send it manually.'**
+  String get whatsappOpenFailed;
+
+  /// No description provided for @whatsappConnectedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Connected'**
+  String get whatsappConnectedTitle;
+
+  /// No description provided for @whatsappConnectedBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Write to Wallet Bot on WhatsApp and it will record your movements.'**
+  String get whatsappConnectedBody;
+
+  /// No description provided for @whatsappLinkedOn.
+  ///
+  /// In en, this message translates to:
+  /// **'Linked on {date}'**
+  String whatsappLinkedOn(String date);
+
+  /// No description provided for @whatsappDisconnect.
+  ///
+  /// In en, this message translates to:
+  /// **'Disconnect'**
+  String get whatsappDisconnect;
+
+  /// No description provided for @whatsappDisconnectConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Wallet Bot will stop answering this number until you link it again.'**
+  String get whatsappDisconnectConfirm;
+
+  /// No description provided for @whatsappDisconnectFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not disconnect the number'**
+  String get whatsappDisconnectFailed;
 }
 
 class _AppLocalizationsDelegate

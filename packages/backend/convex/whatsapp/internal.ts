@@ -21,6 +21,17 @@ const MAX_BATCH = 50
 // How many conversations the reaper repairs per run.
 const REAPER_LIMIT = 25
 
+// Wrong codes tolerated before a conversation is put on ice. Low, because a
+// legitimate user pastes a deep link or copies a code off their own screen —
+// repeated misses mean someone is guessing.
+const MAX_LINK_ATTEMPTS = 5
+const LINK_BLOCK_MS = 15 * 60 * 1000
+
+// How long a code row survives past its expiry, so "that code already expired"
+// stays answerable for a while after the fact.
+const LINK_CODE_RETENTION_MS = 24 * 60 * 60 * 1000
+const PURGE_LIMIT = 100
+
 const findConversation = async (
     ctx: MutationCtx,
     waId: string,
@@ -290,6 +301,111 @@ export const applyStatusUpdates = internalMutation({
                     `whatsapp outbound ${update.wamid} failed (${update.errorCode ?? 'no code'}): ${update.errorMessage ?? 'no message'}`,
                 )
             }
+        }
+        return null
+    },
+})
+
+// Resolves a batch of candidate codes against the pending link codes and, on a
+// match, binds the conversation to that account.
+//
+// One mutation, one transaction, on purpose. The check ("is this code valid
+// and unused?") and the write ("consume it and link") must be atomic, or the
+// same code could be redeemed twice by two conversations racing — which would
+// hand a second, unrelated WhatsApp number access to someone's finances.
+//
+// Not every miss is punished. Re-sending a code this same conversation already
+// redeemed, or one that simply expired, is what a confused legitimate user
+// does; only a wrong code, or one belonging to a different number, counts
+// against the attempt limit.
+export const tryLink = internalMutation({
+    args: {
+        conversationId: v.id('whatsappConversations'),
+        runId: v.string(),
+        candidates: v.array(v.string()),
+    },
+    handler: async (ctx, { conversationId, runId, candidates }) => {
+        const conversation = await ctx.db.get(conversationId)
+        if (!conversation || conversation.runId !== runId) {
+            return { kind: 'fenced' as const }
+        }
+        if (conversation.userId !== undefined) {
+            return { kind: 'already_linked' as const }
+        }
+
+        const now = Date.now()
+        if (
+            conversation.linkBlockedUntil !== undefined &&
+            now < conversation.linkBlockedUntil
+        ) {
+            return {
+                kind: 'blocked' as const,
+                until: conversation.linkBlockedUntil,
+            }
+        }
+        if (candidates.length === 0) {
+            return { kind: 'no_code' as const }
+        }
+
+        for (const candidate of candidates) {
+            const row = await ctx.db
+                .query('whatsappLinkCodes')
+                .withIndex('by_code', (q) => q.eq('code', candidate))
+                .unique()
+            if (!row) continue
+
+            if (row.consumedAt !== undefined) {
+                // Their own code, sent twice. Harmless.
+                if (row.consumedByWaId === conversation.waId) {
+                    return { kind: 'already_used' as const }
+                }
+                // Someone else's code. That is worth counting.
+                break
+            }
+            if (now >= row.expiresAt) {
+                return { kind: 'expired' as const }
+            }
+
+            await ctx.db.patch(row._id, {
+                consumedAt: now,
+                consumedByWaId: conversation.waId,
+            })
+            await ctx.db.patch(conversationId, {
+                userId: row.userId,
+                linkedAt: now,
+                failedLinkAttempts: undefined,
+                linkBlockedUntil: undefined,
+            })
+            return { kind: 'linked' as const }
+        }
+
+        const attempts = (conversation.failedLinkAttempts ?? 0) + 1
+        const blocked = attempts >= MAX_LINK_ATTEMPTS
+        await ctx.db.patch(conversationId, {
+            failedLinkAttempts: attempts,
+            linkBlockedUntil: blocked ? now + LINK_BLOCK_MS : undefined,
+        })
+        return {
+            kind: 'invalid' as const,
+            attemptsLeft: Math.max(0, MAX_LINK_ATTEMPTS - attempts),
+        }
+    },
+})
+
+// Consumed and expired codes are kept for a while so a user re-sending one
+// gets a useful answer rather than "wrong code". Once they are stale they are
+// only a liability, and keeping the table small is what makes the collision
+// check in createLinkCode cheap. Scheduled from crons.ts.
+export const purgeExpiredLinkCodes = internalMutation({
+    args: {},
+    handler: async (ctx) => {
+        const cutoff = Date.now() - LINK_CODE_RETENTION_MS
+        const stale = await ctx.db
+            .query('whatsappLinkCodes')
+            .withIndex('by_expiresAt', (q) => q.lt('expiresAt', cutoff))
+            .take(PURGE_LIMIT)
+        for (const row of stale) {
+            await ctx.db.delete(row._id)
         }
         return null
     },
