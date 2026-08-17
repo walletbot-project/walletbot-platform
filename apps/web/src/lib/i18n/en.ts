@@ -168,6 +168,7 @@ export const en: Messages = {
         account: 'Account',
         sourceAccount: 'Source account',
         destinationAccount: 'Destination account',
+        exchangeRate: 'Exchange rate',
         deletedAccount: 'Deleted account',
         category: 'Category',
         tags: 'Tags',

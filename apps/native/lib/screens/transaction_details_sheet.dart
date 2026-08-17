@@ -714,6 +714,7 @@ class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
                 )
               : null,
         ),
+      ?_exchangeRateRow(transaction),
       _ReceiptRow(
         icon: categoryIcon,
         iconColor: category == null ? null : categoryColor,
@@ -948,6 +949,39 @@ class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
         label: Text(tag.name),
         labelStyle: style.labelStyle,
         backgroundColor: style.background,
+      ),
+    );
+  }
+
+  /// Read-only "tipo de cambio" row for cross-currency transfers, shaped as
+  /// `1 <strong> → <rate> <weak>`. The rate is recomputed from the two amounts
+  /// (not read from the stored field) so legacy rows show the current rule too.
+  /// Returns null for same-currency transfers and non-transfers.
+  _ReceiptRow? _exchangeRateRow(Transaction t) {
+    if (t.type != 'transfer') return null;
+    final toCurrency = t.toCurrency;
+    final toAmount = t.toAmount;
+    if (toCurrency == null || toAmount == null || toCurrency == t.currency) {
+      return null;
+    }
+    final sourceCents = t.amount.toDouble();
+    final destCents = toAmount.toDouble();
+    final rate = computeExchangeRate(sourceCents, destCents);
+    if (rate == null) return null;
+
+    // The rate is always >= 1; its base is the stronger currency — the leg with
+    // the smaller amount, since fewer of its units carry the same value.
+    // Comparing cents works because both legs are scaled by the same 100 factor.
+    final sourceIsBase = sourceCents <= destCents;
+    final baseCurrency = sourceIsBase ? t.currency : toCurrency;
+    final quoteCurrency = sourceIsBase ? toCurrency : t.currency;
+
+    return _ReceiptRow(
+      icon: Icons.currency_exchange_rounded,
+      label: 'Tipo de cambio',
+      value: Text(
+        '1 $baseCurrency  →  ${formatExchangeRate(rate)} '
+        '$quoteCurrency',
       ),
     );
   }
