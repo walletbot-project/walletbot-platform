@@ -39,6 +39,10 @@ Wallet Bot — app for keeping track of personal expenses
 - To use VFS, always use helpers from storage feature, never access VFS tables directly.
 - NEVER EVER EVER write shadcn's component (never write inside /components/ui). ALWAYS use CLI to add components.
 - NEVER ASSUME ANYTHING!!! NEVER!!! ASSUMPTIONS ALREADY KILLED John and Timmy on this project.
+- NEVER hardcode user-facing text. All strings must go through the existing
+  localization systems: on native use the ARB files (`apps/native/lib/l10n/app_en.arb`,
+  `app_es.arb`) accessed via `AppLocalizations`; on web use `useT`/`@/lib/i18n`. Add a new
+  translation key (in every locale) instead of inlining a literal.
 - Avoid reading dependencies source, always try to use skills and documentation.
 - Do not remove imports unless you are 100% sure they are not used, also `pnpm format` already removes unused imports, you don't need to do it manually.
 - PLEASE consider Convex workflows for complex long running or multi steps processes
