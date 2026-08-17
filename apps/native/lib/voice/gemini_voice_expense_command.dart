@@ -1,7 +1,8 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
-import 'dart:typed_data';
+
+import 'package:flutter/foundation.dart';
 
 import 'package:convex_flutter/convex_flutter.dart';
 import 'package:http/http.dart' as http;
@@ -69,6 +70,25 @@ class GeminiVoiceExpenseCommandFactory implements VoiceExpenseCommandFactory {
     return command;
   }
 
+  @override
+  Future<List<VoiceEvent>> restorableHistory() async {
+    final rows = await sessionRepository.resumableConversationEvents(
+      types: kConversationEventTypes,
+    );
+    final events = <VoiceEvent>[];
+    for (final row in rows) {
+      final decoded = jsonDecode(row.payloadJson);
+      if (decoded is! Map) continue;
+      final event = voiceEventFromRecord(
+        type: row.type,
+        payload: decoded.cast<String, Object?>(),
+        at: DateTime.fromMillisecondsSinceEpoch(row.occurredAt.toInt()),
+      );
+      if (event != null) events.add(event);
+    }
+    return events;
+  }
+
   Future<void> dispose() async {
     await _active?.dispose();
     _active = null;
@@ -93,7 +113,6 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
   static const _model = 'gemini-3.1-flash-live-preview';
   static const _voiceName = 'Kore';
   static const _maxQueuedMessages = 200;
-  static const _tokenRefreshMargin = Duration(minutes: 2);
 
   final AppRepositories repositories;
   final VoiceSessionRepository sessionRepository;
@@ -120,13 +139,13 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
   Completer<void>? _setupComplete;
   String? _sessionId;
   String? _resumeHandle;
-  String? _effectiveToken;
-  DateTime? _tokenExpiresAt;
+  Future<String>? _prefetchedToken;
   bool _active = false;
   bool _connected = false;
   bool _disposed = false;
   bool _explicitlyStopped = false;
   bool _audioPlaybackEnabled = true;
+  bool _mutedByDetach = false;
   bool _screenAttached = false;
   bool _discardInterruptedOutput = false;
   bool _audioStreamOpen = false;
@@ -140,10 +159,10 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
   String get label => 'Gemini Live voice expense command';
 
   @override
-  Stream<VoiceEvent> get events async* {
-    yield* Stream<VoiceEvent>.fromIterable(List.of(_history));
-    yield* _events.stream;
-  }
+  Stream<VoiceEvent> get events => _events.stream;
+
+  @override
+  List<VoiceEvent> get history => List.unmodifiable(_history);
 
   @override
   bool get isActive => _active && !_explicitlyStopped && !_disposed;
@@ -154,30 +173,46 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
   @override
   Future<void> start({bool respondWithAudio = true}) async {
     _audioPlaybackEnabled = respondWithAudio;
+    _mutedByDetach = false;
     if (isActive) {
-      if (!_connected) {
-        _reconnectTimer?.cancel();
-        await _connect();
-      }
+      await ensureConnected();
       return;
     }
     if (_disposed) throw StateError('Voice command is disposed');
 
+    final startStopwatch = Stopwatch()..start();
     final session = await sessionRepository.openOrCreate(model: _model);
     _sessionId = session.id;
     _resumeHandle = session.resumeHandle;
     _active = true;
     _explicitlyStopped = false;
     remoteSync?.schedule(delay: Duration.zero);
+    _logConnectionPhase('session_opened', startStopwatch, {
+      'resumed': session.resumeHandle != null,
+    });
 
     _emit(VoiceConnectingEvent('Connecting to Gemini Live'));
+    // The token fetch and the audio engine spin-up are independent and each
+    // can take hundreds of milliseconds — overlap them. `_connectOnce`
+    // consumes the prefetched future (or fetches fresh on reconnects).
+    final tokenFetch = _resolveLiveToken();
+    tokenFetch.ignore();
+    _prefetchedToken = tokenFetch;
     final engineDiagnostics = await _audioPlayer.start(sampleRate: 24000);
+    _logConnectionPhase('audio_engine_started', startStopwatch);
     if (engineDiagnostics != null) {
       // iOS voice engine state (voice processing, formats, route). Persisted
       // with the session events so failed rounds are diagnosable without a
       // console attached — see AUDIO.md § iOS.
       _emit(VoiceSystemEvent('Voice engine: $engineDiagnostics'));
     }
+    await _connect();
+  }
+
+  @override
+  Future<void> ensureConnected() async {
+    if (!isActive || _connected) return;
+    _reconnectTimer?.cancel();
     await _connect();
   }
 
@@ -193,13 +228,21 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
 
   Future<void> _connectOnce() async {
     if (!isActive) return;
-    final effectiveToken = await _resolveLiveToken();
+    final connectStopwatch = Stopwatch()..start();
+    final prefetched = _prefetchedToken;
+    _prefetchedToken = null;
+    final effectiveToken = prefetched != null
+        ? await prefetched
+        : await _resolveLiveToken();
     if (apiKey.isEmpty && effectiveToken.isEmpty) {
       throw StateError(
         'Missing Gemini credentials. Configure an authenticated Convex '
         'account, GEMINI_LIVE_TOKEN, or GEMINI_API_KEY.',
       );
     }
+    _logConnectionPhase('token_resolved', connectStopwatch, {
+      'prefetched': prefetched != null,
+    });
 
     final generation = ++_connectionGeneration;
     final uri = _connectionUri(effectiveToken);
@@ -207,7 +250,10 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
     _setupComplete = setupComplete;
     final channel = WebSocketChannel.connect(uri);
     _channel = channel;
-    await sessionRepository.markStatus(_sessionId!, 'connecting');
+    // Status writes queue behind the session's serialized write chain, which
+    // can be deep in buffered audio during a reconnect — keep them off the
+    // handshake's critical path. `_serial()` still preserves call order.
+    unawaited(sessionRepository.markStatus(_sessionId!, 'connecting'));
 
     _subscription = channel.stream.listen(
       (message) => _handleServerMessage(message, generation),
@@ -256,21 +302,20 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
     if (generation != _connectionGeneration || !isActive) return;
     _connected = true;
     _reconnectAttempt = 0;
-    await sessionRepository.markStatus(_sessionId!, 'active');
+    _logConnectionPhase('setup_complete', connectStopwatch);
+    unawaited(sessionRepository.markStatus(_sessionId!, 'active'));
     _emit(VoiceConnectedEvent());
     _flushPendingMessages();
   }
 
+  /// Fetches a fresh single-use token. The backend mints tokens with
+  /// `uses: 1` and a short new-session window, so a token can never be
+  /// reused across connection attempts — every (re)connect resolves a new
+  /// one, and nothing is cached.
   Future<String> _resolveLiveToken() async {
     if (liveToken.isNotEmpty) return liveToken;
-    final cached = _effectiveToken;
-    final expiresAt = _tokenExpiresAt;
-    if (cached != null &&
-        (expiresAt == null ||
-            DateTime.now().add(_tokenRefreshMargin).isBefore(expiresAt))) {
-      return cached;
-    }
 
+    final fetchStopwatch = Stopwatch()..start();
     _emit(VoiceSystemEvent('Requesting live token from Convex'));
     Map<String, Object?>? body;
     if (useAuthenticatedTokenAction) {
@@ -285,6 +330,9 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
         }
         body = decoded.cast<String, Object?>();
       } catch (error) {
+        _logConnectionPhase('token_action_failed', fetchStopwatch, {
+          'error': error.toString(),
+        });
         _emit(VoiceSystemEvent('Authenticated token action failed: $error'));
       }
     }
@@ -293,10 +341,12 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
       final credential = sessionToken;
       if (credential == null || credential.isEmpty) return '';
       final base = Uri.parse(convexSiteUrl);
-      final response = await http.post(
-        base.replace(path: '/v1/live/token'),
-        headers: {'Authorization': 'Bearer $credential'},
-      );
+      final response = await http
+          .post(
+            base.replace(path: '/v1/live/token'),
+            headers: {'Authorization': 'Bearer $credential'},
+          )
+          .timeout(const Duration(seconds: 15));
       if (response.statusCode < 200 || response.statusCode >= 300) {
         throw StateError(
           'Convex live token request failed: '
@@ -310,13 +360,32 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
     if (token is! String || token.isEmpty) {
       throw StateError('Convex live token response did not include token');
     }
-    final expiration = body['expireTime'];
-    _tokenExpiresAt = expiration is String
-        ? DateTime.tryParse(expiration)
-        : null;
-    _effectiveToken = token;
+    _logConnectionPhase('token_received', fetchStopwatch, {
+      'model': body['model']?.toString(),
+    });
     _emit(VoiceSystemEvent('Live token received for model: ${body['model']}'));
     return token;
+  }
+
+  /// Persists a timestamped connection-phase marker to the durable session
+  /// log (and the debug console) so slow connects are diagnosable from an
+  /// exported session without a console attached.
+  void _logConnectionPhase(
+    String phase,
+    Stopwatch stopwatch, [
+    Map<String, Object?> extra = const {},
+  ]) {
+    final payload = <String, Object?>{
+      'phase': phase,
+      'elapsedMs': stopwatch.elapsedMilliseconds,
+      ...extra,
+    };
+    debugPrint('[voice] connection phase: $payload');
+    _persistProtocolEvent(
+      type: 'connection_phase',
+      direction: 'local',
+      payload: payload,
+    );
   }
 
   Uri _connectionUri(String effectiveLiveToken) {
@@ -375,6 +444,7 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
 
   @override
   void setAudioPlaybackEnabled(bool enabled) {
+    _mutedByDetach = false;
     if (_audioPlaybackEnabled == enabled) return;
     _audioPlaybackEnabled = enabled;
     recordClientEvent('audio_playback_changed', {'enabled': enabled});
@@ -411,9 +481,21 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
     Map<String, Object?> details = const {},
   ]) {
     if (!isActive) return;
-    if (action == 'screen_attached') _screenAttached = true;
-    if (action == 'screen_detached') _screenAttached = false;
-    _emit(VoiceClientActionEvent(action, details));
+    if (action == 'screen_attached') {
+      _screenAttached = true;
+      // The screen's dispose mutes playback so a closed screen never plays
+      // audio. Undo that mute on re-entry — unless something explicit (a
+      // typed turn, a new start) set playback in the meantime.
+      if (_mutedByDetach) {
+        _mutedByDetach = false;
+        _audioPlaybackEnabled = true;
+      }
+    }
+    if (action == 'screen_detached') {
+      _screenAttached = false;
+      _mutedByDetach = _audioPlaybackEnabled;
+    }
+    _emit(VoiceClientActionEvent(action, details: details));
   }
 
   @override
@@ -433,6 +515,7 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
     recordClientEvent('end_session');
     _explicitlyStopped = true;
     _active = false;
+    _prefetchedToken = null;
     _reconnectTimer?.cancel();
     _goAwayTimer?.cancel();
     await _closeSocket(invalidateGeneration: true);
@@ -454,6 +537,7 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
     if (_disposed) return;
     _disposed = true;
     _active = false;
+    _prefetchedToken = null;
     _reconnectTimer?.cancel();
     _goAwayTimer?.cancel();
     await _closeSocket(invalidateGeneration: true);

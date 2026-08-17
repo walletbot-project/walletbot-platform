@@ -31,7 +31,7 @@ const liveTokenHandler = httpAction(async (ctx, req) => {
     if (!secret) {
         return jsonResponse({ error: 'unauthenticated' }, { status: 401 })
     }
-    const validation = await ctx.runMutation(
+    const validation = await ctx.runQuery(
         internal.authNative.mutations.validateSessionToken,
         { tokenHash: await hashSessionSecret(secret) },
     )

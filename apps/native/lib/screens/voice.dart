@@ -33,7 +33,7 @@ class VoiceScreen extends StatefulWidget {
   State<VoiceScreen> createState() => _VoiceScreenState();
 }
 
-class _VoiceScreenState extends State<VoiceScreen> {
+class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
   static const _liveEdgeTolerance = 1.0;
 
   final MicCapture _mic = MicCapture.forPlatform();
@@ -59,6 +59,7 @@ class _VoiceScreenState extends State<VoiceScreen> {
   bool _micActive = false;
   bool _userMicOn = false;
   bool _isBrowsingHistory = false;
+  bool _conversationRestored = false;
   double _level = 0;
 
   bool get _isTextComposing => _textController.text.trim().isNotEmpty;
@@ -68,6 +69,7 @@ class _VoiceScreenState extends State<VoiceScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _textController.addListener(_onTextChanged);
     final active = widget.commandFactory.activeCommand;
     if (active != null && active.isActive) {
@@ -76,17 +78,88 @@ class _VoiceScreenState extends State<VoiceScreen> {
       _isConnected = active.isConnected;
       _isReconnecting = !active.isConnected;
       active.recordClientEvent('screen_attached');
+      // Don't sit out a pending backoff delay while the user is looking at
+      // the screen — reconnect immediately.
+      if (!active.isConnected) unawaited(active.ensureConnected());
     }
   }
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
+    // Restored here rather than initState because rebuilding items may need
+    // localized strings. `events` is live-only and no async gap exists
+    // between the initState subscription and this snapshot, so the history
+    // batch and the live stream can neither overlap nor miss events.
+    if (!_conversationRestored) {
+      _conversationRestored = true;
+      final active = _command;
+      if (active != null) {
+        _restoreConversation(active.history);
+      } else {
+        unawaited(_rehydrateFromLog());
+      }
+    }
     if (_isReconnecting) _showConnectionNotice();
   }
 
   @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state != AppLifecycleState.resumed) return;
+    final command = _command;
+    // The OS may have killed the socket and suspended the reconnect timer
+    // while backgrounded — reconnect immediately on return.
+    if (command != null && command.isActive && !command.isConnected) {
+      unawaited(command.ensureConnected());
+    }
+  }
+
+  /// Rebuilds the visible conversation from already-emitted session events in
+  /// one pass — no per-event setState, no per-event scroll animation.
+  void _restoreConversation(List<VoiceEvent> events) {
+    for (final event in events) {
+      _applyConversationEvent(event, replay: true);
+    }
+    if (_items.isNotEmpty) _jumpToBottomAfterBuild();
+  }
+
+  /// When no session is live, restores the conversation of the session the
+  /// next start would resume, from the durable local log.
+  Future<void> _rehydrateFromLog() async {
+    final List<VoiceEvent> events;
+    try {
+      events = await widget.commandFactory.restorableHistory();
+    } catch (error) {
+      debugPrint('[voice] failed to rehydrate session log: $error');
+      return;
+    }
+    if (!mounted || events.isEmpty) return;
+    // A session may have started while the log was loading — don't clobber
+    // the live conversation.
+    if (_command != null || _items.isNotEmpty) return;
+    setState(() {
+      for (final event in events) {
+        _applyConversationEvent(event, replay: true);
+      }
+      // Unlike a live re-attach, nothing will stream in to complete a
+      // half-open bubble — close them out.
+      _finalisePending();
+    });
+    _jumpToBottomAfterBuild();
+  }
+
+  void _jumpToBottomAfterBuild() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _isBrowsingHistory || !_scrollController.hasClients) {
+        return;
+      }
+      _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
+    });
+  }
+
+  @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _command?.recordClientEvent('screen_detached', {
       'micMuted': true,
       'sessionKeptActive': identical(
@@ -133,7 +206,6 @@ class _VoiceScreenState extends State<VoiceScreen> {
   void _handleVoiceTap() {
     if (_isStarting || _isTextComposing) return;
     if (!_isConnected) {
-      setState(_resetChatLog);
       unawaited(_startSession(mode: _SessionMode.audio));
       return;
     }
@@ -157,7 +229,6 @@ class _VoiceScreenState extends State<VoiceScreen> {
   void _handleVoiceLongPressStart() {
     if (_isStarting || _isTextComposing) return;
     if (!_isConnected) {
-      setState(_resetChatLog);
       unawaited(_startSession(mode: _SessionMode.audio));
       return;
     }
@@ -169,15 +240,6 @@ class _VoiceScreenState extends State<VoiceScreen> {
       _userMicOn = true;
     });
     _recordMuteEvent('long_press_start');
-  }
-
-  void _resetChatLog() {
-    _items.clear();
-    _toolsById.clear();
-    _pendingUser = null;
-    _pendingAgent = null;
-    _connectionNotice = null;
-    _isBrowsingHistory = false;
   }
 
   void _handleVoiceLongPressEnd() {
@@ -203,11 +265,7 @@ class _VoiceScreenState extends State<VoiceScreen> {
     final wasConnected = _isConnected;
 
     setState(() {
-      if (startingFresh) {
-        _resetChatLog();
-      } else {
-        _finalisePending();
-      }
+      _finalisePending();
       _items.add(
         _UserBubbleItem(at: DateTime.now(), text: text, isFinal: true),
       );
@@ -447,7 +505,9 @@ class _VoiceScreenState extends State<VoiceScreen> {
           conversationChanged = true;
           _isConnected = false;
           _isReconnecting = _command?.isActive ?? false;
-          _pendingTextSend = null;
+          // Text queued during the outage is flushed on the next
+          // VoiceConnectedEvent; only a dead session drops it.
+          if (!_isReconnecting) _pendingTextSend = null;
           _finalisePending();
           if (_isReconnecting) {
             _showConnectionNotice();
@@ -456,50 +516,84 @@ class _VoiceScreenState extends State<VoiceScreen> {
           }
         case VoiceErrorEvent(:final message, :final isTransient):
           conversationChanged = true;
-          _pendingTextSend = null;
           if (isTransient) {
             _isReconnecting = true;
             _showConnectionNotice();
           } else {
+            _pendingTextSend = null;
             _addSystem(
               context.l10n.voiceRuntimeError(message),
               kind: _SystemKind.error,
             );
           }
         case VoiceSystemEvent():
-          break;
         case VoiceClientActionEvent():
         case VoiceSessionResumptionEvent():
         case VoiceGoAwayEvent():
         case VoiceUsageMetadataEvent():
           break;
-        case VoiceUserTranscriptDelta(:final text):
-          conversationChanged = true;
+        case VoiceUserTranscriptDelta():
           // A typed turn disables playback for its reply. Voice input starts a
           // new audio turn, so subsequent agent audio must be audible again.
           _command?.setAudioPlaybackEnabled(true);
-          _appendUser(text);
-        case VoiceAgentTranscriptDelta(:final text):
-          conversationChanged = true;
-          _appendAgent(text);
+          conversationChanged = _applyConversationEvent(event, replay: false);
+        case VoiceAgentTranscriptDelta():
         case VoiceAgentTurnComplete():
-          conversationChanged = true;
-          _finalisePendingAgent();
         case VoiceAgentInterruptedEvent():
-          conversationChanged = true;
-          _markAgentInterrupted();
-        case VoiceToolCallEvent(:final id, :final name, :final args):
-          conversationChanged = true;
-          _addToolCall(id: id, name: name, args: args);
-        case VoiceToolResultEvent(:final id, :final result):
-          conversationChanged = true;
-          _completeToolCall(id: id, result: result);
-        case VoiceToolCancelledEvent(:final ids):
-          conversationChanged = true;
-          _cancelToolCalls(ids);
+        case VoiceToolCallEvent():
+        case VoiceToolResultEvent():
+        case VoiceToolCancelledEvent():
+          conversationChanged = _applyConversationEvent(event, replay: false);
       }
     });
     if (conversationChanged) _scrollToBottom();
+  }
+
+  /// Applies one conversation-content event to the chat items. Shared by the
+  /// live stream and both restore paths (in-memory session history, durable
+  /// log). Replay skips side effects that only make sense live: unmatched
+  /// system notices, and typed-message bubbles that the send handler already
+  /// added. Returns whether the visible conversation changed.
+  bool _applyConversationEvent(VoiceEvent event, {required bool replay}) {
+    switch (event) {
+      case VoiceUserTranscriptDelta(:final text):
+        _appendUser(text, at: event.at);
+        return true;
+      case VoiceAgentTranscriptDelta(:final text):
+        _appendAgent(text, at: event.at);
+        return true;
+      case VoiceAgentTurnComplete():
+        _finalisePendingAgent();
+        return true;
+      case VoiceAgentInterruptedEvent():
+        _markAgentInterrupted(replay: replay);
+        return true;
+      case VoiceToolCallEvent(:final id, :final name, :final args):
+        _addToolCall(id: id, name: name, args: args, at: event.at);
+        return true;
+      case VoiceToolResultEvent(:final id, :final result):
+        _completeToolCall(id: id, result: result, at: event.at, replay: replay);
+        return true;
+      case VoiceToolCancelledEvent(:final ids):
+        _cancelToolCalls(ids, replay: replay);
+        return true;
+      case VoiceClientActionEvent(:final action, :final details):
+        // Typed messages only reach a restored transcript through the audit
+        // trail; live sends add their bubble directly in _handleSendText.
+        if (replay && action == 'send_message') {
+          final text = details['text'];
+          if (text is String && text.isNotEmpty) {
+            _finalisePending();
+            _items.add(
+              _UserBubbleItem(at: event.at, text: text, isFinal: true),
+            );
+            return true;
+          }
+        }
+        return false;
+      default:
+        return false;
+    }
   }
 
   // -- Chat item management -------------------------------------------------
@@ -537,15 +631,11 @@ class _VoiceScreenState extends State<VoiceScreen> {
     _scrollToBottom();
   }
 
-  void _appendUser(String chunk) {
+  void _appendUser(String chunk, {required DateTime at}) {
     _finalisePendingAgent();
     final existing = _pendingUser;
     if (existing == null) {
-      final item = _UserBubbleItem(
-        at: DateTime.now(),
-        text: chunk,
-        isFinal: false,
-      );
+      final item = _UserBubbleItem(at: at, text: chunk, isFinal: false);
       _items.add(item);
       _pendingUser = item;
     } else {
@@ -553,12 +643,12 @@ class _VoiceScreenState extends State<VoiceScreen> {
     }
   }
 
-  void _appendAgent(String chunk) {
+  void _appendAgent(String chunk, {required DateTime at}) {
     _finalisePendingUser();
     final existing = _pendingAgent;
     if (existing == null) {
       final item = _AgentBubbleItem(
-        at: DateTime.now(),
+        at: at,
         text: chunk,
         isFinal: false,
         wasInterrupted: false,
@@ -589,13 +679,13 @@ class _VoiceScreenState extends State<VoiceScreen> {
     _pendingAgent = null;
   }
 
-  void _markAgentInterrupted() {
+  void _markAgentInterrupted({required bool replay}) {
     final p = _pendingAgent;
     if (p != null) {
       p.wasInterrupted = true;
       p.isFinal = true;
       _pendingAgent = null;
-    } else {
+    } else if (!replay) {
       _addSystem(context.l10n.agentInterrupted, kind: _SystemKind.info);
     }
   }
@@ -604,9 +694,10 @@ class _VoiceScreenState extends State<VoiceScreen> {
     required String id,
     required String name,
     required Map<String, dynamic> args,
+    required DateTime at,
   }) {
     _finalisePending();
-    final item = _ToolItem(at: DateTime.now(), id: id, name: name, args: args);
+    final item = _ToolItem(at: at, id: id, name: name, args: args);
     _items.add(item);
     if (id.isNotEmpty) {
       _toolsById[id] = item;
@@ -616,6 +707,8 @@ class _VoiceScreenState extends State<VoiceScreen> {
   void _completeToolCall({
     required String id,
     required Map<String, dynamic> result,
+    required DateTime at,
+    required bool replay,
   }) {
     final tool = id.isNotEmpty ? _toolsById[id] : null;
     if (tool != null) {
@@ -628,13 +721,13 @@ class _VoiceScreenState extends State<VoiceScreen> {
           result['id'] is String) {
         _items.add(
           _ActionResultItem(
-            at: DateTime.now(),
+            at: at,
             toolName: tool.name,
             entityId: result['id'] as String,
           ),
         );
       }
-    } else {
+    } else if (!replay) {
       _addSystem(
         context.l10n.toolResponseUnmatched(result),
         kind: _SystemKind.info,
@@ -642,17 +735,19 @@ class _VoiceScreenState extends State<VoiceScreen> {
     }
   }
 
-  void _cancelToolCalls(List<String> ids) {
+  void _cancelToolCalls(List<String> ids, {required bool replay}) {
     for (final id in ids) {
       final tool = _toolsById[id];
       if (tool != null) {
         tool.status = _ToolStatus.cancelled;
       }
     }
-    _addSystem(
-      context.l10n.toolCallsCancelled(ids.join(', ')),
-      kind: _SystemKind.info,
-    );
+    if (!replay) {
+      _addSystem(
+        context.l10n.toolCallsCancelled(ids.join(', ')),
+        kind: _SystemKind.info,
+      );
+    }
   }
 
   bool _handleUserScroll(UserScrollNotification notification) {

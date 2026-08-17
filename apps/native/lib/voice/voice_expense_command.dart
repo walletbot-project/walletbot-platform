@@ -7,18 +7,35 @@ abstract interface class VoiceExpenseCommandFactory {
   VoiceExpenseCommand? get activeCommand;
 
   VoiceExpenseCommand create();
+
+  /// Conversation events of the session a newly created command would resume,
+  /// restored from the durable log. Empty when the next session starts fresh
+  /// (no resumable session), so a restored transcript always matches the
+  /// context the model will actually continue from.
+  Future<List<VoiceEvent>> restorableHistory();
 }
 
 abstract interface class VoiceExpenseCommand {
   String get label;
 
+  /// Live events only, from subscription time onward. A re-attaching screen
+  /// rebuilds prior conversation state from [history] in one pass instead of
+  /// replaying the stream event by event.
   Stream<VoiceEvent> get events;
+
+  /// Events already emitted in this session, oldest first.
+  List<VoiceEvent> get history;
 
   bool get isActive;
 
   bool get isConnected;
 
   Future<void> start({bool respondWithAudio = true});
+
+  /// Reconnects immediately when the session is active but the transport is
+  /// down (e.g. after the OS resumes the app, skipping any pending backoff
+  /// timer). No-op when already connected or when there is no session.
+  Future<void> ensureConnected();
 
   Future<void> addAudioChunk(Uint8List chunk);
 
@@ -65,6 +82,9 @@ class DebugVoiceExpenseCommandFactory implements VoiceExpenseCommandFactory {
 
   @override
   VoiceExpenseCommand create() => DebugVoiceExpenseCommand();
+
+  @override
+  Future<List<VoiceEvent>> restorableHistory() async => const [];
 }
 
 class DebugVoiceExpenseCommand implements VoiceExpenseCommand {
@@ -78,6 +98,9 @@ class DebugVoiceExpenseCommand implements VoiceExpenseCommand {
 
   @override
   Stream<VoiceEvent> get events => _events.stream;
+
+  @override
+  List<VoiceEvent> get history => const [];
 
   @override
   bool get isActive => true;
@@ -96,6 +119,9 @@ class DebugVoiceExpenseCommand implements VoiceExpenseCommand {
     );
     _events.add(VoiceConnectedEvent());
   }
+
+  @override
+  Future<void> ensureConnected() async {}
 
   @override
   Future<void> addAudioChunk(Uint8List chunk) async {
@@ -123,7 +149,7 @@ class DebugVoiceExpenseCommand implements VoiceExpenseCommand {
     String action, [
     Map<String, Object?> details = const {},
   ]) {
-    _events.add(VoiceClientActionEvent(action, details));
+    _events.add(VoiceClientActionEvent(action, details: details));
   }
 
   @override

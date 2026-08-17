@@ -9,6 +9,11 @@ const MODEL = 'gemini-3.1-flash-live-preview'
 // AuthToken.expireTime must be less than 20 hours in the future. Leave a small
 // safety margin for clock/network skew while using the maximum useful window.
 const TOKEN_TTL_MS = (20 * 60 - 5) * 60 * 1000
+// Tokens are minted with uses: 1 and consumed by the connection that requested
+// them, so they only need to authorize a session start briefly after minting.
+// Google's default for newSessionExpireTime is 1 minute; make the window
+// explicit and wide enough to absorb a slow fetch → connect path.
+const NEW_SESSION_WINDOW_MS = 2 * 60 * 1000
 const VOICE_NAME = 'Kore'
 
 const SYSTEM_INSTRUCTION = `You are WalletBot, a calm and trustworthy personal finance assistant. You help the user track their money — recording expenses, income, and transfers — through natural voice conversation.
@@ -142,6 +147,9 @@ export async function createLiveToken() {
         config: {
             uses: 1,
             expireTime,
+            newSessionExpireTime: new Date(
+                Date.now() + NEW_SESSION_WINDOW_MS,
+            ).toISOString(),
             liveConnectConstraints: {
                 model: MODEL,
                 config: {
