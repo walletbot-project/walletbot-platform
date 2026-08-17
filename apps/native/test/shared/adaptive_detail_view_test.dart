@@ -64,7 +64,9 @@ class _FormProbeState extends State<_FormProbe> {
 }
 
 class _Harness extends StatefulWidget {
-  const _Harness();
+  const _Harness({this.isActiveTab = true});
+
+  final bool isActiveTab;
 
   @override
   State<_Harness> createState() => _HarnessState();
@@ -112,7 +114,54 @@ class _HarnessState extends State<_Harness> {
           _formOpen ? _FormProbe(key: _formKey) : null,
       onFormDismissed: () => setState(() => _formOpen = false),
       placeholder: const Center(child: Text('placeholder')),
-      isActiveTab: true,
+      isActiveTab: widget.isActiveTab,
+    );
+  }
+}
+
+/// Puts the host in the shell it actually lives in: one branch of an
+/// [IndexedStack] whose other branch is another tab. Reproduces the reported
+/// bug — open something, switch tabs, resize — where the host used to push its
+/// route onto the shared navigator from a tab nobody was looking at.
+class _TabsHarness extends StatefulWidget {
+  const _TabsHarness();
+
+  @override
+  State<_TabsHarness> createState() => _TabsHarnessState();
+}
+
+class _TabsHarnessState extends State<_TabsHarness> {
+  static const _hostTab = 0;
+  int _tab = _hostTab;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: Column(
+        children: [
+          Expanded(
+            child: IndexedStack(
+              index: _tab,
+              children: [
+                _Harness(isActiveTab: _tab == _hostTab),
+                const Center(child: Text('otherTab')),
+              ],
+            ),
+          ),
+          Row(
+            children: [
+              TextButton(
+                onPressed: () => setState(() => _tab = 1),
+                child: const Text('goOther'),
+              ),
+              TextButton(
+                onPressed: () => setState(() => _tab = _hostTab),
+                child: const Text('goHost'),
+              ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 }
@@ -303,6 +352,68 @@ void main() {
     _resize(tester, const Size(1200, 800));
     await tester.pumpAndSettle();
     expect(find.text('placeholder'), findsOneWidget);
+  });
+
+  testWidgets('a hidden tab never pushes the form route on shrink', (
+    tester,
+  ) async {
+    _resize(tester, const Size(1200, 800));
+    addTearDown(tester.view.reset);
+
+    await tester.pumpWidget(const MaterialApp(home: _TabsHarness()));
+    await tester.tap(find.text('openForm'));
+    await tester.pumpAndSettle();
+    expect(find.byType(_FormProbe), findsOneWidget); // inline pane
+    await tester.tap(find.text('finc'));
+    await tester.pump();
+    expect(find.text('fcount:1'), findsOneWidget);
+
+    // Leave for the other tab, then shrink: the form belongs to a tab nobody
+    // is looking at, so it must NOT take over the window.
+    await tester.tap(find.text('goOther'));
+    await tester.pumpAndSettle();
+    _resize(tester, const Size(500, 800));
+    await tester.pumpAndSettle();
+    expect(find.text('otherTab'), findsOneWidget);
+    expect(find.byType(BackButton), findsNothing); // no route was pushed
+
+    // Coming back presents it again, with its State intact.
+    await tester.tap(find.text('goHost'));
+    await tester.pumpAndSettle();
+    expect(find.byType(BackButton), findsOneWidget);
+    expect(find.text('fcount:1'), findsOneWidget);
+  });
+
+  testWidgets('a hidden tab never pushes the detail sheet on shrink', (
+    tester,
+  ) async {
+    _resize(tester, const Size(1200, 800));
+    addTearDown(tester.view.reset);
+
+    await tester.pumpWidget(const MaterialApp(home: _TabsHarness()));
+    await tester.tap(find.text('open'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('inc'));
+    await tester.pump();
+    expect(find.text('count:1'), findsOneWidget);
+
+    await tester.tap(find.text('goOther'));
+    await tester.pumpAndSettle();
+    _resize(tester, const Size(500, 800));
+    await tester.pumpAndSettle();
+    expect(find.byType(BottomSheet), findsNothing);
+
+    // ...and the medium band, where it would have been a dialog.
+    _resize(tester, const Size(800, 800));
+    await tester.pumpAndSettle();
+    expect(find.byType(Dialog), findsNothing);
+
+    _resize(tester, const Size(500, 800));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('goHost'));
+    await tester.pumpAndSettle();
+    expect(find.byType(BottomSheet), findsOneWidget);
+    expect(find.text('count:1'), findsOneWidget);
   });
 
   testWidgets('scrim dismissal clears the selection', (tester) async {

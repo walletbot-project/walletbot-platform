@@ -131,11 +131,21 @@ class _ActivityScreenState extends State<ActivityScreen> {
     setState(() => _formOpen = false);
   }
 
+  /// Whether Activity is the tab currently on screen. Its detail and form
+  /// routes are pushed on the SHARED navigator, above every tab, so a hidden
+  /// Activity must own none of them — it would cover whatever tab the user is
+  /// actually looking at (leave a detail or the new-transaction form open,
+  /// switch to Home, shrink the window, and the route would slam over Home).
+  /// Hidden, the occupant stays in the bridge — State intact, painting
+  /// nothing inside the hidden tab — and is re-presented on return.
+  bool get _isActiveTab =>
+      context.read<AppNavigation>().index == AppNavigation.activityTab;
+
   /// Form counterpart of [_reconcileDetailRoute].
   void _reconcileFormRoute() {
     if (!mounted) return;
     final split = windowSizeClassOf(context) == WindowSizeClass.expanded;
-    final needsRoute = !split && _formOpen;
+    final needsRoute = !split && _formOpen && _isActiveTab;
     final route = _formRoute;
     if (needsRoute && route == null) {
       _pushFormRoute(instant: true);
@@ -216,14 +226,15 @@ class _ActivityScreenState extends State<ActivityScreen> {
     );
   }
 
-  /// Keeps the mobile route in sync with (window class × selection): pushes
-  /// an instant-entrance route when the window shrinks with a detail open,
-  /// removes the route without animation when the window grows into the
-  /// split. Idempotent; runs post-frame, scheduled by build on mismatch.
+  /// Keeps the mobile route in sync with (window class × selection × tab
+  /// visibility): pushes an instant-entrance route when the window shrinks
+  /// with a detail open, removes the route without animation when the window
+  /// grows into the split or Activity stops being the visible tab.
+  /// Idempotent; runs post-frame, scheduled by build on mismatch.
   void _reconcileDetailRoute() {
     if (!mounted) return;
     final split = windowSizeClassOf(context) == WindowSizeClass.expanded;
-    final needsRoute = !split && _detailTransactionId != null;
+    final needsRoute = !split && _detailTransactionId != null && _isActiveTab;
     final route = _detailRoute;
     if (needsRoute && route == null) {
       _pushDetailRoute(instant: true);
@@ -377,15 +388,21 @@ class _ActivityScreenState extends State<ActivityScreen> {
       ],
     );
 
-    // The mobile routes follow (window class × selection); build only
-    // schedules the sync so pushes/removals happen between frames.
-    final needsRoute = !showDetailPane && _detailTransactionId != null;
+    // The mobile routes follow (window class × selection × tab visibility);
+    // build only schedules the sync so pushes/removals happen between frames.
+    // Subscribed via select so a tab switch rebuilds and reconciles (see
+    // [_isActiveTab] for why a hidden Activity owns no route).
+    final isActiveTab = context.select<AppNavigation, bool>(
+      (nav) => nav.index == AppNavigation.activityTab,
+    );
+    final needsRoute =
+        !showDetailPane && _detailTransactionId != null && isActiveTab;
     if (needsRoute != (_detailRoute != null)) {
       WidgetsBinding.instance.addPostFrameCallback(
         (_) => _reconcileDetailRoute(),
       );
     }
-    final needsFormRoute = !showDetailPane && _formOpen;
+    final needsFormRoute = !showDetailPane && _formOpen && isActiveTab;
     if (needsFormRoute != (_formRoute != null)) {
       WidgetsBinding.instance.addPostFrameCallback(
         (_) => _reconcileFormRoute(),
@@ -456,9 +473,6 @@ class _ActivityScreenState extends State<ActivityScreen> {
     // The routes handle system back natively. This safety net covers only
     // the transient bridge frames, and only while Activity is the visible
     // tab: back then closes the bridged occupant instead of leaving the app.
-    final isActiveTab = context.select<AppNavigation, bool>(
-      (nav) => nav.index == AppNavigation.activityTab,
-    );
     final detailBridging =
         !showDetailPane && detail != null && _detailRoute == null;
     final formBridging = !showDetailPane && _formOpen && _formRoute == null;
