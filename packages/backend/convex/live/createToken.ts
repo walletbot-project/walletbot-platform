@@ -1,9 +1,8 @@
 'use node'
 
-import type { FunctionDeclaration, Schema } from '@google/genai'
-import { GoogleGenAI, Modality, Type } from '@google/genai'
-import type { ToolSchema } from '@wallet-bot/shared'
+import { GoogleGenAI, Modality } from '@google/genai'
 import { TOOL_DEFINITIONS } from '@wallet-bot/shared'
+import { toFunctionDeclarations } from '../agent/schema'
 
 const MODEL = 'gemini-3.1-flash-live-preview'
 // AuthToken.expireTime must be less than 20 hours in the future. Leave a small
@@ -81,52 +80,8 @@ function buildSystemInstruction() {
     return `${SYSTEM_INSTRUCTION}\n\nToday is ${dayOfWeek}, ${date}.`
 }
 
-// Shared → Google GenAI adapter
-
-const SCHEMA_TYPE_MAP: Record<string, Type> = {
-    STRING: Type.STRING,
-    NUMBER: Type.NUMBER,
-    INTEGER: Type.INTEGER,
-    BOOLEAN: Type.BOOLEAN,
-    ARRAY: Type.ARRAY,
-    OBJECT: Type.OBJECT,
-}
-
-function toGoogleSchema(schema: ToolSchema): Schema {
-    const result: Schema = {
-        type: SCHEMA_TYPE_MAP[schema.type],
-        description: schema.description,
-        enum: schema.enum,
-        required: schema.required,
-    }
-    if (schema.properties) {
-        result.properties = Object.fromEntries(
-            Object.entries(schema.properties).map(([k, v]) => [
-                k,
-                toGoogleSchema(v),
-            ]),
-        )
-    }
-    if (schema.items) {
-        result.items = toGoogleSchema(schema.items)
-    }
-    return result
-}
-
-function toFunctionDeclarations(
-    defs: readonly {
-        name: string
-        description: string
-        parameters: ToolSchema
-    }[],
-): FunctionDeclaration[] {
-    return defs.map((d) => ({
-        name: d.name,
-        description: d.description,
-        parameters: toGoogleSchema(d.parameters),
-    }))
-}
-
+// The voice channel keeps the full tool surface, including the dashboard
+// tools: it runs on the device, where the native executor can apply them.
 const TOOL_DECLARATIONS = toFunctionDeclarations(TOOL_DEFINITIONS)
 
 export async function createLiveToken() {

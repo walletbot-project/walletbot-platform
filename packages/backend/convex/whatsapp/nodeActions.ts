@@ -5,11 +5,14 @@ import { internal } from '../_generated/api'
 import type { Id } from '../_generated/dataModel'
 import type { ActionCtx } from '../_generated/server'
 import { internalAction } from '../_generated/server'
+import { turnKeyFor } from '../agent/idempotency'
+import { runAgent } from '../agent/runner'
 import { chunkBody, sendText, windowIsOpen } from './helpers'
 import {
     extractLinkCodeCandidates,
     linkReplyText,
     replyLanguageFor,
+    utcOffsetMinutesFor,
 } from './linking'
 
 // A Node action so the real agent can use @google/genai, the same way
@@ -109,21 +112,71 @@ const resolveLink = async (
     }
 }
 
-// TODO(agent): replace with the real agent. Deliberately a stub so the
-// concurrency can be tested before the LLM is in the picture — send three
-// messages in quick succession and you should get exactly one reply listing all
-// three, which is the coalescing behaviour working.
-const generateReply = async (batch: {
-    userId: string
-    messages: ClaimedMessage[]
-}): Promise<string> => {
-    const lines = batch.messages.map((message, index) => {
-        const body =
-            message.text ??
-            `<${message.type}${message.mediaId ? ` ${message.mediaId}` : ''}>`
-        return `${index + 1}. ${body}`
+// The batch as one user turn.
+//
+// Messages that coalesced into this turn are joined rather than sent as
+// separate turns: the user typed "gasté 5000" and "en el super" as two
+// bubbles, but they are one thought and the model should read them that way.
+//
+// Non-text messages (audio, images, documents) are not downloaded — the media
+// pipeline does not exist yet — so they are described rather than dropped,
+// which lets the model say it cannot open them instead of ignoring the user.
+const batchToPrompt = (messages: ClaimedMessage[]): string =>
+    messages
+        .map((message) => {
+            if (message.text !== null && message.text.trim().length > 0) {
+                return message.text.trim()
+            }
+            return `[the user sent a ${message.type} message, which I cannot open yet]`
+        })
+        .join('\n')
+
+// Deliberately vague about *what* failed and non-committal about whether
+// anything was saved: after an exception mid-turn we genuinely do not know,
+// and telling the user "no se guardó" when it did would be worse than saying
+// nothing precise. Pointing at the app gives them a way to check.
+const failureReplyText = (language: 'es' | 'en'): string =>
+    language === 'es'
+        ? 'Tuve un problema procesando eso. Revisá en la app si quedó registrado antes de volver a mandarlo.'
+        : 'Something went wrong handling that. Check the app to see whether it was saved before sending it again.'
+
+// Runs the agent for one claimed batch and returns what to send back.
+const generateReply = async (
+    ctx: ActionCtx,
+    args: {
+        conversationId: Id<'whatsappConversations'>
+        userId: string
+        waId: string
+        messages: ClaimedMessage[]
+        messageIds: Id<'whatsappInboundMessages'>[]
+    },
+): Promise<string> => {
+    const history = await ctx.runQuery(
+        internal.whatsapp.internal.recentHistory,
+        { conversationId: args.conversationId },
+    )
+
+    const result = await runAgent(ctx, {
+        userId: args.userId,
+        messages: [
+            ...history,
+            { role: 'user' as const, text: batchToPrompt(args.messages) },
+        ],
+        // The claimed rows' ids. If this turn dies before `finishBatch` and
+        // the reaper re-queues them, the replay claims those same rows and
+        // therefore rebuilds the same key — which is what stops the retry from
+        // recording the user's expense a second time (R-019).
+        turnKey: turnKeyFor(args.messageIds),
+        nowMs: Date.now(),
+        // Both inferred from the sender's country code: a WhatsApp
+        // conversation carries no locale and the account stores none.
+        utcOffsetMinutes: utcOffsetMinutesFor(args.waId),
+        preferredLanguage: replyLanguageFor(args.waId),
     })
-    return `Recibí ${batch.messages.length} mensaje(s) en este turno:\n${lines.join('\n')}`
+    console.info(
+        `whatsapp agent turn for ${args.conversationId}: ${result.rounds} round(s), ${result.toolCalls} tool call(s)`,
+    )
+    return result.text
 }
 
 // Drains a conversation's queue until it is empty, then releases the lock.
@@ -197,9 +250,12 @@ export const runAgentTurn = internalAction({
                     continue
                 }
 
-                const reply = await generateReply({
+                const reply = await generateReply(ctx, {
+                    conversationId,
                     userId: claim.userId,
+                    waId: claim.waId,
                     messages: claim.messages,
+                    messageIds,
                 })
 
                 await sendReply(ctx, {
@@ -224,6 +280,25 @@ export const runAgentTurn = internalAction({
                     status: 'failed',
                     failureReason: String(error),
                 })
+                // Say something. A failed turn that stays silent is
+                // indistinguishable from a bot that is ignoring you, and the
+                // user's only recourse would be to send the message again —
+                // which, on a turn that already half-succeeded, is the worst
+                // thing they could do. Best effort: a send that also fails is
+                // already logged by `sendReply`, and must not mask the error
+                // above.
+                try {
+                    await sendReply(ctx, {
+                        conversationId,
+                        phoneNumberId: claim.phoneNumberId,
+                        waId: claim.waId,
+                        body: failureReplyText(replyLanguageFor(claim.waId)),
+                    })
+                } catch (sendError) {
+                    console.error(
+                        `whatsapp failure notice could not be sent to ${claim.waId}: ${String(sendError)}`,
+                    )
+                }
             }
         }
 

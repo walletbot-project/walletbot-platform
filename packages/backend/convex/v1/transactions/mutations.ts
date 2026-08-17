@@ -569,7 +569,7 @@ export const archive = mutation({
 
 // Shared attach/detach used by the `tag`/`untag` mutations and by `update` so a
 // transaction edit and its tag changes commit atomically in one mutation.
-async function attachTags(
+export async function attachTags(
     ctx: MutationCtx,
     userId: string,
     transactionId: string,
@@ -612,7 +612,7 @@ async function attachTags(
     return added
 }
 
-async function detachTags(
+export async function detachTags(
     ctx: MutationCtx,
     userId: string,
     transactionId: string,

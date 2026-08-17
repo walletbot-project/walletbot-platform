@@ -8,6 +8,13 @@
  * @module
  */
 
+import type * as agent_idempotency from "../agent/idempotency.js";
+import type * as agent_prompt from "../agent/prompt.js";
+import type * as agent_resolve from "../agent/resolve.js";
+import type * as agent_runner from "../agent/runner.js";
+import type * as agent_time from "../agent/time.js";
+import type * as agent_tools from "../agent/tools.js";
+import type * as agent_toolset from "../agent/toolset.js";
 import type * as aggregates from "../aggregates.js";
 import type * as auth from "../auth.js";
 import type * as authNative_http from "../authNative/http.js";
@@ -87,6 +94,13 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  "agent/idempotency": typeof agent_idempotency;
+  "agent/prompt": typeof agent_prompt;
+  "agent/resolve": typeof agent_resolve;
+  "agent/runner": typeof agent_runner;
+  "agent/time": typeof agent_time;
+  "agent/tools": typeof agent_tools;
+  "agent/toolset": typeof agent_toolset;
   aggregates: typeof aggregates;
   auth: typeof auth;
   "authNative/http": typeof authNative_http;

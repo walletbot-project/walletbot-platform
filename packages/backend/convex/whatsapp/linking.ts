@@ -164,6 +164,62 @@ export const replyLanguageFor = (waId: string): ReplyLanguage => {
     return 'en'
 }
 
+// UTC offsets in minutes, by calling code. Same shape and same reasoning as
+// the language table above: a wa_id is the only signal available, there is no
+// stored timezone on the account, and a fixed table is auditable.
+//
+// This exists because "hoy" has to mean the user's today. Convex runs in UTC,
+// so an expense reported at 22:00 in Buenos Aires would otherwise be filed
+// under tomorrow — and the calendar day is the axis a finance app is read
+// along. See `agent/time.ts` for how the offset is applied, including the
+// deliberate absence of DST handling.
+//
+// Countries spanning several zones are pinned to the one holding most of the
+// population and most of the WhatsApp traffic (Brazil → São Paulo, Mexico →
+// Mexico City, US/Canada → New York), which is wrong for a minority of users
+// by one to three hours.
+const UTC_OFFSET_MINUTES: Record<string, number> = {
+    '1': -300, // US / Canada — Eastern
+    '34': 60, // Spain
+    '51': -300, // Peru
+    '52': -360, // Mexico
+    '53': -300, // Cuba
+    '54': -180, // Argentina
+    '55': -180, // Brazil
+    '56': -180, // Chile (no DST modelled)
+    '57': -300, // Colombia
+    '58': -240, // Venezuela
+    '502': -360, // Guatemala
+    '503': -360, // El Salvador
+    '504': -360, // Honduras
+    '505': -360, // Nicaragua
+    '506': -360, // Costa Rica
+    '507': -300, // Panama
+    '591': -240, // Bolivia
+    '593': -300, // Ecuador
+    '595': -180, // Paraguay (no DST modelled)
+    '598': -180, // Uruguay
+}
+
+// Longest prefix first so `502` is not shadowed by a hypothetical `50`.
+// E.164 codes are prefix-free, so this is belt-and-braces.
+const OFFSET_CODES = Object.keys(UTC_OFFSET_MINUTES).sort(
+    (a, b) => b.length - a.length,
+)
+
+// Falls back to Argentina rather than UTC: every number this reaches today is
+// Argentine, and UTC would be wrong for all of them. Revisit when the product
+// ships outside the region.
+export const DEFAULT_UTC_OFFSET_MINUTES = -180
+
+export const utcOffsetMinutesFor = (waId: string): number => {
+    const digits = waId.replace(/\D/g, '')
+    for (const code of OFFSET_CODES) {
+        if (digits.startsWith(code)) return UTC_OFFSET_MINUTES[code]
+    }
+    return DEFAULT_UTC_OFFSET_MINUTES
+}
+
 // Copy for the only messages Wallet Bot sends to a number it cannot identify.
 //
 // One language, never both. At this point there is no account and therefore no

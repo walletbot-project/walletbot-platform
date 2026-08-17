@@ -800,6 +800,43 @@ reached `status: read` in `whatsappOutboundMessages` — the full
 `sent → delivered → read` lifecycle, applied by status webhooks through
 `applyStatusUpdates`. Nothing in the loop is silent any more.
 
+**The agent works, end to end** (2026-08-17). The stub is gone. A linked
+conversation now reaches a real Gemini tool-calling loop that reads and writes
+the user's finances through `convex/agent/`. Verified against the dev database:
+
+```
+"que cuentas tengo?"
+  → 2 rounds, 1 tool call
+  → "¡Hola! Tenés estas cuentas: Test, MercadoPago, ICBC, Cash, vale…"
+
+"anota 1234,50 de cafe en la cuenta Test, ayer a la tarde"
+  → 4 rounds, 3 tool calls (listAccounts, createCategory, addExpense)
+  → row written: amount 123450n cents, ARS, timeStatus "approximation",
+    dateConfirmed true, seq 58, date = 2026-08-16 16:00 Buenos Aires
+  → balance moved to -1234.50; summarizeByCategory for that single day
+    returned it, proving the inclusive end-of-day range
+```
+
+Both were then removed and the balance confirmed back at 0. Two things this
+exercise settled that reading the SDK could not:
+
+1. **Gemini 3 requires thought signatures.** Rebuilding the model's turn from
+   `response.functionCalls` drops the sibling `thoughtSignature` on each part
+   and the next request fails with `400 … Function call is missing a
+   thought_signature`. The model's `candidates[0].content` has to be pushed
+   back verbatim. Confirmed against the live API, not inferred from docs.
+2. **The free tier is 5 requests per minute**, and one turn costs two to four.
+   Three consecutive turns exhaust it and Gemini answers `429
+   RESOURCE_EXHAUSTED`. `runAgent` treats that (and 5xx/overload) as
+   recoverable and replies "estoy saturado, probá en un minuto" rather than
+   going silent — but **a paid key is a prerequisite for real use**, not a
+   nice-to-have.
+
+**Replayed turns no longer double-write** (2026-08-17). R-019 made an
+idempotency guard a precondition for giving the agent write tools. Two calls
+with the same `writeKey` return the same id with `duplicate: true`, and the
+account balance moves once. See Part 13.
+
 ### Watch out: Meta itself will message your number
 
 The first inbound the live number received was **not** from a human. Meta's own
@@ -860,25 +897,35 @@ Meta allows only one per app.
 
 ### Tracked in the risk register
 
-Five entries in `docs/riesgos.md` came out of this work. They are the durable
+Eight entries in `docs/riesgos.md` came out of this work. They are the durable
 version of the warnings above:
 
 | ID | Risk | Prob. | Impact |
 | --- | --- | --- | --- |
-| **R-019** | At-least-once turns duplicate **side effects** once the agent can write | Media | Alto |
+| **R-019** | At-least-once turns duplicate **side effects** once the agent can write — **mitigated 2026-08-17** | Media | Alto |
 | **R-020** | The webhook is a public, unauthenticated ingress into the agent | Baja | Crítico |
 | **R-021** | The 24h window drops outbound silently | Alta | Medio |
 | **R-022** | `wa_id` is not "E.164 without the `+`" | Media | Medio |
 | **R-023** | Never-expiring token shared across dev and prod | Baja | Alto |
+| **R-024** | The link code is a bearer credential | Baja | Alto |
+| **R-025** | The agent writes finances **without prior confirmation** | Media | Medio |
+| **R-026** | The user's timezone is inferred from their country code | Media | Bajo |
 
-**R-019 is the one with a hard precondition.** The turn claims a batch, replies,
-*then* marks it processed. If the action dies in between, the reaper requeues and
-the batch runs twice. While the agent only emits text that costs a duplicate
-message. The moment it gets a tool that writes to `transactions`, the same window
-duplicates the *financial record* — landing on R-001 and R-005, with the user
-having to notice and undo something they never created. **Before giving the agent
-any write tool: derive an idempotency key from the claimed `wamid`s and check it
-inside the mutation that creates the movement, so a retry is a no-op.**
+**R-019 had a hard precondition, and it was met.** The turn claims a batch,
+replies, *then* marks it processed; if the action dies in between, the reaper
+requeues and the batch runs twice. While the agent only emitted text that cost a
+duplicate message — but the moment it got a tool that writes to `transactions`,
+the same window would have duplicated the *financial record*. The register
+required an idempotency key before any write tool shipped, and
+`agent/idempotency.ts` is it: deterministic entity ids derived from the claimed
+row ids, so a retry is a no-op. See Part 13 § Replay safety.
+
+**R-025 is the one to watch now.** Voice shows the user the detected movement
+before saving; WhatsApp does not. The agent interprets a text message and writes
+in the same turn, so a misread amount is already in the database — and the
+confirmation the user reads is the model's sentence, not the database's. The
+mitigation is partial: write tools return persisted values rather than an echo
+of their arguments, so the confirmation is at least built from real data.
 
 ### Suggested next steps
 
@@ -886,20 +933,18 @@ inside the mutation that creates the movement, so a retry is a no-op.**
    (2026-08-17)**: a short-lived link code minted from an authenticated session
    and sent by the user over WhatsApp, with the native UI in the user/accounts
    menu. See Part 12 § Identity. Web parity is still open.
-2. Replace the stub `generateReply` in `whatsapp/nodeActions.ts` with the real
-   agent. It needs a server-side tool executor: the 40 tool schemas in
-   `packages/shared/src/tools/` are reusable as-is, but the executor
-   (`apps/native/lib/voice/tool_executors.dart`) runs on the device against
-   Drift, and there is no Convex equivalent. The `v1/*` mutations exist but are
-   all `requireAuth`-gated, so they need internal `userId`-taking variants that
-   still go through `nextSeq` — otherwise the agent's writes never sync to the
-   phone.
-3. Implement the R-019 idempotency key **before** the agent gets write tools.
-   Cheaper than it looks: the create mutations already take a client-supplied
-   `id: v.string()` and already record `createdBy: 'agent'`, so a UUID derived
-   from the claimed `wamid`s makes a replay hit `assertNoExistingId` instead of
-   writing a second expense. That helper currently *throws*, so the executor
-   should treat "already exists" as success rather than reporting an error.
+2. ~~Replace the stub `generateReply` with the real agent~~ — **done
+   (2026-08-17)**. `convex/agent/` holds a server-side executor for 29 of the 38
+   tools, and `runAgent` drives the Gemini tool-calling loop. Writes go through
+   `nextSeq`, so they sync to the phone. The nine dashboard/saved-filter tools
+   are deliberately out of scope — see Part 13 § Tool surface. **Add a paid
+   Gemini key before real use**: the free tier allows 5 requests/min and one
+   turn costs two to four.
+3. ~~Implement the R-019 idempotency key **before** the agent gets write
+   tools~~ — **done (2026-08-17)**, in the same change. `agent/idempotency.ts`
+   derives each created entity's id from the claimed row ids by SHA-256, so a
+   replay reuses the id and the create returns `{ok: true, duplicate: true}`
+   instead of inserting again. Part 13 § Replay safety.
 4. ~~Filter inbound by sender~~ — **done**: the identity gate in `runAgentTurn`
    means an unlinked sender, Meta's own bot included, never reaches the agent.
    It still costs one cheap turn and one fixed-copy reply.
@@ -917,6 +962,17 @@ inside the mutation that creates the movement, so a retry is a no-op.**
 9. Consider subscribing to the `phone_number_name_update` webhook field — it
    reports display-name approval, which is the signal we had no visibility into
    during the `131037` incident. We currently subscribe to `messages` only.
+10. **Store the user's timezone in `userSettings`** and have the native app
+   write it. The agent currently infers it from the sender's country code
+   (R-026), which is wrong for travellers and for DST countries. The app
+   already knows the real zone.
+11. Handle inbound **media**. Audio, images and documents are recognised but
+   not downloaded: the agent is told "the user sent a `<type>` message, which I
+   cannot open yet" so it can say so rather than ignore them. Voice notes are
+   the obvious next channel — the transcription path already exists for the
+   live agent.
+12. Consider a "this is what I saved" turn summary built from the ids the
+   executor actually wrote, rather than from the model's own sentence (R-025).
 
 ---
 
@@ -931,10 +987,18 @@ What actually exists in the backend, and how to test it.
 | `convex/schema/whatsapp.ts` | `whatsappConversations` (the lock), `whatsappInboundMessages` (the queue), `whatsappOutboundMessages` (delivery log), `whatsappLinkCodes` (identity) |
 | `convex/whatsapp/http.ts` | `registerWhatsappRoutes` — `GET` handshake, `POST` events |
 | `convex/whatsapp/utils.ts` | HMAC verification, defensive payload parsing |
-| `convex/whatsapp/internal.ts` | `enqueueInbound`, `claimOrRelease`, `finishBatch`, `recordOutbound`, `applyStatusUpdates`, `handOffTurn`, `releaseStuckTurns`, `tryLink`, `purgeExpiredLinkCodes` |
+| `convex/whatsapp/internal.ts` | `enqueueInbound`, `claimOrRelease`, `finishBatch`, `recordOutbound`, `applyStatusUpdates`, `handOffTurn`, `releaseStuckTurns`, `tryLink`, `purgeExpiredLinkCodes`, `recentHistory` |
 | `convex/whatsapp/helpers.ts` | `sendText`, `windowIsOpen`, `chunkBody` |
 | `convex/whatsapp/linking.ts` | Pure link-code logic: generation, normalisation, extraction, reply copy, deep link |
-| `convex/whatsapp/nodeActions.ts` | `runAgentTurn` — the drain loop and the identity gate |
+| `convex/whatsapp/nodeActions.ts` | `runAgentTurn` — the drain loop, the identity gate, and the call into the agent |
+| `convex/agent/runner.ts` | `runAgent` — the Gemini tool-calling loop; `runForUser` for testing without a phone |
+| `convex/agent/tools.ts` | `execute` — the server-side tool executor, one internal mutation per call |
+| `convex/agent/resolve.ts` | `idOrName` → entity, mirroring the native resolver |
+| `convex/agent/time.ts` | Offset-aware date parsing, so "hoy" means the user's today |
+| `convex/agent/idempotency.ts` | Deterministic entity ids, so a replayed turn writes nothing twice (R-019) |
+| `convex/agent/prompt.ts` | The text-channel system instruction |
+| `convex/agent/toolset.ts` | Which tools the text agent may call |
+| `convex/agent/schema.ts` | Shared tool-schema → Google `FunctionDeclaration` adapter (also used by voice) |
 | `convex/v1/whatsapp/mutations.ts` | `createLinkCode`, `unlink` — the authenticated half of linking |
 | `convex/v1/whatsapp/queries.ts` | `linkStatus` — which numbers are connected |
 
@@ -1142,6 +1206,143 @@ statuses. Watch the Convex logs for the turn and `whatsappOutboundMessages` for
 the status transitions.
 
 ---
+
+## Part 13 — The agent
+
+### Why none of the voice agent transferred
+
+The voice agent mints a short-lived Gemini token (`live/createToken.ts`) and the
+**phone** talks to Gemini, executing tools against its own Drift database. That
+shape has no server in the middle by design — native has to work offline.
+
+A WhatsApp message has no device attached. The model call, the tool execution
+and the reply all have to happen inside one Convex action, against Convex's
+copy of the data. So the prompt and the tool *schemas* were reusable; the
+executor was not, and `apps/native/lib/voice/tool_executors.dart` had to be
+written a third time in TypeScript.
+
+That leaves three executors over one contract
+(`packages/shared/src/tools/definitions.ts`): the Dart one, the `v1/*`
+mutations the app's forms call, and `convex/agent/tools.ts`. The duplication is
+real and deliberate — each has a different authorization story and a different
+database — but it means **a change to money semantics has to be made in all
+three**, and `agent/tools.ts` flags inline wherever it diverges from `v1/*`.
+
+### The loop
+
+```
+runAgentTurn  (whatsapp/nodeActions.ts)
+  ├─ claim batch ─────────────────────── coalesced messages, one turn
+  ├─ identity gate ──────────────────── unlinked → link flow, never the model
+  ├─ recentHistory ──────────────────── last 20 messages, 24h, both directions
+  └─ runAgent  (agent/runner.ts)
+       ├─ generateContent(model, contents, tools)
+       ├─ functionCall parts?  ── no ──▶ reply text
+       │        │ yes
+       │        ▼
+       ├─ push candidates[0].content VERBATIM   ← thought signatures
+       ├─ execute each call  ──▶ agent/tools.ts (one internal mutation each)
+       └─ push functionResponse parts, loop (max 8 rounds / 24 calls)
+```
+
+### Tool surface: 29 of 38
+
+Everything about money is there: accounts, categories, tags, transaction reads
+and writes, and the two summaries.
+
+**The nine dashboard and saved-filter tools are deliberately not exposed.**
+`createDashboardWidget` has to place a tile on a grid, and that packing lives
+in Dart (`components/dashboard/dashboard_layout.dart`) with no server-side
+equivalent; a WhatsApp user also cannot see the result. Porting the packer for
+a surface nobody can look at is work with no payoff, so the prompt tells the
+agent to send the user to the app instead. `agent/toolset.ts` is the single
+list, shared by the model's declarations and the executor's dispatch, so the
+model can never call something the executor cannot handle.
+
+### "Hoy" has to mean the user's today
+
+Convex runs in UTC. The naive implementation files an expense reported at 22:30
+in Buenos Aires under *tomorrow*, and in a finance app the calendar day is the
+axis everything is read along.
+
+`agent/time.ts` therefore takes an explicit UTC offset and computes everything
+with `Date.UTC`/`getUTC*` on a shifted instant, never reading the ambient
+timezone — the result is identical wherever the action runs. The offset comes
+from the sender's country code (`utcOffsetMinutesFor`), the same hard-coded
+table shape as the reply language, because a WhatsApp conversation carries no
+locale and the account stores no timezone. That inference is wrong for
+travellers and for DST countries; it is tracked as R-026, whose real fix is
+storing the timezone in `userSettings` from the native app.
+
+One trap worth naming: `Date.parse('2026-08-17T14:30')` resolves a **zoneless**
+datetime against the host timezone, so an offset correction on top of it
+double-applies. The parser handles that form field by field instead. Two of the
+44 date assertions exist purely because that bug shipped and was caught.
+
+### Replay safety
+
+A WhatsApp turn is at-least-once (R-019): if the action dies between sending
+and `finishBatch`, the reaper re-queues the batch and the agent runs again on
+the same input. With read-only tools that cost a repeated reply; with write
+tools it would cost a second expense.
+
+`agent/idempotency.ts` makes the *identity* of what the agent creates a
+function of the turn rather than of chance:
+
+```
+turnKey  = sorted claimed row ids        (the reaper re-queues rows, not recreates them)
+writeKey = turnKey | toolName | nth      (nth counts calls of that tool, not all calls)
+id       = SHA-256(writeKey) → UUID-shaped, version 8
+```
+
+A replay lands on the same id and the existing "already exists" check turns the
+insert into a no-op. Counting per tool name — not globally — keeps the mapping
+stable when a replay happens to interleave a different number of reads. In
+`addBalanceAdjustment` the guard runs *before* the balance is read, or the
+replay would see the already-adjusted balance and write a second zero-delta
+adjustment.
+
+The duplicate *reply* is not mitigated, deliberately: it is visible and
+harmless, unlike a duplicate movement.
+
+### Configuration
+
+| Variable | Default | Why you'd change it |
+| --- | --- | --- |
+| `GEMINI_API_KEY` | — | Required. The free tier's 5 req/min is not enough for real use. |
+| `GEMINI_TEXT_MODEL` | `gemini-3-flash-preview` | Roll the model forward without a deploy when Google retires a preview. |
+
+Thinking level is pinned to `LOW`. Gemini 3 defaults to `HIGH`, which is not
+worth it for "anotá $5.000 de café" when the user is watching two grey ticks.
+
+### Testing without a phone
+
+`runForUser` is an internal action, so `userId` is trusted and it can never be
+reached from a client:
+
+```bash
+npx convex run agent/runner:runForUser \
+  '{"userId":"<convex user id>","text":"gasté 500 en café"}'
+```
+
+To exercise the executor without spending model quota — useful, given the rate
+limit — call a tool directly:
+
+```bash
+npx convex run agent/tools:execute '{
+  "userId":"<id>", "name":"getAccountBalance",
+  "argsJson":"{\"idOrName\":\"Efectivo\"}",
+  "nowMs":1786993584624, "utcOffsetMinutes":-180
+}'
+```
+
+Date handling has 44 assertions in a standalone script (there is no test runner
+in `packages/backend` yet), run under four different host timezones to prove it
+does not read the ambient zone:
+
+```bash
+TZ=Asia/Tokyo node --experimental-strip-types agent-time-test.ts
+```
 
 ## Sources
 

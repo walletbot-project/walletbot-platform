@@ -100,6 +100,9 @@ export const whatsappInboundMessages = defineTable({
 })
     .index('by_wamid', ['wamid'])
     .index('by_conversationId_and_status', ['conversationId', 'status'])
+    // Conversation history for the agent: the last N messages in the order
+    // they arrived, regardless of how their processing ended.
+    .index('by_conversationId_and_receivedAt', ['conversationId', 'receivedAt'])
 
 // Outbound log. This exists because a send response proves nothing: the only
 // evidence a message was delivered is a status webhook updating this row.

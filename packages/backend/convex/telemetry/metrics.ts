@@ -3,7 +3,11 @@ import type { MutationCtx } from '../_generated/server'
 import type { MetricAttributeValue, MetricInput, MetricName } from './types'
 
 type CreatedBy = 'form' | 'agent'
-type IngestPath = 'direct_mutation'
+// Where the write entered the system. `direct_mutation` is the app calling a
+// `v1/*` mutation as the signed-in user; `whatsapp` is the server-side agent
+// acting for a linked conversation (`agent/tools.ts`), which has no session
+// and therefore no `direct_mutation` to attribute it to.
+type IngestPath = 'direct_mutation' | 'whatsapp'
 type AuthMethod = 'email_password' | 'google' | 'apple' | 'local'
 
 const recordMetric = async (

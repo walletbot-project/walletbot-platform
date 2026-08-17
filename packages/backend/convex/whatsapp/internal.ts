@@ -1,7 +1,11 @@
 import { v } from 'convex/values'
 import { internal } from '../_generated/api'
 import type { Doc, Id } from '../_generated/dataModel'
-import { internalMutation, type MutationCtx } from '../_generated/server'
+import {
+    internalMutation,
+    internalQuery,
+    type MutationCtx,
+} from '../_generated/server'
 import type { ParsedInboundMessage } from './utils'
 
 const WINDOW_MS = 24 * 60 * 60 * 1000
@@ -408,6 +412,77 @@ export const purgeExpiredLinkCodes = internalMutation({
             await ctx.db.delete(row._id)
         }
         return null
+    },
+})
+
+// How much of the conversation the agent is shown. WhatsApp threads are long
+// and mostly irrelevant — a user who logged groceries in March does not want
+// that influencing today's answer — while the last few exchanges are what make
+// "y otro igual" or "cambialo a 3000" resolvable at all.
+const HISTORY_MESSAGES = 20
+// Anything older than this is not context, it is a different conversation.
+const HISTORY_MAX_AGE_MS = 24 * 60 * 60 * 1000
+// One pathological message must not push everything useful out of the window.
+const HISTORY_MAX_CHARS = 1500
+
+// The recent exchange, oldest first, for seeding the model's context.
+//
+// Only messages already dealt with are included: the batch the current turn is
+// holding is `claimed`, and the caller appends those itself as the live user
+// turn. Including them here would duplicate them.
+export const recentHistory = internalQuery({
+    args: { conversationId: v.id('whatsappConversations') },
+    handler: async (ctx, { conversationId }) => {
+        const cutoff = Date.now() - HISTORY_MAX_AGE_MS
+
+        const inbound = await ctx.db
+            .query('whatsappInboundMessages')
+            .withIndex('by_conversationId_and_receivedAt', (q) =>
+                q.eq('conversationId', conversationId).gt('receivedAt', cutoff),
+            )
+            .order('desc')
+            .take(HISTORY_MESSAGES)
+
+        const outbound = await ctx.db
+            .query('whatsappOutboundMessages')
+            .withIndex('by_conversationId', (q) =>
+                q.eq('conversationId', conversationId),
+            )
+            .order('desc')
+            .take(HISTORY_MESSAGES)
+
+        const entries: { at: number; role: 'user' | 'model'; text: string }[] =
+            []
+        for (const message of inbound) {
+            if (message.status !== 'processed' && message.status !== 'failed') {
+                continue
+            }
+            const text = message.text?.trim()
+            if (!text) continue
+            entries.push({
+                at: message.receivedAt,
+                role: 'user',
+                text: text.slice(0, HISTORY_MAX_CHARS),
+            })
+        }
+        for (const message of outbound) {
+            if (message.createdAt <= cutoff) continue
+            // A send that failed never reached the user, so pretending we said
+            // it would make the model reason from a message they never saw.
+            if (message.status === 'failed') continue
+            const text = message.text.trim()
+            if (text.length === 0) continue
+            entries.push({
+                at: message.createdAt,
+                role: 'model',
+                text: text.slice(0, HISTORY_MAX_CHARS),
+            })
+        }
+
+        entries.sort((a, b) => a.at - b.at)
+        return entries
+            .slice(-HISTORY_MESSAGES)
+            .map(({ role, text }) => ({ role, text }))
     },
 })
 
