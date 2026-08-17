@@ -8,6 +8,7 @@ import 'package:app/components/readable_time_picker.dart';
 import 'package:app/data/data.dart';
 import 'package:app/database.dart';
 import 'package:app/l10n/l10n.dart';
+import 'package:app/transactions/exchange_rate.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -485,7 +486,7 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
           _shouldShowExchangeRate &&
               destinationAmountValue != null &&
               destinationAmountValue > 0
-          ? destinationAmountValue / amountValue
+          ? computeExchangeRate(amountValue, destinationAmountValue)
           : null;
       final selectedTime = _selectedTime;
       final transactionDate = selectedTime == null
@@ -1118,9 +1119,9 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
       final message = error is DuplicateAccountException
           ? context.l10n.accountDuplicateNameCurrency
           : context.l10n.accountCreateFailed;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(message)),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(message)));
       return null;
     }
   }

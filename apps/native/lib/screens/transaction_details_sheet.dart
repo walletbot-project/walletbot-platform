@@ -8,6 +8,7 @@ import 'package:app/components/readable_time_picker.dart';
 import 'package:app/data/data.dart';
 import 'package:app/database.dart';
 import 'package:app/l10n/l10n.dart';
+import 'package:app/transactions/exchange_rate.dart';
 import 'package:app/shared/money.dart';
 import 'package:drift/drift.dart' show Value;
 import 'package:flutter/material.dart';
@@ -122,6 +123,20 @@ class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
 
     _balances = await _loadBalances(transaction);
     if (!mounted) return;
+
+    if (transaction != null &&
+        transaction.type == 'transfer' &&
+        transaction.toCurrency != null &&
+        transaction.toCurrency != transaction.currency) {
+      debugPrint(
+        '[TransferDetail] cross-currency transfer '
+        'currency=${transaction.currency} '
+        'toCurrency=${transaction.toCurrency} '
+        'amount=${transaction.amount} '
+        'toAmount=${transaction.toAmount} '
+        'exchangeRate=${transaction.exchangeRate}',
+      );
+    }
 
     setState(() => _loading = false);
   }
@@ -256,7 +271,10 @@ class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
         exchangeRate = sameCurrency || sourceAmount == BigInt.zero
             ? const Value<double?>(null)
             : Value<double?>(
-                destinationAmount.toDouble() / sourceAmount.toDouble(),
+                computeExchangeRate(
+                  sourceAmount.toDouble(),
+                  destinationAmount.toDouble(),
+                ),
               );
       } else {
         amount = Value(parsedAmount);

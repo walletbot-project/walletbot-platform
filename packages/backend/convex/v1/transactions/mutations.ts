@@ -1,3 +1,4 @@
+import { computeExchangeRate } from '@wallet-bot/shared'
 import { v } from 'convex/values'
 import type { Doc, Id } from '../../_generated/dataModel'
 import type { MutationCtx } from '../../_generated/server'
@@ -498,7 +499,10 @@ export const update = mutation({
                 patch.toAmount = nextToAmount
                 patch.exchangeRate = sameCurrency
                     ? undefined
-                    : Number(nextToAmount) / Number(nextAmount)
+                    : computeExchangeRate(
+                          Number(nextAmount),
+                          Number(nextToAmount),
+                      )
             }
         } else if (args.amount !== undefined) {
             patch.amount = args.amount

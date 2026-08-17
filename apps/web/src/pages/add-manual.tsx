@@ -1,5 +1,9 @@
 import { api } from '@wallet-bot/backend/api'
-import { parseAmountToCents, parseTransactionDate } from '@wallet-bot/shared'
+import {
+    computeExchangeRate,
+    parseAmountToCents,
+    parseTransactionDate,
+} from '@wallet-bot/shared'
 import { useMutation, useQuery } from 'convex/react'
 import { Check, Loader2, Plus, Repeat2, X } from 'lucide-react'
 import { type FormEvent, type ReactNode, useEffect, useState } from 'react'
@@ -551,7 +555,10 @@ export function AddManual() {
                 )
                 const exchangeRate =
                     selectedAccount.currency !== destinationAccount?.currency
-                        ? parsedDestinationAmount / parsedAmount
+                        ? computeExchangeRate(
+                              parsedAmount,
+                              parsedDestinationAmount,
+                          )
                         : undefined
 
                 await createTransfer({
