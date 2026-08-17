@@ -170,6 +170,21 @@ class VoiceSessionRepository {
     );
   });
 
+  /// Explicitly ends the session [openOrCreate] would resume, so a later
+  /// open neither rehydrates nor resumes it. No-op when nothing is
+  /// resumable. Not `_serial`-wrapped itself — [endExplicitly] is, and
+  /// nesting `_serial` calls would deadlock on the write tail.
+  Future<void> endResumableSession() async {
+    final active =
+        await (db.select(db.voiceSessions)
+              ..where((row) => row.status.isNotIn(const ['ended', 'expired']))
+              ..orderBy([(row) => OrderingTerm.desc(row.updatedAt)])
+              ..limit(1))
+            .getSingleOrNull();
+    if (active == null) return;
+    await endExplicitly(active.id);
+  }
+
   Future<void> endExplicitly(String sessionId) => _serial(() async {
     final now = DateTime.now();
     final updatedAt = await _nextUpdatedAt(sessionId, now);

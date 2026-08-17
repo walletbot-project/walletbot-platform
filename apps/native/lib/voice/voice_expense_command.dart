@@ -8,11 +8,24 @@ abstract interface class VoiceExpenseCommandFactory {
 
   VoiceExpenseCommand create();
 
+  /// Starts fetching a live token before a session needs it, so the mint
+  /// round trip (roughly half of a cold connect) is hidden behind the user's
+  /// think time on the voice screen. Tokens are single-use with a short
+  /// new-session window, so implementations must discard stale prefetches
+  /// rather than hand them to a connect. No-op when prefetching is
+  /// irrelevant (debug, already-fresh prefetch in flight).
+  void prefetchToken();
+
   /// Conversation events of the session a newly created command would resume,
   /// restored from the durable log. Empty when the next session starts fresh
   /// (no resumable session), so a restored transcript always matches the
   /// context the model will actually continue from.
   Future<List<VoiceEvent>> restorableHistory();
+
+  /// Explicitly ends the session [restorableHistory] would restore, so a
+  /// later screen open neither rehydrates its transcript nor resumes its
+  /// model context. No-op when nothing is resumable.
+  Future<void> discardRestorableSession();
 }
 
 abstract interface class VoiceExpenseCommand {
@@ -84,7 +97,13 @@ class DebugVoiceExpenseCommandFactory implements VoiceExpenseCommandFactory {
   VoiceExpenseCommand create() => DebugVoiceExpenseCommand();
 
   @override
+  void prefetchToken() {}
+
+  @override
   Future<List<VoiceEvent>> restorableHistory() async => const [];
+
+  @override
+  Future<void> discardRestorableSession() async {}
 }
 
 class DebugVoiceExpenseCommand implements VoiceExpenseCommand {

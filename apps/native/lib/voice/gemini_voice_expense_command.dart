@@ -17,6 +17,75 @@ import 'voice_expense_command.dart';
 import 'voice_session_remote_sync.dart';
 import 'voice_session_repository.dart';
 
+/// One-shot fetch of a constrained Gemini Live token from the backend,
+/// shared by the command's connect path and the factory's prefetch.
+///
+/// The Convex-action attempt is bounded to 6 s: the action rides the Convex
+/// WebSocket, which can itself be mid-reconnect exactly when a voice
+/// reconnect needs a token (network loss, resume from background) — without
+/// the bound it would sit out the client's full 30 s operation timeout
+/// before falling back. The HTTP endpoint is transport-independent.
+Future<String> _fetchLiveToken({
+  required bool useAuthenticatedTokenAction,
+  required ConvexClient convexClient,
+  required String? sessionToken,
+  required String convexSiteUrl,
+  void Function(String phase, Map<String, Object?> extra)? onPhase,
+}) async {
+  final fetchStopwatch = Stopwatch()..start();
+  Map<String, Object?>? body;
+  if (useAuthenticatedTokenAction) {
+    try {
+      final raw = await convexClient
+          .action(name: 'v1/live/actions:requestLiveToken', args: const {})
+          .timeout(const Duration(seconds: 6));
+      final decoded = decodeConvexResponse(raw);
+      if (decoded is! Map) {
+        throw StateError('Malformed Convex live token response');
+      }
+      body = decoded.cast<String, Object?>();
+    } catch (error) {
+      onPhase?.call('token_action_failed', {
+        'elapsedMs': fetchStopwatch.elapsedMilliseconds,
+        'error': error.toString(),
+      });
+    }
+  }
+  if (body == null) {
+    if (convexSiteUrl.isEmpty) return '';
+    final credential = sessionToken;
+    if (credential == null || credential.isEmpty) return '';
+    final base = Uri.parse(convexSiteUrl);
+    final response = await http
+        .post(
+          base.replace(path: '/v1/live/token'),
+          headers: {'Authorization': 'Bearer $credential'},
+        )
+        .timeout(const Duration(seconds: 15));
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw StateError(
+        'Convex live token request failed: '
+        '${response.statusCode} ${response.body}',
+      );
+    }
+    body = (jsonDecode(response.body) as Map).cast<String, Object?>();
+  }
+
+  final token = body['token'];
+  if (token is! String || token.isEmpty) {
+    throw StateError('Convex live token response did not include token');
+  }
+  onPhase?.call('token_received', {
+    'elapsedMs': fetchStopwatch.elapsedMilliseconds,
+    'model': body['model']?.toString(),
+    // Server-reported breakdown (google round trip, mint total, cold-start
+    // module age, action/http totals): elapsedMs minus the server total is
+    // network + Convex routing.
+    if (body['timings'] is Map) 'server': body['timings'],
+  });
+  return token;
+}
+
 class GeminiVoiceExpenseCommandFactory implements VoiceExpenseCommandFactory {
   GeminiVoiceExpenseCommandFactory({
     required this.repositories,
@@ -41,10 +110,72 @@ class GeminiVoiceExpenseCommandFactory implements VoiceExpenseCommandFactory {
   final String convexSiteUrl;
   GeminiVoiceExpenseCommand? _active;
 
+  // Tokens are single-use with a 2-minute new-session window (see
+  // packages/backend/convex/live/createToken.ts). The freshness bound stays
+  // well inside that window so a consumed prefetch is always startable.
+  static const _prefetchFreshness = Duration(seconds: 60);
+  Future<String>? _prefetchedToken;
+  DateTime? _prefetchedAt;
+
   @override
   VoiceExpenseCommand? get activeCommand {
     final active = _active;
     return active != null && active.isActive ? active : null;
+  }
+
+  @override
+  void prefetchToken() {
+    if (liveToken.isNotEmpty) return;
+    final startedAt = _prefetchedAt;
+    if (_prefetchedToken != null &&
+        startedAt != null &&
+        DateTime.now().difference(startedAt) < _prefetchFreshness) {
+      return;
+    }
+    late final Future<String> future;
+    future = _fetchLiveToken(
+      useAuthenticatedTokenAction: useAuthenticatedTokenAction,
+      convexClient: convexClient,
+      sessionToken: sessionToken,
+      convexSiteUrl: convexSiteUrl,
+      onPhase: (phase, extra) =>
+          debugPrint('[voice] token prefetch $phase: $extra'),
+    );
+    // A failed or credential-less prefetch must not poison the real connect:
+    // drop it so takeFreshPrefetch hands out nothing and the command runs
+    // its own fetch (with its own error surfacing).
+    future.then(
+      (token) {
+        if (token.isEmpty && identical(_prefetchedToken, future)) {
+          _prefetchedToken = null;
+          _prefetchedAt = null;
+        }
+      },
+      onError: (Object error) {
+        debugPrint('[voice] token prefetch failed: $error');
+        if (identical(_prefetchedToken, future)) {
+          _prefetchedToken = null;
+          _prefetchedAt = null;
+        }
+      },
+    );
+    _prefetchedToken = future;
+    _prefetchedAt = DateTime.now();
+  }
+
+  /// Hands a still-fresh prefetched token fetch to a connecting command,
+  /// consuming it. Null when none was started or it aged out of the token's
+  /// new-session window.
+  Future<String>? takeFreshPrefetch() {
+    final future = _prefetchedToken;
+    final startedAt = _prefetchedAt;
+    _prefetchedToken = null;
+    _prefetchedAt = null;
+    if (future == null || startedAt == null) return null;
+    if (DateTime.now().difference(startedAt) >= _prefetchFreshness) {
+      return null;
+    }
+    return future;
   }
 
   @override
@@ -62,6 +193,7 @@ class GeminiVoiceExpenseCommandFactory implements VoiceExpenseCommandFactory {
       apiKey: apiKey,
       liveToken: liveToken,
       convexSiteUrl: convexSiteUrl,
+      takePrefetchedToken: takeFreshPrefetch,
       onEnded: () {
         if (identical(_active, command)) _active = null;
       },
@@ -89,6 +221,12 @@ class GeminiVoiceExpenseCommandFactory implements VoiceExpenseCommandFactory {
     return events;
   }
 
+  @override
+  Future<void> discardRestorableSession() async {
+    await sessionRepository.endResumableSession();
+    remoteSync?.schedule();
+  }
+
   Future<void> dispose() async {
     await _active?.dispose();
     _active = null;
@@ -108,6 +246,7 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
     required this.liveToken,
     required this.convexSiteUrl,
     required this.onEnded,
+    this.takePrefetchedToken,
   }) : _executors = ToolExecutors(repositories);
 
   static const _model = 'gemini-3.1-flash-live-preview';
@@ -124,6 +263,10 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
   final String liveToken;
   final String convexSiteUrl;
   final void Function() onEnded;
+
+  /// Consumes the factory's screen-open token prefetch, when one is still
+  /// inside the token's new-session window. Null result → fetch fresh.
+  final Future<String>? Function()? takePrefetchedToken;
   final ToolExecutors _executors;
   final _audioPlayer = PcmAudioPlayer();
   final _events = StreamController<VoiceEvent>.broadcast();
@@ -195,7 +338,8 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
     // The token fetch and the audio engine spin-up are independent and each
     // can take hundreds of milliseconds — overlap them. `_connectOnce`
     // consumes the prefetched future (or fetches fresh on reconnects).
-    final tokenFetch = _resolveLiveToken();
+    // Prefer a fetch the factory already started when the screen opened.
+    final tokenFetch = takePrefetchedToken?.call() ?? _resolveLiveToken();
     tokenFetch.ignore();
     _prefetchedToken = tokenFetch;
     final engineDiagnostics = await _audioPlayer.start(sampleRate: 24000);
@@ -229,7 +373,7 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
   Future<void> _connectOnce() async {
     if (!isActive) return;
     final connectStopwatch = Stopwatch()..start();
-    final prefetched = _prefetchedToken;
+    final prefetched = _prefetchedToken ?? takePrefetchedToken?.call();
     _prefetchedToken = null;
     final effectiveToken = prefetched != null
         ? await prefetched
@@ -314,56 +458,26 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
   /// one, and nothing is cached.
   Future<String> _resolveLiveToken() async {
     if (liveToken.isNotEmpty) return liveToken;
-
-    final fetchStopwatch = Stopwatch()..start();
     _emit(VoiceSystemEvent('Requesting live token from Convex'));
-    Map<String, Object?>? body;
-    if (useAuthenticatedTokenAction) {
-      try {
-        final raw = await convexClient.action(
-          name: 'v1/live/actions:requestLiveToken',
-          args: const {},
-        );
-        final decoded = decodeConvexResponse(raw);
-        if (decoded is! Map) {
-          throw StateError('Malformed Convex live token response');
+    final token = await _fetchLiveToken(
+      useAuthenticatedTokenAction: useAuthenticatedTokenAction,
+      convexClient: convexClient,
+      sessionToken: sessionToken,
+      convexSiteUrl: convexSiteUrl,
+      onPhase: (phase, extra) {
+        if (phase == 'token_action_failed') {
+          _emit(
+            VoiceSystemEvent(
+              'Authenticated token action failed: ${extra['error']}',
+            ),
+          );
         }
-        body = decoded.cast<String, Object?>();
-      } catch (error) {
-        _logConnectionPhase('token_action_failed', fetchStopwatch, {
-          'error': error.toString(),
-        });
-        _emit(VoiceSystemEvent('Authenticated token action failed: $error'));
-      }
+        _logPhaseRecord(phase, extra);
+      },
+    );
+    if (token.isNotEmpty) {
+      _emit(VoiceSystemEvent('Live token received'));
     }
-    if (body == null) {
-      if (convexSiteUrl.isEmpty) return '';
-      final credential = sessionToken;
-      if (credential == null || credential.isEmpty) return '';
-      final base = Uri.parse(convexSiteUrl);
-      final response = await http
-          .post(
-            base.replace(path: '/v1/live/token'),
-            headers: {'Authorization': 'Bearer $credential'},
-          )
-          .timeout(const Duration(seconds: 15));
-      if (response.statusCode < 200 || response.statusCode >= 300) {
-        throw StateError(
-          'Convex live token request failed: '
-          '${response.statusCode} ${response.body}',
-        );
-      }
-      body = (jsonDecode(response.body) as Map).cast<String, Object?>();
-    }
-
-    final token = body['token'];
-    if (token is! String || token.isEmpty) {
-      throw StateError('Convex live token response did not include token');
-    }
-    _logConnectionPhase('token_received', fetchStopwatch, {
-      'model': body['model']?.toString(),
-    });
-    _emit(VoiceSystemEvent('Live token received for model: ${body['model']}'));
     return token;
   }
 
@@ -375,16 +489,19 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
     Stopwatch stopwatch, [
     Map<String, Object?> extra = const {},
   ]) {
-    final payload = <String, Object?>{
-      'phase': phase,
+    _logPhaseRecord(phase, {
       'elapsedMs': stopwatch.elapsedMilliseconds,
       ...extra,
-    };
-    debugPrint('[voice] connection phase: $payload');
+    });
+  }
+
+  void _logPhaseRecord(String phase, Map<String, Object?> payload) {
+    final record = <String, Object?>{'phase': phase, ...payload};
+    debugPrint('[voice] connection phase: $record');
     _persistProtocolEvent(
       type: 'connection_phase',
       direction: 'local',
-      payload: payload,
+      payload: record,
     );
   }
 

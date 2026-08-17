@@ -176,7 +176,13 @@ class _ActiveVoiceCommandFactory implements VoiceExpenseCommandFactory {
   VoiceExpenseCommand create() => command;
 
   @override
+  void prefetchToken() {}
+
+  @override
   Future<List<VoiceEvent>> restorableHistory() async => const [];
+
+  @override
+  Future<void> discardRestorableSession() async {}
 }
 
 class _ActiveVoiceCommand implements VoiceExpenseCommand {

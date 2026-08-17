@@ -81,6 +81,11 @@ class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
       // Don't sit out a pending backoff delay while the user is looking at
       // the screen — reconnect immediately.
       if (!active.isConnected) unawaited(active.ensureConnected());
+    } else {
+      // No session yet: start minting the live token now so it's already
+      // resolved by the time the user taps the mic or sends a message —
+      // the mint round trip is roughly half of a cold connect.
+      widget.commandFactory.prefetchToken();
     }
   }
 
@@ -431,6 +436,26 @@ class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
       _micActive = false;
       _userMicOn = false;
       _level = 0;
+    });
+  }
+
+  /// The End button's action: stops any live session, ends the logged
+  /// session so it neither rehydrates nor resumes on the next open, and
+  /// clears the visible conversation. This is the one deliberate wipe —
+  /// mere disconnection never clears the chat.
+  Future<void> _endConversation() async {
+    await _stop();
+    // Also covers the no-live-command case (rehydrated transcript) and a
+    // stop() that failed midway: a no-op when stop() already ended it.
+    await widget.commandFactory.discardRestorableSession();
+    if (!mounted) return;
+    setState(() {
+      _items.clear();
+      _toolsById.clear();
+      _pendingUser = null;
+      _pendingAgent = null;
+      _connectionNotice = null;
+      _isBrowsingHistory = false;
     });
   }
 
@@ -805,25 +830,33 @@ class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
         ? _StatusLevel.connecting
         : _StatusLevel.disconnected;
 
+    // Anything to end? A live/reconnecting session, or a restored
+    // transcript whose logged session is still resumable.
+    final showEndButton = _command != null || _items.isNotEmpty;
+
     return Scaffold(
       appBar: AppBar(
         title: Text(context.l10n.liveVoice),
         actions: [
-          Padding(
-            padding: EdgeInsets.only(right: _isConnected ? 4 : 12),
-            child: Center(
-              child: _isConnected
-                  ? IconButton(
-                      icon: Icon(
-                        Icons.call_end_rounded,
-                        color: theme.colorScheme.error,
-                      ),
-                      tooltip: context.l10n.endSession,
-                      onPressed: () => unawaited(_stop()),
-                    )
-                  : _StatusChip(level: status),
+          if (!_isConnected)
+            Padding(
+              padding: EdgeInsets.only(right: showEndButton ? 0 : 12),
+              child: Center(child: _StatusChip(level: status)),
             ),
-          ),
+          if (showEndButton)
+            Padding(
+              padding: const EdgeInsets.only(right: 4),
+              child: Center(
+                child: IconButton(
+                  icon: Icon(
+                    Icons.call_end_rounded,
+                    color: theme.colorScheme.error,
+                  ),
+                  tooltip: context.l10n.endSession,
+                  onPressed: () => unawaited(_endConversation()),
+                ),
+              ),
+            ),
         ],
       ),
       body: Column(

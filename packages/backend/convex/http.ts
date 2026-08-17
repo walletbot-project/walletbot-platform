@@ -7,6 +7,7 @@ import { hashSessionSecret } from './authNative/utils'
 import { registerConfigRoutes } from './config/http'
 import { resend } from './emails/helpers'
 import { jsonResponse } from './httpHelpers'
+import { createLiveToken } from './live/createToken'
 import { registerTelemetryRoutes } from './telemetry/http'
 
 const http = httpRouter()
@@ -24,6 +25,7 @@ registerTelemetryRoutes(http)
 registerConfigRoutes(http)
 
 const liveTokenHandler = httpAction(async (ctx, req) => {
+    const requestStartedAt = Date.now()
     const authorization = req.headers.get('authorization')
     const secret = authorization?.startsWith('Bearer ')
         ? authorization.slice('Bearer '.length)
@@ -41,12 +43,19 @@ const liveTokenHandler = httpAction(async (ctx, req) => {
             { status: 401 },
         )
     }
-    const result = await ctx.runAction(
-        internal.v1.live.actions.requestLiveTokenForHttp,
-        {},
-    )
+    const validatedAt = Date.now()
+    // Direct call: createLiveToken runs in the default runtime (no Node
+    // APIs), so no cross-runtime action hop is needed.
+    const result = await createLiveToken()
 
-    return jsonResponse(result)
+    return jsonResponse({
+        ...result,
+        timings: {
+            ...result.timings,
+            authMs: validatedAt - requestStartedAt,
+            httpTotalMs: Date.now() - requestStartedAt,
+        },
+    })
 })
 
 http.route({
