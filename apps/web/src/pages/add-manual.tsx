@@ -6,10 +6,17 @@ import {
     IconButton,
     SegmentedButton,
     SegmentedButtonSet,
+    Switch,
     TextField,
 } from 'actify'
 import { useMutation, useQuery } from 'convex/react'
-import { type FormEvent, type ReactNode, useEffect, useState } from 'react'
+import {
+    type FormEvent,
+    type ReactNode,
+    useEffect,
+    useMemo,
+    useState,
+} from 'react'
 import { toast } from 'sonner'
 import { ColorSwatches } from '@/components/color-swatches'
 import { DateField } from '@/components/m3/date-field'
@@ -20,7 +27,14 @@ import { OptionSheet, type SheetOption } from '@/components/m3/option-sheet'
 import { PickerField } from '@/components/m3/picker-field'
 import { TagChip } from '@/components/m3/tag-chip'
 import { TimeField } from '@/components/m3/time-field'
-import { type Messages, useT } from '@/lib/i18n'
+import {
+    CURRENCY_CODES,
+    currencyName,
+    DEFAULT_CURRENCY,
+    SUGGESTED_CURRENCIES,
+} from '@/lib/currencies'
+import { type Messages, useFormatLocale, useT } from '@/lib/i18n'
+import { newId } from '@/lib/new-id'
 import { TAG_COLOR_OPTIONS } from '@/lib/tag-colors'
 
 type MovementType = 'income' | 'expense' | 'transfer'
@@ -122,12 +136,6 @@ function parseFormAmount(value: string): number | null {
     return parsed
 }
 
-function newId() {
-    return crypto.randomUUID()
-}
-
-const MOCK_CURRENCIES = ['ARS', 'USD', 'EUR', 'BRL'] as const
-
 function normalizeIdentity(value: string) {
     return value.trim().toLowerCase()
 }
@@ -183,6 +191,8 @@ export function TransactionForm({
     const accounts = useQuery(api.v1.accounts.queries.listActive)
     const categories = useQuery(api.v1.categories.queries.listActive)
     const availableTags = useQuery(api.v1.tags.queries.listActive)
+    const settings = useQuery(api.v1.users.queries.getSettings, {})
+    const flags = useQuery(api.v1.featureFlags.queries.getMyFlags)
 
     const createIncome = useMutation(api.v1.transactions.mutations.createIncome)
     const createExpense = useMutation(
@@ -249,6 +259,10 @@ export function TransactionForm({
     const [pendingTagColor, setPendingTagColor] = useState<string>(
         TAG_COLOR_OPTIONS[0],
     )
+    // Display-only, exactly as on native: the recurring-expense feature isn't
+    // built yet, so the toggle is never read on save and never persisted
+    // (`_isRecurringExpense` in apps/native/lib/screens/transaction_form.dart).
+    const [isRecurringExpense, setIsRecurringExpense] = useState(false)
     const [isSaving, setIsSaving] = useState(false)
 
     useEffect(() => {
@@ -316,6 +330,7 @@ export function TransactionForm({
         setTags([])
         setPendingTagName(null)
         setPendingTagColor(TAG_COLOR_OPTIONS[0])
+        setIsRecurringExpense(false)
     }
 
     const changeType = (nextType: MovementType) => {
@@ -750,13 +765,29 @@ export function TransactionForm({
                             onSwap={swapTransferSides}
                         />
                     ) : (
-                        <AccountSelect
-                            value={accountId}
-                            onChange={setAccountId}
-                            onCreate={() => setIsCreateAccountOpen(true)}
-                            accounts={accountOptions}
-                            label={t.addManual.account}
-                        />
+                        // The account picker takes the row, and on an expense
+                        // the recurring toggle sits beside it — native's
+                        // `Row(Expanded(account), _RecurringExpenseControl)`.
+                        <div className="flex items-end gap-4">
+                            <div className="min-w-0 flex-1">
+                                <AccountSelect
+                                    value={accountId}
+                                    onChange={setAccountId}
+                                    onCreate={() =>
+                                        setIsCreateAccountOpen(true)
+                                    }
+                                    accounts={accountOptions}
+                                    label={t.addManual.account}
+                                />
+                            </div>
+                            {type === 'expense' && flags?.recurringExpense ? (
+                                <RecurringExpenseToggle
+                                    value={isRecurringExpense}
+                                    onChange={setIsRecurringExpense}
+                                    isDisabled={isSaving}
+                                />
+                            ) : null}
+                        </div>
                     )}
                 </div>
 
@@ -892,6 +923,7 @@ export function TransactionForm({
                 namePlaceholder={t.addManual.accountNamePlaceholder}
                 successToast={t.addManual.accountAdded}
                 withCurrency
+                defaultCurrency={settings?.defaultCurrency}
                 onCreate={addAccount}
             />
             <CreateEntityDialog
@@ -978,6 +1010,39 @@ function SectionLabel({ children }: { children: ReactNode }) {
         <h2 className="m3-title-large font-extrabold text-on-surface">
             {children}
         </h2>
+    )
+}
+
+/**
+ * The `recurringExpense` flag's toggle, porting native's
+ * `_RecurringExpenseControl`: a centred label over a switch, capped narrow so
+ * it never crowds the account picker beside it.
+ *
+ * The flag is registered as "feature not built yet", so this records nothing —
+ * flipping it changes no saved transaction, on either client.
+ */
+function RecurringExpenseToggle({
+    value,
+    onChange,
+    isDisabled,
+}: {
+    value: boolean
+    onChange: (value: boolean) => void
+    isDisabled: boolean
+}) {
+    const t = useT()
+    return (
+        <div className="flex max-w-33 shrink-0 flex-col items-center gap-1.5">
+            <span className="m3-body-medium text-center font-extrabold text-on-surface">
+                {t.addManual.recurringExpense}
+            </span>
+            <Switch
+                aria-label={t.addManual.recurringExpense}
+                isSelected={value}
+                onChange={onChange}
+                isDisabled={isDisabled}
+            />
+        </div>
     )
 }
 
@@ -1509,6 +1574,7 @@ function CreateEntityDialog({
     namePlaceholder,
     successToast,
     withCurrency = false,
+    defaultCurrency,
     onCreate,
 }: {
     open: boolean
@@ -1518,12 +1584,17 @@ function CreateEntityDialog({
     successToast: string
     /** Adds the currency picker; `onCreate` receives its value only then. */
     withCurrency?: boolean
+    /** The user's default currency, or undefined while settings are loading. */
+    defaultCurrency?: string
     onCreate: (name: string, currency: string) => Promise<boolean>
 }) {
     const t = useT()
     const [name, setName] = useState('')
-    const [currency, setCurrency] =
-        useState<(typeof MOCK_CURRENCIES)[number]>('ARS')
+    // Null until the user picks one, so the field tracks the real default as it
+    // loads instead of sticking on the placeholder — the same rule native's
+    // create-account screen uses (`_currency ?? DefaultCurrencyController`).
+    const [pickedCurrency, setPickedCurrency] = useState<string | null>(null)
+    const currency = pickedCurrency ?? defaultCurrency ?? DEFAULT_CURRENCY
     const [isSubmitting, setIsSubmitting] = useState(false)
 
     const handleCreate = async () => {
@@ -1543,7 +1614,7 @@ function CreateEntityDialog({
         }
         if (!created) return
         setName('')
-        setCurrency('ARS')
+        setPickedCurrency(null)
         onOpenChange(false)
         toast.success(successToast)
     }
@@ -1588,7 +1659,7 @@ function CreateEntityDialog({
                     <CurrencyField
                         id="new-account-currency"
                         value={currency}
-                        onChange={setCurrency}
+                        onChange={setPickedCurrency}
                     />
                 ) : null}
             </form>
@@ -1596,18 +1667,34 @@ function CreateEntityDialog({
     )
 }
 
-/** Currency chooser for the inline account dialog, as a picker sheet. */
+/**
+ * Currency chooser for the inline account dialog, as a picker sheet. Offers the
+ * whole shared catalog with the common codes on top — the same list and the
+ * same sheet the full create-account form uses, so an account created inline
+ * isn't limited to a shorter set of currencies than one created from
+ * `/accounts/new`.
+ */
 function CurrencyField({
     id,
     value,
     onChange,
 }: {
     id: string
-    value: (typeof MOCK_CURRENCIES)[number]
-    onChange: (value: (typeof MOCK_CURRENCIES)[number]) => void
+    value: string
+    onChange: (value: string) => void
 }) {
     const t = useT()
+    const formatLocale = useFormatLocale()
     const [open, setOpen] = useState(false)
+    const options: SheetOption[] = useMemo(
+        () =>
+            CURRENCY_CODES.map((code) => ({
+                id: code,
+                label: code,
+                supporting: currencyName(code, formatLocale),
+            })),
+        [formatLocale],
+    )
     return (
         <>
             <PickerField
@@ -1620,15 +1707,14 @@ function CurrencyField({
                 open={open}
                 onOpenChange={setOpen}
                 title={t.accounts.chooseCurrency}
-                options={MOCK_CURRENCIES.map((code) => ({
-                    id: code,
-                    label: code,
-                }))}
+                options={options}
                 selected={value}
                 onSelect={(code) => {
-                    onChange(code as (typeof MOCK_CURRENCIES)[number])
+                    onChange(code)
                     setOpen(false)
                 }}
+                searchPlaceholder={t.accounts.searchCurrency}
+                suggested={SUGGESTED_CURRENCIES}
             />
         </>
     )

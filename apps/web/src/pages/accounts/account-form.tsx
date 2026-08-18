@@ -1,4 +1,6 @@
+import { api } from '@wallet-bot/backend/api'
 import { TextField } from 'actify'
+import { useQuery } from 'convex/react'
 import { type FormEvent, useMemo, useState } from 'react'
 import {
     FormSubmitButton,
@@ -55,8 +57,15 @@ export function AccountForm({
 }) {
     const t = useT()
     const formatLocale = useFormatLocale()
+    const settings = useQuery(api.v1.users.queries.getSettings, {})
     const [name, setName] = useState('')
-    const [currency, setCurrency] = useState(DEFAULT_CURRENCY)
+    // Null until the user picks one, so the field tracks the user's default
+    // currency as it loads instead of getting stuck on the bundled placeholder —
+    // native's `_currency ?? DefaultCurrencyController.value`
+    // (apps/native/lib/screens/create_account.dart).
+    const [pickedCurrency, setPickedCurrency] = useState<string | null>(null)
+    const currency =
+        pickedCurrency ?? settings?.defaultCurrency ?? DEFAULT_CURRENCY
     const [color, setColor] = useState(ACCOUNT_DEFAULT_COLOR)
     const [icon, setIcon] = useState(ACCOUNT_DEFAULT_ICON)
     const [balance, setBalance] = useState('')
@@ -182,7 +191,7 @@ export function AccountForm({
                 options={currencyOptions}
                 selected={currency}
                 onSelect={(code) => {
-                    setCurrency(code)
+                    setPickedCurrency(code)
                     setCurrencyOpen(false)
                 }}
                 searchPlaceholder={t.accounts.searchCurrency}

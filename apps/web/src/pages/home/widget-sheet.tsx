@@ -36,12 +36,9 @@ import { PickerField } from '@/components/m3/picker-field'
 import { CURRENCY_CODES, SUGGESTED_CURRENCIES } from '@/lib/currencies'
 import { COLOR_OPTIONS } from '@/lib/entity-colors'
 import { type Messages, useFormatLocale, useT } from '@/lib/i18n'
+import { newId } from '@/lib/new-id'
 import type { DashboardWidgetRow } from '@/pages/home/dashboard'
 import { widthLabel } from '@/pages/home/labels'
-
-function newId() {
-    return crypto.randomUUID()
-}
 
 type WidgetSheetProps = {
     onOpenChange: (open: boolean) => void

@@ -382,6 +382,16 @@ export function filterConfigToJson(filter: SimpleFilter): string {
     return JSON.stringify(filterToCanonical(filter))
 }
 
+/**
+ * Whether a filter constrains nothing, i.e. matches every transaction — the
+ * counterpart of native's `TransactionFilter.isEmpty`. A widget built on an
+ * empty filter needs no saved filter at all, so callers use this to decide
+ * whether to persist one.
+ */
+export function isFilterEmpty(filter: SimpleFilter): boolean {
+    return filterToCanonical(filter).children.length === 0
+}
+
 /** Resolved query window: `date >= fromMs && date < toExclusiveMs`. */
 export type DateWindow = { fromMs: number | null; toExclusiveMs: number | null }
 

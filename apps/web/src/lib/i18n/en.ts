@@ -470,6 +470,7 @@ export const en: Messages = {
         incoming: 'In',
         swapSides: 'Swap source and destination',
         account: 'Account',
+        recurringExpense: 'Recurring expense',
         newTransaction: 'Add transaction',
         select: 'Select',
         newAccount: 'New account',

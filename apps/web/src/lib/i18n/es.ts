@@ -484,6 +484,7 @@ export const es = {
         incoming: 'Entra',
         swapSides: 'Invertir origen y destino',
         account: 'Cuenta',
+        recurringExpense: 'Gasto recurrente',
         newTransaction: 'Añadir movimiento',
         select: 'Seleccionar',
         newAccount: 'Nueva cuenta',

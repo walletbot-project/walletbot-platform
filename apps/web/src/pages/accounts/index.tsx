@@ -123,6 +123,12 @@ export function AccountCreateRoute() {
                     accountId: id,
                     balanceAfter: BigInt(value.initialBalanceCents),
                     dateConfirmed: true,
+                    // The canonical name native writes for an opening balance
+                    // (apps/native/lib/data/repositories/account_repository.dart).
+                    // Omitting it took the backend's `Ajuste de saldo` default,
+                    // so the same action produced two different names depending
+                    // on which client did it.
+                    name: 'Balance inicial',
                 })
             }
         })()
