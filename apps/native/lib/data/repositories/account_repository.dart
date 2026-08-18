@@ -6,6 +6,17 @@ import '../ids.dart';
 import '../queries/account_balance.dart';
 import 'repository_base.dart';
 
+/// Thrown by [AccountRepository.create]/[AccountRepository.update] when the
+/// resulting name+currency would collide with another active account.
+class DuplicateAccountException implements Exception {
+  const DuplicateAccountException();
+
+  @override
+  String toString() => 'Account with that name and currency already exists';
+}
+
+String _normalizeAccountName(String value) => value.trim().toLowerCase();
+
 /// Reads and writes for wallet accounts (the user's cash/bank/card pockets,
 /// not auth accounts).
 class AccountRepository extends RepositoryBase {
@@ -61,6 +72,26 @@ class AccountRepository extends RepositoryBase {
   Stream<BigInt> watchBalanceForCurrency(String currency) =>
       watchTotalBalanceForCurrency(db, currency);
 
+  /// Throws [DuplicateAccountException] when an active account with the
+  /// same [currency] and a name equal to [name] (trim + case-insensitive)
+  /// already exists, other than [excludeId] itself.
+  Future<void> _assertNoDuplicate({
+    required String currency,
+    required String name,
+    String? excludeId,
+  }) async {
+    final normalized = _normalizeAccountName(name);
+    final sameCurrency =
+        await (db.select(db.accounts)..where(
+              (a) => a.archived.equals(false) & a.currency.equals(currency),
+            ))
+            .get();
+    final hasDuplicate = sameCurrency.any(
+      (a) => a.id != excludeId && _normalizeAccountName(a.name) == normalized,
+    );
+    if (hasDuplicate) throw const DuplicateAccountException();
+  }
+
   /// Creates an account, optionally with an initial-balance adjustment
   /// (`Balance inicial`), atomically. Returns the new account id.
   Future<String> create({
@@ -72,6 +103,7 @@ class AccountRepository extends RepositoryBase {
     String? icon,
     BigInt? initialBalanceCents,
   }) async {
+    await _assertNoDuplicate(currency: currency, name: name);
     final id = newUuid();
     final now = currentMs;
     await db.transaction(() async {
@@ -133,6 +165,16 @@ class AccountRepository extends RepositoryBase {
     Value<String> color = const Value.absent(),
     Value<String> icon = const Value.absent(),
   }) async {
+    if (name.present) {
+      final current = await getById(id);
+      if (current != null) {
+        await _assertNoDuplicate(
+          currency: current.currency,
+          name: name.value,
+          excludeId: id,
+        );
+      }
+    }
     await (db.update(db.accounts)..where((a) => a.id.equals(id))).write(
       AccountsCompanion(
         name: name,

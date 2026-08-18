@@ -18,6 +18,7 @@ import {
 import { Input } from '@/components/ui/input'
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet'
 import { COLOR_OPTIONS } from '@/lib/entity-colors'
+import { useT } from '@/lib/i18n'
 import { normalizeTagColor } from '@/lib/tag-colors'
 
 export type TagSummary = {
@@ -40,6 +41,7 @@ export function TagDetailsSheet({
     onOpenChange: (open: boolean) => void
 }) {
     const navigate = useNavigate()
+    const t = useT()
     const updateTag = useMutation(api.v1.tags.mutations.update)
     const archiveTag = useMutation(api.v1.tags.mutations.archive)
 
@@ -95,15 +97,15 @@ export function TagDetailsSheet({
         }
         const trimmed = name.trim()
         if (!trimmed) {
-            toast.error('El nombre no puede estar vacío')
+            toast.error(t.common.nameCannotBeEmpty)
             return
         }
         setSaving(true)
         const promise = updateTag({ id: tag.id, name: trimmed, color })
         toast.promise(promise, {
-            loading: 'Guardando tag…',
-            success: 'Tag guardado',
-            error: 'No se pudo guardar el tag',
+            loading: t.insights.tagSaving,
+            success: t.insights.tagSaved,
+            error: t.insights.tagSaveFailed,
         })
         try {
             await promise
@@ -117,9 +119,9 @@ export function TagDetailsSheet({
         setSaving(true)
         const promise = archiveTag({ id: tag.id, cascade })
         toast.promise(promise, {
-            loading: 'Eliminando tag…',
-            success: 'Tag eliminado',
-            error: 'No se pudo eliminar el tag',
+            loading: t.insights.tagDeleting,
+            success: t.insights.tagDeleted,
+            error: t.insights.tagDeleteFailed,
         })
         try {
             await promise
@@ -161,7 +163,7 @@ export function TagDetailsSheet({
                                 value={name}
                                 onChange={(e) => setName(e.target.value)}
                                 className="bg-background"
-                                aria-label="Nombre"
+                                aria-label={t.common.name}
                             />
                         ) : (
                             <span className="min-w-0 flex-1 truncate text-xl font-semibold">
@@ -181,7 +183,7 @@ export function TagDetailsSheet({
                     {/* Monthly spend hero. */}
                     <div className="flex flex-col gap-1 rounded-2xl border bg-card p-5">
                         <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                            Gastado este mes
+                            {t.insights.spentThisMonth}
                         </span>
                         <MonthlySpend spend={spend} />
                     </div>
@@ -199,22 +201,22 @@ export function TagDetailsSheet({
                             ) : (
                                 <Pencil data-icon="inline-start" />
                             )}
-                            {editing ? 'Listo' : 'Editar'}
+                            {editing ? t.common.done : t.common.edit}
                         </Button>
                         <Button
                             variant="destructive"
                             size="icon"
                             onClick={requestDelete}
                             disabled={saving}
-                            aria-label="Eliminar"
+                            aria-label={t.common.delete}
                         >
                             <Trash2 />
                         </Button>
                     </div>
 
                     <EntityRecentTransactions
-                        title="Últimos movimientos"
-                        viewAllLabel="Ver todos"
+                        title={t.insights.lastMovements}
+                        viewAllLabel={t.insights.viewAll}
                         onViewAll={viewAllTransactions}
                         transactions={recent}
                     />
@@ -226,18 +228,17 @@ export function TagDetailsSheet({
                     <DialogHeader>
                         <DialogTitle>
                             {hasChildren
-                                ? 'Eliminar tag con sub-tags'
-                                : 'Eliminar tag'}
+                                ? t.insights.tagDeleteWithChildrenTitle
+                                : t.insights.tagDeleteTitle}
                         </DialogTitle>
                     </DialogHeader>
                     {hasChildren ? (
                         <div className="flex flex-col gap-3 text-sm">
                             <p>
                                 <span className="font-medium">{tag.name}</span>{' '}
-                                tiene {childTags.length} sub-tag
-                                {childTags.length === 1 ? '' : 's'}. ¿Qué
-                                hacemos con{' '}
-                                {childTags.length === 1 ? 'él' : 'ellos'}?
+                                {t.insights.tagDeleteWithChildrenPrompt({
+                                    count: childTags.length,
+                                })}
                             </p>
                             <ul className="list-disc pl-5 text-muted-foreground">
                                 {childTags.map((c) => (
@@ -247,8 +248,7 @@ export function TagDetailsSheet({
                         </div>
                     ) : (
                         <p className="text-sm text-muted-foreground">
-                            ¿Seguro que querés eliminar "{tag.name}"? Dejará de
-                            aparecer en tus tags.
+                            {t.insights.tagDeleteConfirm({ name: tag.name })}
                         </p>
                     )}
                     <DialogFooter>
@@ -257,7 +257,7 @@ export function TagDetailsSheet({
                             onClick={() => setDeleteOpen(false)}
                             disabled={saving}
                         >
-                            Cancelar
+                            {t.common.cancel}
                         </Button>
                         {hasChildren ? (
                             <Button
@@ -265,7 +265,7 @@ export function TagDetailsSheet({
                                 onClick={() => performDelete(false)}
                                 disabled={saving}
                             >
-                                Conservar sub-tags
+                                {t.insights.keepSubtags}
                             </Button>
                         ) : null}
                         <Button
@@ -273,7 +273,9 @@ export function TagDetailsSheet({
                             onClick={() => performDelete(hasChildren)}
                             disabled={saving}
                         >
-                            {hasChildren ? 'Eliminar todo' : 'Eliminar'}
+                            {hasChildren
+                                ? t.insights.deleteEverything
+                                : t.common.delete}
                         </Button>
                     </DialogFooter>
                 </DialogContent>

@@ -15,29 +15,31 @@ import 'package:flutter/material.dart';
 import 'package:m3e_buttons/m3e_buttons.dart';
 import 'package:provider/provider.dart';
 
-class CategoriesView extends StatelessWidget {
-  const CategoriesView({super.key});
+class CategoriesView extends StatefulWidget {
+  const CategoriesView({super.key, required this.onSelect});
 
-  /// Opens the category details as a draggable, scrollable modal sheet. The
-  /// sheet is a pushed route below the account-scoped providers, so the data
-  /// layer and navigation controller are captured here and handed down.
-  void _openCategorySheet(BuildContext context, CategoryWithCount entry) {
-    final repos = context.read<AppRepositories>();
-    final nav = context.read<AppNavigation>();
-    showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      showDragHandle: true,
-      builder: (_) => CategoryDetailsSheet(
-        category: entry.category,
-        repos: repos,
-        nav: nav,
-      ),
-    );
-  }
+  /// Called when a category row is tapped. The Insights screen owns the
+  /// selection and presents the detail — the shared split pane on expanded
+  /// windows, a modal bottom sheet everywhere else — so the pane sits
+  /// outside the sliding tab pages.
+  final void Function(CategoryWithCount entry) onSelect;
+
+  @override
+  State<CategoriesView> createState() => _CategoriesViewState();
+}
+
+/// The categories list — one page of the Insights tab view. Pure list: all
+/// detail/creation presentation lives in the Insights screen.
+class _CategoriesViewState extends State<CategoriesView>
+    with AutomaticKeepAliveClientMixin {
+  /// Keeps the list (its scroll position) alive when the Insights tabs swipe
+  /// this view out of the TabBarView.
+  @override
+  bool get wantKeepAlive => true;
 
   @override
   Widget build(BuildContext context) {
+    super.build(context);
     final categories = context.read<AppRepositories>().categories;
 
     return StreamBuilder<List<CategoryWithCount>>(
@@ -80,7 +82,7 @@ class CategoriesView extends StatelessWidget {
               ),
               usageCount: entry.transactionCount,
               borderRadius: groupedRadius(index, data.length),
-              onTap: () => _openCategorySheet(context, entry),
+              onTap: () => widget.onSelect(entry),
             );
           },
         );
@@ -137,11 +139,17 @@ class CategoryDetailsSheet extends StatefulWidget {
     required this.category,
     required this.repos,
     required this.nav,
+    this.onClose,
   });
 
   final Category category;
   final AppRepositories repos;
   final AppNavigation nav;
+
+  /// Embedded (split pane) mode: when set, the sheet never pops a route —
+  /// exits report here instead, the drag-to-size scaffolding is dropped, and
+  /// an explicit close button is shown.
+  final VoidCallback? onClose;
 
   @override
   State<CategoryDetailsSheet> createState() => _CategoryDetailsSheetState();
@@ -251,7 +259,7 @@ class _CategoryDetailsSheetState extends State<CategoryDetailsSheet> {
     try {
       await widget.repos.categories.archive(_categoryId);
       if (!mounted) return;
-      Navigator.of(context).pop(); // close the details sheet
+      _close(); // close the details sheet
     } catch (e, st) {
       debugPrint('Error archiving category: $e\n$st');
       if (mounted) {
@@ -264,32 +272,68 @@ class _CategoryDetailsSheetState extends State<CategoryDetailsSheet> {
   }
 
   void _openAllTransactions() {
-    Navigator.of(context).pop(); // close the sheet before switching tabs
+    _close(); // close the sheet before switching tabs
     widget.nav.openActivityForCategory(_categoryId);
+  }
+
+  /// Exits the sheet: reports to [CategoryDetailsSheet.onClose] when embedded
+  /// in the split pane, pops the modal route otherwise.
+  void _close() {
+    final onClose = widget.onClose;
+    if (onClose != null) {
+      onClose();
+      return;
+    }
+    Navigator.of(context).pop();
   }
 
   @override
   Widget build(BuildContext context) {
+    // Editing state lives in this State object, above the branch below, so
+    // it survives when the presentation morphs between sheet and pane.
+    if (widget.onClose != null) {
+      // Panel presentation (split pane or dialog): a standard app bar, so the
+      // pane's content starts at the same height as the list column's beside
+      // it, and the close button matches every other panel in the app.
+      // Embedded there is no route to pop, so no back button appears on its
+      // own — offer an explicit close instead.
+      return Scaffold(
+        appBar: AppBar(
+          leading: IconButton(
+            tooltip: MaterialLocalizations.of(context).closeButtonTooltip,
+            onPressed: _close,
+            icon: const Icon(Icons.close_rounded),
+          ),
+          title: Text(context.l10n.categoryDetails),
+        ),
+        body: _buildSheetBody(context, null),
+      );
+    }
     return DraggableScrollableSheet(
       expand: false,
       initialChildSize: 0.6,
       minChildSize: 0.3,
       maxChildSize: 0.95,
-      builder: (context, scrollController) {
-        return ListView(
-          controller: scrollController,
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
-          children: [
-            _buildIdentityGroup(context),
-            const SizedBox(height: 12),
-            _buildActions(context),
-            const SizedBox(height: 28),
-            _buildTransactionsHeader(context),
-            const SizedBox(height: 8),
-            _buildTransactions(context),
-          ],
-        );
-      },
+      builder: _buildSheetBody,
+    );
+  }
+
+  Widget _buildSheetBody(
+    BuildContext context,
+    ScrollController? scrollController,
+  ) {
+    return ListView(
+      controller: scrollController,
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+      children: [
+        _buildIdentityGroup(context),
+        const SizedBox(height: 12),
+        _buildActions(context),
+        const SizedBox(height: 28),
+        _buildTransactionsHeader(context),
+        const SizedBox(height: 8),
+        _buildTransactions(context),
+      ],
     );
   }
 
@@ -577,7 +621,7 @@ class _CategoryDetailsSheetState extends State<CategoryDetailsSheet> {
             for (var i = 0; i < txs.length; i++) ...[
               if (i > 0) const SizedBox(height: 10),
               TransactionRow(
-                title: txs[i].name,
+                title: context.l10n.transactionName(txs[i].name, txs[i].type),
                 amountCents: _signedAmountCents(txs[i]),
                 dateCheck: txs[i].dateConfirmed,
                 description: _shortDate(context, txs[i].date),

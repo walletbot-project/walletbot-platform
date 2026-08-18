@@ -17,6 +17,7 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
+import { type Messages, useT } from '@/lib/i18n'
 import { TAG_COLOR_OPTIONS } from '@/lib/tag-colors'
 import { cn } from '@/lib/utils'
 
@@ -39,37 +40,42 @@ type FormTag = {
     color: string
 }
 
-const typeConfig: Record<
-    MovementType,
-    {
-        label: string
-        title: string
-        description: string
-        amountLabel: string
-        selectedColor: string
+const MOVEMENT_TYPES: readonly MovementType[] = [
+    'income',
+    'expense',
+    'transfer',
+]
+
+const SELECTED_COLORS: Record<MovementType, string> = {
+    income: 'bg-[#5EF06A]',
+    expense: 'bg-[#FF3744] text-white',
+    transfer: 'bg-[#6DE7D8]',
+}
+
+function typeCopy(type: MovementType, t: Messages) {
+    switch (type) {
+        case 'income':
+            return {
+                label: t.addManual.incomeLabel,
+                title: t.addManual.incomeTitle,
+                description: t.addManual.incomeDescription,
+                amountLabel: t.addManual.amount,
+            }
+        case 'expense':
+            return {
+                label: t.addManual.expenseLabel,
+                title: t.addManual.expenseTitle,
+                description: t.addManual.expenseDescription,
+                amountLabel: t.addManual.amount,
+            }
+        case 'transfer':
+            return {
+                label: t.addManual.transferLabel,
+                title: t.addManual.transferTitle,
+                description: t.addManual.transferDescription,
+                amountLabel: t.addManual.outgoing,
+            }
     }
-> = {
-    income: {
-        label: 'Ingreso',
-        title: 'Añadir ingreso',
-        description: 'Carga manualmente el dinero que entra a una cuenta.',
-        amountLabel: 'Monto',
-        selectedColor: 'bg-[#5EF06A]',
-    },
-    expense: {
-        label: 'Gasto',
-        title: 'Añadir gasto',
-        description: 'Carga manualmente el dinero que sale de una cuenta.',
-        amountLabel: 'Monto',
-        selectedColor: 'bg-[#FF3744] text-white',
-    },
-    transfer: {
-        label: 'Transferencia',
-        title: 'Añadir transferencia',
-        description: 'Mueve dinero entre dos cuentas propias.',
-        amountLabel: 'Sale',
-        selectedColor: 'bg-[#6DE7D8]',
-    },
 }
 
 function today() {
@@ -151,6 +157,7 @@ function mergeTags(base: FormTag[], extra: FormTag[]): FormTag[] {
 
 export function AddManual() {
     const navigate = useNavigate()
+    const t = useT()
 
     const accounts = useQuery(api.v1.accounts.queries.listActive)
     const categories = useQuery(api.v1.categories.queries.listActive)
@@ -271,7 +278,7 @@ export function AddManual() {
     const selectedCategory = categoryOptions.find(
         (category) => category.id === categoryId,
     )
-    const config = typeConfig[type]
+    const config = typeCopy(type, t)
 
     const resetFields = () => {
         setAmount('0')
@@ -458,23 +465,25 @@ export function AddManual() {
     const submit = async (event: FormEvent<HTMLFormElement>) => {
         event.preventDefault()
         if (!selectedAccount) {
-            toast.error('Selecciona una cuenta')
+            toast.error(t.addManual.selectAccount)
             return
         }
         if (!selectedCategory) {
-            toast.error('Selecciona una categoria')
+            toast.error(t.addManual.selectCategory)
             return
         }
         const parsedAmount = parseFormAmount(amount)
         if (!parsedAmount) {
-            toast.error('El monto debe ser mayor a 0')
+            toast.error(t.addManual.amountGreaterThanZero)
             return
         }
 
         const trimmedTitle =
-            type === 'transfer' ? 'Transferencia' : title.trim()
+            type === 'transfer'
+                ? t.addManual.transferTitleFallback
+                : title.trim()
         if (!trimmedTitle) {
-            toast.error('El titulo es obligatorio')
+            toast.error(t.addManual.titleRequired)
             return
         }
 
@@ -488,11 +497,11 @@ export function AddManual() {
 
         if (type === 'transfer') {
             if (!destinationAccountId) {
-                toast.error('Selecciona una cuenta destino')
+                toast.error(t.addManual.selectDestinationAccount)
                 return
             }
             if (destinationAccountId === accountId) {
-                toast.error('Origen y destino deben ser cuentas distintas')
+                toast.error(t.addManual.distinctAccounts)
                 return
             }
         }
@@ -533,7 +542,7 @@ export function AddManual() {
                 const parsedDestinationAmount =
                     parseFormAmount(destinationAmount)
                 if (!parsedDestinationAmount) {
-                    toast.error('El monto destino debe ser mayor a 0')
+                    toast.error(t.addManual.destinationAmountGreaterThanZero)
                     setIsSaving(false)
                     return
                 }
@@ -569,13 +578,11 @@ export function AddManual() {
             }
 
             setSaved(true)
-            toast.success('Movimiento anotado')
+            toast.success(t.addManual.saved)
             navigate('/activity')
         } catch (error) {
             toast.error(
-                error instanceof Error
-                    ? error.message
-                    : 'No se pudo anotar el movimiento',
+                error instanceof Error ? error.message : t.addManual.saveFailed,
             )
         } finally {
             setIsSaving(false)
@@ -595,7 +602,7 @@ export function AddManual() {
                 account.currency === currency,
         )
         if (exists) {
-            toast.error('Ya existe una cuenta con ese nombre y moneda')
+            toast.error(t.addManual.duplicateAccount)
             return false
         }
         const account: AccountOption = {
@@ -619,7 +626,7 @@ export function AddManual() {
             (category) => normalizeIdentity(category.name) === normalizedName,
         )
         if (exists) {
-            toast.error('Ya existe una categoría con ese nombre')
+            toast.error(t.addManual.duplicateCategory)
             return false
         }
         const category: CategoryOption = {
@@ -651,23 +658,21 @@ export function AddManual() {
             >
                 <header className="space-y-6 text-center">
                     <div className="inline-flex rounded-full border border-[#D9D0D6] bg-white p-1 shadow-sm">
-                        {(Object.keys(typeConfig) as MovementType[]).map(
-                            (item) => (
-                                <button
-                                    key={item}
-                                    type="button"
-                                    onClick={() => changeType(item)}
-                                    className={cn(
-                                        'rounded-full px-4 py-2 text-sm font-bold text-black transition-colors',
-                                        type === item
-                                            ? typeConfig[item].selectedColor
-                                            : 'hover:bg-[#FFF4F6]',
-                                    )}
-                                >
-                                    {typeConfig[item].label}
-                                </button>
-                            ),
-                        )}
+                        {MOVEMENT_TYPES.map((item) => (
+                            <button
+                                key={item}
+                                type="button"
+                                onClick={() => changeType(item)}
+                                className={cn(
+                                    'rounded-full px-4 py-2 text-sm font-bold text-black transition-colors',
+                                    type === item
+                                        ? SELECTED_COLORS[item]
+                                        : 'hover:bg-[#FFF4F6]',
+                                )}
+                            >
+                                {typeCopy(item, t).label}
+                            </button>
+                        ))}
                     </div>
 
                     <div className="space-y-3">
@@ -736,7 +741,7 @@ export function AddManual() {
 
                         <div className="grid gap-5 sm:grid-cols-2">
                             <Field
-                                label="Cuenta"
+                                label={t.addManual.account}
                                 htmlFor="account"
                                 action={
                                     <div className="flex items-center gap-2">
@@ -760,7 +765,7 @@ export function AddManual() {
                                             }
                                         >
                                             <Plus className="size-3" />
-                                            Nueva cuenta
+                                            {t.addManual.newAccount}
                                         </Button>
                                     </div>
                                 }
@@ -773,11 +778,14 @@ export function AddManual() {
                                 />
                             </Field>
 
-                            <Field label="Fecha" htmlFor="date">
+                            <Field label={t.addManual.date} htmlFor="date">
                                 <DateInput value={date} onChange={setDate} />
                             </Field>
 
-                            <Field label="Hora (opcional)" htmlFor="time">
+                            <Field
+                                label={t.addManual.timeOptional}
+                                htmlFor="time"
+                            >
                                 <TimeInput value={time} onChange={setTime} />
                             </Field>
                         </div>
@@ -785,38 +793,41 @@ export function AddManual() {
                 )}
 
                 <section className="space-y-5">
-                    <Field label="Título" htmlFor="title">
+                    <Field label={t.addManual.title} htmlFor="title">
                         <Input
                             id="title"
                             value={title}
                             onChange={(event) => setTitle(event.target.value)}
                             placeholder={
                                 type === 'transfer'
-                                    ? 'Transferencia a ahorro'
+                                    ? t.addManual.titlePlaceholderTransfer
                                     : type === 'income'
-                                      ? 'Salario, devolución, intereses'
-                                      : 'Supermercado, taxi, alquiler'
+                                      ? t.addManual.titlePlaceholderIncome
+                                      : t.addManual.titlePlaceholderExpense
                             }
                             className="h-11 rounded-xl border-[#D9D0D6] bg-white"
                             required={type !== 'transfer'}
                         />
                     </Field>
 
-                    <Field label="Descripción" htmlFor="description">
+                    <Field
+                        label={t.addManual.description}
+                        htmlFor="description"
+                    >
                         <Textarea
                             id="description"
                             value={description}
                             onChange={(event) =>
                                 setDescription(event.target.value)
                             }
-                            placeholder="Detalle opcional"
+                            placeholder={t.addManual.descriptionPlaceholder}
                             rows={3}
                             className="rounded-xl border-[#D9D0D6] bg-white"
                         />
                     </Field>
 
                     <Field
-                        label="Categoría"
+                        label={t.addManual.category}
                         htmlFor="category"
                         action={
                             <div className="flex items-center gap-2">
@@ -840,7 +851,7 @@ export function AddManual() {
                                     }
                                 >
                                     <Plus className="size-3" />
-                                    Nueva categoría
+                                    {t.addManual.newCategory}
                                 </Button>
                             </div>
                         }
@@ -854,7 +865,7 @@ export function AddManual() {
                             className="h-11 w-full rounded-xl border border-[#D9D0D6] bg-white px-3 text-sm outline-none focus-visible:border-[#21C4B6] focus-visible:ring-3 focus-visible:ring-[#21C4B6]/30"
                             required
                         >
-                            <option value="">Sin seleccionar</option>
+                            <option value="">{t.addManual.unselected}</option>
                             {categoryOptions.map((item) => (
                                 <option key={item.id} value={item.id}>
                                     {item.name}
@@ -879,7 +890,7 @@ export function AddManual() {
 
                 {saved ? (
                     <div className="rounded-xl border border-[#21C4B6]/30 bg-[#21C4B6]/10 px-4 py-3 text-sm font-medium text-[#11796F]">
-                        Movimiento guardado.
+                        {t.addManual.savedNote}
                     </div>
                 ) : null}
 
@@ -892,7 +903,7 @@ export function AddManual() {
                         disabled={isSaving}
                     >
                         <X className="size-4" />
-                        Cancelar
+                        {t.common.cancel}
                     </Button>
                     <Button
                         type="submit"
@@ -904,7 +915,7 @@ export function AddManual() {
                         ) : (
                             <Check className="size-4" />
                         )}
-                        Anotar
+                        {t.addManual.submit}
                     </Button>
                 </footer>
             </form>
@@ -960,6 +971,7 @@ function TransferAmounts({
     time: string
     onTimeChange: (value: string) => void
 }) {
+    const t = useT()
     const sourceAccount = accounts.find(
         (account) => account.id === sourceAccountId,
     )
@@ -972,7 +984,7 @@ function TransferAmounts({
             <div className="grid items-start gap-4 sm:grid-cols-[1fr_auto_1fr]">
                 <TransferSide
                     accounts={accounts}
-                    label="Sale"
+                    label={t.addManual.outgoing}
                     amount={sourceAmount}
                     accountId={sourceAccountId}
                     currency={sourceAccount?.currency}
@@ -984,7 +996,7 @@ function TransferAmounts({
                         type="button"
                         variant="outline"
                         onClick={onSwap}
-                        aria-label="Invertir origen y destino"
+                        aria-label={t.addManual.swapSides}
                         className="size-11 rounded-full border-[#D9D0D6] bg-[#E7FFFA] p-0 text-black hover:bg-[#CFFFF7]"
                     >
                         <Repeat2 className="size-5" />
@@ -992,7 +1004,7 @@ function TransferAmounts({
                 </div>
                 <TransferSide
                     accounts={accounts}
-                    label="Entra"
+                    label={t.addManual.incoming}
                     amount={destinationAmount}
                     accountId={destinationAccountId}
                     currency={destinationAccount?.currency}
@@ -1002,10 +1014,10 @@ function TransferAmounts({
             </div>
 
             <div className="grid gap-5 sm:grid-cols-2">
-                <Field label="Fecha" htmlFor="date">
+                <Field label={t.addManual.date} htmlFor="date">
                     <DateInput value={date} onChange={onDateChange} />
                 </Field>
-                <Field label="Hora (opcional)" htmlFor="time">
+                <Field label={t.addManual.timeOptional} htmlFor="time">
                     <TimeInput value={time} onChange={onTimeChange} />
                 </Field>
             </div>
@@ -1080,9 +1092,10 @@ function TagsField({
     onAddTag: (value: string) => void
     onRemoveTag: (name: string) => void
 }) {
+    const t = useT()
     return (
         <section className="space-y-4">
-            <Field label="Etiquetas" htmlFor="tags">
+            <Field label={t.addManual.tags} htmlFor="tags">
                 <div className="flex gap-2">
                     <Input
                         id="tags"
@@ -1096,7 +1109,7 @@ function TagsField({
                                 onAddTag(tagInput)
                             }
                         }}
-                        placeholder="Agregar etiqueta"
+                        placeholder={t.addManual.addTag}
                         className="h-11 rounded-xl border-[#D9D0D6] bg-white"
                     />
                     <Button
@@ -1165,6 +1178,7 @@ function TagColorDialog({
     onCancel: () => void
     onCreate: () => Promise<void>
 }) {
+    const t = useT()
     return (
         <Dialog
             open={tagName !== null}
@@ -1184,14 +1198,16 @@ function TagColorDialog({
                     }}
                 >
                     <DialogHeader>
-                        <DialogTitle>Color de "{tagName}"</DialogTitle>
+                        <DialogTitle>
+                            {t.addManual.tagColorTitle({ name: tagName ?? '' })}
+                        </DialogTitle>
                     </DialogHeader>
                     <div className="flex flex-wrap gap-3 py-2">
                         {TAG_COLOR_OPTIONS.map((color) => (
                             <button
                                 key={color}
                                 type="button"
-                                aria-label={`Elegir ${color}`}
+                                aria-label={t.addManual.chooseColor({ color })}
                                 onClick={() => onSelectedColorChange(color)}
                                 className={cn(
                                     'flex size-10 items-center justify-center rounded-full border-2',
@@ -1213,14 +1229,14 @@ function TagColorDialog({
                             variant="outline"
                             onClick={onCancel}
                         >
-                            Cancelar
+                            {t.common.cancel}
                         </Button>
                         <Button
                             type="submit"
                             className="bg-[#21C4B6] text-white hover:bg-[#1BAEA2]"
                             autoFocus
                         >
-                            Crear
+                            {t.common.create}
                         </Button>
                     </DialogFooter>
                 </form>
@@ -1240,6 +1256,7 @@ function AccountSelect({
     onChange: (value: string) => void
     accounts: AccountOption[]
 }) {
+    const t = useT()
     return (
         <select
             id={id}
@@ -1247,7 +1264,7 @@ function AccountSelect({
             onChange={(event) => onChange(event.target.value)}
             className="h-11 w-full rounded-xl border border-[#D9D0D6] bg-white px-3 text-sm outline-none focus-visible:border-[#21C4B6] focus-visible:ring-3 focus-visible:ring-[#21C4B6]/30"
         >
-            <option value="">Sin seleccionar</option>
+            <option value="">{t.addManual.unselected}</option>
             {accounts.map((account) => (
                 <option key={account.id} value={account.id}>
                     {account.name} · {account.currency}
@@ -1283,6 +1300,7 @@ function TimeInput({
     value: string
     onChange: (value: string) => void
 }) {
+    const t = useT()
     return (
         <div className="flex gap-2">
             <Input
@@ -1299,7 +1317,7 @@ function TimeInput({
                     size="icon"
                     className="h-11 w-11 shrink-0 rounded-xl border-[#D9D0D6] bg-white"
                     onClick={() => onChange('')}
-                    aria-label="Quitar hora"
+                    aria-label={t.addManual.removeTime}
                 >
                     <X className="size-4" />
                 </Button>
@@ -1344,6 +1362,7 @@ function CreateAccountDialog({
     onOpenChange: (open: boolean) => void
     onCreate: (name: string, currency: string) => Promise<boolean>
 }) {
+    const t = useT()
     const [name, setName] = useState('')
     const [currency, setCurrency] =
         useState<(typeof MOCK_CURRENCIES)[number]>('ARS')
@@ -1359,14 +1378,14 @@ function CreateAccountDialog({
         setName('')
         setCurrency('ARS')
         onOpenChange(false)
-        toast.success('Cuenta agregada al formulario')
+        toast.success(t.addManual.accountAdded)
     }
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent>
                 <DialogHeader>
-                    <DialogTitle>Nueva cuenta</DialogTitle>
+                    <DialogTitle>{t.addManual.newAccount}</DialogTitle>
                 </DialogHeader>
                 <form
                     className="space-y-4"
@@ -1375,15 +1394,18 @@ function CreateAccountDialog({
                         handleCreate()
                     }}
                 >
-                    <Field label="Nombre" htmlFor="mock-account-name">
+                    <Field label={t.common.name} htmlFor="mock-account-name">
                         <Input
                             id="mock-account-name"
                             value={name}
                             onChange={(event) => setName(event.target.value)}
-                            placeholder="Ej: Efectivo, Banco Nación"
+                            placeholder={t.addManual.accountNamePlaceholder}
                         />
                     </Field>
-                    <Field label="Moneda" htmlFor="mock-account-currency">
+                    <Field
+                        label={t.common.currency}
+                        htmlFor="mock-account-currency"
+                    >
                         <select
                             id="mock-account-currency"
                             value={currency}
@@ -1410,14 +1432,14 @@ function CreateAccountDialog({
                         onClick={() => onOpenChange(false)}
                         disabled={isSubmitting}
                     >
-                        Cancelar
+                        {t.common.cancel}
                     </Button>
                     <Button
                         type="button"
                         onClick={() => void handleCreate()}
                         disabled={isSubmitting}
                     >
-                        Crear
+                        {t.common.create}
                     </Button>
                 </DialogFooter>
             </DialogContent>
@@ -1434,6 +1456,7 @@ function CreateCategoryDialog({
     onOpenChange: (open: boolean) => void
     onCreate: (name: string) => Promise<boolean>
 }) {
+    const t = useT()
     const [name, setName] = useState('')
     const [isSubmitting, setIsSubmitting] = useState(false)
 
@@ -1446,14 +1469,14 @@ function CreateCategoryDialog({
         if (!created) return
         setName('')
         onOpenChange(false)
-        toast.success('Categoría agregada al formulario')
+        toast.success(t.addManual.categoryAdded)
     }
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent>
                 <DialogHeader>
-                    <DialogTitle>Nueva categoría</DialogTitle>
+                    <DialogTitle>{t.addManual.newCategory}</DialogTitle>
                 </DialogHeader>
                 <form
                     onSubmit={(event) => {
@@ -1461,12 +1484,12 @@ function CreateCategoryDialog({
                         handleCreate()
                     }}
                 >
-                    <Field label="Nombre" htmlFor="mock-category-name">
+                    <Field label={t.common.name} htmlFor="mock-category-name">
                         <Input
                             id="mock-category-name"
                             value={name}
                             onChange={(event) => setName(event.target.value)}
-                            placeholder="Ej: Comida, Regalo, Freelance"
+                            placeholder={t.addManual.categoryNamePlaceholder}
                         />
                     </Field>
                 </form>
@@ -1477,14 +1500,14 @@ function CreateCategoryDialog({
                         onClick={() => onOpenChange(false)}
                         disabled={isSubmitting}
                     >
-                        Cancelar
+                        {t.common.cancel}
                     </Button>
                     <Button
                         type="button"
                         onClick={() => void handleCreate()}
                         disabled={isSubmitting}
                     >
-                        Crear
+                        {t.common.create}
                     </Button>
                 </DialogFooter>
             </DialogContent>

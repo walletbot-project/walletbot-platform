@@ -5,6 +5,7 @@ import { toast } from 'sonner'
 import { CategoryIcon } from '@/components/category-icon'
 import { Skeleton } from '@/components/ui/skeleton'
 import { CATEGORY_DEFAULT_COLOR, normalizeColor } from '@/lib/entity-colors'
+import { useT } from '@/lib/i18n'
 import {
     CategoryDetailsSheet,
     type CategorySummary,
@@ -27,6 +28,7 @@ export function CategoriesView({
     creating,
     onCreatingChange,
 }: CategoriesViewProps) {
+    const t = useT()
     const categories = useQuery(api.v1.categories.queries.listActiveWithCounts)
     const createCategory = useMutation(api.v1.categories.mutations.create)
 
@@ -57,9 +59,9 @@ export function CategoriesView({
             icon: value.icon,
         })
         toast.promise(promise, {
-            loading: 'Creando categoría…',
-            success: 'Categoría creada',
-            error: 'No se pudo crear la categoría',
+            loading: t.insights.categoryCreating,
+            success: t.insights.categoryCreated,
+            error: t.insights.categoryCreateFailed,
         })
         await promise
         onCreatingChange(false)
@@ -72,7 +74,7 @@ export function CategoriesView({
                     <CategoriesSkeleton />
                 ) : categories.length === 0 ? (
                     <p className="py-12 text-center text-sm text-muted-foreground">
-                        No tenés categorías aún.
+                        {t.insights.noCategoriesYet}
                     </p>
                 ) : (
                     <ul className="divide-y overflow-hidden rounded-md border bg-card">

@@ -2,10 +2,14 @@ import 'package:app/components/account_icons.dart';
 import 'package:app/components/category_icons.dart';
 import 'package:app/components/color_utils.dart';
 import 'package:app/components/grouped_card.dart';
+import 'package:app/components/raised_card.dart';
+import 'package:app/components/tag_chip.dart';
 import 'package:app/components/readable_time_picker.dart';
 import 'package:app/data/data.dart';
 import 'package:app/database.dart';
 import 'package:app/l10n/l10n.dart';
+import 'package:app/shared/adaptive_modal.dart';
+import 'package:app/shared/breakpoints.dart';
 import 'package:app/shared/money.dart';
 import 'package:drift/drift.dart' show Value;
 import 'package:flutter/material.dart';
@@ -18,11 +22,17 @@ class TransactionDetailsScreen extends StatefulWidget {
     required this.transactionId,
     required this.repos,
     this.transferSide,
+    this.onResult,
   });
 
   final String transactionId;
   final AppRepositories repos;
   final TransactionDetailTransferSide? transferSide;
+
+  /// Embedded (pane) mode: when set, the screen never pops its route —
+  /// closing or tapping a filterable value reports here instead. A null
+  /// filter means plain close (e.g. after delete or the close button).
+  final void Function(TransactionFilter? filter)? onResult;
 
   @override
   State<TransactionDetailsScreen> createState() =>
@@ -358,7 +368,7 @@ class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
     try {
       await widget.repos.transactions.delete(transaction.id);
       if (!mounted) return;
-      Navigator.of(context).pop();
+      _close();
     } catch (error, stackTrace) {
       debugPrint('Error deleting transaction: $error\n$stackTrace');
       if (mounted) {
@@ -424,8 +434,8 @@ class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
     final currentAccount = destination
         ? _selectedDestinationAccount
         : _selectedAccount;
-    final picked = await showModalBottomSheet<Account>(
-      context: context,
+    final picked = await showAdaptiveModal<Account>(
+      context,
       showDragHandle: true,
       builder: (context) {
         return SafeArea(
@@ -482,8 +492,8 @@ class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
         if (!category.archived) category,
     ];
     if (activeCategories.isEmpty) return;
-    final picked = await showModalBottomSheet<Category>(
-      context: context,
+    final picked = await showAdaptiveModal<Category>(
+      context,
       showDragHandle: true,
       builder: (context) {
         return SafeArea(
@@ -510,8 +520,8 @@ class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
 
   Future<void> _pickTag() async {
     final available = _availableTags;
-    final picked = await showModalBottomSheet<Tag>(
-      context: context,
+    final picked = await showAdaptiveModal<Tag>(
+      context,
       showDragHandle: true,
       builder: (context) {
         return SafeArea(
@@ -538,6 +548,17 @@ class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
     setState(() => _selectedTagIds = {..._selectedTagIds, picked.id});
   }
 
+  /// Exits the screen: reports to [TransactionDetailsScreen.onResult] when
+  /// embedded as a pane, pops the route otherwise.
+  void _close([TransactionFilter? filter]) {
+    final onResult = widget.onResult;
+    if (onResult != null) {
+      onResult(filter);
+      return;
+    }
+    Navigator.of(context).pop(filter);
+  }
+
   @override
   Widget build(BuildContext context) {
     final transaction = _transaction;
@@ -545,6 +566,25 @@ class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
 
     return Scaffold(
       appBar: AppBar(
+        // Embedded there is no route to pop, so no back button appears on its
+        // own: offer an explicit exit — an X in the split pane, a back arrow
+        // when covering the screen (matching the pushed-page look).
+        leading: widget.onResult == null
+            ? null
+            : Builder(
+                builder: (context) {
+                  final split =
+                      windowSizeClassOf(context) == WindowSizeClass.expanded;
+                  final localizations = MaterialLocalizations.of(context);
+                  return IconButton(
+                    tooltip: split
+                        ? localizations.closeButtonTooltip
+                        : localizations.backButtonTooltip,
+                    onPressed: () => _close(),
+                    icon: Icon(split ? Icons.close_rounded : Icons.arrow_back),
+                  );
+                },
+              ),
         title: Text(title),
         actions: [
           if (_saving)
@@ -722,8 +762,8 @@ class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
     ];
 
     return Material(
-      color: colors.surface,
-      elevation: 1,
+      color: raisedCardColor(colors, Theme.of(context).brightness),
+      elevation: raisedCardElevation(Theme.of(context).brightness),
       borderRadius: BorderRadius.circular(kGroupOuterRadius),
       clipBehavior: Clip.antiAlias,
       child: Padding(
@@ -823,7 +863,7 @@ class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
     if (_editing) return child;
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
-      onTap: () => Navigator.of(context).pop(filter),
+      onTap: () => _close(filter),
       child: child,
     );
   }
@@ -896,35 +936,38 @@ class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
           : Wrap(
               spacing: 8,
               runSpacing: 8,
-              children: [
-                for (final tag in selectedTags)
-                  if (_editing)
-                    InputChip(
-                      avatar: const CircleAvatar(backgroundColor: Colors.white),
-                      label: Text(tag.name),
-                      backgroundColor: colorFromHex(tag.color),
-                      onDeleted: () => setState(
-                        () =>
-                            _selectedTagIds = {..._selectedTagIds}
-                              ..remove(tag.id),
-                      ),
-                    )
-                  else
-                    GestureDetector(
-                      behavior: HitTestBehavior.opaque,
-                      onTap: () => Navigator.of(
-                        context,
-                      ).pop(TransactionFilter(tagIds: {tag.id})),
-                      child: Chip(
-                        avatar: const CircleAvatar(
-                          backgroundColor: Colors.white,
-                        ),
-                        label: Text(tag.name),
-                        backgroundColor: colorFromHex(tag.color),
-                      ),
-                    ),
-              ],
+              children: [for (final tag in selectedTags) _tagChip(tag)],
             ),
+    );
+  }
+
+  /// Tag chip styled to match the Insights tag list: the fill stays the tag's
+  /// own color, and in dark mode the avatar and label switch to a contrasting
+  /// foreground so the chip reads the same in both places.
+  Widget _tagChip(Tag tag) {
+    final style = tagChipStyle(context, colorFromHex(tag.color));
+
+    if (_editing) {
+      return InputChip(
+        avatar: CircleAvatar(backgroundColor: style.avatarColor),
+        label: Text(tag.name),
+        labelStyle: style.labelStyle,
+        backgroundColor: style.background,
+        onDeleted: () => setState(
+          () => _selectedTagIds = {..._selectedTagIds}..remove(tag.id),
+        ),
+      );
+    }
+
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () => _close(TransactionFilter(tagIds: {tag.id})),
+      child: Chip(
+        avatar: CircleAvatar(backgroundColor: style.avatarColor),
+        label: Text(tag.name),
+        labelStyle: style.labelStyle,
+        backgroundColor: style.background,
+      ),
     );
   }
 

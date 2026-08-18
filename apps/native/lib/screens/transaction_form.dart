@@ -1,10 +1,14 @@
 import 'dart:async';
 
+import 'package:app/app_config/app_config_controller.dart';
+import 'package:app/components/account_icons.dart';
+import 'package:app/components/category_icons.dart';
 import 'package:app/components/color_utils.dart';
 import 'package:app/components/readable_time_picker.dart';
 import 'package:app/data/data.dart';
 import 'package:app/database.dart';
 import 'package:app/l10n/l10n.dart';
+import 'package:app/shared/adaptive_modal.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -14,7 +18,12 @@ enum TransactionFormType { income, expense, transfer }
 enum _TransferAmountField { source, destination }
 
 class TransactionFormScreen extends StatefulWidget {
-  const TransactionFormScreen({super.key});
+  const TransactionFormScreen({super.key, this.onResult});
+
+  /// Embedded (split pane) mode: when set, the screen never pops its route —
+  /// save/cancel report here instead ([saved] tells whether a transaction
+  /// was recorded).
+  final void Function(bool saved)? onResult;
 
   @override
   State<TransactionFormScreen> createState() => _TransactionFormScreenState();
@@ -198,8 +207,8 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
     final selectedAccount = destination
         ? _selectedDestinationAccount
         : _selectedAccount;
-    final account = await showModalBottomSheet<Account>(
-      context: context,
+    final account = await showAdaptiveModal<Account>(
+      context,
       showDragHandle: true,
       builder: (context) {
         return SafeArea(
@@ -217,7 +226,7 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
               ),
               for (final account in _accounts)
                 ListTile(
-                  leading: const Icon(Icons.account_balance_wallet_rounded),
+                  leading: Icon(accountIconFromName(account.icon)),
                   title: Text(account.name),
                   subtitle: Text(account.currency),
                   trailing: account == selectedAccount
@@ -245,8 +254,8 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
   Future<void> _pickCategory() async {
     await _commitInlineEditing();
     if (!mounted) return;
-    final category = await showModalBottomSheet<Category>(
-      context: context,
+    final category = await showAdaptiveModal<Category>(
+      context,
       showDragHandle: true,
       builder: (context) {
         return SafeArea(
@@ -264,7 +273,7 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
               ),
               for (final category in _categories)
                 ListTile(
-                  leading: const Icon(Icons.label_rounded),
+                  leading: Icon(categoryIconFromName(category.icon)),
                   title: Text(category.name),
                   trailing: category == _selectedCategory
                       ? const Icon(Icons.check_circle_rounded)
@@ -336,8 +345,8 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
           ),
         )
         .toList();
-    final tag = await showModalBottomSheet<_FormTag>(
-      context: context,
+    final tag = await showAdaptiveModal<_FormTag>(
+      context,
       showDragHandle: true,
       builder: (context) {
         return SafeArea(
@@ -470,7 +479,6 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
     }
 
     setState(() => _isSaving = true);
-    final navigator = Navigator.of(context);
 
     try {
       final amountValue = _parseAmount(_amountController.text)!;
@@ -548,7 +556,7 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
       }
 
       if (!mounted) return;
-      navigator.pop(true);
+      _close(saved: true);
     } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(
@@ -556,6 +564,17 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
       ).showSnackBar(SnackBar(content: Text(context.l10n.recordFailed(error))));
       setState(() => _isSaving = false);
     }
+  }
+
+  /// Exits the form: reports to [TransactionFormScreen.onResult] when
+  /// embedded in the split pane, pops the route with [saved] otherwise.
+  void _close({required bool saved}) {
+    final onResult = widget.onResult;
+    if (onResult != null) {
+      onResult(saved);
+      return;
+    }
+    Navigator.pop(context, saved);
   }
 
   @override
@@ -568,14 +587,22 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
 
     if (_isLoading) {
       return const Scaffold(
-        backgroundColor: Color(0xFFFFF8F8),
         body: SafeArea(child: Center(child: CircularProgressIndicator())),
       );
     }
 
     return Scaffold(
-      backgroundColor: const Color(0xFFFFF8F8),
       resizeToAvoidBottomInset: true,
+      // The close action routes through _close, so it works in both
+      // presentations: reporting to onResult when embedded in the Activity
+      // split pane, popping the route otherwise.
+      appBar: AppBar(
+        leading: IconButton(
+          tooltip: MaterialLocalizations.of(context).closeButtonTooltip,
+          onPressed: _isSaving ? null : () => _close(saved: false),
+          icon: const Icon(Icons.close_rounded),
+        ),
+      ),
       body: SafeArea(
         child: Form(
           key: _formKey,
@@ -586,7 +613,7 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
                 context.l10n.newTransaction,
                 textAlign: TextAlign.center,
                 style: Theme.of(context).textTheme.displaySmall?.copyWith(
-                  color: Colors.black,
+                  color: Theme.of(context).colorScheme.onSurface,
                   fontWeight: FontWeight.w800,
                 ),
               ),
@@ -616,7 +643,12 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
                       }
                       return Colors.transparent;
                     }),
-                    foregroundColor: const WidgetStatePropertyAll(Colors.black),
+                    foregroundColor: WidgetStateProperty.resolveWith((states) {
+                      if (states.contains(WidgetState.selected)) {
+                        return foregroundOn(selectedColor);
+                      }
+                      return Theme.of(context).colorScheme.onSurface;
+                    }),
                     textStyle: const WidgetStatePropertyAll(
                       TextStyle(fontWeight: FontWeight.w700),
                     ),
@@ -670,7 +702,10 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
                         ],
                       ),
                     ),
-                    if (_type == TransactionFormType.expense) ...[
+                    if (_type == TransactionFormType.expense &&
+                        context.watch<AppConfigController>().isFlagEnabled(
+                          'recurringExpense',
+                        )) ...[
                       const SizedBox(width: 16),
                       _RecurringExpenseControl(
                         value: _isRecurringExpense,
@@ -771,8 +806,18 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
                     for (final tag in _tags)
                       InputChip(
                         label: Text(tag.name),
+                        labelStyle:
+                            Theme.of(context).brightness == Brightness.dark
+                            ? Theme.of(context).textTheme.labelLarge?.copyWith(
+                                color: foregroundOn(tag.color),
+                              )
+                            : null,
                         backgroundColor: tag.color,
                         side: BorderSide(color: tag.color),
+                        deleteIconColor:
+                            Theme.of(context).brightness == Brightness.dark
+                            ? foregroundOn(tag.color)
+                            : null,
                         onDeleted: _isSaving
                             ? null
                             : () => setState(() => _tags.remove(tag)),
@@ -785,15 +830,20 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
                 children: [
                   Expanded(
                     child: FilledButton.tonalIcon(
-                      onPressed: _isSaving
-                          ? null
-                          : () => Navigator.pop(context),
+                      onPressed: _isSaving ? null : () => _close(saved: false),
                       icon: const Icon(Icons.close_rounded),
                       label: Text(context.l10n.cancel),
                       style: FilledButton.styleFrom(
                         padding: const EdgeInsets.symmetric(vertical: 16),
-                        backgroundColor: const Color(0xFFF0C9CE),
-                        foregroundColor: Colors.black,
+                        // Soft red (like the previous pink), theme-aware so it
+                        // also works in dark; overrides the global turquoise
+                        // filledButtonTheme.
+                        backgroundColor: Theme.of(
+                          context,
+                        ).colorScheme.errorContainer,
+                        foregroundColor: Theme.of(
+                          context,
+                        ).colorScheme.onErrorContainer,
                       ),
                     ),
                   ),
@@ -810,8 +860,6 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
                       label: Text(context.l10n.record),
                       style: FilledButton.styleFrom(
                         padding: const EdgeInsets.symmetric(vertical: 16),
-                        backgroundColor: const Color(0xFF21C4B6),
-                        foregroundColor: Colors.white,
                       ),
                     ),
                   ),
@@ -1091,9 +1139,12 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
       return account;
     } catch (error) {
       if (!mounted) return null;
+      final message = error is DuplicateAccountException
+          ? context.l10n.accountDuplicateNameCurrency
+          : context.l10n.accountCreateFailed;
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text(context.l10n.accountCreateFailed)));
+      ).showSnackBar(SnackBar(content: Text(message)));
       return null;
     }
   }
@@ -1144,7 +1195,7 @@ class _RecurringExpenseControl extends StatelessWidget {
             context.l10n.recurringExpense,
             textAlign: TextAlign.center,
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              color: Colors.black,
+              color: Theme.of(context).colorScheme.onSurface,
               fontSize: 15,
               fontWeight: FontWeight.w800,
             ),
@@ -1215,10 +1266,6 @@ class _TransferBlock extends StatelessWidget {
               child: IconButton.filledTonal(
                 onPressed: onSwap,
                 icon: const Icon(Icons.swap_horiz_rounded),
-                style: IconButton.styleFrom(
-                  backgroundColor: const Color(0xFFE7FFFA),
-                  foregroundColor: Colors.black,
-                ),
               ),
             ),
             Expanded(
@@ -1277,7 +1324,7 @@ class _TransferSide extends StatelessWidget {
           label,
           textAlign: TextAlign.center,
           style: Theme.of(context).textTheme.labelLarge?.copyWith(
-            color: Colors.black87,
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
             fontWeight: FontWeight.w800,
           ),
         ),
@@ -1298,7 +1345,7 @@ class _TransferSide extends StatelessWidget {
             contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 11),
           ),
           style: Theme.of(context).textTheme.titleMedium?.copyWith(
-            color: Colors.black,
+            color: Theme.of(context).colorScheme.onSurface,
             fontWeight: FontWeight.w600,
           ),
           onChanged: onAmountChanged,
@@ -1417,7 +1464,7 @@ class _SectionLabel extends StatelessWidget {
       text,
       style: Theme.of(context).textTheme.titleLarge?.copyWith(
         fontWeight: FontWeight.w800,
-        color: Colors.black,
+        color: Theme.of(context).colorScheme.onSurface,
       ),
     );
   }
@@ -1442,8 +1489,10 @@ class _PickerChip extends StatelessWidget {
           icon: const Icon(Icons.keyboard_arrow_down_rounded, size: 20),
           label: Text(label, overflow: TextOverflow.ellipsis),
           style: FilledButton.styleFrom(
-            backgroundColor: const Color(0xFF21C4B6),
-            foregroundColor: Colors.white,
+            // Bright brand turquoise (not the dark `primary` tone, which reads
+            // green in light mode) so the pickers stay turquoise in both themes.
+            backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+            foregroundColor: Theme.of(context).colorScheme.onPrimaryContainer,
             minimumSize: Size.zero,
             tapTargetSize: MaterialTapTargetSize.shrinkWrap,
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),

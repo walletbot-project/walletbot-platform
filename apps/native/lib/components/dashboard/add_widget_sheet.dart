@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:app/components/color_utils.dart';
 import 'package:app/components/dashboard/dashboard_background.dart';
 import 'package:app/components/dashboard/dashboard_layout.dart';
 import 'package:app/components/dashboard/dashboard_models.dart';
@@ -7,6 +8,7 @@ import 'package:app/components/filter_sheet.dart';
 import 'package:app/data/data.dart';
 import 'package:app/database.dart';
 import 'package:app/l10n/l10n.dart';
+import 'package:app/shared/adaptive_modal.dart';
 import 'package:drift/drift.dart' show Value;
 import 'package:flutter/material.dart';
 
@@ -50,12 +52,12 @@ Future<bool> _showWidgetSheet(
   DashboardLayoutCoord? at,
   int? maxUnits,
 }) async {
-  final saved = await showModalBottomSheet<bool>(
-    context: context,
+  final saved = await showAdaptiveModal<bool>(
+    context,
     isScrollControlled: true,
     useSafeArea: true,
     backgroundColor: Theme.of(context).colorScheme.surface,
-    shape: const RoundedRectangleBorder(
+    sheetShape: const RoundedRectangleBorder(
       borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
     ),
     builder: (_) => _WidgetSheet(
@@ -752,7 +754,8 @@ class _ColorSwatches extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
     final onCleared = this.onCleared;
     return Wrap(
       spacing: 8,
@@ -795,7 +798,10 @@ class _ColorSwatches extends StatelessWidget {
                 width: 30,
                 height: 30,
                 decoration: BoxDecoration(
-                  color: color,
+                  // Preview the color as the widget will actually render it in
+                  // the current theme (see [readableWidgetBackground]); the
+                  // stored pastel is what selection compares against.
+                  color: readableWidgetBackground(color, theme.brightness),
                   shape: BoxShape.circle,
                   border: Border.all(
                     color: (!cleared && color == selected)

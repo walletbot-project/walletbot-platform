@@ -1,0 +1,33 @@
+@import "tailwindcss";
+@plugin "@tailwindcss/typography";
+
+/*
+ * Tailwind v4 is configured here in CSS, not in a `tailwind.config.js`.
+ * Design tokens go in an `@theme` block — each one becomes both a CSS custom
+ * property and a utility class (e.g. `--color-brand` → `bg-brand`/`text-brand`).
+ *
+ * `--color-brand` is the native app's Material seed color
+ * (apps/native/lib/main.dart). It is too light for text — use it only for
+ * accents and tinted backgrounds, mirroring the repo-wide rule.
+ */
+@theme {
+    --font-sans: "Inter Variable", ui-sans-serif, system-ui, sans-serif;
+    --color-brand: #6de7d8;
+}
+
+/* Mint selection so highlighted text stays on-brand on the dark theme. */
+::selection {
+    background-color: rgb(109 231 216 / 0.3);
+    color: white;
+}
+
+/* Gentle vertical drift for the hero phone mockup (motion-safe only). */
+@keyframes float {
+    0%,
+    100% {
+        transform: translateY(0);
+    }
+    50% {
+        transform: translateY(-12px);
+    }
+}

@@ -4,6 +4,13 @@ import { internal } from './_generated/api'
 const crons = cronJobs()
 
 crons.interval(
+    'cleanup resend emails',
+    { hours: 24 },
+    internal.emails.internal.cleanupResendEmails,
+    {},
+)
+
+crons.interval(
     'export pending telemetry events',
     { minutes: 5 },
     internal.telemetry.actions.exportPending,
@@ -58,8 +65,7 @@ crons.daily(
 
 crons.interval(
     'record agent monthly usage',
-    // TODO: Change this back to { hours: 6 } after the dashboard rollout is validated.
-    { minutes: 5 },
+    { hours: 6 },
     internal.telemetry.actions.recordAgentMonthlyUsage,
     {},
 )

@@ -1,5 +1,6 @@
 import { Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { useFormatLocale, useT } from '@/lib/i18n'
 import {
     type ActivityTransaction,
     formatTransactionTime,
@@ -8,25 +9,12 @@ import {
 } from '@/pages/activity/helpers'
 import { TransactionRow } from '@/pages/activity/transaction-row'
 
-const SHORT_MONTHS = [
-    'ene',
-    'feb',
-    'mar',
-    'abr',
-    'may',
-    'jun',
-    'jul',
-    'ago',
-    'sep',
-    'oct',
-    'nov',
-    'dic',
-]
-
-/** Compact `day month` label, e.g. `27 may`. */
-function shortDate(ms: number): string {
-    const d = new Date(ms)
-    return `${d.getDate()} ${SHORT_MONTHS[d.getMonth()]}`
+/** Compact `day month` label, e.g. `27 may` / `May 27`. */
+function shortDate(ms: number, locale: string): string {
+    return new Intl.DateTimeFormat(locale, {
+        day: 'numeric',
+        month: 'short',
+    }).format(new Date(ms))
 }
 
 type RecentTransaction = ActivityTransaction & { currency: string }
@@ -50,6 +38,8 @@ export function EntityRecentTransactions({
     onViewAll,
     transactions,
 }: EntityRecentTransactionsProps) {
+    const t = useT()
+    const formatLocale = useFormatLocale()
     return (
         <section className="flex flex-col gap-2">
             <div className="flex items-center justify-between gap-2">
@@ -64,20 +54,26 @@ export function EntityRecentTransactions({
                 </div>
             ) : transactions.length === 0 ? (
                 <p className="py-4 text-sm text-muted-foreground">
-                    Sin movimientos todavía
+                    {t.activity.noMovementsYet}
                 </p>
             ) : (
                 <div className="flex flex-col gap-2.5">
-                    {transactions.map((t) => (
+                    {transactions.map((transaction) => (
                         <TransactionRow
-                            key={t.id}
-                            title={t.name}
-                            amountCents={signedAmountCents(t)}
-                            dateConfirmed={t.dateConfirmed}
-                            timeLabel={formatTransactionTime(t.date)}
-                            timeStatus={transactionTimeStatus(t)}
-                            description={shortDate(Number(t.date))}
-                            currency={t.currency}
+                            key={transaction.id}
+                            title={transaction.name}
+                            amountCents={signedAmountCents(transaction)}
+                            dateConfirmed={transaction.dateConfirmed}
+                            timeLabel={formatTransactionTime(
+                                transaction.date,
+                                formatLocale,
+                            )}
+                            timeStatus={transactionTimeStatus(transaction)}
+                            description={shortDate(
+                                Number(transaction.date),
+                                formatLocale,
+                            )}
+                            currency={transaction.currency}
                         />
                     ))}
                 </div>

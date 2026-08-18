@@ -1,6 +1,9 @@
 import 'package:app/components/grouped_card.dart';
 import 'package:app/l10n/l10n.dart';
 import 'package:app/settings/display_settings.dart';
+import 'package:app/shared/adaptive_modal.dart';
+import 'package:app/user_settings/default_currency_controller.dart';
+import 'package:app/widgets/currency_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -10,6 +13,7 @@ class SettingsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final settings = context.watch<DisplaySettingsController>();
+    final defaultCurrency = context.watch<DefaultCurrencyController>();
 
     return Scaffold(
       appBar: AppBar(title: Text(context.l10n.settings)),
@@ -20,7 +24,7 @@ class SettingsScreen extends StatelessWidget {
             icon: Icons.language_rounded,
             title: context.l10n.language,
             value: _languageLabel(context, settings.language),
-            borderRadius: groupedRadius(0, 2),
+            borderRadius: groupedRadius(0, 3),
             onTap: () => _showLanguageChoices(context, settings),
           ),
           const SizedBox(height: kGroupSpacing),
@@ -28,8 +32,16 @@ class SettingsScreen extends StatelessWidget {
             icon: Icons.palette_outlined,
             title: context.l10n.theme,
             value: _themeLabel(context, settings.theme),
-            borderRadius: groupedRadius(1, 2),
+            borderRadius: groupedRadius(1, 3),
             onTap: () => _showThemeChoices(context, settings),
+          ),
+          const SizedBox(height: kGroupSpacing),
+          _PreferenceTile(
+            icon: Icons.attach_money_rounded,
+            title: context.l10n.currency,
+            value: defaultCurrency.value,
+            borderRadius: groupedRadius(2, 3),
+            onTap: () => _showCurrencyChoices(context, defaultCurrency),
           ),
         ],
       ),
@@ -40,8 +52,8 @@ class SettingsScreen extends StatelessWidget {
     BuildContext context,
     DisplaySettingsController settings,
   ) {
-    return showModalBottomSheet<void>(
-      context: context,
+    return showAdaptiveModal<void>(
+      context,
       isScrollControlled: true,
       showDragHandle: true,
       builder: (sheetContext) => _SelectionSheet<DisplayLanguage>(
@@ -77,8 +89,8 @@ class SettingsScreen extends StatelessWidget {
     BuildContext context,
     DisplaySettingsController settings,
   ) {
-    return showModalBottomSheet<void>(
-      context: context,
+    return showAdaptiveModal<void>(
+      context,
       isScrollControlled: true,
       showDragHandle: true,
       builder: (sheetContext) => _SelectionSheet<DisplayTheme>(
@@ -108,6 +120,24 @@ class SettingsScreen extends StatelessWidget {
         },
       ),
     );
+  }
+
+  Future<void> _showCurrencyChoices(
+    BuildContext context,
+    DefaultCurrencyController defaultCurrency,
+  ) async {
+    final picked = await showAdaptiveModal<String>(
+      context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (_) => CurrencyPicker(selected: defaultCurrency.value),
+    );
+    if (picked == null) return;
+    try {
+      await defaultCurrency.setValue(picked);
+    } catch (_) {
+      if (context.mounted) _showSaveError(context);
+    }
   }
 
   String _languageLabel(BuildContext context, DisplayLanguage language) =>

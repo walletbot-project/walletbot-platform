@@ -1,4 +1,5 @@
-import { useConvex } from 'convex/react'
+import { api } from '@wallet-bot/backend/api'
+import { useConvex, useQuery } from 'convex/react'
 import {
     AlertCircle,
     CheckCircle2,
@@ -16,13 +17,14 @@ import { useEffect, useRef } from 'react'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import { type ChatMessage, useVoice } from '@/hooks/use-voice'
+import { useFormatLocale, useT } from '@/lib/i18n'
 import { cn } from '@/lib/utils'
 import { ActionWidget } from '@/pages/add-action-widget'
 
 // Helpers
 
-function formatTime(date: Date) {
-    return date.toLocaleTimeString('en-US', {
+function formatTime(date: Date, locale: string) {
+    return date.toLocaleTimeString(locale, {
         hour12: false,
         hour: '2-digit',
         minute: '2-digit',
@@ -42,10 +44,11 @@ function formatJson(data: Record<string, unknown>): string {
 // Speaking dots indicator
 
 function SpeakingDots({ className }: { className?: string }) {
+    const t = useT()
     return (
         <span
             role="status"
-            aria-label="Speaking"
+            aria-label={t.voice.speaking}
             className={cn('inline-flex items-end gap-1', className)}
         >
             <span className="size-1.5 animate-bounce rounded-full bg-current" />
@@ -62,13 +65,15 @@ function UserBubble({
 }: {
     message: Extract<ChatMessage, { kind: 'user' }>
 }) {
+    const t = useT()
+    const formatLocale = useFormatLocale()
     const text = message.text.trim()
     return (
         <div className="flex justify-end">
             <div className="flex max-w-[78%] flex-col items-end gap-1">
                 <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                    <span>{formatTime(message.at)}</span>
-                    <span className="font-medium">You</span>
+                    <span>{formatTime(message.at, formatLocale)}</span>
+                    <span className="font-medium">{t.voice.you}</span>
                 </div>
                 <div className="rounded-2xl rounded-br-sm bg-primary px-4 py-2.5 text-primary-foreground">
                     {text && (
@@ -97,6 +102,8 @@ function AgentBubble({
 }: {
     message: Extract<ChatMessage, { kind: 'agent' }>
 }) {
+    const t = useT()
+    const formatLocale = useFormatLocale()
     const text = message.text.trim()
     return (
         <div className="flex justify-start">
@@ -108,8 +115,8 @@ function AgentBubble({
                 </Avatar>
                 <div className="flex flex-col items-start gap-1">
                     <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                        <span className="font-medium">WalletBot</span>
-                        <span>{formatTime(message.at)}</span>
+                        <span className="font-medium">{t.voice.agent}</span>
+                        <span>{formatTime(message.at, formatLocale)}</span>
                     </div>
                     <div className="rounded-2xl rounded-tl-sm bg-muted px-4 py-2.5 text-foreground">
                         {text && (
@@ -129,7 +136,7 @@ function AgentBubble({
                         )}
                         {message.wasInterrupted && (
                             <p className="mt-1.5 text-xs italic text-muted-foreground">
-                                (interrupted)
+                                {t.voice.interrupted}
                             </p>
                         )}
                     </div>
@@ -141,9 +148,12 @@ function AgentBubble({
 
 function ToolCard({
     message,
+    debugEnabled,
 }: {
     message: Extract<ChatMessage, { kind: 'tool' }>
+    debugEnabled: boolean
 }) {
+    const t = useT()
     const status = message.status
     const StatusIcon =
         status === 'pending'
@@ -159,10 +169,10 @@ function ToolCard({
               : 'text-destructive'
     const statusLabel =
         status === 'pending'
-            ? 'Running'
+            ? t.voice.toolRunning
             : status === 'completed'
-              ? 'Done'
-              : 'Cancelled'
+              ? t.voice.toolDone
+              : t.voice.toolCancelled
 
     return (
         <div className="flex justify-center">
@@ -170,7 +180,7 @@ function ToolCard({
                 <div className="flex items-center gap-2">
                     <Wrench className="size-3.5 text-muted-foreground" />
                     <span className="text-xs uppercase tracking-wider text-muted-foreground">
-                        Tool
+                        {t.voice.tool}
                     </span>
                     <span className="flex-1 truncate font-mono text-sm font-semibold">
                         {message.name}
@@ -185,10 +195,10 @@ function ToolCard({
                         {statusLabel}
                     </span>
                 </div>
-                {Object.keys(message.args).length > 0 && (
+                {debugEnabled && Object.keys(message.args).length > 0 && (
                     <KvBlock label="args" data={message.args} />
                 )}
-                {message.result && (
+                {debugEnabled && message.result && (
                     <KvBlock label="result" data={message.result} />
                 )}
             </div>
@@ -242,14 +252,20 @@ function SystemLine({
     )
 }
 
-function MessageView({ message }: { message: ChatMessage }) {
+function MessageView({
+    message,
+    debugEnabled,
+}: {
+    message: ChatMessage
+    debugEnabled: boolean
+}) {
     switch (message.kind) {
         case 'user':
             return <UserBubble message={message} />
         case 'agent':
             return <AgentBubble message={message} />
         case 'tool':
-            return <ToolCard message={message} />
+            return <ToolCard message={message} debugEnabled={debugEnabled} />
         case 'system':
             return <SystemLine message={message} />
         case 'action-result':
@@ -264,6 +280,7 @@ function StatusPill({
 }: {
     status: 'idle' | 'connecting' | 'connected'
 }) {
+    const t = useT()
     const color =
         status === 'connected'
             ? 'border-primary text-primary'
@@ -272,10 +289,10 @@ function StatusPill({
               : 'border-muted-foreground/40 text-muted-foreground'
     const label =
         status === 'connected'
-            ? 'connected'
+            ? t.voice.statusConnected
             : status === 'connecting'
-              ? 'connecting'
-              : 'idle'
+              ? t.voice.statusConnecting
+              : t.voice.statusIdle
     return (
         <div
             className={cn(
@@ -297,13 +314,12 @@ function StatusPill({
 // Empty state
 
 function EmptyState({ isConnecting }: { isConnecting: boolean }) {
+    const t = useT()
     return (
         <div className="flex flex-1 flex-col items-center justify-center gap-3 text-muted-foreground">
             <Mic className="size-12 opacity-50" />
             <p className="text-sm">
-                {isConnecting
-                    ? 'Connecting…'
-                    : 'Tap the phone to start a conversation'}
+                {isConnecting ? t.voice.connectingEllipsis : t.voice.tapToStart}
             </p>
         </div>
     )
@@ -312,8 +328,11 @@ function EmptyState({ isConnecting }: { isConnecting: boolean }) {
 // Page
 
 export function Add() {
+    const t = useT()
     const client = useConvex()
     const voice = useVoice({ context: { client } })
+    const flags = useQuery(api.v1.featureFlags.queries.getMyFlags)
+    const debugEnabled = flags?.debugToolCalls ?? false
 
     const status: 'idle' | 'connecting' | 'connected' = voice.isConnected
         ? 'connected'
@@ -334,7 +353,7 @@ export function Add() {
         <div className="flex flex-1 flex-col">
             {/* Sub-header with status */}
             <div className="flex items-center justify-between gap-2 border-b bg-background/50 px-4 py-2">
-                <h2 className="text-sm font-medium">Live Voice</h2>
+                <h2 className="text-sm font-medium">{t.voice.title}</h2>
                 <StatusPill status={status} />
             </div>
 
@@ -344,7 +363,11 @@ export function Add() {
                     <EmptyState isConnecting={voice.isConnecting} />
                 ) : (
                     voice.messages.map((m) => (
-                        <MessageView key={m.id} message={m} />
+                        <MessageView
+                            key={m.id}
+                            message={m}
+                            debugEnabled={debugEnabled}
+                        />
                     ))
                 )}
                 <div ref={bottomRef} aria-hidden className="h-0" />
@@ -375,7 +398,11 @@ export function Add() {
                                 variant="outline"
                                 size="icon-lg"
                                 onClick={() => voice.setIsMuted(!voice.isMuted)}
-                                aria-label={voice.isMuted ? 'Unmute' : 'Mute'}
+                                aria-label={
+                                    voice.isMuted
+                                        ? t.voice.unmute
+                                        : t.voice.mute
+                                }
                                 className={cn(
                                     'rounded-full',
                                     voice.isMuted &&
@@ -396,7 +423,7 @@ export function Add() {
                                 size="icon-lg"
                                 variant="destructive"
                                 onClick={voice.disconnect}
-                                aria-label="Disconnect"
+                                aria-label={t.voice.disconnect}
                                 className="size-14 rounded-full"
                             >
                                 <PhoneOff className="size-6" />
@@ -407,7 +434,7 @@ export function Add() {
                                 size="icon-lg"
                                 onClick={voice.connect}
                                 disabled={voice.isConnecting}
-                                aria-label="Connect"
+                                aria-label={t.voice.connect}
                                 className="size-14 rounded-full"
                             >
                                 <Phone className="size-6" />

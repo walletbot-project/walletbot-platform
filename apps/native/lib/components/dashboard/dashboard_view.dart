@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:app/components/dashboard/balance_card_widget.dart';
 import 'package:app/components/dashboard/breakdown_chart_widget.dart';
 import 'package:app/components/dashboard/dashboard_layout.dart';
@@ -6,7 +8,9 @@ import 'package:app/components/dashboard/stat_widget.dart';
 import 'package:app/components/dashboard/transaction_list_widget.dart';
 import 'package:app/database.dart';
 import 'package:app/l10n/l10n.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 class DashboardViewItem {
   const DashboardViewItem({required this.row, required this.spec});
@@ -76,6 +80,13 @@ class DashboardView extends StatelessWidget {
 
   static const _gap = 4.0;
 
+  /// Reflow on wide layouts: several 6-unit logical rows render side by side
+  /// per visual band once each can get at least this width, so tiles keep a
+  /// phone-like size instead of stretching. Capped at [_maxBandColumns].
+  static const _minLogicalRowWidth = 380.0;
+  static const _bandGap = 16.0;
+  static const _maxBandColumns = 3;
+
   /// Hit width of the (overlaid) between-tile insert strips. Wider than [_gap]
   /// so the seam is easy to hit while dragging, but it lives in a Stack overlay
   /// so it never widens the row's actual layout.
@@ -103,15 +114,58 @@ class DashboardView extends StatelessWidget {
       builder: (context, constraints) {
         final maxWidth = constraints.maxWidth;
         final rowCount = layout.rowCount;
-        // Identical spacing in view and edit mode (a constant [_gap] between
-        // rows, nothing at the edges) so toggling edit never shifts the layout.
-        // The new-row drop bands are overlaid inside each row (see _buildRow).
+        // Reflow, don't stretch: logical (row, col) coordinates — and the
+        // persisted layout — always stay in 6-unit terms; wide layouts only
+        // change how many logical rows sit side by side per visual band.
+        final bandColumns = math.min(
+          _maxBandColumns,
+          math.max(
+            1,
+            (maxWidth + _bandGap) ~/ (_minLogicalRowWidth + _bandGap),
+          ),
+        );
+        if (bandColumns == 1) {
+          // Identical spacing in view and edit mode (a constant [_gap] between
+          // rows, nothing at the edges) so toggling edit never shifts the
+          // layout. The new-row drop bands are overlaid inside each row (see
+          // _buildRow).
+          return Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              for (var row = 0; row < rowCount; row++) ...[
+                if (row > 0) const SizedBox(height: _gap),
+                _buildRow(context, layout, itemsById, row, maxWidth),
+              ],
+            ],
+          );
+        }
+        final logicalRowWidth =
+            (maxWidth - _bandGap * (bandColumns - 1)) / bandColumns;
         return Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            for (var row = 0; row < rowCount; row++) ...[
-              if (row > 0) const SizedBox(height: _gap),
-              _buildRow(context, layout, itemsById, row, maxWidth),
+            for (var band = 0; band * bandColumns < rowCount; band++) ...[
+              if (band > 0) const SizedBox(height: _gap),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  for (var i = 0; i < bandColumns; i++) ...[
+                    if (i > 0) const SizedBox(width: _bandGap),
+                    SizedBox(
+                      width: logicalRowWidth,
+                      child: band * bandColumns + i < rowCount
+                          ? _buildRow(
+                              context,
+                              layout,
+                              itemsById,
+                              band * bandColumns + i,
+                              logicalRowWidth,
+                            )
+                          : const SizedBox.shrink(),
+                    ),
+                  ],
+                ],
+              ),
             ],
           ],
         );
@@ -338,6 +392,8 @@ class DashboardView extends StatelessWidget {
             onDelete: onDeleteItem == null ? null : () => onDeleteItem!(item),
           )
         : null;
+    final canDrag = editing && (onPlaceInCell != null || onSwap != null);
+
     final child = _DashboardEditableFrame(
       selected: selected,
       child: Material(
@@ -345,6 +401,10 @@ class DashboardView extends StatelessWidget {
         borderRadius: BorderRadius.circular(8),
         clipBehavior: Clip.antiAlias,
         child: InkWell(
+          // A tile that can be picked up should say so before the pointer goes
+          // down; with a mouse the grab cursor is the only hint that edit mode
+          // supports drag-and-drop at all.
+          mouseCursor: canDrag ? SystemMouseCursors.grab : null,
           onTap: onTapItem == null ? null : () => onTapItem!(item),
           onLongPress: onLongPressItem == null
               ? null
@@ -385,13 +445,11 @@ class DashboardView extends StatelessWidget {
       },
     );
 
-    final canDrag = editing && (onPlaceInCell != null || onSwap != null);
-
     return _FloatingMenuAnchor(
       show: selected,
       alignRight: _alignMenuRight(placement),
       menu: menu,
-      child: LongPressDraggable<String>(
+      child: _MouseFriendlyDraggable<String>(
         data: item.row.id,
         maxSimultaneousDrags: canDrag ? null : 0,
         dragAnchorStrategy: pointerDragAnchorStrategy,
@@ -424,6 +482,105 @@ class DashboardView extends StatelessWidget {
       ChartWidgetSpec() => BreakdownChartWidget(spec: spec),
     };
   }
+}
+
+/// A [LongPressDraggable] that a mouse can start dragging straight away.
+///
+/// Touch (and stylus, and trackpad pans) keep the long-press delay: the
+/// dashboard renders inside the home `ListView`, and an immediate touch drag
+/// would beat that list's own scroll drag in the gesture arena, leaving the
+/// page unscrollable anywhere a tile sits. A mouse has no such conflict —
+/// [ScrollBehavior.dragDevices] excludes [PointerDeviceKind.mouse], so
+/// press-and-drag with a mouse never scrolls a `Scrollable` — which makes the
+/// half-second hold pure friction on desktop.
+class _MouseFriendlyDraggable<T extends Object> extends LongPressDraggable<T> {
+  const _MouseFriendlyDraggable({
+    required super.child,
+    required super.feedback,
+    super.data,
+    super.childWhenDragging,
+    super.dragAnchorStrategy,
+    super.maxSimultaneousDrags,
+  });
+
+  @override
+  DelayedMultiDragGestureRecognizer createRecognizer(
+    GestureMultiDragStartCallback onStart,
+  ) {
+    final recognizer = _MouseImmediateMultiDragGestureRecognizer(
+      delay: delay,
+      allowedButtonsFilter: allowedButtonsFilter,
+    );
+    return recognizer
+      ..onStart = (Offset position) {
+        final result = onStart(position);
+        // Same contract as [LongPressDraggable], minus the buzz for a pointer
+        // that never waited out a long press to get here.
+        if (result != null &&
+            hapticFeedbackOnStart &&
+            recognizer.lastPointerKind != PointerDeviceKind.mouse) {
+          HapticFeedback.selectionClick();
+        }
+        return result;
+      };
+  }
+}
+
+/// [DelayedMultiDragGestureRecognizer] that drops the delay for mouse pointers
+/// and keeps it for every other device kind.
+class _MouseImmediateMultiDragGestureRecognizer
+    extends DelayedMultiDragGestureRecognizer {
+  _MouseImmediateMultiDragGestureRecognizer({
+    required super.delay,
+    super.allowedButtonsFilter,
+  });
+
+  /// Kind of the most recent pointer this recognizer took charge of. Read back
+  /// by [_MouseFriendlyDraggable] to decide whether the drag that just started
+  /// earned haptics — `onStart` only carries a position.
+  PointerDeviceKind? lastPointerKind;
+
+  @override
+  MultiDragPointerState createNewPointerState(PointerDownEvent event) {
+    lastPointerKind = event.kind;
+    if (event.kind != PointerDeviceKind.mouse) {
+      return super.createNewPointerState(event);
+    }
+    return _ImmediateDragPointerState(
+      event.position,
+      event.kind,
+      gestureSettings,
+    );
+  }
+}
+
+/// Per-pointer state that claims the drag as soon as the pointer travels past
+/// [_slop] — the mouse counterpart of the framework's private immediate
+/// multi-drag state.
+class _ImmediateDragPointerState extends MultiDragPointerState {
+  _ImmediateDragPointerState(
+    super.initialPosition,
+    super.kind,
+    super.gestureSettings,
+  );
+
+  /// Flutter's precise-pointer hit slop is a single logical pixel, which suits
+  /// a dedicated drag handle but is far too twitchy for a tile that is *also* a
+  /// tap target: a click carrying a pixel of hand jitter would turn into a drag
+  /// that lands back on itself (a no-op) and swallow the selection tap. Still
+  /// well under [kTouchSlop], so a deliberate mouse drag feels immediate.
+  static const double _slop = 6;
+
+  @override
+  void checkForResolutionAfterMove() {
+    if (pendingDelta!.distance > _slop) {
+      resolve(GestureDisposition.accepted);
+    }
+  }
+
+  @override
+  void accepted(GestureMultiDragStartCallback starter) =>
+      starter(initialPosition);
 }
 
 /// The merged dashed visual filling a contiguous empty run in editing mode. Tap
@@ -856,19 +1013,34 @@ class _DashboardFloatingMenu extends StatelessWidget {
                         : () => onWidthChanged!(option),
                   ),
                 const SizedBox(width: 4),
+                // Named via `Icon.semanticLabel` rather than `IconButton`'s
+                // `tooltip:`. A tooltip is an `OverlayPortal`, and this menu is
+                // itself the overlay child of an `OverlayPortal`
+                // ([_FloatingMenuAnchor]); showing a tooltip on hover pushes a
+                // second layout-callback overlay child into the same
+                // `_RenderTheatre` and trips the framework assertion at
+                // rendering/object.dart `scheduleLayoutCallback`
+                // (`debugNeedsLayout is not true`). `semanticLabel` keeps these
+                // icon-only buttons named for screen readers — `IconButton`'s
+                // own `Semantics(button: true)` carries no label — without any
+                // overlay. Guarded by a semantics test in
+                // test/components/dashboard/dashboard_view_test.dart.
                 IconButton(
-                  tooltip: context.l10n.edit,
                   visualDensity: VisualDensity.compact,
-                  icon: const Icon(Icons.tune_rounded, size: 20),
+                  icon: Icon(
+                    Icons.tune_rounded,
+                    size: 20,
+                    semanticLabel: context.l10n.edit,
+                  ),
                   onPressed: onEdit,
                 ),
                 IconButton(
-                  tooltip: context.l10n.remove,
                   visualDensity: VisualDensity.compact,
                   icon: Icon(
                     Icons.delete_outline_rounded,
                     size: 20,
                     color: colors.error,
+                    semanticLabel: context.l10n.remove,
                   ),
                   onPressed: onDelete,
                 ),
@@ -881,7 +1053,7 @@ class _DashboardFloatingMenu extends StatelessWidget {
                 children: [
                   _MoveButton(
                     icon: Icons.arrow_back_rounded,
-                    tooltip: context.l10n.moveLeft,
+                    semanticLabel: context.l10n.moveLeft,
                     onPressed:
                         enabledDirections.contains(DashboardMoveDirection.left)
                         ? () => onMove!(DashboardMoveDirection.left)
@@ -889,7 +1061,7 @@ class _DashboardFloatingMenu extends StatelessWidget {
                   ),
                   _MoveButton(
                     icon: Icons.arrow_upward_rounded,
-                    tooltip: context.l10n.moveUp,
+                    semanticLabel: context.l10n.moveUp,
                     onPressed:
                         enabledDirections.contains(DashboardMoveDirection.up)
                         ? () => onMove!(DashboardMoveDirection.up)
@@ -897,7 +1069,7 @@ class _DashboardFloatingMenu extends StatelessWidget {
                   ),
                   _MoveButton(
                     icon: Icons.arrow_downward_rounded,
-                    tooltip: context.l10n.moveDown,
+                    semanticLabel: context.l10n.moveDown,
                     onPressed:
                         enabledDirections.contains(DashboardMoveDirection.down)
                         ? () => onMove!(DashboardMoveDirection.down)
@@ -905,7 +1077,7 @@ class _DashboardFloatingMenu extends StatelessWidget {
                   ),
                   _MoveButton(
                     icon: Icons.arrow_forward_rounded,
-                    tooltip: context.l10n.moveRight,
+                    semanticLabel: context.l10n.moveRight,
                     onPressed:
                         enabledDirections.contains(DashboardMoveDirection.right)
                         ? () => onMove!(DashboardMoveDirection.right)
@@ -933,20 +1105,22 @@ class _DashboardFloatingMenu extends StatelessWidget {
 class _MoveButton extends StatelessWidget {
   const _MoveButton({
     required this.icon,
-    required this.tooltip,
+    required this.semanticLabel,
     required this.onPressed,
   });
 
   final IconData icon;
-  final String tooltip;
+
+  /// Accessible name for this icon-only button. Deliberately not an
+  /// `IconButton.tooltip` — see the note in [_DashboardFloatingMenu].
+  final String semanticLabel;
   final VoidCallback? onPressed;
 
   @override
   Widget build(BuildContext context) {
     return IconButton(
-      tooltip: tooltip,
       visualDensity: VisualDensity.compact,
-      icon: Icon(icon, size: 20),
+      icon: Icon(icon, size: 20, semanticLabel: semanticLabel),
       onPressed: onPressed,
     );
   }

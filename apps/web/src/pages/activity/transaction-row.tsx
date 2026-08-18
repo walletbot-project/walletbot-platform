@@ -2,6 +2,7 @@ import { HelpCircle } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { AccountIcon } from '@/components/account-icon'
 import { CategoryIcon } from '@/components/category-icon'
+import { useFormatLocale, useT } from '@/lib/i18n'
 import { formatMoney } from '@/lib/money'
 import { cn } from '@/lib/utils'
 import type { TransactionTimeStatus } from './helpers'
@@ -40,13 +41,15 @@ export function TransactionRow({
     currencySymbol = '$',
     onClick,
 }: TransactionRowProps) {
+    const t = useT()
+    const formatLocale = useFormatLocale()
     const isPositive = amountCents > 0
     const timeNeedsAttention = timeStatus !== 'confirmed'
     const showAttention = !dateConfirmed || timeNeedsAttention
     const sign = amountCents < 0 ? '-' : amountCents > 0 ? '+' : ''
     const amount = currency
-        ? `${sign ? `${sign} ` : ''}${formatMoney(Math.abs(amountCents), currency)}`
-        : formatSignedAmount(amountCents, currencySymbol)
+        ? `${sign ? `${sign} ` : ''}${formatMoney(Math.abs(amountCents), currency, formatLocale)}`
+        : formatSignedAmount(amountCents, formatLocale, currencySymbol)
 
     const content = (
         <>
@@ -86,7 +89,7 @@ export function TransactionRow({
                         {showAttention ? (
                             <HelpCircle
                                 className="size-4 text-amber-600 dark:text-amber-500"
-                                aria-label="Fecha u horario estimado"
+                                aria-label={t.activity.estimatedDateOrTime}
                             />
                         ) : null}
                         {timeLabel ? (

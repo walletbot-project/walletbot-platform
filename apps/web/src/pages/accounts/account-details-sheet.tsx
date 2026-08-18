@@ -24,8 +24,10 @@ import {
     COLOR_OPTIONS,
     normalizeColor,
 } from '@/lib/entity-colors'
+import { useFormatLocale, useT } from '@/lib/i18n'
 import { formatMoney } from '@/lib/money'
 import { cn } from '@/lib/utils'
+import { accountErrorMessage } from '@/pages/accounts/account-errors'
 
 export type AccountSummary = {
     id: string
@@ -45,6 +47,8 @@ export function AccountDetailsSheet({
     onOpenChange: (open: boolean) => void
 }) {
     const navigate = useNavigate()
+    const t = useT()
+    const formatLocale = useFormatLocale()
     const updateAccount = useMutation(api.v1.accounts.mutations.update)
     const archiveAccount = useMutation(api.v1.accounts.mutations.archive)
     const createBalanceAdjustment = useMutation(
@@ -101,7 +105,7 @@ export function AccountDetailsSheet({
         }
         const trimmed = name.trim()
         if (!trimmed) {
-            toast.error('El nombre no puede estar vacío')
+            toast.error(t.common.nameCannotBeEmpty)
             return
         }
         setSaving(true)
@@ -112,9 +116,10 @@ export function AccountDetailsSheet({
             icon,
         })
         toast.promise(promise, {
-            loading: 'Guardando cuenta…',
-            success: 'Cuenta guardada',
-            error: 'No se pudo guardar la cuenta',
+            loading: t.accounts.saving,
+            success: t.accounts.saved,
+            error: (error) =>
+                accountErrorMessage(error, t, t.accounts.saveFailed),
         })
         try {
             await promise
@@ -127,7 +132,7 @@ export function AccountDetailsSheet({
     const handleAdjust = async () => {
         const parsed = Number.parseFloat(adjustValue.replace(',', '.'))
         if (Number.isNaN(parsed)) {
-            toast.error('Ingresá un monto válido')
+            toast.error(t.accounts.invalidAmount)
             return
         }
         setSaving(true)
@@ -139,9 +144,9 @@ export function AccountDetailsSheet({
             dateConfirmed: true,
         })
         toast.promise(promise, {
-            loading: 'Ajustando saldo…',
-            success: 'Saldo ajustado',
-            error: 'No se pudo ajustar el saldo',
+            loading: t.accounts.adjusting,
+            success: t.accounts.adjusted,
+            error: t.accounts.adjustFailed,
         })
         try {
             await promise
@@ -155,9 +160,9 @@ export function AccountDetailsSheet({
         setSaving(true)
         const promise = archiveAccount({ id: account.id })
         toast.promise(promise, {
-            loading: 'Eliminando cuenta…',
-            success: 'Cuenta eliminada',
-            error: 'No se pudo eliminar la cuenta',
+            loading: t.accounts.deleting,
+            success: t.accounts.deleted,
+            error: t.accounts.deleteFailed,
         })
         try {
             await promise
@@ -212,7 +217,7 @@ export function AccountDetailsSheet({
                                 value={name}
                                 onChange={(e) => setName(e.target.value)}
                                 className="bg-background"
-                                aria-label="Nombre"
+                                aria-label={t.common.name}
                             />
                         ) : (
                             <span className="min-w-0 flex-1 truncate text-xl font-semibold">
@@ -233,7 +238,7 @@ export function AccountDetailsSheet({
                     <div className="flex items-start justify-between gap-3 rounded-2xl border bg-card p-5">
                         <div className="flex min-w-0 flex-col">
                             <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                                Saldo
+                                {t.accounts.balance}
                             </span>
                             <span
                                 className={cn(
@@ -247,6 +252,7 @@ export function AccountDetailsSheet({
                                     ? formatMoney(
                                           Number(balance.balance),
                                           balance.currency,
+                                          formatLocale,
                                       )
                                     : '—'}
                             </span>
@@ -265,14 +271,14 @@ export function AccountDetailsSheet({
                             disabled={saving}
                         >
                             <SlidersHorizontal data-icon="inline-start" />
-                            Ajustar saldo
+                            {t.accounts.adjustBalance}
                         </Button>
                         <Button
                             variant={editing ? 'default' : 'secondary'}
                             size="icon"
                             onClick={handleToggleEditing}
                             disabled={saving}
-                            aria-label={editing ? 'Listo' : 'Editar'}
+                            aria-label={editing ? t.common.done : t.common.edit}
                         >
                             {editing ? <Check /> : <Pencil />}
                         </Button>
@@ -281,15 +287,15 @@ export function AccountDetailsSheet({
                             size="icon"
                             onClick={() => setDeleteOpen(true)}
                             disabled={saving}
-                            aria-label="Eliminar"
+                            aria-label={t.common.delete}
                         >
                             <Trash2 />
                         </Button>
                     </div>
 
                     <EntityRecentTransactions
-                        title="Últimas transacciones"
-                        viewAllLabel="Ver todas"
+                        title={t.accounts.lastTransactions}
+                        viewAllLabel={t.accounts.viewAll}
                         onViewAll={viewAllTransactions}
                         transactions={recent}
                     />
@@ -300,14 +306,14 @@ export function AccountDetailsSheet({
             <Dialog open={adjustOpen} onOpenChange={setAdjustOpen}>
                 <DialogContent>
                     <DialogHeader>
-                        <DialogTitle>Ajustar saldo</DialogTitle>
+                        <DialogTitle>{t.accounts.adjustBalance}</DialogTitle>
                     </DialogHeader>
                     <Input
                         value={adjustValue}
                         onChange={(e) => setAdjustValue(e.target.value)}
                         inputMode="decimal"
                         autoFocus
-                        aria-label="Nuevo saldo"
+                        aria-label={t.accounts.newBalance}
                     />
                     <DialogFooter>
                         <Button
@@ -315,10 +321,10 @@ export function AccountDetailsSheet({
                             onClick={() => setAdjustOpen(false)}
                             disabled={saving}
                         >
-                            Cancelar
+                            {t.common.cancel}
                         </Button>
                         <Button onClick={handleAdjust} disabled={saving}>
-                            Guardar
+                            {t.common.save}
                         </Button>
                     </DialogFooter>
                 </DialogContent>
@@ -328,11 +334,10 @@ export function AccountDetailsSheet({
             <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
                 <DialogContent>
                     <DialogHeader>
-                        <DialogTitle>Eliminar cuenta</DialogTitle>
+                        <DialogTitle>{t.accounts.deleteTitle}</DialogTitle>
                     </DialogHeader>
                     <p className="text-sm text-muted-foreground">
-                        ¿Seguro que querés eliminar "{account.name}"? Dejará de
-                        aparecer en tus cuentas.
+                        {t.accounts.deleteConfirm({ name: account.name })}
                     </p>
                     <DialogFooter>
                         <Button
@@ -340,14 +345,14 @@ export function AccountDetailsSheet({
                             onClick={() => setDeleteOpen(false)}
                             disabled={saving}
                         >
-                            Cancelar
+                            {t.common.cancel}
                         </Button>
                         <Button
                             variant="destructive"
                             onClick={handleDelete}
                             disabled={saving}
                         >
-                            Eliminar
+                            {t.common.delete}
                         </Button>
                     </DialogFooter>
                 </DialogContent>

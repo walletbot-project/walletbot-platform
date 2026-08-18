@@ -4,66 +4,11 @@ import 'package:app/components/color_utils.dart';
 import 'package:app/components/icon_picker.dart';
 import 'package:app/data/data.dart';
 import 'package:app/l10n/l10n.dart';
+import 'package:app/shared/adaptive_modal.dart';
+import 'package:app/user_settings/default_currency_controller.dart';
+import 'package:app/widgets/currency_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-
-// ISO 4217 codes — language-neutral and sorted alphabetically.
-const _currencies = [
-  'AED',
-  'ARS',
-  'AUD',
-  'BOB',
-  'BRL',
-  'CAD',
-  'CHF',
-  'CLP',
-  'CNY',
-  'COP',
-  'CRC',
-  'CUP',
-  'DKK',
-  'DOP',
-  'EGP',
-  'EUR',
-  'GBP',
-  'GTQ',
-  'HKD',
-  'HNL',
-  'HUF',
-  'IDR',
-  'ILS',
-  'INR',
-  'JPY',
-  'KRW',
-  'MXN',
-  'MYR',
-  'NGN',
-  'NIO',
-  'NOK',
-  'NZD',
-  'PAB',
-  'PEN',
-  'PHP',
-  'PKR',
-  'PLN',
-  'PYG',
-  'RON',
-  'RUB',
-  'SAR',
-  'SEK',
-  'SGD',
-  'THB',
-  'TRY',
-  'TWD',
-  'UAH',
-  'USD',
-  'UYU',
-  'VES',
-  'VND',
-  'ZAR',
-];
-
-const _suggestedCurrencies = ['ARS', 'USD', 'EUR', 'BRL'];
 
 List<({String label, IconData icon})> _nameSuggestions(AppLocalizations l10n) =>
     [
@@ -73,7 +18,11 @@ List<({String label, IconData icon})> _nameSuggestions(AppLocalizations l10n) =>
     ];
 
 class CreateAccountScreen extends StatefulWidget {
-  const CreateAccountScreen({super.key});
+  const CreateAccountScreen({super.key, this.onClose});
+
+  /// Embedded (split pane) mode: when set, the screen never pops its route —
+  /// exits report here instead, and an explicit close button is shown.
+  final VoidCallback? onClose;
 
   @override
   State<CreateAccountScreen> createState() => _CreateAccountScreenState();
@@ -83,7 +32,10 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
   final _balanceController = TextEditingController();
-  String _currency = 'ARS';
+  // Null until the user explicitly picks one — until then the currency
+  // tracks `DefaultCurrencyController.value` live, so it doesn't get stuck
+  // on the placeholder value while the real default is still loading.
+  String? _currency;
   Color _color = accountDefaultColor;
   IconData _icon = accountDefaultIcon;
   bool _saving = false;
@@ -102,12 +54,12 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
     setState(() => _icon = suggestion.icon);
   }
 
-  Future<void> _pickCurrency() async {
-    final picked = await showModalBottomSheet<String>(
-      context: context,
+  Future<void> _pickCurrency(String currency) async {
+    final picked = await showAdaptiveModal<String>(
+      context,
       isScrollControlled: true,
       showDragHandle: true,
-      builder: (_) => _CurrencyPicker(selected: _currency),
+      builder: (_) => CurrencyPicker(selected: currency),
     );
     if (picked != null) setState(() => _currency = picked);
   }
@@ -122,7 +74,7 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
     if (picked != null) setState(() => _icon = picked);
   }
 
-  Future<void> _submit() async {
+  Future<void> _submit(String currency) async {
     if (!_formKey.currentState!.validate()) return;
 
     final rawBalance = _balanceController.text.trim();
@@ -136,28 +88,55 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
     try {
       await context.read<AppRepositories>().accounts.create(
         name: _nameController.text.trim(),
-        currency: _currency,
+        currency: currency,
         color: colorToHex(_color),
         icon: accountIconName(_icon),
         initialBalanceCents: initialAmountCents,
       );
-      if (mounted) Navigator.of(context).pop();
+      if (mounted) _close();
     } catch (e, st) {
       debugPrint('Error creating account: $e\n$st');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(context.l10n.accountCreateFailed)),
-        );
+        final message = e is DuplicateAccountException
+            ? context.l10n.accountDuplicateNameCurrency
+            : context.l10n.accountCreateFailed;
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(message)));
       }
     } finally {
       if (mounted) setState(() => _saving = false);
     }
   }
 
+  /// Exits the screen: reports to [CreateAccountScreen.onClose] when embedded
+  /// in the split pane, pops the route otherwise.
+  void _close() {
+    final onClose = widget.onClose;
+    if (onClose != null) {
+      onClose();
+      return;
+    }
+    Navigator.of(context).pop();
+  }
+
   @override
   Widget build(BuildContext context) {
+    final currency =
+        _currency ?? context.watch<DefaultCurrencyController>().value;
     return Scaffold(
-      appBar: AppBar(title: Text(context.l10n.newAccount)),
+      appBar: AppBar(
+        // Embedded there is no route to pop, so no back button appears on its
+        // own — offer an explicit close instead.
+        leading: widget.onClose == null
+            ? null
+            : IconButton(
+                tooltip: MaterialLocalizations.of(context).closeButtonTooltip,
+                onPressed: _close,
+                icon: const Icon(Icons.close_rounded),
+              ),
+        title: Text(context.l10n.newAccount),
+      ),
       body: Form(
         key: _formKey,
         child: ListView(
@@ -230,7 +209,7 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
             ),
             const SizedBox(height: 16),
             InkWell(
-              onTap: _pickCurrency,
+              onTap: () => _pickCurrency(currency),
               borderRadius: BorderRadius.circular(4),
               child: InputDecorator(
                 decoration: InputDecoration(
@@ -238,7 +217,7 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                   border: const OutlineInputBorder(),
                   suffixIcon: const Icon(Icons.arrow_drop_down),
                 ),
-                child: Text(_currency),
+                child: Text(currency),
               ),
             ),
             const SizedBox(height: 16),
@@ -250,7 +229,7 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
               decoration: InputDecoration(
                 labelText: context.l10n.initialBalanceOptional,
                 hintText: '0.00',
-                prefixText: '$_currency ',
+                prefixText: '$currency ',
                 border: const OutlineInputBorder(),
               ),
               validator: (v) {
@@ -264,112 +243,13 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
             ),
             const SizedBox(height: 32),
             FilledButton(
-              onPressed: _saving ? null : _submit,
+              onPressed: _saving ? null : () => _submit(currency),
               child: _saving
                   ? const SizedBox.square(
                       dimension: 20,
                       child: CircularProgressIndicator(strokeWidth: 2),
                     )
                   : Text(context.l10n.createAccount),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _CurrencyPicker extends StatefulWidget {
-  const _CurrencyPicker({required this.selected});
-
-  final String selected;
-
-  @override
-  State<_CurrencyPicker> createState() => _CurrencyPickerState();
-}
-
-class _CurrencyPickerState extends State<_CurrencyPicker> {
-  final _searchController = TextEditingController();
-  String _query = '';
-
-  @override
-  void dispose() {
-    _searchController.dispose();
-    super.dispose();
-  }
-
-  List<String> get _filtered {
-    if (_query.isEmpty) return _currencies;
-    final q = _query.toLowerCase();
-    return _currencies.where((code) => code.toLowerCase().contains(q)).toList();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final filtered = _filtered;
-
-    return DraggableScrollableSheet(
-      initialChildSize: 0.7,
-      minChildSize: 0.4,
-      maxChildSize: 0.9,
-      expand: false,
-      builder: (context, scrollController) => Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              context.l10n.chooseCurrency,
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: _searchController,
-              decoration: InputDecoration(
-                hintText: context.l10n.searchCurrency,
-                prefixIcon: const Icon(Icons.search),
-                border: const OutlineInputBorder(),
-                isDense: true,
-              ),
-              onChanged: (v) => setState(() => _query = v),
-            ),
-            if (_query.isEmpty) ...[
-              const SizedBox(height: 16),
-              Text(
-                context.l10n.mostUsed,
-                style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Wrap(
-                spacing: 8,
-                children: [
-                  for (final code in _suggestedCurrencies)
-                    FilterChip(
-                      label: Text(code),
-                      selected: widget.selected == code,
-                      onSelected: (_) => Navigator.of(context).pop(code),
-                    ),
-                ],
-              ),
-              const Divider(height: 24),
-            ] else
-              const SizedBox(height: 8),
-            Expanded(
-              child: ListView.builder(
-                controller: scrollController,
-                itemCount: filtered.length,
-                itemBuilder: (context, i) {
-                  final code = filtered[i];
-                  return ListTile(
-                    dense: true,
-                    title: Text(code),
-                    selected: widget.selected == code,
-                    onTap: () => Navigator.of(context).pop(code),
-                  );
-                },
-              ),
             ),
           ],
         ),

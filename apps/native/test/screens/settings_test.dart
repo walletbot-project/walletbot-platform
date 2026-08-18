@@ -1,13 +1,20 @@
 import 'package:app/l10n/l10n.dart';
 import 'package:app/screens/settings.dart';
 import 'package:app/settings/display_settings.dart';
+import 'package:app/shared/breakpoints.dart';
+import 'package:app/user_settings/default_currency_controller.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 
 import '../helpers/memory_display_settings_store.dart';
 
 void main() {
+  setUp(() {
+    FlutterSecureStorage.setMockInitialValues({});
+  });
+
   testWidgets('shows the settings title in the app bar', (tester) async {
     final settings = DisplaySettingsController(
       store: MemoryDisplaySettingsStore(),
@@ -23,6 +30,7 @@ void main() {
   testWidgets('orders language choices alphabetically in English', (
     tester,
   ) async {
+    _useCompactWindow(tester);
     final settings = DisplaySettingsController(
       store: MemoryDisplaySettingsStore(),
     );
@@ -37,6 +45,7 @@ void main() {
   testWidgets('orders language choices alphabetically in Spanish', (
     tester,
   ) async {
+    _useCompactWindow(tester);
     final settings = DisplaySettingsController(
       store: MemoryDisplaySettingsStore(),
     );
@@ -96,7 +105,19 @@ void main() {
   });
 }
 
+/// The choice pickers are bottom sheets only below [Breakpoints.medium] — at
+/// or above it they present as dialogs (see `showAdaptiveModal`). The default
+/// 800x600 test surface is already past that, so tests that assert
+/// sheet-specific framing must pin the window to a phone size.
+void _useCompactWindow(WidgetTester tester) {
+  tester.view.physicalSize = const Size(500, 800);
+  tester.view.devicePixelRatio = 1.0;
+  addTearDown(tester.view.reset);
+}
+
 void _expectVerticalOrder(WidgetTester tester, List<String> labels) {
+  // Scoped to the sheet so the settings tile behind it — which shows the
+  // current value, e.g. "System default" — doesn't match too.
   final sheet = find.byType(BottomSheet);
   final positions = labels
       .map(
@@ -117,8 +138,14 @@ class _SettingsTestApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ChangeNotifierProvider.value(
-      value: settings,
+    return MultiProvider(
+      providers: [
+        ChangeNotifierProvider.value(value: settings),
+        ChangeNotifierProvider(
+          create: (_) =>
+              DefaultCurrencyController(accountId: 'test', isRemote: false),
+        ),
+      ],
       child: Consumer<DisplaySettingsController>(
         builder: (context, value, _) => MaterialApp(
           locale: value.locale,

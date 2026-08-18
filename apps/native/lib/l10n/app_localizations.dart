@@ -716,6 +716,48 @@ abstract class AppLocalizations {
   /// **'No transactions yet'**
   String get noTransactionsYet;
 
+  /// No description provided for @selectTransactionDetail.
+  ///
+  /// In en, this message translates to:
+  /// **'Select a transaction to see its details'**
+  String get selectTransactionDetail;
+
+  /// No description provided for @selectAccountDetail.
+  ///
+  /// In en, this message translates to:
+  /// **'Select an account to see its details'**
+  String get selectAccountDetail;
+
+  /// No description provided for @selectCategoryDetail.
+  ///
+  /// In en, this message translates to:
+  /// **'Select a category to see its details'**
+  String get selectCategoryDetail;
+
+  /// No description provided for @selectTagDetail.
+  ///
+  /// In en, this message translates to:
+  /// **'Select a tag to see its details'**
+  String get selectTagDetail;
+
+  /// No description provided for @accountDetails.
+  ///
+  /// In en, this message translates to:
+  /// **'Account details'**
+  String get accountDetails;
+
+  /// No description provided for @categoryDetails.
+  ///
+  /// In en, this message translates to:
+  /// **'Category details'**
+  String get categoryDetails;
+
+  /// No description provided for @tagDetails.
+  ///
+  /// In en, this message translates to:
+  /// **'Tag details'**
+  String get tagDetails;
+
   /// No description provided for @today.
   ///
   /// In en, this message translates to:
@@ -782,7 +824,7 @@ abstract class AppLocalizations {
   /// **'Transfers'**
   String get transfers;
 
-  /// No description provided for @balanceAdjustment.
+  /// Transaction type label. Also the display name of an auto-generated balance-adjustment transaction (stored canonically as 'Ajuste de saldo').
   ///
   /// In en, this message translates to:
   /// **'Balance adjustment'**
@@ -793,6 +835,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Adjustments'**
   String get balanceAdjustments;
+
+  /// Display name of the balance-adjustment transaction seeded when an account is created with a starting balance (stored canonically as 'Balance inicial').
+  ///
+  /// In en, this message translates to:
+  /// **'Initial balance'**
+  String get initialBalance;
 
   /// No description provided for @pending.
   ///
@@ -979,6 +1027,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Could not create the account'**
   String get accountCreateFailed;
+
+  /// No description provided for @accountDuplicateNameCurrency.
+  ///
+  /// In en, this message translates to:
+  /// **'An account with that name and currency already exists'**
+  String get accountDuplicateNameCurrency;
 
   /// No description provided for @suggestions.
   ///
@@ -1724,6 +1778,12 @@ abstract class AppLocalizations {
   /// **'You already added an account with that email'**
   String get accountAlreadyAdded;
 
+  /// No description provided for @accountExistsSignIn.
+  ///
+  /// In en, this message translates to:
+  /// **'An account with that email already exists. Sign in with your password or with Google.'**
+  String get accountExistsSignIn;
+
   /// No description provided for @emailSignInFailedGoogleHint.
   ///
   /// In en, this message translates to:
@@ -1735,6 +1795,108 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Could not {action}: {error}'**
   String emailAuthFailed(String action, Object error);
+
+  /// No description provided for @forgotPassword.
+  ///
+  /// In en, this message translates to:
+  /// **'Forgot your password?'**
+  String get forgotPassword;
+
+  /// No description provided for @resetPasswordTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Reset your password'**
+  String get resetPasswordTitle;
+
+  /// No description provided for @resetPasswordSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter your email and we\'ll send you a reset link.'**
+  String get resetPasswordSubtitle;
+
+  /// No description provided for @sendResetLink.
+  ///
+  /// In en, this message translates to:
+  /// **'Send reset link'**
+  String get sendResetLink;
+
+  /// No description provided for @resetEmailSent.
+  ///
+  /// In en, this message translates to:
+  /// **'If an account exists for {email}, we sent it a link to reset the password. The link opens in your browser.'**
+  String resetEmailSent(String email);
+
+  /// No description provided for @resetEmailSentReturnHint.
+  ///
+  /// In en, this message translates to:
+  /// **'After resetting it, come back here and sign in with your new password.'**
+  String get resetEmailSentReturnHint;
+
+  /// No description provided for @resetRequestFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not send the reset email: {error}'**
+  String resetRequestFailed(Object error);
+
+  /// No description provided for @backToSignIn.
+  ///
+  /// In en, this message translates to:
+  /// **'Back to sign in'**
+  String get backToSignIn;
+
+  /// No description provided for @verifyEmailTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Verify your email'**
+  String get verifyEmailTitle;
+
+  /// No description provided for @verifyEmailSent.
+  ///
+  /// In en, this message translates to:
+  /// **'We sent a verification link to {email}. The link opens in your browser.'**
+  String verifyEmailSent(String email);
+
+  /// No description provided for @verifyEmailInstructions.
+  ///
+  /// In en, this message translates to:
+  /// **'Open the link to verify your account, then come back here and sign in.'**
+  String get verifyEmailInstructions;
+
+  /// No description provided for @verifyEmailDone.
+  ///
+  /// In en, this message translates to:
+  /// **'I verified my email'**
+  String get verifyEmailDone;
+
+  /// No description provided for @resendVerificationEmail.
+  ///
+  /// In en, this message translates to:
+  /// **'Resend email'**
+  String get resendVerificationEmail;
+
+  /// No description provided for @resendVerificationCooldown.
+  ///
+  /// In en, this message translates to:
+  /// **'Resend in {seconds}s'**
+  String resendVerificationCooldown(int seconds);
+
+  /// No description provided for @verificationEmailResent.
+  ///
+  /// In en, this message translates to:
+  /// **'Verification email sent again.'**
+  String get verificationEmailResent;
+
+  /// No description provided for @resendVerificationFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not resend the email: {error}'**
+  String resendVerificationFailed(Object error);
+
+  /// No description provided for @emailStillNotVerified.
+  ///
+  /// In en, this message translates to:
+  /// **'That email isn\'t verified yet. We sent you a new link.'**
+  String get emailStillNotVerified;
 
   /// No description provided for @localAccountFailed.
   ///

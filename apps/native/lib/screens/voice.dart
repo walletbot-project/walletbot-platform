@@ -1,13 +1,15 @@
 import 'dart:async';
 import 'dart:math' as math;
-import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
+import 'package:app/app_config/app_config_controller.dart';
 import 'package:app/l10n/l10n.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'package:record/record.dart';
+import 'package:provider/provider.dart';
 
+import '../voice/mic_capture.dart';
 import '../voice/voice_event.dart';
 import '../voice/voice_expense_command.dart';
 import 'voice_action_widget.dart';
@@ -34,7 +36,7 @@ class VoiceScreen extends StatefulWidget {
 class _VoiceScreenState extends State<VoiceScreen> {
   static const _liveEdgeTolerance = 1.0;
 
-  final AudioRecorder _recorder = AudioRecorder();
+  final MicCapture _mic = MicCapture.forPlatform();
   final ScrollController _scrollController = ScrollController();
   final TextEditingController _textController = TextEditingController();
   final FocusNode _textFocusNode = FocusNode();
@@ -42,7 +44,7 @@ class _VoiceScreenState extends State<VoiceScreen> {
   final Map<String, _ToolItem> _toolsById = {};
 
   StreamSubscription<Uint8List>? _audioSubscription;
-  StreamSubscription<Amplitude>? _amplitudeSubscription;
+  StreamSubscription<double>? _amplitudeSubscription;
   StreamSubscription<VoiceEvent>? _commandEventsSubscription;
   VoiceExpenseCommand? _command;
 
@@ -62,19 +64,6 @@ class _VoiceScreenState extends State<VoiceScreen> {
   bool get _isTextComposing => _textController.text.trim().isNotEmpty;
   bool get _isMicEffectivelyMuted =>
       !_micActive || !_userMicOn || _isTextComposing;
-
-  static const _recordConfig = RecordConfig(
-    encoder: AudioEncoder.pcm16bits,
-    sampleRate: 16000,
-    numChannels: 1,
-    echoCancel: true,
-    noiseSuppress: true,
-    autoGain: false,
-    streamBufferSize: 3200,
-    androidConfig: AndroidRecordConfig(
-      audioSource: AndroidAudioSource.voiceCommunication,
-    ),
-  );
 
   @override
   void initState() {
@@ -113,7 +102,7 @@ class _VoiceScreenState extends State<VoiceScreen> {
     if (!identical(widget.commandFactory.activeCommand, _command)) {
       unawaited(_command?.dispose());
     }
-    unawaited(_recorder.dispose());
+    unawaited(_mic.dispose());
     _scrollController.dispose();
     _textController.removeListener(_onTextChanged);
     _textController.dispose();
@@ -309,26 +298,24 @@ class _VoiceScreenState extends State<VoiceScreen> {
         return;
       }
 
-      final hasRecorderPermission = await _recorder.hasPermission(
-        request: false,
-      );
-      if (!hasRecorderPermission) {
+      final issue = await _mic.checkAvailability();
+      if (issue == MicCaptureIssue.permissionDenied) {
         _addSystemSetState(
           l10n.recorderPermissionFailed,
           kind: _SystemKind.error,
         );
         return;
       }
-
-      final supportsPcm = await _recorder.isEncoderSupported(
-        AudioEncoder.pcm16bits,
-      );
-      if (!supportsPcm) {
+      if (issue == MicCaptureIssue.pcmUnsupported) {
         _addSystemSetState(l10n.pcmUnsupported, kind: _SystemKind.error);
         return;
       }
 
-      final audioStream = await _recorder.startStream(_recordConfig);
+      // On iOS this streams from the native voice engine's echo-cancelled
+      // input tap (PcmAudioPlayer.swift), which requires the engine to be
+      // running — guaranteed because _command.start() precedes mic capture.
+      // Elsewhere it streams from the `record` plugin. See mic_capture.dart.
+      final audioStream = await _mic.start();
       _audioSubscription = audioStream.listen(
         _handleAudioChunk,
         onError: (Object error) {
@@ -340,12 +327,12 @@ class _VoiceScreenState extends State<VoiceScreen> {
         },
       );
 
-      _amplitudeSubscription = _recorder
-          .onAmplitudeChanged(const Duration(milliseconds: 100))
-          .listen((amplitude) {
+      _amplitudeSubscription = _mic
+          .onAmplitudeDbfs(const Duration(milliseconds: 100))
+          .listen((dbfs) {
             if (!mounted) return;
             setState(() {
-              _level = _dbfsToLevel(amplitude.current);
+              _level = _dbfsToLevel(dbfs);
             });
           });
 
@@ -372,9 +359,7 @@ class _VoiceScreenState extends State<VoiceScreen> {
     _amplitudeSubscription = null;
 
     try {
-      if (await _recorder.isRecording()) {
-        await _recorder.stop();
-      }
+      await _mic.stop();
     } catch (_) {
       // best-effort cleanup
     }
@@ -1101,13 +1086,17 @@ class _ToolCard extends StatelessWidget {
                   ),
                 ],
               ),
-              if (item.args.isNotEmpty) ...[
-                const SizedBox(height: 8),
-                _KvBlock(label: context.l10n.arguments, data: item.args),
-              ],
-              if (item.result != null) ...[
-                const SizedBox(height: 6),
-                _KvBlock(label: context.l10n.result, data: item.result!),
+              if (context.watch<AppConfigController>().isFlagEnabled(
+                'debugToolCalls',
+              )) ...[
+                if (item.args.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  _KvBlock(label: context.l10n.arguments, data: item.args),
+                ],
+                if (item.result != null) ...[
+                  const SizedBox(height: 6),
+                  _KvBlock(label: context.l10n.result, data: item.result!),
+                ],
               ],
             ],
           ),
@@ -1536,8 +1525,8 @@ class _PrimaryActionButton extends StatelessWidget {
       border = BorderSide(color: theme.colorScheme.outline, width: 1.5);
       elevation = 0;
     } else {
-      bg = theme.colorScheme.primary;
-      fg = theme.colorScheme.onPrimary;
+      bg = theme.colorScheme.primaryContainer;
+      fg = theme.colorScheme.onPrimaryContainer;
       border = BorderSide.none;
       elevation = 2;
     }

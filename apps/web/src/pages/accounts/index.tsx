@@ -5,10 +5,12 @@ import { useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
+import { type Messages, useT } from '@/lib/i18n'
 import {
     AccountDetailsSheet,
     type AccountSummary,
 } from '@/pages/accounts/account-details-sheet'
+import { accountErrorMessage } from '@/pages/accounts/account-errors'
 import {
     AccountFormDialog,
     type AccountFormValue,
@@ -20,6 +22,7 @@ function newId() {
 }
 
 export function Accounts() {
+    const t = useT()
     const accounts = useQuery(api.v1.accounts.queries.listActive)
     const createAccount = useMutation(api.v1.accounts.mutations.create)
     const createBalanceAdjustment = useMutation(
@@ -65,9 +68,10 @@ export function Accounts() {
             }
         })()
         toast.promise(run, {
-            loading: 'Creando cuenta…',
-            success: 'Cuenta creada',
-            error: 'No se pudo crear la cuenta',
+            loading: t.accounts.creating,
+            success: t.accounts.created,
+            error: (error) =>
+                accountErrorMessage(error, t, t.accounts.createFailed),
         })
         await run
         setCreating(false)
@@ -78,7 +82,7 @@ export function Accounts() {
             <div className="flex items-center justify-end border-b px-4 py-2">
                 <Button size="sm" onClick={() => setCreating(true)}>
                     <Plus data-icon="inline-start" />
-                    Nueva cuenta
+                    {t.accounts.newAccount}
                 </Button>
             </div>
 
@@ -86,7 +90,7 @@ export function Accounts() {
                 {accounts === undefined ? (
                     <AccountsSkeleton />
                 ) : accounts.length === 0 ? (
-                    <EmptyState onCreate={() => setCreating(true)} />
+                    <EmptyState t={t} onCreate={() => setCreating(true)} />
                 ) : (
                     <ul className="divide-y overflow-hidden rounded-md border bg-card">
                         {accounts.map((account) => (
@@ -121,19 +125,19 @@ export function Accounts() {
     )
 }
 
-function EmptyState({ onCreate }: { onCreate: () => void }) {
+function EmptyState({ t, onCreate }: { t: Messages; onCreate: () => void }) {
     return (
         <div className="flex flex-col items-center justify-center gap-4 py-16 text-center">
             <Landmark className="size-12 text-muted-foreground" />
             <div className="flex flex-col gap-1">
-                <p className="font-medium">No tenés cuentas aún</p>
+                <p className="font-medium">{t.accounts.emptyTitle}</p>
                 <p className="text-sm text-muted-foreground">
-                    Creá tu primera cuenta para empezar a registrar tus gastos.
+                    {t.accounts.emptyDescription}
                 </p>
             </div>
             <Button onClick={onCreate}>
                 <Plus data-icon="inline-start" />
-                Crear cuenta
+                {t.accounts.createAccount}
             </Button>
         </div>
     )

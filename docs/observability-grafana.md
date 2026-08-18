@@ -169,11 +169,9 @@ sum by (cost_bucket) (increase(agent_session_cost_bucket_count[1d]))
 `record registered users total` at 03:00 UTC. It counts Better Auth users and
 exports a gauge with the latest total registered accounts.
 
-`agent.user.monthly_cost_usd` is temporarily emitted every 5 minutes by the
-Convex cron `record agent monthly usage`. It reads the current
-`agentUsageMonthly` rollup and exports one gauge per
-`user_id + month + model + mode`. TODO: change this back to every 6 hours after
-the dashboard rollout is validated.
+`agent.user.monthly_cost_usd` is emitted every 6 hours by the Convex cron
+`record agent monthly usage`. It reads the current `agentUsageMonthly` rollup
+and exports one gauge per `user_id + month + model + mode`.
 
 To force a refresh while testing, set `TELEMETRY_ADMIN_TOKEN` in the Convex
 environment and run:

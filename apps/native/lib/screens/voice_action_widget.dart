@@ -6,6 +6,7 @@ import 'package:app/components/icon_picker.dart';
 import 'package:app/data/data.dart';
 import 'package:app/database.dart';
 import 'package:app/l10n/l10n.dart';
+import 'package:app/shared/adaptive_modal.dart';
 import 'package:app/shared/money.dart';
 import 'package:drift/drift.dart' show Value;
 import 'package:flutter/material.dart';
@@ -188,7 +189,7 @@ class _TxnActionWidgetState extends State<_TxnActionWidget> {
     return _ActionCard(
       icon: icon,
       iconColor: color,
-      title: transaction.name,
+      title: context.l10n.transactionName(transaction.name, transaction.type),
       subtitle: '$amountLabel · $location',
       trailing: context.l10n.transactionSaved(
         typeLabel,
@@ -1096,8 +1097,8 @@ class _TagEditSheetState extends State<_TagEditSheet> {
 // =============================================================================
 
 Future<void> _showActionEditSheet(BuildContext context, Widget child) {
-  return showModalBottomSheet<void>(
-    context: context,
+  return showAdaptiveModal<void>(
+    context,
     isScrollControlled: true,
     useSafeArea: true,
     showDragHandle: true,
