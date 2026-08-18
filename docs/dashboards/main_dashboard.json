@@ -50,7 +50,7 @@
                       "spec": {
                         "alias": "Visits",
                         "editorMode": "builder",
-                        "expr": "sum by(auth_method) (business_user_accounts_created_count_total)",
+                        "expr": "business_users_registered_total_count",
                         "instant": false,
                         "legendFormat": "__auto",
                         "max": 28000,
@@ -69,52 +69,61 @@
                 }
               ],
               "queryOptions": {},
-              "transformations": []
+              "transformations": [
+                {
+                  "group": "organize",
+                  "kind": "Transformation",
+                  "spec": {
+                    "options": {
+                      "excludeByName": {
+                        "Time": true
+                      },
+                      "includeByName": {},
+                      "indexByName": {},
+                      "renameByName": {}
+                    }
+                  }
+                }
+              ]
             }
           },
-          "description": "Cantidad de cuentas creadas por metodo de autenticacion en el rango seleccionado.",
+          "description": "",
           "id": 1,
           "links": [],
-          "title": "User accounts created by auth method",
+          "title": "Cuentas totales registradas",
           "vizConfig": {
-            "group": "piechart",
+            "group": "stat",
             "kind": "VizConfig",
             "spec": {
               "fieldConfig": {
                 "defaults": {
                   "color": {
-                    "fixedColor": "#73BF69",
-                    "mode": "palette-classic"
-                  },
-                  "custom": {
-                    "hideFrom": {
-                      "legend": false,
-                      "tooltip": false,
-                      "viz": false
-                    }
+                    "mode": "thresholds"
                   },
                   "min": 0,
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "green",
+                        "value": 0
+                      },
+                      {
+                        "color": "red",
+                        "value": 80
+                      }
+                    ]
+                  },
                   "unit": "short"
                 },
                 "overrides": []
               },
               "options": {
-                "displayLabels": [
-                  "name",
-                  "value",
-                  "percent"
-                ],
-                "legend": {
-                  "displayMode": "table",
-                  "overflow": "ellipsis",
-                  "placement": "right",
-                  "showLegend": true,
-                  "values": [
-                    "value",
-                    "percent"
-                  ]
-                },
-                "pieType": "pie",
+                "colorMode": "value",
+                "graphMode": "area",
+                "justifyMode": "auto",
+                "orientation": "auto",
+                "percentChangeColorMode": "standard",
                 "reduceOptions": {
                   "calcs": [
                     "lastNotNull"
@@ -122,12 +131,9 @@
                   "fields": "",
                   "values": false
                 },
-                "sort": "desc",
-                "tooltip": {
-                  "hideZeros": false,
-                  "mode": "single",
-                  "sort": "desc"
-                }
+                "showPercentChange": false,
+                "textMode": "auto",
+                "wideLayout": true
               }
             },
             "version": "13.2.0-31683987170"
@@ -212,6 +218,220 @@
                 "showPercentChange": false,
                 "textMode": "auto",
                 "wideLayout": true
+              }
+            },
+            "version": "13.2.0-31683987170"
+          }
+        }
+      },
+      "panel-11": {
+        "kind": "Panel",
+        "spec": {
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "hidden": false,
+                    "query": {
+                      "datasource": {
+                        "name": "grafanacloud-prom"
+                      },
+                      "group": "prometheus",
+                      "kind": "DataQuery",
+                      "spec": {
+                        "alias": "Visits",
+                        "editorMode": "builder",
+                        "expr": "sum by(auth_method) (business_user_accounts_created_count_total)",
+                        "instant": false,
+                        "legendFormat": "__auto",
+                        "max": 28000,
+                        "min": 22000,
+                        "noise": 150,
+                        "range": true,
+                        "scenarioId": "random_walk",
+                        "seriesCount": 1,
+                        "spread": 600,
+                        "startValue": 25000
+                      },
+                      "version": "v0"
+                    },
+                    "refId": "A"
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": []
+            }
+          },
+          "description": "Cantidad de cuentas creadas por metodo de autenticacion en el rango seleccionado.",
+          "id": 11,
+          "links": [],
+          "title": "User accounts created by auth method",
+          "vizConfig": {
+            "group": "piechart",
+            "kind": "VizConfig",
+            "spec": {
+              "fieldConfig": {
+                "defaults": {
+                  "color": {
+                    "fixedColor": "#73BF69",
+                    "mode": "palette-classic"
+                  },
+                  "custom": {
+                    "hideFrom": {
+                      "legend": false,
+                      "tooltip": false,
+                      "viz": false
+                    }
+                  },
+                  "min": 0,
+                  "unit": "short"
+                },
+                "overrides": []
+              },
+              "options": {
+                "displayLabels": [
+                  "name",
+                  "value",
+                  "percent"
+                ],
+                "legend": {
+                  "displayMode": "table",
+                  "overflow": "ellipsis",
+                  "placement": "right",
+                  "showLegend": true,
+                  "values": [
+                    "value",
+                    "percent"
+                  ]
+                },
+                "pieType": "pie",
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ],
+                  "fields": "",
+                  "values": false
+                },
+                "sort": "desc",
+                "tooltip": {
+                  "hideZeros": false,
+                  "mode": "single",
+                  "sort": "desc"
+                }
+              }
+            },
+            "version": "13.2.0-31683987170"
+          }
+        }
+      },
+      "panel-12": {
+        "kind": "Panel",
+        "spec": {
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "hidden": false,
+                    "query": {
+                      "datasource": {
+                        "name": "grafanacloud-prom"
+                      },
+                      "group": "prometheus",
+                      "kind": "DataQuery",
+                      "spec": {
+                        "editorMode": "code",
+                        "exemplar": false,
+                        "expr": "label_replace(sum(count_over_time((agent_session_cost_usd < 0.01)[$__range:])), \"bucket\", \"0-0.01\", \"\", \"\") or label_replace(sum(count_over_time((agent_session_cost_usd >= 0.01 and agent_session_cost_usd < 0.05)[$__range:])), \"bucket\", \"0.01-0.05\", \"\", \"\") or label_replace(sum(count_over_time((agent_session_cost_usd >= 0.05 and agent_session_cost_usd < 0.10)[$__range:])), \"bucket\", \"0.05-0.10\", \"\", \"\") or label_replace(sum(count_over_time((agent_session_cost_usd >= 0.10 and agent_session_cost_usd < 0.50)[$__range:])), \"bucket\", \"0.10-0.50\", \"\", \"\") or label_replace(sum(count_over_time((agent_session_cost_usd >= 0.50 and agent_session_cost_usd < 1.00)[$__range:])), \"bucket\", \"0.50-1.00\", \"\", \"\") or label_replace(sum(count_over_time((agent_session_cost_usd >= 1.00)[$__range:])), \"bucket\", \"1.00+\", \"\", \"\")",
+                        "format": "table",
+                        "instant": true,
+                        "legendFormat": "{{bucket}}",
+                        "range": false
+                      },
+                      "version": "v0"
+                    },
+                    "refId": "Token costs"
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": []
+            }
+          },
+          "description": "",
+          "id": 12,
+          "links": [],
+          "title": "Sesiones por bucket de costo (USD)",
+          "vizConfig": {
+            "group": "barchart",
+            "kind": "VizConfig",
+            "spec": {
+              "fieldConfig": {
+                "defaults": {
+                  "color": {
+                    "mode": "thresholds"
+                  },
+                  "custom": {
+                    "axisBorderShow": false,
+                    "axisCenteredZero": false,
+                    "axisColorMode": "text",
+                    "axisLabel": "",
+                    "axisPlacement": "auto",
+                    "fillOpacity": 80,
+                    "gradientMode": "none",
+                    "hideFrom": {
+                      "legend": false,
+                      "tooltip": false,
+                      "viz": false
+                    },
+                    "lineWidth": 1,
+                    "scaleDistribution": {
+                      "type": "linear"
+                    },
+                    "thresholdsStyle": {
+                      "mode": "off"
+                    }
+                  },
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "green",
+                        "value": 0
+                      }
+                    ]
+                  }
+                },
+                "overrides": []
+              },
+              "options": {
+                "barRadius": 0,
+                "barWidth": 0.97,
+                "fullHighlight": false,
+                "groupWidth": 0.7,
+                "legend": {
+                  "calcs": [],
+                  "displayMode": "list",
+                  "placement": "bottom",
+                  "showLegend": true
+                },
+                "orientation": "auto",
+                "showValue": "auto",
+                "stacking": "none",
+                "tooltip": {
+                  "hideZeros": false,
+                  "mode": "single",
+                  "sort": "none"
+                },
+                "xField": "bucket",
+                "xTickLabelRotation": 0,
+                "xTickLabelSpacing": 0
               }
             },
             "version": "13.2.0-31683987170"
@@ -925,7 +1145,7 @@
                           "name": "panel-1"
                         },
                         "height": 10,
-                        "width": 12,
+                        "width": 6,
                         "x": 0,
                         "y": 0
                       }
@@ -936,6 +1156,19 @@
                         "element": {
                           "kind": "ElementReference",
                           "name": "panel-6"
+                        },
+                        "height": 10,
+                        "width": 6,
+                        "x": 6,
+                        "y": 0
+                      }
+                    },
+                    {
+                      "kind": "GridLayoutItem",
+                      "spec": {
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-11"
                         },
                         "height": 10,
                         "width": 12,
@@ -1001,12 +1234,25 @@
                       "spec": {
                         "element": {
                           "kind": "ElementReference",
+                          "name": "panel-12"
+                        },
+                        "height": 10,
+                        "width": 24,
+                        "x": 0,
+                        "y": 10
+                      }
+                    },
+                    {
+                      "kind": "GridLayoutItem",
+                      "spec": {
+                        "element": {
+                          "kind": "ElementReference",
                           "name": "panel-7"
                         },
                         "height": 8,
                         "width": 12,
                         "x": 0,
-                        "y": 10
+                        "y": 20
                       }
                     },
                     {
@@ -1019,7 +1265,7 @@
                         "height": 8,
                         "width": 12,
                         "x": 12,
-                        "y": 10
+                        "y": 20
                       }
                     },
                     {
@@ -1032,7 +1278,7 @@
                         "height": 8,
                         "width": 24,
                         "x": 0,
-                        "y": 18
+                        "y": 28
                       }
                     }
                   ]
@@ -1089,7 +1335,7 @@
         "1d"
       ],
       "fiscalYearStartMonth": 0,
-      "from": "now-3h",
+      "from": "now-12h",
       "hideTimepicker": false,
       "timezone": "browser",
       "to": "now"
