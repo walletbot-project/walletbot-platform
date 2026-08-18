@@ -16,6 +16,28 @@ import { useT } from '@/lib/i18n'
 const INPUT_SAMPLE_RATE = 16000
 const OUTPUT_SAMPLE_RATE = 24000
 
+/**
+ * Whether the model's spoken answer is played back when the user's turn was
+ * *typed*. Hardcoded for now, mirroring `_kRespondToTextWithAudio` in
+ * `apps/native/lib/screens/voice.dart`; future work will expose it as a user
+ * preference.
+ *
+ * The session is always negotiated with `responseModalities: [AUDIO]` (the
+ * ephemeral token bakes that in — see `convex/live/createToken.ts`), so the
+ * transcript is always rendered and "text-only" means *audio suppressed at
+ * playback*, never a different server config. The rules, matching native:
+ *
+ * - user turn sent as audio  → transcript + audible reply;
+ * - user turn sent as text   → transcript only, no playback;
+ * - session started by text  → starts suppressed;
+ * - user speaks again        → playback re-enabled for that turn onward;
+ * - server `interrupted`     → discard queued output until `turnComplete`.
+ */
+const RESPOND_TO_TEXT_WITH_AUDIO = false
+
+/** Which interaction opened the session — it decides the reply modality. */
+export type SessionMode = 'audio' | 'text'
+
 // Audio helpers
 
 function floatTo16BitPCM(float32: Float32Array): ArrayBuffer {
@@ -138,7 +160,8 @@ export function useVoice(opts: UseVoiceOpts) {
 
     const [connectionStatus, setConnectionStatus] =
         useState<ConnectionStatus>('disconnected')
-    const [isMuted, setIsMuted] = useState(false)
+    const [isMicCaptureActive, setIsMicCaptureActive] = useState(false)
+    const [isMicOn, setIsMicOn] = useState(false)
     const [micLevel, setMicLevel] = useState(0)
     const [devices, setDevices] = useState<MediaDeviceInfo[]>([])
     const [selectedDeviceId, setSelectedDeviceId] = useState<string>('')
@@ -154,8 +177,21 @@ export function useVoice(opts: UseVoiceOpts) {
     const mediaStreamRef = useRef<MediaStream | null>(null)
     const playbackContextRef = useRef<AudioContext | null>(null)
     const playbackWorkletRef = useRef<AudioWorkletNode | null>(null)
-    const isMutedRef = useRef(false)
     const selectedDeviceIdRef = useRef(selectedDeviceId)
+
+    // Mirrors of the state above, so the audio callbacks and the message
+    // handler read the live value instead of the one captured at render.
+    const statusRef = useRef<ConnectionStatus>('disconnected')
+    const micCaptureActiveRef = useRef(false)
+    const micOnRef = useRef(false)
+    const micOpeningRef = useRef(false)
+    const composingRef = useRef(false)
+
+    // Reply-modality state — see RESPOND_TO_TEXT_WITH_AUDIO above.
+    const audioPlaybackEnabledRef = useRef(true)
+    const discardOutputRef = useRef(false)
+    const audioStreamOpenRef = useRef(false)
+    const pendingTextRef = useRef<string[]>([])
 
     // Aggregation state — refs so message handlers can mutate without
     // re-creating the onmessage callback on every render.
@@ -168,12 +204,13 @@ export function useVoice(opts: UseVoiceOpts) {
     )
 
     useEffect(() => {
-        isMutedRef.current = isMuted
-    }, [isMuted])
-
-    useEffect(() => {
         selectedDeviceIdRef.current = selectedDeviceId
     }, [selectedDeviceId])
+
+    const applyStatus = useCallback((next: ConnectionStatus) => {
+        statusRef.current = next
+        setConnectionStatus(next)
+    }, [])
 
     // Chat message helpers
 
@@ -288,6 +325,25 @@ export function useVoice(opts: UseVoiceOpts) {
         [finalisePendingUser, nextId],
     )
 
+    /** A typed turn has no input transcription — echo it locally instead. */
+    const appendTypedUser = useCallback(
+        (text: string) => {
+            finalisePendingUser()
+            finalisePendingAgent()
+            setMessages((prev) => [
+                ...prev,
+                {
+                    kind: 'user',
+                    id: nextId(),
+                    at: new Date(),
+                    text,
+                    isFinal: true,
+                },
+            ])
+        },
+        [finalisePendingUser, finalisePendingAgent, nextId],
+    )
+
     const addToolCall = useCallback(
         (
             callId: string,
@@ -385,6 +441,18 @@ export function useVoice(opts: UseVoiceOpts) {
         }
     }, [])
 
+    /**
+     * Tell the server the audio turn is over. Sent when the mic goes away, is
+     * muted, or the user starts typing: chunks stop flowing on our side
+     * immediately, but the server still holds whatever it buffered for the
+     * turn. Only meaningful while a stream is actually open.
+     */
+    const endAudioStream = useCallback(() => {
+        if (!audioStreamOpenRef.current) return
+        audioStreamOpenRef.current = false
+        sessionRef.current?.sendRealtimeInput({ audioStreamEnd: true })
+    }, [])
+
     // Mic capture (16kHz AudioWorklet)
     const startMicCapture = useCallback(async (deviceId: string) => {
         const stream = await navigator.mediaDevices.getUserMedia({
@@ -411,15 +479,18 @@ export function useVoice(opts: UseVoiceOpts) {
 
         worklet.port.onmessage = (event: MessageEvent) => {
             const float32: Float32Array = event.data.data
-            const rms = computeRMS(float32)
-            setMicLevel(Math.min(1, rms * 10))
+            // Muted covers all three native conditions: capture off, user mic
+            // off, or the user is composing text (`_isMicEffectivelyMuted`).
+            const muted = !micOnRef.current || composingRef.current
+            setMicLevel(muted ? 0 : Math.min(1, computeRMS(float32) * 10))
+            if (muted) return
 
-            if (isMutedRef.current) return
             const session = sessionRef.current
             if (!session) return
 
             const pcm = floatTo16BitPCM(float32)
             const base64 = arrayBufferToBase64(pcm)
+            audioStreamOpenRef.current = true
             session.sendRealtimeInput({
                 audio: { data: base64, mimeType: 'audio/pcm;rate=16000' },
             })
@@ -443,180 +514,344 @@ export function useVoice(opts: UseVoiceOpts) {
         captureWorkletRef.current = null
         captureContextRef.current = null
         mediaStreamRef.current = null
+        micCaptureActiveRef.current = false
+        micOnRef.current = false
+        setIsMicCaptureActive(false)
+        setIsMicOn(false)
         setMicLevel(0)
     }, [])
+
+    /** Turn the user's mic on or off without tearing capture down. */
+    const setMicOn = useCallback(
+        (on: boolean) => {
+            micOnRef.current = on
+            setIsMicOn(on)
+            if (on) return
+            setMicLevel(0)
+            endAudioStream()
+        },
+        [endAudioStream],
+    )
+
+    /** Open the mic — prompts for permission the first time. */
+    const openMic = useCallback(
+        async ({ turnOn }: { turnOn: boolean } = { turnOn: true }) => {
+            if (micCaptureActiveRef.current) {
+                if (turnOn) setMicOn(true)
+                return
+            }
+            if (micOpeningRef.current) return
+            micOpeningRef.current = true
+            try {
+                await startMicCapture(selectedDeviceIdRef.current)
+                // Device labels are only exposed once permission is granted.
+                await refreshDevicesRef.current()
+                micCaptureActiveRef.current = true
+                setIsMicCaptureActive(true)
+                setMicOn(turnOn)
+            } catch (err) {
+                stopMicCapture()
+                addSystem(
+                    catalog.voice.systemMicOpenFailed({
+                        error: err instanceof Error ? err.message : String(err),
+                    }),
+                    'error',
+                )
+            }
+            // Cleared on both paths — `finally` would stop the React Compiler
+            // from lowering this hook (`react-hooks/todo`).
+            micOpeningRef.current = false
+        },
+        [startMicCapture, stopMicCapture, setMicOn, addSystem, catalog],
+    )
 
     // Switch mic while connected
     const handleDeviceChange = useCallback(
         async (deviceId: string) => {
             setSelectedDeviceId(deviceId)
-            if (connectionStatus === 'connected') {
-                stopMicCapture()
-                await startMicCapture(deviceId)
-            }
+            selectedDeviceIdRef.current = deviceId
+            if (!micCaptureActiveRef.current) return
+            const wasOn = micOnRef.current
+            endAudioStream()
+            stopMicCapture()
+            await openMic({ turnOn: wasOn })
         },
-        [connectionStatus, stopMicCapture, startMicCapture],
+        [endAudioStream, stopMicCapture, openMic],
     )
 
-    // Connect
-    const connect = useCallback(async () => {
-        setMessages([])
-        pendingUserIdRef.current = null
-        pendingAgentIdRef.current = null
-        setConnectionStatus('connecting')
-        addSystem(catalog.voice.systemConnecting, 'info')
-
-        try {
-            const tempStream = await navigator.mediaDevices.getUserMedia({
-                audio: true,
+    /** Send the turns typed before the session was up, in order. */
+    const flushPendingText = useCallback(() => {
+        const queued = pendingTextRef.current
+        pendingTextRef.current = []
+        const session = sessionRef.current
+        if (!session || queued.length === 0) return
+        // These are typed turns, so they follow the text reply rule.
+        audioPlaybackEnabledRef.current = RESPOND_TO_TEXT_WITH_AUDIO
+        for (const text of queued) {
+            session.sendClientContent({
+                turns: [{ role: 'user', parts: [{ text }] }],
+                turnComplete: true,
             })
-            for (const track of tempStream.getTracks()) track.stop()
-            await refreshDevicesRef.current()
-
-            const { token, model } = await convex.action(
-                api.v1.live.actions.requestLiveToken,
-                {},
-            )
-            addSystem(catalog.voice.systemTokenReceived({ model }), 'info')
-
-            const playbackCtx = new AudioContext({
-                sampleRate: OUTPUT_SAMPLE_RATE,
-            })
-            await playbackCtx.audioWorklet.addModule(
-                '/audio-processors/playback.worklet.js',
-            )
-            const playbackNode = new AudioWorkletNode(
-                playbackCtx,
-                'pcm-processor',
-            )
-            playbackNode.connect(playbackCtx.destination)
-            playbackContextRef.current = playbackCtx
-            playbackWorkletRef.current = playbackNode
-
-            const ai = new GoogleGenAI({
-                apiKey: token,
-                httpOptions: { apiVersion: 'v1alpha' },
-            })
-            const session = await ai.live.connect({
-                model: `models/${model}`,
-                callbacks: {
-                    onmessage: async (msg: LiveServerMessage) => {
-                        if (msg.toolCall) {
-                            const functionCalls =
-                                msg.toolCall.functionCalls ?? []
-                            const functionResponses: {
-                                id?: string
-                                name?: string
-                                response: { result: Record<string, unknown> }
-                            }[] = []
-                            for (const fc of functionCalls) {
-                                addToolCall(
-                                    fc.id ?? '',
-                                    fc.name ?? '',
-                                    (fc.args ?? {}) as Record<string, unknown>,
-                                )
-                            }
-                            for (const fc of functionCalls) {
-                                const result = await executeToolCall(
-                                    optsRef.current.context,
-                                    fc.name ?? '',
-                                    (fc.args ?? {}) as Record<string, unknown>,
-                                )
-                                completeToolCall(fc.id ?? '', result)
-                                functionResponses.push({
-                                    id: fc.id,
-                                    name: fc.name,
-                                    response: { result },
-                                })
-                            }
-                            session.sendToolResponse({ functionResponses })
-                            return
-                        }
-
-                        if (msg.toolCallCancellation) {
-                            const ids = (
-                                msg.toolCallCancellation.ids ?? []
-                            ).filter((x): x is string => typeof x === 'string')
-                            cancelToolCalls(ids)
-                            return
-                        }
-
-                        const sc = msg.serverContent
-                        if (!sc) return
-
-                        const inputText = sc.inputTranscription?.text
-                        if (inputText) appendUser(inputText)
-
-                        const outputText = sc.outputTranscription?.text
-                        if (outputText) appendAgent(outputText)
-
-                        if (sc.interrupted) {
-                            playbackNode.port.postMessage('interrupt')
-                            finalisePendingAgent({ interrupted: true })
-                        }
-
-                        const parts = sc.modelTurn?.parts
-                        if (parts) {
-                            for (const part of parts) {
-                                if (part.inlineData?.data) {
-                                    const float32 = base64ToPcmFloat32(
-                                        part.inlineData.data,
-                                    )
-                                    playbackNode.port.postMessage(float32)
-                                }
-                                if (part.text) {
-                                    appendAgent(part.text)
-                                }
-                            }
-                        }
-
-                        if (sc.turnComplete) {
-                            finalisePendingAgent()
-                        }
-                    },
-                    onerror: () => {
-                        addSystem(catalog.voice.systemSocketError, 'error')
-                        setConnectionStatus('disconnected')
-                    },
-                    onclose: () => {
-                        addSystem(catalog.voice.systemDisconnected, 'info')
-                        setConnectionStatus('disconnected')
-                        setMicLevel(0)
-                        finalisePendingUser()
-                        finalisePendingAgent()
-                    },
-                },
-            })
-
-            sessionRef.current = session
-            setConnectionStatus('connected')
-            addSystem(catalog.voice.systemConnected, 'success')
-            await startMicCapture(selectedDeviceIdRef.current)
-        } catch (err) {
-            addSystem(
-                catalog.voice.systemConnectionFailed({
-                    error: err instanceof Error ? err.message : String(err),
-                }),
-                'error',
-            )
-            setConnectionStatus('disconnected')
         }
-    }, [
-        convex,
-        catalog,
-        startMicCapture,
-        addSystem,
-        addToolCall,
-        completeToolCall,
-        cancelToolCalls,
-        appendUser,
-        appendAgent,
-        finalisePendingUser,
-        finalisePendingAgent,
-    ])
+    }, [])
+
+    // Connect
+    const connect = useCallback(
+        async (mode: SessionMode = 'audio') => {
+            if (statusRef.current !== 'disconnected') return
+            applyStatus('connecting')
+            pendingUserIdRef.current = null
+            pendingAgentIdRef.current = null
+            audioStreamOpenRef.current = false
+            discardOutputRef.current = false
+            audioPlaybackEnabledRef.current =
+                mode === 'audio' ? true : RESPOND_TO_TEXT_WITH_AUDIO
+            addSystem(catalog.voice.systemConnecting, 'info')
+
+            try {
+                const { token, model } = await convex.action(
+                    api.v1.live.actions.requestLiveToken,
+                    {},
+                )
+                addSystem(catalog.voice.systemTokenReceived({ model }), 'info')
+
+                const playbackCtx = new AudioContext({
+                    sampleRate: OUTPUT_SAMPLE_RATE,
+                })
+                await playbackCtx.audioWorklet.addModule(
+                    '/audio-processors/playback.worklet.js',
+                )
+                const playbackNode = new AudioWorkletNode(
+                    playbackCtx,
+                    'pcm-processor',
+                )
+                playbackNode.connect(playbackCtx.destination)
+                playbackContextRef.current = playbackCtx
+                playbackWorkletRef.current = playbackNode
+
+                const ai = new GoogleGenAI({
+                    apiKey: token,
+                    httpOptions: { apiVersion: 'v1alpha' },
+                })
+                const session = await ai.live.connect({
+                    model: `models/${model}`,
+                    callbacks: {
+                        onmessage: async (msg: LiveServerMessage) => {
+                            if (msg.toolCall) {
+                                const functionCalls =
+                                    msg.toolCall.functionCalls ?? []
+                                const functionResponses: {
+                                    id?: string
+                                    name?: string
+                                    response: {
+                                        result: Record<string, unknown>
+                                    }
+                                }[] = []
+                                for (const fc of functionCalls) {
+                                    addToolCall(
+                                        fc.id ?? '',
+                                        fc.name ?? '',
+                                        (fc.args ?? {}) as Record<
+                                            string,
+                                            unknown
+                                        >,
+                                    )
+                                }
+                                for (const fc of functionCalls) {
+                                    const result = await executeToolCall(
+                                        optsRef.current.context,
+                                        fc.name ?? '',
+                                        (fc.args ?? {}) as Record<
+                                            string,
+                                            unknown
+                                        >,
+                                    )
+                                    completeToolCall(fc.id ?? '', result)
+                                    functionResponses.push({
+                                        id: fc.id,
+                                        name: fc.name,
+                                        response: { result },
+                                    })
+                                }
+                                session.sendToolResponse({ functionResponses })
+                                return
+                            }
+
+                            if (msg.toolCallCancellation) {
+                                const ids = (
+                                    msg.toolCallCancellation.ids ?? []
+                                ).filter(
+                                    (x): x is string => typeof x === 'string',
+                                )
+                                cancelToolCalls(ids)
+                                return
+                            }
+
+                            const sc = msg.serverContent
+                            if (!sc) return
+
+                            const inputText = sc.inputTranscription?.text
+                            if (inputText) {
+                                // The user spoke: a typed turn silenced
+                                // playback, a spoken one makes the reply
+                                // audible again.
+                                audioPlaybackEnabledRef.current = true
+                                discardOutputRef.current = false
+                                appendUser(inputText)
+                            }
+
+                            const outputText = sc.outputTranscription?.text
+                            if (outputText) appendAgent(outputText)
+
+                            if (sc.interrupted) {
+                                discardOutputRef.current = true
+                                playbackNode.port.postMessage('interrupt')
+                                finalisePendingAgent({ interrupted: true })
+                            }
+
+                            const parts = sc.modelTurn?.parts
+                            if (parts) {
+                                const playable =
+                                    audioPlaybackEnabledRef.current &&
+                                    !discardOutputRef.current
+                                for (const part of parts) {
+                                    if (playable && part.inlineData?.data) {
+                                        playbackNode.port.postMessage(
+                                            base64ToPcmFloat32(
+                                                part.inlineData.data,
+                                            ),
+                                        )
+                                    }
+                                    if (part.text) {
+                                        appendAgent(part.text)
+                                    }
+                                }
+                            }
+
+                            if (sc.turnComplete) {
+                                discardOutputRef.current = false
+                                finalisePendingAgent()
+                            }
+                        },
+                        onerror: () => {
+                            addSystem(catalog.voice.systemSocketError, 'error')
+                            applyStatus('disconnected')
+                        },
+                        onclose: () => {
+                            addSystem(catalog.voice.systemDisconnected, 'info')
+                            applyStatus('disconnected')
+                            audioStreamOpenRef.current = false
+                            pendingTextRef.current = []
+                            sessionRef.current = null
+                            // The socket is gone: release the mic instead of
+                            // capturing into a dead session (the control bar
+                            // would still show a live mic otherwise).
+                            stopMicCapture()
+                            finalisePendingUser()
+                            finalisePendingAgent()
+                        },
+                    },
+                })
+
+                sessionRef.current = session
+                applyStatus('connected')
+                addSystem(
+                    mode === 'audio'
+                        ? catalog.voice.systemConnected
+                        : catalog.voice.systemConnectedTyping,
+                    'success',
+                )
+                flushPendingText()
+                if (mode === 'audio') await openMic({ turnOn: true })
+            } catch (err) {
+                pendingTextRef.current = []
+                addSystem(
+                    catalog.voice.systemConnectionFailed({
+                        error: err instanceof Error ? err.message : String(err),
+                    }),
+                    'error',
+                )
+                applyStatus('disconnected')
+            }
+        },
+        [
+            convex,
+            catalog,
+            applyStatus,
+            openMic,
+            stopMicCapture,
+            flushPendingText,
+            addSystem,
+            addToolCall,
+            completeToolCall,
+            cancelToolCalls,
+            appendUser,
+            appendAgent,
+            finalisePendingUser,
+            finalisePendingAgent,
+        ],
+    )
+
+    /**
+     * Send a typed turn. With no session yet it starts one in text mode and
+     * replays the message once connected; mid-session it flushes any open
+     * audio turn first, exactly like native's `sendText`.
+     */
+    const sendText = useCallback(
+        (raw: string) => {
+            const text = raw.trim()
+            if (!text) return
+            const status = statusRef.current
+
+            if (status === 'connected') {
+                appendTypedUser(text)
+                audioPlaybackEnabledRef.current = RESPOND_TO_TEXT_WITH_AUDIO
+                endAudioStream()
+                sessionRef.current?.sendClientContent({
+                    turns: [{ role: 'user', parts: [{ text }] }],
+                    turnComplete: true,
+                })
+                return
+            }
+
+            if (status === 'disconnected') {
+                setMessages([])
+                appendTypedUser(text)
+                pendingTextRef.current = [...pendingTextRef.current, text]
+                void connect('text')
+                return
+            }
+
+            appendTypedUser(text)
+            pendingTextRef.current = [...pendingTextRef.current, text]
+        },
+        [appendTypedUser, endAudioStream, connect],
+    )
+
+    /**
+     * Track whether the composer holds text. Typing mutes the mic (native's
+     * `_isTextComposing`) and, on the transition into composing, flushes the
+     * audio turn the server is still buffering.
+     */
+    const setComposing = useCallback(
+        (composing: boolean) => {
+            const started = composing && !composingRef.current
+            composingRef.current = composing
+            if (composing) setMicLevel(0)
+            if (
+                started &&
+                statusRef.current === 'connected' &&
+                micCaptureActiveRef.current
+            ) {
+                endAudioStream()
+            }
+        },
+        [endAudioStream],
+    )
 
     // Disconnect
     const disconnect = useCallback(() => {
+        endAudioStream()
         stopMicCapture()
         playbackWorkletRef.current?.disconnect()
         playbackContextRef.current?.close()
@@ -624,10 +859,20 @@ export function useVoice(opts: UseVoiceOpts) {
         playbackWorkletRef.current = null
         playbackContextRef.current = null
         sessionRef.current = null
-        setConnectionStatus('disconnected')
+        audioStreamOpenRef.current = false
+        pendingTextRef.current = []
+        discardOutputRef.current = false
+        audioPlaybackEnabledRef.current = true
+        applyStatus('disconnected')
         finalisePendingUser()
         finalisePendingAgent()
-    }, [stopMicCapture, finalisePendingUser, finalisePendingAgent])
+    }, [
+        endAudioStream,
+        stopMicCapture,
+        applyStatus,
+        finalisePendingUser,
+        finalisePendingAgent,
+    ])
 
     const clearMessages = useCallback(() => setMessages([]), [])
 
@@ -637,14 +882,20 @@ export function useVoice(opts: UseVoiceOpts) {
         connectionStatus,
         isConnected: connectionStatus === 'connected',
         isConnecting: connectionStatus === 'connecting',
-        isMuted,
-        setIsMuted,
+        /** Capture is running (the browser gave us the mic). */
+        isMicCaptureActive,
+        /** The user has the mic on — the tap/push-to-talk toggle. */
+        isMicOn,
         micLevel,
         devices,
         selectedDeviceId,
         handleDeviceChange,
         connect,
         disconnect,
+        openMic,
+        setMicOn,
+        sendText,
+        setComposing,
         messages,
         clearMessages,
     }

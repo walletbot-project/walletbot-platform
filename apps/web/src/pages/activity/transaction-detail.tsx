@@ -1,8 +1,8 @@
 import { api } from '@wallet-bot/backend/api'
-import { IconButton, Select, SelectOption } from 'actify'
+import { CircularProgress, IconButton, Select, SelectOption } from 'actify'
 import { useMutation, useQuery } from 'convex/react'
 import type { FunctionReturnType } from 'convex/server'
-import { type FormEvent, type ReactNode, useId, useState } from 'react'
+import { type ReactNode, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 import { AccountIcon } from '@/components/account-icon'
@@ -13,7 +13,6 @@ import { DialogAction, M3Dialog } from '@/components/m3/dialog'
 import { Icon } from '@/components/m3/icon'
 import { TimeField } from '@/components/m3/time-field'
 import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Textarea } from '@/components/ui/textarea'
@@ -176,7 +175,6 @@ function TransactionDetailsContent({
     const archiveTransaction = useMutation(
         api.v1.transactions.mutations.archive,
     )
-    const formId = useId()
 
     const [editing, setEditing] = useState(initialEditing)
     const [saving, setSaving] = useState(false)
@@ -228,8 +226,7 @@ function TransactionDetailsContent({
             ? (transaction.toCurrency ?? transaction.currency)
             : transaction.currency
 
-    const handleSubmit = async (event: FormEvent) => {
-        event.preventDefault()
+    const handleSave = async () => {
         const trimmedName = name.trim()
         if (!trimmedName) {
             toast.error(t.common.nameCannotBeEmpty)
@@ -348,19 +345,33 @@ function TransactionDetailsContent({
                 }
                 actions={
                     <>
-                        {editing ? (
-                            // Keep the edit button's space occupied. Besides
-                            // avoiding header movement, this prevents the event
-                            // that opened the editor from landing on another
-                            // actionable control.
-                            <span className="size-10 shrink-0" aria-hidden />
+                        {/*
+                         * One action toggles between reading and editing, as in
+                         * native's `_toggleEditing`
+                         * (`transaction_details_sheet.dart:601`): a pencil while
+                         * reading, a check that commits while editing, and a
+                         * spinner in its place while the save is in flight.
+                         */}
+                        {saving ? (
+                            <span
+                                className="flex size-10 shrink-0 items-center justify-center"
+                                aria-hidden
+                            >
+                                <CircularProgress isIndeterminate size="xs" />
+                            </span>
                         ) : (
                             <IconButton
-                                aria-label={t.common.edit}
-                                onPress={() => setEditing(true)}
+                                aria-label={
+                                    editing ? t.common.save : t.common.edit
+                                }
+                                onPress={() =>
+                                    editing
+                                        ? void handleSave()
+                                        : setEditing(true)
+                                }
                                 className="text-on-surface-variant"
                             >
-                                <Icon name="edit" />
+                                <Icon name={editing ? 'check' : 'edit'} />
                             </IconButton>
                         )}
                         <IconButton
@@ -376,8 +387,10 @@ function TransactionDetailsContent({
             />
 
             <form
-                id={formId}
-                onSubmit={(event) => void handleSubmit(event)}
+                onSubmit={(event) => {
+                    event.preventDefault()
+                    void handleSave()
+                }}
                 className="min-h-0 flex-1 overflow-y-auto p-4"
             >
                 <div className="overflow-hidden rounded-2xl border bg-card shadow-xs">
@@ -790,20 +803,6 @@ function TransactionDetailsContent({
                     </div>
                 </div>
             </form>
-
-            {editing ? (
-                <footer className="mt-auto border-t bg-surface p-4">
-                    <Button
-                        type="submit"
-                        form={formId}
-                        disabled={saving}
-                        className="w-full"
-                    >
-                        <Icon name="check" />
-                        {saving ? t.common.saving : t.transaction.saveChanges}
-                    </Button>
-                </footer>
-            ) : null}
 
             <M3Dialog
                 open={deleteOpen}
