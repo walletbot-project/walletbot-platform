@@ -1,5 +1,5 @@
 import { api } from '@wallet-bot/backend/api'
-import { Select, SelectOption } from 'actify'
+import { IconButton, Select, SelectOption } from 'actify'
 import { useMutation, useQuery } from 'convex/react'
 import type { FunctionReturnType } from 'convex/server'
 import { type FormEvent, type ReactNode, useId, useState } from 'react'
@@ -7,6 +7,7 @@ import { useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 import { AccountIcon } from '@/components/account-icon'
 import { CategoryIcon } from '@/components/category-icon'
+import { AppBar } from '@/components/m3/app-bar'
 import { DateField } from '@/components/m3/date-field'
 import { DialogAction, M3Dialog } from '@/components/m3/dialog'
 import { Icon } from '@/components/m3/icon'
@@ -55,9 +56,11 @@ type TransactionDetailProps = {
 }
 
 /**
- * A transaction's details, with an inline edit mode. Presentation-agnostic —
- * `DividedView` renders it in the split pane on expanded windows and inside a
- * modal bottom sheet everywhere else, matching the native detail screen.
+ * A transaction's details, with an inline edit mode. It is a PAGE below the
+ * split and the right pane above it — never a sheet — because the native
+ * Activity screen presents it as a real `MaterialPageRoute` (activity.dart:49).
+ * Its route therefore carries `handle: { fullScreen: true }`, and it heads
+ * itself with the standard `AppBar` at every width.
  */
 export function TransactionDetail({
     transactionId,
@@ -320,49 +323,57 @@ function TransactionDetailsContent({
 
     return (
         <>
-            <header className="flex flex-row items-center gap-1 border-b p-4">
-                <h2 className="m3-title-large flex-1">
-                    {editing
-                        ? t.transaction.editActivity
-                        : t.transaction.detail}
-                </h2>
-                {editing ? (
-                    // Keep the edit button's space occupied. Besides avoiding
-                    // header movement, this prevents the event that opened the
-                    // editor from landing on another actionable control.
-                    <span className="size-8 shrink-0" aria-hidden />
-                ) : (
-                    <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon-sm"
-                        onClick={() => setEditing(true)}
-                        aria-label={t.common.edit}
+            {/*
+             * The standard top app bar, identical to every other one in the
+             * app. This screen is a page at every width (the native Activity
+             * pushes it as a real route), so unlike `DetailPaneHeader` the bar
+             * is never hidden — but it is the same `AppBar`, with the same
+             * height and leading inset, and no border: Material 3 app bars
+             * separate themselves with a surface tint on scroll, and no app bar
+             * in the native app carries a rule.
+             */}
+            <AppBar
+                title={
+                    editing ? t.transaction.editActivity : t.transaction.detail
+                }
+                leading={
+                    <IconButton
+                        aria-label={t.common.close}
+                        onPress={onClose}
+                        isDisabled={saving}
+                        className="text-on-surface-variant"
                     >
-                        <Icon name="edit" />
-                    </Button>
-                )}
-                <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon-sm"
-                    onClick={() => setDeleteOpen(true)}
-                    disabled={saving}
-                    aria-label={t.common.delete}
-                >
-                    <Icon name="delete" />
-                </Button>
-                <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon-sm"
-                    onClick={onClose}
-                    disabled={saving}
-                    aria-label={t.common.close}
-                >
-                    <Icon name="close" />
-                </Button>
-            </header>
+                        <Icon name="close" />
+                    </IconButton>
+                }
+                actions={
+                    <>
+                        {editing ? (
+                            // Keep the edit button's space occupied. Besides
+                            // avoiding header movement, this prevents the event
+                            // that opened the editor from landing on another
+                            // actionable control.
+                            <span className="size-10 shrink-0" aria-hidden />
+                        ) : (
+                            <IconButton
+                                aria-label={t.common.edit}
+                                onPress={() => setEditing(true)}
+                                className="text-on-surface-variant"
+                            >
+                                <Icon name="edit" />
+                            </IconButton>
+                        )}
+                        <IconButton
+                            aria-label={t.common.delete}
+                            onPress={() => setDeleteOpen(true)}
+                            isDisabled={saving}
+                            className="text-on-surface-variant"
+                        >
+                            <Icon name="delete" />
+                        </IconButton>
+                    </>
+                }
+            />
 
             <form
                 id={formId}

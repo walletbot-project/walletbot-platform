@@ -93,14 +93,10 @@ export default function Home() {
                             label={t.nav.addManually}
                             icon="add"
                             // The native home pushes the transaction form and
-                            // lands on Activity once it saves; on web the
-                            // Activity screen hosts the form, so we open it
-                            // there directly.
-                            onClick={() =>
-                                navigate('/activity', {
-                                    state: { createTransaction: true },
-                                })
-                            }
+                            // lands on Activity once it saves; on web the form
+                            // is a route under Activity, so we link straight
+                            // at it.
+                            onClick={() => navigate('/activity/new')}
                         />
                     </div>
                 </div>

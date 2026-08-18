@@ -20,6 +20,10 @@ export const es = {
         apply: 'Aplicar',
         clear: 'Limpiar',
         close: 'Cerrar',
+        notFoundTitle: 'Esto ya no existe',
+        notFoundDescription:
+            'Puede que se haya eliminado desde otro dispositivo. Volvé a la lista para continuar.',
+        backToList: 'Volver a la lista',
         name: 'Nombre',
         description: 'Descripción',
         color: 'Color',
@@ -429,20 +433,27 @@ export const es = {
         toolDone: 'Listo',
         toolCancelled: 'Cancelado',
         connectingEllipsis: 'Conectando…',
-        tapToStart: 'Tocá el teléfono para empezar una conversación',
+        tapToStart: 'Tocá el micrófono o escribí un mensaje para empezar',
         microphone: 'Micrófono',
         mute: 'Silenciar',
         unmute: 'Activar micrófono',
         connect: 'Conectar',
         disconnect: 'Desconectar',
+        startConversation: 'Iniciar una conversación',
+        endSession: 'Finalizar sesión',
+        typeMessage: 'Escribí un mensaje…',
+        send: 'Enviar',
         systemConnecting: 'Conectando…',
         systemTokenReceived: (p: { model: string }) =>
             `Token recibido para ${p.model}`,
         systemSocketError: 'Error de WebSocket',
         systemDisconnected: 'Desconectado',
         systemConnected: 'Conectado. Podés hablar.',
+        systemConnectedTyping: 'Conectado. Enviando tu mensaje…',
         systemConnectionFailed: (p: { error: string }) =>
             `Falló la conexión: ${p.error}`,
+        systemMicOpenFailed: (p: { error: string }) =>
+            `No se pudo abrir el micrófono: ${p.error}`,
     },
 
     actionWidget: {

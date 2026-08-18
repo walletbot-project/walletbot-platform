@@ -8,6 +8,7 @@ import {
 import { useWindowSizeClass } from '@/hooks/use-window-size-class'
 import type { Messages } from '@/lib/i18n'
 import { useT } from '@/lib/i18n'
+import { cn } from '@/lib/utils'
 
 /**
  * The four primary destinations, in the same order as the native app's
@@ -77,42 +78,54 @@ export function RootLayout() {
         </span>
     )
 
-    const content = (
-        <main className="flex min-h-0 flex-1 flex-col overflow-hidden">
-            <Outlet />
-        </main>
-    )
-
-    if (useRail) {
-        return (
-            <div className="flex h-dvh w-full overflow-hidden bg-surface">
+    /*
+     * ONE tree for both shells. The rail and the bottom bar are conditional
+     * siblings, but `<main>` — which holds the entire routed page — is emitted
+     * unconditionally and always at the same child index, so crossing 600px
+     * only rewrites classNames.
+     *
+     * This is load-bearing, not tidiness. Returning two different trees (which
+     * this file used to do) put `<Outlet />` at index 2 in one and index 0 in
+     * the other, so React unmounted and rebuilt the whole page every time the
+     * window crossed 600px. Every `useState` in the active page reset — which
+     * is what made an open Add Account / Add Tag / Add Category screen vanish
+     * on resize. Never reintroduce a second `return` here.
+     */
+    return (
+        <div
+            className={cn(
+                'flex h-dvh w-full overflow-hidden bg-surface',
+                useRail ? 'flex-row' : 'flex-col',
+            )}
+        >
+            {useRail ? (
                 <NavigationRail
                     destinations={destinations}
                     agentButton={voiceFab}
                 />
+            ) : null}
+            {useRail ? (
                 <div
                     aria-hidden
                     className="w-px shrink-0 self-stretch bg-outline-variant"
                 />
-                {content}
-            </div>
-        )
-    }
-
-    return (
-        <div className="flex h-dvh w-full flex-col overflow-hidden bg-surface">
-            {content}
-            <div className="relative">
-                {/*
-                 * Centre-docked FAB, matching
-                 * `FloatingActionButtonLocation.centerDocked`: it straddles the
-                 * top edge of the navigation bar.
-                 */}
-                <div className="pointer-events-none absolute inset-x-0 -top-7 z-10 flex justify-center">
-                    <div className="pointer-events-auto">{voiceFab}</div>
+            ) : null}
+            <main className="flex min-h-0 flex-1 flex-col overflow-hidden">
+                <Outlet />
+            </main>
+            {useRail ? null : (
+                <div className="relative">
+                    {/*
+                     * Centre-docked FAB, matching
+                     * `FloatingActionButtonLocation.centerDocked`: it straddles
+                     * the top edge of the navigation bar.
+                     */}
+                    <div className="pointer-events-none absolute inset-x-0 -top-7 z-10 flex justify-center">
+                        <div className="pointer-events-auto">{voiceFab}</div>
+                    </div>
+                    <NavigationBar destinations={destinations} />
                 </div>
-                <NavigationBar destinations={destinations} />
-            </div>
+            )}
         </div>
     )
 }

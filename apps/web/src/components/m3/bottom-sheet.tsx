@@ -1,5 +1,7 @@
 import { Dialog } from '@base-ui/react/dialog'
-import type { ReactNode } from 'react'
+import type { CSSProperties, ReactNode } from 'react'
+import { useCallback } from 'react'
+import { useSheetDismiss } from '@/hooks/use-sheet-dismiss'
 import { useWindowSizeClass } from '@/hooks/use-window-size-class'
 import { cn } from '@/lib/utils'
 
@@ -25,7 +27,8 @@ type BottomSheetProps = {
  *
  * - **Compact windows: a Material 3 modal bottom sheet** — drag handle, 28dp
  *   top corners, and a `surfaceContainerLow` container that stops short of the
- *   top of the window. The 640px cap is Material's own: Flutter's
+ *   top of the window. It slides its full height in and out, and the handle
+ *   drags it down to dismiss. The 640px cap is Material's own: Flutter's
  *   `_BottomSheetDefaultsM3` gives every modal sheet
  *   `BoxConstraints(maxWidth: 640)`.
  * - **Medium and expanded windows: a Material 3 dialog** — centred,
@@ -42,6 +45,10 @@ type BottomSheetProps = {
  * primitive rather than `components/ui`'s `Sheet` and `Dialog` wrappers is what
  * buys that; they are two different components, so swapping between them would
  * throw the content away and rebuild it.
+ *
+ * This surface is for transient pickers only. Anything that is a *screen* — a
+ * detail, a creation form — belongs to a route instead; see
+ * `ListDetailLayout`.
  */
 export function BottomSheet({
     open,
@@ -53,12 +60,29 @@ export function BottomSheet({
     className,
 }: BottomSheetProps) {
     const asDialog = useWindowSizeClass() !== 'compact'
+    const close = useCallback(() => onOpenChange(false), [onOpenChange])
+    const { sheetRef, offset, dragging, handleProps } = useSheetDismiss({
+        enabled: !asDialog && open,
+        onDismissed: close,
+    })
+
+    // Only take the transform over while the user is actually moving the
+    // sheet. At rest it must stay unset so the entry and exit transitions —
+    // which Base UI drives through data-starting-style / data-ending-style —
+    // are not overridden by an inline `translateY(0)`.
+    const dragStyle: CSSProperties | undefined =
+        offset > 0 || dragging
+            ? {
+                  transform: `translateY(${offset}px)`,
+                  transition: dragging ? 'none' : undefined,
+              }
+            : undefined
 
     return (
         <Dialog.Root open={open} onOpenChange={onOpenChange}>
             <Dialog.Portal>
                 {/* The scrim the rest of the app's overlays use. */}
-                <Dialog.Backdrop className="fixed inset-0 z-50 bg-black/10 transition-opacity duration-150 supports-backdrop-filter:backdrop-blur-xs data-ending-style:opacity-0 data-starting-style:opacity-0" />
+                <Dialog.Backdrop className="fixed inset-0 z-50 bg-scrim/30 transition-opacity duration-200 supports-backdrop-filter:backdrop-blur-xs data-ending-style:opacity-0 data-starting-style:opacity-0" />
                 <Dialog.Viewport
                     className={cn(
                         'fixed inset-0 z-50 flex justify-center',
@@ -66,6 +90,8 @@ export function BottomSheet({
                     )}
                 >
                     <Dialog.Popup
+                        ref={sheetRef}
+                        style={dragStyle}
                         className={cn(
                             'flex w-full min-w-0 flex-col overflow-hidden text-on-surface outline-none transition duration-200 ease-out data-ending-style:opacity-0 data-starting-style:opacity-0',
                             asDialog
@@ -73,12 +99,17 @@ export function BottomSheet({
                                       'max-h-[80dvh] max-w-140 rounded-[28px] bg-surface-container-high shadow-level-3 data-ending-style:scale-95 data-starting-style:scale-95',
                                       dialogPadded && 'py-4',
                                   )
-                                : 'max-h-[95dvh] max-w-160 rounded-t-[28px] bg-surface-container-low data-ending-style:translate-y-10 data-starting-style:translate-y-10',
+                                : // A sheet travels its own full height, not a
+                                  // token nudge — anything less reads as a jump.
+                                  'max-h-[95dvh] max-w-160 rounded-t-[28px] bg-surface-container-low shadow-level-3 data-ending-style:translate-y-full data-starting-style:translate-y-full',
                             className,
                         )}
                     >
                         {asDialog ? null : (
-                            <div className="flex justify-center pt-4 pb-2">
+                            <div
+                                {...handleProps}
+                                className="flex shrink-0 cursor-grab touch-none justify-center pt-4 pb-2 active:cursor-grabbing"
+                            >
                                 <span
                                     aria-hidden
                                     className="h-1 w-8 rounded-full bg-on-surface-variant/40"

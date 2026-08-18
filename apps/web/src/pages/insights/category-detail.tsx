@@ -35,7 +35,7 @@ export type CategorySummary = {
  * color-washed identity hero joined to the monthly-spend hero, an edit/delete
  * action row, and the five most recent transactions.
  *
- * Presentation-agnostic — `DividedView` renders it inline in the split pane on
+ * Presentation-agnostic — `ListDetailLayout` renders it inline in the split pane on
  * expanded windows and inside a modal bottom sheet everywhere else.
  */
 export function CategoryDetail({

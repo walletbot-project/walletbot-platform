@@ -36,7 +36,7 @@ export type AccountSummary = {
  * color-washed identity hero joined by the grouped-card seam to the balance
  * hero, a row of actions, and the five most recent transactions.
  *
- * Presentation-agnostic — `DividedView` renders it inline in the split pane on
+ * Presentation-agnostic — `ListDetailLayout` renders it inline in the split pane on
  * expanded windows and inside a modal bottom sheet everywhere else.
  */
 export function AccountDetail({

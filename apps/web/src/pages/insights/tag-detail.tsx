@@ -28,7 +28,7 @@ export type TagSummary = {
  * edit/delete action row, and the five most recent transactions — the same
  * shape as the account and category details, matching the native tag sheet.
  *
- * Presentation-agnostic — `DividedView` renders it inline in the split pane on
+ * Presentation-agnostic — `ListDetailLayout` renders it inline in the split pane on
  * expanded windows and inside a modal bottom sheet everywhere else.
  */
 export function TagDetail({

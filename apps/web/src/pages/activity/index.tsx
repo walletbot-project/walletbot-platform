@@ -1,11 +1,18 @@
 import { api } from '@wallet-bot/backend/api'
 import { CircularProgress, IconButton } from 'actify'
 import { usePaginatedQuery, useQuery } from 'convex/react'
-import { useEffect, useMemo, useRef, useState } from 'react'
-import { useLocation } from 'react-router-dom'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import {
+    useLocation,
+    useNavigate,
+    useOutletContext,
+    useParams,
+    useSearchParams,
+} from 'react-router-dom'
 import { AppBar } from '@/components/m3/app-bar'
-import { DividedView } from '@/components/m3/divided-view'
 import { Icon } from '@/components/m3/icon'
+import { ListDetailLayout } from '@/components/m3/list-detail-layout'
+import { StateMessage } from '@/components/m3/state-message'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
     ACCOUNT_DEFAULT_COLOR,
@@ -59,30 +66,20 @@ export function Activity() {
         return EMPTY_FILTERS
     })
     const [type, setType] = useState<TransactionType | null>(null)
-    const [selectedTransaction, setSelectedTransaction] = useState<{
-        id: string
-        transferSide?: TransactionTransferSide
-    } | null>(null)
-    // The new-transaction form lives in the divided view's pane, like the
-    // native Activity screen. Home hands it over through the router state.
-    const [creating, setCreating] = useState(
-        () =>
-            (location.state as { createTransaction?: boolean } | null)
-                ?.createTransaction === true,
-    )
+    const navigate = useNavigate()
 
-    // The pane hosts one occupant at a time.
-    const openCreate = () => {
-        setSelectedTransaction(null)
-        setCreating(true)
-    }
+    // What is open beside the list is the child route's business, not this
+    // component's — see `ListDetailLayout`. Opening one is a navigation.
+    const openCreate = () => navigate('/activity/new')
     const openDetail = (next: {
         id: string
         transferSide?: TransactionTransferSide
-    }) => {
-        setCreating(false)
-        setSelectedTransaction(next)
-    }
+    }) =>
+        navigate(
+            next.transferSide
+                ? `/activity/${next.id}?side=${next.transferSide}`
+                : `/activity/${next.id}`,
+        )
     const accounts = useQuery(api.v1.accounts.queries.list, {
         includeArchived: true,
     })
@@ -298,22 +295,22 @@ export function Activity() {
         </>
     )
 
+    const applyFilter = useCallback(
+        (next: Partial<TransactionFilters>) =>
+            setFilters({ ...EMPTY_FILTERS, ...next }),
+        [],
+    )
+    const outletContext: ActivityOutletContext = useMemo(
+        () => ({ applyFilter }),
+        [applyFilter],
+    )
+
     return (
-        <DividedView
+        <ListDetailLayout
             list={list}
-            detail={
-                selectedTransaction ? (
-                    <TransactionDetail
-                        transactionId={selectedTransaction.id}
-                        transferSide={selectedTransaction.transferSide}
-                        onApplyFilter={(next) =>
-                            setFilters({ ...EMPTY_FILTERS, ...next })
-                        }
-                        onClose={() => setSelectedTransaction(null)}
-                    />
-                ) : null
-            }
+            closeTo="/activity"
             detailTitle={t.transaction.detail}
+            context={outletContext}
             placeholder={
                 <div className="flex flex-1 items-center justify-center p-8">
                     <p className="m3-body-large max-w-xs text-center text-on-surface-variant">
@@ -321,17 +318,55 @@ export function Activity() {
                     </p>
                 </div>
             }
-            onDismiss={() => setSelectedTransaction(null)}
-            form={
-                creating ? (
-                    <TransactionForm
-                        onClose={() => setCreating(false)}
-                        // The list is query-driven, so a saved transaction
-                        // shows up on its own — just close the form.
-                        onSaved={() => setCreating(false)}
-                    />
-                ) : null
-            }
+        />
+    )
+}
+
+/** What the Activity list offers its child routes. */
+export type ActivityOutletContext = {
+    applyFilter: (filters: Partial<TransactionFilters>) => void
+}
+
+/** `/activity/new` — the transaction form as the layout's occupant. */
+export function TransactionCreateRoute() {
+    const navigate = useNavigate()
+    // The list is query-driven, so a saved transaction shows up on its own.
+    const close = () => navigate('/activity')
+    return <TransactionForm onClose={close} onSaved={close} />
+}
+
+/** `/activity/:transactionId` — one transaction's detail. */
+export function TransactionDetailRoute() {
+    const t = useT()
+    const navigate = useNavigate()
+    const { transactionId } = useParams()
+    const [searchParams] = useSearchParams()
+    const { applyFilter } = useOutletContext<ActivityOutletContext>()
+
+    const rawSide = searchParams.get('side')
+    const transferSide: TransactionTransferSide | undefined =
+        rawSide === 'source' || rawSide === 'destination' ? rawSide : undefined
+
+    if (transactionId === undefined) {
+        return (
+            <StateMessage
+                icon="search_off"
+                tone="error"
+                title={t.common.notFoundTitle}
+                detail={t.common.notFoundDescription}
+            />
+        )
+    }
+
+    return (
+        <TransactionDetail
+            transactionId={transactionId}
+            transferSide={transferSide}
+            onApplyFilter={(next) => {
+                applyFilter(next)
+                navigate('/activity')
+            }}
+            onClose={() => navigate('/activity')}
         />
     )
 }
