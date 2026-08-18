@@ -305,6 +305,9 @@ const normalizeMetric = (
         ...(normalizeString(value.sessionId)
             ? { sessionId: normalizeString(value.sessionId) }
             : {}),
+        ...(normalizeString(value.sampleId)
+            ? { sampleId: normalizeString(value.sampleId) }
+            : {}),
         ...(userId ? { userId } : {}),
         ...(normalizeString(value.appVersion)
             ? { appVersion: normalizeString(value.appVersion) }

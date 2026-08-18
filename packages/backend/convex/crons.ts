@@ -58,7 +58,8 @@ crons.daily(
 
 crons.interval(
     'record agent monthly usage',
-    { hours: 6 },
+    // TODO: Change this back to { hours: 6 } after the dashboard rollout is validated.
+    { minutes: 5 },
     internal.telemetry.actions.recordAgentMonthlyUsage,
     {},
 )
