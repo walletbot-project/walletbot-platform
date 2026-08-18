@@ -56,6 +56,8 @@ export const telemetryMetrics = defineTable({
         v.literal('agent.session.cost_usd'),
         v.literal('agent.user.monthly_cost_usd'),
         v.literal('agent.interactions.completed_count'),
+        // Deprecated: accepted only so deployments can clean up historical rows.
+        // New ingestion rejects this metric in telemetry validators/catalog.
         v.literal('agent.session.cost_outlier_count'),
         v.literal('agent.session.cost_bucket_count'),
     ),

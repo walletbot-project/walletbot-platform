@@ -56,9 +56,9 @@ crons.interval(
     },
 )
 
-crons.daily(
+crons.interval(
     'record registered users total',
-    { hourUTC: 3, minuteUTC: 0 },
+    { hours: 6 },
     internal.telemetry.actions.recordRegisteredUsersTotal,
     {},
 )

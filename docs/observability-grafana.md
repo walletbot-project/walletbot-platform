@@ -60,7 +60,6 @@ dots may appear as underscores.
 - `agent_session_cost_usd`
 - `agent_user_monthly_cost_usd`
 - `agent_interactions_completed_count`
-- `agent_session_cost_outlier_count`
 - `agent_session_cost_bucket_count`
 
 Useful labels:
@@ -77,7 +76,6 @@ Useful labels:
 - `user_id`
 - `month`
 - `interaction_type`
-- `threshold_usd`
 - `cost_bucket`
 - `deployment_environment`
 - `service_namespace`
@@ -151,12 +149,6 @@ Agent interactions by type:
 sum by (interaction_type, mode) (increase(agent_interactions_completed_count[1d]))
 ```
 
-Agent cost outliers by threshold:
-
-```promql
-sum by (threshold_usd) (increase(agent_session_cost_outlier_count[1d]))
-```
-
 Agent sessions by cost bucket:
 
 ```promql
@@ -165,9 +157,9 @@ sum by (cost_bucket) (increase(agent_session_cost_bucket_count[1d]))
 
 ## Scheduled Business Gauges
 
-`business.users.registered_total` is emitted once per day by the Convex cron
-`record registered users total` at 03:00 UTC. It counts Better Auth users and
-exports a gauge with the latest total registered accounts.
+`business.users.registered_total` is emitted every 6 hours by the Convex cron
+`record registered users total`. It counts Better Auth users and exports a
+gauge with the latest total registered accounts.
 
 `agent.user.monthly_cost_usd` is emitted every 6 hours by the Convex cron
 `record agent monthly usage`. It reads the current `agentUsageMonthly` rollup

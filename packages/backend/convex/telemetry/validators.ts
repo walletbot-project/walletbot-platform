@@ -31,7 +31,6 @@ export const metricName = v.union(
     v.literal('agent.session.cost_usd'),
     v.literal('agent.user.monthly_cost_usd'),
     v.literal('agent.interactions.completed_count'),
-    v.literal('agent.session.cost_outlier_count'),
     v.literal('agent.session.cost_bucket_count'),
 )
 

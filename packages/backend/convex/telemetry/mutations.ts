@@ -430,3 +430,20 @@ export const deleteOldExportedMetrics = internalMutation({
         return { deleted: rows.length }
     },
 })
+
+export const deleteDeprecatedAgentCostOutlierMetrics = internalMutation({
+    args: { limit: v.number() },
+    handler: async (ctx, args) => {
+        const rows = await ctx.db
+            .query('telemetryMetrics')
+            .withIndex('by_name_and_receivedAt', (q) =>
+                q.eq('name', 'agent.session.cost_outlier_count'),
+            )
+            .take(Math.min(Math.max(args.limit, 1), 100))
+
+        for (const row of rows) {
+            await ctx.db.delete(row._id)
+        }
+        return { deleted: rows.length }
+    },
+})

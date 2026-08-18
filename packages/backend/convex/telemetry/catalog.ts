@@ -16,7 +16,6 @@ export const metricNames = new Set<MetricName>([
     'agent.session.cost_usd',
     'agent.user.monthly_cost_usd',
     'agent.interactions.completed_count',
-    'agent.session.cost_outlier_count',
     'agent.session.cost_bucket_count',
 ])
 
@@ -115,15 +114,6 @@ export const metricCatalog: Record<
             model: 'string',
             mode: new Set(['voice', 'text', 'mixed']),
             interaction_type: new Set(['voice', 'text', 'mixed', 'tool']),
-        },
-    },
-    'agent.session.cost_outlier_count': {
-        type: 'counter',
-        unit: 'count',
-        attributes: {
-            model: 'string',
-            mode: new Set(['voice', 'text', 'mixed']),
-            threshold_usd: new Set(['0.01', '0.05', '0.10', '0.50', '1.00']),
         },
     },
     'agent.session.cost_bucket_count': {

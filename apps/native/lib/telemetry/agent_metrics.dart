@@ -14,8 +14,6 @@ class AgentMetrics {
   static const _gemini31FlashLiveInputMediaUsdPerMillion = 1.00;
   static const _gemini31FlashLiveOutputTextUsdPerMillion = 4.50;
   static const _gemini31FlashLiveOutputAudioUsdPerMillion = 12.00;
-  static const _outlierThresholdsUsd = [0.01, 0.05, 0.10, 0.50, 1.00];
-
   final TelemetryClient? _telemetry;
 
   Future<double?> recordSessionCostFromUsage({
@@ -49,22 +47,6 @@ class AgentMetrics {
         },
         sessionId: sessionId,
       ),
-      for (final threshold in _outlierThresholdsUsd)
-        if (costUsd >= threshold)
-          TelemetryMetric(
-            name: 'agent.session.cost_outlier_count',
-            timestamp: DateTime.now(),
-            source: 'native',
-            type: 'counter',
-            value: 1,
-            unit: 'count',
-            attributes: {
-              'model': model,
-              'mode': normalizedMode,
-              'threshold_usd': threshold.toStringAsFixed(2),
-            },
-            sessionId: sessionId,
-          ),
     ];
 
     await _telemetry?.sendMetricBatch(metrics);

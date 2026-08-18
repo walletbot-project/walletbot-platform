@@ -81,7 +81,7 @@ Attributes: none.
 
 Sources:
 
-- Backend daily Convex cron `record registered users total`.
+- Backend Convex cron `record registered users total`, every 6 hours.
 - Manual backend action `telemetry/actions:recordRegisteredUsersTotalNow` for
   tests and dashboard backfill checks.
 
@@ -169,20 +169,6 @@ Sources:
 
 - Native Gemini Live usage metadata after completed turns/interactions.
 
-### `agent.session.cost_outlier_count`
-
-Counts agent sessions whose estimated USD cost exceeded a configured threshold.
-
-Attributes:
-
-- `model`: stable model name
-- `mode`: `voice`, `text`, or `mixed`
-- `threshold_usd`: `0.01`, `0.05`, `0.10`, `0.50`, or `1.00`
-
-Sources:
-
-- Native Gemini Live usage metadata at session end.
-
 ### `agent.session.cost_bucket_count`
 
 Counts agent sessions by estimated USD cost bucket.
@@ -263,8 +249,8 @@ by cron.
 ## Operational Notes
 
 - Metrics are counters with unit `count`.
-- Agent session cost uses a `gauge` with unit `usd`; outlier and bucket metrics
-  use counters with unit `count`.
+- Agent session cost uses a `gauge` with unit `usd`; bucket metrics use counters
+  with unit `count`.
 - Registered user total uses a `gauge` with unit `count`.
 - Attribute values are validated against the catalog on HTTP ingestion.
 - Metric delivery is best-effort on native and backend.

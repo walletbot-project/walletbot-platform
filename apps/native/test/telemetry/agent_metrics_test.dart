@@ -71,7 +71,7 @@ void main() {
     telemetry.dispose();
   });
 
-  test('sends outlier counters for exceeded cost thresholds', () async {
+  test('sends session cost bucket for higher cost sessions', () async {
     FlutterSecureStorage.setMockInitialValues({});
 
     http.Request? captured;
@@ -79,7 +79,7 @@ void main() {
       convexSiteUrl: 'https://example.convex.site',
       httpClient: MockClient((request) async {
         captured = request;
-        return http.Response('{"ok":true,"accepted":5}', 200);
+        return http.Response('{"ok":true,"accepted":2}', 200);
       }),
     );
     final metrics = AgentMetrics(telemetry);
@@ -99,16 +99,7 @@ void main() {
     final body = jsonDecode(captured!.body) as Map<String, Object?>;
     final sent = (body['metrics'] as List<Object?>)
         .cast<Map<String, Object?>>();
-    expect(sent, hasLength(5));
-    expect(
-      sent
-          .where(
-            (metric) => metric['name'] == 'agent.session.cost_outlier_count',
-          )
-          .map((metric) => metric['attributes'] as Map<String, Object?>)
-          .map((attributes) => attributes['threshold_usd']),
-      ['0.01', '0.05', '0.10'],
-    );
+    expect(sent, hasLength(2));
     expect(
       sent.singleWhere(
         (metric) => metric['name'] == 'agent.session.cost_bucket_count',

@@ -225,9 +225,23 @@ const countRegisteredUsers = async (ctx: ActionCtx): Promise<number> => {
                 model: 'user',
                 paginationOpts: { cursor, numItems: 100 },
             },
-        )) as { docs: unknown[]; continueCursor?: string; isDone: boolean }
-        count += page.docs.length
-        cursor = page.isDone ? null : (page.continueCursor ?? null)
+        )) as
+            | unknown[]
+            | {
+                  page?: unknown[]
+                  docs?: unknown[]
+                  continueCursor?: string | null
+                  isDone?: boolean
+              }
+        if (Array.isArray(page)) {
+            count += page.length
+            cursor = null
+            continue
+        }
+
+        const docs = page.page ?? page.docs ?? []
+        count += docs.length
+        cursor = page.isDone === false ? (page.continueCursor ?? null) : null
     } while (cursor !== null)
     return count
 }
@@ -342,6 +356,21 @@ export const recordAgentMonthlyUsageNow = action({
             throw new Error('Unauthorized')
         }
         return recordAgentMonthlyUsageMetric(ctx, args.month)
+    },
+})
+
+export const deleteDeprecatedAgentCostOutlierMetricsNow = action({
+    args: { adminToken: v.string(), limit: v.optional(v.number()) },
+    handler: async (ctx, args): Promise<{ deleted: number }> => {
+        const expected = process.env.TELEMETRY_ADMIN_TOKEN?.trim()
+        if (!expected || args.adminToken !== expected) {
+            throw new Error('Unauthorized')
+        }
+        return await ctx.runMutation(
+            internal.telemetry.mutations
+                .deleteDeprecatedAgentCostOutlierMetrics,
+            { limit: args.limit ?? 100 },
+        )
     },
 })
 
