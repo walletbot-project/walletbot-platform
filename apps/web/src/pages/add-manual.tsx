@@ -16,7 +16,7 @@ import { DateField } from '@/components/m3/date-field'
 import { DialogAction, M3Dialog } from '@/components/m3/dialog'
 import { FormScreen } from '@/components/m3/form-screen'
 import { Icon } from '@/components/m3/icon'
-import { OptionSheet } from '@/components/m3/option-sheet'
+import { OptionSheet, type SheetOption } from '@/components/m3/option-sheet'
 import { PickerField } from '@/components/m3/picker-field'
 import { TagChip } from '@/components/m3/tag-chip'
 import { TimeField } from '@/components/m3/time-field'
@@ -365,11 +365,18 @@ export function TransactionForm({
             name: pendingTagName,
             color: pendingTagColor,
         }
-        await createTag({
-            id: createdTag.id,
-            name: createdTag.name,
-            color: createdTag.color,
-        })
+        try {
+            await createTag({
+                id: createdTag.id,
+                name: createdTag.name,
+                color: createdTag.color,
+            })
+        } catch {
+            // Uncaught, this was an unhandled rejection: the color dialog hung
+            // open with no feedback.
+            toast.error(t.common.saveFailed)
+            return
+        }
         setCreatedTags((current) => [...current, createdTag])
         addResolvedTag(createdTag)
         setTagInput('')
@@ -562,7 +569,6 @@ export function TransactionForm({
                     parseFormAmount(destinationAmount)
                 if (!parsedDestinationAmount) {
                     toast.error(t.addManual.destinationAmountGreaterThanZero)
-                    setIsSaving(false)
                     return
                 }
                 const destinationAccount = accountOptions.find(
@@ -879,15 +885,22 @@ export function TransactionForm({
                 onCancel={() => setPendingTagName(null)}
                 onCreate={createPendingTag}
             />
-            <CreateAccountDialog
+            <CreateEntityDialog
                 open={isCreateAccountOpen}
                 onOpenChange={setIsCreateAccountOpen}
+                title={t.addManual.newAccount}
+                namePlaceholder={t.addManual.accountNamePlaceholder}
+                successToast={t.addManual.accountAdded}
+                withCurrency
                 onCreate={addAccount}
             />
-            <CreateCategoryDialog
+            <CreateEntityDialog
                 open={isCreateCategoryOpen}
                 onOpenChange={setIsCreateCategoryOpen}
-                onCreate={addCategory}
+                title={t.addManual.newCategory}
+                namePlaceholder={t.addManual.categoryNamePlaceholder}
+                successToast={t.addManual.categoryAdded}
+                onCreate={(name) => addCategory(name)}
             />
         </FormScreen>
     )
@@ -1284,6 +1297,58 @@ function PickerChip({
     )
 }
 
+/** The labeled chip + option-sheet picker both entity selects share. */
+function EntitySelect({
+    label,
+    chipLabel,
+    options,
+    value,
+    onChange,
+    searchPlaceholder,
+    createLabel,
+    onCreate,
+}: {
+    label: string
+    chipLabel: string
+    options: SheetOption[]
+    value: string
+    onChange: (value: string) => void
+    searchPlaceholder: string
+    createLabel: string
+    onCreate?: () => void
+}) {
+    const [open, setOpen] = useState(false)
+    return (
+        <section className="flex flex-col gap-2.5">
+            <SectionLabel>{label}</SectionLabel>
+            <PickerChip label={chipLabel} onClick={() => setOpen(true)} />
+            <OptionSheet
+                open={open}
+                onOpenChange={setOpen}
+                title={label}
+                options={options}
+                selected={value === '' ? null : value}
+                onSelect={(id) => {
+                    onChange(id)
+                    setOpen(false)
+                }}
+                searchPlaceholder={searchPlaceholder}
+                header={
+                    onCreate ? (
+                        <NewEntityRow
+                            label={createLabel}
+                            onClick={() => {
+                                setOpen(false)
+                                onCreate()
+                            }}
+                        />
+                    ) : null
+                }
+            />
+        </section>
+    )
+}
+
 function AccountSelect({
     value,
     onChange,
@@ -1298,48 +1363,26 @@ function AccountSelect({
     label: string
 }) {
     const t = useT()
-    const [open, setOpen] = useState(false)
     const selected = accounts.find((account) => account.id === value)
-
     return (
-        <section className="flex flex-col gap-2.5">
-            <SectionLabel>{label}</SectionLabel>
-            <PickerChip
-                label={
-                    selected
-                        ? `${selected.name} · ${selected.currency}`
-                        : t.addManual.select
-                }
-                onClick={() => setOpen(true)}
-            />
-            <OptionSheet
-                open={open}
-                onOpenChange={setOpen}
-                title={label}
-                options={accounts.map((account) => ({
-                    id: account.id,
-                    label: account.name,
-                    supporting: account.currency,
-                }))}
-                selected={value === '' ? null : value}
-                onSelect={(id) => {
-                    onChange(id)
-                    setOpen(false)
-                }}
-                searchPlaceholder={t.addManual.account}
-                header={
-                    onCreate ? (
-                        <NewEntityRow
-                            label={t.addManual.newAccount}
-                            onClick={() => {
-                                setOpen(false)
-                                onCreate()
-                            }}
-                        />
-                    ) : null
-                }
-            />
-        </section>
+        <EntitySelect
+            label={label}
+            chipLabel={
+                selected
+                    ? `${selected.name} · ${selected.currency}`
+                    : t.addManual.select
+            }
+            options={accounts.map((account) => ({
+                id: account.id,
+                label: account.name,
+                supporting: account.currency,
+            }))}
+            value={value}
+            onChange={onChange}
+            searchPlaceholder={t.addManual.account}
+            createLabel={t.addManual.newAccount}
+            onCreate={onCreate}
+        />
     )
 }
 
@@ -1357,41 +1400,21 @@ function CategorySelect({
     label: string
 }) {
     const t = useT()
-    const [open, setOpen] = useState(false)
     const selected = categories.find((category) => category.id === value)
-
     return (
-        <section className="flex flex-col gap-2.5">
-            <SectionLabel>{label}</SectionLabel>
-            <PickerChip
-                label={selected?.name ?? t.addManual.select}
-                onClick={() => setOpen(true)}
-            />
-            <OptionSheet
-                open={open}
-                onOpenChange={setOpen}
-                title={label}
-                options={categories.map((category) => ({
-                    id: category.id,
-                    label: category.name,
-                }))}
-                selected={value === '' ? null : value}
-                onSelect={(id) => {
-                    onChange(id)
-                    setOpen(false)
-                }}
-                searchPlaceholder={label}
-                header={
-                    <NewEntityRow
-                        label={t.addManual.newCategory}
-                        onClick={() => {
-                            setOpen(false)
-                            onCreate()
-                        }}
-                    />
-                }
-            />
-        </section>
+        <EntitySelect
+            label={label}
+            chipLabel={selected?.name ?? t.addManual.select}
+            options={categories.map((category) => ({
+                id: category.id,
+                label: category.name,
+            }))}
+            value={value}
+            onChange={onChange}
+            searchPlaceholder={label}
+            createLabel={t.addManual.newCategory}
+            onCreate={onCreate}
+        />
     )
 }
 
@@ -1475,13 +1498,26 @@ function TimeInput({
     )
 }
 
-function CreateAccountDialog({
+/**
+ * The inline "new account / new category" dialog — one component, since the
+ * two differed only by copy and the account's currency picker.
+ */
+function CreateEntityDialog({
     open,
     onOpenChange,
+    title,
+    namePlaceholder,
+    successToast,
+    withCurrency = false,
     onCreate,
 }: {
     open: boolean
     onOpenChange: (open: boolean) => void
+    title: string
+    namePlaceholder: string
+    successToast: string
+    /** Adds the currency picker; `onCreate` receives its value only then. */
+    withCurrency?: boolean
     onCreate: (name: string, currency: string) => Promise<boolean>
 }) {
     const t = useT()
@@ -1494,20 +1530,29 @@ function CreateAccountDialog({
         const trimmed = name.trim()
         if (!trimmed) return
         setIsSubmitting(true)
-        const created = await onCreate(trimmed, currency)
-        setIsSubmitting(false)
+        let created: boolean
+        try {
+            created = await onCreate(trimmed, currency)
+        } catch {
+            // A rejected mutation used to skip the reset below, leaving both
+            // dialog buttons disabled forever with no feedback.
+            toast.error(t.common.saveFailed)
+            return
+        } finally {
+            setIsSubmitting(false)
+        }
         if (!created) return
         setName('')
         setCurrency('ARS')
         onOpenChange(false)
-        toast.success(t.addManual.accountAdded)
+        toast.success(successToast)
     }
 
     return (
         <M3Dialog
             open={open}
             onOpenChange={onOpenChange}
-            title={t.addManual.newAccount}
+            title={title}
             actions={
                 <>
                     <DialogAction
@@ -1536,14 +1581,16 @@ function CreateAccountDialog({
                     label={t.common.name}
                     value={name}
                     onChange={setName}
-                    placeholder={t.addManual.accountNamePlaceholder}
+                    placeholder={namePlaceholder}
                     autoFocus
                 />
-                <CurrencyField
-                    id="new-account-currency"
-                    value={currency}
-                    onChange={setCurrency}
-                />
+                {withCurrency ? (
+                    <CurrencyField
+                        id="new-account-currency"
+                        value={currency}
+                        onChange={setCurrency}
+                    />
+                ) : null}
             </form>
         </M3Dialog>
     )
@@ -1584,70 +1631,5 @@ function CurrencyField({
                 }}
             />
         </>
-    )
-}
-
-function CreateCategoryDialog({
-    open,
-    onOpenChange,
-    onCreate,
-}: {
-    open: boolean
-    onOpenChange: (open: boolean) => void
-    onCreate: (name: string) => Promise<boolean>
-}) {
-    const t = useT()
-    const [name, setName] = useState('')
-    const [isSubmitting, setIsSubmitting] = useState(false)
-
-    const handleCreate = async () => {
-        const trimmed = name.trim()
-        if (!trimmed) return
-        setIsSubmitting(true)
-        const created = await onCreate(trimmed)
-        setIsSubmitting(false)
-        if (!created) return
-        setName('')
-        onOpenChange(false)
-        toast.success(t.addManual.categoryAdded)
-    }
-
-    return (
-        <M3Dialog
-            open={open}
-            onOpenChange={onOpenChange}
-            title={t.addManual.newCategory}
-            actions={
-                <>
-                    <DialogAction
-                        label={t.common.cancel}
-                        onPress={() => onOpenChange(false)}
-                        isDisabled={isSubmitting}
-                    />
-                    <DialogAction
-                        label={t.common.create}
-                        onPress={() => void handleCreate()}
-                        isDisabled={isSubmitting}
-                    />
-                </>
-            }
-        >
-            <form
-                onSubmit={(event) => {
-                    event.preventDefault()
-                    void handleCreate()
-                }}
-            >
-                <TextField
-                    variant="outlined"
-                    className="w-full"
-                    label={t.common.name}
-                    value={name}
-                    onChange={setName}
-                    placeholder={t.addManual.categoryNamePlaceholder}
-                    autoFocus
-                />
-            </form>
-        </M3Dialog>
     )
 }

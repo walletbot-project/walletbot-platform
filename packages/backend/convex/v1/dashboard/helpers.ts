@@ -1,16 +1,18 @@
 import {
     collectTagConditions,
+    type DateWindow,
     type FilterCondition,
     type FilterGroup,
     type FilterNode,
-    filterToCanonical,
     isFilterGroup,
-    isSimplyRepresentable,
     parseFilterConfig,
+    parseFilterConfigRoot,
+    resolveDateConditionWindow,
     resolveDateWindow,
     type SimpleFilter,
 } from '@wallet-bot/shared'
-import type { Doc } from '../../_generated/dataModel'
+import type { IndexRange, NamedTableInfo, Query } from 'convex/server'
+import type { DataModel, Doc } from '../../_generated/dataModel'
 import type { QueryCtx } from '../../_generated/server'
 
 /**
@@ -28,11 +30,23 @@ import type { QueryCtx } from '../../_generated/server'
 /** Hard bound on the index range a single widget query may walk. */
 export const MAX_SCAN = 2000
 
+/**
+ * Both dashboard tables are per-user configuration: a handful of rows each,
+ * bounded by what a person can lay out on one screen. The cap is a guard, not
+ * a paging strategy.
+ */
+export const MAX_DASHBOARD_ROWS = 200
+
 export type Transaction = Doc<'transactions'>
 
 export type EvaluationContext = {
     /** transactionId -> the tag ids on it, for the tag conditions in the tree. */
     tagsByTransaction: Map<string, Set<string>>
+    /**
+     * tagId -> itself plus every descendant, resolved for the conditions that
+     * set `includeSubtags` — native's `expandTagGroups` groups.
+     */
+    tagDescendants: Map<string, Set<string>>
     now: Date
 }
 
@@ -40,8 +54,14 @@ export function filterFromConfig(config: string | null | undefined): {
     filter: SimpleFilter
     root: FilterGroup
 } {
-    const filter = parseFilterConfig(config ?? '')
-    return { filter, root: filterToCanonical(filter) }
+    // The stored tree is evaluated as-is; the flat view only picks the index
+    // anchors. Re-serializing the flat view and evaluating that (the previous
+    // approach) silently dropped whatever flattening loses — extra status
+    // values, an amount bound without a currency, a one-sided date range.
+    return {
+        filter: parseFilterConfig(config ?? ''),
+        root: parseFilterConfigRoot(config ?? ''),
+    }
 }
 
 /**
@@ -57,7 +77,9 @@ export async function buildEvaluationContext(
 ): Promise<EvaluationContext> {
     const conditions = collectTagConditions(root)
     const tagsByTransaction = new Map<string, Set<string>>()
-    if (conditions.length === 0) return { tagsByTransaction, now }
+    const tagDescendants = new Map<string, Set<string>>()
+    if (conditions.length === 0)
+        return { tagsByTransaction, tagDescendants, now }
 
     const wanted = new Set<string>()
     for (const condition of conditions) {
@@ -68,8 +90,11 @@ export async function buildEvaluationContext(
             : []
         for (const id of ids) wanted.add(id)
     }
-    if (wanted.size === 0) return { tagsByTransaction, now }
+    if (wanted.size === 0) return { tagsByTransaction, tagDescendants, now }
 
+    // The ids whose joins must be loaded: the literal selections, plus their
+    // descendants when some condition expands subtags.
+    const joinIds = new Set(wanted)
     if (conditions.some((condition) => condition.includeSubtags === true)) {
         // Descendants are resolved from the user's own tag list, which is small
         // and already read whole by the tags screen.
@@ -86,20 +111,28 @@ export async function buildEvaluationContext(
             siblings.push(tag.id)
             childrenByParent.set(tag.parentId, siblings)
         }
-        const queue = [...wanted]
-        while (queue.length > 0) {
-            const current = queue.pop()
-            if (current === undefined) break
-            for (const child of childrenByParent.get(current) ?? []) {
-                if (!wanted.has(child)) {
-                    wanted.add(child)
-                    queue.push(child)
+        // One group per selected tag — the tag plus all its descendants —
+        // matching native's `expandTagGroups`, so a `match: all` condition can
+        // require a hit in *every* group rather than in a merged union.
+        for (const id of wanted) {
+            const group = new Set([id])
+            const queue = [id]
+            while (queue.length > 0) {
+                const current = queue.pop()
+                if (current === undefined) break
+                for (const child of childrenByParent.get(current) ?? []) {
+                    if (!group.has(child)) {
+                        group.add(child)
+                        queue.push(child)
+                    }
                 }
             }
+            tagDescendants.set(id, group)
+            for (const member of group) joinIds.add(member)
         }
     }
 
-    for (const tagId of wanted) {
+    for (const tagId of joinIds) {
         const joins = await ctx.db
             .query('transactionTags')
             .withIndex('by_user_tag', (q) =>
@@ -112,7 +145,86 @@ export async function buildEvaluationContext(
             tagsByTransaction.set(join.transactionId, set)
         }
     }
-    return { tagsByTransaction, now }
+    return { tagsByTransaction, tagDescendants, now }
+}
+
+export type MatchResult = {
+    rows: Transaction[]
+    /** True when an index scan hit `MAX_SCAN` before its window was exhausted. */
+    truncated: boolean
+}
+
+/** An index builder once every equality prefix is applied and `date` is next. */
+type DateRangeBuilder = {
+    gte(
+        fieldName: 'date',
+        value: bigint,
+    ): { lte(fieldName: 'date', value: bigint): IndexRange } & IndexRange
+    lte(fieldName: 'date', value: bigint): IndexRange
+} & IndexRange
+
+function boundByDate(
+    base: DateRangeBuilder,
+    window: DateWindow | null,
+): IndexRange {
+    const fromMs = window?.fromMs ?? null
+    // The stored window is half-open; the index range is inclusive, so step
+    // back one millisecond rather than widening the range by a day.
+    const toMs =
+        window?.toExclusiveMs === null || window?.toExclusiveMs === undefined
+            ? null
+            : window.toExclusiveMs - 1
+    if (fromMs !== null && toMs !== null) {
+        return base.gte('date', BigInt(fromMs)).lte('date', BigInt(toMs))
+    }
+    if (fromMs !== null) return base.gte('date', BigInt(fromMs))
+    if (toMs !== null) return base.lte('date', BigInt(toMs))
+    return base
+}
+
+/**
+ * The date window bounding the index scan. Simple filters carry it in their
+ * flat fields; an advanced tree contributes one when a date condition sits
+ * directly under the top-level `and` — every match must satisfy it, so
+ * bounding the scan by it is sound. `or`/negated roots get no bound; their
+ * date conditions are still enforced row by row by the predicate.
+ */
+function indexDateWindow(
+    filter: SimpleFilter,
+    root: FilterGroup,
+    now: Date,
+): DateWindow | null {
+    const flat = resolveDateWindow(filter, now)
+    if (flat) return flat
+    if (root.combinator !== 'and' || root.not === true) return null
+    for (const child of root.children) {
+        if (isFilterGroup(child) || child.field !== 'date') continue
+        const window = resolveDateConditionWindow(child, now)
+        if (window) return window
+    }
+    return null
+}
+
+type TxnQuery = Query<NamedTableInfo<DataModel, 'transactions'>>
+
+async function scanStream(
+    stream: TxnQuery,
+    root: FilterGroup,
+    evaluation: EvaluationContext,
+    limit: number | null,
+): Promise<MatchResult> {
+    const rows: Transaction[] = []
+    let scanned = 0
+    for await (const txn of stream.order('desc')) {
+        scanned++
+        if (scanned > MAX_SCAN) return { rows, truncated: true }
+        if (txn.isArchived) continue
+        if (matchesNode(txn, root, evaluation)) {
+            rows.push(txn)
+            if (limit !== null && rows.length >= limit) break
+        }
+    }
+    return { rows, truncated: false }
 }
 
 /**
@@ -127,80 +239,84 @@ export async function collectMatching(
     root: FilterGroup,
     evaluation: EvaluationContext,
     limit: number | null,
-): Promise<Transaction[]> {
-    const window = resolveDateWindow(filter, evaluation.now)
-    const fromMs = window?.fromMs ?? null
-    // The stored window is half-open; the index range is inclusive, so step
-    // back one millisecond rather than widening the range by a day.
-    const toMs =
-        window?.toExclusiveMs === null || window?.toExclusiveMs === undefined
-            ? null
-            : window.toExclusiveMs - 1
+): Promise<MatchResult> {
+    const window = indexDateWindow(filter, root, evaluation.now)
 
     const anchorAccount =
-        filter.accountIds.length === 1 &&
-        filter.accountDirection !== 'destination'
-            ? filter.accountIds[0]
-            : null
+        filter.accountIds.length === 1 ? filter.accountIds[0] : null
     const anchorCategory =
         filter.categoryIds.length === 1 ? filter.categoryIds[0] : null
 
-    const stream = anchorAccount
-        ? ctx.db
-              .query('transactions')
-              .withIndex('by_user_account_date', (q) => {
-                  const base = q
-                      .eq('userId', userId)
-                      .eq('accountId', anchorAccount)
-                  if (fromMs !== null && toMs !== null) {
-                      return base
-                          .gte('date', BigInt(fromMs))
-                          .lte('date', BigInt(toMs))
-                  }
-                  if (fromMs !== null) return base.gte('date', BigInt(fromMs))
-                  if (toMs !== null) return base.lte('date', BigInt(toMs))
-                  return base
-              })
-        : anchorCategory
-          ? ctx.db
-                .query('transactions')
-                .withIndex('by_user_category_date', (q) => {
-                    const base = q
-                        .eq('userId', userId)
-                        .eq('categoryId', anchorCategory)
-                    if (fromMs !== null && toMs !== null) {
-                        return base
-                            .gte('date', BigInt(fromMs))
-                            .lte('date', BigInt(toMs))
-                    }
-                    if (fromMs !== null) return base.gte('date', BigInt(fromMs))
-                    if (toMs !== null) return base.lte('date', BigInt(toMs))
-                    return base
-                })
-          : ctx.db.query('transactions').withIndex('by_user_date', (q) => {
-                const base = q.eq('userId', userId)
-                if (fromMs !== null && toMs !== null) {
-                    return base
-                        .gte('date', BigInt(fromMs))
-                        .lte('date', BigInt(toMs))
-                }
-                if (fromMs !== null) return base.gte('date', BigInt(fromMs))
-                if (toMs !== null) return base.lte('date', BigInt(toMs))
-                return base
-            })
+    const bySource = (accountId: string) =>
+        ctx.db
+            .query('transactions')
+            .withIndex('by_user_account_date', (q) =>
+                boundByDate(
+                    q.eq('userId', userId).eq('accountId', accountId),
+                    window,
+                ),
+            )
+    const byDestination = (accountId: string) =>
+        ctx.db
+            .query('transactions')
+            .withIndex('by_user_to_account_date', (q) =>
+                boundByDate(
+                    q.eq('userId', userId).eq('toAccountId', accountId),
+                    window,
+                ),
+            )
 
-    const matched: Transaction[] = []
-    let scanned = 0
-    for await (const txn of stream.order('desc')) {
-        scanned++
-        if (scanned > MAX_SCAN) break
-        if (txn.isArchived) continue
-        if (matchesNode(txn, root, evaluation)) {
-            matched.push(txn)
-            if (limit !== null && matched.length >= limit) break
-        }
+    const streams: TxnQuery[] =
+        anchorAccount !== null
+            ? filter.accountDirection === 'source'
+                ? [bySource(anchorAccount)]
+                : filter.accountDirection === 'destination'
+                  ? [byDestination(anchorAccount)]
+                  : // `either`: the account can sit on either leg and each leg
+                    // has its own index — scan both and merge, so transfers
+                    // *into* the account are not silently dropped.
+                    [bySource(anchorAccount), byDestination(anchorAccount)]
+            : anchorCategory !== null
+              ? [
+                    ctx.db
+                        .query('transactions')
+                        .withIndex('by_user_category_date', (q) =>
+                            boundByDate(
+                                q
+                                    .eq('userId', userId)
+                                    .eq('categoryId', anchorCategory),
+                                window,
+                            ),
+                        ),
+                ]
+              : [
+                    ctx.db
+                        .query('transactions')
+                        .withIndex('by_user_date', (q) =>
+                            boundByDate(q.eq('userId', userId), window),
+                        ),
+                ]
+
+    if (streams.length === 1) {
+        return scanStream(streams[0], root, evaluation, limit)
     }
-    return matched
+
+    // Each leg is already newest-first and capped; the union's newest `limit`
+    // rows are therefore contained in the legs' own top `limit` rows.
+    const results = await Promise.all(
+        streams.map((stream) => scanStream(stream, root, evaluation, limit)),
+    )
+    const byId = new Map<string, Transaction>()
+    for (const result of results) {
+        for (const txn of result.rows) byId.set(txn._id, txn)
+    }
+    const merged = [...byId.values()].sort((a, b) =>
+        a.date === b.date ? 0 : a.date > b.date ? -1 : 1,
+    )
+    return {
+        rows: limit !== null ? merged.slice(0, limit) : merged,
+        truncated: results.some((result) => result.truncated),
+    }
 }
 
 export function matchesNode(
@@ -232,7 +348,8 @@ function matchesCondition(
     condition: FilterCondition,
     evaluation: EvaluationContext,
 ): boolean {
-    const negate = condition.operator === 'not in'
+    const negate =
+        condition.operator === 'not in' || condition.operator === 'not contains'
     const result = evaluateCondition(txn, condition, evaluation)
     return negate ? !result : result
 }
@@ -251,10 +368,24 @@ function evaluateCondition(
             const values = asStringList(condition.value)
             return values.length === 0 || values.includes(txn.status)
         }
-        case 'date':
-            // The date dimension is served by the index range, not the
-            // predicate — see `collectMatching`.
+        case 'date': {
+            // Simple filters also serve this from the index range, but a date
+            // condition anywhere in an advanced tree only exists here — the
+            // counterpart of native's `_dateCondition`, which compiles every
+            // date condition into the SQL predicate.
+            const window = resolveDateConditionWindow(condition, evaluation.now)
+            if (!window) return true
+            if (window.fromMs !== null && txn.date < BigInt(window.fromMs)) {
+                return false
+            }
+            if (
+                window.toExclusiveMs !== null &&
+                txn.date >= BigInt(window.toExclusiveMs)
+            ) {
+                return false
+            }
             return true
+        }
         case 'account': {
             const values = asStringList(condition.value)
             if (values.length === 0) return true
@@ -280,9 +411,24 @@ function evaluateCondition(
             if (values.length === 0) return true
             const onTxn = evaluation.tagsByTransaction.get(txn.id)
             if (!onTxn) return false
+            // One group per selected tag — the tag plus its descendants when
+            // `includeSubtags` is on (native's `expandTagGroups`): `any` needs
+            // a hit in some group, `all` a hit in every group.
+            const hitsGroup = (id: string): boolean => {
+                if (condition.includeSubtags === true) {
+                    const group = evaluation.tagDescendants.get(id)
+                    if (group) {
+                        for (const member of group) {
+                            if (onTxn.has(member)) return true
+                        }
+                        return false
+                    }
+                }
+                return onTxn.has(id)
+            }
             return condition.match === 'all'
-                ? values.every((id) => onTxn.has(id))
-                : values.some((id) => onTxn.has(id))
+                ? values.every(hitsGroup)
+                : values.some(hitsGroup)
         }
         case 'currency': {
             const values = asStringList(condition.value)
@@ -346,8 +492,22 @@ export function absCents(txn: Transaction): bigint {
     return txn.amount < 0n ? -txn.amount : txn.amount
 }
 
-/** Whether a stored filter is still one the simple editor can render. */
-export function isSimpleConfig(config: string): boolean {
-    const { root } = filterFromConfig(config)
-    return isSimplyRepresentable(root)
+/**
+ * The whole evaluation pipeline for one stored filter config: parse, pre-resolve
+ * tag membership, scan the anchored window. Every widget query starts here.
+ */
+export async function evaluateConfig(
+    ctx: QueryCtx,
+    userId: string,
+    config: string,
+    limit: number | null,
+): Promise<MatchResult> {
+    const { filter, root } = filterFromConfig(config)
+    const evaluation = await buildEvaluationContext(
+        ctx,
+        userId,
+        root,
+        new Date(),
+    )
+    return collectMatching(ctx, userId, filter, root, evaluation, limit)
 }

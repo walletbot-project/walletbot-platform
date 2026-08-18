@@ -1,8 +1,5 @@
-import { IconButton } from 'actify'
 import type { ReactNode } from 'react'
-import { useT } from '@/lib/i18n'
-import { AppBar } from './app-bar'
-import { Icon } from './icon'
+import { CloseAppBar } from './app-bar'
 
 type FormScreenProps = {
     /** Omitted when the form heads itself in its body, as the native
@@ -19,21 +16,9 @@ type FormScreenProps = {
  * either way (see `CreateAccountScreen`).
  */
 export function FormScreen({ title, onClose, children }: FormScreenProps) {
-    const t = useT()
     return (
         <>
-            <AppBar
-                title={title}
-                leading={
-                    <IconButton
-                        aria-label={t.common.close}
-                        onPress={onClose}
-                        className="text-on-surface-variant"
-                    >
-                        <Icon name="close" />
-                    </IconButton>
-                }
-            />
+            <CloseAppBar title={title} onClose={onClose} />
             <div className="min-h-0 flex-1 overflow-y-auto">{children}</div>
         </>
     )

@@ -579,6 +579,18 @@ export function useVoice(opts: UseVoiceOpts) {
         [endAudioStream, stopMicCapture, openMic],
     )
 
+    /**
+     * Release the playback pipeline. Every path that ends a session must run
+     * this — audio contexts are a limited OS resource, and a failed connect or
+     * a server-side close used to leak one per attempt.
+     */
+    const stopPlayback = useCallback(() => {
+        playbackWorkletRef.current?.disconnect()
+        playbackContextRef.current?.close()
+        playbackWorkletRef.current = null
+        playbackContextRef.current = null
+    }, [])
+
     /** Send the turns typed before the session was up, in order. */
     const flushPendingText = useCallback(() => {
         const queued = pendingTextRef.current
@@ -747,6 +759,7 @@ export function useVoice(opts: UseVoiceOpts) {
                             // capturing into a dead session (the control bar
                             // would still show a live mic otherwise).
                             stopMicCapture()
+                            stopPlayback()
                             finalisePendingUser()
                             finalisePendingAgent()
                         },
@@ -765,6 +778,7 @@ export function useVoice(opts: UseVoiceOpts) {
                 if (mode === 'audio') await openMic({ turnOn: true })
             } catch (err) {
                 pendingTextRef.current = []
+                stopPlayback()
                 addSystem(
                     catalog.voice.systemConnectionFailed({
                         error: err instanceof Error ? err.message : String(err),
@@ -780,6 +794,7 @@ export function useVoice(opts: UseVoiceOpts) {
             applyStatus,
             openMic,
             stopMicCapture,
+            stopPlayback,
             flushPendingText,
             addSystem,
             addToolCall,
@@ -853,11 +868,8 @@ export function useVoice(opts: UseVoiceOpts) {
     const disconnect = useCallback(() => {
         endAudioStream()
         stopMicCapture()
-        playbackWorkletRef.current?.disconnect()
-        playbackContextRef.current?.close()
+        stopPlayback()
         sessionRef.current?.close()
-        playbackWorkletRef.current = null
-        playbackContextRef.current = null
         sessionRef.current = null
         audioStreamOpenRef.current = false
         pendingTextRef.current = []
@@ -869,6 +881,7 @@ export function useVoice(opts: UseVoiceOpts) {
     }, [
         endAudioStream,
         stopMicCapture,
+        stopPlayback,
         applyStatus,
         finalisePendingUser,
         finalisePendingAgent,

@@ -1,11 +1,5 @@
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import {
-    AuthHeroHeader,
-    AuthPanel,
-    AuthPanelTitle,
-    AuthPrimaryButton,
-    AuthScaffold,
-} from '@/components/auth/auth-scaffold'
+import { AuthFrame, AuthMessagePanel } from '@/components/auth/auth-scaffold'
 import { type Messages, useT } from '@/lib/i18n'
 
 type VerifyState = {
@@ -44,24 +38,14 @@ export function VerifyEmail() {
     const state = stateForError(searchParams.get('error'), t)
 
     return (
-        <AuthScaffold>
-            <AuthHeroHeader subtitle={t.auth.signInToContinue} />
-            <div className="mt-5.5">
-                <AuthPanel>
-                    <AuthPanelTitle
-                        icon={state.icon}
-                        title={state.title}
-                        subtitle={state.description}
-                    />
-                    <div className="mt-4">
-                        <AuthPrimaryButton
-                            submitting={false}
-                            label={t.auth.signIn}
-                            onPress={() => navigate('/login')}
-                        />
-                    </div>
-                </AuthPanel>
-            </div>
-        </AuthScaffold>
+        <AuthFrame>
+            <AuthMessagePanel
+                icon={state.icon}
+                title={state.title}
+                subtitle={state.description}
+                actionLabel={t.auth.signIn}
+                onAction={() => navigate('/login')}
+            />
+        </AuthFrame>
     )
 }

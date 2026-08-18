@@ -49,22 +49,9 @@ const clamp = (value: number, min: number, max: number) =>
     Math.min(Math.max(value, min), max)
 
 /**
- * Keeps a color's hue but drops saturation and lifts lightness — the CSS port
- * of the native `pastelize`, so dashboard fills read the same on both clients.
- */
-export function pastelize(hex: string): string {
-    const hsl = toHsl(hex)
-    if (!hsl) return hex
-    return hslToCss({
-        h: hsl.h,
-        s: clamp(hsl.s * 0.6, 0, 1),
-        l: clamp(hsl.l + (1 - hsl.l) * 0.7, 0, 1),
-    })
-}
-
-/**
- * Adapts a stored pastel so its content stays legible in both themes: kept
- * as-is in light, rebuilt as a deep tint of the same hue in dark. Ported from
+ * Adapts a stored color so its content stays legible in both themes: the
+ * native `pastelize` (keep the hue, drop saturation, lift lightness) in
+ * light, a deep tint of the same hue in dark. Ported from
  * `readableWidgetBackground`.
  */
 export function readableWidgetBackground(
@@ -86,9 +73,6 @@ export function readableWidgetBackground(
     })
 }
 
-/** The pastel swatches offered for a widget's fixed background. */
-export const DASHBOARD_BACKGROUND_PALETTE = COLOR_OPTIONS
-
 /**
  * Resolves a widget's configured background to a CSS color, or null to keep
  * the default `surfaceContainer`. `numericValue` is in *displayed* units:
@@ -103,8 +87,7 @@ export function resolveBackground(
         case 'none':
             return null
         case 'fixed': {
-            const hex =
-                style.fixedColor ?? DASHBOARD_BACKGROUND_PALETTE[0] ?? '#69F0AE'
+            const hex = style.fixedColor ?? COLOR_OPTIONS[0] ?? '#69F0AE'
             return readableWidgetBackground(hex, brightness)
         }
         case 'value': {

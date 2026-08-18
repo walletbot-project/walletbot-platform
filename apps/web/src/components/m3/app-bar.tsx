@@ -1,5 +1,8 @@
+import { IconButton } from 'actify'
 import type { ReactNode } from 'react'
+import { useT } from '@/lib/i18n'
 import { cn } from '@/lib/utils'
+import { Icon } from './icon'
 
 type AppBarProps = {
     /**
@@ -11,8 +14,6 @@ type AppBarProps = {
     leading?: ReactNode
     /** Trailing actions, matching Flutter's `AppBar.actions`. */
     actions?: ReactNode
-    /** Rendered flush under the bar — the tab bar slot (`AppBar.bottom`). */
-    bottom?: ReactNode
     className?: string
 }
 
@@ -20,13 +21,7 @@ type AppBarProps = {
  * The small top app bar, laid out like Flutter's `AppBar`: 64dp tall, a
  * `titleLarge` title inset 16dp from the leading edge, and 48dp action slots.
  */
-export function AppBar({
-    title,
-    leading,
-    actions,
-    bottom,
-    className,
-}: AppBarProps) {
+export function AppBar({ title, leading, actions, className }: AppBarProps) {
     return (
         <header
             className={cn(
@@ -49,7 +44,34 @@ export function AppBar({
                     <div className="flex items-center gap-1">{actions}</div>
                 ) : null}
             </div>
-            {bottom}
         </header>
+    )
+}
+
+/**
+ * The bar-with-a-close-action every non-sheet occupant leads with — one
+ * definition so the affordance can't drift between forms and detail panes.
+ */
+export function CloseAppBar({
+    title,
+    onClose,
+}: {
+    title?: ReactNode
+    onClose: () => void
+}) {
+    const t = useT()
+    return (
+        <AppBar
+            title={title}
+            leading={
+                <IconButton
+                    aria-label={t.common.close}
+                    onPress={onClose}
+                    className="text-on-surface-variant"
+                >
+                    <Icon name="close" />
+                </IconButton>
+            }
+        />
     )
 }

@@ -2,6 +2,7 @@ import { Button } from 'actify'
 import { type FormEvent, useState } from 'react'
 import { toast } from 'sonner'
 import {
+    AuthMessagePanel,
     AuthPanel,
     AuthPanelTitle,
     AuthPrimaryButton,
@@ -53,23 +54,17 @@ export function ForgotPasswordPanel({ onBack }: { onBack: () => void }) {
 
     if (sentTo !== null) {
         return (
-            <AuthPanel>
-                <AuthPanelTitle
-                    icon="mark_email_read"
-                    title={t.auth.resetPasswordTitle}
-                    subtitle={t.auth.resetEmailSent({ email: sentTo })}
-                />
+            <AuthMessagePanel
+                icon="mark_email_read"
+                title={t.auth.resetPasswordTitle}
+                subtitle={t.auth.resetEmailSent({ email: sentTo })}
+                actionLabel={t.auth.backToSignIn}
+                onAction={onBack}
+            >
                 <p className="m3-body-small mt-3 font-semibold leading-snug text-on-surface-variant">
                     {t.auth.resetEmailSentReturnHint}
                 </p>
-                <div className="mt-4">
-                    <AuthPrimaryButton
-                        submitting={false}
-                        label={t.auth.backToSignIn}
-                        onPress={onBack}
-                    />
-                </div>
-            </AuthPanel>
+            </AuthMessagePanel>
         )
     }
 

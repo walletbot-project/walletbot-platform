@@ -37,13 +37,13 @@ import { CURRENCY_CODES, SUGGESTED_CURRENCIES } from '@/lib/currencies'
 import { COLOR_OPTIONS } from '@/lib/entity-colors'
 import { type Messages, useFormatLocale, useT } from '@/lib/i18n'
 import type { DashboardWidgetRow } from '@/pages/home/dashboard'
+import { widthLabel } from '@/pages/home/labels'
 
 function newId() {
     return crypto.randomUUID()
 }
 
 type WidgetSheetProps = {
-    open: boolean
     onOpenChange: (open: boolean) => void
     /** The widget being edited, or null when adding a new one. */
     widget: DashboardWidgetRow | null
@@ -61,7 +61,6 @@ type WidgetSheetProps = {
  * widget created here is editable from the native app and vice versa.
  */
 export function WidgetSheet({
-    open,
     onOpenChange,
     widget,
     nextRow,
@@ -157,11 +156,15 @@ export function WidgetSheet({
                 filterId = null
             }
 
+            // Same rule the shared parser reads back with: anything that isn't
+            // a positive count stores as 5, so the stored JSON never disagrees
+            // with what every client displays.
+            const parsedLimit = Number.parseInt(limit, 10)
             const options = mergeWidgetOptions(widget?.options ?? '', {
                 title,
                 ...(type === 'stat' ? { aggregation } : {}),
                 ...(type === 'list'
-                    ? { limit: Number.parseInt(limit, 10) || 5 }
+                    ? { limit: parsedLimit > 0 ? parsedLimit : 5 }
                     : {}),
                 ...(type === 'balance' ? { currency } : {}),
                 ...(type === 'chart' ? { groupBy, chartKind } : {}),
@@ -200,7 +203,8 @@ export function WidgetSheet({
 
     return (
         <BottomSheet
-            open={open}
+            // Mounted conditionally by Home; while rendered it is always open.
+            open
             onOpenChange={onOpenChange}
             title={widget ? t.dashboard.editWidget : t.dashboard.addWidget}
             showTitle
@@ -214,6 +218,9 @@ export function WidgetSheet({
                                 label={widgetTypeLabel(option, t)}
                                 selected={option === type}
                                 onSelect={() => {
+                                    // Re-tapping the selected chip must not
+                                    // reset a hand-picked width.
+                                    if (option === type) return
                                     setType(option)
                                     setWidth(defaultWidthFor(option))
                                 }}
@@ -676,19 +683,6 @@ function chartKindLabel(value: BreakdownChartKind, t: Messages): string {
             return t.dashboard.chartBar
         case 'line':
             return t.dashboard.chartLine
-    }
-}
-
-function widthLabel(value: DashboardWidth, t: Messages): string {
-    switch (value) {
-        case 'third':
-            return t.dashboard.widthThird
-        case 'half':
-            return t.dashboard.widthHalf
-        case 'two_thirds':
-            return t.dashboard.widthTwoThirds
-        case 'full':
-            return t.dashboard.widthFull
     }
 }
 

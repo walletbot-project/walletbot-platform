@@ -21,9 +21,13 @@ function splitTime(value: string): { hour: string; minute: string } {
 }
 
 function clampPart(raw: string, max: number): string {
-    const digits = raw.replace(/\D/g, '').slice(0, 2)
+    // Keep every typed digit before clamping. The controlled value round-trips
+    // as e.g. '01', so the next keystroke arrives as '015' — slicing to two
+    // digits first dropped it and made 10–23 / 10–59 untypeable digit by digit.
+    const digits = raw.replace(/\D/g, '').slice(0, 4)
     if (digits === '') return ''
-    return String(Math.min(Number(digits), max)).padStart(digits.length, '0')
+    const clamped = Math.min(Number(digits), max)
+    return String(clamped).padStart(Math.min(digits.length, 2), '0')
 }
 
 /**
@@ -31,8 +35,9 @@ function clampPart(raw: string, max: number): string {
  * (the dial's counterpart). Used instead of `<input type="time">`, which
  * renders the browser's own control.
  *
- * A part is only reported upward once both are present, so a half-typed time
- * never reaches the caller as a malformed value.
+ * The pair is reported upward as a whole: clearing both boxes reports an empty
+ * value, and a half-set pair pads the missing part with zeros, so the caller
+ * always receives either '' or a well-formed `HH:mm`.
  */
 export function TimeField({
     value,

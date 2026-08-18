@@ -3,9 +3,7 @@ import type { MutationCtx } from '../../_generated/server'
 import { mutation } from '../../_generated/server'
 import { nextSeq, writeTombstone } from '../../sync/helpers'
 import { requireAuth } from '../../users/helpers'
-
-/** Guard on the per-user configuration tables — see queries.ts. */
-const MAX_DASHBOARD_ROWS = 200
+import { MAX_DASHBOARD_ROWS } from './helpers'
 
 async function findWidget(ctx: MutationCtx, userId: string, id: string) {
     return await ctx.db

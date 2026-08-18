@@ -4,6 +4,7 @@ import { useMutation, useQuery } from 'convex/react'
 import { useMemo } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { toast } from 'sonner'
+import { DetailNotFound, DetailSkeleton } from '@/components/detail-fallbacks'
 import { AppBar } from '@/components/m3/app-bar'
 import { Icon } from '@/components/m3/icon'
 import { ListDetailLayout } from '@/components/m3/list-detail-layout'
@@ -11,6 +12,7 @@ import { StateMessage } from '@/components/m3/state-message'
 import { Skeleton } from '@/components/ui/skeleton'
 import { GROUP_SPACING, groupedRadius } from '@/lib/grouped-list'
 import { type Messages, useT } from '@/lib/i18n'
+import { newId } from '@/lib/new-id'
 import {
     AccountDetail,
     type AccountSummary,
@@ -21,10 +23,6 @@ import {
     type AccountFormValue,
 } from '@/pages/accounts/account-form'
 import { AccountTile } from '@/pages/accounts/account-tile'
-
-function newId() {
-    return `${Date.now()}${Math.random().toString(36).slice(2, 8)}`
-}
 
 /**
  * The accounts list. What is open beside it — nothing, the create form, or one
@@ -134,7 +132,13 @@ export function AccountCreateRoute() {
             error: (error) =>
                 accountErrorMessage(error, t, t.accounts.createFailed),
         })
-        await run
+        // The toast already reported the failure; swallowing it here keeps the
+        // form open without an unhandled rejection.
+        try {
+            await run
+        } catch {
+            return
+        }
         close()
     }
 
@@ -143,7 +147,6 @@ export function AccountCreateRoute() {
 
 /** `/accounts/:accountId` — one account's detail as the layout's occupant. */
 export function AccountDetailRoute() {
-    const t = useT()
     const navigate = useNavigate()
     const { accountId } = useParams()
     const accounts = useQuery(api.v1.accounts.queries.listActive)
@@ -162,32 +165,10 @@ export function AccountDetailRoute() {
             : null
     }, [accounts, accountId])
 
-    if (accounts === undefined) {
-        return (
-            <div className="flex flex-col gap-3 p-4">
-                <Skeleton className="h-28 w-full rounded-2xl" />
-                <Skeleton className="h-24 w-full rounded-2xl" />
-            </div>
-        )
-    }
+    if (accounts === undefined) return <DetailSkeleton />
 
     if (account === null) {
-        return (
-            <StateMessage
-                icon="search_off"
-                tone="error"
-                title={t.common.notFoundTitle}
-                detail={t.common.notFoundDescription}
-                action={
-                    <Button
-                        variant="filled"
-                        onPress={() => navigate('/accounts')}
-                    >
-                        {t.common.backToList}
-                    </Button>
-                }
-            />
-        )
+        return <DetailNotFound onBack={() => navigate('/accounts')} />
     }
 
     return (

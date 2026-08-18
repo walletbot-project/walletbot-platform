@@ -1,16 +1,17 @@
-import { Button, CircularProgress, TextField } from 'actify'
+import { TextField } from 'actify'
 import { type FormEvent, useState } from 'react'
-import { ColorSwatches } from '@/components/color-swatches'
-import { IconPicker } from '@/components/icon-picker'
-import { ChoiceChip } from '@/components/m3/chip'
+import {
+    FormSubmitButton,
+    IconColorSection,
+    NameSuggestions,
+} from '@/components/entity-form-sections'
 import { FormScreen } from '@/components/m3/form-screen'
-import { Icon } from '@/components/m3/icon'
 import {
     CATEGORY_DEFAULT_ICON,
     CATEGORY_ICONS,
     categoryIcon,
 } from '@/lib/category-icons'
-import { CATEGORY_DEFAULT_COLOR, COLOR_OPTIONS } from '@/lib/entity-colors'
+import { CATEGORY_DEFAULT_COLOR } from '@/lib/entity-colors'
 import { type Messages, useT } from '@/lib/i18n'
 
 export type CategoryFormValue = {
@@ -68,35 +69,17 @@ export function CategoryForm({
     return (
         <FormScreen title={t.insights.newCategory} onClose={onClose}>
             <form onSubmit={handleSubmit} className="flex flex-col gap-6 p-4">
-                <section className="flex flex-col gap-2">
-                    <h2 className="m3-label-large text-on-surface">
-                        {t.accounts.suggestions}
-                    </h2>
-                    <div className="flex flex-wrap gap-2">
-                        {NAME_SUGGESTIONS.map((suggestion) => {
-                            const label = suggestion.label(t)
-                            const option = categoryIcon(suggestion.icon)
-                            return (
-                                <ChoiceChip
-                                    key={suggestion.icon}
-                                    label={label}
-                                    selected={false}
-                                    onSelect={() => {
-                                        setName(label)
-                                        setIcon(suggestion.icon)
-                                    }}
-                                    leading={
-                                        <Icon
-                                            name={option.symbol}
-                                            filled={option.filled}
-                                            size={18}
-                                        />
-                                    }
-                                />
-                            )
-                        })}
-                    </div>
-                </section>
+                <NameSuggestions
+                    suggestions={NAME_SUGGESTIONS.map((suggestion) => ({
+                        label: suggestion.label(t),
+                        icon: suggestion.icon,
+                    }))}
+                    resolveIcon={categoryIcon}
+                    onPick={(suggestion) => {
+                        setName(suggestion.label)
+                        setIcon(suggestion.icon)
+                    }}
+                />
 
                 <TextField
                     variant="outlined"
@@ -120,38 +103,19 @@ export function CategoryForm({
                     isDisabled={submitting}
                 />
 
-                <section className="flex flex-col gap-3">
-                    <h2 className="m3-label-large text-on-surface">
-                        {t.common.iconAndColor}
-                    </h2>
-                    <div className="flex items-start gap-4">
-                        <IconPicker
-                            icon={icon}
-                            color={color}
-                            onIconChange={setIcon}
-                            icons={CATEGORY_ICONS}
-                        />
-                        <div className="flex-1">
-                            <ColorSwatches
-                                value={color}
-                                onChange={setColor}
-                                options={COLOR_OPTIONS}
-                            />
-                        </div>
-                    </div>
-                </section>
+                <IconColorSection
+                    icon={icon}
+                    color={color}
+                    onIconChange={setIcon}
+                    onColorChange={setColor}
+                    icons={CATEGORY_ICONS}
+                />
 
-                <Button
-                    type="submit"
-                    variant="filled"
-                    className="w-full"
+                <FormSubmitButton
+                    submitting={submitting}
                     isDisabled={submitting || !name.trim()}
-                >
-                    {submitting ? (
-                        <CircularProgress isIndeterminate size="xs" />
-                    ) : null}
-                    {t.common.create}
-                </Button>
+                    label={t.common.create}
+                />
             </form>
         </FormScreen>
     )

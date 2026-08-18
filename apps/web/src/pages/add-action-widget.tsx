@@ -95,23 +95,7 @@ export function ActionWidget({ message }: { message: ActionResultMessage }) {
     }
 }
 
-type TxnDoc = {
-    id: string
-    type: 'expense' | 'income' | 'transfer' | 'balance_adjustment'
-    name: string
-    description?: string | null
-    date: bigint
-    dateConfirmed: boolean
-    amount: bigint
-    currency: string
-    balanceAfter?: bigint
-    categoryId: string
-    accountId: string
-    toAccountId?: string
-    toAmount?: bigint
-    toCurrency?: string
-    status: 'pending' | 'cleared'
-}
+type TxnType = 'expense' | 'income' | 'transfer' | 'balance_adjustment'
 
 function TransactionActionWidget({
     entityId,
@@ -194,15 +178,6 @@ function TransactionActionWidget({
     )
 }
 
-type AccountDoc = {
-    id: string
-    name: string
-    currency: string
-    description?: string | null
-    color?: string
-    icon?: string
-}
-
 function AccountActionWidget({
     entityId,
     wasUpdated,
@@ -212,6 +187,7 @@ function AccountActionWidget({
 }) {
     const t = useT()
     const account = useQuery(api.v1.accounts.queries.get, { id: entityId })
+    const updateAccount = useMutation(api.v1.accounts.mutations.update)
     const [editOpen, setEditOpen] = useState(false)
     if (account === undefined) return <ActionSkeleton />
     if (account === null) return null
@@ -237,115 +213,28 @@ function AccountActionWidget({
                 onOpenChange={setEditOpen}
                 title={t.actionWidget.editAccount}
             >
-                <AccountEditContent
-                    account={account}
+                <EntityEditContent
+                    title={t.actionWidget.editAccount}
+                    initialName={account.name}
+                    initialDescription={account.description ?? ''}
+                    initialColor={normalizeColor(
+                        account.color,
+                        ACCOUNT_DEFAULT_COLOR,
+                    )}
+                    initialIcon={account.icon ?? 'wallet'}
+                    icons={ACCOUNT_ICONS}
+                    savedToast={t.actionWidget.accountSaved}
+                    errorToast={(error) =>
+                        accountErrorMessage(error, t, t.common.saveFailed)
+                    }
+                    onSave={(value) =>
+                        updateAccount({ id: account.id, ...value })
+                    }
                     onClose={() => setEditOpen(false)}
                 />
             </ActionSheet>
         </>
     )
-}
-
-function AccountEditContent({
-    account,
-    onClose,
-}: {
-    account: AccountDoc
-    onClose: () => void
-}) {
-    const t = useT()
-    const updateAccount = useMutation(api.v1.accounts.mutations.update)
-    const formId = useId()
-    const [name, setName] = useState(account.name)
-    const [description, setDescription] = useState(account.description ?? '')
-    const [color, setColor] = useState(() =>
-        normalizeColor(account.color, ACCOUNT_DEFAULT_COLOR),
-    )
-    const [icon, setIcon] = useState(account.icon ?? 'wallet')
-    const [saving, setSaving] = useState(false)
-
-    const handleSubmit = async (event: FormEvent) => {
-        event.preventDefault()
-        const nextDescription = description.trim()
-        setSaving(true)
-        const promise = updateAccount({
-            id: account.id,
-            name: name.trim(),
-            description:
-                nextDescription !== (account.description ?? '')
-                    ? nextDescription
-                    : undefined,
-            color,
-            icon,
-        })
-        toast.promise(promise, {
-            loading: t.common.saving,
-            success: t.actionWidget.accountSaved,
-            error: (error) =>
-                accountErrorMessage(error, t, t.common.saveFailed),
-        })
-        try {
-            await promise
-            onClose()
-        } catch {
-            // toast.promise owns the user-facing error state.
-        } finally {
-            setSaving(false)
-        }
-    }
-
-    return (
-        <>
-            <SheetHeader>
-                <SheetTitle>{t.actionWidget.editAccount}</SheetTitle>
-            </SheetHeader>
-            <form
-                id={formId}
-                onSubmit={handleSubmit}
-                className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-4 py-2"
-            >
-                <EditField label={t.common.name} id={`${formId}-name`}>
-                    <Input
-                        id={`${formId}-name`}
-                        value={name}
-                        onChange={(event) => setName(event.target.value)}
-                        required
-                    />
-                </EditField>
-                <EditField
-                    label={t.common.description}
-                    id={`${formId}-description`}
-                >
-                    <Textarea
-                        id={`${formId}-description`}
-                        value={description}
-                        onChange={(event) => setDescription(event.target.value)}
-                        rows={3}
-                    />
-                </EditField>
-                <VisualIdentityFields
-                    color={color}
-                    onColorChange={setColor}
-                    icon={icon}
-                    onIconChange={setIcon}
-                    icons={ACCOUNT_ICONS}
-                />
-            </form>
-            <ActionSheetFooter
-                formId={formId}
-                saving={saving}
-                onClose={onClose}
-            />
-        </>
-    )
-}
-
-type CategoryDoc = {
-    id: string
-    name: string
-    description?: string | null
-    color?: string
-    icon?: string
 }
 
 function CategoryActionWidget({
@@ -357,6 +246,7 @@ function CategoryActionWidget({
 }) {
     const t = useT()
     const category = useQuery(api.v1.categories.queries.get, { id: entityId })
+    const updateCategory = useMutation(api.v1.categories.mutations.update)
     const [editOpen, setEditOpen] = useState(false)
     if (category === undefined) return <ActionSkeleton />
     if (category === null) return null
@@ -385,8 +275,21 @@ function CategoryActionWidget({
                 onOpenChange={setEditOpen}
                 title={t.actionWidget.editCategory}
             >
-                <CategoryEditContent
-                    category={category}
+                <EntityEditContent
+                    title={t.actionWidget.editCategory}
+                    initialName={category.name}
+                    initialDescription={category.description ?? ''}
+                    initialColor={normalizeColor(
+                        category.color,
+                        CATEGORY_DEFAULT_COLOR,
+                    )}
+                    initialIcon={category.icon ?? 'category'}
+                    icons={CATEGORY_ICONS}
+                    savedToast={t.actionWidget.categorySaved}
+                    errorToast={t.common.saveFailed}
+                    onSave={(value) =>
+                        updateCategory({ id: category.id, ...value })
+                    }
                     onClose={() => setEditOpen(false)}
                 />
             </ActionSheet>
@@ -394,33 +297,55 @@ function CategoryActionWidget({
     )
 }
 
-function CategoryEditContent({
-    category,
+/**
+ * The account/category edit form — one component, since the two differed only
+ * in mutation, defaults, icon set and toast copy. The description is sent only
+ * when it changed, so an untouched field can't clobber a concurrent edit.
+ */
+function EntityEditContent({
+    title,
+    initialName,
+    initialDescription,
+    initialColor,
+    initialIcon,
+    icons,
+    savedToast,
+    errorToast,
+    onSave,
     onClose,
 }: {
-    category: CategoryDoc
+    title: string
+    initialName: string
+    initialDescription: string
+    initialColor: string
+    initialIcon: string
+    icons: typeof ACCOUNT_ICONS | typeof CATEGORY_ICONS
+    savedToast: string
+    errorToast: string | ((error: unknown) => string)
+    onSave: (value: {
+        name: string
+        description: string | undefined
+        color: string
+        icon: string
+    }) => Promise<unknown>
     onClose: () => void
 }) {
     const t = useT()
-    const updateCategory = useMutation(api.v1.categories.mutations.update)
     const formId = useId()
-    const [name, setName] = useState(category.name)
-    const [description, setDescription] = useState(category.description ?? '')
-    const [color, setColor] = useState(() =>
-        normalizeColor(category.color, CATEGORY_DEFAULT_COLOR),
-    )
-    const [icon, setIcon] = useState(category.icon ?? 'category')
+    const [name, setName] = useState(initialName)
+    const [description, setDescription] = useState(initialDescription)
+    const [color, setColor] = useState(initialColor)
+    const [icon, setIcon] = useState(initialIcon)
     const [saving, setSaving] = useState(false)
 
     const handleSubmit = async (event: FormEvent) => {
         event.preventDefault()
         const nextDescription = description.trim()
         setSaving(true)
-        const promise = updateCategory({
-            id: category.id,
+        const promise = onSave({
             name: name.trim(),
             description:
-                nextDescription !== (category.description ?? '')
+                nextDescription !== initialDescription
                     ? nextDescription
                     : undefined,
             color,
@@ -428,8 +353,8 @@ function CategoryEditContent({
         })
         toast.promise(promise, {
             loading: t.common.saving,
-            success: t.actionWidget.categorySaved,
-            error: t.common.saveFailed,
+            success: savedToast,
+            error: errorToast,
         })
         try {
             await promise
@@ -444,7 +369,7 @@ function CategoryEditContent({
     return (
         <>
             <SheetHeader>
-                <SheetTitle>{t.actionWidget.editCategory}</SheetTitle>
+                <SheetTitle>{title}</SheetTitle>
             </SheetHeader>
             <form
                 id={formId}
@@ -475,7 +400,7 @@ function CategoryEditContent({
                     onColorChange={setColor}
                     icon={icon}
                     onIconChange={setIcon}
-                    icons={CATEGORY_ICONS}
+                    icons={icons}
                 />
             </form>
             <ActionSheetFooter
@@ -806,10 +731,11 @@ function VisualIdentityFields({
     onIconChange: (icon: string) => void
     icons: typeof ACCOUNT_ICONS | typeof CATEGORY_ICONS
 }) {
+    const t = useT()
     return (
         <>
             <div className="flex flex-col gap-2">
-                <Label>Color</Label>
+                <Label>{t.common.color}</Label>
                 <ColorSwatches
                     value={color}
                     onChange={onColorChange}
@@ -817,7 +743,7 @@ function VisualIdentityFields({
                 />
             </div>
             <div className="flex flex-col gap-2">
-                <Label>Ícono</Label>
+                <Label>{t.common.icon}</Label>
                 <IconPicker
                     icon={icon}
                     color={color}
@@ -828,8 +754,6 @@ function VisualIdentityFields({
         </>
     )
 }
-
-type TxnType = TxnDoc['type']
 
 function txnTypeConfig(type: TxnType, t: Messages) {
     switch (type) {

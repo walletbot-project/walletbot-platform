@@ -82,17 +82,6 @@ export function formatAmount(
     return `${currencySymbol}${groupThousands(whole, locale)}`
 }
 
-/** Signed amount, e.g. `+ $ 1.234` / `- $ 1.234`. */
-export function formatSignedAmount(
-    cents: number,
-    locale: string,
-    currencySymbol = '$',
-): string {
-    const sign = cents < 0 ? '-' : cents > 0 ? '+' : ''
-    const whole = Math.round(Math.abs(cents) / 100)
-    return `${sign ? `${sign} ` : ''}${currencySymbol} ${groupThousands(whole, locale)}`
-}
-
 function startOfDay(date: Date): Date {
     return new Date(date.getFullYear(), date.getMonth(), date.getDate())
 }

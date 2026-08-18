@@ -1,14 +1,15 @@
 import { api } from '@wallet-bot/backend/api'
-import { Button, IconButton, TabItem, Tabs } from 'actify'
+import { IconButton, TabItem, Tabs } from 'actify'
 import { useMutation, useQuery } from 'convex/react'
 import { useMemo } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { toast } from 'sonner'
+import { DetailNotFound, DetailSkeleton } from '@/components/detail-fallbacks'
 import { AppBar } from '@/components/m3/app-bar'
 import { Icon } from '@/components/m3/icon'
 import { ListDetailLayout } from '@/components/m3/list-detail-layout'
-import { StateMessage } from '@/components/m3/state-message'
 import { useT } from '@/lib/i18n'
+import { newId } from '@/lib/new-id'
 import { CategoriesView } from '@/pages/insights/categories-view'
 import {
     CategoryDetail,
@@ -25,10 +26,6 @@ import {
     type TagOption,
 } from '@/pages/insights/tag-form'
 import { TagsView } from '@/pages/insights/tags-view'
-
-function newId() {
-    return `${Date.now()}${Math.random().toString(36).slice(2, 8)}`
-}
 
 type InsightsTab = 'categories' | 'tags'
 
@@ -123,7 +120,11 @@ export function InsightCreateRoute() {
     const t = useT()
     const navigate = useNavigate()
     const tab = useInsightsTab()
-    const tags = useQuery(api.v1.tags.queries.listActiveWithCounts)
+    // Only the tag form needs the tag list (for the parent picker).
+    const tags = useQuery(
+        api.v1.tags.queries.listActiveWithCounts,
+        tab === 'tags' ? {} : 'skip',
+    )
     const createCategory = useMutation(api.v1.categories.mutations.create)
     const createTag = useMutation(api.v1.tags.mutations.create)
 
@@ -153,7 +154,13 @@ export function InsightCreateRoute() {
             success: t.insights.categoryCreated,
             error: t.insights.categoryCreateFailed,
         })
-        await promise
+        // The toast already reported the failure; swallowing it here keeps the
+        // form open without an unhandled rejection.
+        try {
+            await promise
+        } catch {
+            return
+        }
         close()
     }
 
@@ -169,7 +176,11 @@ export function InsightCreateRoute() {
             success: t.insights.tagCreated,
             error: t.insights.tagCreateFailed,
         })
-        await promise
+        try {
+            await promise
+        } catch {
+            return
+        }
         close()
     }
 
@@ -190,12 +201,18 @@ export function InsightCreateRoute() {
 
 /** `/insights/:tab/:entityId` — one category's or tag's detail. */
 export function InsightDetailRoute() {
-    const t = useT()
     const navigate = useNavigate()
     const tab = useInsightsTab()
     const { entityId } = useParams()
-    const categories = useQuery(api.v1.categories.queries.listActiveWithCounts)
-    const tags = useQuery(api.v1.tags.queries.listActiveWithCounts)
+    // Each tab reads only its own list.
+    const categories = useQuery(
+        api.v1.categories.queries.listActiveWithCounts,
+        tab === 'categories' ? {} : 'skip',
+    )
+    const tags = useQuery(
+        api.v1.tags.queries.listActiveWithCounts,
+        tab === 'tags' ? {} : 'skip',
+    )
 
     const close = () => navigate(`/insights/${tab}`)
     const loading =
@@ -245,7 +262,7 @@ export function InsightDetailRoute() {
         [tags, tag],
     )
 
-    if (loading) return null
+    if (loading) return <DetailSkeleton />
 
     if (category !== null) {
         return <CategoryDetail category={category} onClose={close} />
@@ -254,17 +271,5 @@ export function InsightDetailRoute() {
         return <TagDetail tag={tag} childTags={childTags} onClose={close} />
     }
 
-    return (
-        <StateMessage
-            icon="search_off"
-            tone="error"
-            title={t.common.notFoundTitle}
-            detail={t.common.notFoundDescription}
-            action={
-                <Button variant="filled" onPress={close}>
-                    {t.common.backToList}
-                </Button>
-            }
-        />
-    )
+    return <DetailNotFound onBack={close} />
 }

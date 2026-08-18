@@ -1,7 +1,6 @@
 import { useContext } from 'react'
 import { ThemeContext, type ThemeContextValue } from './context'
 
-export { ThemeContext, type ThemeContextValue } from './context'
 export {
     type Brightness,
     readSystemBrightness,

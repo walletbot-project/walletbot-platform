@@ -38,8 +38,3 @@ export function normalizeColor(
     if (!color) return fallback
     return color.toUpperCase()
 }
-
-/** A translucent variant of a hex color for tinted backgrounds (e.g. `1F` ≈ 12%). */
-export function tint(color: string, alphaHex: string): string {
-    return `${color}${alphaHex}`
-}

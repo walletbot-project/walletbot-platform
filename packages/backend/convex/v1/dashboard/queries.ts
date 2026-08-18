@@ -5,19 +5,10 @@ import { requireAuth } from '../../users/helpers'
 import { computeAccountBalance } from '../transactions/queries'
 import {
     absCents,
-    buildEvaluationContext,
-    collectMatching,
-    filterFromConfig,
-    MAX_SCAN,
+    evaluateConfig,
+    MAX_DASHBOARD_ROWS,
     netCents,
 } from './helpers'
-
-/**
- * Both dashboard tables are per-user configuration: a handful of rows each,
- * bounded by what a person can lay out on one screen. The cap is a guard, not
- * a paging strategy.
- */
-const MAX_DASHBOARD_ROWS = 200
 
 /** Rows the transaction-list widget may request. */
 const MAX_LIST_LIMIT = 50
@@ -76,19 +67,10 @@ export const stat = query({
     },
     handler: async (ctx, args) => {
         const userId = await requireAuth(ctx)
-        const { filter, root } = filterFromConfig(args.config)
-        const evaluation = await buildEvaluationContext(
+        const { rows, truncated } = await evaluateConfig(
             ctx,
             userId,
-            root,
-            new Date(),
-        )
-        const rows = await collectMatching(
-            ctx,
-            userId,
-            filter,
-            root,
-            evaluation,
+            args.config,
             null,
         )
 
@@ -100,7 +82,7 @@ export const stat = query({
             aggregation: args.aggregation,
             amountCents: args.aggregation === 'count' ? 0n : amount,
             count: rows.length,
-            truncated: rows.length >= MAX_SCAN,
+            truncated,
         }
     },
 })
@@ -113,21 +95,8 @@ export const transactions = query({
             Math.max(Math.trunc(args.limit ?? 5), 1),
             MAX_LIST_LIMIT,
         )
-        const { filter, root } = filterFromConfig(args.config)
-        const evaluation = await buildEvaluationContext(
-            ctx,
-            userId,
-            root,
-            new Date(),
-        )
-        return await collectMatching(
-            ctx,
-            userId,
-            filter,
-            root,
-            evaluation,
-            limit,
-        )
+        const { rows } = await evaluateConfig(ctx, userId, args.config, limit)
+        return rows
     },
 })
 
@@ -175,19 +144,10 @@ export const breakdown = query({
     },
     handler: async (ctx, args) => {
         const userId = await requireAuth(ctx)
-        const { filter, root } = filterFromConfig(args.config)
-        const evaluation = await buildEvaluationContext(
+        const { rows, truncated } = await evaluateConfig(
             ctx,
             userId,
-            root,
-            new Date(),
-        )
-        const rows = await collectMatching(
-            ctx,
-            userId,
-            filter,
-            root,
-            evaluation,
+            args.config,
             null,
         )
 
@@ -224,7 +184,8 @@ export const breakdown = query({
 
         return {
             slices: slices.slice(0, MAX_SLICES),
-            truncated: slices.length > MAX_SLICES,
+            // Partial either way: the scan was capped, or the tail was folded.
+            truncated: truncated || slices.length > MAX_SLICES,
         }
     },
 })

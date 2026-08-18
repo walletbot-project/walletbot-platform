@@ -15,7 +15,7 @@ const EXPENSE_FILTER_ID = 'seed-flt-gastos-mes'
 const INCOME_FILTER_ID = 'seed-flt-ingresos-mes'
 const MONTH_FILTER_ID = 'seed-flt-movimientos-mes'
 
-export type SeedPayload = {
+type SeedPayload = {
     filters: { id: string; name: string; config: string }[]
     widgets: {
         id: string

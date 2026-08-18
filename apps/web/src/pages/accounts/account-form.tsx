@@ -1,10 +1,11 @@
-import { Button, CircularProgress, TextField } from 'actify'
+import { TextField } from 'actify'
 import { type FormEvent, useMemo, useState } from 'react'
-import { ColorSwatches } from '@/components/color-swatches'
-import { IconPicker } from '@/components/icon-picker'
-import { ChoiceChip } from '@/components/m3/chip'
+import {
+    FormSubmitButton,
+    IconColorSection,
+    NameSuggestions,
+} from '@/components/entity-form-sections'
 import { FormScreen } from '@/components/m3/form-screen'
-import { Icon } from '@/components/m3/icon'
 import { OptionSheet, type SheetOption } from '@/components/m3/option-sheet'
 import { PickerField } from '@/components/m3/picker-field'
 import {
@@ -18,7 +19,7 @@ import {
     DEFAULT_CURRENCY,
     SUGGESTED_CURRENCIES,
 } from '@/lib/currencies'
-import { ACCOUNT_DEFAULT_COLOR, COLOR_OPTIONS } from '@/lib/entity-colors'
+import { ACCOUNT_DEFAULT_COLOR } from '@/lib/entity-colors'
 import { type Messages, useFormatLocale, useT } from '@/lib/i18n'
 
 export type AccountFormValue = {
@@ -107,35 +108,17 @@ export function AccountForm({
     return (
         <FormScreen title={t.accounts.newAccount} onClose={onClose}>
             <form onSubmit={handleSubmit} className="flex flex-col gap-6 p-4">
-                <section className="flex flex-col gap-2">
-                    <h2 className="m3-label-large text-on-surface">
-                        {t.accounts.suggestions}
-                    </h2>
-                    <div className="flex flex-wrap gap-2">
-                        {NAME_SUGGESTIONS.map((suggestion) => {
-                            const label = suggestion.label(t)
-                            const option = accountIcon(suggestion.icon)
-                            return (
-                                <ChoiceChip
-                                    key={suggestion.icon}
-                                    label={label}
-                                    selected={false}
-                                    onSelect={() => {
-                                        setName(label)
-                                        setIcon(suggestion.icon)
-                                    }}
-                                    leading={
-                                        <Icon
-                                            name={option.symbol}
-                                            filled={option.filled}
-                                            size={18}
-                                        />
-                                    }
-                                />
-                            )
-                        })}
-                    </div>
-                </section>
+                <NameSuggestions
+                    suggestions={NAME_SUGGESTIONS.map((suggestion) => ({
+                        label: suggestion.label(t),
+                        icon: suggestion.icon,
+                    }))}
+                    resolveIcon={accountIcon}
+                    onPick={(suggestion) => {
+                        setName(suggestion.label)
+                        setIcon(suggestion.icon)
+                    }}
+                />
 
                 <TextField
                     variant="outlined"
@@ -149,26 +132,13 @@ export function AccountForm({
                     autoFocus
                 />
 
-                <section className="flex flex-col gap-3">
-                    <h2 className="m3-label-large text-on-surface">
-                        {t.common.iconAndColor}
-                    </h2>
-                    <div className="flex items-start gap-4">
-                        <IconPicker
-                            icon={icon}
-                            color={color}
-                            onIconChange={setIcon}
-                            icons={ACCOUNT_ICONS}
-                        />
-                        <div className="flex-1">
-                            <ColorSwatches
-                                value={color}
-                                onChange={setColor}
-                                options={COLOR_OPTIONS}
-                            />
-                        </div>
-                    </div>
-                </section>
+                <IconColorSection
+                    icon={icon}
+                    color={color}
+                    onIconChange={setIcon}
+                    onColorChange={setColor}
+                    icons={ACCOUNT_ICONS}
+                />
 
                 <PickerField
                     label={t.common.currency}
@@ -196,19 +166,13 @@ export function AccountForm({
                     ) : null}
                 </div>
 
-                <Button
-                    type="submit"
-                    variant="filled"
-                    className="w-full"
+                <FormSubmitButton
+                    submitting={submitting}
                     isDisabled={
                         submitting || !name.trim() || balanceError !== null
                     }
-                >
-                    {submitting ? (
-                        <CircularProgress isIndeterminate size="xs" />
-                    ) : null}
-                    {t.accounts.createAccount}
-                </Button>
+                    label={t.accounts.createAccount}
+                />
             </form>
 
             <OptionSheet

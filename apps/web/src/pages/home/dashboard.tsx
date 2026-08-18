@@ -20,9 +20,10 @@ import { toast } from 'sonner'
 import { Icon } from '@/components/m3/icon'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useElementWidth } from '@/hooks/use-element-width'
-import { type Messages, useT } from '@/lib/i18n'
+import { useT } from '@/lib/i18n'
 import { cn } from '@/lib/utils'
 import { defaultDashboardSeed } from '@/pages/home/default-dashboard'
+import { widthLabel } from '@/pages/home/labels'
 import {
     type DropTarget,
     type TileDrag,
@@ -397,21 +398,10 @@ export function Dashboard({
             />
         )
 
-    if (bandColumns === 1) {
-        return (
-            <div
-                ref={measureRef}
-                className="flex flex-col"
-                style={{ gap: TILE_GAP }}
-            >
-                {Array.from({ length: rowCount }, (_, rowIndex) => (
-                    <div key={rowIndex}>{renderRow(rowIndex)}</div>
-                ))}
-                {preview}
-            </div>
-        )
-    }
-
+    // ONE tree for every band count. With `bandColumns === 1` the band grid
+    // degenerates to one row per band, which renders identically — a second
+    // early-return here would change the tree shape at the width threshold and
+    // remount every widget (the exact bug the root layout once had).
     const bandCount = Math.ceil(rowCount / bandColumns)
     return (
         <div
@@ -528,9 +518,10 @@ function placeInCell(
     if (!dragged) return null
     const fit = fitWidth(placements, row, col, id)
     if (fit === null) return null
+    // `fitWidth` measured the contiguous free run from `col`, and the chosen
+    // width never exceeds it, so the span is free by construction.
     const width =
         WIDTH_UNITS[fit] < WIDTH_UNITS[dragged.width] ? fit : dragged.width
-    if (!isSpanFree(placements, row, col, WIDTH_UNITS[width], id)) return null
     return placements.map((placement) =>
         placement.id === id ? { ...placement, row, col, width } : placement,
     )
@@ -572,6 +563,16 @@ function swapPlacements(
         )
     ) {
         return null
+    }
+    // The two checks above ignore *both* movers, so they never test the
+    // swapped tiles against each other: in the same row, unequal widths can
+    // overlap after the swap. Refuse that drop — persisting the overlap would
+    // make the shared resolver discard the whole stored layout to legacy
+    // auto-flow. (Native's `DashboardGridLayout.swap` has this same hole.)
+    if (a.row === b.row) {
+        const aEnd = b.col + WIDTH_UNITS[a.width]
+        const bEnd = a.col + WIDTH_UNITS[b.width]
+        if (b.col < bEnd && a.col < aEnd) return null
     }
     return placements.map((placement) => {
         if (placement.id === aId)
@@ -752,7 +753,7 @@ function TileMenu({
                     {WIDTH_OPTIONS.map((option) => (
                         <WidthChip
                             key={option}
-                            label={widthChipLabel(option, t)}
+                            label={widthLabel(option, t)}
                             selected={option === placement.width}
                             isDisabled={!canUseWidth(option)}
                             onClick={() =>
@@ -803,19 +804,6 @@ function TileMenu({
             </div>
         </div>
     )
-}
-
-function widthChipLabel(width: DashboardWidth, t: Messages): string {
-    switch (width) {
-        case 'full':
-            return t.dashboard.widthFull
-        case 'two_thirds':
-            return t.dashboard.widthTwoThirds
-        case 'half':
-            return t.dashboard.widthHalf
-        case 'third':
-            return t.dashboard.widthThird
-    }
 }
 
 /** A 34×30 width chip, filled with `primary` while it is the tile's width. */

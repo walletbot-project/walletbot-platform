@@ -54,6 +54,15 @@ export function OptionSheet({
     const t = useT()
     const [query, setQuery] = useState('')
 
+    // Start every presentation with a clean search. The sheet is controlled by
+    // the `open` prop (there is no Base UI trigger), so `onOpenChange(true)`
+    // never fires — adjust on the prop flip, during render.
+    const [wasOpen, setWasOpen] = useState(open)
+    if (wasOpen !== open) {
+        setWasOpen(open)
+        if (open) setQuery('')
+    }
+
     const filtered = useMemo(() => {
         const trimmed = query.trim().toLowerCase()
         if (!trimmed) return options
@@ -67,15 +76,10 @@ export function OptionSheet({
     const showSearch =
         searchPlaceholder !== undefined && options.length >= SEARCH_THRESHOLD
 
-    const handleOpenChange = (next: boolean) => {
-        if (next) setQuery('')
-        onOpenChange(next)
-    }
-
     return (
         <BottomSheet
             open={open}
-            onOpenChange={handleOpenChange}
+            onOpenChange={onOpenChange}
             title={title}
             showTitle
         >

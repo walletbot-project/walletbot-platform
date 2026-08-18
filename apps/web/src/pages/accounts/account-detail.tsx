@@ -1,25 +1,27 @@
 import { api } from '@wallet-bot/backend/api'
 import { Button, IconButton, TextField } from 'actify'
 import { useMutation, useQuery } from 'convex/react'
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 import { AccountIcon } from '@/components/account-icon'
-import { ColorSwatches } from '@/components/color-swatches'
+import {
+    ConfirmDeleteDialog,
+    DetailColorEditor,
+} from '@/components/entity-detail-sections'
 import { EntityRecentTransactions } from '@/components/entity-recent-transactions'
 import { IconPicker } from '@/components/icon-picker'
 import { DetailPaneHeader } from '@/components/m3/detail-pane-header'
 import { DialogAction, M3Dialog } from '@/components/m3/dialog'
 import { Icon } from '@/components/m3/icon'
+import { useSeededEntity } from '@/hooks/use-seeded-entity'
+import { useToastMutation } from '@/hooks/use-toast-mutation'
 import { ACCOUNT_ICONS } from '@/lib/account-icons'
-import {
-    ACCOUNT_DEFAULT_COLOR,
-    COLOR_OPTIONS,
-    normalizeColor,
-} from '@/lib/entity-colors'
+import { ACCOUNT_DEFAULT_COLOR, normalizeColor } from '@/lib/entity-colors'
 import { GROUP_SPACING, groupedRadius } from '@/lib/grouped-list'
 import { useFormatLocale, useT } from '@/lib/i18n'
 import { formatMoney } from '@/lib/money'
+import { newId } from '@/lib/new-id'
 import { cn } from '@/lib/utils'
 import { accountErrorMessage } from '@/pages/accounts/account-errors'
 
@@ -63,109 +65,87 @@ export function AccountDetail({
         limit: 5,
     })
 
-    const [editing, setEditing] = useState(false)
-    const [saving, setSaving] = useState(false)
-    const [name, setName] = useState(account.name)
-    const [color, setColor] = useState(
-        normalizeColor(account.color, ACCOUNT_DEFAULT_COLOR),
+    const { fields, setFields, editing, setEditing } = useSeededEntity(
+        account.id,
+        () => ({
+            name: account.name,
+            color: normalizeColor(account.color, ACCOUNT_DEFAULT_COLOR),
+            icon: account.icon ?? 'wallet',
+        }),
     )
-    const [icon, setIcon] = useState(account.icon ?? 'wallet')
+    const { pending: saving, run } = useToastMutation()
 
     const [adjustOpen, setAdjustOpen] = useState(false)
     const [adjustValue, setAdjustValue] = useState('')
     const [deleteOpen, setDeleteOpen] = useState(false)
 
-    // Re-seed the editable identity only when a *different* account opens.
-    // Keying on the id (not the object) keeps live query updates — e.g. the
-    // refreshed values right after a save — from clobbering in-progress edits.
-    const [seededId, setSeededId] = useState(account.id)
-    useEffect(() => {
-        if (account.id === seededId) return
-        setSeededId(account.id)
-        setName(account.name)
-        setColor(normalizeColor(account.color, ACCOUNT_DEFAULT_COLOR))
-        setIcon(account.icon ?? 'wallet')
-        setEditing(false)
-    }, [account, seededId])
-
     const accent = editing
-        ? color
+        ? fields.color
         : normalizeColor(account.color, ACCOUNT_DEFAULT_COLOR)
     const cents = balance ? Number(balance.balance) : null
 
-    const handleToggleEditing = async () => {
+    const handleToggleEditing = () => {
         if (!editing) {
             setEditing(true)
             return
         }
-        const trimmed = name.trim()
+        const trimmed = fields.name.trim()
         if (!trimmed) {
             toast.error(t.common.nameCannotBeEmpty)
             return
         }
-        setSaving(true)
-        const promise = updateAccount({
-            id: account.id,
-            name: trimmed,
-            color,
-            icon,
-        })
-        toast.promise(promise, {
-            loading: t.accounts.saving,
-            success: t.accounts.saved,
-            error: (error) =>
-                accountErrorMessage(error, t, t.accounts.saveFailed),
-        })
-        try {
-            await promise
-            setEditing(false)
-        } finally {
-            setSaving(false)
-        }
+        void run(
+            updateAccount({
+                id: account.id,
+                name: trimmed,
+                color: fields.color,
+                icon: fields.icon,
+            }),
+            {
+                loading: t.accounts.saving,
+                success: t.accounts.saved,
+                error: (error) =>
+                    accountErrorMessage(error, t, t.accounts.saveFailed),
+            },
+            () => setEditing(false),
+        )
     }
 
-    const handleAdjust = async () => {
+    const handleAdjust = () => {
         const parsed = Number.parseFloat(adjustValue.replace(',', '.'))
         if (Number.isNaN(parsed)) {
             toast.error(t.accounts.invalidAmount)
             return
         }
-        setSaving(true)
-        const id = `${Date.now()}${Math.random().toString(36).slice(2, 8)}`
-        const promise = createBalanceAdjustment({
-            id,
-            accountId: account.id,
-            balanceAfter: BigInt(Math.round(parsed * 100)),
-            dateConfirmed: true,
-        })
-        toast.promise(promise, {
-            loading: t.accounts.adjusting,
-            success: t.accounts.adjusted,
-            error: t.accounts.adjustFailed,
-        })
-        try {
-            await promise
-            setAdjustOpen(false)
-        } finally {
-            setSaving(false)
-        }
+        void run(
+            createBalanceAdjustment({
+                id: newId(),
+                accountId: account.id,
+                balanceAfter: BigInt(Math.round(parsed * 100)),
+                dateConfirmed: true,
+            }),
+            {
+                loading: t.accounts.adjusting,
+                success: t.accounts.adjusted,
+                error: t.accounts.adjustFailed,
+            },
+            () => setAdjustOpen(false),
+        )
     }
 
-    const handleDelete = async () => {
-        setSaving(true)
-        const promise = archiveAccount({ id: account.id })
-        toast.promise(promise, {
-            loading: t.accounts.deleting,
-            success: t.accounts.deleted,
-            error: t.accounts.deleteFailed,
-        })
-        try {
-            await promise
-            setDeleteOpen(false)
-            onClose()
-        } finally {
-            setSaving(false)
-        }
+    const handleDelete = () => {
+        void run(
+            archiveAccount({ id: account.id }),
+            {
+                loading: t.accounts.deleting,
+                success: t.accounts.deleted,
+                error: t.accounts.deleteFailed,
+            },
+            () => {
+                setDeleteOpen(false)
+                onClose()
+            },
+        )
     }
 
     const openAdjust = () => {
@@ -199,9 +179,11 @@ export function AccountDetail({
                 >
                     {editing ? (
                         <IconPicker
-                            icon={icon}
-                            color={color}
-                            onIconChange={setIcon}
+                            icon={fields.icon}
+                            color={fields.color}
+                            onIconChange={(icon) =>
+                                setFields((current) => ({ ...current, icon }))
+                            }
                             icons={ACCOUNT_ICONS}
                         />
                     ) : (
@@ -220,8 +202,10 @@ export function AccountDetail({
                         <TextField
                             variant="outlined"
                             className="min-w-0 flex-1"
-                            value={name}
-                            onChange={setName}
+                            value={fields.name}
+                            onChange={(name) =>
+                                setFields((current) => ({ ...current, name }))
+                            }
                             aria-label={t.common.name}
                             label={t.common.name}
                         />
@@ -232,15 +216,13 @@ export function AccountDetail({
                     )}
                 </div>
 
-                {editing ? (
-                    <div className="pt-3">
-                        <ColorSwatches
-                            value={color}
-                            onChange={setColor}
-                            options={COLOR_OPTIONS}
-                        />
-                    </div>
-                ) : null}
+                <DetailColorEditor
+                    editing={editing}
+                    color={fields.color}
+                    onChange={(color) =>
+                        setFields((current) => ({ ...current, color }))
+                    }
+                />
 
                 {/* Balance hero — the focal number; currency rides along as a pill. */}
                 <div
@@ -352,29 +334,15 @@ export function AccountDetail({
                     />
                 </M3Dialog>
 
-                {/* Delete confirmation. */}
-                <M3Dialog
+                <ConfirmDeleteDialog
                     open={deleteOpen}
                     onOpenChange={setDeleteOpen}
                     title={t.accounts.deleteTitle}
                     description={t.accounts.deleteConfirm({
                         name: account.name,
                     })}
-                    actions={
-                        <>
-                            <DialogAction
-                                label={t.common.cancel}
-                                onPress={() => setDeleteOpen(false)}
-                                isDisabled={saving}
-                            />
-                            <DialogAction
-                                label={t.common.delete}
-                                onPress={handleDelete}
-                                isDisabled={saving}
-                                destructive
-                            />
-                        </>
-                    }
+                    saving={saving}
+                    onDelete={handleDelete}
                 />
             </div>
         </div>

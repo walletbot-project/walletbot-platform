@@ -236,7 +236,11 @@ function TransactionDetailsContent({
             toast.error(t.transaction.chooseAccount)
             return
         }
-        if (isTransfer && (!destinationAccount || accountId === toAccountId)) {
+        if (isTransfer && !destinationAccount) {
+            toast.error(t.transaction.chooseAccount)
+            return
+        }
+        if (isTransfer && accountId === toAccountId) {
             toast.error(t.transaction.sameAccounts)
             return
         }

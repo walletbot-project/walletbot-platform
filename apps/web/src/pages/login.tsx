@@ -4,12 +4,12 @@ import { useLocation, useNavigate } from 'react-router-dom'
 
 import googleIcon from '@/assets/google.svg'
 import {
-    AuthHeroHeader,
+    AuthErrorNote,
+    AuthFrame,
     AuthOrDivider,
     AuthPanel,
     AuthPanelTitle,
     AuthPrimaryButton,
-    AuthScaffold,
     AuthTextField,
 } from '@/components/auth/auth-scaffold'
 import { authClient } from '@/lib/auth-client'
@@ -49,13 +49,25 @@ export function Login({ mode }: { mode: AuthMode }) {
         })
     }
 
-    const handleGoogleSignIn = () => {
+    const handleGoogleSignIn = async () => {
         setError(null)
         setLoading('google')
-        authClient.signIn.social({
-            provider: 'google',
-            callbackURL: window.location.origin + from,
-        })
+        try {
+            const result = await authClient.signIn.social({
+                provider: 'google',
+                callbackURL: window.location.origin + from,
+            })
+            if (result.error) {
+                throw new Error(result.error.message ?? t.auth.authFailed)
+            }
+            // Success hands the tab to the provider redirect — keep the button
+            // in its loading state until the navigation lands.
+        } catch (err) {
+            // Without this, a failed start left every control disabled on
+            // "Signing in…" with no message, forever.
+            setError(err instanceof Error ? err.message : String(err))
+            setLoading(null)
+        }
     }
 
     const handleEmailSubmit = async (event: FormEvent<HTMLFormElement>) => {
@@ -129,32 +141,29 @@ export function Login({ mode }: { mode: AuthMode }) {
     }
 
     return (
-        <AuthScaffold>
-            <AuthHeroHeader subtitle={t.auth.signInToContinue} />
-            <div className="mt-5.5">
-                {flow === 'forgot-password' ? (
-                    <ForgotPasswordPanel onBack={returnToSignIn} />
-                ) : flow === 'verify-pending' ? (
-                    <VerifyPendingPanel
-                        email={pendingEmail}
-                        onSignIn={returnToSignIn}
-                    />
-                ) : (
-                    <CredentialsPanel
-                        mode={mode}
-                        loading={loading}
-                        error={error}
-                        onSubmit={handleEmailSubmit}
-                        onGoogle={handleGoogleSignIn}
-                        onModeChange={goToMode}
-                        onForgotPassword={() => {
-                            setError(null)
-                            setFlow('forgot-password')
-                        }}
-                    />
-                )}
-            </div>
-        </AuthScaffold>
+        <AuthFrame>
+            {flow === 'forgot-password' ? (
+                <ForgotPasswordPanel onBack={returnToSignIn} />
+            ) : flow === 'verify-pending' ? (
+                <VerifyPendingPanel
+                    email={pendingEmail}
+                    onSignIn={returnToSignIn}
+                />
+            ) : (
+                <CredentialsPanel
+                    mode={mode}
+                    loading={loading}
+                    error={error}
+                    onSubmit={handleEmailSubmit}
+                    onGoogle={() => void handleGoogleSignIn()}
+                    onModeChange={goToMode}
+                    onForgotPassword={() => {
+                        setError(null)
+                        setFlow('forgot-password')
+                    }}
+                />
+            )}
+        </AuthFrame>
     )
 }
 
@@ -246,11 +255,7 @@ function CredentialsPanel({
                     <div className="h-1" />
                 )}
 
-                {error ? (
-                    <p className="m3-body-medium rounded-2xl bg-error-container px-3 py-2 text-on-error-container">
-                        {error}
-                    </p>
-                ) : null}
+                {error ? <AuthErrorNote message={error} /> : null}
 
                 <AuthPrimaryButton
                     type="submit"

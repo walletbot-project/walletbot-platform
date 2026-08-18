@@ -6,7 +6,7 @@ const DISMISS_TRAVEL_PX = 88
 /** Fraction of a sheet's own height that also dismisses, for short sheets. */
 const DISMISS_RATIO = 0.3
 /** Kept in sync with the sheet's CSS transition duration. */
-export const SHEET_EXIT_MS = 200
+const SHEET_EXIT_MS = 200
 
 type SheetDismissOptions = {
     /** Whether the surface is currently presented as a draggable sheet. */
@@ -43,8 +43,23 @@ export function useSheetDismiss({ enabled, onDismissed }: SheetDismissOptions) {
 
     useEffect(() => clearExit, [clearExit])
 
+    // The callbacks live in a ref so the effect below doesn't re-run (and the
+    // exit timer isn't disturbed) when a consumer passes a fresh closure.
+    const onDismissedRef = useRef(onDismissed)
     useEffect(() => {
-        if (!enabled) clearExit()
+        onDismissedRef.current = onDismissed
+    }, [onDismissed])
+
+    useEffect(() => {
+        if (enabled) return
+        if (exitTimer.current !== null) {
+            // The surface stopped being a sheet mid-exit (the window crossed
+            // the breakpoint): the slide can't finish, so complete the
+            // dismissal now instead of resurrecting a surface the user
+            // already dismissed.
+            clearExit()
+            onDismissedRef.current()
+        }
     }, [enabled, clearExit])
 
     // A surface that stops being a sheet (the window grew into the split, or it

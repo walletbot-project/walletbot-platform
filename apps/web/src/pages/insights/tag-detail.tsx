@@ -1,19 +1,22 @@
 import { api } from '@wallet-bot/backend/api'
-import { Button, IconButton } from 'actify'
 import { useMutation, useQuery } from 'convex/react'
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
-import { ColorSwatches } from '@/components/color-swatches'
+import {
+    DetailActionsRow,
+    DetailColorEditor,
+    MonthlySpendHero,
+} from '@/components/entity-detail-sections'
 import { EntityRecentTransactions } from '@/components/entity-recent-transactions'
 import { DetailPaneHeader } from '@/components/m3/detail-pane-header'
 import { DialogAction, M3Dialog } from '@/components/m3/dialog'
-import { Icon } from '@/components/m3/icon'
-import { MonthlySpend } from '@/components/monthly-spend'
 import { Input } from '@/components/ui/input'
-import { COLOR_OPTIONS } from '@/lib/entity-colors'
-import { GROUP_SPACING, groupedRadius } from '@/lib/grouped-list'
+import { useSeededEntity } from '@/hooks/use-seeded-entity'
+import { useToastMutation } from '@/hooks/use-toast-mutation'
+import { groupedRadius } from '@/lib/grouped-list'
 import { useT } from '@/lib/i18n'
+import { currentMonthWindow } from '@/lib/month-window'
 import { normalizeTagColor } from '@/lib/tag-colors'
 
 export type TagSummary = {
@@ -46,85 +49,61 @@ export function TagDetail({
     const updateTag = useMutation(api.v1.tags.mutations.update)
     const archiveTag = useMutation(api.v1.tags.mutations.archive)
 
-    const [monthWindow] = useState(() => {
-        const now = new Date()
-        const from = new Date(now.getFullYear(), now.getMonth(), 1)
-        const to = new Date(now.getFullYear(), now.getMonth() + 1, 1)
-        return {
-            fromMs: BigInt(from.getTime()),
-            toExclusiveMs: BigInt(to.getTime()),
-        }
-    })
-
     const spend = useQuery(api.v1.tags.queries.spendByCurrency, {
         id: tag.id,
-        ...monthWindow,
+        ...currentMonthWindow(),
     })
     const recent = useQuery(api.v1.tags.queries.recentTransactions, {
         id: tag.id,
         limit: 5,
     })
 
-    const [editing, setEditing] = useState(false)
-    const [saving, setSaving] = useState(false)
-    const [name, setName] = useState(tag.name)
-    const [color, setColor] = useState(normalizeTagColor(tag.color))
+    const { fields, setFields, editing, setEditing } = useSeededEntity(
+        tag.id,
+        () => ({
+            name: tag.name,
+            color: normalizeTagColor(tag.color),
+        }),
+    )
+    const { pending: saving, run } = useToastMutation()
     const [deleteOpen, setDeleteOpen] = useState(false)
 
-    // Re-seed the editable identity only when a *different* tag opens. Keying
-    // on the id (not the object) keeps live query updates — e.g. the refreshed
-    // values right after a save — from clobbering in-progress edits.
-    const [seededId, setSeededId] = useState(tag.id)
-    useEffect(() => {
-        if (tag.id === seededId) return
-        setSeededId(tag.id)
-        setName(tag.name)
-        setColor(normalizeTagColor(tag.color))
-        setEditing(false)
-    }, [tag, seededId])
+    const accent = editing ? fields.color : normalizeTagColor(tag.color)
 
-    const accent = editing ? color : normalizeTagColor(tag.color)
-
-    const handleToggleEditing = async () => {
+    const handleToggleEditing = () => {
         if (!editing) {
             setEditing(true)
             return
         }
-        const trimmed = name.trim()
+        const trimmed = fields.name.trim()
         if (!trimmed) {
             toast.error(t.common.nameCannotBeEmpty)
             return
         }
-        setSaving(true)
-        const promise = updateTag({ id: tag.id, name: trimmed, color })
-        toast.promise(promise, {
-            loading: t.insights.tagSaving,
-            success: t.insights.tagSaved,
-            error: t.insights.tagSaveFailed,
-        })
-        try {
-            await promise
-            setEditing(false)
-        } finally {
-            setSaving(false)
-        }
+        void run(
+            updateTag({ id: tag.id, name: trimmed, color: fields.color }),
+            {
+                loading: t.insights.tagSaving,
+                success: t.insights.tagSaved,
+                error: t.insights.tagSaveFailed,
+            },
+            () => setEditing(false),
+        )
     }
 
-    const performDelete = async (cascade: boolean) => {
-        setSaving(true)
-        const promise = archiveTag({ id: tag.id, cascade })
-        toast.promise(promise, {
-            loading: t.insights.tagDeleting,
-            success: t.insights.tagDeleted,
-            error: t.insights.tagDeleteFailed,
-        })
-        try {
-            await promise
-            setDeleteOpen(false)
-            onClose()
-        } finally {
-            setSaving(false)
-        }
+    const performDelete = (cascade: boolean) => {
+        void run(
+            archiveTag({ id: tag.id, cascade }),
+            {
+                loading: t.insights.tagDeleting,
+                success: t.insights.tagDeleted,
+                error: t.insights.tagDeleteFailed,
+            },
+            () => {
+                setDeleteOpen(false)
+                onClose()
+            },
+        )
     }
 
     const viewAllTransactions = () => {
@@ -152,8 +131,13 @@ export function TagDetail({
                     />
                     {editing ? (
                         <Input
-                            value={name}
-                            onChange={(e) => setName(e.target.value)}
+                            value={fields.name}
+                            onChange={(e) =>
+                                setFields((current) => ({
+                                    ...current,
+                                    name: e.target.value,
+                                }))
+                            }
                             className="bg-surface"
                             aria-label={t.common.name}
                         />
@@ -164,47 +148,25 @@ export function TagDetail({
                     )}
                 </div>
 
-                {editing ? (
-                    <div className="pt-3">
-                        <ColorSwatches
-                            value={color}
-                            onChange={setColor}
-                            options={COLOR_OPTIONS}
-                        />
-                    </div>
-                ) : null}
+                <DetailColorEditor
+                    editing={editing}
+                    color={fields.color}
+                    onChange={(color) =>
+                        setFields((current) => ({ ...current, color }))
+                    }
+                />
 
-                {/* Monthly spend hero. */}
-                <div
-                    className="flex flex-col gap-1 bg-surface-container-high px-5 pt-4 pb-4.5"
-                    style={{ marginTop: GROUP_SPACING, ...groupedRadius(1, 2) }}
-                >
-                    <span className="m3-label-medium tracking-[0.8px] text-on-surface-variant">
-                        {t.insights.spentThisMonth.toUpperCase()}
-                    </span>
-                    <MonthlySpend spend={spend} />
-                </div>
+                <MonthlySpendHero
+                    label={t.insights.spentThisMonth}
+                    spend={spend}
+                />
 
-                {/* Actions. */}
-                <div className="mt-3 flex items-center gap-2">
-                    <Button
-                        variant={editing ? 'filled' : 'tonal'}
-                        className="flex-1"
-                        onPress={handleToggleEditing}
-                        isDisabled={saving}
-                    >
-                        <Icon name={editing ? 'check' : 'edit'} size={18} />
-                        {editing ? t.common.done : t.common.edit}
-                    </Button>
-                    <IconButton
-                        onPress={() => setDeleteOpen(true)}
-                        isDisabled={saving}
-                        aria-label={t.common.delete}
-                        className="rounded-full bg-error-container text-on-error-container"
-                    >
-                        <Icon name="delete" />
-                    </IconButton>
-                </div>
+                <DetailActionsRow
+                    editing={editing}
+                    saving={saving}
+                    onToggleEditing={handleToggleEditing}
+                    onDelete={() => setDeleteOpen(true)}
+                />
 
                 <EntityRecentTransactions
                     title={t.insights.lastMovements}

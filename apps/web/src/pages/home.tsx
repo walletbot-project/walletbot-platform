@@ -105,7 +105,6 @@ export default function Home() {
             {sheet ? (
                 <WidgetSheet
                     key={sheet.key}
-                    open
                     onOpenChange={(open) => {
                         if (!open) setSheet(null)
                     }}

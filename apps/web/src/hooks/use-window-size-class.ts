@@ -14,7 +14,7 @@ export type WindowSizeClass = 'compact' | 'medium' | 'expanded'
  * divided (split) views, so it sits above the Material default (900) to keep
  * the single-column layout until there's comfortable room for two.
  */
-export const BREAKPOINTS = {
+const BREAKPOINTS = {
     medium: 600,
     expanded: 1000,
 } as const

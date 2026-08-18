@@ -18,7 +18,6 @@ type BottomSheetProps = {
      */
     dialogPadded?: boolean
     children: ReactNode
-    className?: string
 }
 
 /**
@@ -57,14 +56,14 @@ export function BottomSheet({
     showTitle = false,
     dialogPadded = true,
     children,
-    className,
 }: BottomSheetProps) {
     const asDialog = useWindowSizeClass() !== 'compact'
     const close = useCallback(() => onOpenChange(false), [onOpenChange])
-    const { sheetRef, offset, dragging, handleProps } = useSheetDismiss({
-        enabled: !asDialog && open,
-        onDismissed: close,
-    })
+    const { sheetRef, offset, dragging, dismiss, handleProps } =
+        useSheetDismiss({
+            enabled: !asDialog && open,
+            onDismissed: close,
+        })
 
     // Only take the transform over while the user is actually moving the
     // sheet. At rest it must stay unset so the entry and exit transitions —
@@ -79,7 +78,17 @@ export function BottomSheet({
             : undefined
 
     return (
-        <Dialog.Root open={open} onOpenChange={onOpenChange}>
+        <Dialog.Root
+            open={open}
+            onOpenChange={(next) => {
+                // Every close request — scrim, Escape, a consumer's close
+                // button — funnels through `dismiss`, so a sheet always slides
+                // out with its content still mounted, exactly like the drag
+                // path. (As a dialog, `dismiss` closes immediately.)
+                if (next) onOpenChange(true)
+                else dismiss()
+            }}
+        >
             <Dialog.Portal>
                 {/* The scrim the rest of the app's overlays use. */}
                 <Dialog.Backdrop className="fixed inset-0 z-50 bg-scrim/30 transition-opacity duration-200 supports-backdrop-filter:backdrop-blur-xs data-ending-style:opacity-0 data-starting-style:opacity-0" />
@@ -102,7 +111,6 @@ export function BottomSheet({
                                 : // A sheet travels its own full height, not a
                                   // token nudge — anything less reads as a jump.
                                   'max-h-[95dvh] max-w-160 rounded-t-[28px] bg-surface-container-low shadow-level-3 data-ending-style:translate-y-full data-starting-style:translate-y-full',
-                            className,
                         )}
                     >
                         {asDialog ? null : (

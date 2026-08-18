@@ -1,8 +1,5 @@
-import { IconButton } from 'actify'
 import { useWindowSizeClass } from '@/hooks/use-window-size-class'
-import { useT } from '@/lib/i18n'
-import { AppBar } from './app-bar'
-import { Icon } from './icon'
+import { CloseAppBar } from './app-bar'
 
 /**
  * The app bar an entity detail shows when it is not presented as a bottom
@@ -25,21 +22,7 @@ export function DetailPaneHeader({
     title: string
     onClose: () => void
 }) {
-    const t = useT()
     const inSheet = useWindowSizeClass() === 'compact'
     if (inSheet) return null
-    return (
-        <AppBar
-            title={title}
-            leading={
-                <IconButton
-                    aria-label={t.common.close}
-                    onPress={onClose}
-                    className="text-on-surface-variant"
-                >
-                    <Icon name="close" />
-                </IconButton>
-            }
-        />
-    )
+    return <CloseAppBar title={title} onClose={onClose} />
 }

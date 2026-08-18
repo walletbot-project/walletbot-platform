@@ -6,7 +6,6 @@ import { useFormatLocale, useT } from '@/lib/i18n'
 import { formatMoney } from '@/lib/money'
 import { cn } from '@/lib/utils'
 import type { TransactionTimeStatus } from './helpers'
-import { formatSignedAmount } from './helpers'
 
 export type TransactionRowIdentity = {
     type: 'account' | 'category'
@@ -24,8 +23,7 @@ type TransactionRowProps = {
     timeStatus?: TransactionTimeStatus
     description?: string | null
     identities?: readonly TransactionRowIdentity[]
-    currency?: string
-    currencySymbol?: string
+    currency: string
     onClick?: () => void
 }
 
@@ -44,7 +42,6 @@ export function TransactionRow({
     description,
     identities = [],
     currency,
-    currencySymbol = '$',
     onClick,
 }: TransactionRowProps) {
     const t = useT()
@@ -53,9 +50,7 @@ export function TransactionRow({
     const timeNeedsAttention = timeStatus !== 'confirmed'
     const showAttention = !dateConfirmed || timeNeedsAttention
     const sign = amountCents < 0 ? '-' : amountCents > 0 ? '+' : ''
-    const amount = currency
-        ? `${sign ? `${sign} ` : ''}${formatMoney(Math.abs(amountCents), currency, formatLocale)}`
-        : formatSignedAmount(amountCents, formatLocale, currencySymbol)
+    const amount = `${sign ? `${sign} ` : ''}${formatMoney(Math.abs(amountCents), currency, formatLocale)}`
 
     const content = (
         <>

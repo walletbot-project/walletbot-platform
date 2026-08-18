@@ -340,5 +340,3 @@ unchanged — only advanced (disjunctive) filters take the anchor+predicate path
 > (`_NewRowDropZone`, `_RowInsertZone`) are still native-only.
 >
 > **Still pending:** the advanced (tree) filter editor on web.
-</content>
-</invoke>

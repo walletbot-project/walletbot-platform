@@ -1,6 +1,7 @@
-import { Button, CircularProgress, TextField } from 'actify'
+import { TextField } from 'actify'
 import { type FormEvent, useMemo, useState } from 'react'
 import { ColorSwatches } from '@/components/color-swatches'
+import { FormSubmitButton } from '@/components/entity-form-sections'
 import { FormScreen } from '@/components/m3/form-screen'
 import { OptionSheet, type SheetOption } from '@/components/m3/option-sheet'
 import { PickerField } from '@/components/m3/picker-field'
@@ -33,29 +34,21 @@ export type TagOption = {
 export function TagForm({
     title,
     submitLabel,
-    initialValue,
     parentOptions,
     onClose,
     onSubmit,
 }: {
     title: string
     submitLabel: string
-    initialValue?: TagFormValue
     parentOptions: TagOption[]
     onClose: () => void
     onSubmit: (value: TagFormValue) => Promise<void>
 }) {
     const t = useT()
-    const [name, setName] = useState(initialValue?.name ?? '')
-    const [color, setColor] = useState(
-        normalizeTagColor(initialValue?.color ?? TAG_DEFAULT_COLOR),
-    )
-    const [parentId, setParentId] = useState<string | null>(
-        initialValue?.parentId ?? null,
-    )
-    const [isSubtag, setIsSubtag] = useState(
-        (initialValue?.parentId ?? null) !== null,
-    )
+    const [name, setName] = useState('')
+    const [color, setColor] = useState(normalizeTagColor(TAG_DEFAULT_COLOR))
+    const [parentId, setParentId] = useState<string | null>(null)
+    const [isSubtag, setIsSubtag] = useState(false)
     const [parentOpen, setParentOpen] = useState(false)
     const [submitting, setSubmitting] = useState(false)
 
@@ -138,19 +131,13 @@ export function TagForm({
                     />
                 ) : null}
 
-                <Button
-                    type="submit"
-                    variant="filled"
-                    className="w-full"
+                <FormSubmitButton
+                    submitting={submitting}
                     isDisabled={
                         submitting || !name.trim() || (isSubtag && !parentId)
                     }
-                >
-                    {submitting ? (
-                        <CircularProgress isIndeterminate size="xs" />
-                    ) : null}
-                    {submitLabel}
-                </Button>
+                    label={submitLabel}
+                />
             </form>
 
             <OptionSheet

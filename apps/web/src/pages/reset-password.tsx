@@ -2,11 +2,12 @@ import { type FormEvent, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
 import {
-    AuthHeroHeader,
+    AuthErrorNote,
+    AuthFrame,
+    AuthMessagePanel,
     AuthPanel,
     AuthPanelTitle,
     AuthPrimaryButton,
-    AuthScaffold,
     AuthTextField,
 } from '@/components/auth/auth-scaffold'
 import { authClient } from '@/lib/auth-client'
@@ -69,77 +70,60 @@ export function ResetPassword() {
 
     if (invalidLink) {
         return (
-            <AuthScaffold>
-                <AuthHeroHeader subtitle={t.auth.signInToContinue} />
-                <div className="mt-5.5">
-                    <AuthPanel>
-                        <AuthPanelTitle
-                            icon="link_off"
-                            title={t.auth.invalidLinkTitle}
-                            subtitle={t.auth.invalidLinkDescription}
-                        />
-                        <div className="mt-4">
-                            <AuthPrimaryButton
-                                submitting={false}
-                                label={t.auth.requestNewLink}
-                                onPress={() => navigate('/forgot-password')}
-                            />
-                        </div>
-                    </AuthPanel>
-                </div>
-            </AuthScaffold>
+            <AuthFrame>
+                <AuthMessagePanel
+                    icon="link_off"
+                    title={t.auth.invalidLinkTitle}
+                    subtitle={t.auth.invalidLinkDescription}
+                    actionLabel={t.auth.requestNewLink}
+                    onAction={() => navigate('/forgot-password')}
+                />
+            </AuthFrame>
         )
     }
 
     return (
-        <AuthScaffold>
-            <AuthHeroHeader subtitle={t.auth.signInToContinue} />
-            <div className="mt-5.5">
-                <AuthPanel>
-                    <AuthPanelTitle
-                        icon="lock_reset"
-                        title={t.auth.newPasswordTitle}
-                        subtitle={t.auth.newPasswordSubtitle}
+        <AuthFrame>
+            <AuthPanel>
+                <AuthPanelTitle
+                    icon="lock_reset"
+                    title={t.auth.newPasswordTitle}
+                    subtitle={t.auth.newPasswordSubtitle}
+                />
+                <form
+                    className="mt-4.5 flex flex-col gap-3"
+                    onSubmit={handleSubmit}
+                >
+                    <AuthTextField
+                        icon="lock"
+                        name="password"
+                        type="password"
+                        label={t.auth.newPassword}
+                        autoComplete="new-password"
+                        minLength={8}
+                        isRequired
+                        isDisabled={loading}
                     />
-                    <form
-                        className="mt-4.5 flex flex-col gap-3"
-                        onSubmit={handleSubmit}
-                    >
-                        <AuthTextField
-                            icon="lock"
-                            name="password"
-                            type="password"
-                            label={t.auth.newPassword}
-                            autoComplete="new-password"
-                            minLength={8}
-                            isRequired
-                            isDisabled={loading}
-                        />
-                        <AuthTextField
-                            icon="lock"
-                            name="confirm"
-                            type="password"
-                            label={t.auth.repeatPassword}
-                            autoComplete="new-password"
-                            minLength={8}
-                            isRequired
-                            isDisabled={loading}
-                        />
+                    <AuthTextField
+                        icon="lock"
+                        name="confirm"
+                        type="password"
+                        label={t.auth.repeatPassword}
+                        autoComplete="new-password"
+                        minLength={8}
+                        isRequired
+                        isDisabled={loading}
+                    />
 
-                        {error ? (
-                            <p className="m3-body-medium rounded-2xl bg-error-container px-3 py-2 text-on-error-container">
-                                {error}
-                            </p>
-                        ) : null}
+                    {error ? <AuthErrorNote message={error} /> : null}
 
-                        <AuthPrimaryButton
-                            type="submit"
-                            submitting={loading}
-                            label={t.auth.resetPasswordAction}
-                        />
-                    </form>
-                </AuthPanel>
-            </div>
-        </AuthScaffold>
+                    <AuthPrimaryButton
+                        type="submit"
+                        submitting={loading}
+                        label={t.auth.resetPasswordAction}
+                    />
+                </form>
+            </AuthPanel>
+        </AuthFrame>
     )
 }

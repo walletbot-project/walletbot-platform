@@ -23,7 +23,7 @@ export function DashboardCell({
     icon,
     trailing,
     backgroundColor,
-    minHeight = 120,
+    minHeight,
     children,
 }: DashboardCellProps) {
     const t = useT()

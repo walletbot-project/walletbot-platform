@@ -14,8 +14,6 @@ type IconProps = {
     filled?: boolean
     /** Optical size in pixels. Material's default is 24. */
     size?: number
-    /** Weight axis (100-700). Material's default is 400. */
-    weight?: number
     className?: string
     style?: CSSProperties
 }
@@ -31,7 +29,6 @@ export function Icon({
     name,
     filled = false,
     size,
-    weight,
     className,
     style,
 }: IconProps) {
@@ -42,7 +39,6 @@ export function Icon({
             style={{
                 '--md-icon-fill': filled ? 1 : 0,
                 '--md-icon-size': size === undefined ? undefined : `${size}px`,
-                '--md-icon-weight': weight,
                 ...style,
             }}
         >

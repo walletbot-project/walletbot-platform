@@ -3,7 +3,6 @@ import type { ComponentProps, ReactNode } from 'react'
 import { AuthBackdrop } from '@/components/auth/auth-backdrop'
 import { Icon } from '@/components/m3/icon'
 import { useT } from '@/lib/i18n'
-import { cn } from '@/lib/utils'
 
 /**
  * The auth screens' page frame, porting the native login `Scaffold`: the
@@ -42,18 +41,66 @@ export function AuthHeroHeader({ subtitle }: { subtitle: string }) {
     )
 }
 
+/**
+ * Scaffold + hero + the panel column — the frame every auth screen shares
+ * (login, signup, forgot, reset, verify), all under the same hero subtitle.
+ */
+export function AuthFrame({ children }: { children: ReactNode }) {
+    const t = useT()
+    return (
+        <AuthScaffold>
+            <AuthHeroHeader subtitle={t.auth.signInToContinue} />
+            <div className="mt-5.5">{children}</div>
+        </AuthScaffold>
+    )
+}
+
 /** The translucent card the auth flows live in, porting `_Panel`. */
-export function AuthPanel({
+export function AuthPanel({ children }: { children: ReactNode }) {
+    return <div className="auth-panel flex flex-col p-4.5">{children}</div>
+}
+
+/**
+ * A message-only panel — icon, headline, copy and one primary action. The
+ * shape of every terminal auth state (link sent, link dead, email verified).
+ */
+export function AuthMessagePanel({
+    icon,
+    title,
+    subtitle,
+    actionLabel,
+    onAction,
     children,
-    className,
 }: {
-    children: ReactNode
-    className?: string
+    icon: string
+    title: string
+    subtitle: string
+    actionLabel: string
+    onAction: () => void
+    /** Optional extra copy between the title and the action. */
+    children?: ReactNode
 }) {
     return (
-        <div className={cn('auth-panel flex flex-col p-4.5', className)}>
+        <AuthPanel>
+            <AuthPanelTitle icon={icon} title={title} subtitle={subtitle} />
             {children}
-        </div>
+            <div className="mt-4">
+                <AuthPrimaryButton
+                    submitting={false}
+                    label={actionLabel}
+                    onPress={onAction}
+                />
+            </div>
+        </AuthPanel>
+    )
+}
+
+/** The inline error strip under an auth form's fields. */
+export function AuthErrorNote({ message }: { message: string }) {
+    return (
+        <p className="m3-body-medium rounded-2xl bg-error-container px-3 py-2 text-on-error-container">
+            {message}
+        </p>
     )
 }
 

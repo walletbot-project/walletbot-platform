@@ -28,30 +28,43 @@ export function NavigationBar({
             className="grid shrink-0 grid-flow-col justify-stretch bg-surface-container px-2 pt-3 pb-4"
         >
             {destinations.map((destination) => (
-                <NavigationBarItem
+                <NavigationItem
                     key={destination.to}
                     destination={destination}
+                    variant="bar"
                 />
             ))}
         </nav>
     )
 }
 
-function NavigationBarItem({
+/**
+ * One destination — the bar and rail variants differ only in the link frame,
+ * the pill width (64dp vs 56dp) and the rail's centered label.
+ */
+function NavigationItem({
     destination,
+    variant,
 }: {
     destination: NavigationDestination
+    variant: 'bar' | 'rail'
 }) {
     const { icon, label, to, isActive } = destination
+    const bar = variant === 'bar'
     return (
         <Link
             to={to}
             aria-current={isActive ? 'page' : undefined}
-            className="group flex flex-col items-center gap-1 rounded-2xl pt-0 outline-none"
+            className={
+                bar
+                    ? 'group flex flex-col items-center gap-1 rounded-2xl pt-0 outline-none'
+                    : 'flex w-full flex-col items-center gap-1 outline-none'
+            }
         >
             <span
                 className={cn(
-                    'm3-state-layer flex h-8 w-16 items-center justify-center rounded-full transition-colors',
+                    'm3-state-layer flex h-8 items-center justify-center rounded-full transition-colors',
+                    bar ? 'w-16' : 'w-14',
                     isActive
                         ? 'bg-secondary-container text-on-secondary-container'
                         : 'text-on-surface-variant',
@@ -62,6 +75,7 @@ function NavigationBarItem({
             <span
                 className={cn(
                     'm3-label-medium',
+                    !bar && 'text-center',
                     isActive ? 'text-on-surface' : 'text-on-surface-variant',
                 )}
             >
@@ -102,43 +116,9 @@ export function NavigationRail({
                     {agentButton && index === AGENT_SPLIT_INDEX ? (
                         <div className="pt-2 pb-3">{agentButton}</div>
                     ) : null}
-                    <NavigationRailItem destination={destination} />
+                    <NavigationItem destination={destination} variant="rail" />
                 </Fragment>
             ))}
         </nav>
-    )
-}
-
-function NavigationRailItem({
-    destination,
-}: {
-    destination: NavigationDestination
-}) {
-    const { icon, label, to, isActive } = destination
-    return (
-        <Link
-            to={to}
-            aria-current={isActive ? 'page' : undefined}
-            className="flex w-full flex-col items-center gap-1 outline-none"
-        >
-            <span
-                className={cn(
-                    'm3-state-layer flex h-8 w-14 items-center justify-center rounded-full transition-colors',
-                    isActive
-                        ? 'bg-secondary-container text-on-secondary-container'
-                        : 'text-on-surface-variant',
-                )}
-            >
-                <Icon name={icon} filled={isActive} />
-            </span>
-            <span
-                className={cn(
-                    'm3-label-medium text-center',
-                    isActive ? 'text-on-surface' : 'text-on-surface-variant',
-                )}
-            >
-                {label}
-            </span>
-        </Link>
     )
 }

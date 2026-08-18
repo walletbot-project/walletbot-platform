@@ -75,15 +75,15 @@ export function Settings() {
     const themeLabel =
         themeChoices.find((choice) => choice.value === theme)?.label ?? ''
 
-    const handleCurrency = async (code: string) => {
+    const handleCurrency = (code: string) => {
         setOpen(null)
-        const promise = updateDefaultCurrency({ currency: code })
-        toast.promise(promise, {
+        // The toast handles both outcomes; re-awaiting the promise here only
+        // re-threw the failure as an unhandled rejection.
+        toast.promise(updateDefaultCurrency({ currency: code }), {
             loading: t.common.saving,
-            success: t.common.save,
+            success: t.common.saved,
             error: t.common.saveFailed,
         })
-        await promise
     }
 
     const tiles = [

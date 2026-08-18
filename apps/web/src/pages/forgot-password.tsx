@@ -1,6 +1,5 @@
 import { useNavigate } from 'react-router-dom'
-import { AuthHeroHeader, AuthScaffold } from '@/components/auth/auth-scaffold'
-import { useT } from '@/lib/i18n'
+import { AuthFrame } from '@/components/auth/auth-scaffold'
 import { ForgotPasswordPanel } from '@/pages/auth/forgot-password-panel'
 
 /**
@@ -9,14 +8,10 @@ import { ForgotPasswordPanel } from '@/pages/auth/forgot-password-panel'
  * linkable and gets shared.
  */
 export function ForgotPassword() {
-    const t = useT()
     const navigate = useNavigate()
     return (
-        <AuthScaffold>
-            <AuthHeroHeader subtitle={t.auth.signInToContinue} />
-            <div className="mt-5.5">
-                <ForgotPasswordPanel onBack={() => navigate('/login')} />
-            </div>
-        </AuthScaffold>
+        <AuthFrame>
+            <ForgotPasswordPanel onBack={() => navigate('/login')} />
+        </AuthFrame>
     )
 }

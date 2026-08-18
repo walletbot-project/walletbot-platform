@@ -203,6 +203,25 @@ export function parseFilterConfig(config: string): SimpleFilter {
     return filterFromCanonical(decoded)
 }
 
+/**
+ * Parses a stored `savedFilters.config` JSON string into the canonical tree
+ * itself, unflattened. Evaluators must use this — flattening to a
+ * `SimpleFilter` and re-serializing loses what the flat view cannot express
+ * (extra status values, an amount bound without a currency, a one-sided date
+ * range). An empty or malformed config parses to an empty `and` group, which
+ * matches everything.
+ */
+export function parseFilterConfigRoot(config: string): FilterGroup {
+    if (!config) return { combinator: 'and', children: [] }
+    let decoded: unknown
+    try {
+        decoded = JSON.parse(config)
+    } catch {
+        return { combinator: 'and', children: [] }
+    }
+    return rootFromJson(decoded)
+}
+
 export function filterFromCanonical(value: unknown): SimpleFilter {
     const root = rootFromJson(value)
     if (!isSimplyRepresentable(root)) {
@@ -371,6 +390,23 @@ function dayStart(date: Date): Date {
 }
 
 /**
+ * Parses an ISO date(-time) string the way Dart's `DateTime.parse` does: a
+ * bare `YYYY-MM-DD` is *local* midnight. JS's `new Date('YYYY-MM-DD')` would
+ * read it as UTC midnight, shifting day-precision ranges by a whole day in
+ * negative-offset timezones.
+ */
+function parseLocalDate(value: string): Date | null {
+    const date = /^\d{4}-\d{2}-\d{2}$/.test(value)
+        ? new Date(
+              Number(value.slice(0, 4)),
+              Number(value.slice(5, 7)) - 1,
+              Number(value.slice(8, 10)),
+          )
+        : new Date(value)
+    return Number.isNaN(date.getTime()) ? null : date
+}
+
+/**
  * Resolves the date dimension to an absolute window, matching the native
  * `resolveDateWindow`: absolute ranges are day-precision with an inclusive end
  * day, and weeks start on Monday.
@@ -380,9 +416,9 @@ export function resolveDateWindow(
     now: Date = new Date(),
 ): DateWindow | null {
     if (filter.dateFrom && filter.dateTo) {
-        const from = new Date(filter.dateFrom)
-        const to = new Date(filter.dateTo)
-        if (!Number.isNaN(from.getTime()) && !Number.isNaN(to.getTime())) {
+        const from = parseLocalDate(filter.dateFrom)
+        const to = parseLocalDate(filter.dateTo)
+        if (from && to) {
             const endExclusive = dayStart(to)
             endExclusive.setDate(endExclusive.getDate() + 1)
             return {
@@ -441,6 +477,43 @@ export function resolveDateWindow(
                 toExclusiveMs: new Date(now.getFullYear() + 1, 0, 1).getTime(),
             }
     }
+}
+
+/**
+ * Resolves a single date *condition* to an absolute window, for evaluating the
+ * date dimension inside an arbitrary tree — the counterpart of native's
+ * `_dateCondition` (transaction_query.dart). Returns null when the condition
+ * doesn't carry a resolvable window, in which case it constrains nothing.
+ */
+export function resolveDateConditionWindow(
+    condition: FilterCondition,
+    now: Date = new Date(),
+): DateWindow | null {
+    if (
+        condition.operator === 'relative' &&
+        typeof condition.value === 'string'
+    ) {
+        const preset = condition.value
+        if (!DATE_PRESETS.includes(preset as DatePreset)) return null
+        return resolveDateWindow(
+            { ...EMPTY_FILTER, datePreset: preset as DatePreset },
+            now,
+        )
+    }
+    if (condition.operator === 'between') {
+        const range = asRecord(condition.value)
+        if (
+            range &&
+            typeof range.from === 'string' &&
+            typeof range.to === 'string'
+        ) {
+            return resolveDateWindow(
+                { ...EMPTY_FILTER, dateFrom: range.from, dateTo: range.to },
+                now,
+            )
+        }
+    }
+    return null
 }
 
 /** Every tag condition in the tree, so callers can pre-resolve tag membership. */
