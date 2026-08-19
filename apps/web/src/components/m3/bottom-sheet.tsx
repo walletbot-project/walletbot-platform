@@ -17,6 +17,14 @@ type BottomSheetProps = {
      * `AdaptiveDetailView` passes `padding: EdgeInsets.zero` for the same case.
      */
     dialogPadded?: boolean
+    /**
+     * Actions pinned below the scrolling body, for a surface long enough that
+     * its commit action would otherwise scroll out of reach — native's filter
+     * sheet keeps its action bar in a `SafeArea` under the `Expanded` list.
+     * Sits outside the scroller, so the popup's own container colour shows
+     * through and it needs no background of its own.
+     */
+    footer?: ReactNode
     children: ReactNode
 }
 
@@ -55,6 +63,7 @@ export function BottomSheet({
     title,
     showTitle = false,
     dialogPadded = true,
+    footer,
     children,
 }: BottomSheetProps) {
     const asDialog = useWindowSizeClass() !== 'compact'
@@ -135,6 +144,11 @@ export function BottomSheet({
                         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
                             {children}
                         </div>
+                        {footer ? (
+                            <div className="shrink-0 border-outline-variant border-t px-4 py-3">
+                                {footer}
+                            </div>
+                        ) : null}
                     </Dialog.Popup>
                 </Dialog.Viewport>
             </Dialog.Portal>

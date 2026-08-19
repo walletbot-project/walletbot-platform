@@ -17,6 +17,7 @@ export type {
     TxnType,
 } from './dashboard/filter'
 export {
+    ACCOUNT_DIRECTIONS,
     collectTagConditions,
     DATE_PRESETS,
     EMPTY_FILTER,
@@ -25,10 +26,13 @@ export {
     filterToCanonical,
     isFilterEmpty,
     isFilterGroup,
+    isSimplyRepresentable,
     parseFilterConfig,
     parseFilterConfigRoot,
     resolveDateConditionWindow,
     resolveDateWindow,
+    TAG_MATCHES,
+    TXN_STATUSES,
     TXN_TYPES,
 } from './dashboard/filter'
 export type {

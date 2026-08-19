@@ -24,6 +24,7 @@ import { formatMoney } from '@/lib/money'
 import { newId } from '@/lib/new-id'
 import { cn } from '@/lib/utils'
 import { accountErrorMessage } from '@/pages/accounts/account-errors'
+import type { ActivityFilterSeed } from '@/pages/activity/helpers'
 
 export type AccountSummary = {
     id: string
@@ -155,7 +156,8 @@ export function AccountDetail({
 
     const viewAllTransactions = () => {
         onClose()
-        navigate('/activity', { state: { accountIds: [account.id] } })
+        const seed: ActivityFilterSeed = { accountIds: [account.id] }
+        navigate('/activity', { state: seed })
     }
 
     return (

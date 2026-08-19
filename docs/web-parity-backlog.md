@@ -12,73 +12,14 @@ verified at runtime — these are source-level findings.
 The offline-first local database and sync engine are the known architectural
 difference and are out of scope; this list is what sits on top of them.
 
+Closed entries move to § 5 rather than being deleted, and keep their original
+numbers so the ids stay quotable. Last updated 2026-08-19.
+
 ---
 
 ## 1. Features to implement on web
 
 Ordered by what the user loses.
-
-### 1.1 Advanced transaction filtering
-
-Native's filter model (`apps/native/lib/data/models/transaction_filter.dart`)
-carries nine dimensions plus a boolean condition tree. Web's
-(`apps/web/src/pages/activity/helpers.ts`) carries four.
-
-| Dimension | Native | Web Activity |
-|---|---|---|
-| type (multi-select) | yes | single-select chip row only |
-| status (pending / cleared) | yes | missing |
-| date preset (today, week, month, last month, year) | yes | missing (absolute range only) |
-| absolute date range | yes | yes |
-| accounts + direction (source / destination / either) | yes | ids only |
-| categories | yes | yes |
-| tags + match any/all + includeSubtags | yes | ids only, implicit "any" |
-| currency scope | yes | missing |
-| amount min / max | yes | missing |
-| text | yes | yes |
-| AND / OR / NOT nested group editor | yes | missing |
-
-Native's tree editor: `apps/native/lib/components/filter_sheet.dart` (`_GroupEditor`,
-`_ConditionEditor`).
-
-The model is **already ported to TypeScript** in
-`packages/shared/src/dashboard/filter.ts`, and the backend already evaluates it
-in `packages/backend/convex/v1/dashboard/helpers.ts`. Web's Activity re-derived
-a flat `TransactionFilters` type instead of using it. The missing work is a UI
-plus a query path, not a model.
-
-### 1.2 Search and filtering are page-scoped on web
-
-Native filters in SQL over the whole local database
-(`apps/native/lib/data/queries/transaction_query.dart`). Web narrows
-server-side by one account *or* one category plus a date range, then filters the
-loaded page in JS, auto-loading at most 1000 rows
-(`apps/web/src/pages/activity/index.tsx`, `REFILL_THRESHOLD` / `AUTO_LOAD_CAP`).
-
-Consequence: on web a text search, a type chip, a multi-account selection or a
-tag filter silently misses matches older than the first ~1000 transactions.
-
-The backend has no index-backed text search at all. A search index fixes this
-for both clients.
-
-### 1.3 Nine agent tools stubbed as `native_only` on web
-
-`apps/web/src/lib/agent-tools/executors.ts` returns
-`{ ok: false, error: 'native_only' }` for:
-
-- `listSavedFilters`, `createSavedFilter`, `updateSavedFilter`, `archiveSavedFilter`
-- `listDashboardWidgets`, `createDashboardWidget`, `updateDashboardWidget`,
-  `reorderDashboardWidgets`, `archiveDashboardWidget`
-
-All nine backend mutations exist
-(`packages/backend/convex/v1/dashboard/mutations.ts`) and web's own dashboard
-already calls them (`apps/web/src/pages/home/widget-sheet.tsx`). The stubs are
-stale.
-
-Related: the shared system prompt still instructs the model to say *"web
-dashboard parity is not available yet"*
-(`packages/backend/convex/live/createToken.ts`). That sentence is now false and
-should be updated in the same change.
 
 ### 1.4 Voice history is never persisted on web
 
@@ -101,15 +42,8 @@ flips to `disconnected` and the conversation ends
 The ephemeral token already negotiates `sessionResumption` and
 `contextWindowCompression`, so the server side is ready.
 
-### 1.6 Dashboard widget filters are narrower on web
-
-Native's widget sheet opens the full filter editor, hiding only status
-(`apps/native/lib/components/dashboard/add_widget_sheet.dart`). Web's inline
-editor offers types, date preset, accounts, categories and currency — no tags,
-no amount, no custom range — and renders advanced filters read-only
-(`apps/web/src/pages/home/widget-sheet.tsx`).
-
-A widget configured on native can be opened on web but not fully edited.
+Related and also open: native keeps the session alive when the screen is left,
+while web tears it down when the route unmounts.
 
 ### 1.7 No telemetry on web
 
@@ -131,20 +65,6 @@ messaging cannot reach web users.
 
 The version-gating half of that config is genuinely native-only and should stay
 so.
-
-### 1.9 `recurringExpense` flag toggle
-
-Registered as a known flag for both platforms
-(`packages/backend/convex/featureFlags/utils.ts`) but only read by native's
-expense form (`apps/native/lib/screens/transaction_form.dart`). Enabling the flag
-does nothing on web.
-
-### 1.10 Web's create-account ignores the user's default currency
-
-Native seeds the picker from `DefaultCurrencyController`
-(`apps/native/lib/screens/create_account.dart`); web hardcodes
-`DEFAULT_CURRENCY` (`apps/web/src/pages/accounts/account-form.tsx`). A web user
-who set USD in Settings still gets ARS pre-selected.
 
 ### Deliberately architectural — decide, do not drift
 
@@ -171,14 +91,9 @@ Native maps canonical Spanish names to the active locale at render time —
 applied at six call sites. Web has no equivalent, so an English web user sees
 `Ajuste de saldo`, `Balance inicial` and `Gastos del mes` verbatim.
 
-### 2.2 The same action writes two different names
-
-Creating an account with an opening balance writes a transaction named
-`Balance inicial` on native
-(`apps/native/lib/data/repositories/account_repository.dart`) but
-`Ajuste de saldo` on web, which omits `name` and takes the backend default
-(`packages/backend/convex/v1/transactions/mutations.ts`). One user's ledger ends
-up carrying both.
+Closing 2.2 made this more visible, not less: web now writes `Balance inicial`
+itself, so the canonical Spanish string reaches an English web user by the
+app's own hand rather than by the backend default.
 
 ### 2.3 Native's transaction-detail screen is not localized
 
@@ -188,23 +103,8 @@ hardcoded Spanish strings against 3 `l10n` calls — `Descripción`,
 so on. The row identity labels in `apps/native/lib/screens/activity.dart`
 (`'Cuenta: '`, `'Categoria: '` — also misspelled) are hardcoded too.
 
-Web's equivalent is fully internationalized. This is the one item where **native
-is behind web**.
-
-### 2.4 Two ID schemes on web
-
-Native deliberately consolidated on a single UUID v4 helper
-(`apps/native/lib/data/ids.dart`, whose comment records removing exactly this
-problem). Web has three `newId` definitions across two schemes:
-
-- `crypto.randomUUID()` — `apps/web/src/pages/add-manual.tsx`,
-  `apps/web/src/pages/home/widget-sheet.tsx`,
-  `apps/web/src/lib/agent-tools/executors.ts`
-- `Date.now() + Math.random()` — `apps/web/src/pages/accounts/index.tsx`,
-  `apps/web/src/pages/insights.tsx`,
-  `apps/web/src/pages/accounts/account-detail.tsx`
-
-These ids are synced and shared between clients.
+Web's equivalent is fully internationalized. This is one of the items where
+**native is behind web**.
 
 ---
 
@@ -216,6 +116,14 @@ These ids are synced and shared between clients.
 - **Microphone device picker** in the voice screen — `apps/web/src/pages/add.tsx`.
 - **Transaction counts on tag chips** in Insights —
   `apps/web/src/pages/insights/tags-view.tsx`. Native shows the chip only.
+- **Currency list in the inline "new account" dialog** — the web transaction
+  form offers the full shared catalog, while native's still offers four hardcoded
+  options (`apps/native/lib/screens/transaction_form.dart:_mockCurrencyOptions`).
+  Introduced by closing 1.10.
+- **Text search reaches the whole history from one query** — web now searches
+  server-side over indexed text (§ 5, 1.2). Native searches its whole local
+  database too, so this is not a user-visible gap, but the *shape* differs: web
+  can search without having synced every row locally.
 
 ---
 
@@ -226,9 +134,11 @@ These ids are synced and shared between clients.
    wherever both clients consume it — dashboard seeding, widget rendering, agent
    schemas — parity is near-exact. The default dashboards even share
    deterministic seed ids so a device and the browser converge instead of
-   duplicating the layout. Where a client re-derived a model instead (web's
-   `TransactionFilters` versus shared's `SimpleFilter`) is precisely where the
-   gap opened. New cross-platform concepts should land in `shared` first.
+   duplicating the layout. Where a client re-derived a model instead (web's old
+   flat `TransactionFilters` versus shared's `SimpleFilter`) is precisely where
+   the gap opened — that re-derived model is gone as of § 5, 1.1, and its
+   deletion is what closed three separate entries at once. New cross-platform
+   concepts should land in `shared` first.
 
 2. **Confirmed already at parity**, checked and requiring no action: icon
    catalogs (11 account, 14 category, name for name), the 21-colour palette,
@@ -244,3 +154,85 @@ These ids are synced and shared between clients.
    `apps/web/src/pages/activity/activity-summary-card.tsx`), along with web's
    `aggregateMonth` and `monthRange` helpers. Removing it from one app only
    would read as a parity regression later, so handle it in one change.
+
+4. **A shared control should keep a shared summary.** The activity filter bar's
+   badge and chip row report four groups (accounts, categories, tags, date) on
+   both clients, because that is what `transaction_filters_bar.dart` counts —
+   even though the sheet behind it edits nine dimensions. A filter on amount or
+   currency is therefore invisible in the bar on *both* platforms. Widening it
+   is a two-client change; doing it on one side would open a new divergence.
+
+---
+
+## 5. Closed
+
+Kept for the record, with what closed each one. Neither batch below has been
+verified at runtime.
+
+### 1.1 Advanced transaction filtering — closed 2026-08-19
+
+Web's Activity dropped its own flat four-dimension `TransactionFilters` for the
+canonical `SimpleFilter` in `packages/shared/src/dashboard/filter.ts`, and
+`apps/web/src/components/filters/` ports native's
+`apps/native/lib/components/filter_sheet.dart`: simple mode over all nine
+dimensions (type, status, date presets plus absolute range, accounts with
+direction, categories, tags with subtags / `match` / `includeSubtags`, currency,
+amount, text) and advanced mode with the nested AND/OR/NOT tree, depth 2, the
+same per-field operators and the same default conditions. The `hiddenSections`
+contract matches too — the activity bar hides text and status, the widget sheet
+hides status.
+
+### 1.2 Search and filtering are page-scoped on web — closed 2026-08-19
+
+`v1/transactions/queries:listByFilter` evaluates the canonical tree server-side
+over an index-anchored stream, paginating *after* the predicate, so a page is a
+page of matches. `transactions` gained `search_name` and `search_description`
+search indexes for the one dimension no ordered index can bound.
+
+Residual bounds are tracked as **R-019** in `docs/riesgos.md`: the ordered scan
+stops at `MAX_SCAN` rows read per page, a text-only filter considers only the
+best `MAX_SEARCH_CANDIDATES` per index, and a search index cannot match an
+infix (`bucks` inside `Starbucks`), which native's `LIKE '%…%'` can. None of
+that is surfaced in the UI yet.
+
+### 1.3 Nine agent tools stubbed as `native_only` on web — closed 2026-08-18
+
+`apps/web/src/lib/agent-tools/executors.ts` ports them from
+`apps/native/lib/voice/tool_executors.dart` with the same arguments, error
+strings, result shapes and stored JSON. The system prompt in
+`packages/backend/convex/live/createToken.ts` no longer tells the model that web
+dashboard parity is missing.
+
+### 1.6 Dashboard widget filters are narrower on web — closed 2026-08-19
+
+The widget sheet uses the same `FilterSheet` as the activity list, so a widget
+configured on native is now fully editable on web — tags, amount, custom ranges
+and advanced trees included. The read-only advanced-filter notice is gone.
+
+### 1.9 `recurringExpense` flag toggle — closed 2026-08-18
+
+The toggle exists on web's expense form, display-only and never persisted,
+exactly as `_isRecurringExpense` behaves on native. The flag registry still
+records the feature itself as not built.
+
+### 1.10 Web's create-account ignores the user's default currency — closed 2026-08-18
+
+Both surfaces — `apps/web/src/pages/accounts/account-form.tsx` and the inline
+"new account" dialog in `apps/web/src/pages/add-manual.tsx` — now seed from the
+user's default currency, null until the user picks, with a live fallback, the
+same rule as `apps/native/lib/screens/create_account.dart`. Left web ahead of
+native on the inline dialog's currency list (§ 3).
+
+### 2.2 The same action writes two different names — closed 2026-08-18
+
+Web passes `name: 'Balance inicial'` when creating an account's opening balance,
+the canonical name native writes, instead of falling through to the backend's
+`Ajuste de saldo` default. The string stays canonical Spanish on purpose; making
+it read correctly for an English web user is 2.1.
+
+### 2.4 Two ID schemes on web — closed 2026-08-18
+
+`apps/web/src/lib/new-id.ts` is the single helper and returns
+`crypto.randomUUID()`, the scheme native settled on
+(`apps/native/lib/data/ids.dart`) and the one the backend generates and
+documents. The three inlined definitions are gone.

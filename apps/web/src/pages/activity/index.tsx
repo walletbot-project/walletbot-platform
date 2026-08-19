@@ -1,4 +1,9 @@
 import { api } from '@wallet-bot/backend/api'
+import {
+    EMPTY_FILTER,
+    filterConfigToJson,
+    type SimpleFilter,
+} from '@wallet-bot/shared'
 import { CircularProgress, IconButton } from 'actify'
 import { usePaginatedQuery, useQuery } from 'convex/react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -24,26 +29,16 @@ import { TransactionForm } from '@/pages/add-manual'
 import { FilterChips } from './filter-chips'
 import {
     buildListEntries,
-    dateFromMs,
-    dateToMs,
-    EMPTY_FILTERS,
     estimatedDescription,
     formatTransactionTime,
-    matchesFilters,
-    type TransactionFilters,
+    readFilterSeed,
     type TransactionTransferSide,
-    type TransactionType,
     transactionTimeStatus,
 } from './helpers'
 import { TransactionDetail } from './transaction-detail'
 import { TransactionFiltersBar } from './transaction-filters-bar'
 import { TransactionRow } from './transaction-row'
 
-// How many extra rows to eagerly pull when client-side filters thin out the
-// visible page, and the ceiling that stops auto-loading from walking the whole
-// table for a filter that matches almost nothing.
-const REFILL_THRESHOLD = 25
-const AUTO_LOAD_CAP = 1_000
 const PAGE_SIZE = 50
 
 export function Activity() {
@@ -52,20 +47,9 @@ export function Activity() {
     const location = useLocation()
     const t = useT()
     const formatLocale = useFormatLocale()
-    const [filters, setFilters] = useState<TransactionFilters>(() => {
-        const seed = location.state as Partial<TransactionFilters> | null
-        if (
-            seed?.accountIds ||
-            seed?.categoryIds ||
-            seed?.tagIds ||
-            seed?.dateFrom ||
-            seed?.dateTo
-        ) {
-            return { ...EMPTY_FILTERS, ...seed }
-        }
-        return EMPTY_FILTERS
-    })
-    const [type, setType] = useState<TransactionType | null>(null)
+    const [filter, setFilter] = useState<SimpleFilter>(
+        () => readFilterSeed(location.state) ?? EMPTY_FILTER,
+    )
     const navigate = useNavigate()
 
     // What is open beside the list is the child route's business, not this
@@ -97,30 +81,16 @@ export function Activity() {
         [categories],
     )
 
-    // The backend narrows by a single account/category plus the date range
-    // (all index-backed). Everything else is refined client-side below.
-    const accountId =
-        filters.accountIds.length === 1 ? filters.accountIds[0] : undefined
-    const categoryId =
-        !accountId && filters.categoryIds.length === 1
-            ? filters.categoryIds[0]
-            : undefined
+    // Every dimension is applied server-side against the whole table, so a page
+    // is a page of matches — there is nothing left to refine here, and no
+    // filter can be blind to transactions the client happens not to have paged
+    // in (which is what the old client-side predicate was).
+    const config = useMemo(() => filterConfigToJson(filter), [filter])
 
     const { results, status, loadMore } = usePaginatedQuery(
-        api.v1.transactions.queries.listPaginated,
-        {
-            accountId,
-            categoryId,
-            dateFrom: dateFromMs(filters.dateFrom),
-            dateTo: dateToMs(filters.dateTo),
-            includeTags: filters.tagIds.length > 0,
-        },
+        api.v1.transactions.queries.listByFilter,
+        { config },
         { initialNumItems: PAGE_SIZE },
-    )
-
-    const filtered = useMemo(
-        () => results.filter((t) => matchesFilters(t, filters, type)),
-        [results, filters, type],
     )
 
     // "Now" is captured once via a lazy initializer — reading the clock during
@@ -129,20 +99,9 @@ export function Activity() {
     const nowMs = now.getTime()
 
     const entries = useMemo(
-        () => buildListEntries(filtered, nowMs, t, formatLocale),
-        [filtered, nowMs, t, formatLocale],
+        () => buildListEntries(results, nowMs, t, formatLocale),
+        [results, nowMs, t, formatLocale],
     )
-
-    // Keep the list filled when client-side filters reduce the loaded page.
-    useEffect(() => {
-        if (
-            status === 'CanLoadMore' &&
-            filtered.length < REFILL_THRESHOLD &&
-            results.length < AUTO_LOAD_CAP
-        ) {
-            loadMore(PAGE_SIZE)
-        }
-    }, [status, filtered.length, results.length, loadMore])
 
     // Infinite scroll: load the next page when the sentinel comes into view.
     const sentinelRef = useRef<HTMLDivElement>(null)
@@ -175,10 +134,25 @@ export function Activity() {
             <div className="min-h-0 flex-1 overflow-y-auto">
                 <div className="flex flex-col gap-4 pt-2 pb-20">
                     <TransactionFiltersBar
-                        filters={filters}
-                        onChange={setFilters}
+                        filter={filter}
+                        onChange={setFilter}
                     />
-                    <FilterChips selected={type} onChange={setType} />
+                    {/*
+                     * The chip row is the type dimension of the same filter,
+                     * single-select — native's `_updateTypeChip` writes it the
+                     * same way, so the sheet and the chips can never disagree.
+                     */}
+                    <FilterChips
+                        selected={
+                            filter.types.length === 1 ? filter.types[0] : null
+                        }
+                        onChange={(next) =>
+                            setFilter({
+                                ...filter,
+                                types: next ? [next] : [],
+                            })
+                        }
+                    />
 
                     {status === 'LoadingFirstPage' ? (
                         <ListSkeleton />
@@ -296,8 +270,8 @@ export function Activity() {
     )
 
     const applyFilter = useCallback(
-        (next: Partial<TransactionFilters>) =>
-            setFilters({ ...EMPTY_FILTERS, ...next }),
+        (next: Partial<SimpleFilter>) =>
+            setFilter({ ...EMPTY_FILTER, ...next }),
         [],
     )
     const outletContext: ActivityOutletContext = useMemo(
@@ -324,7 +298,7 @@ export function Activity() {
 
 /** What the Activity list offers its child routes. */
 export type ActivityOutletContext = {
-    applyFilter: (filters: Partial<TransactionFilters>) => void
+    applyFilter: (filter: Partial<SimpleFilter>) => void
 }
 
 /** `/activity/new` — the transaction form as the layout's occupant. */

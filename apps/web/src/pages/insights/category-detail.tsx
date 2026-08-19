@@ -21,6 +21,7 @@ import { CATEGORY_DEFAULT_COLOR, normalizeColor } from '@/lib/entity-colors'
 import { groupedRadius } from '@/lib/grouped-list'
 import { useT } from '@/lib/i18n'
 import { currentMonthWindow } from '@/lib/month-window'
+import type { ActivityFilterSeed } from '@/pages/activity/helpers'
 
 export type CategorySummary = {
     id: string
@@ -117,7 +118,8 @@ export function CategoryDetail({
 
     const viewAllTransactions = () => {
         onClose()
-        navigate('/activity', { state: { categoryIds: [category.id] } })
+        const seed: ActivityFilterSeed = { categoryIds: [category.id] }
+        navigate('/activity', { state: seed })
     }
 
     return (

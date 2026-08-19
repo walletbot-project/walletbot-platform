@@ -155,7 +155,7 @@ export type MatchResult = {
 }
 
 /** An index builder once every equality prefix is applied and `date` is next. */
-type DateRangeBuilder = {
+export type DateRangeBuilder = {
     gte(
         fieldName: 'date',
         value: bigint,
@@ -163,7 +163,7 @@ type DateRangeBuilder = {
     lte(fieldName: 'date', value: bigint): IndexRange
 } & IndexRange
 
-function boundByDate(
+export function boundByDate(
     base: DateRangeBuilder,
     window: DateWindow | null,
 ): IndexRange {
@@ -189,7 +189,7 @@ function boundByDate(
  * bounding the scan by it is sound. `or`/negated roots get no bound; their
  * date conditions are still enforced row by row by the predicate.
  */
-function indexDateWindow(
+export function indexDateWindow(
     filter: SimpleFilter,
     root: FilterGroup,
     now: Date,

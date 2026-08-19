@@ -8,19 +8,17 @@ import {
     type BreakdownGroupBy,
     backgroundToJson,
     DASHBOARD_WIDTHS,
-    DATE_PRESETS,
     type DashboardWidth,
     DEFAULT_CURRENCY,
     DEFAULT_VALUE_BACKGROUND,
     filterConfigToJson,
+    isFilterEmpty,
     mergeWidgetOptions,
     parseFilterConfig,
     parseWidgetOptions,
     type SimpleFilter,
     STAT_AGGREGATIONS,
     type StatAggregation,
-    TXN_TYPES,
-    type TxnType,
     WIDGET_TYPES,
     type WidgetType,
 } from '@wallet-bot/shared'
@@ -29,6 +27,7 @@ import { useMutation, useQuery } from 'convex/react'
 import { useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import { ColorSwatches } from '@/components/color-swatches'
+import { FilterSheet } from '@/components/filters/filter-sheet'
 import { BottomSheet } from '@/components/m3/bottom-sheet'
 import { ChoiceChip } from '@/components/m3/chip'
 import { OptionSheet, type SheetOption } from '@/components/m3/option-sheet'
@@ -65,8 +64,6 @@ export function WidgetSheet({
 }: WidgetSheetProps) {
     const t = useT()
     const layout = useQuery(api.v1.dashboard.queries.layout)
-    const accounts = useQuery(api.v1.accounts.queries.listActive)
-    const categories = useQuery(api.v1.categories.queries.listActive)
     const createWidget = useMutation(api.v1.dashboard.mutations.createWidget)
     const updateWidget = useMutation(api.v1.dashboard.mutations.updateWidget)
     const createFilter = useMutation(
@@ -116,6 +113,7 @@ export function WidgetSheet({
     )
     const [filter, setFilter] = useState<SimpleFilter>(existingFilter)
     const [currencyOpen, setCurrencyOpen] = useState(false)
+    const [filterOpen, setFilterOpen] = useState(false)
     const [submitting, setSubmitting] = useState(false)
 
     const formatLocale = useFormatLocale()
@@ -301,12 +299,20 @@ export function WidgetSheet({
                 ) : null}
 
                 {usesFilter ? (
-                    <FilterEditor
-                        filter={filter}
-                        onChange={setFilter}
-                        accounts={accounts ?? []}
-                        categories={categories ?? []}
-                    />
+                    <Section label={t.dashboard.filter}>
+                        <PickerField
+                            label={t.dashboard.filter}
+                            value={
+                                isFilterEmpty(filter)
+                                    ? ''
+                                    : t.dashboard.filterConfigured
+                            }
+                            placeholder={t.dashboard.noFilter}
+                            icon="filter_alt"
+                            onClick={() => setFilterOpen(true)}
+                            disabled={submitting}
+                        />
+                    </Section>
                 ) : null}
 
                 <Section label={t.dashboard.width}>
@@ -353,6 +359,21 @@ export function WidgetSheet({
                 searchPlaceholder={t.accounts.searchCurrency}
                 suggested={SUGGESTED_CURRENCIES}
             />
+
+            {/*
+             * The same editor the activity list uses, so a widget's filter is
+             * as expressive here as it is on native — tags, amounts, custom
+             * ranges and the advanced tree included. Native hides only status
+             * for widgets and keeps the advanced toggle on.
+             */}
+            <FilterSheet
+                open={filterOpen}
+                onOpenChange={setFilterOpen}
+                initial={filter}
+                hiddenSections={['status']}
+                allowAdvanced
+                onApply={setFilter}
+            />
         </BottomSheet>
     )
 }
@@ -369,150 +390,6 @@ function Section({
             <h3 className="m3-label-large text-on-surface">{label}</h3>
             {children}
         </section>
-    )
-}
-
-/** The simple-mode filter editor: the dimensions the design doc calls simple. */
-function FilterEditor({
-    filter,
-    onChange,
-    accounts,
-    categories,
-}: {
-    filter: SimpleFilter
-    onChange: (next: SimpleFilter) => void
-    accounts: { id: string; name: string }[]
-    categories: { id: string; name: string }[]
-}) {
-    const t = useT()
-
-    if (filter.advancedRoot) {
-        return (
-            <Section label={t.dashboard.filter}>
-                <p className="m3-body-medium rounded-lg bg-surface-container-high px-3 py-2 text-on-surface-variant">
-                    {t.dashboard.advancedFilterReadOnly}
-                </p>
-            </Section>
-        )
-    }
-
-    const toggle = <T,>(list: T[], value: T): T[] =>
-        list.includes(value)
-            ? list.filter((item) => item !== value)
-            : [...list, value]
-
-    return (
-        <>
-            <Section label={t.dashboard.movementTypes}>
-                <div className="flex flex-wrap gap-2">
-                    {TXN_TYPES.map((option) => (
-                        <ChoiceChip
-                            key={option}
-                            label={txnTypeLabel(option, t)}
-                            selected={filter.types.includes(option)}
-                            onSelect={() =>
-                                onChange({
-                                    ...filter,
-                                    types: toggle(filter.types, option),
-                                })
-                            }
-                        />
-                    ))}
-                </div>
-            </Section>
-
-            <Section label={t.dashboard.period}>
-                <div className="flex flex-wrap gap-2">
-                    {DATE_PRESETS.map((option) => (
-                        <ChoiceChip
-                            key={option}
-                            label={datePresetLabel(option, t)}
-                            selected={filter.datePreset === option}
-                            onSelect={() =>
-                                onChange({
-                                    ...filter,
-                                    datePreset:
-                                        filter.datePreset === option
-                                            ? null
-                                            : option,
-                                    dateFrom: null,
-                                    dateTo: null,
-                                })
-                            }
-                        />
-                    ))}
-                </div>
-            </Section>
-
-            {accounts.length > 0 ? (
-                <Section label={t.activity.accounts}>
-                    <div className="flex flex-wrap gap-2">
-                        {accounts.map((account) => (
-                            <ChoiceChip
-                                key={account.id}
-                                label={account.name}
-                                selected={filter.accountIds.includes(
-                                    account.id,
-                                )}
-                                onSelect={() =>
-                                    onChange({
-                                        ...filter,
-                                        accountIds: toggle(
-                                            filter.accountIds,
-                                            account.id,
-                                        ),
-                                    })
-                                }
-                            />
-                        ))}
-                    </div>
-                </Section>
-            ) : null}
-
-            {categories.length > 0 ? (
-                <Section label={t.activity.categories}>
-                    <div className="flex flex-wrap gap-2">
-                        {categories.map((category) => (
-                            <ChoiceChip
-                                key={category.id}
-                                label={category.name}
-                                selected={filter.categoryIds.includes(
-                                    category.id,
-                                )}
-                                onSelect={() =>
-                                    onChange({
-                                        ...filter,
-                                        categoryIds: toggle(
-                                            filter.categoryIds,
-                                            category.id,
-                                        ),
-                                    })
-                                }
-                            />
-                        ))}
-                    </div>
-                </Section>
-            ) : null}
-
-            <Section label={t.dashboard.currencyScope}>
-                <div className="flex flex-wrap gap-2">
-                    {SUGGESTED_CURRENCIES.map((code) => (
-                        <ChoiceChip
-                            key={code}
-                            label={code}
-                            selected={filter.currency === code}
-                            onSelect={() =>
-                                onChange({
-                                    ...filter,
-                                    currency:
-                                        filter.currency === code ? null : code,
-                                })
-                            }
-                        />
-                    ))}
-                </div>
-            </Section>
-        </>
     )
 }
 
@@ -691,36 +568,5 @@ function backgroundModeLabel(value: BackgroundMode, t: Messages): string {
             return t.dashboard.backgroundFixed
         case 'value':
             return t.dashboard.backgroundValue
-    }
-}
-
-function txnTypeLabel(value: TxnType, t: Messages): string {
-    switch (value) {
-        case 'expense':
-            return t.activity.typeExpense
-        case 'income':
-            return t.activity.typeIncome
-        case 'transfer':
-            return t.activity.typeTransfer
-        case 'balance_adjustment':
-            return t.activity.typeBalanceAdjustment
-    }
-}
-
-function datePresetLabel(
-    value: (typeof DATE_PRESETS)[number],
-    t: Messages,
-): string {
-    switch (value) {
-        case 'today':
-            return t.dashboard.presetToday
-        case 'this_week':
-            return t.dashboard.presetThisWeek
-        case 'this_month':
-            return t.dashboard.presetThisMonth
-        case 'last_month':
-            return t.dashboard.presetLastMonth
-        case 'this_year':
-            return t.dashboard.presetThisYear
     }
 }

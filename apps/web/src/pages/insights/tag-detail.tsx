@@ -18,6 +18,7 @@ import { groupedRadius } from '@/lib/grouped-list'
 import { useT } from '@/lib/i18n'
 import { currentMonthWindow } from '@/lib/month-window'
 import { normalizeTagColor } from '@/lib/tag-colors'
+import type { ActivityFilterSeed } from '@/pages/activity/helpers'
 
 export type TagSummary = {
     id: string
@@ -108,7 +109,8 @@ export function TagDetail({
 
     const viewAllTransactions = () => {
         onClose()
-        navigate('/activity', { state: { tagIds: [tag.id] } })
+        const seed: ActivityFilterSeed = { tagIds: [tag.id] }
+        navigate('/activity', { state: seed })
     }
 
     const hasChildren = childTags.length > 0

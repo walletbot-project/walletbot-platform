@@ -1,6 +1,9 @@
+import { type FilterGroup, isFilterGroup } from '@wallet-bot/shared'
+import type { PaginationOptions, PaginationResult } from 'convex/server'
 import { paginationOptsValidator } from 'convex/server'
 import { v } from 'convex/values'
-import type { Doc } from '../../_generated/dataModel'
+import { stream } from 'convex-helpers/server/stream'
+import type { Doc, Id } from '../../_generated/dataModel'
 import type { QueryCtx } from '../../_generated/server'
 import { query } from '../../_generated/server'
 import {
@@ -8,11 +11,28 @@ import {
     inflowsByAccount,
     outflowsByAccount,
 } from '../../aggregates'
+import schema from '../../schema'
 import { requireAuth } from '../../users/helpers'
+import {
+    boundByDate,
+    buildEvaluationContext,
+    filterFromConfig,
+    indexDateWindow,
+    MAX_SCAN,
+    matchesNode,
+} from '../dashboard/helpers'
 
 // Bounded read so we never accidentally collect an unbounded set. Callers that
 // truly need everything must paginate via `listPaginated`.
 const MAX_RECENT = 100
+
+/**
+ * Rows pulled from each text index before the rest of the tree is applied.
+ * Text search is the one dimension no `date`/`account`/`category` index can
+ * bound, so the search index supplies the candidates and the predicate narrows
+ * them; this caps how many it may supply per index.
+ */
+const MAX_SEARCH_CANDIDATES = 512
 
 export const get = query({
     args: { id: v.string() },
@@ -192,6 +212,211 @@ export const listPaginated = query({
         return { ...result, page }
     },
 })
+
+/**
+ * The activity list, filtered by a canonical filter tree
+ * (`packages/shared/src/dashboard/filter.ts`) instead of the handful of
+ * dimensions `listPaginated` can express.
+ *
+ * Native filters in SQL over its whole local database, so every dimension is
+ * applied to every row it owns. This is the server-side equivalent: the same
+ * evaluator the dashboard widgets use (`matchesNode`), applied to an
+ * index-bounded stream, with pagination happening *after* the predicate so a
+ * page is a page of matches rather than a page of candidates. Filtering the
+ * already-loaded page in the browser — what the web activity screen did — could
+ * only ever see the rows it had paged in.
+ */
+export const listByFilter = query({
+    args: {
+        paginationOpts: paginationOptsValidator,
+        /** Canonical filter JSON, i.e. `filterConfigToJson(filter)`. */
+        config: v.string(),
+    },
+    handler: async (
+        ctx,
+        args,
+    ): Promise<PaginationResult<Doc<'transactions'>>> => {
+        const userId = await requireAuth(ctx)
+        const { filter, root } = filterFromConfig(args.config)
+        const now = new Date()
+        const evaluation = await buildEvaluationContext(ctx, userId, root, now)
+        const matches = async (txn: Doc<'transactions'>) =>
+            !txn.isArchived && matchesNode(txn, root, evaluation)
+
+        const window = indexDateWindow(filter, root, now)
+        const anchorAccount =
+            filter.accountIds.length === 1 ? filter.accountIds[0] : null
+        const anchorCategory =
+            filter.categoryIds.length === 1 ? filter.categoryIds[0] : null
+
+        // Text is the one dimension no ordered index can bound — but the search
+        // index only offers a bounded slice of best matches, while an ordered
+        // scan pages through *every* row in its range. So the search index is
+        // the fallback, taken only when nothing else can bound the read: with a
+        // date window or a single account/category to anchor on, the ordered
+        // scan is used and text is evaluated row by row, which is complete.
+        const canAnchorOnIndex =
+            window !== null || anchorAccount !== null || anchorCategory !== null
+        const needle = canAnchorOnIndex ? null : searchAnchor(root)
+        if (needle !== null) {
+            return await paginateSearchMatches(
+                ctx,
+                userId,
+                needle,
+                matches,
+                args.paginationOpts,
+            )
+        }
+
+        const table = stream(ctx.db, schema).query('transactions')
+
+        // The narrowest index the filter's anchor dimensions allow, date window
+        // folded into the range. `either` gets no account anchor: the account
+        // can sit on either leg, and each leg is its own index — the predicate
+        // enforces the dimension in that case rather than a merged read.
+        const anchored =
+            anchorAccount !== null && filter.accountDirection === 'source'
+                ? table.withIndex('by_user_account_date', (q) =>
+                      boundByDate(
+                          q.eq('userId', userId).eq('accountId', anchorAccount),
+                          window,
+                      ),
+                  )
+                : anchorAccount !== null &&
+                    filter.accountDirection === 'destination'
+                  ? table.withIndex('by_user_to_account_date', (q) =>
+                        boundByDate(
+                            q
+                                .eq('userId', userId)
+                                .eq('toAccountId', anchorAccount),
+                            window,
+                        ),
+                    )
+                  : anchorCategory !== null
+                    ? table.withIndex('by_user_category_date', (q) =>
+                          boundByDate(
+                              q
+                                  .eq('userId', userId)
+                                  .eq('categoryId', anchorCategory),
+                              window,
+                          ),
+                      )
+                    : table.withIndex('by_user_date', (q) =>
+                          boundByDate(q.eq('userId', userId), window),
+                      )
+
+        return await anchored
+            .order('desc')
+            .filterWith(matches)
+            // Pre-filter pagination reads until the page is full, so the cap is
+            // what stops a filter matching almost nothing from walking the
+            // whole table in one call.
+            .paginate({ ...args.paginationOpts, maximumRowsRead: MAX_SCAN })
+    },
+})
+
+/**
+ * The text a search index may drive the read with: a `contains` condition
+ * directly under a plain top-level `and`, where every match must satisfy it.
+ * An `or` root, a negated one, or `not contains` constrains nothing on its own,
+ * so those keep the ordered-index path and evaluate text row by row.
+ */
+function searchAnchor(root: FilterGroup): string | null {
+    if (root.combinator !== 'and' || root.not === true) return null
+    for (const child of root.children) {
+        if (isFilterGroup(child)) continue
+        if (child.field !== 'text' || child.operator !== 'contains') continue
+        if (typeof child.value !== 'string') continue
+        const needle = child.value.trim()
+        if (needle) return needle
+    }
+    return null
+}
+
+/**
+ * Search-anchored page: union the candidates both text indexes offer, apply the
+ * whole tree to them, then order and page in memory.
+ *
+ * The candidates are word-prefix matches (what a search index gives); the
+ * predicate then re-applies the substring test every other evaluator uses, so
+ * what comes back is exactly what native's `LIKE '%needle%'` would return, with
+ * two bounds native does not have: an infix like "bucks" inside "Starbucks" is
+ * never offered as a candidate, and only the best `MAX_SEARCH_CANDIDATES` per
+ * index are considered. Both are the price of reaching the user's whole history
+ * instead of the rows the browser happened to have paged in.
+ */
+async function paginateSearchMatches(
+    ctx: QueryCtx,
+    userId: string,
+    needle: string,
+    matches: (txn: Doc<'transactions'>) => Promise<boolean>,
+    paginationOpts: PaginationOptions,
+): Promise<PaginationResult<Doc<'transactions'>>> {
+    const [byName, byDescription] = await Promise.all([
+        ctx.db
+            .query('transactions')
+            .withSearchIndex('search_name', (q) =>
+                q
+                    .search('name', needle)
+                    .eq('userId', userId)
+                    .eq('isArchived', false),
+            )
+            .take(MAX_SEARCH_CANDIDATES),
+        ctx.db
+            .query('transactions')
+            .withSearchIndex('search_description', (q) =>
+                q
+                    .search('description', needle)
+                    .eq('userId', userId)
+                    .eq('isArchived', false),
+            )
+            .take(MAX_SEARCH_CANDIDATES),
+    ])
+
+    const candidates = new Map<Id<'transactions'>, Doc<'transactions'>>()
+    for (const txn of [...byName, ...byDescription]) {
+        candidates.set(txn._id, txn)
+    }
+
+    const matched: Doc<'transactions'>[] = []
+    for (const txn of candidates.values()) {
+        if (await matches(txn)) matched.push(txn)
+    }
+    matched.sort(newestFirst)
+
+    // The candidate list is bounded and fully in hand, so the cursor is simply
+    // how far into it the client has read. `endCursor`, when the client sends
+    // one back, pins a page it already holds so live updates can't reshuffle it.
+    const from = cursorOffset(paginationOpts.cursor, 0)
+    const to = cursorOffset(
+        paginationOpts.endCursor ?? null,
+        from + paginationOpts.numItems,
+    )
+    const page = matched.slice(from, to)
+    const continueCursor = String(from + page.length)
+    return {
+        page,
+        isDone: from + page.length >= matched.length,
+        continueCursor,
+    }
+}
+
+function cursorOffset(cursor: string | null, fallback: number): number {
+    if (cursor === null) return fallback
+    const parsed = Number.parseInt(cursor, 10)
+    return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback
+}
+
+/**
+ * The activity ordering, matching the client's own list build and native's
+ * `_buildListEntries`: newest date first, then newest creation, then id.
+ */
+function newestFirst(a: Doc<'transactions'>, b: Doc<'transactions'>): number {
+    if (a.date !== b.date) return a.date > b.date ? -1 : 1
+    if (a.createdAt !== b.createdAt) return a.createdAt > b.createdAt ? -1 : 1
+    if (a.id === b.id) return 0
+    return a.id > b.id ? -1 : 1
+}
 
 // O(log n) balance read backed by two TableAggregates over `transactions`.
 // See aggregates.ts for the namespace/sumValue contracts.

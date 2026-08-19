@@ -1,4 +1,5 @@
 import { api } from '@wallet-bot/backend/api'
+import type { SimpleFilter } from '@wallet-bot/shared'
 import { CircularProgress, IconButton, Select, SelectOption } from 'actify'
 import { useMutation, useQuery } from 'convex/react'
 import type { FunctionReturnType } from 'convex/server'
@@ -25,11 +26,7 @@ import { useFormatLocale, useT } from '@/lib/i18n'
 import { formatMoney } from '@/lib/money'
 import { normalizeTagColor } from '@/lib/tag-colors'
 import { cn } from '@/lib/utils'
-import type {
-    TransactionFilters,
-    TransactionTimeStatus,
-    TransactionTransferSide,
-} from './helpers'
+import type { TransactionTimeStatus, TransactionTransferSide } from './helpers'
 
 type Transaction = NonNullable<
     FunctionReturnType<typeof api.v1.transactions.queries.get>
@@ -50,7 +47,7 @@ type TransactionDetailProps = {
     // When provided, the read-mode date/category/tag chips apply the filter in
     // place (used by the Activity page, which owns the filter state). Without
     // it, they deep-link to /activity via the router.
-    onApplyFilter?: (filters: Partial<TransactionFilters>) => void
+    onApplyFilter?: (filter: Partial<SimpleFilter>) => void
     onClose: () => void
 }
 
@@ -137,7 +134,7 @@ function TransactionDetailsContent({
     tags: Tag[]
     transferSide?: TransactionTransferSide
     initialEditing: boolean
-    onApplyFilter?: (filters: Partial<TransactionFilters>) => void
+    onApplyFilter?: (filter: Partial<SimpleFilter>) => void
     onClose: () => void
 }) {
     const navigate = useNavigate()
@@ -163,11 +160,11 @@ function TransactionDetailsContent({
 
     // Apply a filter to the Activity list and dismiss the sheet. Prefer the
     // in-place callback (Activity owns the filter state); otherwise deep-link.
-    const applyFilter = (filters: Partial<TransactionFilters>) => {
+    const applyFilter = (filter: Partial<SimpleFilter>) => {
         if (onApplyFilter) {
-            onApplyFilter(filters)
+            onApplyFilter(filter)
         } else {
-            void navigate('/activity', { state: filters })
+            void navigate('/activity', { state: filter })
         }
         onClose()
     }
@@ -511,11 +508,13 @@ function TransactionDetailsContent({
                                     className="cursor-pointer"
                                     onClick={() =>
                                         applyFilter({
-                                            dateFrom: new Date(
-                                                Number(transaction.date),
+                                            // The canonical filter carries days
+                                            // as local ISO dates, not instants.
+                                            dateFrom: dateInputValue(
+                                                transaction.date,
                                             ),
-                                            dateTo: new Date(
-                                                Number(transaction.date),
+                                            dateTo: dateInputValue(
+                                                transaction.date,
                                             ),
                                         })
                                     }
