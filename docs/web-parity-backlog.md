@@ -21,16 +21,6 @@ numbers so the ids stay quotable. Last updated 2026-08-19.
 
 Ordered by what the user loses.
 
-### 1.4 Voice history is never persisted on web
-
-Native records every Live event to Drift and replicates it to `voiceSessions` /
-`voiceSessionEvents` (`packages/backend/convex/v1/voice/sessions.ts`, via
-`apps/native/lib/voice/voice_session_remote_sync.dart`). Web calls nothing under
-`api.v1.voice` — the transcript lives in React state and is lost on reload.
-
-The data-export and retention contract in `docs/voice-data-export.md` therefore
-covers native conversations only.
-
 ### 1.5 Voice sessions do not survive a dropped socket on web
 
 Native holds a resumption handle, handles `goAway`, and reconnects with
@@ -44,6 +34,11 @@ The ephemeral token already negotiates `sessionResumption` and
 
 Related and also open: native keeps the session alive when the screen is left,
 while web tears it down when the route unmounts.
+
+Closing 1.4 wrote the observation into the history: web records the server's
+`session_resumption_update` and `go_away` signals but does nothing with them, and
+marks a dropped session `ended` where native marks it `suspended`. Both change
+when this lands.
 
 ### 1.7 No telemetry on web
 
@@ -83,17 +78,6 @@ an explicit decision so it is not treated as a bug later.
 Same feature on both clients, different result. These matter more than missing
 features because they produce inconsistent data or display for the same user
 across devices.
-
-### 2.1 Generated names are not localized on web
-
-Native maps canonical Spanish names to the active locale at render time —
-`transactionName()` and `dashboardTitle()` in `apps/native/lib/l10n/l10n.dart`,
-applied at six call sites. Web has no equivalent, so an English web user sees
-`Ajuste de saldo`, `Balance inicial` and `Gastos del mes` verbatim.
-
-Closing 2.2 made this more visible, not less: web now writes `Balance inicial`
-itself, so the canonical Spanish string reaches an English web user by the
-app's own hand rather than by the backend default.
 
 ### 2.3 Native's transaction-detail screen is not localized
 
@@ -166,8 +150,8 @@ Web's equivalent is fully internationalized. This is one of the items where
 
 ## 5. Closed
 
-Kept for the record, with what closed each one. Neither batch below has been
-verified at runtime.
+Kept for the record, with what closed each one. Nothing below has been verified
+at runtime; every entry is a source-level change that typechecks and lints.
 
 ### 1.1 Advanced transaction filtering — closed 2026-08-19
 
@@ -203,6 +187,25 @@ strings, result shapes and stored JSON. The system prompt in
 `packages/backend/convex/live/createToken.ts` no longer tells the model that web
 dashboard parity is missing.
 
+### 1.4 Voice history is never persisted on web — closed 2026-08-19
+
+`apps/web/src/lib/voice-history.ts` replicates a Live session to `voiceSessions`
+/ `voiceSessionEvents` through the same V1 mutation native uses, with native's
+event vocabulary (`type`, `direction`, `modality`), its 50-event batches, its
+one-second debounce and its five-second retry. Web's `ownerId` comes from the new
+`v1/users/queries:getMyId`, derived server-side, so the account-boundary check
+behaves the same for both clients.
+
+Three deliberate divergences, all recorded in `docs/voice-data-export.md`: the
+outbox is in memory, so a tab closed inside the flush window loses the tail; only
+the semantic log is uploaded, not native's raw protocol firehose or its per-PCM
+-chunk rows (thousands a minute, which SQLite absorbs and a browser round-trip
+does not); and a dropped socket writes status `ended` rather than native's
+`suspended`, because web cannot resume it (1.5).
+
+There is still no export surface for a web user's history — `exportSessionJson`
+and friends are Drift APIs, so Convex holds the only copy.
+
 ### 1.6 Dashboard widget filters are narrower on web — closed 2026-08-19
 
 The widget sheet uses the same `FilterSheet` as the activity list, so a widget
@@ -222,6 +225,17 @@ Both surfaces — `apps/web/src/pages/accounts/account-form.tsx` and the inline
 user's default currency, null until the user picks, with a live fallback, the
 same rule as `apps/native/lib/screens/create_account.dart`. Left web ahead of
 native on the inline dialog's currency list (§ 3).
+
+### 2.1 Generated names are not localized on web — closed 2026-08-19
+
+`apps/web/src/lib/i18n/generated-names.ts` ports `transactionName` and
+`dashboardTitle` from `apps/native/lib/l10n/l10n.dart`, mapping the two generated
+transaction names and the six seeded dashboard titles at render time and
+accepting either spelling, since either client may have written the row. Applied
+at the four places web renders a transaction name (activity list, entity recent
+lists, the agent action card, the dashboard list widget) and the six where it
+renders a widget title. Editable fields keep the stored value — localizing them
+would persist the localized copy over the canonical name.
 
 ### 2.2 The same action writes two different names — closed 2026-08-18
 

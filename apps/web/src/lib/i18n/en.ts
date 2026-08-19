@@ -368,6 +368,9 @@ export const en: Messages = {
     },
 
     transaction: {
+        balanceAdjustment: 'Balance adjustment',
+        initialBalance: 'Initial balance',
+
         gone: 'This activity no longer exists',
         detail: 'Details',
         editActivity: 'Edit activity',

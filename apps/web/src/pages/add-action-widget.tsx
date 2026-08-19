@@ -24,7 +24,12 @@ import {
     COLOR_OPTIONS,
     normalizeColor,
 } from '@/lib/entity-colors'
-import { type Messages, useFormatLocale, useT } from '@/lib/i18n'
+import {
+    type Messages,
+    transactionName,
+    useFormatLocale,
+    useT,
+} from '@/lib/i18n'
 import { normalizeTagColor } from '@/lib/tag-colors'
 import { cn } from '@/lib/utils'
 import { accountErrorMessage } from '@/pages/accounts/account-errors'
@@ -147,7 +152,9 @@ function TransactionActionWidget({
                     />
                 </div>
                 <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium">{txn.name}</p>
+                    <p className="truncate text-sm font-medium">
+                        {transactionName(txn.name, txn.type, t)}
+                    </p>
                     <p className="truncate text-xs text-muted-foreground">
                         {wasUpdated
                             ? t.actionWidget.transactionUpdated({ type: label })

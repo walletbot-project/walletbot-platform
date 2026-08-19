@@ -5,11 +5,17 @@ import {
 } from '@google/genai'
 import { api } from '@wallet-bot/backend/api'
 import type { ToolName } from '@wallet-bot/shared'
-import { useConvex } from 'convex/react'
+import { useConvex, useQuery } from 'convex/react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { executeToolCall } from '@/lib/agent-tools'
 import type { AgentToolContext } from '@/lib/agent-tools/helpers'
 import { useT } from '@/lib/i18n'
+import {
+    createVoiceHistoryRecorder,
+    type VoiceEventDirection,
+    type VoiceEventModality,
+    type VoiceHistoryRecorder,
+} from '@/lib/voice-history'
 
 // Constants
 
@@ -212,6 +218,60 @@ export function useVoice(opts: UseVoiceOpts) {
         setConnectionStatus(next)
     }, [])
 
+    // Voice history replication. The recorder lives for one session and is
+    // best-effort: see `@/lib/voice-history`. `ownerId` comes from the server
+    // because `appendEvents` rejects a batch whose owner is not the
+    // authenticated user, and a guessed id would throw that batch away.
+    const ownerId = useQuery(api.v1.users.queries.getMyId) ?? null
+    const ownerIdRef = useRef(ownerId)
+    const historyRef = useRef<VoiceHistoryRecorder | null>(null)
+
+    useEffect(() => {
+        ownerIdRef.current = ownerId
+    }, [ownerId])
+
+    const recordHistory = useCallback(
+        (
+            type: string,
+            direction: VoiceEventDirection,
+            payload?: Record<string, unknown>,
+            modality?: VoiceEventModality,
+        ) => {
+            historyRef.current?.record(type, direction, payload, modality)
+        },
+        [],
+    )
+
+    /**
+     * Native's `send_message` client action (`sendText`). A typed turn has no
+     * input transcription, so this is the only record of what the user said.
+     */
+    const recordSendMessage = useCallback(
+        (text: string) => {
+            recordHistory(
+                'send_message',
+                'client',
+                { interactionModality: 'text', text },
+                'text',
+            )
+        },
+        [recordHistory],
+    )
+
+    /** Native's `_recordMuteEvent`, with the same five details. */
+    const recordMute = useCallback(
+        (reason: string) => {
+            recordHistory('mute_changed', 'client', {
+                muted: !micOnRef.current || composingRef.current,
+                reason,
+                micCaptureActive: micCaptureActiveRef.current,
+                userMicOn: micOnRef.current,
+                textComposing: composingRef.current,
+            })
+        },
+        [recordHistory],
+    )
+
     // Chat message helpers
 
     const addSystem = useCallback(
@@ -266,6 +326,12 @@ export function useVoice(opts: UseVoiceOpts) {
 
     const appendUser = useCallback(
         (chunk: string) => {
+            recordHistory(
+                'user_transcript_delta',
+                'server',
+                { text: chunk },
+                'voice',
+            )
             finalisePendingAgent()
             if (pendingUserIdRef.current) {
                 const id = pendingUserIdRef.current
@@ -291,11 +357,17 @@ export function useVoice(opts: UseVoiceOpts) {
                 },
             ])
         },
-        [finalisePendingAgent, nextId],
+        [finalisePendingAgent, nextId, recordHistory],
     )
 
     const appendAgent = useCallback(
         (chunk: string) => {
+            recordHistory(
+                'agent_transcript_delta',
+                'server',
+                { text: chunk },
+                'voice',
+            )
             finalisePendingUser()
             if (pendingAgentIdRef.current) {
                 const id = pendingAgentIdRef.current
@@ -322,7 +394,7 @@ export function useVoice(opts: UseVoiceOpts) {
                 },
             ])
         },
-        [finalisePendingUser, nextId],
+        [finalisePendingUser, nextId, recordHistory],
     )
 
     /** A typed turn has no input transcription — echo it locally instead. */
@@ -519,18 +591,20 @@ export function useVoice(opts: UseVoiceOpts) {
         setIsMicCaptureActive(false)
         setIsMicOn(false)
         setMicLevel(0)
-    }, [])
+        recordHistory('mic_capture_stopped', 'client', { muted: true })
+    }, [recordHistory])
 
     /** Turn the user's mic on or off without tearing capture down. */
     const setMicOn = useCallback(
         (on: boolean) => {
             micOnRef.current = on
             setIsMicOn(on)
+            recordMute(on ? 'tap_unmute' : 'tap_mute')
             if (on) return
             setMicLevel(0)
             endAudioStream()
         },
-        [endAudioStream],
+        [endAudioStream, recordMute],
     )
 
     /** Open the mic — prompts for permission the first time. */
@@ -549,20 +623,31 @@ export function useVoice(opts: UseVoiceOpts) {
                 micCaptureActiveRef.current = true
                 setIsMicCaptureActive(true)
                 setMicOn(turnOn)
+                recordMute('mic_capture_started')
             } catch (err) {
                 stopMicCapture()
-                addSystem(
-                    catalog.voice.systemMicOpenFailed({
-                        error: err instanceof Error ? err.message : String(err),
-                    }),
-                    'error',
-                )
+                const message = catalog.voice.systemMicOpenFailed({
+                    error: err instanceof Error ? err.message : String(err),
+                })
+                addSystem(message, 'error')
+                recordHistory('error', 'local', {
+                    message,
+                    isTransient: false,
+                })
             }
             // Cleared on both paths — `finally` would stop the React Compiler
             // from lowering this hook (`react-hooks/todo`).
             micOpeningRef.current = false
         },
-        [startMicCapture, stopMicCapture, setMicOn, addSystem, catalog],
+        [
+            startMicCapture,
+            stopMicCapture,
+            setMicOn,
+            addSystem,
+            catalog,
+            recordMute,
+            recordHistory,
+        ],
     )
 
     // Switch mic while connected
@@ -620,12 +705,27 @@ export function useVoice(opts: UseVoiceOpts) {
                 mode === 'audio' ? true : RESPOND_TO_TEXT_WITH_AUDIO
             addSystem(catalog.voice.systemConnecting, 'info')
 
+            // One recorder per session, created before the first await so a
+            // turn typed while connecting still lands in the same history.
+            historyRef.current = createVoiceHistoryRecorder(
+                convex,
+                () => ownerIdRef.current,
+            )
+            recordHistory('connecting', 'local', {
+                message: catalog.voice.systemConnecting,
+            })
+
             try {
                 const { token, model } = await convex.action(
                     api.v1.live.actions.requestLiveToken,
                     {},
                 )
-                addSystem(catalog.voice.systemTokenReceived({ model }), 'info')
+                const tokenNotice = catalog.voice.systemTokenReceived({ model })
+                addSystem(tokenNotice, 'info')
+                // The model is only known now, so this is where the session row
+                // becomes uploadable.
+                historyRef.current?.open(model)
+                recordHistory('system', 'local', { message: tokenNotice })
 
                 const playbackCtx = new AudioContext({
                     sampleRate: OUTPUT_SAMPLE_RATE,
@@ -668,6 +768,16 @@ export function useVoice(opts: UseVoiceOpts) {
                                             unknown
                                         >,
                                     )
+                                    recordHistory(
+                                        'tool_call',
+                                        'server',
+                                        {
+                                            id: fc.id ?? '',
+                                            name: fc.name ?? '',
+                                            args: fc.args ?? {},
+                                        },
+                                        'tool',
+                                    )
                                 }
                                 for (const fc of functionCalls) {
                                     const result = await executeToolCall(
@@ -679,6 +789,16 @@ export function useVoice(opts: UseVoiceOpts) {
                                         >,
                                     )
                                     completeToolCall(fc.id ?? '', result)
+                                    recordHistory(
+                                        'tool_result',
+                                        'client',
+                                        {
+                                            id: fc.id ?? '',
+                                            name: fc.name ?? '',
+                                            result,
+                                        },
+                                        'tool',
+                                    )
                                     functionResponses.push({
                                         id: fc.id,
                                         name: fc.name,
@@ -696,7 +816,41 @@ export function useVoice(opts: UseVoiceOpts) {
                                     (x): x is string => typeof x === 'string',
                                 )
                                 cancelToolCalls(ids)
+                                recordHistory(
+                                    'tool_cancelled',
+                                    'server',
+                                    { ids },
+                                    'tool',
+                                )
                                 return
+                            }
+
+                            if (msg.usageMetadata) {
+                                recordHistory('usage_metadata', 'server', {
+                                    ...msg.usageMetadata,
+                                })
+                            }
+                            if (msg.goAway) {
+                                recordHistory('go_away', 'server', {
+                                    timeLeft: msg.goAway.timeLeft,
+                                })
+                            }
+                            if (msg.sessionResumptionUpdate) {
+                                // Only the two booleans, never the handle —
+                                // native redacts it from the wire as well.
+                                recordHistory(
+                                    'session_resumption_update',
+                                    'server',
+                                    {
+                                        resumable:
+                                            msg.sessionResumptionUpdate
+                                                .resumable ?? false,
+                                        hasNewHandle: Boolean(
+                                            msg.sessionResumptionUpdate
+                                                .newHandle,
+                                        ),
+                                    },
+                                )
                             }
 
                             const sc = msg.serverContent
@@ -716,6 +870,9 @@ export function useVoice(opts: UseVoiceOpts) {
                             if (outputText) appendAgent(outputText)
 
                             if (sc.interrupted) {
+                                recordHistory('agent_interrupted', 'server', {
+                                    reason: 'server_interrupted',
+                                })
                                 discardOutputRef.current = true
                                 playbackNode.port.postMessage('interrupt')
                                 finalisePendingAgent({ interrupted: true })
@@ -741,16 +898,25 @@ export function useVoice(opts: UseVoiceOpts) {
                             }
 
                             if (sc.turnComplete) {
+                                recordHistory('agent_turn_complete', 'server')
                                 discardOutputRef.current = false
                                 finalisePendingAgent()
                             }
                         },
                         onerror: () => {
                             addSystem(catalog.voice.systemSocketError, 'error')
+                            recordHistory('error', 'local', {
+                                message: catalog.voice.systemSocketError,
+                                isTransient: true,
+                            })
                             applyStatus('disconnected')
                         },
-                        onclose: () => {
+                        onclose: (event: CloseEvent) => {
                             addSystem(catalog.voice.systemDisconnected, 'info')
+                            recordHistory('disconnected', 'server', {
+                                code: event.code,
+                                reason: event.reason,
+                            })
                             applyStatus('disconnected')
                             audioStreamOpenRef.current = false
                             pendingTextRef.current = []
@@ -762,12 +928,17 @@ export function useVoice(opts: UseVoiceOpts) {
                             stopPlayback()
                             finalisePendingUser()
                             finalisePendingAgent()
+                            // No resumption on web yet (backlog 1.5), so a
+                            // closed socket ends the session for good.
+                            historyRef.current?.end({ explicit: false })
                         },
                     },
                 })
 
                 sessionRef.current = session
                 applyStatus('connected')
+                historyRef.current?.markStatus('active')
+                recordHistory('connected', 'local')
                 addSystem(
                     mode === 'audio'
                         ? catalog.voice.systemConnected
@@ -779,12 +950,15 @@ export function useVoice(opts: UseVoiceOpts) {
             } catch (err) {
                 pendingTextRef.current = []
                 stopPlayback()
-                addSystem(
-                    catalog.voice.systemConnectionFailed({
-                        error: err instanceof Error ? err.message : String(err),
-                    }),
-                    'error',
-                )
+                const message = catalog.voice.systemConnectionFailed({
+                    error: err instanceof Error ? err.message : String(err),
+                })
+                addSystem(message, 'error')
+                recordHistory('error', 'local', {
+                    message,
+                    isTransient: false,
+                })
+                historyRef.current?.end({ explicit: false })
                 applyStatus('disconnected')
             }
         },
@@ -804,6 +978,7 @@ export function useVoice(opts: UseVoiceOpts) {
             appendAgent,
             finalisePendingUser,
             finalisePendingAgent,
+            recordHistory,
         ],
     )
 
@@ -820,6 +995,7 @@ export function useVoice(opts: UseVoiceOpts) {
 
             if (status === 'connected') {
                 appendTypedUser(text)
+                recordSendMessage(text)
                 audioPlaybackEnabledRef.current = RESPOND_TO_TEXT_WITH_AUDIO
                 endAudioStream()
                 sessionRef.current?.sendClientContent({
@@ -833,14 +1009,19 @@ export function useVoice(opts: UseVoiceOpts) {
                 setMessages([])
                 appendTypedUser(text)
                 pendingTextRef.current = [...pendingTextRef.current, text]
+                // `connect` runs synchronously until its first await, so the
+                // recorder exists by the time it returns and the turn is
+                // recorded after the `connecting` notice, in the right order.
                 void connect('text')
+                recordSendMessage(text)
                 return
             }
 
             appendTypedUser(text)
             pendingTextRef.current = [...pendingTextRef.current, text]
+            recordSendMessage(text)
         },
-        [appendTypedUser, endAudioStream, connect],
+        [appendTypedUser, endAudioStream, connect, recordSendMessage],
     )
 
     /**
@@ -852,6 +1033,7 @@ export function useVoice(opts: UseVoiceOpts) {
         (composing: boolean) => {
             const started = composing && !composingRef.current
             composingRef.current = composing
+            if (started) recordMute('text_composing')
             if (composing) setMicLevel(0)
             if (
                 started &&
@@ -861,11 +1043,12 @@ export function useVoice(opts: UseVoiceOpts) {
                 endAudioStream()
             }
         },
-        [endAudioStream],
+        [endAudioStream, recordMute],
     )
 
     // Disconnect
     const disconnect = useCallback(() => {
+        recordHistory('end_session', 'client')
         endAudioStream()
         stopMicCapture()
         stopPlayback()
@@ -878,6 +1061,8 @@ export function useVoice(opts: UseVoiceOpts) {
         applyStatus('disconnected')
         finalisePendingUser()
         finalisePendingAgent()
+        // Ends the row and flushes the tail, native's `endExplicitly` + flush.
+        historyRef.current?.end({ explicit: true })
     }, [
         endAudioStream,
         stopMicCapture,
@@ -885,6 +1070,7 @@ export function useVoice(opts: UseVoiceOpts) {
         applyStatus,
         finalisePendingUser,
         finalisePendingAgent,
+        recordHistory,
     ])
 
     const clearMessages = useCallback(() => setMessages([]), [])

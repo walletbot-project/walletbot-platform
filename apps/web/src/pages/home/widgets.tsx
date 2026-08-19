@@ -21,7 +21,12 @@ import {
 } from 'recharts'
 import { Skeleton } from '@/components/ui/skeleton'
 import { COLOR_OPTIONS } from '@/lib/entity-colors'
-import { useFormatLocale, useT } from '@/lib/i18n'
+import {
+    dashboardTitle,
+    transactionName,
+    useFormatLocale,
+    useT,
+} from '@/lib/i18n'
 import { formatMoney } from '@/lib/money'
 import { useTheme } from '@/lib/theme'
 import { DashboardCell } from '@/pages/home/dashboard-cell'
@@ -64,7 +69,7 @@ export function StatWidget({ spec }: { spec: WidgetSpec }) {
 
     return (
         <DashboardCell
-            title={spec.options.title}
+            title={dashboardTitle(spec.options.title, t)}
             icon={STAT_ICONS[spec.options.aggregation]}
             minHeight={128}
             backgroundColor={resolveBackground(
@@ -110,6 +115,7 @@ function formatStatMoney(
 }
 
 export function BalanceCardWidget({ spec }: { spec: WidgetSpec }) {
+    const t = useT()
     const formatLocale = useFormatLocale()
     const { brightness } = useTheme()
     const currency = spec.options.currency
@@ -119,7 +125,7 @@ export function BalanceCardWidget({ spec }: { spec: WidgetSpec }) {
 
     return (
         <DashboardCell
-            title={spec.options.title}
+            title={dashboardTitle(spec.options.title, t)}
             icon="account_balance_wallet"
             minHeight={128}
             trailing={
@@ -159,7 +165,7 @@ export function TransactionListWidget({ spec }: { spec: WidgetSpec }) {
 
     return (
         <DashboardCell
-            title={spec.options.title}
+            title={dashboardTitle(spec.options.title, t)}
             icon="receipt_long"
             minHeight={160}
             backgroundColor={resolveBackground(
@@ -189,7 +195,7 @@ export function TransactionListWidget({ spec }: { spec: WidgetSpec }) {
                             }
                         >
                             <span className="m3-body-medium min-w-0 flex-1 truncate text-on-surface">
-                                {row.name}
+                                {transactionName(row.name, row.type, t)}
                             </span>
                             <span
                                 className={
@@ -245,7 +251,7 @@ export function BreakdownChartWidget({ spec }: { spec: WidgetSpec }) {
 
     return (
         <DashboardCell
-            title={spec.options.title}
+            title={dashboardTitle(spec.options.title, t)}
             icon={GROUP_BY_ICONS[spec.options.groupBy]}
             minHeight={240}
             backgroundColor={resolveBackground(

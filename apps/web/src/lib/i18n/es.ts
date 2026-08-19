@@ -378,6 +378,11 @@ export const es = {
     },
 
     transaction: {
+        // The two auto-generated names, localized at render time by
+        // `generated-names.ts`. The persisted value stays canonical Spanish.
+        balanceAdjustment: 'Ajuste de saldo',
+        initialBalance: 'Balance inicial',
+
         gone: 'La actividad ya no existe',
         detail: 'Detalle',
         editActivity: 'Editar actividad',

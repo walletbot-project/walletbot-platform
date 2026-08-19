@@ -6,7 +6,7 @@
 // than reading a module-level locale, so they stay pure and testable.
 
 import { EMPTY_FILTER, type SimpleFilter, TXN_TYPES } from '@wallet-bot/shared'
-import type { Messages } from '@/lib/i18n'
+import { type Messages, transactionName } from '@/lib/i18n'
 
 export type TransactionType =
     | 'expense'
@@ -351,7 +351,7 @@ export function buildListEntries(
                 kind: 'txn',
                 key: t.id,
                 txn: t,
-                title: t.name,
+                title: transactionName(t.name, t.type, messages),
                 amountCents: signedAmountCents(t),
                 currency: t.currency,
                 accountId: t.accountId,

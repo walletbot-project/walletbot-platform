@@ -1,5 +1,5 @@
 import { Button, CircularProgress } from 'actify'
-import { useFormatLocale, useT } from '@/lib/i18n'
+import { transactionName, useFormatLocale, useT } from '@/lib/i18n'
 import {
     type ActivityTransaction,
     formatTransactionTime,
@@ -60,7 +60,11 @@ export function EntityRecentTransactions({
                     {transactions.map((transaction) => (
                         <TransactionRow
                             key={transaction.id}
-                            title={transaction.name}
+                            title={transactionName(
+                                transaction.name,
+                                transaction.type,
+                                t,
+                            )}
                             amountCents={signedAmountCents(transaction)}
                             dateConfirmed={transaction.dateConfirmed}
                             timeLabel={formatTransactionTime(

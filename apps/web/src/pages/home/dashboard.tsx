@@ -20,7 +20,7 @@ import { toast } from 'sonner'
 import { Icon } from '@/components/m3/icon'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useElementWidth } from '@/hooks/use-element-width'
-import { useT } from '@/lib/i18n'
+import { dashboardTitle, useT } from '@/lib/i18n'
 import { cn } from '@/lib/utils'
 import { defaultDashboardSeed } from '@/pages/home/default-dashboard'
 import { widthLabel } from '@/pages/home/labels'
@@ -324,8 +324,10 @@ export function Dashboard({
                                             placement.id === selectedId
                                         }
                                         aria-label={
-                                            entry.spec.options.title ||
-                                            t.dashboard.widget
+                                            dashboardTitle(
+                                                entry.spec.options.title,
+                                                t,
+                                            ) || t.dashboard.widget
                                         }
                                         onPointerDown={(event) =>
                                             startTracking(event, placement.id)
@@ -630,7 +632,8 @@ function DragPreview({
                     className="shrink-0 text-primary"
                 />
                 <span className="m3-title-small min-w-0 flex-1 truncate font-extrabold text-on-surface">
-                    {spec.options.title || t.dashboard.widget}
+                    {dashboardTitle(spec.options.title, t) ||
+                        t.dashboard.widget}
                 </span>
             </div>
         </div>
