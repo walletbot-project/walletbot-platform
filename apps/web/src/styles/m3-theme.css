@@ -230,8 +230,7 @@
  * Component-level overrides mirroring the `ThemeData` tweaks in
  * `apps/native/lib/main.dart`: solid filled buttons use the bright brand
  * turquoise (`primaryContainer`) rather than the dark `primary` tone, which
- * reads green in light mode, and the selected tab indicator keeps the brand
- * hue while the label stays a neutral readable color.
+ * reads green in light mode.
  *
  * These are the token names Actify's components (ported from `material-web`)
  * read, so the override lands on every Actify button without wrapping it.
@@ -262,11 +261,6 @@
     --md-filled-button-pressed-state-layer-color: var(
         --md-sys-color-on-primary-container
     );
-
-    --md-secondary-tab-active-indicator-color: var(
-        --md-sys-color-primary-container
-    );
-    --md-secondary-tab-active-indicator-height: 3px;
 }
 
 /*
@@ -637,4 +631,89 @@ button.m3-fab {
     line-height: 20px;
     font-weight: 400;
     letter-spacing: 0.25px;
+}
+
+/*
+ * Actify's tabs, dressed as the tab bar native draws. `insights.dart` hangs a
+ * primary `TabBar` off the app bar, so these are Flutter's
+ * `_TabsPrimaryDefaultsM3`: tabs that divide the bar's width equally over 48dp,
+ * `titleSmall` labels — `onSurface` selected, `onSurfaceVariant` not, per
+ * `tabBarTheme` in `main.dart` — a 1dp `outlineVariant` divider under the bar,
+ * and a 3dp indicator with rounded top corners as wide as the label it sits
+ * under (`TabBarIndicatorSize.label`).
+ *
+ * Plain rules rather than `@utility`: Actify injects its stylesheet at runtime
+ * with no cascade layer, and an unlayered declaration beats anything in a layer
+ * whatever its specificity. Where Actify's own rule would tie on specificity
+ * the selector is element-qualified to outrank it, as injection order is not
+ * ours to depend on.
+ *
+ * The indicator is drawn on the selected tab's label — which the call site
+ * marks with `m3-tab-label` — instead of on Actify's sliding div, hidden below.
+ * That div is measured in JS on selection change only, so once the tabs are as
+ * wide as the bar it goes stale the moment the pane resizes, which the list
+ * pane does every time a detail opens beside it. The cost is Flutter's sliding
+ * indicator; being right at every width is worth more.
+ */
+nav.m3-tabs {
+    padding: 0;
+}
+
+/* The bar. An inset shadow, so the divider sits inside the 48dp as it does on
+ * native rather than adding a pixel below the tabs. */
+.m3-tabs div:has(> [role="tablist"]) {
+    box-shadow: inset 0 -1px 0 var(--md-sys-color-outline-variant);
+}
+
+/* Actify's JS-measured slider, replaced by the per-label indicator below. */
+.m3-tabs div:has(+ [role="tablist"]) {
+    display: none;
+}
+
+/* Fixed tabs: each one takes an equal share of the bar's width. */
+.m3-tabs [role="tablist"] {
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: 1fr;
+    gap: 0;
+}
+
+/* `kTabLabelPadding` (16dp) around a 48dp tab, labelled `titleSmall`. */
+.m3-tabs [role="tab"] {
+    min-height: 48px;
+    padding: 0 16px;
+    justify-content: center;
+    cursor: pointer;
+    color: var(--md-sys-color-on-surface-variant);
+    font-size: 14px;
+    line-height: 20px;
+    font-weight: 500;
+    letter-spacing: 0.1px;
+}
+
+.m3-tabs [role="tab"][aria-selected="true"] {
+    color: var(--md-sys-color-on-surface);
+}
+
+/* Stretched to the tab's full height so its indicator lands on the bar's
+ * bottom edge while staying only as wide as the label. */
+.m3-tabs .m3-tab-label {
+    position: relative;
+    display: flex;
+    align-items: center;
+    align-self: stretch;
+}
+
+.m3-tabs [role="tab"][aria-selected="true"] .m3-tab-label::after {
+    content: "";
+    position: absolute;
+    inset-inline: 0;
+    bottom: 0;
+    height: 3px;
+    border-radius: 3px 3px 0 0;
+    /*
+     * `tabBarTheme.indicatorColor` in `main.dart`: the brand container, since
+     * `primary` at tone 40 reads green.
+     */
+    background-color: var(--md-sys-color-primary-container);
 }

@@ -72,10 +72,25 @@ export function Insights() {
                 aria-label={t.nav.insights}
                 selectedKey={tab}
                 onSelectionChange={(key) => navigate(`/insights/${key}`)}
-                className="flex min-h-0 flex-1 flex-col p-0 **:[[role=tablist]]:grid **:[[role=tablist]]:grid-cols-2 **:[[role=tablist]]:gap-0 **:[[role=tab]]:justify-center"
+                className="m3-tabs flex min-h-0 flex-1 flex-col"
                 contentClassName="min-h-0 flex-1 overflow-y-auto"
             >
-                <TabItem key="categories" title={t.insights.categories}>
+                {/*
+                 * The label is wrapped so `m3-tabs` can hang the active
+                 * indicator off it: Material's primary tab indicator is as
+                 * wide as the label, not as wide as the tab. `textValue` keeps
+                 * the collection's plain-text name now that `title` is an
+                 * element.
+                 */}
+                <TabItem
+                    key="categories"
+                    textValue={t.insights.categories}
+                    title={
+                        <span className="m3-tab-label">
+                            {t.insights.categories}
+                        </span>
+                    }
+                >
                     <CategoriesView
                         categories={categories}
                         onSelect={(id) =>
@@ -83,7 +98,13 @@ export function Insights() {
                         }
                     />
                 </TabItem>
-                <TabItem key="tags" title={t.insights.tags}>
+                <TabItem
+                    key="tags"
+                    textValue={t.insights.tags}
+                    title={
+                        <span className="m3-tab-label">{t.insights.tags}</span>
+                    }
+                >
                     <TagsView
                         tags={tags}
                         onSelect={(id) => navigate(`/insights/tags/${id}`)}
