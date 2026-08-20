@@ -9,12 +9,10 @@ import {
     MicOff,
     Phone,
     PhoneOff,
-    Sparkles,
     Wrench,
     XCircle,
 } from 'lucide-react'
 import { useEffect, useRef } from 'react'
-import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import { type ChatMessage, useVoice } from '@/hooks/use-voice'
 import { useFormatLocale, useT } from '@/lib/i18n'
@@ -108,11 +106,6 @@ function AgentBubble({
     return (
         <div className="flex justify-start">
             <div className="flex max-w-[82%] items-start gap-2">
-                <Avatar size="sm" className="mt-5 size-7">
-                    <AvatarFallback className="bg-secondary text-secondary-foreground">
-                        <Sparkles className="size-3.5" />
-                    </AvatarFallback>
-                </Avatar>
                 <div className="flex flex-col items-start gap-1">
                     <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                         <span className="font-medium">{t.voice.agent}</span>
