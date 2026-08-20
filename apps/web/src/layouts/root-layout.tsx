@@ -2,12 +2,13 @@ import { api } from '@wallet-bot/backend/api'
 import { useQuery } from 'convex/react'
 import {
     BarChart3,
-    Bot,
     Flag,
     Home,
     Landmark,
     List,
     LogOut,
+    MessageCircle,
+    Mic,
     Plus,
     RefreshCw,
     Trash2,
@@ -166,7 +167,10 @@ export function RootLayout() {
                                         )}
                                         render={<NavLink to="/add" />}
                                     >
-                                        <Bot className="size-4" />
+                                        <span className="relative inline-flex size-4 items-center justify-center">
+                                            <MessageCircle className="size-4" />
+                                            <Mic className="absolute -right-1.5 -bottom-0.5 size-2.5" />
+                                        </span>
                                         <span>{t.nav.addWithGasti}</span>
                                     </SidebarMenuButton>
                                 </SidebarMenuItem>

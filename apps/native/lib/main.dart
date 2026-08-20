@@ -499,7 +499,7 @@ class _AppMainState extends State<AppMain> {
               heroTag: 'voiceFab',
               onPressed: _openVoice,
               tooltip: context.l10n.voiceCommands,
-              child: const Text('🤖'),
+              child: const _VoiceFabIcon(),
             ),
       bottomNavigationBar: useRail
           ? null
@@ -587,7 +587,7 @@ class _AgentCenteredRail extends StatelessWidget {
               elevation: 0,
               onPressed: onOpenVoice,
               tooltip: l10n.voiceCommands,
-              child: const Text('🤖'),
+              child: const _VoiceFabIcon(),
             ),
           ),
           Expanded(
@@ -610,6 +610,32 @@ class _AgentCenteredRail extends StatelessWidget {
                 ),
               ],
             ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// The voice-agent FAB glyph: a speech bubble with a microphone tucked into
+/// its lower-right corner, hinting at "talk to the assistant".
+class _VoiceFabIcon extends StatelessWidget {
+  const _VoiceFabIcon();
+
+  @override
+  Widget build(BuildContext context) {
+    // The mic is nudged 6px left to sit almost against the bubble; that shift
+    // is visual only (Transform doesn't affect layout), so offset the whole row
+    // 3px right to keep the pair optically centred in the FAB.
+    return Transform.translate(
+      offset: const Offset(6, 0),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.chat_bubble_outline_rounded),
+          Transform.translate(
+            offset: const Offset(-6, 0),
+            child: const Icon(Icons.mic_none_rounded),
           ),
         ],
       ),
