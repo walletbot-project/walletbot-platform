@@ -13,6 +13,7 @@ import {
     DEFAULT_VALUE_BACKGROUND,
     filterConfigToJson,
     isFilterEmpty,
+    type LayoutCoord,
     mergeWidgetOptions,
     parseFilterConfig,
     parseWidgetOptions,
@@ -20,11 +21,13 @@ import {
     STAT_AGGREGATIONS,
     type StatAggregation,
     WIDGET_TYPES,
+    WIDTH_UNITS,
     type WidgetType,
+    widthForUnits,
 } from '@wallet-bot/shared'
 import { Button, CircularProgress, TextField } from 'actify'
 import { useMutation, useQuery } from 'convex/react'
-import { useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import { ColorSwatches } from '@/components/color-swatches'
 import { FilterSheet } from '@/components/filters/filter-sheet'
@@ -37,13 +40,21 @@ import { COLOR_OPTIONS } from '@/lib/entity-colors'
 import { type Messages, useFormatLocale, useT } from '@/lib/i18n'
 import { newId } from '@/lib/new-id'
 import type { DashboardWidgetRow } from '@/pages/home/dashboard'
-import { widthLabel } from '@/pages/home/labels'
+import { widgetTypeLabel, widthLabel } from '@/pages/home/labels'
 
 type WidgetSheetProps = {
     onOpenChange: (open: boolean) => void
     /** The widget being edited, or null when adding a new one. */
     widget: DashboardWidgetRow | null
-    /** Row the new widget lands on — one past the last occupied row. */
+    /**
+     * Where a new widget lands. `null` is the toolbar's add action — a fresh
+     * bottom row; a coordinate is one of the grid's `+` placeholders, and
+     * `maxUnits` is the free run there, capping the new widget's width
+     * (native `showAddWidgetSheet(at:, maxUnits:)`).
+     */
+    at: LayoutCoord | null
+    maxUnits: number | null
+    /** Row the new widget lands on when `at` is null — past the last row. */
     nextRow: number
     nextPosition: number
 }
@@ -59,6 +70,8 @@ type WidgetSheetProps = {
 export function WidgetSheet({
     onOpenChange,
     widget,
+    at,
+    maxUnits,
     nextRow,
     nextPosition,
 }: WidgetSheetProps) {
@@ -105,8 +118,28 @@ export function WidgetSheet({
     const [chartKind, setChartKind] = useState<BreakdownChartKind>(
         existingOptions.chartKind,
     )
-    const [width, setWidth] = useState<DashboardWidth>(
-        defaultWidthFor(type, widget?.width),
+    /**
+     * A widget added into one of the grid's `+` placeholders can be no wider
+     * than the free run there, so the too-wide options are taken off the
+     * picker rather than silently shrunk on save — native caps the width in
+     * `_create` because its add sheet has no width control at all.
+     */
+    const fits = useCallback(
+        (candidate: DashboardWidth) =>
+            at === null || maxUnits === null
+                ? true
+                : WIDTH_UNITS[candidate] <= maxUnits,
+        [at, maxUnits],
+    )
+    const cap = useCallback(
+        (candidate: DashboardWidth): DashboardWidth =>
+            fits(candidate)
+                ? candidate
+                : (widthForUnits(maxUnits ?? 0) ?? candidate),
+        [fits, maxUnits],
+    )
+    const [width, setWidth] = useState<DashboardWidth>(() =>
+        cap(defaultWidthFor(type, widget?.width)),
     )
     const [background, setBackground] = useState<BackgroundStyle>(
         existingOptions.background,
@@ -180,11 +213,13 @@ export function WidgetSheet({
                     type,
                     ...(filterId ? { filterId } : {}),
                     position: nextPosition,
-                    width,
-                    // A new tile lands on its own row, so it can never overlap.
+                    width: cap(width),
+                    // Either the targeted `+` cell, or — for the toolbar's add
+                    // action — a fresh row of its own, where it can never
+                    // overlap.
                     options: JSON.stringify({
                         ...JSON.parse(options),
-                        layout: { row: nextRow, col: 0 },
+                        layout: at ?? { row: nextRow, col: 0 },
                     }),
                 })
             }
@@ -217,7 +252,7 @@ export function WidgetSheet({
                                     // reset a hand-picked width.
                                     if (option === type) return
                                     setType(option)
-                                    setWidth(defaultWidthFor(option))
+                                    setWidth(cap(defaultWidthFor(option)))
                                 }}
                             />
                         ))}
@@ -317,7 +352,7 @@ export function WidgetSheet({
 
                 <Section label={t.dashboard.width}>
                     <div className="flex flex-wrap gap-2">
-                        {DASHBOARD_WIDTHS.map((option) => (
+                        {DASHBOARD_WIDTHS.filter(fits).map((option) => (
                             <ChoiceChip
                                 key={option}
                                 label={widthLabel(option, t)}
@@ -511,19 +546,6 @@ function defaultWidthFor(type: WidgetType, stored?: string): DashboardWidth {
             return 'half'
         default:
             return 'full'
-    }
-}
-
-function widgetTypeLabel(type: WidgetType, t: Messages): string {
-    switch (type) {
-        case 'stat':
-            return t.dashboard.typeStat
-        case 'list':
-            return t.dashboard.typeList
-        case 'balance':
-            return t.dashboard.typeBalance
-        case 'chart':
-            return t.dashboard.typeChart
     }
 }
 

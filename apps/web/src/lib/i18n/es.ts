@@ -145,7 +145,11 @@ export const es = {
         widget: 'Widget',
         editDashboard: 'Editar tablero',
         addWidget: 'Agregar widget',
+        addWidgetHere: 'Agregar un widget acá',
         editWidget: 'Editar widget',
+        removeWidget: 'Quitar widget',
+        removeWidgetConfirmation: (p: { title: string }) =>
+            `¿Quitar «${p.title}» del tablero?`,
         emptyTitle: 'Tu tablero está vacío',
         emptyDescription: 'Agregá un widget para empezar.',
         saveFailed: 'No se pudo guardar el widget',

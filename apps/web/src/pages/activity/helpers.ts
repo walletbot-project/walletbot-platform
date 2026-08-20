@@ -5,7 +5,12 @@
 // The label-producing helpers take the active catalog and BCP 47 tag rather
 // than reading a module-level locale, so they stay pure and testable.
 
-import { EMPTY_FILTER, type SimpleFilter, TXN_TYPES } from '@wallet-bot/shared'
+import {
+    EMPTY_FILTER,
+    parseFilterConfig,
+    type SimpleFilter,
+    TXN_TYPES,
+} from '@wallet-bot/shared'
 import { type Messages, transactionName } from '@/lib/i18n'
 
 export type TransactionType =
@@ -77,6 +82,13 @@ function stringList(value: unknown): string[] | null {
 export function readFilterSeed(state: unknown): SimpleFilter | null {
     if (typeof state !== 'object' || state === null) return null
     const seed: Record<string, unknown> = { ...state }
+
+    // A dashboard tile hands over its whole saved filter rather than a few
+    // dimensions, so the activity list shows exactly what the tile counted
+    // (native `_activityFilterFor`). The canonical JSON is parsed, not trusted.
+    if (typeof seed.filterConfig === 'string' && seed.filterConfig) {
+        return parseFilterConfig(seed.filterConfig)
+    }
 
     const types = stringList(seed.types)?.filter(
         (value): value is SimpleFilter['types'][number] =>

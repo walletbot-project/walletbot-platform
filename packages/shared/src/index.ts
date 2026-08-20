@@ -35,6 +35,26 @@ export {
     TXN_STATUSES,
     TXN_TYPES,
 } from './dashboard/filter'
+export type { MoveDirection, UnitRun } from './dashboard/layout'
+export {
+    canInsertInRow,
+    dropOnCell,
+    enabledDirections,
+    fitWidth,
+    freeRuns,
+    insertInRow,
+    insertRowAt,
+    MOVE_DIRECTIONS,
+    normalizeLayout,
+    nudgePlacement,
+    placeAt,
+    placementById,
+    resizePlacement,
+    rowCount,
+    rowItems,
+    rowOccupancy,
+    swapPlacements,
+} from './dashboard/layout'
 export type {
     BackgroundMode,
     BackgroundStyle,

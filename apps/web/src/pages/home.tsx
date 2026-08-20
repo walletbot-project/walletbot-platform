@@ -1,5 +1,5 @@
 import { api } from '@wallet-bot/backend/api'
-import { parseWidgetOptions } from '@wallet-bot/shared'
+import { type LayoutCoord, parseWidgetOptions } from '@wallet-bot/shared'
 import { IconButton } from 'actify'
 import { useQuery } from 'convex/react'
 import { useState } from 'react'
@@ -20,9 +20,12 @@ export default function Home() {
     const navigate = useNavigate()
     const [menuOpen, setMenuOpen] = useState(false)
     const [editing, setEditing] = useState(false)
-    // `null` while closed; `{ widget: null }` is the add flow.
+    // `null` while closed; `{ widget: null }` is the add flow, and `at` marks
+    // the grid cell a `+` placeholder targeted (null = a fresh bottom row).
     const [sheet, setSheet] = useState<{
         widget: DashboardWidgetRow | null
+        at: LayoutCoord | null
+        maxUnits: number | null
         key: number
     } | null>(null)
 
@@ -34,8 +37,11 @@ export default function Home() {
     }, 0)
     const nextPosition = layout?.widgets.length ?? 0
 
-    const openSheet = (widget: DashboardWidgetRow | null) =>
-        setSheet({ widget, key: Date.now() })
+    const openSheet = (
+        widget: DashboardWidgetRow | null,
+        at: LayoutCoord | null = null,
+        maxUnits: number | null = null,
+    ) => setSheet({ widget, at, maxUnits, key: Date.now() })
 
     return (
         <>
@@ -85,6 +91,9 @@ export default function Home() {
                         editing={editing}
                         onStartEditing={() => setEditing(true)}
                         onEditWidget={(widget) => openSheet(widget)}
+                        onAddWidgetAt={(at, maxUnits) =>
+                            openSheet(null, at, maxUnits)
+                        }
                     />
 
                     <h2 className="m3-title-medium mt-6">{t.nav.actions}</h2>
@@ -109,6 +118,8 @@ export default function Home() {
                         if (!open) setSheet(null)
                     }}
                     widget={sheet.widget}
+                    at={sheet.at}
+                    maxUnits={sheet.maxUnits}
                     nextRow={nextRow}
                     nextPosition={nextPosition}
                 />

@@ -129,9 +129,9 @@ Web's equivalent is fully internationalized. This is one of the items where
    window size-class breakpoints (600 / 1000), list-detail presentation rules,
    transaction-detail editing including balance before/after, account, category
    and tag details, the manual transaction form (inline entity creation,
-   transfer swap, dual amounts), all four widget types with pie/bar/line,
-   dashboard grid drag plus width and delete, the 11 agent-editable action
-   cards, and the settings screen.
+   transfer swap, dual amounts), all four widget types with pie/bar/line, the
+   whole dashboard grid editor (§ 5, 1.11), the 11 agent-editable action cards,
+   and the settings screen.
 
 3. **Dead code on both sides.** `ActivitySummaryCard` is defined and never used
    in either app (`apps/native/lib/components/activity_summary_card.dart`,
@@ -243,6 +243,38 @@ Web passes `name: 'Balance inicial'` when creating an account's opening balance,
 the canonical name native writes, instead of falling through to the backend's
 `Ajuste de saldo` default. The string stays canonical Spanish on purpose; making
 it read correctly for an English web user is 2.1.
+
+### 1.11 The web dashboard grid was a fraction of the native one — closed 2026-08-19
+
+Web had two of the four drop affordances (swap onto a tile, move onto a free
+unit) and nothing else. Missing: the between-rows band that opens a new row
+(`_NewRowDropZone`), the between-tiles seam that wedges a tile into a row and
+reflows it (`_RowInsertZone`), the dashed `+` placeholder in every empty run
+that adds a widget at that exact cell capped to the free span (`_GapVisual` +
+`showAddWidgetSheet(at:, maxUnits:)`), the press-and-hold that arms the editor,
+the tap that opens the activity list on the tile's filter
+(`_activityFilterFor`), and the delete confirmation. Widths that did not fit
+were disabled instead of sliding the tile left or clamping it
+(`DashboardGridLayout.resize`), and every move waited out a server round-trip
+before appearing.
+
+All of it landed by moving the engine itself into
+`packages/shared/src/dashboard/layout.ts` — `placeAt`, `dropOnCell`, `swap`,
+`insertRowAt`, `insertInRow`, `canInsertInRow`, `nudge`, `enabledDirections`,
+`resize`, `fitWidth`, `freeRuns`, `normalizeLayout` — ported from
+`dashboard_layout.dart`, so the two clients no longer each re-derive the moves.
+`apps/web/src/pages/home/dashboard.tsx` renders the affordances over it and
+writes through `saveLayout` with a Convex optimistic update.
+
+Verified in headless Chromium against the real components: 40 checks over the
+drop geometry, `elementsFromPoint` ordering, every drop kind, the menu's
+enabled states, the `+` targeting, the confirmation, the view-mode gestures,
+the optimistic move and its rollback, touch hold-then-drag, and the wide-window
+band reflow.
+
+Left web ahead of native on two points, both recorded in
+`docs/home-dashboard.md`: unavailable widths are disabled rather than inert, and
+an overlapping same-row swap is refused instead of persisted.
 
 ### 2.4 Two ID schemes on web — closed 2026-08-18
 

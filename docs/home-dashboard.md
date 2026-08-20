@@ -331,12 +331,28 @@ unchanged — only advanced (disjunctive) filters take the anchor+predicate path
 > through `v1/dashboard/mutations`. The web seed uses the **same deterministic
 > ids** as `default_dashboard.dart`, so a device and the web app seeding one
 > fresh account converge under LWW instead of duplicating, and it refuses to
-> seed when a dashboard tombstone exists. Tile editing on web is the width
-> controls, the one-cell nudges, and drag & drop (2026-08-16): a tile can be
-> dropped on another to swap the two, or on a free unit to move there and shrink
-> to the run, matching `DashboardGridLayout.swap` and `_UnitDropTarget`. As on
-> native, a mouse starts dragging on movement while touch waits out a hold, so
-> the page keeps its scroll. The between-rows and between-tiles insert zones
-> (`_NewRowDropZone`, `_RowInsertZone`) are still native-only.
+> seed when a dashboard tombstone exists. As on native, a mouse starts dragging
+> on movement while touch waits out a hold, so the page keeps its scroll.
+>
+> **Web editing is at parity (2026-08-19).** The whole
+> `DashboardGridLayout` op set — `place`, `swap`, `insertRowAt`, `insertInRow`,
+> `nudge`, `resize`, `fitWidth`, `enabledDirections` and the empty-row collapse —
+> now lives in `packages/shared/src/dashboard/layout.ts`, so both clients compute
+> the same move from the same snapshot. The web board offers all four native drop
+> affordances (another tile to swap, a free unit to move and shrink to the run,
+> the seam between two tiles to wedge into that row, a row's edge band to open a
+> new row), the dashed `+` placeholder in every empty run that adds a widget
+> right there capped to the free span, the floating menu's widths / nudges /
+> edit / delete, a delete confirmation, and outside edit mode a tap that opens
+> the activity list scoped to the tile's own filter plus a press-and-hold that
+> arms the editor. Layout writes are optimistic (`withOptimisticUpdate`), so a
+> dropped tile lands under the pointer and rolls back with a toast if the
+> mutation fails.
+>
+> Two deliberate web-only refinements: a width the tile cannot take is
+> **disabled** rather than silently doing nothing, and a same-row swap between
+> unequal widths that would overlap is **refused** — `DashboardGridLayout.swap`
+> on native still has that hole and would persist an overlap the resolver then
+> discards to the legacy auto-flow.
 >
 > **Still pending:** the advanced (tree) filter editor on web.

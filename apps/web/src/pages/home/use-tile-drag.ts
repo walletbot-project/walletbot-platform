@@ -1,3 +1,8 @@
+// TEMPORARY, paired with the same directive in `dashboard.tsx`: opts the drag
+// hooks out of React Compiler memoization while a reported drag-and-drop
+// failure is bisected. Remove once the cause is known.
+'use no memo'
+
 import {
     type PointerEvent as ReactPointerEvent,
     useEffect,
@@ -5,10 +10,24 @@ import {
     useState,
 } from 'react'
 
-/** Where a dragged tile would land if it were dropped right now. */
+/**
+ * Where a dragged tile would land if it were dropped right now — the four drop
+ * affordances the native board offers (`dashboard_view.dart`):
+ *
+ * - `tile` — another tile, dropped onto to swap the two.
+ * - `cell` — one free unit of a row, auto-shrinking the tile to the free run
+ *   (`_UnitDropTarget`).
+ * - `row-insert` — the vertical seam between two tiles (or a flush row edge),
+ *   wedging the tile into that row and shifting the others aside
+ *   (`_RowInsertZone`).
+ * - `new-row` — the band at a row's top/bottom edge, creating a fresh row
+ *   there (`_NewRowDropZone`).
+ */
 export type DropTarget =
     | { kind: 'tile'; id: string }
     | { kind: 'cell'; row: number; col: number }
+    | { kind: 'row-insert'; row: number; slot: number }
+    | { kind: 'new-row'; rowIndex: number }
 
 export type TileDrag = {
     /** Id of the tile being dragged. */
@@ -43,29 +62,52 @@ type Pending = {
     timer: number | null
 }
 
+/** Reads a drop target off an element's `data-drop-*` attributes. */
+function targetOf(
+    element: HTMLElement,
+    draggedId: string,
+): DropTarget | null | undefined {
+    const { dropKind, dropId, dropRow, dropCol, dropSlot, dropRowIndex } =
+        element.dataset
+    switch (dropKind) {
+        case 'tile':
+            if (dropId === undefined) return undefined
+            // Dropping a tile on itself is a no-op, and it must not shadow the
+            // gap targets underneath it either.
+            return dropId === draggedId ? null : { kind: 'tile', id: dropId }
+        case 'cell':
+            if (dropRow === undefined || dropCol === undefined) return undefined
+            return { kind: 'cell', row: Number(dropRow), col: Number(dropCol) }
+        case 'row-insert':
+            if (dropRow === undefined || dropSlot === undefined)
+                return undefined
+            return {
+                kind: 'row-insert',
+                row: Number(dropRow),
+                slot: Number(dropSlot),
+            }
+        case 'new-row':
+            if (dropRowIndex === undefined) return undefined
+            return { kind: 'new-row', rowIndex: Number(dropRowIndex) }
+        default:
+            return undefined
+    }
+}
+
 /**
  * Resolves the drop target under the pointer. Targets mark themselves with
  * `data-drop-*` attributes rather than being registered up front, so a row that
- * reflows mid-drag needs no bookkeeping. `elementsFromPoint` skips anything
- * with `pointer-events: none`, which is why the drag preview never shadows the
- * board underneath it.
+ * reflows mid-drag needs no bookkeeping. `elementsFromPoint` walks front to
+ * back, which is what makes the overlaid insert strips and new-row bands win
+ * over the tiles they cover — the same stacking Flutter's `Stack` overlay gives
+ * them. It also skips anything with `pointer-events: none`, which is why the
+ * drag preview never shadows the board underneath it.
  */
 function targetAt(x: number, y: number, draggedId: string): DropTarget | null {
     for (const element of document.elementsFromPoint(x, y)) {
         if (!(element instanceof HTMLElement)) continue
-        const { dropKind, dropId, dropRow, dropCol } = element.dataset
-        if (dropKind === 'tile' && dropId !== undefined) {
-            // Dropping a tile on itself is a no-op, and it must not shadow the
-            // gap targets underneath it either.
-            return dropId === draggedId ? null : { kind: 'tile', id: dropId }
-        }
-        if (
-            dropKind === 'cell' &&
-            dropRow !== undefined &&
-            dropCol !== undefined
-        ) {
-            return { kind: 'cell', row: Number(dropRow), col: Number(dropCol) }
-        }
+        const target = targetOf(element, draggedId)
+        if (target !== undefined) return target
     }
     return null
 }
@@ -237,5 +279,70 @@ export function useTileDrag(onDrop: (id: string, target: DropTarget) => void) {
         startTracking,
         /** True when the click about to fire is the tail of a drag. */
         wasDragged: () => draggedRef.current,
+    }
+}
+
+/**
+ * A press-and-hold on a tile outside edit mode, porting the native
+ * `InkWell.onLongPress` that puts the board into edit mode with that tile
+ * already selected. Fires for a mouse too, as Flutter's does, and is abandoned
+ * as soon as the pointer travels — a finger that starts scrolling the home page
+ * must not arm the editor.
+ */
+export function useLongPress(onLongPress: () => void) {
+    const timerRef = useRef<number | null>(null)
+    const originRef = useRef<{ x: number; y: number } | null>(null)
+    const firedRef = useRef(false)
+    const callbackRef = useRef(onLongPress)
+
+    useEffect(() => {
+        callbackRef.current = onLongPress
+    })
+
+    const clear = () => {
+        if (timerRef.current !== null) window.clearTimeout(timerRef.current)
+        timerRef.current = null
+        originRef.current = null
+    }
+
+    // Inlined rather than calling `clear`, which is a new function every render
+    // and would have to be a dependency of a cleanup that must run only on
+    // unmount.
+    useEffect(
+        () => () => {
+            if (timerRef.current !== null) {
+                window.clearTimeout(timerRef.current)
+            }
+        },
+        [],
+    )
+
+    return {
+        /** True when the click about to fire is the tail of a long press. */
+        wasLongPressed: () => firedRef.current,
+        handlers: {
+            onPointerDown: (event: ReactPointerEvent<HTMLElement>) => {
+                if (event.button !== 0) return
+                clear()
+                firedRef.current = false
+                originRef.current = { x: event.clientX, y: event.clientY }
+                timerRef.current = window.setTimeout(() => {
+                    clear()
+                    firedRef.current = true
+                    callbackRef.current()
+                }, TOUCH_HOLD_MS)
+            },
+            onPointerMove: (event: ReactPointerEvent<HTMLElement>) => {
+                const origin = originRef.current
+                if (!origin) return
+                const distance = Math.hypot(
+                    event.clientX - origin.x,
+                    event.clientY - origin.y,
+                )
+                if (distance > TOUCH_SLOP) clear()
+            },
+            onPointerUp: clear,
+            onPointerCancel: clear,
+        },
     }
 }

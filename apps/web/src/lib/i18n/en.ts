@@ -138,7 +138,11 @@ export const en: Messages = {
         widget: 'Widget',
         editDashboard: 'Edit dashboard',
         addWidget: 'Add widget',
+        addWidgetHere: 'Add a widget here',
         editWidget: 'Edit widget',
+        removeWidget: 'Remove widget',
+        removeWidgetConfirmation: (p) =>
+            `Remove “${p.title}” from the dashboard?`,
         emptyTitle: 'Your dashboard is empty',
         emptyDescription: 'Add a widget to get started.',
         saveFailed: 'Could not save the widget',
