@@ -21,7 +21,7 @@ class AppLocalizationsEs extends AppLocalizations {
   String get accounts => 'Cuentas';
 
   @override
-  String get insights => 'Análisis';
+  String get insights => 'Organización';
 
   @override
   String get categories => 'Categorías';

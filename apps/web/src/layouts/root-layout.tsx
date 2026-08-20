@@ -1,7 +1,7 @@
 import { api } from '@wallet-bot/backend/api'
 import { useQuery } from 'convex/react'
 import {
-    BarChart3,
+    Bookmark,
     Flag,
     Home,
     Landmark,
@@ -62,7 +62,7 @@ const NAV_ITEMS = [
     {
         to: '/insights',
         label: (t: Messages) => t.nav.insights,
-        icon: BarChart3,
+        icon: Bookmark,
         end: false,
     },
 ] as const

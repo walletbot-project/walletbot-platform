@@ -521,7 +521,7 @@ class _AppMainState extends State<AppMain> {
                   label: context.l10n.accounts,
                 ),
                 NavigationDestination(
-                  icon: const Icon(Icons.stacked_line_chart_rounded),
+                  icon: const Icon(Icons.bookmarks_rounded),
                   label: context.l10n.insights,
                 ),
               ],
@@ -605,7 +605,7 @@ class _AgentCenteredRail extends StatelessWidget {
                   label: Text(l10n.accounts),
                 ),
                 NavigationRailDestination(
-                  icon: const Icon(Icons.stacked_line_chart_rounded),
+                  icon: const Icon(Icons.bookmarks_rounded),
                   label: Text(l10n.insights),
                 ),
               ],

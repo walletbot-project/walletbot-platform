@@ -44,7 +44,7 @@ export const es = {
         home: 'Inicio',
         activity: 'Actividad',
         accounts: 'Cuentas',
-        insights: 'Análisis',
+        insights: 'Organización',
         addWithGasti: 'Añadir con Gasti',
         addManually: 'Añadir manualmente',
         connectToAccount: 'Conectar cuenta',

@@ -42,7 +42,7 @@ export const en: Messages = {
         home: 'Home',
         activity: 'Activity',
         accounts: 'Accounts',
-        insights: 'Insights',
+        insights: 'Organization',
         addWithGasti: 'Add with Gasti',
         addManually: 'Add manually',
         connectToAccount: 'Connect to account',
