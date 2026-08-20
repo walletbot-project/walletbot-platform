@@ -254,7 +254,7 @@ export const es = {
         statusConnected: 'conectado',
         speaking: 'Hablando',
         you: 'Vos',
-        agent: 'WalletBot',
+        agent: 'Gaston',
         interrupted: '(interrumpido)',
         tool: 'Herramienta',
         toolRunning: 'Ejecutando',

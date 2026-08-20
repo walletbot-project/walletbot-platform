@@ -949,7 +949,7 @@ class _AgentBubble extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _RoleLabel(label: 'WalletBot', time: item.at),
+                  _RoleLabel(label: 'Gaston', time: item.at),
                   const SizedBox(height: 4),
                   Container(
                     padding: const EdgeInsets.symmetric(

@@ -253,7 +253,7 @@ export const en: Messages = {
         statusConnected: 'connected',
         speaking: 'Speaking',
         you: 'You',
-        agent: 'WalletBot',
+        agent: 'Gaston',
         interrupted: '(interrupted)',
         tool: 'Tool',
         toolRunning: 'Running',
