@@ -120,6 +120,7 @@ flutter:
   assets:
     - .env
     - assets/google.svg
+    - assets/icon/icon-android.png
 
   # To add assets to your application, add an assets section, like this:
   # assets:

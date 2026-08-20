@@ -472,8 +472,8 @@ class _HeroHeader extends StatelessWidget {
             Container(
               width: 56,
               height: 56,
+              clipBehavior: Clip.antiAlias,
               decoration: BoxDecoration(
-                color: colors.primary,
                 borderRadius: BorderRadius.circular(18),
                 boxShadow: [
                   BoxShadow(
@@ -483,9 +483,9 @@ class _HeroHeader extends StatelessWidget {
                   ),
                 ],
               ),
-              child: Icon(
-                Icons.account_balance_wallet_rounded,
-                color: colors.onPrimary,
+              child: Image.asset(
+                'assets/icon/icon-android.png',
+                fit: BoxFit.cover,
               ),
             ),
             const SizedBox(width: 14),
