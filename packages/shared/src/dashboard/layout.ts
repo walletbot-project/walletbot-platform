@@ -304,10 +304,26 @@ export function swapPlacements(
 }
 
 /**
+ * Whether a tile can be nudged down. Moving onto a row that does not exist yet
+ * is allowed — it is how a tile boxed in on the bottom row gets out of the way
+ * so a neighbour can grow — but only when the tile leaves something behind. A
+ * tile *alone* on the last row would vacate that row, the empty-row collapse
+ * would renumber the new row straight back to the old index, and nothing would
+ * have moved.
+ */
+function canNudgeDown(
+    placements: WidgetPlacement[],
+    p: WidgetPlacement,
+): boolean {
+    if (p.row < rowCount(placements) - 1) return true
+    return rowItems(placements, p.row).length > 1
+}
+
+/**
  * One-cell nudge. Horizontal moves slide by a single unit into adjacent free
  * space; vertical moves jump to the same column on the neighbouring row when it
- * is free. Null when blocked or out of bounds, so the matching arrow button can
- * disable.
+ * is free — including a fresh row past the last one (see [canNudgeDown]). Null
+ * when blocked or out of bounds, so the matching arrow button can disable.
  */
 export function nudgePlacement(
     placements: WidgetPlacement[],
@@ -324,7 +340,7 @@ export function nudgePlacement(
         case 'up':
             return p.row > 0 ? placeAt(placements, id, p.row - 1, p.col) : null
         case 'down':
-            return p.row < rowCount(placements) - 1
+            return canNudgeDown(placements, p)
                 ? placeAt(placements, id, p.row + 1, p.col)
                 : null
     }

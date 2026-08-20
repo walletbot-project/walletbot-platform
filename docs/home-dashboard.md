@@ -162,6 +162,17 @@ automatically; horizontal gaps within a row are kept. The floating tile menu
 also offers up/down/left/right arrows for one-cell nudges and the
 `1/3 · 1/2 · 2/3 · 1/1` width controls.
 
+**Edit mode always keeps one spare row below the board.** Without it the bottom
+row is a dead end: two `third`s side by side there can neither slide sideways
+nor move up, so neither can be shifted out of the way and neither can grow. The
+spare row is a full-height (88dp) dashed drop area with its own `+`, not a
+16dp band, and it only becomes a real row once something lands in it. The
+down-nudge follows the same rule — it may move a tile onto a row that does not
+exist yet, but *not* when the tile is alone on the last row, because that would
+vacate the row it left and the empty-row collapse would put it straight back.
+With the spare row present the last row drops its bottom insert band; the spare
+row does that job more legibly.
+
 The layout engine (`dashboard_layout.dart`) is pure Dart: it resolves stored
 coordinates into placements (falling back to the legacy auto-flow for any widget
 that predates manual placement, so old dashboards upgrade cleanly) and computes

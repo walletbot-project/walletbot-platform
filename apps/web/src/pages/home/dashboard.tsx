@@ -81,6 +81,12 @@ const MAX_BAND_COLUMNS = 3
 const INSERT_HIT = 22
 const ROW_BAND = 16
 
+/**
+ * Height of the spare row kept below the board while editing. Shorter than a
+ * tile — it reads as somewhere to put things, not as a widget.
+ */
+const SPARE_ROW_HEIGHT = 88
+
 /** One grid unit as a CSS length, given the row is `GRID_UNITS` equal columns. */
 const UNIT = `((100% - ${TILE_GAP * (GRID_UNITS - 1)}px) / ${GRID_UNITS})`
 
@@ -332,10 +338,17 @@ export function Dashboard({
     }
 
     const renderRow = (rowIndex: number) => {
+        // The spare row sits one past the real ones and holds nothing, so its
+        // whole width is a single empty run. Nothing in it has an intrinsic
+        // height, so it gets one of its own or it would be an invisible,
+        // unhittable strip.
+        const isSpare = rowIndex >= rowCount
         const tiles = rowItems(placements, rowIndex)
         const dragging = drag !== null
         const canWedge =
-            dragging && canInsertInRow(placements, rowIndex, drag.id)
+            dragging &&
+            !isSpare &&
+            canInsertInRow(placements, rowIndex, drag.id)
 
         return (
             <div
@@ -343,6 +356,7 @@ export function Dashboard({
                 style={{
                     gridTemplateColumns: `repeat(${GRID_UNITS}, minmax(0, 1fr))`,
                     gap: TILE_GAP,
+                    minHeight: isSpare ? SPARE_ROW_HEIGHT : undefined,
                 }}
             >
                 {/*
@@ -405,7 +419,13 @@ export function Dashboard({
                  * beneath and the tiles themselves stay clickable — the same
                  * thing native's rejecting `DragTarget`s do.
                  */}
-                {editing ? (
+                {/*
+                 * The spare row *is* the row below the board, so it paints no
+                 * band of its own — and with it present the last real row drops
+                 * its bottom band, which the spare row already does more
+                 * legibly.
+                 */}
+                {editing && !isSpare ? (
                     <>
                         {insertSeams(tiles).map((seam) => (
                             <RowInsertZone
@@ -422,7 +442,6 @@ export function Dashboard({
                             />
                         ))}
                         <NewRowZone
-                            edge="top"
                             rowIndex={rowIndex}
                             active={dragging}
                             hovered={
@@ -430,17 +449,6 @@ export function Dashboard({
                                 drag.over.rowIndex === rowIndex
                             }
                         />
-                        {rowIndex === rowCount - 1 ? (
-                            <NewRowZone
-                                edge="bottom"
-                                rowIndex={rowIndex + 1}
-                                active={dragging}
-                                hovered={
-                                    drag?.over?.kind === 'new-row' &&
-                                    drag.over.rowIndex === rowIndex + 1
-                                }
-                            />
-                        ) : null}
                     </>
                 ) : null}
             </div>
@@ -468,7 +476,8 @@ export function Dashboard({
     // degenerates to one row per band, which renders identically — a second
     // early-return here would change the tree shape at the width threshold and
     // remount every widget (the exact bug the root layout once had).
-    const bandCount = Math.ceil(rowCount / bandColumns)
+    const renderedRowCount = rowCount + (editing ? 1 : 0)
+    const bandCount = Math.ceil(renderedRowCount / bandColumns)
     return (
         <div
             ref={measureRef}
@@ -488,7 +497,7 @@ export function Dashboard({
                         const rowIndex = band * bandColumns + column
                         return (
                             <div key={column} className="min-w-0">
-                                {rowIndex < rowCount
+                                {rowIndex < renderedRowCount
                                     ? renderRow(rowIndex)
                                     : null}
                             </div>
@@ -726,18 +735,18 @@ function RowInsertZone({
 }
 
 /**
- * A new-row drop band at a row's top or bottom edge, porting
- * `_NewRowDropZone`: dropping here opens a fresh row at that boundary.
- * Overlaid at the edge so the between-row spacing is identical in and out of
- * edit mode.
+ * A new-row drop band at a row's top edge, porting `_NewRowDropZone`: dropping
+ * here opens a fresh row above that row. Overlaid at the edge so the
+ * between-row spacing is identical in and out of edit mode.
+ *
+ * Only the top edge needs one: the bottom of the board is the spare row, which
+ * is a full drop area rather than a 16px band.
  */
 function NewRowZone({
-    edge,
     rowIndex,
     active,
     hovered,
 }: {
-    edge: 'top' | 'bottom'
     rowIndex: number
     active: boolean
     hovered: boolean
@@ -747,8 +756,7 @@ function NewRowZone({
             data-drop-kind={active ? 'new-row' : undefined}
             data-drop-row-index={rowIndex}
             className={cn(
-                'absolute right-0 left-0 z-20 flex',
-                edge === 'top' ? 'top-0 items-start' : 'bottom-0 items-end',
+                'absolute top-0 right-0 left-0 z-20 flex items-start',
                 active ? null : 'pointer-events-none',
             )}
             style={{ height: ROW_BAND }}
