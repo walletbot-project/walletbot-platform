@@ -310,10 +310,14 @@ class _AuthGate extends StatelessWidget {
         // once Convex auth attaches. Scoped per account (like the database)
         // so a verdict never leaks across account switches.
         ChangeNotifierProvider<TermsAcceptanceController>(
-          create: (_) {
+          create: (ctx) {
+            final config = ctx.read<AppConfigController>();
             final controller = TermsAcceptanceController(
               accountId: active.id,
               isRemote: active.type == AccountType.remote,
+              // Freshest device-known policy on every evaluation; bundled
+              // constants only for a device that never fetched config.
+              policy: () => config.legalPolicy ?? bundledLegalPolicy,
             );
             unawaited(controller.load());
             return controller;
@@ -385,12 +389,13 @@ class _AuthGate extends StatelessWidget {
   }
 }
 
-/// Blocks the app with [TermsAcceptanceScreen] when the active account has no
-/// recorded acceptance of the current legal documents. Offline-first: only a
-/// definitive "not accepted" blocks — while the remote verdict is unknown
-/// (offline, check pending) the app stays fully usable, and the next launch
-/// re-checks. Local accounts resolve entirely on-device, so their gate works
-/// with no connectivity at all.
+/// Shows [TermsAcceptanceScreen] when the active account's acceptance of the
+/// legal documents needs attention: blocking on
+/// [TermsGateStatus.required], dismissible ("Not now", once per launch) on
+/// [TermsGateStatus.requested]. Offline-first: while the remote verdict is
+/// unknown the app stays fully usable, a cache-derived verdict never hard
+/// blocks a remote account, and local accounts resolve entirely on-device,
+/// so their gate works with no connectivity at all.
 class _TermsGate extends StatefulWidget {
   const _TermsGate({required this.child});
   final Widget child;
@@ -405,10 +410,11 @@ class _TermsGateState extends State<_TermsGate> {
     final terms = context.watch<TermsAcceptanceController>();
     final auth = context.watch<AuthController>();
 
-    // Remote accounts need Convex auth attached before the server can be
-    // asked; `checkRemote` self-limits to one round-trip per controller life.
+    // Remote accounts get the authoritative verdict from the server once
+    // Convex auth is attached; `checkRemote` self-limits to one round-trip
+    // per controller life.
     if (terms.isRemote &&
-        terms.status == TermsGateStatus.unknown &&
+        terms.status != TermsGateStatus.cleared &&
         auth.convexAuthenticated) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
@@ -416,9 +422,10 @@ class _TermsGateState extends State<_TermsGate> {
       });
     }
 
-    if (terms.status == TermsGateStatus.required) {
-      return const TermsAcceptanceScreen();
-    }
+    final showGate =
+        terms.status == TermsGateStatus.required ||
+        (terms.status == TermsGateStatus.requested && !terms.promptDismissed);
+    if (showGate) return const TermsAcceptanceScreen();
     return widget.child;
   }
 }

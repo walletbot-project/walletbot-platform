@@ -1407,6 +1407,14 @@ class AppLocalizationsEn extends AppLocalizations {
   String get termsContinue => 'Continue';
 
   @override
+  String get termsLater => 'Not now';
+
+  @override
+  String termsDeadline(String date) {
+    return 'We updated the documents. You can review and accept them until $date.';
+  }
+
+  @override
   String get termsAcceptFailed =>
       'Could not record your acceptance. Try again.';
 }

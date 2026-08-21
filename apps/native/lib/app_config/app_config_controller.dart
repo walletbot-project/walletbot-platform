@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:app/app_config/client_info.dart';
 import 'package:app/auth/account.dart';
 import 'package:app/config.dart';
+import 'package:app/legal/terms_acceptance.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
@@ -175,6 +176,13 @@ class AppConfigController extends ChangeNotifier {
   bool get updateAvailable => _updateAvailable;
   String? get updateUrl => _updateUrl;
   String get locale => _locale;
+
+  /// Legal-documents policy from the `legal` block of the `/v1/config`
+  /// verdict (fresh or cached). Null until any verdict carrying it applies;
+  /// consumers fall back to [bundledLegalPolicy]. Locale-neutral, so
+  /// [updateLocale] leaves it alone.
+  LegalPolicy? get legalPolicy => _legalPolicy;
+  LegalPolicy? _legalPolicy;
   List<AppConfigBanner> get banners => _mergeBanners(
     deviceBanners: _deviceBanners,
     accountBanners: _accountBanners,
@@ -406,6 +414,9 @@ class AppConfigController extends ChangeNotifier {
     _updateAvailable = data['updateAvailable'] as bool? ?? false;
     _updateUrl = data['updateUrl'] as String?;
     _deviceBanners = _parseBanners(data, allowVersionFallback: true);
+    // A verdict without a parseable block (older cached shape) keeps the
+    // last-known policy rather than dropping to the bundled fallback.
+    _legalPolicy = LegalPolicy.fromJson(data['legal']) ?? _legalPolicy;
   }
 
   List<AppConfigBanner> _parseBanners(

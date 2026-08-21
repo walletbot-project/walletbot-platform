@@ -2612,6 +2612,18 @@ abstract class AppLocalizations {
   /// **'Continue'**
   String get termsContinue;
 
+  /// No description provided for @termsLater.
+  ///
+  /// In en, this message translates to:
+  /// **'Not now'**
+  String get termsLater;
+
+  /// No description provided for @termsDeadline.
+  ///
+  /// In en, this message translates to:
+  /// **'We updated the documents. You can review and accept them until {date}.'**
+  String termsDeadline(String date);
+
   /// No description provided for @termsAcceptFailed.
   ///
   /// In en, this message translates to:

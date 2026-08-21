@@ -151,6 +151,9 @@ export const es = {
         termsGateDescription:
             'Para seguir usando Wallet Bot, aceptá los Términos y Condiciones y la Política de Privacidad.',
         termsContinue: 'Continuar',
+        termsLater: 'Ahora no',
+        termsDeadline: (p: { date: string }) =>
+            `Actualizamos los documentos. Podés revisarlos y aceptarlos hasta el ${p.date}.`,
         termsAcceptFailed:
             'No se pudo registrar tu aceptación. Probá de nuevo.',
     },

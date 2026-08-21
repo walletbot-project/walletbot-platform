@@ -4,14 +4,15 @@ import 'package:app/l10n/l10n.dart';
 import 'package:app/legal/terms_acceptance.dart';
 import 'package:app/legal/terms_checkbox.dart';
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
-/// Blocking one-time acceptance step for accounts without a recorded
-/// acceptance of the current legal documents: first Google sign-ins, accounts
-/// created before the acceptance flow, local accounts predating it, and
-/// everyone again when the documents' version bumps. Shown by `_TermsGate`
-/// (main.dart) instead of the app until the user affirmatively accepts —
-/// the native counterpart of the web `TermsGate`
+/// Acceptance step for accounts whose acceptance of the legal documents needs
+/// attention, shown by `_TermsGate` (main.dart) instead of the app. Blocking
+/// when the controller says [TermsGateStatus.required] (never accepted, below
+/// the min floor, grace expired); dismissible — a "Not now" action and the
+/// grace deadline in the copy — on [TermsGateStatus.requested] (old but
+/// still-valid acceptance). The native counterpart of the web `TermsGate`
 /// (apps/web/src/components/auth/terms-gate.tsx).
 class TermsAcceptanceScreen extends StatefulWidget {
   const TermsAcceptanceScreen({super.key});
@@ -44,6 +45,14 @@ class _TermsAcceptanceScreenState extends State<TermsAcceptanceScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colors = theme.colorScheme;
+    final terms = context.watch<TermsAcceptanceController>();
+    final dismissible = terms.status == TermsGateStatus.requested;
+    final graceEndsAt = terms.graceEndsAt;
+    final deadline = dismissible && graceEndsAt != null
+        ? DateFormat.yMMMMd(
+            context.localeName,
+          ).format(DateTime.fromMillisecondsSinceEpoch(graceEndsAt))
+        : null;
 
     return Scaffold(
       body: SafeArea(
@@ -115,6 +124,16 @@ class _TermsAcceptanceScreenState extends State<TermsAcceptanceScreen> {
                             ),
                           ],
                         ),
+                        if (deadline != null) ...[
+                          const SizedBox(height: 12),
+                          Text(
+                            context.l10n.termsDeadline(deadline),
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: colors.onSurfaceVariant,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
                         const SizedBox(height: 18),
                         TermsAcceptanceCheckbox(
                           value: _accepted,
@@ -144,6 +163,19 @@ class _TermsAcceptanceScreenState extends State<TermsAcceptanceScreen> {
                                 : Text(context.l10n.termsContinue),
                           ),
                         ),
+                        if (dismissible) ...[
+                          const SizedBox(height: 6),
+                          Center(
+                            child: TextButton(
+                              onPressed: _submitting
+                                  ? null
+                                  : () => context
+                                        .read<TermsAcceptanceController>()
+                                        .dismissPrompt(),
+                              child: Text(context.l10n.termsLater),
+                            ),
+                          ),
+                        ],
                       ],
                     ),
                   ),

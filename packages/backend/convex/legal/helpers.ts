@@ -1,19 +1,22 @@
-import { CURRENT_LEGAL_VERSION } from '@wallet-bot/shared'
+import { CURRENT_LEGAL_VERSION, LEGAL_POLICY } from '@wallet-bot/shared'
 import type { Doc } from '../_generated/dataModel'
 import type { MutationCtx, QueryCtx } from '../_generated/server'
 
-export { CURRENT_LEGAL_VERSION }
+export { CURRENT_LEGAL_VERSION, LEGAL_POLICY }
 
-/** The user's acceptance row for the documents version currently in force. */
-export async function getCurrentAcceptance(
+/**
+ * The user's newest accepted documents version. Versions are ISO dates, so
+ * the `by_user_version` index order IS version order and `.order('desc')`
+ * surfaces the latest; the read stays bounded to one row per call.
+ */
+export async function getLatestAcceptance(
     ctx: QueryCtx,
     userId: string,
 ): Promise<Doc<'termsAcceptances'> | null> {
     return await ctx.db
         .query('termsAcceptances')
-        .withIndex('by_user_version', (q) =>
-            q.eq('userId', userId).eq('documentVersion', CURRENT_LEGAL_VERSION),
-        )
+        .withIndex('by_user_version', (q) => q.eq('userId', userId))
+        .order('desc')
         .first()
 }
 

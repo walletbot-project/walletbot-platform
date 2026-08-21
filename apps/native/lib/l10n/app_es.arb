@@ -419,5 +419,7 @@
   "termsGateTitle": "Términos y privacidad",
   "termsGateDescription": "Para seguir usando Wallet Bot, aceptá los Términos y Condiciones y la Política de Privacidad.",
   "termsContinue": "Continuar",
+  "termsLater": "Ahora no",
+  "termsDeadline": "Actualizamos los documentos. Podés revisarlos y aceptarlos hasta el {date}.",
   "termsAcceptFailed": "No se pudo registrar tu aceptación. Probá de nuevo."
 }

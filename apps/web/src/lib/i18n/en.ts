@@ -144,6 +144,9 @@ export const en: Messages = {
         termsGateDescription:
             'To keep using Wallet Bot, accept the Terms and Conditions and the Privacy Policy.',
         termsContinue: 'Continue',
+        termsLater: 'Not now',
+        termsDeadline: (p) =>
+            `We updated the documents. You can review and accept them until ${p.date}.`,
         termsAcceptFailed: 'Could not record your acceptance. Try again.',
     },
 

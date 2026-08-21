@@ -93,8 +93,13 @@ export {
 export {
     CURRENT_LEGAL_VERSION,
     isValidLegalVersion,
+    LEGAL_POLICY,
     type LegalLocale,
+    type LegalPolicy,
+    type LegalVerdictStatus,
     legalUrls,
+    legalVerdict,
+    MIN_ACCEPTED_LEGAL_VERSION,
 } from './legal'
 export type { ToolArgs, ToolName } from './tools'
 export { TOOL_DEFINITIONS, TOOL_MAP, toolSchemas } from './tools'

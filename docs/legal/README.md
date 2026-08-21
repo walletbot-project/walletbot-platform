@@ -39,11 +39,41 @@ Audit of 2026-08-06 (policy text vs. `main` at `ba3f017` and branch `wal-151-agr
 5. **Implement effective rate limiting and anti-enumeration** (§3.4, §11). Better-auth's default rate limiter uses per-isolate memory storage (ineffective on Convex) and only guards its own router — the custom endpoints (`/auth/email/sign-in`, `/auth/email/sign-up`, `/auth/google`, `/auth/refresh`, `/v1/config`, `/v1/live/token`) bypass it entirely. Sign-up currently forwards `USER_ALREADY_EXISTS` verbatim (`packages/backend/convex/authNative/http.ts`) — an email-enumeration vector.
 6. **Implement crash reporting** (§3.4). No crash handler or SDK exists anywhere (no `FlutterError.onError` / `runZonedGuarded` / crash SDK); nothing captures stack traces today.
 7. **Implement usage analytics as described** (§3.4: screens viewed, features used, device model/OS/language). Today only one `app.started` event plus 4 business counters are collected, and the web app sends no client telemetry at all. Ties into required-item 4 (choose the SDK).
-8. **Signup acceptance checkbox + 18+ age gate** (§2, §8, §14 and T&C), **plus a first-run acceptance step for local-only mode** — T&C §1 promises affirmative acceptance also "when first using the app" without an account, which is a separate piece of UI from the signup checkbox. Deferred by owner (2026-08-06); required before publishing, see the publishing checklist below. **Persist acceptance state** (accepted document version, user/device, timestamp) server-side (or device-side for local-only mode) and re-prompt when the documents were shown but not accepted — merely displaying them must never be recorded as acceptance (PR #193 review feedback, 2026-08-08). **Shipped (2026-08-21, WAL-172):** one combined 18+/acceptance checkbox with document links on the web and native sign-up forms and on the native local-account panel; acceptance persisted server-side in the `termsAcceptances` table (`documentVersion` = the documents' "Última actualización" date, currently `2026-08-06`; userId; timestamp; source) via the sign-up body plus `v1/legal` RPCs, and device-side in secure storage for local accounts; post-auth blocking gates on both platforms re-prompt any account without a record for the current version (first Google sign-ins, pre-existing accounts) — display alone is never recorded. Native gate fails open while offline; local-mode acceptance works fully offline.
+8. **Signup acceptance checkbox + 18+ age gate** (§2, §8, §14 and T&C), **plus a first-run acceptance step for local-only mode** — T&C §1 promises affirmative acceptance also "when first using the app" without an account, which is a separate piece of UI from the signup checkbox. Deferred by owner (2026-08-06); required before publishing, see the publishing checklist below. **Persist acceptance state** (accepted document version, user/device, timestamp) server-side (or device-side for local-only mode) and re-prompt when the documents were shown but not accepted — merely displaying them must never be recorded as acceptance (PR #193 review feedback, 2026-08-08). **Shipped (2026-08-21, WAL-172):** one combined 18+/acceptance checkbox with document links on the web and native sign-up forms and on the native local-account panel; acceptance persisted server-side in the `termsAcceptances` table (`documentVersion` = the documents' "Última actualización" date, currently `2026-08-06`; userId; timestamp; source) via the sign-up body plus `v1/legal` RPCs, and device-side in secure storage for local accounts; post-auth blocking gates on both platforms re-prompt any account without a record for the current version (first Google sign-ins, pre-existing accounts) — display alone is never recorded. Native gate fails open while offline; local-mode acceptance works fully offline. Document updates re-prompt via the min/current/grace policy — see § Versioning & re-acceptance below.
 9. **`support@walletbot.live` mailbox** — deferred by owner (2026-08-06); required before publishing (required-item 2 above).
 10. **Apple Sign-In** — now disclosed in §7 as "where available". The backend already enables it whenever `APPLE_CLIENT_ID` is set (`packages/backend/convex/auth.ts`); client-side support will ship eventually — no further policy change needed then.
 
 11. **12-month voice-retention cron** (required-item 3 above). Privacy §5/§9 promise automatic deletion of `voiceSessions` / `voiceSessionEvents` older than 12 months; no such cleanup exists on `main` or the PR #192 branch. Owner decision (PR #193 review, 2026-08-08): the policy keeps the 12-month promise — the cron must ship before the policy goes live.
+
+## Versioning & re-acceptance — how to publish updated documents
+
+A document version is its "Última actualización" date (`YYYY-MM-DD`), compared
+as a plain string. The policy lives in `packages/shared/src/legal.ts` and is
+what installed clients obey — remote accounts receive a per-user verdict from
+`v1/legal/queries:getMyAcceptance`, native local accounts receive the policy
+inside the `/v1/config` payload (cached, fail-open) and evaluate it on-device
+(`apps/native/lib/legal/terms_acceptance.dart` mirrors the verdict function —
+keep both in sync). Publishing an update is a backend deploy; no app release:
+
+1. Edit the four documents (ES and EN together, as always) and set the new
+   "Última actualización" date.
+2. In `packages/shared/src/legal.ts`: set `CURRENT_LEGAL_VERSION` to that date
+   and `LEGAL_GRACE_ENDS_AT` to the notice deadline (ms epoch, e.g. +30 days).
+   Leave `MIN_ACCEPTED_LEGAL_VERSION` alone for routine updates.
+3. Deploy the backend. Users on the previous version get a **dismissible**
+   prompt ("Not now") until the deadline; after it, the gate blocks. New
+   sign-ups accept the new version directly.
+
+Semantics: acceptance ≥ current → nothing; acceptance below
+`MIN_ACCEPTED_LEGAL_VERSION` (or none) → blocking gate, no grace; anything in
+between → dismissible prompt while the grace runs, blocking after. Fail-safe
+defaults: a `null` grace deadline means the prompt stays dismissible forever
+(forgetting it can never lock users out), a client that receives a status it
+does not recognize renders the dismissible prompt (a future policy state can
+never hard-block an old build), and a native remote account never hard-blocks
+from cached data alone — only a live server verdict can (accepting needs the
+network). Raising `MIN_ACCEPTED_LEGAL_VERSION` is the only immediate-lockout
+lever; reserve it for "the old terms are legally void".
 
 ## Publishing checklist (app stores)
 

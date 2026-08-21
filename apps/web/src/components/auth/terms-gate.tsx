@@ -1,4 +1,5 @@
 import { api } from '@wallet-bot/backend/api'
+import { Button } from 'actify'
 import { useMutation, useQuery } from 'convex/react'
 import { type ReactNode, useState } from 'react'
 import {
@@ -10,28 +11,65 @@ import {
     AuthScaffold,
 } from '@/components/auth/auth-scaffold'
 import { TermsCheckbox } from '@/components/auth/terms-checkbox'
-import { useT } from '@/lib/i18n'
+import { useFormatLocale, useT } from '@/lib/i18n'
 
 /**
- * Blocks the app for authenticated accounts without a recorded acceptance of
- * the legal documents version currently in force — first Google sign-ins
- * (the OAuth redirect cannot carry the sign-up checkbox), accounts created
- * before the acceptance flow, and everyone again when the documents' version
- * bumps. Accounts whose acceptance was recorded at sign-up pass straight
- * through; accepting here records it and the reactive query lets them in.
+ * Renders the server's legal-acceptance verdict for the signed-in account
+ * (see `v1/legal/queries:getMyAcceptance` and the policy in
+ * packages/shared/src/legal.ts):
+ *
+ * - `ok` → the app;
+ * - `reacceptRequired` → blocking acceptance panel (never accepted, below
+ *   the min floor, or the grace deadline passed);
+ * - anything else → the same panel with a "Not now" escape, once per page
+ *   load — `reacceptRequested` today, and by contract any status this build
+ *   doesn't recognize, so a future state can never hard-block an old client.
+ *
+ * The query is reactive: publishing a new documents version pops the prompt
+ * in already-open sessions without a reload.
  */
 export function TermsGate({ children }: { children: ReactNode }) {
     const acceptance = useQuery(api.v1.legal.queries.getMyAcceptance)
+    // "Not now" on the soft prompt, remembered per page load and per
+    // documents version: a reload (or a newer version) prompts again.
+    const [dismissedVersion, setDismissedVersion] = useState<string | null>(
+        null,
+    )
 
     // Same contract as AuthGuard's initial load: render nothing until the
     // status is known, so the app never flashes ahead of the gate.
     if (acceptance === undefined) return null
-    if (acceptance.accepted) return <>{children}</>
-    return <TermsGatePanel currentVersion={acceptance.currentVersion} />
+    if (acceptance.status === 'ok') return <>{children}</>
+
+    const blocking = acceptance.status === 'reacceptRequired'
+    if (!blocking && dismissedVersion === acceptance.currentVersion) {
+        return <>{children}</>
+    }
+    return (
+        <TermsGatePanel
+            currentVersion={acceptance.currentVersion}
+            graceEndsAt={acceptance.graceEndsAt}
+            onDismiss={
+                blocking
+                    ? null
+                    : () => setDismissedVersion(acceptance.currentVersion)
+            }
+        />
+    )
 }
 
-function TermsGatePanel({ currentVersion }: { currentVersion: string }) {
+function TermsGatePanel({
+    currentVersion,
+    graceEndsAt,
+    onDismiss,
+}: {
+    currentVersion: string
+    graceEndsAt: number | null
+    /** Present on the soft prompt only; `null` means blocking. */
+    onDismiss: (() => void) | null
+}) {
     const t = useT()
+    const formatLocale = useFormatLocale()
     const accept = useMutation(api.v1.legal.mutations.accept)
     const [accepted, setAccepted] = useState(false)
     const [submitting, setSubmitting] = useState(false)
@@ -42,13 +80,20 @@ function TermsGatePanel({ currentVersion }: { currentVersion: string }) {
         setSubmitting(true)
         try {
             await accept({ documentVersion: currentVersion })
-            // No setSubmitting(false): the query above flips `accepted` and
+            // No setSubmitting(false): the query above flips the status and
             // unmounts this panel; dropping the spinner early would flicker.
         } catch {
             setError(t.auth.termsAcceptFailed)
             setSubmitting(false)
         }
     }
+
+    const deadline =
+        onDismiss !== null && graceEndsAt !== null
+            ? new Intl.DateTimeFormat(formatLocale, {
+                  dateStyle: 'long',
+              }).format(new Date(graceEndsAt))
+            : null
 
     return (
         <AuthScaffold>
@@ -61,6 +106,11 @@ function TermsGatePanel({ currentVersion }: { currentVersion: string }) {
                         subtitle={t.auth.termsGateDescription}
                     />
                     <div className="mt-4.5 flex flex-col gap-3">
+                        {deadline ? (
+                            <p className="m3-body-small font-semibold text-on-surface-variant">
+                                {t.auth.termsDeadline({ date: deadline })}
+                            </p>
+                        ) : null}
                         <TermsCheckbox
                             isSelected={accepted}
                             onChange={setAccepted}
@@ -73,6 +123,18 @@ function TermsGatePanel({ currentVersion }: { currentVersion: string }) {
                             isDisabled={!accepted}
                             onPress={() => void handleContinue()}
                         />
+                        {onDismiss !== null ? (
+                            <div className="flex justify-center">
+                                <Button
+                                    type="button"
+                                    variant="text"
+                                    isDisabled={submitting}
+                                    onPress={onDismiss}
+                                >
+                                    {t.auth.termsLater}
+                                </Button>
+                            </div>
+                        ) : null}
                     </div>
                 </AuthPanel>
             </div>

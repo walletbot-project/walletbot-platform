@@ -1,3 +1,4 @@
+import { LEGAL_POLICY, type LegalPolicy } from '@wallet-bot/shared'
 import { internal } from '../_generated/api'
 import type { ActionCtx } from '../_generated/server'
 import type { FlagKey } from '../featureFlags/utils'
@@ -49,6 +50,14 @@ export type ConfigVerdict = {
     latestVersion: string
     updateUrl: string | null
     banners: ConfigBanner[]
+    /**
+     * Legal-documents policy for accounts the backend cannot issue a
+     * per-user verdict for (native local accounts): the client evaluates its
+     * device-side acceptance record against this. Remote accounts get their
+     * verdict from `v1/legal/queries:getMyAcceptance` instead. Device-scoped
+     * and cached like the rest of this payload, so it fails open.
+     */
+    legal: LegalPolicy
 }
 
 export type AccountConfigVerdict = {
@@ -251,6 +260,7 @@ export function resolveConfigVerdict(args: {
             latestVersion: config.latestVersion,
             updateUrl: null,
             banners: sortBanners(configuredBanners),
+            legal: LEGAL_POLICY,
         }
     }
 
@@ -277,6 +287,7 @@ export function resolveConfigVerdict(args: {
         latestVersion: config.latestVersion,
         updateUrl,
         banners: sortBanners(banners),
+        legal: LEGAL_POLICY,
     }
 }
 

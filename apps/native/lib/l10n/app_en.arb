@@ -465,5 +465,8 @@
   "termsGateTitle": "Terms and privacy",
   "termsGateDescription": "To keep using Wallet Bot, accept the Terms and Conditions and the Privacy Policy.",
   "termsContinue": "Continue",
+  "termsLater": "Not now",
+  "termsDeadline": "We updated the documents. You can review and accept them until {date}.",
+  "@termsDeadline": {"placeholders": {"date": {"type": "String"}}},
   "termsAcceptFailed": "Could not record your acceptance. Try again."
 }
