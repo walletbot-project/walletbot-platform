@@ -67,6 +67,19 @@ class LegalPolicy {
       graceEndsAt: grace is num ? grace.round() : null,
     );
   }
+
+  // Value equality: a config refresh that re-delivers the same policy must not
+  // look like a policy change to [TermsAcceptanceController].
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is LegalPolicy &&
+          other.currentVersion == currentVersion &&
+          other.minVersion == minVersion &&
+          other.graceEndsAt == graceEndsAt;
+
+  @override
+  int get hashCode => Object.hash(currentVersion, minVersion, graceEndsAt);
 }
 
 /// How the acceptance gate currently stands for the active account.
@@ -145,16 +158,27 @@ Future<void> writeTermsAcceptanceRecord(
 /// — accepting needs the network, so only a live server verdict may hard
 /// block. LOCAL accounts evaluate and record entirely on-device, so their
 /// gate works (and may block) with no connectivity at all.
+///
+/// Freshness invariant: a policy published on the backend takes effect on the
+/// NEXT app launch, never the one after. Remote accounts always ask the server
+/// once per launch — a device cache saying "accepted" is not a reason to skip
+/// the check, because the cache cannot know the policy moved. Local accounts
+/// re-evaluate whenever [policyChanges] fires with a different policy, which is
+/// what the `/v1/config` fetch does moments after launch.
 class TermsAcceptanceController extends ChangeNotifier {
   TermsAcceptanceController({
     required this.accountId,
     required this.isRemote,
     required LegalPolicy Function() policy,
+    Listenable? policyChanges,
     ConvexClient? client,
     FlutterSecureStorage? storage,
   }) : _policy = policy,
+       _policyChanges = policyChanges,
        _client = client,
-       _storage = storage ?? const FlutterSecureStorage();
+       _storage = storage ?? const FlutterSecureStorage() {
+    _policyChanges?.addListener(_onPolicyChanged);
+  }
 
   final String accountId;
   final bool isRemote;
@@ -162,6 +186,14 @@ class TermsAcceptanceController extends ChangeNotifier {
   /// Freshest device-known policy (cached `/v1/config` via
   /// `AppConfigController`, falling back to [bundledLegalPolicy]).
   final LegalPolicy Function() _policy;
+
+  /// Notifier that fires when [_policy] may have moved — `AppConfigController`
+  /// in the app, so the `/v1/config` refresh lands in the same launch.
+  final Listenable? _policyChanges;
+
+  /// Policy the current [_status] was decided against. Guards the listener
+  /// above: a config refresh that re-delivers the same policy costs nothing.
+  LegalPolicy? _appliedPolicy;
 
   // Resolved lazily — only ever touched when `isRemote` is true — so local
   // accounts (and widget tests) never require `ConvexClient.initialize()`.
@@ -187,8 +219,17 @@ class TermsAcceptanceController extends ChangeNotifier {
   bool get promptDismissed => _dismissedVersion == currentVersion;
 
   /// One server round-trip per controller life: a failed check fails open
-  /// and retries on the next app launch, never in a loop.
+  /// and retries on the next app launch, never in a loop. Cleared only when
+  /// the policy itself moves under us (see [_onPolicyChanged]), which is a new
+  /// question, not a retry.
   bool _serverChecked = false;
+  bool _checking = false;
+  bool _recheckQueued = false;
+
+  /// Whether the authoritative server verdict for this launch is still
+  /// outstanding. `_TermsGate` (main.dart) uses it to trigger [checkRemote]
+  /// once Convex auth is attached.
+  bool get needsServerCheck => isRemote && !_serverChecked;
 
   /// Version the gate displays and records.
   String get currentVersion =>
@@ -218,22 +259,59 @@ class TermsAcceptanceController extends ChangeNotifier {
       debugPrint('terms: read cache failed: $e');
     }
 
+    _applyLocalVerdict();
+  }
+
+  /// Decides from the device record alone, against the freshest known policy.
+  void _applyLocalVerdict() {
+    final policy = _policy();
+    _appliedPolicy = policy;
     if (isRemote && _acceptedVersion == null) return;
-    var verdict = legalVerdict(_acceptedVersion, _policy(), DateTime.now());
+    var verdict = legalVerdict(_acceptedVersion, policy, DateTime.now());
     if (isRemote && verdict == TermsGateStatus.required) {
       verdict = TermsGateStatus.requested;
     }
     _setStatus(verdict);
   }
 
+  /// The device-known policy moved (a `/v1/config` refresh landed). Local
+  /// accounts re-decide right here — that is what makes a backend policy
+  /// change show up in this launch instead of the next one. Remote accounts
+  /// re-ask the backend instead of re-deciding: the config copy of the policy
+  /// can be older than the verdict already in hand, and only the server may
+  /// hard block them.
+  void _onPolicyChanged() {
+    final policy = _policy();
+    if (policy == _appliedPolicy) return;
+    if (!isRemote) {
+      _applyLocalVerdict();
+      return;
+    }
+    _appliedPolicy = policy;
+    if (_checking) {
+      // A verdict for the previous policy is in flight; re-ask once it lands.
+      _recheckQueued = true;
+    } else if (_serverChecked) {
+      _serverChecked = false;
+      // Rebuilds `_TermsGate`, which calls `checkRemote` when authenticated.
+      _notify();
+    }
+    // Otherwise the first check hasn't run yet and will answer for the new
+    // policy anyway — the server evaluates it, not us.
+  }
+
   /// Asks the backend for the authoritative verdict. Call once Convex auth is
   /// attached. Network failure keeps whatever [load] concluded — the app
   /// stays usable and the next launch retries.
+  ///
+  /// Runs even when the device record already says the current documents were
+  /// accepted: that record was matched against the policy this device happens
+  /// to know, so skipping the call would hide a policy published since — the
+  /// gate would need a second launch to appear.
   Future<void> checkRemote() async {
-    if (!isRemote || _serverChecked || _status == TermsGateStatus.cleared) {
-      return;
-    }
+    if (!isRemote || _serverChecked) return;
     _serverChecked = true;
+    _checking = true;
     try {
       final raw = await _resolvedClient.query(
         'v1/legal/queries:getMyAcceptance',
@@ -273,6 +351,15 @@ class TermsAcceptanceController extends ChangeNotifier {
       });
     } catch (e) {
       debugPrint('terms: acceptance check failed: $e');
+    } finally {
+      _checking = false;
+      if (_recheckQueued) {
+        // The policy moved while this call was in flight: the answer just
+        // applied is stale, so ask again for the policy now in force.
+        _recheckQueued = false;
+        _serverChecked = false;
+        _notify();
+      }
     }
   }
 
@@ -301,12 +388,29 @@ class TermsAcceptanceController extends ChangeNotifier {
   void dismissPrompt() {
     if (_dismissedVersion == currentVersion) return;
     _dismissedVersion = currentVersion;
-    notifyListeners();
+    _notify();
   }
 
   void _setStatus(TermsGateStatus next) {
     if (_status == next) return;
     _status = next;
+    _notify();
+  }
+
+  /// Switching accounts disposes this controller while a check may still be in
+  /// flight; the answer that lands afterwards belongs to a gate that no longer
+  /// exists, and notifying a disposed [ChangeNotifier] throws.
+  void _notify() {
+    if (_disposed) return;
     notifyListeners();
+  }
+
+  bool _disposed = false;
+
+  @override
+  void dispose() {
+    _disposed = true;
+    _policyChanges?.removeListener(_onPolicyChanged);
+    super.dispose();
   }
 }

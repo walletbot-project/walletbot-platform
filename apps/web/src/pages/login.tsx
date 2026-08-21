@@ -1,5 +1,7 @@
+import { api } from '@wallet-bot/backend/api'
 import { CURRENT_LEGAL_VERSION } from '@wallet-bot/shared'
 import { Button } from 'actify'
+import { useQuery } from 'convex/react'
 import { type FormEvent, useEffect, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 
@@ -33,6 +35,13 @@ export function Login({ mode }: { mode: AuthMode }) {
     const navigate = useNavigate()
     const t = useT()
     const from = location.state?.from?.pathname || '/'
+
+    // The documents version in force right now, so a policy published on the
+    // backend is recorded correctly without waiting for a web deploy. Falls
+    // back to the bundled constant while the query is in flight or offline —
+    // an older version simply means the gate re-prompts after sign-up.
+    const policy = useQuery(api.v1.legal.queries.getPolicy)
+    const legalVersion = policy?.currentVersion ?? CURRENT_LEGAL_VERSION
 
     const [loading, setLoading] = useState<'email' | 'google' | null>(null)
     const [error, setError] = useState<string | null>(null)
@@ -120,7 +129,7 @@ export function Login({ mode }: { mode: AuthMode }) {
                 password,
                 // Recorded against the real user insert by the user-create
                 // hook (packages/backend/convex/auth.ts).
-                termsAcceptedVersion: CURRENT_LEGAL_VERSION,
+                termsAcceptedVersion: legalVersion,
             })
 
             if (result.error) {

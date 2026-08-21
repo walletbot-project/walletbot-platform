@@ -34,14 +34,18 @@ void main() {
     FlutterSecureStorage.setMockInitialValues({});
   });
 
-  Future<void> pumpLogin(WidgetTester tester, AuthController auth) async {
+  Future<void> pumpLogin(
+    WidgetTester tester,
+    AuthController auth, {
+    AppConfigController? appConfig,
+  }) async {
     await tester.pumpWidget(
       MyApp(
         auth: auth,
         displaySettings: DisplaySettingsController(
           store: MemoryDisplaySettingsStore(),
         ),
-        appConfig: AppConfigController(),
+        appConfig: appConfig ?? AppConfigController(),
         clientInfo: _testClientInfo,
         locale: const Locale('es'),
       ),
@@ -51,6 +55,13 @@ void main() {
 
   Future<void> drainResendCooldown(WidgetTester tester) async {
     await tester.pump(const Duration(seconds: 31));
+  }
+
+  // Sign-up cannot proceed until the legal-acceptance box is ticked, so every
+  // sign-up flow below goes through it, exactly like a user would.
+  Future<void> acceptTerms(WidgetTester tester) async {
+    await tester.tap(find.byType(Checkbox));
+    await tester.pump();
   }
 
   testWidgets('sign-up blocked by verification shows the pending panel', (
@@ -74,6 +85,7 @@ void main() {
     await tester.enterText(find.byType(TextFormField).at(0), 'Ana');
     await tester.enterText(find.byType(TextFormField).at(1), 'ana@test.com');
     await tester.enterText(find.byType(TextFormField).at(2), 'password123');
+    await acceptTerms(tester);
     await tester.tap(find.text('Registrarme'));
     await tester.pumpAndSettle();
 
@@ -86,6 +98,84 @@ void main() {
 
     await drainResendCooldown(tester);
     expect(find.text('Reenviar correo'), findsOneWidget);
+  });
+
+  testWidgets('sign-up records the documents version config reports', (
+    tester,
+  ) async {
+    final requests = <http.Request>[];
+    final auth = AuthController(
+      httpClient: MockClient((request) async {
+        requests.add(request);
+        return http.Response(
+          jsonEncode({'code': 'email_not_verified', 'message': 'verify'}),
+          403,
+        );
+      }),
+    );
+    // A backend that published newer documents than this build bundles.
+    final appConfig = AppConfigController(
+      clientInfo: _testClientInfo,
+      httpClient: MockClient(
+        (request) async => http.Response(
+          jsonEncode({
+            'supported': true,
+            'updateAvailable': false,
+            'banners': <Object?>[],
+            'legal': {
+              'currentVersion': '2099-01-01',
+              'minVersion': '2026-08-06',
+              'graceEndsAt': null,
+            },
+          }),
+          200,
+        ),
+      ),
+    );
+    addTearDown(appConfig.dispose);
+    await appConfig.load();
+
+    await pumpLogin(tester, auth, appConfig: appConfig);
+
+    await tester.tap(find.text('¿Necesitás una cuenta? Registrate'));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(find.byType(TextFormField).at(0), 'Ana');
+    await tester.enterText(find.byType(TextFormField).at(1), 'ana@test.com');
+    await tester.enterText(find.byType(TextFormField).at(2), 'password123');
+    await acceptTerms(tester);
+    await tester.tap(find.text('Registrarme'));
+    await tester.pumpAndSettle();
+
+    final body = jsonDecode(requests.single.body) as Map<String, Object?>;
+    expect(body['termsAcceptedVersion'], '2099-01-01');
+  });
+
+  testWidgets('sign-up does nothing until the legal box is ticked', (
+    tester,
+  ) async {
+    final requests = <http.Request>[];
+    final auth = AuthController(
+      httpClient: MockClient((request) async {
+        requests.add(request);
+        return http.Response(jsonEncode({'message': 'unexpected'}), 500);
+      }),
+    );
+    await pumpLogin(tester, auth);
+
+    await tester.tap(find.text('¿Necesitás una cuenta? Registrate'));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(find.byType(TextFormField).at(0), 'Ana');
+    await tester.enterText(find.byType(TextFormField).at(1), 'ana@test.com');
+    await tester.enterText(find.byType(TextFormField).at(2), 'password123');
+    await tester.tap(find.text('Registrarme'));
+    await tester.pumpAndSettle();
+
+    // No account may be created without an affirmative acceptance.
+    expect(requests, isEmpty);
+    expect(auth.accounts, isEmpty);
+    expect(find.text('Registrarme'), findsOneWidget);
   });
 
   testWidgets('sign-up on a registered email says so instead of pending', (
@@ -107,6 +197,7 @@ void main() {
     await tester.enterText(find.byType(TextFormField).at(0), 'Ana');
     await tester.enterText(find.byType(TextFormField).at(1), 'ana@test.com');
     await tester.enterText(find.byType(TextFormField).at(2), 'password123');
+    await acceptTerms(tester);
     await tester.tap(find.text('Registrarme'));
     await tester.pumpAndSettle();
 

@@ -318,6 +318,10 @@ class _AuthGate extends StatelessWidget {
               // Freshest device-known policy on every evaluation; bundled
               // constants only for a device that never fetched config.
               policy: () => config.legalPolicy ?? bundledLegalPolicy,
+              // The `/v1/config` fetch lands moments after launch: re-decide
+              // then, so a policy published on the backend takes effect in
+              // this launch rather than the next one.
+              policyChanges: config,
             );
             unawaited(controller.load());
             return controller;
@@ -411,11 +415,11 @@ class _TermsGateState extends State<_TermsGate> {
     final auth = context.watch<AuthController>();
 
     // Remote accounts get the authoritative verdict from the server once
-    // Convex auth is attached; `checkRemote` self-limits to one round-trip
-    // per controller life.
-    if (terms.isRemote &&
-        terms.status != TermsGateStatus.cleared &&
-        auth.convexAuthenticated) {
+    // Convex auth is attached — including when the device record says the
+    // documents were already accepted, since only the server knows whether
+    // the policy moved since. `needsServerCheck` self-limits this to one
+    // round-trip per launch (plus one if the policy changes under us).
+    if (terms.needsServerCheck && auth.convexAuthenticated) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
         unawaited(context.read<TermsAcceptanceController>().checkRemote());

@@ -62,7 +62,15 @@ keep both in sync). Publishing an update is a backend deploy; no app release:
    Leave `MIN_ACCEPTED_LEGAL_VERSION` alone for routine updates.
 3. Deploy the backend. Users on the previous version get a **dismissible**
    prompt ("Not now") until the deadline; after it, the gate blocks. New
-   sign-ups accept the new version directly.
+   sign-ups accept the new version directly (both clients record the version
+   the backend reports, not the one they were built with).
+
+Propagation: one reload on the web, one app reopen on native — never two.
+Convex invalidates query subscriptions from data writes, and a deploy writes
+no data, so a browser tab left open keeps the previous verdict until it
+reloads or reconnects; native asks the backend once per launch and re-decides
+local accounts as soon as the `/v1/config` refresh lands. Accepted behaviour
+(owner, 2026-08-21): pick deadlines with a day of slack, not minutes.
 
 Semantics: acceptance ≥ current → nothing; acceptance below
 `MIN_ACCEPTED_LEGAL_VERSION` (or none) → blocking gate, no grace; anything in

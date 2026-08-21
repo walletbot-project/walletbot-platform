@@ -25,8 +25,12 @@ import { useFormatLocale, useT } from '@/lib/i18n'
  *   load — `reacceptRequested` today, and by contract any status this build
  *   doesn't recognize, so a future state can never hard-block an old client.
  *
- * The query is reactive: publishing a new documents version pops the prompt
- * in already-open sessions without a reload.
+ * Propagation: the query is reactive to the acceptance ROW, not to the policy,
+ * which lives in code. Convex subscriptions are invalidated by writes to the
+ * data a query read, and deploying new function code writes nothing — so a
+ * newly published version reaches a tab that is already open on its next load
+ * or reconnect, not the instant of the deploy. Accepted behaviour (owner,
+ * 2026-08-21); native is the same, one relaunch.
  */
 export function TermsGate({ children }: { children: ReactNode }) {
     const acceptance = useQuery(api.v1.legal.queries.getMyAcceptance)

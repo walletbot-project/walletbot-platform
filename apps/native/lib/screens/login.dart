@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:app/app_config/app_config_banner_list.dart';
+import 'package:app/app_config/app_config_controller.dart';
 import 'package:app/auth/auth_controller.dart';
 import 'package:app/l10n/l10n.dart';
 import 'package:app/legal/terms_acceptance.dart';
@@ -77,6 +78,15 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
+  /// Version to record for an acceptance ticked on this screen: the policy in
+  /// force per the last `/v1/config` fetch, so documents published on the
+  /// backend are recorded correctly without an app release. The bundled
+  /// constant is the fallback for a device that never reached config — an
+  /// older version just means the post-auth gate re-prompts.
+  String get _legalVersionToRecord =>
+      context.read<AppConfigController>().legalPolicy?.currentVersion ??
+      currentLegalVersion;
+
   void _startResendCooldown() {
     _resendTimer?.cancel();
     setState(() => _resendCooldown = _resendCooldownSeconds);
@@ -116,7 +126,7 @@ class _LoginScreenState extends State<LoginScreen> {
           email: email,
           password: password,
           rejectExisting: widget.canDismiss,
-          termsAcceptedVersion: currentLegalVersion,
+          termsAcceptedVersion: _legalVersionToRecord,
         );
       }
     } on AccountAlreadyAddedError {
@@ -234,7 +244,7 @@ class _LoginScreenState extends State<LoginScreen> {
     try {
       await auth.addLocal(
         name: _localNameController.text.trim(),
-        termsAcceptedVersion: currentLegalVersion,
+        termsAcceptedVersion: _legalVersionToRecord,
       );
       businessMetrics?.userAccountCreated(authMethod: 'local');
     } catch (e) {
@@ -258,7 +268,7 @@ class _LoginScreenState extends State<LoginScreen> {
         rejectExisting: widget.canDismiss,
         termsAcceptedVersion:
             _emailMode == _EmailAuthMode.signUp && _remoteTermsAccepted
-            ? currentLegalVersion
+            ? _legalVersionToRecord
             : null,
       );
     } on GoogleSignInException catch (e) {

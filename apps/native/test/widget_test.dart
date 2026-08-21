@@ -73,6 +73,12 @@ void main() {
 
     expect(find.text('Nombre'), findsOneWidget);
 
+    // A local account also requires accepting the legal documents, so the
+    // button stays inert until the box is ticked — tick it first, then the
+    // name validation is what's under test here.
+    await tester.tap(find.byType(Checkbox));
+    await tester.pump();
+
     await tester.tap(find.text('Continuar sin cuenta'));
     await tester.pump();
 
