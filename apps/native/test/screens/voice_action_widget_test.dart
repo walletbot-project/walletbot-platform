@@ -39,6 +39,14 @@ void main() {
   testWidgets('update account renders an editor with a safe save action', (
     tester,
   ) async {
+    // The editor is a bottom sheet only below Breakpoints.medium — at or above
+    // it, showAdaptiveModal frames it as a dialog, which has no bottom view
+    // padding to maintain. The default 800x600 test surface is already past
+    // that, so pin the window to a phone size for this assertion.
+    tester.view.physicalSize = const Size(500, 800);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
     final accountId = await repos.accounts.create(
       name: 'Efectivo',
       currency: 'ARS',

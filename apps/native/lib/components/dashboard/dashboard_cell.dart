@@ -91,11 +91,7 @@ class DashboardCell extends StatelessWidget {
                     color: colors.primaryContainer.withValues(alpha: 0.62),
                     borderRadius: BorderRadius.circular(6),
                   ),
-                  child: Icon(
-                    icon,
-                    size: 13,
-                    color: colors.onPrimaryContainer,
-                  ),
+                  child: Icon(icon, size: 13, color: colors.onPrimaryContainer),
                 ),
               ),
           ],

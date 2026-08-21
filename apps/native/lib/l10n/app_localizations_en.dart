@@ -344,6 +344,28 @@ class AppLocalizationsEn extends AppLocalizations {
   String get noTransactionsYet => 'No transactions yet';
 
   @override
+  String get selectTransactionDetail =>
+      'Select a transaction to see its details';
+
+  @override
+  String get selectAccountDetail => 'Select an account to see its details';
+
+  @override
+  String get selectCategoryDetail => 'Select a category to see its details';
+
+  @override
+  String get selectTagDetail => 'Select a tag to see its details';
+
+  @override
+  String get accountDetails => 'Account details';
+
+  @override
+  String get categoryDetails => 'Category details';
+
+  @override
+  String get tagDetails => 'Tag details';
+
+  @override
   String get today => 'Today';
 
   @override

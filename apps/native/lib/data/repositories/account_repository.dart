@@ -81,13 +81,13 @@ class AccountRepository extends RepositoryBase {
     String? excludeId,
   }) async {
     final normalized = _normalizeAccountName(name);
-    final sameCurrency = await (db.select(db.accounts)..where(
-          (a) => a.archived.equals(false) & a.currency.equals(currency),
-        ))
-        .get();
+    final sameCurrency =
+        await (db.select(db.accounts)..where(
+              (a) => a.archived.equals(false) & a.currency.equals(currency),
+            ))
+            .get();
     final hasDuplicate = sameCurrency.any(
-      (a) =>
-          a.id != excludeId && _normalizeAccountName(a.name) == normalized,
+      (a) => a.id != excludeId && _normalizeAccountName(a.name) == normalized,
     );
     if (hasDuplicate) throw const DuplicateAccountException();
   }

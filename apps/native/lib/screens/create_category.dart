@@ -16,7 +16,11 @@ List<({String label, IconData icon})> _nameSuggestions(AppLocalizations l10n) =>
     ];
 
 class CreateCategoryScreen extends StatefulWidget {
-  const CreateCategoryScreen({super.key});
+  const CreateCategoryScreen({super.key, this.onClose});
+
+  /// Embedded (split pane) mode: when set, the screen never pops its route —
+  /// exits report here instead, and an explicit close button is shown.
+  final VoidCallback? onClose;
 
   @override
   State<CreateCategoryScreen> createState() => _CreateCategoryScreenState();
@@ -67,7 +71,7 @@ class _CreateCategoryScreenState extends State<CreateCategoryScreen> {
         color: colorToHex(_color),
         icon: categoryIconName(_icon),
       );
-      if (mounted) Navigator.of(context).pop();
+      if (mounted) _close();
     } catch (e, st) {
       debugPrint('Error creating category: $e\n$st');
       if (mounted) {
@@ -80,10 +84,32 @@ class _CreateCategoryScreenState extends State<CreateCategoryScreen> {
     }
   }
 
+  /// Exits the screen: reports to [CreateCategoryScreen.onClose] when embedded
+  /// in the split pane, pops the route otherwise.
+  void _close() {
+    final onClose = widget.onClose;
+    if (onClose != null) {
+      onClose();
+      return;
+    }
+    Navigator.of(context).pop();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text(context.l10n.newCategory)),
+      appBar: AppBar(
+        // Embedded there is no route to pop, so no back button appears on its
+        // own — offer an explicit close instead.
+        leading: widget.onClose == null
+            ? null
+            : IconButton(
+                tooltip: MaterialLocalizations.of(context).closeButtonTooltip,
+                onPressed: _close,
+                icon: const Icon(Icons.close_rounded),
+              ),
+        title: Text(context.l10n.newCategory),
+      ),
       body: Form(
         key: _formKey,
         child: ListView(

@@ -18,6 +18,7 @@ import 'package:app/screens/login.dart';
 import 'package:app/screens/voice.dart';
 import 'package:app/settings/display_settings.dart';
 import 'package:app/shared/app_navigation.dart';
+import 'package:app/shared/breakpoints.dart';
 import 'package:app/sync/sync_engine.dart';
 import 'package:app/telemetry/business_metrics.dart';
 import 'package:app/telemetry/telemetry_client.dart';
@@ -413,6 +414,10 @@ class _AppMainState extends State<AppMain> {
   TransactionFilter _activityFilter = const TransactionFilter();
   int _activityFilterRevision = 0;
 
+  /// Keeps the four tab subtrees (and their scroll/edit State) alive when the
+  /// shell flips between the bottom bar and the rail on window resize.
+  final GlobalKey _tabStackKey = GlobalKey(debugLabel: 'appTabStack');
+
   void _openActivityWithFilter(TransactionFilter filter) {
     setState(() {
       _activityFilter = filter;
@@ -421,82 +426,193 @@ class _AppMainState extends State<AppMain> {
     context.read<AppNavigation>().index = 1;
   }
 
+  void _openVoice() {
+    // The voice route is pushed on the root navigator, above the
+    // account-scoped providers: capture the active account's data layer
+    // here, and dismiss the route if the account changes while open so
+    // the agent can never write to a closed/foreign database.
+    final repositories = context.read<AppRepositories>();
+    final commandFactory = context.read<GeminiVoiceExpenseCommandFactory>();
+    final accountId = context.read<AuthController>().activeAccount?.id;
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => Provider<AppRepositories>.value(
+          value: repositories,
+          child: PopOnAccountSwitch(
+            accountId: accountId,
+            child: VoiceScreen(commandFactory: commandFactory),
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final needsReauth = context.select<AuthController, bool>(
       (a) => a.activeAccount?.requiresReauth ?? false,
     );
     final selectedIndex = context.watch<AppNavigation>().index;
+    final useRail = windowSizeClassOf(context) != WindowSizeClass.compact;
+
+    // Built once per build and placed in exactly one branch below — never
+    // both, or the GlobalKey would be duplicated within a single frame.
+    final tabs = Column(
+      children: [
+        if (needsReauth) const _ReauthBanner(),
+        Expanded(
+          child: IndexedStack(
+            key: _tabStackKey,
+            index: selectedIndex,
+            children: [
+              HomeScreen(onOpenActivity: _openActivityWithFilter),
+              ActivityScreen(
+                initialFilter: _activityFilter,
+                filterRevision: _activityFilterRevision,
+              ),
+              AccountsScreen(),
+              InsightsScreen(),
+            ],
+          ),
+        ),
+      ],
+    );
+
     return Scaffold(
-      body: Column(
-        children: [
-          if (needsReauth) const _ReauthBanner(),
-          Expanded(
-            child: IndexedStack(
-              index: selectedIndex,
+      body: useRail
+          ? Row(
               children: [
-                HomeScreen(onOpenActivity: _openActivityWithFilter),
-                ActivityScreen(
-                  initialFilter: _activityFilter,
-                  filterRevision: _activityFilterRevision,
+                _AgentCenteredRail(
+                  selectedIndex: selectedIndex,
+                  onDestinationSelected: (value) =>
+                      context.read<AppNavigation>().index = value,
+                  onOpenVoice: _openVoice,
                 ),
-                AccountsScreen(),
-                InsightsScreen(),
+                const VerticalDivider(width: 1, thickness: 1),
+                Expanded(child: tabs),
+              ],
+            )
+          : tabs,
+      floatingActionButton: useRail
+          ? null
+          : FloatingActionButton(
+              heroTag: 'voiceFab',
+              onPressed: _openVoice,
+              tooltip: context.l10n.voiceCommands,
+              child: const Text('🤖'),
+            ),
+      bottomNavigationBar: useRail
+          ? null
+          : NavigationBar(
+              selectedIndex: selectedIndex,
+              onDestinationSelected: (value) =>
+                  context.read<AppNavigation>().index = value,
+              destinations: [
+                NavigationDestination(
+                  icon: const Icon(Icons.home_rounded),
+                  label: context.l10n.home,
+                ),
+                NavigationDestination(
+                  icon: const Icon(Icons.calendar_view_month_rounded),
+                  label: context.l10n.activity,
+                ),
+                NavigationDestination(
+                  icon: const Icon(Icons.account_balance_rounded),
+                  label: context.l10n.accounts,
+                ),
+                NavigationDestination(
+                  icon: const Icon(Icons.stacked_line_chart_rounded),
+                  label: context.l10n.insights,
+                ),
+              ],
+            ),
+      floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
+    );
+  }
+}
+
+/// Navigation rail whose voice-agent button sits between the second and third
+/// destination, mirroring the centre-docked FAB of the compact bottom bar.
+///
+/// [NavigationRail] has no slot between destinations, so the four destinations
+/// are split across two rails with the button in the gap. Both halves stay
+/// top-aligned, like a single rail: the upper one is sized to its content with
+/// [IntrinsicHeight] (a rail always fills the height it is given), the lower one
+/// takes the remaining space. Both paint the same surface, and [IntrinsicWidth]
+/// keeps the two halves the same width whatever the labels measure in the
+/// active locale.
+class _AgentCenteredRail extends StatelessWidget {
+  const _AgentCenteredRail({
+    required this.selectedIndex,
+    required this.onDestinationSelected,
+    required this.onOpenVoice,
+  });
+
+  static const int _splitIndex = 2;
+
+  final int selectedIndex;
+  final ValueChanged<int> onDestinationSelected;
+  final VoidCallback onOpenVoice;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = context.l10n;
+    return IntrinsicWidth(
+      child: Column(
+        children: [
+          IntrinsicHeight(
+            child: NavigationRail(
+              selectedIndex: selectedIndex < _splitIndex ? selectedIndex : null,
+              onDestinationSelected: onDestinationSelected,
+              labelType: NavigationRailLabelType.all,
+              groupAlignment: -1,
+              destinations: [
+                NavigationRailDestination(
+                  icon: const Icon(Icons.home_rounded),
+                  label: Text(l10n.home),
+                ),
+                NavigationRailDestination(
+                  icon: const Icon(Icons.calendar_view_month_rounded),
+                  label: Text(l10n.activity),
+                ),
+              ],
+            ),
+          ),
+          // 8 above + the destination's built-in 12 below it, 12 below + the
+          // lower rail's 8 leading spacer: an even 20px gap on both sides.
+          Padding(
+            padding: const EdgeInsets.only(top: 8, bottom: 12),
+            child: FloatingActionButton(
+              heroTag: 'voiceFab',
+              elevation: 0,
+              onPressed: onOpenVoice,
+              tooltip: l10n.voiceCommands,
+              child: const Text('🤖'),
+            ),
+          ),
+          Expanded(
+            child: NavigationRail(
+              selectedIndex: selectedIndex >= _splitIndex
+                  ? selectedIndex - _splitIndex
+                  : null,
+              onDestinationSelected: (value) =>
+                  onDestinationSelected(value + _splitIndex),
+              labelType: NavigationRailLabelType.all,
+              groupAlignment: -1,
+              destinations: [
+                NavigationRailDestination(
+                  icon: const Icon(Icons.account_balance_rounded),
+                  label: Text(l10n.accounts),
+                ),
+                NavigationRailDestination(
+                  icon: const Icon(Icons.stacked_line_chart_rounded),
+                  label: Text(l10n.insights),
+                ),
               ],
             ),
           ),
         ],
       ),
-      floatingActionButton: FloatingActionButton(
-        heroTag: 'voiceFab',
-        onPressed: () {
-          // The voice route is pushed on the root navigator, above the
-          // account-scoped providers: capture the active account's data layer
-          // here, and dismiss the route if the account changes while open so
-          // the agent can never write to a closed/foreign database.
-          final repositories = context.read<AppRepositories>();
-          final commandFactory = context
-              .read<GeminiVoiceExpenseCommandFactory>();
-          final accountId = context.read<AuthController>().activeAccount?.id;
-          Navigator.of(context).push(
-            MaterialPageRoute(
-              builder: (_) => Provider<AppRepositories>.value(
-                value: repositories,
-                child: PopOnAccountSwitch(
-                  accountId: accountId,
-                  child: VoiceScreen(commandFactory: commandFactory),
-                ),
-              ),
-            ),
-          );
-        },
-        tooltip: context.l10n.voiceCommands,
-        child: const Text('🤖'),
-      ),
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: selectedIndex,
-        onDestinationSelected: (value) =>
-            context.read<AppNavigation>().index = value,
-        destinations: [
-          NavigationDestination(
-            icon: const Icon(Icons.home_rounded),
-            label: context.l10n.home,
-          ),
-          NavigationDestination(
-            icon: const Icon(Icons.calendar_view_month_rounded),
-            label: context.l10n.activity,
-          ),
-          NavigationDestination(
-            icon: const Icon(Icons.account_balance_rounded),
-            label: context.l10n.accounts,
-          ),
-          NavigationDestination(
-            icon: const Icon(Icons.stacked_line_chart_rounded),
-            label: context.l10n.insights,
-          ),
-        ],
-      ),
-      floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
     );
   }
 }
