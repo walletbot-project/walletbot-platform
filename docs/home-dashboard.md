@@ -366,4 +366,21 @@ unchanged — only advanced (disjunctive) filters take the anchor+predicate path
 > on native still has that hole and would persist an overlap the resolver then
 > discards to the legacy auto-flow.
 >
+> **A widget must carry a filter (2026-08-21, both clients).** A widget of a
+> transaction-reading type (stat / list / chart) cannot be created without one:
+> the confirm button stays disabled while the filter is empty, and the submit
+> path refuses it a second time (a toast on web, a snackbar on native), the same
+> shape as native's existing title and currency guards. Web also gained the
+> non-empty-title requirement native's `_canSubmit` already had, and trims the
+> title the way native does.
+>
+> The rule exempts a tile *already stored* without a filter — the default seed
+> writes `seed-wgt-recientes` that way in both clients — so that tile stays
+> editable; the exemption is keyed on the stored type, so converting a balance
+> card into a filtered type does not inherit it. Enforcement is client-side
+> only, deliberately: `v1/dashboard/mutations:createWidget` must keep accepting
+> a null `filterId` because `seedDefaultIfEmpty` and the agent's
+> `createDashboardWidget` both write one. Covered by
+> `apps/native/test/components/dashboard/add_widget_sheet_test.dart`.
+>
 > **Still pending:** the advanced (tree) filter editor on web.

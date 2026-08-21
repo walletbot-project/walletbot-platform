@@ -165,8 +165,39 @@ export function WidgetSheet({
     )
 
     const usesFilter = type !== 'balance'
+    /**
+     * Every type that reads transactions needs a filter: a "no filter" tile
+     * reads as the whole ledger and was never meant to be creatable.
+     *
+     * The one exemption is a tile *already stored* without one — the default
+     * dashboard seeds `seed-wgt-recientes` that way (`default-dashboard.ts`,
+     * and native's `default_dashboard.dart`), so requiring one here would
+     * leave that tile un-editable. Turning a balance card into a filtered
+     * type is a new tile as far as this rule goes, and does not inherit it.
+     */
+    const filterExempt =
+        widget !== null &&
+        widget.type !== 'balance' &&
+        isFilterEmpty(existingFilter)
+    const filterMissing = usesFilter && !filterExempt && isFilterEmpty(filter)
+
+    // Native's `_canSubmit` requires a title too; its currency check has no
+    // web counterpart because the balance card's picker is never empty here.
+    const trimmedTitle = title.trim()
+    const titleMissing = trimmedTitle.length === 0
 
     const handleSubmit = async () => {
+        // Checked here as well as on the disabled button, so no other path into
+        // the submit can write an untitled or filterless tile — the same two
+        // guards native's `_submit` raises a snackbar for.
+        if (titleMissing) {
+            toast.error(t.dashboard.titleRequired)
+            return
+        }
+        if (filterMissing) {
+            toast.error(t.dashboard.filterRequired)
+            return
+        }
         setSubmitting(true)
         try {
             let filterId: string | null = widget?.filterId ?? null
@@ -178,7 +209,7 @@ export function WidgetSheet({
                     filterId = newId()
                     await createFilter({
                         id: filterId,
-                        name: title || t.dashboard.widget,
+                        name: trimmedTitle,
                         config,
                     })
                 }
@@ -191,7 +222,7 @@ export function WidgetSheet({
             // with what every client displays.
             const parsedLimit = Number.parseInt(limit, 10)
             const options = mergeWidgetOptions(widget?.options ?? '', {
-                title,
+                title: trimmedTitle,
                 ...(type === 'stat' ? { aggregation } : {}),
                 ...(type === 'list'
                     ? { limit: parsedLimit > 0 ? parsedLimit : 5 }
@@ -349,6 +380,11 @@ export function WidgetSheet({
                             onClick={() => setFilterOpen(true)}
                             disabled={submitting}
                         />
+                        {filterMissing ? (
+                            <p className="m3-body-small px-4 text-error">
+                                {t.dashboard.filterRequired}
+                            </p>
+                        ) : null}
                     </Section>
                 ) : null}
 
@@ -373,7 +409,7 @@ export function WidgetSheet({
                 <Button
                     variant="filled"
                     className="w-full"
-                    isDisabled={submitting}
+                    isDisabled={submitting || titleMissing || filterMissing}
                     onPress={() => void handleSubmit()}
                 >
                     {submitting ? (

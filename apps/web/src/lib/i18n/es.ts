@@ -183,6 +183,8 @@ export const es = {
         filter: 'Filtro',
         filterConfigured: 'Filtro configurado',
         noFilter: 'Sin filtro',
+        filterRequired: 'Elegí un filtro para este widget',
+        titleRequired: 'Ingresá un título para este widget',
 
         width: 'Ancho',
         widthThird: '1/3',

@@ -176,6 +176,8 @@ export const en: Messages = {
         filter: 'Filter',
         filterConfigured: 'Filter configured',
         noFilter: 'No filter',
+        filterRequired: 'Choose a filter for this widget',
+        titleRequired: 'Enter a title for this widget',
 
         width: 'Width',
         widthThird: '1/3',
