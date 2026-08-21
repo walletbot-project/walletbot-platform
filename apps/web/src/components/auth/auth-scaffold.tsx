@@ -6,13 +6,15 @@ import { useT } from '@/lib/i18n'
 
 /**
  * The auth screens' page frame, porting the native login `Scaffold`: the
- * painted backdrop under a top-aligned 480px column.
+ * painted backdrop under a 480px column. Web centres that column in the
+ * viewport instead of pinning it to the top, and falls back to top-aligned
+ * scrolling once the panel is taller than the window.
  */
 export function AuthScaffold({ children }: { children: ReactNode }) {
     return (
-        <div className="relative min-h-dvh overflow-y-auto px-5 pt-3 pb-7">
+        <div className="relative flex min-h-dvh flex-col overflow-y-auto px-5 py-7">
             <AuthBackdrop />
-            <div className="mx-auto flex w-full max-w-120 flex-col">
+            <div className="mx-auto my-auto flex w-full max-w-120 flex-col">
                 {children}
             </div>
         </div>
