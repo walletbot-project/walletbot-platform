@@ -19,6 +19,7 @@ new version namespace and an explicit client migration.
 | Sync | `getCounter`, `pull` | `push` |
 | Live | — | `requestLiveToken` action |
 | Voice | — | `appendEvents` mutation |
+| Legal | `getMyAcceptance` | `accept` |
 
 The native dashboard and saved-filter records are part of the V1 sync payload;
 they are read through `v1/sync/queries:pull` and written through

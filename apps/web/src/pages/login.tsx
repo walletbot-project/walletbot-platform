@@ -1,3 +1,4 @@
+import { CURRENT_LEGAL_VERSION } from '@wallet-bot/shared'
 import { Button } from 'actify'
 import { type FormEvent, useEffect, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
@@ -12,6 +13,7 @@ import {
     AuthPrimaryButton,
     AuthTextField,
 } from '@/components/auth/auth-scaffold'
+import { TermsCheckbox } from '@/components/auth/terms-checkbox'
 import { authClient } from '@/lib/auth-client'
 import { useT } from '@/lib/i18n'
 import { ForgotPasswordPanel } from '@/pages/auth/forgot-password-panel'
@@ -103,12 +105,22 @@ export function Login({ mode }: { mode: AuthMode }) {
                 return
             }
 
+            // The submit button stays disabled until the box is ticked; this
+            // guards the FormData path against anything that bypasses it.
+            if (formData.get('termsAccepted') !== 'accepted') {
+                setError(t.auth.termsRequired)
+                return
+            }
+
             // No callbackURL: the verification link's landing page is
             // canonicalized server-side to /verify-email.
             const result = await authClient.signUp.email({
                 name: name || email,
                 email,
                 password,
+                // Recorded against the real user insert by the user-create
+                // hook (packages/backend/convex/auth.ts).
+                termsAcceptedVersion: CURRENT_LEGAL_VERSION,
             })
 
             if (result.error) {
@@ -188,6 +200,7 @@ function CredentialsPanel({
     const t = useT()
     const submitting = loading !== null
     const nameRef = useRef<HTMLDivElement>(null)
+    const [termsAccepted, setTermsAccepted] = useState(false)
 
     // The name field only exists in sign-up; focus it when it appears so the
     // mode switch lands the caret where typing continues.
@@ -252,7 +265,11 @@ function CredentialsPanel({
                         </Button>
                     </div>
                 ) : (
-                    <div className="h-1" />
+                    <TermsCheckbox
+                        isSelected={termsAccepted}
+                        onChange={setTermsAccepted}
+                        isDisabled={submitting}
+                    />
                 )}
 
                 {error ? <AuthErrorNote message={error} /> : null}
@@ -260,6 +277,7 @@ function CredentialsPanel({
                 <AuthPrimaryButton
                     type="submit"
                     submitting={loading === 'email'}
+                    isDisabled={mode === 'sign-up' && !termsAccepted}
                     label={mode === 'sign-in' ? t.auth.signIn : t.auth.signUp}
                 />
 

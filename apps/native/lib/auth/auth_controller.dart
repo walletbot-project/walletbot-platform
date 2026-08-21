@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:app/auth/account.dart';
 import 'package:app/config.dart';
 import 'package:app/database.dart';
+import 'package:app/legal/terms_acceptance.dart';
 import 'package:convex_flutter/convex_flutter.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -53,14 +54,24 @@ class AuthController extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<UserAccount> signInWithGoogle({bool rejectExisting = false}) async {
+  /// [termsAcceptedVersion] carries the legal-documents version the user
+  /// accepted on the sign-up panel; the backend records it only when this
+  /// sign-in actually creates the account. Accounts that end up without a
+  /// record are re-prompted by the in-app acceptance gate.
+  Future<UserAccount> signInWithGoogle({
+    bool rejectExisting = false,
+    String? termsAcceptedVersion,
+  }) async {
     final googleAccount = await GoogleSignIn.instance.authenticate();
     final idToken = googleAccount.authentication.idToken;
     if (idToken == null) {
       throw StateError('Google sign-in returned no idToken');
     }
 
-    final body = await _postJson('/auth/google', {'idToken': idToken});
+    final body = await _postJson('/auth/google', {
+      'idToken': idToken,
+      'termsAcceptedVersion': ?termsAcceptedVersion,
+    });
     return _saveRemoteAccountFromAuthResponse(
       body,
       rejectExisting: rejectExisting,
@@ -91,11 +102,13 @@ class AuthController extends ChangeNotifier {
     required String email,
     required String password,
     bool rejectExisting = false,
+    String? termsAcceptedVersion,
   }) async {
     final body = await _postJson('/auth/email/sign-up', {
       'name': name,
       'email': email,
       'password': password,
+      'termsAcceptedVersion': ?termsAcceptedVersion,
     });
     return _saveRemoteAccountFromAuthResponse(
       body,
@@ -116,13 +129,29 @@ class AuthController extends ChangeNotifier {
     await _postJson('/auth/email/resend-verification', {'email': email});
   }
 
-  Future<UserAccount> addLocal({required String name}) async {
+  /// [termsAcceptedVersion] is the legal-documents version accepted on the
+  /// local panel. Local accounts have no backend user, so the record lives
+  /// device-side, and it must be written BEFORE the account activates: the
+  /// notify below rebuilds `_AuthGate`, whose acceptance controller reads the
+  /// record immediately — writing later would race it into a spurious
+  /// re-prompt.
+  Future<UserAccount> addLocal({
+    required String name,
+    String? termsAcceptedVersion,
+  }) async {
     final trimmedName = name.trim();
     if (trimmedName.isEmpty) {
       throw ArgumentError.value(name, 'name', 'Local accounts require a name');
     }
 
     final id = 'local_${DateTime.now().microsecondsSinceEpoch}';
+    if (termsAcceptedVersion != null) {
+      await writeTermsAcceptanceRecord(
+        _storage,
+        accountId: id,
+        documentVersion: termsAcceptedVersion,
+      );
+    }
     final account = UserAccount(
       id: id,
       type: AccountType.local,
@@ -164,6 +193,8 @@ class AuthController extends ChangeNotifier {
     }
     // TODO: guard against unsynced data once sync is wired up.
     await AppDatabase.deleteForUser(id);
+    // Device-side acceptance cache only — the server keeps the legal record.
+    await _storage.delete(key: termsAcceptanceCacheKey(id));
     _accounts = _accounts.where((a) => a.id != id).toList();
     if (_activeId == id) {
       _activeId = null;
@@ -183,6 +214,9 @@ class AuthController extends ChangeNotifier {
       throw StateError('deleteLocal called on non-local account: $id');
     }
     await AppDatabase.deleteForUser(id);
+    // For a local account this IS the acceptance record; it dies with the
+    // account, exactly like the rest of its on-device data.
+    await _storage.delete(key: termsAcceptanceCacheKey(id));
     _accounts = _accounts.where((a) => a.id != id).toList();
     if (_activeId == id) _activeId = null;
     await _persist();

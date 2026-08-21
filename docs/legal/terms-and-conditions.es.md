@@ -7,7 +7,7 @@
 
 ## 1. Aceptación de estos Términos
 
-Estos Términos y Condiciones (los "**Términos**") constituyen un acuerdo vinculante entre usted ("**usted**", el "**Usuario**") y **[NOMBRE LEGAL DEL RESPONSABLE]**, con domicilio en [DOMICILIO DEL RESPONSABLE, ARGENTINA] ("**Wallet Bot**", "**nosotros**"), que rige el uso de las aplicaciones y servicios de Wallet Bot (el "**Servicio**").
+Estos Términos y Condiciones (los "**Términos**") constituyen un acuerdo vinculante entre usted ("**usted**", el "**Usuario**") y **Tomás Cichero**, con domicilio en Estanislao del Campo 1260, B1604ADH Florida Oeste, Provincia de Buenos Aires, Argentina ("**Wallet Bot**", "**nosotros**"), que rige el uso de las aplicaciones y servicios de Wallet Bot (el "**Servicio**").
 
 Usted acepta estos Términos manifestando expresamente su aceptación al crear una cuenta o, en el caso del uso en modo local, al usar la aplicación por primera vez. La mera navegación de nuestro sitio web no crea por sí sola un contrato; siempre solicitaremos su aceptación afirmativa. Si no está de acuerdo con estos Términos, no utilice el Servicio.
 
@@ -154,6 +154,6 @@ Estos Términos se otorgan en español y en inglés. Para los consumidores resid
 
 ## 21. Contacto
 
-**[NOMBRE LEGAL DEL RESPONSABLE]**
-[DOMICILIO DEL RESPONSABLE, ARGENTINA]
+**Tomás Cichero**
+Estanislao del Campo 1260, B1604ADH Florida Oeste, Provincia de Buenos Aires, Argentina
 support@walletbot.live

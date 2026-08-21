@@ -1,3 +1,4 @@
+import { isValidLegalVersion } from '@wallet-bot/shared'
 import { APIError } from 'better-auth/api'
 import type { HttpRouter } from 'convex/server'
 import { internal } from '../_generated/api'
@@ -71,6 +72,7 @@ type GoogleSignInBody = {
     idToken?: string
     accessToken?: string
     nonce?: string
+    termsAcceptedVersion?: string
 }
 
 type EmailSignInBody = {
@@ -80,7 +82,19 @@ type EmailSignInBody = {
 
 type EmailSignUpBody = EmailSignInBody & {
     name?: string
+    termsAcceptedVersion?: string
 }
+
+// Legal-documents version the client showed next to its acceptance checkbox.
+// Only well-formed values travel further; anything else is treated as absent
+// and the post-auth gate re-prompts the account.
+const getTermsAcceptedVersion = (
+    body: { termsAcceptedVersion?: string } | null,
+): string | undefined =>
+    typeof body?.termsAcceptedVersion === 'string' &&
+    isValidLegalVersion(body.termsAcceptedVersion)
+        ? body.termsAcceptedVersion
+        : undefined
 
 type NativeAuthUser = {
     id: string
@@ -179,6 +193,20 @@ const googleSignIn = corsHttpAction(async (ctx, req) => {
                 authMethod: 'google',
             },
         )
+        // Google account creation happens through the sign-in call, so the
+        // acceptance ticked on the native sign-up panel arrives here rather
+        // than through /sign-up/email. Recorded only for genuinely new users;
+        // existing accounts without a record hit the post-auth gate instead.
+        const termsAcceptedVersion = getTermsAcceptedVersion(body)
+        if (termsAcceptedVersion) {
+            await ctx.runMutation(
+                internal.legal.internal.recordSignupAcceptance,
+                {
+                    userId: result.user.id,
+                    documentVersion: termsAcceptedVersion,
+                },
+            )
+        }
     }
 
     return issueNativeSession(ctx, req, result.user)
@@ -304,12 +332,17 @@ const emailSignUp = corsHttpAction(async (ctx, req) => {
         )
     }
 
+    const termsAcceptedVersion = getTermsAcceptedVersion(body)
+
     try {
         const result = await auth.api.signUpEmail({
             body: {
                 name,
                 email: parsed.email,
                 password: parsed.password,
+                // Declared as a better-auth `additionalFields` entry; the
+                // user-create hook in auth.ts records the acceptance.
+                ...(termsAcceptedVersion ? { termsAcceptedVersion } : {}),
             },
             headers,
         })

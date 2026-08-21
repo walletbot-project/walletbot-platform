@@ -132,6 +132,19 @@ export const en: Messages = {
         verifyFailedTitle: 'We could not verify your email',
         verifyFailedDescription:
             'The link is not valid. Sign in again to receive a new one.',
+
+        termsAge18Prefix: 'I am 18 or older and I accept the ',
+        termsLinkLabel: 'Terms and Conditions',
+        termsAnd: ' and the ',
+        privacyLinkLabel: 'Privacy Policy',
+        termsRequired:
+            'You must accept the Terms and the Privacy Policy to create your account.',
+        termsGateSubtitle: 'Review the terms to continue',
+        termsGateTitle: 'Terms and privacy',
+        termsGateDescription:
+            'To keep using Wallet Bot, accept the Terms and Conditions and the Privacy Policy.',
+        termsContinue: 'Continue',
+        termsAcceptFailed: 'Could not record your acceptance. Try again.',
     },
 
     dashboard: {

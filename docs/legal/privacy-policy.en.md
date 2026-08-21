@@ -11,8 +11,8 @@ Wallet Bot ("**Wallet Bot**", the "**Service**", "**we**", "**us**", "**our**") 
 
 The controller of the personal-data database (the "responsable de la base de datos" under Argentine Law No. 25,326 on Personal Data Protection) is:
 
-- **Controller:** [CONTROLLER LEGAL NAME]
-- **Domicile:** [CONTROLLER ADDRESS, ARGENTINA]
+- **Controller:** Tomás Cichero
+- **Domicile:** Estanislao del Campo 1260, B1604ADH Florida Oeste, Provincia de Buenos Aires, Argentina
 - **Contact for privacy matters:** support@walletbot.live
 
 ## 2. Scope
@@ -107,7 +107,7 @@ We share personal data only with the processors needed to run the Service, under
 | Resend, Inc. (USA) | Transactional email delivery | Recipient email address, display name, message content |
 | Cloudflare, Inc. (USA) | Web application hosting / CDN | Standard web request logs (IP address, user-agent) |
 | Grafana Labs (USA) | Observability platform — storage of usage metrics and diagnostic events | Usage/diagnostic events and metrics, including random installation and session identifiers, an internal user identifier, app version and platform |
-| [ANALYTICS / CRASH-REPORTING PROVIDER] | Usage analytics and crash reporting | Usage events, device and app information, crash/diagnostic reports |
+| Google LLC (USA) — Firebase | Usage analytics and crash reporting (Firebase Analytics, Crashlytics) | Usage events, device and app information, crash/diagnostic reports |
 
 We may also disclose personal data if required to do so by law, court order or competent authority, or to protect the rights, safety and security of Wallet Bot, our users or third parties. If the Service is transferred as part of a merger, acquisition or asset sale, your data may be transferred with it; we will notify you before your data becomes subject to a different privacy policy.
 
@@ -133,7 +133,7 @@ You may revoke this consent at any time (without retroactive effect) by deleting
 | Account-deletion requests (email + confirmation token hash) | Deleted when the deletion completes; expired requests become invalid and can no longer be used |
 | Post-deletion security record | After deletion completes we retain only an internal random account identifier and the deletion timestamp, so that credentials previously issued to the deleted account can never be used again. This record contains no name, email or financial data |
 | Security and error logs | Short, rolling retention on our backend platform |
-| Usage analytics and crash/diagnostic data | [ANALYTICS RETENTION PERIOD — to be defined with the analytics provider] |
+| Usage analytics and crash/diagnostic data | Up to **14 months** (analytics user-level data) and **90 days** (crash reports), per Google Firebase's data-retention settings |
 
 ## 10. Account deletion
 
@@ -207,5 +207,5 @@ We may update this Policy as the Service evolves. If we make material changes, w
 ## 18. Contact
 
 - **Privacy and data-protection requests:** support@walletbot.live
-- **Controller:** [CONTROLLER LEGAL NAME], [CONTROLLER ADDRESS, ARGENTINA]
+- **Controller:** Tomás Cichero, Estanislao del Campo 1260, B1604ADH Florida Oeste, Provincia de Buenos Aires, Argentina
 - **Supervisory authority (Argentina):** Agencia de Acceso a la Información Pública — `https://www.argentina.gob.ar/aaip`

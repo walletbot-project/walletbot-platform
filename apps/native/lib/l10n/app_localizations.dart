@@ -2569,6 +2569,54 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Tap to try again'**
   String get tapToRetry;
+
+  /// No description provided for @termsAge18Prefix.
+  ///
+  /// In en, this message translates to:
+  /// **'I am 18 or older and I accept the '**
+  String get termsAge18Prefix;
+
+  /// No description provided for @termsLinkLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Terms and Conditions'**
+  String get termsLinkLabel;
+
+  /// No description provided for @termsAnd.
+  ///
+  /// In en, this message translates to:
+  /// **' and the '**
+  String get termsAnd;
+
+  /// No description provided for @privacyLinkLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Privacy Policy'**
+  String get privacyLinkLabel;
+
+  /// No description provided for @termsGateTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Terms and privacy'**
+  String get termsGateTitle;
+
+  /// No description provided for @termsGateDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'To keep using Wallet Bot, accept the Terms and Conditions and the Privacy Policy.'**
+  String get termsGateDescription;
+
+  /// No description provided for @termsContinue.
+  ///
+  /// In en, this message translates to:
+  /// **'Continue'**
+  String get termsContinue;
+
+  /// No description provided for @termsAcceptFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not record your acceptance. Try again.'**
+  String get termsAcceptFailed;
 }
 
 class _AppLocalizationsDelegate

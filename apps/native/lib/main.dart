@@ -10,11 +10,13 @@ import 'package:app/config.dart';
 import 'package:app/data/data.dart';
 import 'package:app/database.dart';
 import 'package:app/l10n/l10n.dart';
+import 'package:app/legal/terms_acceptance.dart';
 import 'package:app/screens/accounts.dart';
 import 'package:app/screens/activity.dart';
 import 'package:app/screens/home.dart';
 import 'package:app/screens/insights.dart';
 import 'package:app/screens/login.dart';
+import 'package:app/screens/terms_acceptance.dart';
 import 'package:app/screens/voice.dart';
 import 'package:app/settings/display_settings.dart';
 import 'package:app/shared/app_navigation.dart';
@@ -303,6 +305,20 @@ class _AuthGate extends StatelessWidget {
             return controller;
           },
         ),
+        // Legal-documents acceptance state driving `_TermsGate` below. Local
+        // accounts resolve purely on-device; remote accounts ask the backend
+        // once Convex auth attaches. Scoped per account (like the database)
+        // so a verdict never leaks across account switches.
+        ChangeNotifierProvider<TermsAcceptanceController>(
+          create: (_) {
+            final controller = TermsAcceptanceController(
+              accountId: active.id,
+              isRemote: active.type == AccountType.remote,
+            );
+            unawaited(controller.load());
+            return controller;
+          },
+        ),
         // The app-facing data layer: all reads/writes from screens and the
         // voice agent go through this. Scoped to the account subtree so it is
         // recreated together with the database on account switch.
@@ -364,8 +380,46 @@ class _AuthGate extends StatelessWidget {
           ),
         ),
       ],
-      child: const _SyncStarter(child: AppMain()),
+      child: const _TermsGate(child: _SyncStarter(child: AppMain())),
     );
+  }
+}
+
+/// Blocks the app with [TermsAcceptanceScreen] when the active account has no
+/// recorded acceptance of the current legal documents. Offline-first: only a
+/// definitive "not accepted" blocks — while the remote verdict is unknown
+/// (offline, check pending) the app stays fully usable, and the next launch
+/// re-checks. Local accounts resolve entirely on-device, so their gate works
+/// with no connectivity at all.
+class _TermsGate extends StatefulWidget {
+  const _TermsGate({required this.child});
+  final Widget child;
+
+  @override
+  State<_TermsGate> createState() => _TermsGateState();
+}
+
+class _TermsGateState extends State<_TermsGate> {
+  @override
+  Widget build(BuildContext context) {
+    final terms = context.watch<TermsAcceptanceController>();
+    final auth = context.watch<AuthController>();
+
+    // Remote accounts need Convex auth attached before the server can be
+    // asked; `checkRemote` self-limits to one round-trip per controller life.
+    if (terms.isRemote &&
+        terms.status == TermsGateStatus.unknown &&
+        auth.convexAuthenticated) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        unawaited(context.read<TermsAcceptanceController>().checkRemote());
+      });
+    }
+
+    if (terms.status == TermsGateStatus.required) {
+      return const TermsAcceptanceScreen();
+    }
+    return widget.child;
   }
 }
 

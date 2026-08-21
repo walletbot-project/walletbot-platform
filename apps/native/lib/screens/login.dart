@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:app/app_config/app_config_banner_list.dart';
 import 'package:app/auth/auth_controller.dart';
 import 'package:app/l10n/l10n.dart';
+import 'package:app/legal/terms_acceptance.dart';
+import 'package:app/legal/terms_checkbox.dart';
 import 'package:app/telemetry/business_metrics.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
@@ -48,6 +50,12 @@ class _LoginScreenState extends State<LoginScreen> {
   _RemoteFlow _remoteFlow = _RemoteFlow.credentials;
   bool _submitting = false;
 
+  /// Affirmative acceptance of the legal documents, one flag per panel that
+  /// shows the checkbox (remote sign-up, local account creation). The submit
+  /// buttons stay disabled until ticked.
+  bool _remoteTermsAccepted = false;
+  bool _localTermsAccepted = false;
+
   /// Email echoed in the pending/sent copy of the new flows.
   String _pendingEmail = '';
 
@@ -84,6 +92,9 @@ class _LoginScreenState extends State<LoginScreen> {
 
   Future<void> _submitRemote() async {
     if (!_remoteFormKey.currentState!.validate()) return;
+    // The button is disabled until the box is ticked; this guards anything
+    // that bypasses it (e.g. keyboard submit from the password field).
+    if (_emailMode == _EmailAuthMode.signUp && !_remoteTermsAccepted) return;
 
     setState(() => _submitting = true);
     final messenger = ScaffoldMessenger.of(context);
@@ -105,6 +116,7 @@ class _LoginScreenState extends State<LoginScreen> {
           email: email,
           password: password,
           rejectExisting: widget.canDismiss,
+          termsAcceptedVersion: currentLegalVersion,
         );
       }
     } on AccountAlreadyAddedError {
@@ -212,6 +224,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
   Future<void> _submitLocal() async {
     if (!_localFormKey.currentState!.validate()) return;
+    if (!_localTermsAccepted) return;
 
     setState(() => _submitting = true);
     final messenger = ScaffoldMessenger.of(context);
@@ -219,7 +232,10 @@ class _LoginScreenState extends State<LoginScreen> {
     final businessMetrics = context.read<BusinessMetrics?>();
     final l10n = context.l10n;
     try {
-      await auth.addLocal(name: _localNameController.text.trim());
+      await auth.addLocal(
+        name: _localNameController.text.trim(),
+        termsAcceptedVersion: currentLegalVersion,
+      );
       businessMetrics?.userAccountCreated(authMethod: 'local');
     } catch (e) {
       messenger.showSnackBar(
@@ -235,8 +251,15 @@ class _LoginScreenState extends State<LoginScreen> {
     final messenger = ScaffoldMessenger.of(context);
     final l10n = context.l10n;
     try {
+      // In sign-up mode the ticked checkbox travels with the request and the
+      // backend records it if this creates the account; otherwise a new
+      // Google user is caught by the post-auth acceptance gate.
       await context.read<AuthController>().signInWithGoogle(
         rejectExisting: widget.canDismiss,
+        termsAcceptedVersion:
+            _emailMode == _EmailAuthMode.signUp && _remoteTermsAccepted
+            ? currentLegalVersion
+            : null,
       );
     } on GoogleSignInException catch (e) {
       // The user dismissing the Google sheet isn't an error worth surfacing.
@@ -299,6 +322,10 @@ class _LoginScreenState extends State<LoginScreen> {
                                     nameController: _remoteNameController,
                                     emailController: _emailController,
                                     passwordController: _passwordController,
+                                    termsAccepted: _remoteTermsAccepted,
+                                    onTermsChanged: (value) => setState(
+                                      () => _remoteTermsAccepted = value,
+                                    ),
                                     onModeChanged: (mode) =>
                                         setState(() => _emailMode = mode),
                                     onSubmit: _submitRemote,
@@ -329,6 +356,9 @@ class _LoginScreenState extends State<LoginScreen> {
                                 submitting: _submitting,
                                 formKey: _localFormKey,
                                 nameController: _localNameController,
+                                termsAccepted: _localTermsAccepted,
+                                onTermsChanged: (value) =>
+                                    setState(() => _localTermsAccepted = value),
                                 onSubmit: _submitLocal,
                               ),
                             ),
@@ -667,6 +697,8 @@ class _RemoteLoginPanel extends StatelessWidget {
     required this.nameController,
     required this.emailController,
     required this.passwordController,
+    required this.termsAccepted,
+    required this.onTermsChanged,
     required this.onModeChanged,
     required this.onSubmit,
     required this.onGoogle,
@@ -679,6 +711,8 @@ class _RemoteLoginPanel extends StatelessWidget {
   final TextEditingController nameController;
   final TextEditingController emailController;
   final TextEditingController passwordController;
+  final bool termsAccepted;
+  final ValueChanged<bool> onTermsChanged;
   final ValueChanged<_EmailAuthMode> onModeChanged;
   final VoidCallback onSubmit;
   final VoidCallback onGoogle;
@@ -778,13 +812,19 @@ class _RemoteLoginPanel extends StatelessWidget {
                             child: Text(context.l10n.forgotPassword),
                           ),
                         )
-                      : const SizedBox(
-                          key: ValueKey('no-forgot-password'),
-                          height: 16,
+                      : Padding(
+                          key: const ValueKey('signup-terms'),
+                          padding: const EdgeInsets.only(top: 10, bottom: 6),
+                          child: TermsAcceptanceCheckbox(
+                            value: termsAccepted,
+                            enabled: !submitting,
+                            onChanged: onTermsChanged,
+                          ),
                         ),
                 ),
                 _PrimaryActionButton(
                   submitting: submitting,
+                  enabled: mode == _EmailAuthMode.signIn || termsAccepted,
                   label: mode.primaryButtonLabel(context.l10n),
                   onPressed: onSubmit,
                 ),
@@ -847,12 +887,16 @@ class _LocalLoginPanel extends StatelessWidget {
     required this.submitting,
     required this.formKey,
     required this.nameController,
+    required this.termsAccepted,
+    required this.onTermsChanged,
     required this.onSubmit,
   });
 
   final bool submitting;
   final GlobalKey<FormState> formKey;
   final TextEditingController nameController;
+  final bool termsAccepted;
+  final ValueChanged<bool> onTermsChanged;
   final VoidCallback onSubmit;
 
   @override
@@ -884,9 +928,19 @@ class _LocalLoginPanel extends StatelessWidget {
                 return null;
               },
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 10),
+            // T&C §1 requires affirmative acceptance also "when first using
+            // the app" without an account — this is that acceptance; the
+            // record stays on the device (docs/legal/README.md TODO #8).
+            TermsAcceptanceCheckbox(
+              value: termsAccepted,
+              enabled: !submitting,
+              onChanged: onTermsChanged,
+            ),
+            const SizedBox(height: 12),
             _PrimaryActionButton(
               submitting: submitting,
+              enabled: termsAccepted,
               label: context.l10n.continueLocally,
               onPressed: onSubmit,
             ),
@@ -1084,18 +1138,22 @@ class _PrimaryActionButton extends StatelessWidget {
     required this.submitting,
     required this.label,
     required this.onPressed,
+    this.enabled = true,
   });
 
   final bool submitting;
   final String label;
   final VoidCallback onPressed;
 
+  /// Blocks the action beyond [submitting], e.g. an unticked required box.
+  final bool enabled;
+
   @override
   Widget build(BuildContext context) {
     return SizedBox(
       height: 54,
       child: FilledButton(
-        onPressed: submitting ? null : onPressed,
+        onPressed: submitting || !enabled ? null : onPressed,
         style: FilledButton.styleFrom(
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(16),

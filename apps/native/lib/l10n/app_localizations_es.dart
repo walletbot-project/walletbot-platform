@@ -1390,4 +1390,30 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get tapToRetry => 'Tocá para volver a intentar';
+
+  @override
+  String get termsAge18Prefix => 'Tengo 18 años o más y acepto los ';
+
+  @override
+  String get termsLinkLabel => 'Términos y Condiciones';
+
+  @override
+  String get termsAnd => ' y la ';
+
+  @override
+  String get privacyLinkLabel => 'Política de Privacidad';
+
+  @override
+  String get termsGateTitle => 'Términos y privacidad';
+
+  @override
+  String get termsGateDescription =>
+      'Para seguir usando Wallet Bot, aceptá los Términos y Condiciones y la Política de Privacidad.';
+
+  @override
+  String get termsContinue => 'Continuar';
+
+  @override
+  String get termsAcceptFailed =>
+      'No se pudo registrar tu aceptación. Probá de nuevo.';
 }

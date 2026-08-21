@@ -1383,4 +1383,30 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get tapToRetry => 'Tap to try again';
+
+  @override
+  String get termsAge18Prefix => 'I am 18 or older and I accept the ';
+
+  @override
+  String get termsLinkLabel => 'Terms and Conditions';
+
+  @override
+  String get termsAnd => ' and the ';
+
+  @override
+  String get privacyLinkLabel => 'Privacy Policy';
+
+  @override
+  String get termsGateTitle => 'Terms and privacy';
+
+  @override
+  String get termsGateDescription =>
+      'To keep using Wallet Bot, accept the Terms and Conditions and the Privacy Policy.';
+
+  @override
+  String get termsContinue => 'Continue';
+
+  @override
+  String get termsAcceptFailed =>
+      'Could not record your acceptance. Try again.';
 }

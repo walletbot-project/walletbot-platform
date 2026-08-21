@@ -1,4 +1,5 @@
 import { Navigate, Outlet, useLocation } from 'react-router-dom'
+import { TermsGate } from '@/components/auth/terms-gate'
 import { AuthProvider } from '@/components/layout/auth-provider'
 import { VoiceProvider } from '@/components/layout/voice-provider'
 import { useCachedSession } from '@/hooks/use-cached-session'
@@ -16,12 +17,19 @@ export function AuthGuard() {
     return (
         <AuthProvider>
             {/*
-             * Above the router, so the assistant conversation survives every
-             * navigation, and inside AuthProvider, so it ends with the account.
+             * TermsGate blocks the whole app until the account has accepted
+             * the current legal documents; it needs the session, so it sits
+             * inside AuthProvider and above everything else.
              */}
-            <VoiceProvider>
-                <Outlet />
-            </VoiceProvider>
+            <TermsGate>
+                {/*
+                 * Above the router, so the assistant conversation survives every
+                 * navigation, and inside AuthProvider, so it ends with the account.
+                 */}
+                <VoiceProvider>
+                    <Outlet />
+                </VoiceProvider>
+            </TermsGate>
         </AuthProvider>
     )
 }

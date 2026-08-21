@@ -47,6 +47,18 @@ export const createAuth = (ctx: GenericCtx<DataModel>) => {
         baseURL: convexSiteUrl,
         trustedOrigins: [siteUrl, 'flutter://'],
         database: authComponent.adapter(ctx),
+        user: {
+            additionalFields: {
+                // Legal-documents version the client showed at sign-up.
+                // Carried through /sign-up/email so the create hook below can
+                // record the acceptance against the real user insert; the
+                // canonical record lives in the `termsAcceptances` table.
+                termsAcceptedVersion: {
+                    type: 'string',
+                    required: false,
+                },
+            },
+        },
         emailAndPassword: {
             enabled: true,
             requireEmailVerification: true,
@@ -91,6 +103,25 @@ export const createAuth = (ctx: GenericCtx<DataModel>) => {
                                 authMethod: 'email_password',
                             },
                         )
+                        // Terms acceptance ticked on the sign-up form (web
+                        // client and the native /auth/email/sign-up endpoint
+                        // both pass it through the sign-up body). Recording
+                        // hangs off the real insert for the same reason as
+                        // the telemetry above; accounts created without it
+                        // are re-prompted by the post-auth gate.
+                        const termsAcceptedVersion = user.termsAcceptedVersion
+                        if (
+                            typeof termsAcceptedVersion === 'string' &&
+                            termsAcceptedVersion.length > 0
+                        ) {
+                            await requireRunMutationCtx(ctx).runMutation(
+                                internal.legal.internal.recordSignupAcceptance,
+                                {
+                                    userId: user.id,
+                                    documentVersion: termsAcceptedVersion,
+                                },
+                            )
+                        }
                     },
                 },
             },

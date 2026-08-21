@@ -11,8 +11,8 @@ Wallet Bot ("**Wallet Bot**", el "**Servicio**", "**nosotros**") es una aplicaci
 
 El responsable de la base de datos en los términos de la Ley N° 25.326 de Protección de los Datos Personales es:
 
-- **Responsable:** [NOMBRE LEGAL DEL RESPONSABLE]
-- **Domicilio:** [DOMICILIO DEL RESPONSABLE, ARGENTINA]
+- **Responsable:** Tomás Cichero
+- **Domicilio:** Estanislao del Campo 1260, B1604ADH Florida Oeste, Provincia de Buenos Aires, Argentina
 - **Contacto para asuntos de privacidad:** support@walletbot.live
 
 ## 2. Alcance
@@ -107,7 +107,7 @@ Compartimos datos personales únicamente con los encargados de tratamiento neces
 | Resend, Inc. (EE. UU.) | Envío de correos transaccionales | Dirección de correo del destinatario, nombre para mostrar, contenido del mensaje |
 | Cloudflare, Inc. (EE. UU.) | Alojamiento / CDN de la aplicación web | Registros estándar de solicitudes web (dirección IP, user-agent) |
 | Grafana Labs (EE. UU.) | Plataforma de observabilidad — almacenamiento de métricas de uso y eventos de diagnóstico | Eventos y métricas de uso/diagnóstico, incluidos identificadores aleatorios de instalación y de sesión, un identificador interno de usuario, versión de la aplicación y plataforma |
-| [PROVEEDOR DE ANALÍTICA / REPORTES DE FALLOS] | Analítica de uso y reportes de fallos | Eventos de uso, información del dispositivo y de la aplicación, reportes de fallos/diagnóstico |
+| Google LLC (EE. UU.) — Firebase | Analítica de uso y reportes de fallos (Firebase Analytics, Crashlytics) | Eventos de uso, información del dispositivo y de la aplicación, reportes de fallos/diagnóstico |
 
 También podremos divulgar datos personales si así lo exige la ley, una orden judicial o una autoridad competente, o para proteger los derechos, la seguridad y la integridad de Wallet Bot, de nuestros usuarios o de terceros. Si el Servicio se transfiriera en el marco de una fusión, adquisición o venta de activos, sus datos podrán transferirse con él; le notificaremos antes de que sus datos queden sujetos a una política de privacidad distinta.
 
@@ -133,7 +133,7 @@ Usted puede revocar este consentimiento en cualquier momento (sin efectos retroa
 | Solicitudes de eliminación de cuenta (correo + hash del token de confirmación) | Se eliminan al completarse la eliminación; las solicitudes vencidas quedan sin validez y no pueden volver a usarse |
 | Registro de seguridad posterior a la eliminación | Tras completarse la eliminación conservamos únicamente un identificador interno aleatorio de la cuenta y la fecha de eliminación, para que las credenciales emitidas a la cuenta eliminada no puedan volver a usarse jamás. Este registro no contiene nombre, correo ni datos financieros |
 | Registros de seguridad y errores | Retención breve y rotativa en nuestra plataforma de backend |
-| Datos de analítica de uso y de fallos/diagnóstico | [PLAZO DE CONSERVACIÓN DE ANALÍTICA — a definir con el proveedor de analítica] |
+| Datos de analítica de uso y de fallos/diagnóstico | Hasta **14 meses** (datos de analítica a nivel de usuario) y **90 días** (reportes de fallos), conforme a la configuración de retención de datos de Google Firebase |
 
 ## 10. Eliminación de cuenta
 
@@ -205,5 +205,5 @@ Podremos actualizar esta Política a medida que el Servicio evolucione. Ante cam
 ## 18. Contacto
 
 - **Solicitudes de privacidad y protección de datos:** support@walletbot.live
-- **Responsable:** [NOMBRE LEGAL DEL RESPONSABLE], [DOMICILIO DEL RESPONSABLE, ARGENTINA]
+- **Responsable:** Tomás Cichero, Estanislao del Campo 1260, B1604ADH Florida Oeste, Provincia de Buenos Aires, Argentina
 - **Autoridad de control (Argentina):** Agencia de Acceso a la Información Pública — `https://www.argentina.gob.ar/aaip`

@@ -90,6 +90,12 @@ export {
     widthForUnits,
     writeLayout,
 } from './dashboard/widgets'
+export {
+    CURRENT_LEGAL_VERSION,
+    isValidLegalVersion,
+    type LegalLocale,
+    legalUrls,
+} from './legal'
 export type { ToolArgs, ToolName } from './tools'
 export { TOOL_DEFINITIONS, TOOL_MAP, toolSchemas } from './tools'
 export type { ToolDefinition, ToolSchema } from './tools/helpers'

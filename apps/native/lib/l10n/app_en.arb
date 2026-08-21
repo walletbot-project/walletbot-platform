@@ -457,5 +457,13 @@
   "editTag": "Edit tag",
   "tagSaveFailed": "Could not save the tag",
   "actionLoadFailed": "Could not load the action",
-  "tapToRetry": "Tap to try again"
+  "tapToRetry": "Tap to try again",
+  "termsAge18Prefix": "I am 18 or older and I accept the ",
+  "termsLinkLabel": "Terms and Conditions",
+  "termsAnd": " and the ",
+  "privacyLinkLabel": "Privacy Policy",
+  "termsGateTitle": "Terms and privacy",
+  "termsGateDescription": "To keep using Wallet Bot, accept the Terms and Conditions and the Privacy Policy.",
+  "termsContinue": "Continue",
+  "termsAcceptFailed": "Could not record your acceptance. Try again."
 }

@@ -411,5 +411,13 @@
   "editTag": "Editar etiqueta",
   "tagSaveFailed": "No se pudo guardar la etiqueta",
   "actionLoadFailed": "No se pudo cargar la acción",
-  "tapToRetry": "Tocá para volver a intentar"
+  "tapToRetry": "Tocá para volver a intentar",
+  "termsAge18Prefix": "Tengo 18 años o más y acepto los ",
+  "termsLinkLabel": "Términos y Condiciones",
+  "termsAnd": " y la ",
+  "privacyLinkLabel": "Política de Privacidad",
+  "termsGateTitle": "Términos y privacidad",
+  "termsGateDescription": "Para seguir usando Wallet Bot, aceptá los Términos y Condiciones y la Política de Privacidad.",
+  "termsContinue": "Continuar",
+  "termsAcceptFailed": "No se pudo registrar tu aceptación. Probá de nuevo."
 }

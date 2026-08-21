@@ -15,6 +15,7 @@ import {
     telemetryMetricSeries,
     telemetryMetrics,
 } from './schema/telemetry'
+import { termsAcceptances } from './schema/termsAcceptances'
 import { transactions } from './schema/transactions'
 import { transactionTags } from './schema/transactionTags'
 import { userSettings } from './schema/userSettings'
@@ -34,6 +35,7 @@ export default defineSchema({
     telemetryEvents,
     telemetryMetrics,
     telemetryMetricSeries,
+    termsAcceptances,
     tombstones,
     transactionTags,
     transactions,

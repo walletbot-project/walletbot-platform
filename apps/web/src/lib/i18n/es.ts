@@ -139,6 +139,20 @@ export const es = {
         verifyFailedTitle: 'No pudimos verificar tu correo',
         verifyFailedDescription:
             'El enlace no es válido. Volvé a iniciar sesión para recibir un enlace nuevo.',
+
+        termsAge18Prefix: 'Tengo 18 años o más y acepto los ',
+        termsLinkLabel: 'Términos y Condiciones',
+        termsAnd: ' y la ',
+        privacyLinkLabel: 'Política de Privacidad',
+        termsRequired:
+            'Tenés que aceptar los Términos y la Política de Privacidad para crear tu cuenta.',
+        termsGateSubtitle: 'Revisá los términos para continuar',
+        termsGateTitle: 'Términos y privacidad',
+        termsGateDescription:
+            'Para seguir usando Wallet Bot, aceptá los Términos y Condiciones y la Política de Privacidad.',
+        termsContinue: 'Continuar',
+        termsAcceptFailed:
+            'No se pudo registrar tu aceptación. Probá de nuevo.',
     },
 
     dashboard: {

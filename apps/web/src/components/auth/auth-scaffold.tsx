@@ -140,11 +140,14 @@ export function AuthPrimaryButton({
     submitting,
     type = 'button',
     onPress,
+    isDisabled = false,
 }: {
     label: string
     submitting: boolean
     type?: 'button' | 'submit'
     onPress?: () => void
+    /** Blocks the action beyond `submitting`, e.g. an unticked required box. */
+    isDisabled?: boolean
 }) {
     return (
         <Button
@@ -155,7 +158,7 @@ export function AuthPrimaryButton({
                 height: 54,
                 '--md-filled-button-container-shape': '16px',
             }}
-            isDisabled={submitting}
+            isDisabled={submitting || isDisabled}
             onPress={onPress}
         >
             {submitting ? (
