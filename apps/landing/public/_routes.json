@@ -1,5 +1,19 @@
 {
     "version": 1,
-    "include": ["/"],
+    "include": [
+        "/",
+        "/privacy",
+        "/privacy/",
+        "/terms",
+        "/terms/",
+        "/privacidad",
+        "/privacidad/",
+        "/terminos",
+        "/terminos/",
+        "/es/privacidad",
+        "/es/privacidad/",
+        "/es/terminos",
+        "/es/terminos/"
+    ],
     "exclude": []
 }

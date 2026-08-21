@@ -12,6 +12,11 @@ served from `app.walletbot.live` (its own Pages project).
 | `/{en,es}/privacy` | `src/components/legal-page.astro` | Renders `docs/legal/privacy-policy.{locale}.md` |
 | `/{en,es}/terms` | `src/components/legal-page.astro` | Renders `docs/legal/terms-and-conditions.{locale}.md` |
 
+`/`, `/privacy` and `/terms` carry no language and have no page in the build:
+each is a Pages Function that 302s to the negotiated locale. Four more Functions
+alias the Spanish slugs — `/privacidad`, `/terminos`, `/es/privacidad`,
+`/es/terminos` — onto the Spanish pages. See § Routing and i18n.
+
 Every marketing claim on the home page maps to shipped code (voice agent,
 offline sync, local accounts, multi-currency, dashboard). Do not add claims for
 features that don't exist — the saved-filters card is commented out until that
@@ -51,9 +56,10 @@ Run from this directory:
 
 `pnpm dev` and `pnpm typecheck` at the repo root include this package.
 
-`pnpm dev` does **not** run the Pages Function, so `/` 404s there — go straight
-to `/en/` or `/es/`. To exercise the redirect, build and serve the output through
-Wrangler instead:
+`pnpm dev` does **not** run the Pages Functions, so every path they own (`/`,
+`/privacy`, `/terms`, the Spanish aliases) 404s there — go straight to `/en/`,
+`/es/` or `/es/privacy/`. To exercise the redirects, build and serve the output
+through Wrangler instead:
 
 ```sh
 pnpm build && npx wrangler pages dev dist
@@ -77,6 +83,22 @@ Astro's built-in i18n routing owns the URLs; `src/i18n/` owns the copy.
   without an adapter, and `i18n.routing.redirectToDefaultLocale` demands a root
   `src/pages/index.astro` (which it then shadows, warning about the conflict on
   every build) and can only ever pick the default locale.
+- `/privacy` and `/terms` have no page either, and `functions/privacy.ts` /
+  `functions/terms.ts` redirect them the same way, to `/<locale>/privacy/` and
+  `/<locale>/terms/`. The documents get shared as those unprefixed URLs — it is
+  the shape store listings and pasted links take — so a 404 there is a broken
+  legal link, not a cosmetic one. Both exist because the two documents are
+  always shown as a pair; a live privacy link beside a dead terms link is worse
+  than neither.
+- The Spanish slugs are aliases, not pages: `/privacidad` and `/es/privacidad`
+  both 302 to `/es/privacy/`, `/terminos` and `/es/terminos` to `/es/terms/`.
+  They are Spanish-only and do not negotiate — the slug names the language — and
+  they are unaccented, so `/t%C3%A9rminos` is deliberately not routed. Because
+  they redirect rather than render, `/es/privacy/` and `/es/terms/` remain the
+  only addresses of each document: canonical and `hreflang` tags are untouched,
+  and `packages/shared/src/legal.ts` (which builds the in-app links) keeps
+  pointing at them. Adding an alias for a *page* would instead need a real
+  route, and then a decision about which URL is canonical.
 - `Astro.currentLocale` is typed `string | undefined`. Narrow it through
   `useTranslations(Astro.currentLocale)`, which returns `{ locale, t }`.
 - `getRelativeLocaleUrl` / `getAbsoluteLocaleUrl` from `astro:i18n` build
@@ -143,14 +165,27 @@ on demand, and only one route here is dynamic at all.
 `site` in `astro.config.mjs` feeds canonical and `hreflang` URLs — it must match
 the production domain (`www.walletbot.live`).
 
-### The one piece of server code
+### The only server code
 
-`functions/index.ts` is a Pages Function serving `/`, and exists solely because
-picking a language from the `Accept-Language` header has to happen per request —
-a static redirect rule has no access to request headers. It parses the header's
-weighted language ranges (honouring `q=` ordering and `q=0` rejections, matching
-on the primary subtag so `es-419` and `es-AR` both resolve to `es`), then 302s to
-`/<locale>/`, carrying the query string over so campaign parameters survive.
+`functions/` holds seven Pages Functions, every one of them a redirect.
+
+Three negotiate: `/` to `/<locale>/`, `/privacy` to `/<locale>/privacy/` and
+`/terms` to `/<locale>/terms/`. They exist solely because picking a language
+from the `Accept-Language` header has to happen per request — a static redirect
+rule has no access to request headers.
+
+The other four are the fixed Spanish-slug aliases (`privacidad.ts`,
+`terminos.ts` and their `es/` twins). They read no header, so they answer with
+`Cache-Control: public, max-age=3600` instead of the pair below and mostly never
+reach the Worker twice.
+
+The negotiation lives in `src/i18n/negotiate.ts`, which both handlers import, so
+neither restates it. It parses the header's weighted language ranges (honouring
+`q=` ordering and `q=0` rejections, matching on the primary subtag so `es-419`
+and `es-AR` both resolve to `es`), then 302s to the localized path, carrying the
+query string over so campaign parameters survive. The target keeps its trailing
+slash because that is the form Pages serves — `/es/privacy` 308s to
+`/es/privacy/` — so naming the final URL saves visitors a second hop.
 
 The response sets `Vary: Accept-Language` and `Cache-Control: no-store`: the
 destination is derived from a request header, so without them a shared cache
@@ -160,15 +195,16 @@ Three conventions keep this cheap:
 
 | File | Role |
 |---|---|
-| `functions/index.ts` | Pages' file-based routing maps this to exactly `/` |
-| `public/_routes.json` | `include: ["/"]` — pins invocation to that one path, so the six prerendered pages and every asset stay free static requests and never start a Worker |
+| `functions/*.ts`, `functions/es/*.ts` | Pages' file-based routing maps each file to exactly its path — `index.ts` to `/`, `privacy.ts` to `/privacy`, `es/privacidad.ts` to `/es/privacidad` |
+| `public/_routes.json` | `include` lists those seven paths, each in both slash forms (13 rules of the 100 allowed) — invocation is pinned to them, so the six prerendered pages and every asset stay free static requests and never start a Worker. Trailing slashes are optional in function routing but spelled out here anyway: nothing documents invocation matching as normalizing them |
 | `public/_headers` | Immutable caching for `/_astro/*`, which Astro fingerprints; replaces what the Vercel adapter used to emit |
 
 `_routes.json` and `_headers` live in `public/` because Astro copies that
 directory verbatim into `dist/`, which is where Cloudflare expects them.
 
-The handler imports `LOCALES` from `src/i18n/locales.ts` rather than restating
-the list, so it cannot drift from the catalogs. It types the request context
+The negotiation imports `LOCALES` from `src/i18n/locales.ts` rather than
+restating the list, so it cannot drift from the catalogs. It types the request
+context
 locally instead of pulling in `@cloudflare/workers-types`, whose global
 `Request`/`Response` declarations collide with the DOM types the rest of the
 package builds against.
