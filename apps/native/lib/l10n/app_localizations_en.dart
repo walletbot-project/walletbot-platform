@@ -327,6 +327,83 @@ class AppLocalizationsEn extends AppLocalizations {
   String get addManually => 'Add manually';
 
   @override
+  String get sendFeedback => 'Send feedback';
+
+  @override
+  String get feedbackIntro =>
+      'Tell us what\'s working, what isn\'t, or what you\'d like to see. Attach screenshots, a recording, or any file that helps explain it.';
+
+  @override
+  String get feedbackMessageLabel => 'Your feedback';
+
+  @override
+  String get feedbackMessageHint => 'What would you like to tell us?';
+
+  @override
+  String get feedbackAttachments => 'Attachments';
+
+  @override
+  String get feedbackAddFiles => 'Add files';
+
+  @override
+  String feedbackAttachmentsHint(int max, int mb) {
+    return 'Up to $max files, $mb MB each.';
+  }
+
+  @override
+  String feedbackRemoveFile(String name) {
+    return 'Remove $name';
+  }
+
+  @override
+  String get feedbackSubmit => 'Send';
+
+  @override
+  String get feedbackSending => 'Sending…';
+
+  @override
+  String get feedbackSent => 'Thanks — we got your feedback.';
+
+  @override
+  String get feedbackSendFailed => 'Could not send your feedback';
+
+  @override
+  String get feedbackEmpty => 'Write something or attach a file';
+
+  @override
+  String feedbackTextTooLong(int max) {
+    return 'Keep your feedback under $max characters';
+  }
+
+  @override
+  String feedbackTooManyFiles(int max) {
+    return 'You can attach at most $max files';
+  }
+
+  @override
+  String feedbackFileTooLarge(String name, int mb) {
+    return '“$name” is larger than $mb MB';
+  }
+
+  @override
+  String feedbackFileTooLargeGeneric(int mb) {
+    return 'One of the attachments is larger than $mb MB';
+  }
+
+  @override
+  String get feedbackRateLimited =>
+      'Too many submissions in a short time. Try again in a little while.';
+
+  @override
+  String get feedbackUnknownAttachment =>
+      'One of the attachments could not be verified. Remove it and try again.';
+
+  @override
+  String feedbackUploadFailed(String name) {
+    return 'Could not upload “$name”';
+  }
+
+  @override
   String get addTransaction => 'Add transaction';
 
   @override

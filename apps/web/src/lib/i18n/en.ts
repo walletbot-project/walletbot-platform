@@ -50,6 +50,7 @@ export const en: Messages = {
         insights: 'Insights',
         addWithGasti: 'Add with Gasti',
         addManually: 'Add manually',
+        sendFeedback: 'Send feedback',
         signOut: 'Sign out',
         language: 'Language',
     },
@@ -598,5 +599,31 @@ export const en: Messages = {
         categoryAdded: 'Category added to the form',
         accountNamePlaceholder: 'e.g. Cash, Checking',
         categoryNamePlaceholder: 'e.g. Food, Gift, Freelance',
+    },
+
+    feedback: {
+        title: 'Send feedback',
+        intro: "Tell us what's working, what isn't, or what you'd like to see. Attach screenshots, a recording, or any file that helps explain it.",
+        messageLabel: 'Your feedback',
+        messagePlaceholder: 'What would you like to tell us?',
+        attachments: 'Attachments',
+        addFiles: 'Add files',
+        attachmentsHint: (p) => `Up to ${p.max} files, ${p.mb} MB each.`,
+        removeFile: (p) => `Remove ${p.name}`,
+        submit: 'Send',
+        sending: 'Sending…',
+        sent: 'Thanks — we got your feedback.',
+        sendFailed: 'Could not send your feedback',
+        empty: 'Write something or attach a file',
+        textTooLong: (p) => `Keep your feedback under ${p.max} characters`,
+        tooManyFiles: (p) => `You can attach at most ${p.max} files`,
+        fileTooLarge: (p) => `"${p.name}" is larger than ${p.mb} MB`,
+        fileTooLargeGeneric: (p) =>
+            `One of the attachments is larger than ${p.mb} MB`,
+        rateLimited:
+            'Too many submissions in a short time. Try again in a little while.',
+        unknownAttachment:
+            'One of the attachments could not be verified. Remove it and try again.',
+        uploadFailed: (p) => `Could not upload "${p.name}"`,
     },
 }

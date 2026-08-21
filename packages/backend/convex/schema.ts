@@ -7,6 +7,7 @@ import {
     featureFlagOverrides,
     featureFlags,
 } from './schema/featureFlags'
+import { feedback } from './schema/feedback'
 import { refreshTokens } from './schema/refreshTokens'
 import { supportEmails } from './schema/supportEmails'
 import { syncCounters, tombstones } from './schema/sync'
@@ -29,6 +30,7 @@ export default defineSchema({
     dashboardWidgets,
     featureFlagOverrides,
     featureFlags,
+    feedback,
     refreshTokens,
     savedFilters,
     supportEmails,

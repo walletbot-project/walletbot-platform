@@ -91,6 +91,13 @@ export {
     writeLayout,
 } from './dashboard/widgets'
 export {
+    FEEDBACK_MAX_FILE_BYTES,
+    FEEDBACK_MAX_FILE_MB,
+    FEEDBACK_MAX_FILES,
+    FEEDBACK_MAX_TEXT_CHARS,
+    isSubmittableFeedback,
+} from './feedback'
+export {
     CURRENT_LEGAL_VERSION,
     isValidLegalVersion,
     LEGAL_POLICY,

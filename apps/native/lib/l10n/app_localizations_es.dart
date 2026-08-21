@@ -330,6 +330,83 @@ class AppLocalizationsEs extends AppLocalizations {
   String get addManually => 'Agregar a mano';
 
   @override
+  String get sendFeedback => 'Enviar comentarios';
+
+  @override
+  String get feedbackIntro =>
+      'Contanos qué funciona, qué no, o qué te gustaría ver. Podés adjuntar capturas, un video o cualquier archivo que ayude a entenderlo.';
+
+  @override
+  String get feedbackMessageLabel => 'Tu comentario';
+
+  @override
+  String get feedbackMessageHint => '¿Qué querés contarnos?';
+
+  @override
+  String get feedbackAttachments => 'Adjuntos';
+
+  @override
+  String get feedbackAddFiles => 'Agregar archivos';
+
+  @override
+  String feedbackAttachmentsHint(int max, int mb) {
+    return 'Hasta $max archivos, $mb MB cada uno.';
+  }
+
+  @override
+  String feedbackRemoveFile(String name) {
+    return 'Quitar $name';
+  }
+
+  @override
+  String get feedbackSubmit => 'Enviar';
+
+  @override
+  String get feedbackSending => 'Enviando…';
+
+  @override
+  String get feedbackSent => '¡Gracias! Recibimos tu comentario.';
+
+  @override
+  String get feedbackSendFailed => 'No se pudo enviar tu comentario';
+
+  @override
+  String get feedbackEmpty => 'Escribí algo o adjuntá un archivo';
+
+  @override
+  String feedbackTextTooLong(int max) {
+    return 'El comentario no puede superar los $max caracteres';
+  }
+
+  @override
+  String feedbackTooManyFiles(int max) {
+    return 'Podés adjuntar como máximo $max archivos';
+  }
+
+  @override
+  String feedbackFileTooLarge(String name, int mb) {
+    return '“$name” supera los $mb MB';
+  }
+
+  @override
+  String feedbackFileTooLargeGeneric(int mb) {
+    return 'Uno de los adjuntos supera los $mb MB';
+  }
+
+  @override
+  String get feedbackRateLimited =>
+      'Recibimos demasiados envíos en poco tiempo. Probá de nuevo en un rato.';
+
+  @override
+  String get feedbackUnknownAttachment =>
+      'No pudimos verificar uno de los adjuntos. Quitalo y probá de nuevo.';
+
+  @override
+  String feedbackUploadFailed(String name) {
+    return 'No se pudo subir “$name”';
+  }
+
+  @override
   String get addTransaction => 'Añadir movimiento';
 
   @override

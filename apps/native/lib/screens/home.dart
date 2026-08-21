@@ -2,11 +2,14 @@ import 'package:app/auth/account.dart';
 import 'package:app/auth/auth_controller.dart';
 import 'package:app/auth/pop_on_account_switch.dart';
 import 'package:app/app_config/app_config_banner_list.dart';
+import 'package:app/app_config/app_config_controller.dart';
+import 'package:app/app_config/client_info.dart';
 import 'package:app/components/dashboard/add_widget_sheet.dart';
 import 'package:app/components/dashboard/dashboard_section.dart';
 import 'package:app/components/dashboard/default_dashboard.dart';
 import 'package:app/data/data.dart';
 import 'package:app/l10n/l10n.dart';
+import 'package:app/screens/feedback_sheet.dart';
 import 'package:app/screens/login.dart';
 import 'package:app/screens/settings.dart';
 import 'package:app/screens/transaction_form.dart';
@@ -267,6 +270,14 @@ class _HomeScreenState extends State<HomeScreen> {
     context.read<AppNavigation>().index = AppNavigation.activityTab;
   }
 
+  /// The sheet needs `ClientInfo` for the report's platform/version/device
+  /// fields, and it lives above the navigator the sheet is pushed on — so it is
+  /// read here and passed in, the same way `_openManualAdd` re-provides repos.
+  Future<void> _openFeedback() async {
+    final clientInfo = context.read<ClientInfo>();
+    await showFeedbackSheet(context, clientInfo: clientInfo);
+  }
+
   bool _editing = false;
 
   Future<void> _openAddWidget() async {
@@ -323,13 +334,27 @@ class _HomeScreenState extends State<HomeScreen> {
             style: Theme.of(context).textTheme.titleMedium,
           ),
           const SizedBox(height: 12),
-          Align(
-            alignment: Alignment.centerLeft,
-            child: _HomeActionCard(
-              label: context.l10n.addManually,
-              icon: Icons.add_rounded,
-              onTap: _openManualAdd,
-            ),
+          // A Wrap rather than a Row: the cards are fixed-size squares and a
+          // narrow phone in a large text scale must be able to reflow them
+          // instead of overflowing.
+          Wrap(
+            spacing: 12,
+            runSpacing: 12,
+            children: [
+              _HomeActionCard(
+                label: context.l10n.addManually,
+                icon: Icons.add_rounded,
+                onTap: _openManualAdd,
+              ),
+              if (context.watch<AppConfigController>().isFlagEnabled(
+                'feedback',
+              ))
+                _HomeActionCard(
+                  label: context.l10n.sendFeedback,
+                  icon: Icons.feedback_rounded,
+                  onTap: _openFeedback,
+                ),
+            ],
           ),
         ],
       ),

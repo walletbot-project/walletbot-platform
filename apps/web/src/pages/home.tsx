@@ -3,7 +3,7 @@ import { type LayoutCoord, parseWidgetOptions } from '@wallet-bot/shared'
 import { IconButton } from 'actify'
 import { useQuery } from 'convex/react'
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Outlet, useNavigate } from 'react-router-dom'
 import { AppBar } from '@/components/m3/app-bar'
 import { BottomSheet } from '@/components/m3/bottom-sheet'
 import { GroupedCard } from '@/components/m3/grouped-card'
@@ -28,6 +28,11 @@ export default function Home() {
         maxUnits: number | null
         key: number
     } | null>(null)
+
+    // Undefined while the flags load, so the card appears once rather than
+    // flashing in — a gated feature stays hidden until it is known to be on.
+    const flags = useQuery(api.v1.featureFlags.queries.getMyFlags)
+    const feedbackEnabled = flags?.feedback ?? false
 
     const layout = useQuery(api.v1.dashboard.queries.layout)
     // A new tile lands on its own row past everything already placed.
@@ -107,6 +112,13 @@ export default function Home() {
                             // at it.
                             onClick={() => navigate('/activity/new')}
                         />
+                        {feedbackEnabled ? (
+                            <HomeActionCard
+                                label={t.nav.sendFeedback}
+                                icon="feedback"
+                                onClick={() => navigate('/feedback')}
+                            />
+                        ) : null}
                     </div>
                 </div>
             </div>
@@ -126,6 +138,13 @@ export default function Home() {
             ) : null}
 
             <AccountMenu open={menuOpen} onOpenChange={setMenuOpen} />
+
+            {/*
+             * Fixed final slot for the child route ('/feedback'), which brings
+             * its own sheet framing. Renders null when no child matches, so the
+             * slot never changes shape and nothing above it remounts.
+             */}
+            <Outlet />
         </>
     )
 }

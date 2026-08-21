@@ -52,6 +52,7 @@ export const es = {
         insights: 'Análisis',
         addWithGasti: 'Añadir con Gasti',
         addManually: 'Añadir manualmente',
+        sendFeedback: 'Enviar comentarios',
         signOut: 'Cerrar sesión',
         language: 'Idioma',
     },
@@ -616,6 +617,36 @@ export const es = {
         categoryAdded: 'Categoría agregada al formulario',
         accountNamePlaceholder: 'Ej: Efectivo, Banco Nación',
         categoryNamePlaceholder: 'Ej: Comida, Regalo, Freelance',
+    },
+
+    feedback: {
+        title: 'Enviar comentarios',
+        intro: 'Contanos qué funciona, qué no, o qué te gustaría ver. Podés adjuntar capturas, un video o cualquier archivo que ayude a entenderlo.',
+        messageLabel: 'Tu comentario',
+        messagePlaceholder: '¿Qué querés contarnos?',
+        attachments: 'Adjuntos',
+        addFiles: 'Agregar archivos',
+        attachmentsHint: (p: { max: number; mb: number }) =>
+            `Hasta ${p.max} archivos, ${p.mb} MB cada uno.`,
+        removeFile: (p: { name: string }) => `Quitar ${p.name}`,
+        submit: 'Enviar',
+        sending: 'Enviando…',
+        sent: '¡Gracias! Recibimos tu comentario.',
+        sendFailed: 'No se pudo enviar tu comentario',
+        empty: 'Escribí algo o adjuntá un archivo',
+        textTooLong: (p: { max: number }) =>
+            `El comentario no puede superar los ${p.max} caracteres`,
+        tooManyFiles: (p: { max: number }) =>
+            `Podés adjuntar como máximo ${p.max} archivos`,
+        fileTooLarge: (p: { name: string; mb: number }) =>
+            `"${p.name}" supera los ${p.mb} MB`,
+        fileTooLargeGeneric: (p: { mb: number }) =>
+            `Uno de los adjuntos supera los ${p.mb} MB`,
+        rateLimited:
+            'Recibimos demasiados envíos en poco tiempo. Probá de nuevo en un rato.',
+        unknownAttachment:
+            'No pudimos verificar uno de los adjuntos. Quitalo y probá de nuevo.',
+        uploadFailed: (p: { name: string }) => `No se pudo subir "${p.name}"`,
     },
 }
 

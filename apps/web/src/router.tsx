@@ -69,6 +69,24 @@ export const router = createBrowserRouter([
                             {
                                 path: '/',
                                 element: <Home />,
+                                children: [
+                                    {
+                                        // A child of '/' so Home stays mounted
+                                        // underneath and the sheet overlays it,
+                                        // rather than replacing the screen.
+                                        // Being a route rather than component
+                                        // state is what keeps a half-written
+                                        // report alive across a resize
+                                        // (LESSONS.md #13/#14).
+                                        path: 'feedback',
+                                        lazy: () =>
+                                            import('@/pages/feedback').then(
+                                                (m) => ({
+                                                    Component: m.FeedbackRoute,
+                                                }),
+                                            ),
+                                    },
+                                ],
                             },
                             // Every view that is a screen — a list, a detail, a
                             // creation form — is a URL. Nothing about which of

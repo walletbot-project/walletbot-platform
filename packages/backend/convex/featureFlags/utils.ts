@@ -1,4 +1,4 @@
-export type FlagKey = 'debugToolCalls' | 'recurringExpense'
+export type FlagKey = 'debugToolCalls' | 'feedback' | 'recurringExpense'
 
 export const KNOWN_FLAGS: {
     key: FlagKey
@@ -9,6 +9,12 @@ export const KNOWN_FLAGS: {
         key: 'debugToolCalls',
         description:
             'Show raw function-call debug JSON in the Gasti voice chat (native + web).',
+        enabledByDefault: false,
+    },
+    {
+        key: 'feedback',
+        description:
+            'Show the "Send feedback" card on the home screen (native + web), which opens the report form with file attachments.',
         enabledByDefault: false,
     },
     {
