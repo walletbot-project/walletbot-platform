@@ -265,7 +265,7 @@ export const es = {
 
         noAccountsYet: 'Todavía no hay cuentas.',
         noCategoriesYet: 'Todavía no hay categorías.',
-        noTagsYet: 'Todavía no hay tags.',
+        noTagsYet: 'Todavía no hay etiquetas.',
         noCurrenciesYet: 'Todavía no hay monedas.',
         showLess: 'Ver menos',
         showMore: (p: { count: number }) => `Ver ${p.count} más`,
@@ -353,14 +353,14 @@ export const es = {
         filters: 'Filtros',
         accounts: 'Cuentas',
         categories: 'Categorías',
-        tags: 'Tags',
+        tags: 'Etiquetas',
         rangeFrom: (p: { date: string }) => `Desde ${p.date}`,
         rangeTo: (p: { date: string }) => `Hasta ${p.date}`,
         removeFilter: (p: { label: string }) => `Quitar filtro ${p.label}`,
         // Fallbacks for a chip whose entities all resolved to nothing.
         fallbackAccounts: 'cuentas',
         fallbackCategories: 'categorías',
-        fallbackTags: 'tags',
+        fallbackTags: 'etiquetas',
         typeAll: 'Todos',
         typeIncome: 'Ingresos',
         typeExpense: 'Gastos',
@@ -403,8 +403,8 @@ export const es = {
         destinationAccount: 'Cuenta destino',
         deletedAccount: 'Cuenta eliminada',
         category: 'Categoría',
-        tags: 'Tags',
-        noTags: 'Sin tags',
+        tags: 'Etiquetas',
+        noTags: 'Sin etiquetas',
         balanceUnavailable: 'Saldo no disponible',
         chooseAccount: 'Elegí una cuenta',
         sameAccounts: 'La cuenta origen y destino deben ser distintas',
@@ -420,7 +420,7 @@ export const es = {
 
     insights: {
         categories: 'Categorías',
-        tags: 'Tags',
+        tags: 'Etiquetas',
         spentThisMonth: 'Gastado este mes',
         noSpendThisMonth: 'Sin gastos este mes',
         otherCurrencies: (p: { count: number }) =>
@@ -458,33 +458,33 @@ export const es = {
         categoryDeleteConfirm: (p: { name: string }) =>
             `¿Seguro que querés eliminar "${p.name}"? Dejará de aparecer en tus categorías.`,
 
-        noTagsYet: 'No tenés tags aún.',
-        newTag: 'Nuevo tag',
-        tagCreating: 'Creando tag…',
-        tagCreated: 'Tag creado',
-        tagCreateFailed: 'No se pudo crear el tag',
-        tagSaving: 'Guardando tag…',
-        tagSaved: 'Tag guardado',
-        tagSaveFailed: 'No se pudo guardar el tag',
-        tagDeleting: 'Eliminando tag…',
-        tagDeleted: 'Tag eliminado',
-        tagDeleteFailed: 'No se pudo eliminar el tag',
-        tagDeleteTitle: 'Eliminar tag',
+        noTagsYet: 'No tenés etiquetas aún.',
+        newTag: 'Nueva etiqueta',
+        tagCreating: 'Creando etiqueta…',
+        tagCreated: 'Etiqueta creada',
+        tagCreateFailed: 'No se pudo crear la etiqueta',
+        tagSaving: 'Guardando etiqueta…',
+        tagSaved: 'Etiqueta guardada',
+        tagSaveFailed: 'No se pudo guardar la etiqueta',
+        tagDeleting: 'Eliminando etiqueta…',
+        tagDeleted: 'Etiqueta eliminada',
+        tagDeleteFailed: 'No se pudo eliminar la etiqueta',
+        tagDeleteTitle: 'Eliminar etiqueta',
         tagDeleteConfirm: (p: { name: string }) =>
-            `¿Seguro que querés eliminar "${p.name}"? Dejará de aparecer en tus tags.`,
-        tagDeleteWithChildrenTitle: 'Eliminar tag con sub-tags',
+            `¿Seguro que querés eliminar "${p.name}"? Dejará de aparecer en tus etiquetas.`,
+        tagDeleteWithChildrenTitle: 'Eliminar etiqueta con subetiquetas',
         // Rendered right after the bold tag name, so it starts mid-sentence.
         tagDeleteWithChildrenPrompt: (p: { count: number }) =>
             p.count === 1
-                ? 'tiene 1 sub-tag. ¿Qué hacemos con él?'
-                : `tiene ${p.count} sub-tags. ¿Qué hacemos con ellos?`,
-        keepSubtags: 'Conservar sub-tags',
+                ? 'tiene 1 subetiqueta. ¿Qué hacemos con ella?'
+                : `tiene ${p.count} subetiquetas. ¿Qué hacemos con ellas?`,
+        keepSubtags: 'Conservar subetiquetas',
         deleteEverything: 'Eliminar todo',
-        createSubtag: 'Crear sub-tag',
-        parentTag: 'Tag padre',
-        selectParentTag: 'Elegí un tag padre',
-        searchTags: 'Buscar tags…',
-        noTagsAvailable: 'No hay tags disponibles',
+        createSubtag: 'Crear subetiqueta',
+        parentTag: 'Etiqueta padre',
+        selectParentTag: 'Elegí la etiqueta padre',
+        searchTags: 'Buscar etiquetas…',
+        noTagsAvailable: 'No hay etiquetas disponibles',
     },
 
     voice: {
@@ -536,15 +536,15 @@ export const es = {
         categoryDetail: (p: { updated: boolean }) =>
             `Categoría ${p.updated ? 'actualizada' : 'creada'}`,
         tagDetail: (p: { updated: boolean }) =>
-            `Tag ${p.updated ? 'actualizado' : 'creado'}`,
+            `Etiqueta ${p.updated ? 'actualizada' : 'creada'}`,
         editAccount: 'Editar cuenta',
         editCategory: 'Editar categoría',
-        editTag: 'Editar tag',
+        editTag: 'Editar etiqueta',
         accountSaved: 'Cuenta actualizada',
         categorySaved: 'Categoría actualizada',
-        tagSaved: 'Tag actualizado',
-        parentTag: 'Tag padre',
-        noParentTag: 'Sin tag padre',
+        tagSaved: 'Etiqueta actualizada',
+        parentTag: 'Etiqueta padre',
+        noParentTag: 'Sin etiqueta padre',
     },
 
     addManual: {
