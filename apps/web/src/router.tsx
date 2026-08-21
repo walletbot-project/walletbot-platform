@@ -1,4 +1,4 @@
-import { createBrowserRouter } from 'react-router-dom'
+import { createBrowserRouter, Navigate } from 'react-router-dom'
 
 import { AuthGuard } from '@/components/layout/auth-guard'
 import { GlobalErrorBoundary } from '@/components/layout/error-boundary'
@@ -86,12 +86,58 @@ export const router = createBrowserRouter([
                                 path: '/',
                                 element: <Home />,
                             },
+                            // Every view that is a screen — a list, a detail, a
+                            // creation form — is a URL. Nothing about which of
+                            // them is showing lives in component state, so
+                            // reload, back/forward, deep links and window
+                            // resizes all keep working for free. Only
+                            // transient pickers (currency, icon, option
+                            // sheets) stay as plain modals.
                             {
                                 path: '/activity',
                                 lazy: () =>
                                     import('@/pages/activity').then((m) => ({
                                         Component: m.Activity,
                                     })),
+                                children: [
+                                    {
+                                        path: 'new',
+                                        // A creation form is a page that
+                                        // covers the window on small screens,
+                                        // exactly as it always has been.
+                                        handle: { fullScreen: true },
+                                        lazy: () =>
+                                            import('@/pages/activity').then(
+                                                (m) => ({
+                                                    Component:
+                                                        m.TransactionCreateRoute,
+                                                }),
+                                            ),
+                                    },
+                                    {
+                                        path: ':transactionId',
+                                        // The transaction detail is a PAGE
+                                        // below the split, not a sheet. The
+                                        // native Activity screen presents it
+                                        // as a real `MaterialPageRoute`
+                                        // ("keeping the exact platform
+                                        // transition, back button/gestures,
+                                        // and route semantics" —
+                                        // activity.dart:49). Only the account,
+                                        // category and tag details are modals,
+                                        // because those go through
+                                        // `AdaptiveDetailView`, whose framing
+                                        // is sheet/dialog/pane.
+                                        handle: { fullScreen: true },
+                                        lazy: () =>
+                                            import('@/pages/activity').then(
+                                                (m) => ({
+                                                    Component:
+                                                        m.TransactionDetailRoute,
+                                                }),
+                                            ),
+                                    },
+                                ],
                             },
                             {
                                 path: '/accounts',
@@ -99,13 +145,74 @@ export const router = createBrowserRouter([
                                     import('@/pages/accounts').then((m) => ({
                                         Component: m.Accounts,
                                     })),
+                                children: [
+                                    {
+                                        path: 'new',
+                                        // A creation form is a page that
+                                        // covers the window on small screens,
+                                        // exactly as it always has been.
+                                        handle: { fullScreen: true },
+                                        lazy: () =>
+                                            import('@/pages/accounts').then(
+                                                (m) => ({
+                                                    Component:
+                                                        m.AccountCreateRoute,
+                                                }),
+                                            ),
+                                    },
+                                    {
+                                        path: ':accountId',
+                                        lazy: () =>
+                                            import('@/pages/accounts').then(
+                                                (m) => ({
+                                                    Component:
+                                                        m.AccountDetailRoute,
+                                                }),
+                                            ),
+                                    },
+                                ],
                             },
                             {
                                 path: '/insights',
+                                element: (
+                                    <Navigate
+                                        to="/insights/categories"
+                                        replace
+                                    />
+                                ),
+                            },
+                            {
+                                path: '/insights/:tab',
                                 lazy: () =>
                                     import('@/pages/insights').then((m) => ({
                                         Component: m.Insights,
                                     })),
+                                children: [
+                                    {
+                                        path: 'new',
+                                        // A creation form is a page that
+                                        // covers the window on small screens,
+                                        // exactly as it always has been.
+                                        handle: { fullScreen: true },
+                                        lazy: () =>
+                                            import('@/pages/insights').then(
+                                                (m) => ({
+                                                    Component:
+                                                        m.InsightCreateRoute,
+                                                }),
+                                            ),
+                                    },
+                                    {
+                                        path: ':entityId',
+                                        lazy: () =>
+                                            import('@/pages/insights').then(
+                                                (m) => ({
+                                                    Component:
+                                                        m.InsightDetailRoute,
+                                                }),
+                                            ),
+                                    },
+                                ],
                             },
                             {
                                 path: '/add',
@@ -115,10 +222,10 @@ export const router = createBrowserRouter([
                                     })),
                             },
                             {
-                                path: '/add/manual',
+                                path: '/settings',
                                 lazy: () =>
-                                    import('@/pages/add-manual').then((m) => ({
-                                        Component: m.AddManual,
+                                    import('@/pages/settings').then((m) => ({
+                                        Component: m.Settings,
                                     })),
                             },
                             {

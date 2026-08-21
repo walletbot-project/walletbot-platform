@@ -81,44 +81,48 @@ void main() {
     );
   });
 
-  test('requestPasswordReset posts the email to /auth/password/forgot',
-      () async {
-    final requests = <http.Request>[];
-    final auth = controllerWith(
-      MockClient((request) async {
-        requests.add(request);
-        return http.Response(jsonEncode({'ok': true}), 200);
-      }),
-    );
+  test(
+    'requestPasswordReset posts the email to /auth/password/forgot',
+    () async {
+      final requests = <http.Request>[];
+      final auth = controllerWith(
+        MockClient((request) async {
+          requests.add(request);
+          return http.Response(jsonEncode({'ok': true}), 200);
+        }),
+      );
 
-    await auth.requestPasswordReset(email: 'a@b.c');
+      await auth.requestPasswordReset(email: 'a@b.c');
 
-    final request = requests.single;
-    expect(request.method, 'POST');
-    expect(request.url.toString(), 'https://site.test/auth/password/forgot');
-    expect(jsonDecode(request.body), {'email': 'a@b.c'});
-  });
+      final request = requests.single;
+      expect(request.method, 'POST');
+      expect(request.url.toString(), 'https://site.test/auth/password/forgot');
+      expect(jsonDecode(request.body), {'email': 'a@b.c'});
+    },
+  );
 
-  test('resendVerificationEmail posts to /auth/email/resend-verification',
-      () async {
-    final requests = <http.Request>[];
-    final auth = controllerWith(
-      MockClient((request) async {
-        requests.add(request);
-        return http.Response(jsonEncode({'ok': true}), 200);
-      }),
-    );
+  test(
+    'resendVerificationEmail posts to /auth/email/resend-verification',
+    () async {
+      final requests = <http.Request>[];
+      final auth = controllerWith(
+        MockClient((request) async {
+          requests.add(request);
+          return http.Response(jsonEncode({'ok': true}), 200);
+        }),
+      );
 
-    await auth.resendVerificationEmail(email: 'a@b.c');
+      await auth.resendVerificationEmail(email: 'a@b.c');
 
-    final request = requests.single;
-    expect(request.method, 'POST');
-    expect(
-      request.url.toString(),
-      'https://site.test/auth/email/resend-verification',
-    );
-    expect(jsonDecode(request.body), {'email': 'a@b.c'});
-  });
+      final request = requests.single;
+      expect(request.method, 'POST');
+      expect(
+        request.url.toString(),
+        'https://site.test/auth/email/resend-verification',
+      );
+      expect(jsonDecode(request.body), {'email': 'a@b.c'});
+    },
+  );
 
   test('requestAccountDeletion posts to /v1/account-deletion/request',
       () async {

@@ -8,6 +8,7 @@ import 'package:app/components/filter_sheet.dart';
 import 'package:app/data/data.dart';
 import 'package:app/database.dart';
 import 'package:app/l10n/l10n.dart';
+import 'package:app/shared/adaptive_modal.dart';
 import 'package:drift/drift.dart' show Value;
 import 'package:flutter/material.dart';
 
@@ -51,12 +52,12 @@ Future<bool> _showWidgetSheet(
   DashboardLayoutCoord? at,
   int? maxUnits,
 }) async {
-  final saved = await showModalBottomSheet<bool>(
-    context: context,
+  final saved = await showAdaptiveModal<bool>(
+    context,
     isScrollControlled: true,
     useSafeArea: true,
     backgroundColor: Theme.of(context).colorScheme.surface,
-    shape: const RoundedRectangleBorder(
+    sheetShape: const RoundedRectangleBorder(
       borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
     ),
     builder: (_) => _WidgetSheet(
@@ -179,11 +180,13 @@ class _WidgetSheetState extends State<_WidgetSheet> {
     if (mounted) setState(() {});
   }
 
-  /// Whether the required fields are filled: a title always, plus a currency
-  /// for the balance card. Drives the confirm button's enabled state.
+  /// Whether the required fields are filled: a title always, a currency for
+  /// the balance card, and a filter for every type that reads transactions.
+  /// Drives the confirm button's enabled state.
   bool get _canSubmit {
     if (_titleController.text.trim().isEmpty) return false;
     if (_type == WidgetType.balance && _currency == null) return false;
+    if (_filterMissing) return false;
     return true;
   }
 
@@ -232,6 +235,22 @@ class _WidgetSheetState extends State<_WidgetSheet> {
 
   bool get _filterConfigured => !_filter.isEmpty;
 
+  /// A tile *already stored* without a filter keeps its exemption, so the
+  /// default seed's filterless `seed-wgt-recientes` (`default_dashboard.dart`)
+  /// stays editable. A balance card converted to a filtered type does not
+  /// inherit it — that is a new filtered tile as far as this rule goes.
+  bool get _filterExempt {
+    final existing = widget.existing;
+    return existing != null &&
+        WidgetType.fromWire(existing.type) != WidgetType.balance &&
+        widget.initialFilter.isEmpty;
+  }
+
+  /// Every type that reads transactions needs a filter: a "no filter" tile
+  /// reads as the whole ledger and was never meant to be creatable.
+  bool get _filterMissing =>
+      _type != WidgetType.balance && !_filterExempt && !_filterConfigured;
+
   Future<void> _configureFilter() async {
     final result = await showFilterSheet(
       context,
@@ -258,6 +277,12 @@ class _WidgetSheetState extends State<_WidgetSheet> {
     if (_type == WidgetType.balance && _currency == null) {
       messenger.showSnackBar(
         SnackBar(content: Text(context.l10n.selectWidgetCurrency)),
+      );
+      return;
+    }
+    if (_filterMissing) {
+      messenger.showSnackBar(
+        SnackBar(content: Text(context.l10n.configureWidgetFilter)),
       );
       return;
     }

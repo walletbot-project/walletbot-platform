@@ -5,6 +5,7 @@ import type { Messages } from './es'
 export { I18nContext, type I18nContextValue } from './context'
 export { en } from './en'
 export { es, type Messages } from './es'
+export { dashboardTitle, transactionName } from './generated-names'
 export {
     formatLocaleFor,
     type LanguagePreference,

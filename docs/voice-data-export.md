@@ -62,10 +62,10 @@ this does not affect the completeness of the local export.
 
 ## Communication and server-side storage
 
-Gemini audio does not pass through Convex. For remote accounts, the native app
-obtains an authenticated ephemeral token from the backend and then communicates
-directly with Gemini Live over WebSocket. Incoming and outgoing Live events are
-recorded locally before any server replication is attempted.
+Gemini audio does not pass through Convex. Both clients obtain an authenticated
+ephemeral token from the backend and then communicate directly with Gemini Live
+over WebSocket. On native, incoming and outgoing Live events are recorded
+locally before any server replication is attempted.
 
 The client-facing contracts are explicitly V1:
 
@@ -114,3 +114,52 @@ There is currently no server-side export endpoint. The implemented export is
 produced from Drift because it is the authoritative and most complete copy,
 including PCM audio. Convex provides durable remote history for remote accounts
 but intentionally contains only the reduced audio metadata described above.
+
+## Web
+
+The web app writes to the same two tables through the same V1 mutation
+(`apps/web/src/lib/voice-history.ts`), so a browser conversation is durable
+history and not just React state. The differences follow from the browser having
+no local database:
+
+- **The outbox is in memory.** Events queue and flush about a second after the
+  last write, with the same 50-event batches and the same five-second retry. A
+  tab closed inside that window loses at most the tail; native would still hold
+  it in Drift.
+- **Only the semantic log is uploaded.** Native additionally persists the raw
+  protocol firehose (`server_message`, `client_message`) and one row per PCM
+  chunk (`audio_input_chunk`, `audio_output_chunk`) — thousands of rows a minute,
+  which SQLite absorbs and a browser round-trip does not. Web records lifecycle,
+  transcript deltas, tool calls and results, mute changes, and the server's
+  `usage_metadata` / `go_away` / `session_resumption_update` signals. Audio bytes
+  never leave either client, so no audio is lost by this; the input/output byte
+  accounting is.
+- **A dropped socket writes status `ended`, not `suspended`.** Native can resume
+  a session from its handle, so a dead socket leaves the session resumable; web
+  cannot yet, so the conversation really is over.
+- **There is no local export.** `exportSessionJson` and friends are Drift APIs.
+  A web user's history lives only in Convex, which is exactly the reduced copy
+  described above.
+
+A web session row covers one conversation, not one visit to the assistant page.
+The recorder belongs to `apps/web/src/components/layout/voice-provider.tsx`,
+which is mounted above the router, so navigating away records
+`screen_detached` and keeps the row open — the same boundary native gets from
+holding the command in its factory. `endedExplicitly` is therefore true only
+when the user actually ended the session; a socket that died writes `ended` with
+it false, and signing out ends the row because the provider unmounts with the
+account. Until 2026-08-21 the recorder was owned by the `/add` route and every
+navigation closed the row with `endedExplicitly: true`, splitting one
+conversation into a session per visit.
+
+The `ownerId` a web batch asserts comes from `v1/users/queries:getMyId`, derived
+server-side, so the account-boundary check above behaves identically for both
+clients.
+
+## Reading the history back
+
+Neither client has one. `v1/voice/sessions.ts` exports only `appendEvents`, and
+there is no query that lists sessions or pages their events, so nothing in
+either app browses past conversations — native's export APIs are the only way
+to get at the data, and they read Drift. A history browser would be a new
+product surface, not parity work.

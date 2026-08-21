@@ -6,6 +6,21 @@
     <link rel="icon" type="image/png" href="./src/assets/favicon.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, interactive-widget=resizes-content" />
     <title>Wallet Bot</title>
+    <script>
+      // Paint the stored theme before first paint, so a dark-mode user never
+      // sees a light flash. `ThemeProvider` owns it from here on; the key
+      // matches the native app's `display_theme` preference.
+      try {
+        const stored = localStorage.getItem('display_theme')
+        const dark =
+          stored === 'dark' ||
+          (stored !== 'light' &&
+            window.matchMedia('(prefers-color-scheme: dark)').matches)
+        document.documentElement.classList.toggle('dark', dark)
+      } catch {
+        // Storage can be unavailable (private mode); the light default is fine.
+      }
+    </script>
   </head>
   <body>
     <div id="root"></div>

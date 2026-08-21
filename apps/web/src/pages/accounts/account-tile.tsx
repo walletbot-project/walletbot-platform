@@ -1,6 +1,8 @@
 import { api } from '@wallet-bot/backend/api'
 import { useQuery } from 'convex/react'
+import type { CSSProperties } from 'react'
 import { AccountIcon } from '@/components/account-icon'
+import { EntityAvatar, EntityListTile } from '@/components/m3/entity-list-tile'
 import { ACCOUNT_DEFAULT_COLOR, normalizeColor } from '@/lib/entity-colors'
 import { useFormatLocale } from '@/lib/i18n'
 import { formatMoney } from '@/lib/money'
@@ -11,15 +13,22 @@ type AccountTileProps = {
     name: string
     icon?: string
     color?: string
+    /** Shape for this tile's position in the group — see `groupedRadius`. */
+    radius: CSSProperties
     onClick: () => void
 }
 
-/** One account row: tinted icon avatar, name, and a live balance (red if negative). */
+/**
+ * One account in the list: the shared entity tile fed the account's accent
+ * (color + icon) and its live balance. Mirrors `AccountListTile` in the native
+ * app — negative balances use the error color.
+ */
 export function AccountTile({
     id,
     name,
     icon,
     color,
+    radius,
     onClick,
 }: AccountTileProps) {
     const formatLocale = useFormatLocale()
@@ -32,32 +41,31 @@ export function AccountTile({
     const isNegative = cents !== null && cents < 0
 
     return (
-        <button
-            type="button"
+        <EntityListTile
+            radius={radius}
             onClick={onClick}
-            className="flex w-full items-center gap-4 px-4 py-3 text-left transition-colors hover:bg-accent/50"
-        >
-            <span
-                className="flex size-10 shrink-0 items-center justify-center rounded-full"
-                style={{ backgroundColor: `${accent}2E` }}
-            >
-                <AccountIcon name={icon} className="size-5" color={accent} />
-            </span>
-            <span className="min-w-0 flex-1 truncate text-sm">{name}</span>
-            <span
-                className={cn(
-                    'shrink-0 text-sm font-semibold tabular-nums',
-                    isNegative ? 'text-destructive' : 'text-foreground',
-                )}
-            >
-                {balance
-                    ? formatMoney(
-                          Number(balance.balance),
-                          balance.currency,
-                          formatLocale,
-                      )
-                    : '—'}
-            </span>
-        </button>
+            leading={
+                <EntityAvatar color={accent}>
+                    <AccountIcon name={icon} size={22} color={accent} />
+                </EntityAvatar>
+            }
+            title={name}
+            trailing={
+                <span
+                    className={cn(
+                        'm3-title-medium tabular-nums',
+                        isNegative ? 'text-error' : 'text-on-surface',
+                    )}
+                >
+                    {balance
+                        ? formatMoney(
+                              Number(balance.balance),
+                              balance.currency,
+                              formatLocale,
+                          )
+                        : '—'}
+                </span>
+            }
+        />
     )
 }

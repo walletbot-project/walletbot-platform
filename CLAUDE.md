@@ -59,6 +59,16 @@ Wallet Bot — app for keeping track of personal expenses
 
 - If the user or a linear ticket asks you to implement a feature in mobile or web, asks the user if he also wants to implement that feature in the other platform to maintain feature parity and suggest possible implementations for this.
 
+### Feature flags
+
+- A feature flag system already exists (`packages/backend/convex/schema/featureFlags.ts`,
+  `featureFlags/helpers.ts`, `featureFlags/utils.ts` for the `KNOWN_FLAGS` registry, and
+  `v1/featureFlags/queries.ts`/`mutations.ts`). Use it to gate partially developed features or
+  features we want to experiment with, instead of shipping them fully exposed.
+- When starting work on a new feature, proactively ask the developer whether it should be gated
+  behind a feature flag (e.g. because it's partial/WIP, experimental, or needs staged rollout).
+  Don't assume — ask.
+
 ## Dev workflow
 
 - `pnpm dev` at root starts both web and convex dev servers in parallel
