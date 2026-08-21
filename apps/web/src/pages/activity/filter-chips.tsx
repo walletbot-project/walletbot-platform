@@ -1,4 +1,4 @@
-import { Button } from '@/components/ui/button'
+import { ChoiceChip } from '@/components/m3/chip'
 import { type Messages, useT } from '@/lib/i18n'
 import type { TransactionType } from './helpers'
 
@@ -21,25 +21,19 @@ type FilterChipsProps = {
     onChange: (value: TransactionType | null) => void
 }
 
+/** The transaction-type choice chips above the activity list. */
 export function FilterChips({ selected, onChange }: FilterChipsProps) {
     const t = useT()
     return (
-        <div className="flex gap-2 overflow-x-auto pb-1">
-            {OPTIONS.map((option) => {
-                const isSelected = option.value === selected
-                return (
-                    <Button
-                        key={option.value ?? 'all'}
-                        type="button"
-                        size="sm"
-                        variant={isSelected ? 'secondary' : 'outline'}
-                        className="shrink-0 rounded-full"
-                        onClick={() => onChange(option.value)}
-                    >
-                        {option.label(t)}
-                    </Button>
-                )
-            })}
+        <div className="flex gap-2 overflow-x-auto px-4 pb-1">
+            {OPTIONS.map((option) => (
+                <ChoiceChip
+                    key={option.value ?? 'all'}
+                    label={option.label(t)}
+                    selected={option.value === selected}
+                    onSelect={() => onChange(option.value)}
+                />
+            ))}
         </div>
     )
 }

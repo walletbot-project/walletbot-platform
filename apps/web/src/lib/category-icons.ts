@@ -1,46 +1,39 @@
-import {
-    Bus,
-    Dumbbell,
-    GraduationCap,
-    Heart,
-    HelpCircle,
-    Home,
-    type LucideIcon,
-    PartyPopper,
-    PawPrint,
-    PiggyBank,
-    ReceiptText,
-    Shapes,
-    ShoppingBag,
-    ShoppingCart,
-    Utensils,
-} from 'lucide-react'
 import type { IconOption } from './account-icons'
 
-// Icon catalog for categories. Names mirror the native catalog
-// (apps/native/lib/components/category_icons.dart) so a category keeps its icon
-// across platforms.
+/**
+ * Icon catalog for categories. Names *and* glyphs mirror the native catalog
+ * (apps/native/lib/components/category_icons.dart), so a category looks the
+ * same on both platforms.
+ */
 export const CATEGORY_ICONS: readonly IconOption[] = [
-    { name: 'category', Icon: Shapes },
-    { name: 'receipt', Icon: ReceiptText },
-    { name: 'shopping_bag', Icon: ShoppingBag },
-    { name: 'shopping_cart', Icon: ShoppingCart },
-    { name: 'savings', Icon: PiggyBank },
-    { name: 'health', Icon: Heart },
-    { name: 'education', Icon: GraduationCap },
-    { name: 'restaurant', Icon: Utensils },
-    { name: 'transport', Icon: Bus },
-    { name: 'home', Icon: Home },
-    { name: 'celebration', Icon: PartyPopper },
-    { name: 'fitness', Icon: Dumbbell },
-    { name: 'pets', Icon: PawPrint },
-    { name: 'help', Icon: HelpCircle },
+    { name: 'category', symbol: 'category', filled: true },
+    { name: 'receipt', symbol: 'receipt_long', filled: true },
+    { name: 'shopping_bag', symbol: 'shopping_bag', filled: true },
+    { name: 'shopping_cart', symbol: 'shopping_cart', filled: true },
+    { name: 'savings', symbol: 'savings', filled: true },
+    { name: 'health', symbol: 'favorite', filled: true },
+    { name: 'education', symbol: 'school', filled: true },
+    { name: 'restaurant', symbol: 'restaurant', filled: true },
+    { name: 'transport', symbol: 'directions_bus', filled: true },
+    { name: 'home', symbol: 'home', filled: true },
+    { name: 'celebration', symbol: 'celebration', filled: true },
+    { name: 'fitness', symbol: 'fitness_center', filled: true },
+    { name: 'pets', symbol: 'pets', filled: true },
+    { name: 'help', symbol: 'help', filled: false },
 ]
 
 export const CATEGORY_DEFAULT_ICON = 'category'
 
-export const CATEGORY_FALLBACK_ICON: LucideIcon = Shapes
+export const CATEGORY_FALLBACK_ICON: IconOption = CATEGORY_ICONS[0]
 
-export const CATEGORY_ICON_MAP: Record<string, LucideIcon> = Object.fromEntries(
-    CATEGORY_ICONS.map((i) => [i.name, i.Icon]),
+const CATEGORY_ICON_MAP: ReadonlyMap<string, IconOption> = new Map(
+    CATEGORY_ICONS.map((option) => [option.name, option]),
 )
+
+/** Resolves a stored icon name to its glyph, falling back to the default. */
+export function categoryIcon(name: string | undefined): IconOption {
+    return (
+        (name ? CATEGORY_ICON_MAP.get(name) : undefined) ??
+        CATEGORY_FALLBACK_ICON
+    )
+}

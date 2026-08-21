@@ -52,3 +52,18 @@ export const transactions = defineTable({
     .index('by_user_account_date', ['userId', 'accountId', 'date'])
     .index('by_user_category_date', ['userId', 'categoryId', 'date'])
     .index('by_user_to_account_date', ['userId', 'toAccountId', 'date'])
+    // Text search over the user's whole history. Native filters with SQL LIKE
+    // against its local database, so a web search that only looked at the rows
+    // already paged in silently missed older matches. A search index takes one
+    // `searchField` each, and the text dimension covers name *and* description
+    // (`matchesCondition`, case 'text'), so it takes two — callers union the
+    // candidates. `isArchived` is a filter field because every read excludes
+    // archived rows.
+    .searchIndex('search_name', {
+        searchField: 'name',
+        filterFields: ['userId', 'isArchived'],
+    })
+    .searchIndex('search_description', {
+        searchField: 'description',
+        filterFields: ['userId', 'isArchived'],
+    })
