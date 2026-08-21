@@ -8,6 +8,7 @@ import { registerConfigRoutes } from './config/http'
 import { resend } from './emails/helpers'
 import { jsonResponse } from './httpHelpers'
 import { createLiveToken } from './live/createToken'
+import { registerSupportRoutes } from './support/http'
 import { registerTelemetryRoutes } from './telemetry/http'
 import { registerUserDeletionRoutes } from './userDeletion/http'
 
@@ -79,5 +80,11 @@ http.route({
         resend.handleResendEventWebhook(ctx, req),
     ),
 })
+
+// Resend inbound mail (`email.received`) for support@walletbot.live: archived
+// to the `supportEmails` table and redirected to SUPPORT_FORWARD_TO. Separate
+// route and separate signing secret (RESEND_INBOUND_WEBHOOK_SECRET) from the
+// delivery-event webhook above — see support/http.ts.
+registerSupportRoutes(http)
 
 export default http

@@ -10,6 +10,7 @@ import {
 } from './schema/featureFlags'
 import { legalAcceptances } from './schema/legal'
 import { refreshTokens } from './schema/refreshTokens'
+import { supportEmails } from './schema/supportEmails'
 import { syncCounters, tombstones } from './schema/sync'
 import { tags } from './schema/tags'
 import {
@@ -36,6 +37,7 @@ export default defineSchema({
     legalAcceptances,
     refreshTokens,
     savedFilters,
+    supportEmails,
     syncCounters,
     tags,
     telemetryEvents,
