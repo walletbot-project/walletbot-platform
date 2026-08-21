@@ -368,6 +368,14 @@ export function WidgetSheet({
 
                 {usesFilter ? (
                     <Section label={t.dashboard.filter}>
+                        {/*
+                         * No inline error while the filter is empty: an
+                         * untouched sheet is not a mistake the user has made
+                         * yet, and the disabled confirm button already says
+                         * the tile is not ready. Native shows nothing here
+                         * either — its only message is the snackbar `_submit`
+                         * raises, which `handleSubmit` mirrors as a toast.
+                         */}
                         <PickerField
                             label={t.dashboard.filter}
                             value={
@@ -380,11 +388,6 @@ export function WidgetSheet({
                             onClick={() => setFilterOpen(true)}
                             disabled={submitting}
                         />
-                        {filterMissing ? (
-                            <p className="m3-body-small px-4 text-error">
-                                {t.dashboard.filterRequired}
-                            </p>
-                        ) : null}
                     </Section>
                 ) : null}
 
