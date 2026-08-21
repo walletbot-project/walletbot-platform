@@ -13,7 +13,7 @@ The offline-first local database and sync engine are the known architectural
 difference and are out of scope; this list is what sits on top of them.
 
 Closed entries move to § 5 rather than being deleted, and keep their original
-numbers so the ids stay quotable. Last updated 2026-08-19.
+numbers so the ids stay quotable. Last updated 2026-08-21.
 
 ---
 
@@ -32,8 +32,9 @@ flips to `disconnected` and the conversation ends
 The ephemeral token already negotiates `sessionResumption` and
 `contextWindowCompression`, so the server side is ready.
 
-Related and also open: native keeps the session alive when the screen is left,
-while web tears it down when the route unmounts.
+A session left running while the user is on another screen (1.12) is now web's
+behaviour too, which makes this the only remaining way web loses a conversation
+native would keep.
 
 Closing 1.4 wrote the observation into the history: web records the server's
 `session_resumption_update` and `go_away` signals but does nothing with them, and
@@ -98,6 +99,10 @@ Web's equivalent is fully internationalized. This is one of the items where
   (defaults plus per-user overrides). No native equivalent; flags can only be
   administered from web.
 - **Microphone device picker** in the voice screen — `apps/web/src/pages/add.tsx`.
+- **A returning assistant screen restores the whole conversation.** Native
+  replays the command's event log, so a *typed* turn — a local bubble, never an
+  event — is missing when `VoiceScreen` is reopened. Web keeps the message list
+  itself and restores everything. Introduced by closing 1.12.
 - **Transaction counts on tag chips** in Insights —
   `apps/web/src/pages/insights/tags-view.tsx`. Native shows the chip only.
 - **Currency list in the inline "new account" dialog** — the web transaction
@@ -204,7 +209,15 @@ does not); and a dropped socket writes status `ended` rather than native's
 `suspended`, because web cannot resume it (1.5).
 
 There is still no export surface for a web user's history — `exportSessionJson`
-and friends are Drift APIs, so Convex holds the only copy.
+and friends are Drift APIs, so Convex holds the only copy. Nothing reads the two
+tables back either: `v1/voice/sessions.ts` exports only `appendEvents`, and
+neither client has a screen that browses past conversations. A history *browser*
+would be a new product surface on both, not parity.
+
+What this entry got wrong, corrected by 1.12: the session boundary. Because the
+recorder was owned by the `/add` route, every navigation ended the row with
+`endedExplicitly: true`, so one conversation split into a session per page visit
+and each claimed the user had ended it.
 
 ### 1.6 Dashboard widget filters are narrower on web — closed 2026-08-19
 
@@ -282,3 +295,41 @@ an overlapping same-row swap is refused instead of persisted.
 `crypto.randomUUID()`, the scheme native settled on
 (`apps/native/lib/data/ids.dart`) and the one the backend generates and
 documents. The three inlined definitions are gone.
+
+### 1.12 Leaving the assistant page destroyed the conversation — closed 2026-08-21
+
+Web owned the Live session from inside the `/add` route: `useVoice` was called
+in the page and closed the socket from its own unmount effect. Navigating to
+Accounts and back therefore landed on an empty screen — no transcript, no
+session, and any tool call in flight aborted with the socket.
+
+Native's session lives above the navigator. `GeminiVoiceExpenseCommand` is held
+by `GeminiVoiceExpenseCommandFactory` (`apps/native/lib/main.dart`), so popping
+`VoiceScreen` leaves it running, and `initState` re-attaches to
+`activeCommand`; the transcript comes back because the command replays its
+in-memory `_history` to every new subscriber
+(`apps/native/lib/voice/gemini_voice_expense_command.dart`).
+
+Web now has the same ownership rather than the same machinery:
+`apps/web/src/components/layout/voice-provider.tsx` holds the one session,
+mounted inside `AuthProvider` and above `RootLayout`, and `/add` reads it
+through `useVoiceSession`. The page calls `attach` / `detach` on mount and
+unmount, which port `_VoiceScreenState`'s `screen_attached` / `screen_detached`:
+leaving interrupts the answer in flight, flushes the audio turn and releases the
+mic, while the socket, the running agent and the transcript stay. Ending the
+session — the call button, a dead socket, or signing out — still tears
+everything down, and leaving an already-ended conversation clears the log, as
+native does when its factory has dropped the command.
+
+Two consequences beyond the visible one:
+
+- the composer draft is still page-local, matching native's `_textController`;
+- **web ends up ahead of native here.** Native replays *events*, so a typed turn
+  — which is a local bubble, not an event — is lost on re-entry. Web restores
+  the whole log. Worth fixing on native rather than matching downwards.
+
+Verified in headless Chromium against the real provider, hook and page, with the
+React Compiler in the harness and only the Gemini socket and the Convex
+deployment stubbed: 11 checks over the live-session navigation, the re-render on
+return, the ended-session clean slate, and the old page-owned shape as a control
+— it closes the socket on the same navigation the new one survives.

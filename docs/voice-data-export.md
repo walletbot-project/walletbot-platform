@@ -141,6 +141,25 @@ no local database:
   A web user's history lives only in Convex, which is exactly the reduced copy
   described above.
 
+A web session row covers one conversation, not one visit to the assistant page.
+The recorder belongs to `apps/web/src/components/layout/voice-provider.tsx`,
+which is mounted above the router, so navigating away records
+`screen_detached` and keeps the row open — the same boundary native gets from
+holding the command in its factory. `endedExplicitly` is therefore true only
+when the user actually ended the session; a socket that died writes `ended` with
+it false, and signing out ends the row because the provider unmounts with the
+account. Until 2026-08-21 the recorder was owned by the `/add` route and every
+navigation closed the row with `endedExplicitly: true`, splitting one
+conversation into a session per visit.
+
 The `ownerId` a web batch asserts comes from `v1/users/queries:getMyId`, derived
 server-side, so the account-boundary check above behaves identically for both
 clients.
+
+## Reading the history back
+
+Neither client has one. `v1/voice/sessions.ts` exports only `appendEvents`, and
+there is no query that lists sessions or pages their events, so nothing in
+either app browses past conversations — native's export APIs are the only way
+to get at the data, and they read Drift. A history browser would be a new
+product surface, not parity work.

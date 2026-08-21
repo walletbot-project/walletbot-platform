@@ -1073,8 +1073,61 @@ export function useVoice(opts: UseVoiceOpts) {
         recordHistory,
     ])
 
+    /**
+     * The assistant screen is on screen again. Mirrors
+     * `_VoiceScreenState.initState` re-attaching to the factory's active
+     * command in `apps/native/lib/screens/voice.dart`: there is nothing to
+     * rebuild, because the session and its transcript never went away.
+     */
+    const attach = useCallback(() => {
+        if (statusRef.current === 'disconnected') return
+        recordHistory('screen_attached', 'client')
+    }, [recordHistory])
+
+    /**
+     * The assistant screen went away but the account did not — the user simply
+     * navigated elsewhere. Mirrors `_VoiceScreenState.dispose`: the current
+     * answer is interrupted, the audio turn is flushed and the mic is released,
+     * while the socket, the running agent and the transcript stay. Coming back
+     * to `/add` finds the conversation where it was left.
+     *
+     * The mic release is not optional on web the way it reads on native: a
+     * browser keeps its recording indicator lit for as long as the track is
+     * live, and the user is no longer looking at the screen that explains it.
+     */
+    const detach = useCallback(() => {
+        if (statusRef.current === 'disconnected') {
+            // The conversation is over — the user ended it, or the socket did.
+            // Native's factory drops the command at that point, so reopening
+            // the screen starts from an empty log; leaving the transcript up
+            // would suggest something is still listening.
+            setMessages([])
+            return
+        }
+        recordHistory('screen_detached', 'client', {
+            micMuted: true,
+            sessionKeptActive: true,
+        })
+        // Native's `interruptAgentResponse('screen_detached')`: stop speaking
+        // and drop what the server has already queued for this turn. Both flags
+        // are cleared again by the next spoken turn / `turnComplete`.
+        audioPlaybackEnabledRef.current = false
+        discardOutputRef.current = true
+        playbackWorkletRef.current?.port.postMessage('interrupt')
+        finalisePendingAgent({ interrupted: true })
+        endAudioStream()
+        stopMicCapture()
+    }, [recordHistory, finalisePendingAgent, endAudioStream, stopMicCapture])
+
     const clearMessages = useCallback(() => setMessages([]), [])
 
+    /*
+     * Ends the session when the *account* goes away, which is the only thing
+     * that unmounts `VoiceProvider` — it sits inside `AuthProvider`, above the
+     * router. This used to hang off the `/add` page, where it fired on every
+     * navigation: it killed the socket mid-answer and wrote a `voiceSessions`
+     * row marked `endedExplicitly` for what was only a tab change.
+     */
     useEffect(() => disconnect, [disconnect])
 
     return {
@@ -1091,6 +1144,8 @@ export function useVoice(opts: UseVoiceOpts) {
         handleDeviceChange,
         connect,
         disconnect,
+        attach,
+        detach,
         openMic,
         setMicOn,
         sendText,
@@ -1099,3 +1154,8 @@ export function useVoice(opts: UseVoiceOpts) {
         clearMessages,
     }
 }
+
+/**
+ * The session object `VoiceProvider` publishes and `useVoiceSession` reads.
+ */
+export type VoiceSession = ReturnType<typeof useVoice>

@@ -6,7 +6,7 @@ import {
     MenuButton,
     MenuItem,
 } from 'actify'
-import { useConvex, useQuery } from 'convex/react'
+import { useQuery } from 'convex/react'
 import {
     type KeyboardEvent,
     type PointerEvent,
@@ -19,7 +19,8 @@ import { useNavigate } from 'react-router-dom'
 import { AppBar } from '@/components/m3/app-bar'
 import { Icon } from '@/components/m3/icon'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
-import { type ChatMessage, useVoice } from '@/hooks/use-voice'
+import type { ChatMessage } from '@/hooks/use-voice'
+import { useVoiceSession } from '@/hooks/use-voice-session'
 import { useFormatLocale, useT } from '@/lib/i18n'
 import { cn } from '@/lib/utils'
 import { ActionWidget } from '@/pages/add-action-widget'
@@ -610,13 +611,24 @@ function PrimaryActionButton({
 export function Add() {
     const t = useT()
     const navigate = useNavigate()
-    const client = useConvex()
-    const voice = useVoice({ context: { client } })
+    // The session belongs to `VoiceProvider`, above the router: this page shows
+    // it, it does not own it. Leaving the page no longer ends the conversation.
+    const voice = useVoiceSession()
     const flags = useQuery(api.v1.featureFlags.queries.getMyFlags)
     const debugEnabled = flags?.debugToolCalls ?? false
 
     const [text, setText] = useState('')
     const isComposing = text.trim().length > 0
+
+    // Native's `screen_attached` / `screen_detached`, with the same effects:
+    // leaving mutes the mic and interrupts the answer in flight, and keeps
+    // everything else running. The composer draft stays page-local, as
+    // `_textController` does on native.
+    const { attach, detach } = voice
+    useEffect(() => {
+        attach()
+        return detach
+    }, [attach, detach])
 
     const status: 'idle' | 'connecting' | 'connected' = voice.isConnected
         ? 'connected'

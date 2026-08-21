@@ -1,5 +1,6 @@
 import { Navigate, Outlet, useLocation } from 'react-router-dom'
 import { AuthProvider } from '@/components/layout/auth-provider'
+import { VoiceProvider } from '@/components/layout/voice-provider'
 import { useCachedSession } from '@/hooks/use-cached-session'
 
 export function AuthGuard() {
@@ -14,7 +15,13 @@ export function AuthGuard() {
 
     return (
         <AuthProvider>
-            <Outlet />
+            {/*
+             * Above the router, so the assistant conversation survives every
+             * navigation, and inside AuthProvider, so it ends with the account.
+             */}
+            <VoiceProvider>
+                <Outlet />
+            </VoiceProvider>
         </AuthProvider>
     )
 }
