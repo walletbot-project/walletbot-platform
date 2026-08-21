@@ -139,6 +139,13 @@ export const consumeToken = internalMutation({
 // and no syncCounters bump on purpose: the user is denylisted before this
 // runs, so no client of theirs can pull again — and the point is to leave no
 // trace, not to replicate the deletion.
+//
+// Deliberately NOT purged: `telemetryEvents` and `telemetryMetrics`. Both carry
+// an optional `userId` (and an index on it), but they hold no financial rows and
+// the ingest contract forbids PII in `properties`/`attributes` — they are
+// aggregate product analytics, and dropping a deleted user's rows would silently
+// restate historical counts. If that trade is ever revisited, both tables are
+// index-ready (`by_userId_and_receivedAt`) and belong here as two more steps.
 export const purgeUserData = internalMutation({
     args: { userId: v.string() },
     handler: async (ctx, { userId }) => {
@@ -247,6 +254,22 @@ export const purgeUserData = internalMutation({
                     await ctx.db
                         .query('userSettings')
                         .withIndex('by_user', (q) => q.eq('userId', userId))
+                        .take(n),
+                ),
+            async (n) =>
+                deleteRows(
+                    await ctx.db
+                        .query('featureFlagOverrides')
+                        .withIndex('by_user', (q) => q.eq('userId', userId))
+                        .take(n),
+                ),
+            // Holds the user's email as well as their id, so leaving it behind
+            // would keep an address alive after the account is "deleted".
+            async (n) =>
+                deleteRows(
+                    await ctx.db
+                        .query('admins')
+                        .withIndex('by_user_id', (q) => q.eq('userId', userId))
                         .take(n),
                 ),
             async (n) =>

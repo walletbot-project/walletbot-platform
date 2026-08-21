@@ -418,7 +418,19 @@ const resendVerificationHandler = corsHttpAction(async (ctx, req) => {
 
 type RefreshBody = {
     refreshToken?: string
+    /**
+     * The account's better-auth user id, sent so a refresh that fails because
+     * the account was deleted can be told apart from an ordinary expired or
+     * revoked session. `purgeUserData` deletes `refreshTokens` first, so by the
+     * time the client notices, the token row is gone and the id is the only
+     * thing left to look up. Optional: older clients omit it and keep the
+     * generic `invalid_refresh_token`.
+     */
+    userId?: string
 }
+
+const isDeletedUser = (ctx: ActionCtx, userId: string): Promise<boolean> =>
+    ctx.runQuery(internal.userDeletion.internal.isUserDeleted, { userId })
 
 const refreshHandler = corsHttpAction(async (ctx, req) => {
     const body = await parseJsonBody<RefreshBody>(req)
@@ -437,7 +449,24 @@ const refreshHandler = corsHttpAction(async (ctx, req) => {
     )
 
     if (!validation.ok) {
+        // The token is gone or dead. If the caller named an account we know is
+        // deleted, say so: re-authenticating would mint a *new* user for the
+        // same address, which is exactly the duplicate-account trap.
+        if (
+            typeof body.userId === 'string' &&
+            body.userId.length > 0 &&
+            (await isDeletedUser(ctx, body.userId))
+        ) {
+            return jsonError(401, 'account_deleted', 'account was deleted')
+        }
         return jsonError(401, 'invalid_refresh_token', validation.reason)
+    }
+
+    // The token outlived the denylist entry — the purge is batched, so it may
+    // not have reached `refreshTokens` yet. Minting here would hand out an
+    // access token that every `requireAuth` call rejects anyway.
+    if (await isDeletedUser(ctx, validation.userId)) {
+        return jsonError(401, 'account_deleted', 'account was deleted')
     }
 
     const access = await mintAccessToken(validation.userId)

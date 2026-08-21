@@ -620,6 +620,36 @@ abstract class AppLocalizations {
   /// **'Could not send the email. Try again in a few minutes.'**
   String get deleteUserAccountFailed;
 
+  /// No description provided for @accountDeletedBanner.
+  ///
+  /// In en, this message translates to:
+  /// **'This account was deleted'**
+  String get accountDeletedBanner;
+
+  /// No description provided for @accountDeletedRemove.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove'**
+  String get accountDeletedRemove;
+
+  /// No description provided for @accountDeletedConfirmTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove this account from the device?'**
+  String get accountDeletedConfirmTitle;
+
+  /// No description provided for @accountDeletedConfirmBody.
+  ///
+  /// In en, this message translates to:
+  /// **'The account is already deleted on the server. This erases its data from this device too, which is the last copy.'**
+  String get accountDeletedConfirmBody;
+
+  /// No description provided for @accountDeletedRemoveConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove'**
+  String get accountDeletedRemoveConfirm;
+
   /// No description provided for @updateRequiredTitle.
   ///
   /// In en, this message translates to:

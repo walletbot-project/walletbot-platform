@@ -293,6 +293,23 @@ class AppLocalizationsEs extends AppLocalizations {
       'No pudimos enviar el correo. Probá de nuevo en unos minutos.';
 
   @override
+  String get accountDeletedBanner => 'Esta cuenta fue eliminada';
+
+  @override
+  String get accountDeletedRemove => 'Quitar';
+
+  @override
+  String get accountDeletedConfirmTitle =>
+      '¿Quitar esta cuenta del dispositivo?';
+
+  @override
+  String get accountDeletedConfirmBody =>
+      'La cuenta ya fue eliminada en el servidor. Esto borra también sus datos de este dispositivo, que son la última copia.';
+
+  @override
+  String get accountDeletedRemoveConfirm => 'Quitar';
+
+  @override
   String get updateRequiredTitle => 'Actualización obligatoria';
 
   @override

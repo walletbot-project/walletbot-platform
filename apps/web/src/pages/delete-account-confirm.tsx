@@ -1,28 +1,31 @@
-import {
-    CircleAlert,
-    CircleCheck,
-    LoaderCircle,
-    TriangleAlert,
-} from 'lucide-react'
+import { Button } from 'actify'
 import { type FormEvent, useState } from 'react'
-import { Link, useSearchParams } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
-
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
+import {
+    AuthFrame,
+    AuthMessagePanel,
+    AuthPanel,
+    AuthPanelTitle,
+    AuthPrimaryButton,
+    AuthTextField,
+} from '@/components/auth/auth-scaffold'
 import { authClient } from '@/lib/auth-client'
-
-const CONFIRM_WORD = 'ELIMINAR'
+import { useT } from '@/lib/i18n'
 
 // Landing page for the emailed deletion link. Guard-free (see router.tsx):
 // the link can be opened with or without a session. Possession of the token
 // is the authorization — confirming here is final and irreversible.
 export function DeleteAccountConfirm() {
+    const t = useT()
+    const navigate = useNavigate()
     const [searchParams] = useSearchParams()
     const token = searchParams.get('token')
 
-    const [confirmWord, setConfirmWord] = useState('')
+    // The word is typed by the user, so it follows the app's language.
+    const confirmWord = t.deleteAccount.confirmWord
+
+    const [typedWord, setTypedWord] = useState('')
     const [loading, setLoading] = useState(false)
     const [done, setDone] = useState(false)
     // The token is single-use: if the submit fails with invalid_token the
@@ -33,7 +36,7 @@ export function DeleteAccountConfirm() {
 
     const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
         event.preventDefault()
-        if (!token || confirmWord !== CONFIRM_WORD) return
+        if (!token || typedWord !== confirmWord) return
 
         setLoading(true)
         try {
@@ -50,11 +53,11 @@ export function DeleteAccountConfirm() {
                 return
             }
             if (!res.ok) {
-                throw new Error('No se pudo eliminar la cuenta')
+                throw new Error(t.deleteAccount.deleteFailed)
             }
 
             setDone(true)
-            toast.success('Tu cuenta fue eliminada')
+            toast.success(t.deleteAccount.doneTitle)
             // Clear any local session state — the server already revoked
             // every session, so this can only fail harmlessly.
             try {
@@ -66,7 +69,7 @@ export function DeleteAccountConfirm() {
             toast.error(
                 err instanceof Error
                     ? err.message
-                    : 'No se pudo eliminar la cuenta',
+                    : t.deleteAccount.deleteFailed,
             )
         } finally {
             setLoading(false)
@@ -75,124 +78,85 @@ export function DeleteAccountConfirm() {
 
     if (done) {
         return (
-            <div className="flex min-h-screen items-center justify-center bg-background">
-                <div className="flex w-full max-w-sm flex-col items-center gap-6 px-4 text-center">
-                    <div className="rounded-full bg-muted p-4">
-                        <CircleCheck className="size-6 text-muted-foreground" />
-                    </div>
-                    <div className="flex flex-col gap-2">
-                        <h1 className="text-2xl font-semibold tracking-tight">
-                            Tu cuenta fue eliminada
-                        </h1>
-                        <p className="text-sm text-muted-foreground">
-                            Estamos borrando todos tus datos de forma
-                            permanente. Gracias por haber usado Wallet Bot.
-                        </p>
-                    </div>
-                </div>
-            </div>
+            <AuthFrame>
+                <AuthMessagePanel
+                    icon="check_circle"
+                    title={t.deleteAccount.doneTitle}
+                    subtitle={t.deleteAccount.doneBody}
+                    actionLabel={t.deleteAccount.backHome}
+                    onAction={() => navigate('/')}
+                />
+            </AuthFrame>
         )
     }
 
     if (invalidLink) {
         return (
-            <div className="flex min-h-screen items-center justify-center bg-background">
-                <div className="flex w-full max-w-sm flex-col items-center gap-6 px-4 text-center">
-                    <div className="rounded-full bg-destructive/10 p-4">
-                        <CircleAlert className="size-6 text-destructive" />
-                    </div>
-                    <div className="flex flex-col gap-2">
-                        <h1 className="text-2xl font-semibold tracking-tight">
-                            Enlace no válido
-                        </h1>
-                        <p className="text-sm text-muted-foreground">
-                            El enlace no es válido, ya venció o ya fue usado. Si
-                            todavía querés eliminar tu cuenta, pedí un enlace
-                            nuevo.
-                        </p>
-                    </div>
-                    <Button
-                        className="w-full"
-                        render={<Link to="/delete-account" />}
-                    >
-                        Pedir un enlace nuevo
-                    </Button>
-                </div>
-            </div>
+            <AuthFrame>
+                <AuthMessagePanel
+                    icon="link_off"
+                    title={t.deleteAccount.invalidTitle}
+                    subtitle={t.deleteAccount.invalidBody}
+                    actionLabel={t.deleteAccount.requestNewLink}
+                    onAction={() => navigate('/delete-account')}
+                />
+            </AuthFrame>
         )
     }
 
     return (
-        <div className="flex min-h-screen items-center justify-center bg-background">
-            <div className="flex w-full max-w-sm flex-col items-center gap-6 px-4">
-                <div className="flex flex-col items-center gap-2 text-center">
-                    <div className="rounded-full bg-destructive/10 p-4">
-                        <TriangleAlert className="size-6 text-destructive" />
-                    </div>
-                    <h1 className="text-2xl font-semibold tracking-tight">
-                        ¿Eliminar tu cuenta definitivamente?
-                    </h1>
-                    <p className="text-sm text-muted-foreground">
-                        Esta acción es permanente y no se puede deshacer.
-                    </p>
-                </div>
+        <AuthFrame>
+            <AuthPanel>
+                <AuthPanelTitle
+                    icon="warning"
+                    title={t.deleteAccount.confirmTitle}
+                    subtitle={t.deleteAccount.confirmSubtitle}
+                />
 
-                <div className="w-full rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3">
-                    <p className="text-sm font-medium text-destructive">
-                        Se va a borrar para siempre:
+                <div className="mt-4 rounded-2xl bg-error-container px-4 py-3 text-on-error-container">
+                    <p className="m3-body-medium font-semibold">
+                        {t.deleteAccount.willDeleteTitle}
                     </p>
-                    <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-destructive">
-                        <li>Todas tus transacciones</li>
-                        <li>Tus cuentas y saldos</li>
-                        <li>Categorías, etiquetas y configuración</li>
-                        <li>Tu usuario y acceso a Wallet Bot</li>
+                    <ul className="m3-body-medium mt-2 list-disc space-y-1 pl-5">
+                        <li>{t.deleteAccount.willDeleteTransactions}</li>
+                        <li>{t.deleteAccount.willDeleteAccounts}</li>
+                        <li>{t.deleteAccount.willDeleteCategories}</li>
+                        <li>{t.deleteAccount.willDeleteUser}</li>
                     </ul>
                 </div>
 
                 <form
-                    className="flex w-full flex-col gap-4"
+                    className="mt-4.5 flex flex-col gap-4"
                     onSubmit={handleSubmit}
                 >
-                    <div className="grid gap-2">
-                        <Label htmlFor="confirm-word">
-                            Para confirmar, escribí{' '}
-                            <span className="font-semibold">
-                                {CONFIRM_WORD}
-                            </span>
-                        </Label>
-                        <Input
-                            id="confirm-word"
-                            name="confirm-word"
-                            autoComplete="off"
-                            placeholder={CONFIRM_WORD}
-                            value={confirmWord}
-                            onChange={(e) => setConfirmWord(e.target.value)}
-                            required
-                            disabled={loading}
-                        />
-                    </div>
-
-                    <Button
+                    <AuthTextField
+                        icon="keyboard"
+                        name="confirm-word"
+                        label={`${t.deleteAccount.confirmPrompt} ${confirmWord}`}
+                        autoComplete="off"
+                        value={typedWord}
+                        onChange={setTypedWord}
+                        isRequired
+                        isDisabled={loading}
+                    />
+                    <AuthPrimaryButton
                         type="submit"
-                        variant="destructive"
-                        className="w-full"
-                        disabled={loading || confirmWord !== CONFIRM_WORD}
-                    >
-                        {loading ? (
-                            <LoaderCircle className="animate-spin" />
-                        ) : null}
-                        Eliminar mi cuenta definitivamente
-                    </Button>
-
-                    <Button
-                        variant="ghost"
-                        className="w-full"
-                        render={<Link to="/" />}
-                    >
-                        Cancelar
-                    </Button>
+                        submitting={loading}
+                        disabled={typedWord !== confirmWord}
+                        label={t.deleteAccount.confirmSubmit}
+                    />
+                    <div className="flex justify-center">
+                        <Button
+                            type="button"
+                            variant="text"
+                            isDisabled={loading}
+                            onPress={() => navigate('/')}
+                        >
+                            {t.common.cancel}
+                        </Button>
+                    </div>
                 </form>
-            </div>
-        </div>
+            </AuthPanel>
+        </AuthFrame>
     )
 }

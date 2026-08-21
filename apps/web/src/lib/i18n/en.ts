@@ -69,6 +69,49 @@ export const en: Messages = {
         featureFlags: 'Feature flags',
     },
 
+    deleteAccount: {
+        tile: 'Delete my account',
+        tileDescription: 'Permanently delete your account and all your data',
+
+        title: 'Delete your account',
+        subtitle:
+            'Enter your email and we will send you a link to confirm the deletion.',
+        warning:
+            'Your account and all your data will be permanently deleted. This cannot be undone.',
+        emailLabel: 'Email',
+        submit: 'Send deletion link',
+        sendFailed: 'Could not send the email. Try again in a few minutes.',
+
+        sentTitle: 'Check your email',
+        sentDefinite: (p: { email: string }) =>
+            `We sent a link to ${p.email} to delete your account.`,
+        sentGeneric: (p: { email: string }) =>
+            `If an account exists for ${p.email}, we sent it a link to delete it.`,
+        sentHint: 'The link expires in 24 hours.',
+        backHome: 'Back to home',
+
+        confirmWord: 'DELETE',
+        confirmTitle: 'Delete your account for good?',
+        confirmSubtitle: 'This action is permanent and cannot be undone.',
+        willDeleteTitle: 'This will be deleted forever:',
+        willDeleteTransactions: 'All your transactions',
+        willDeleteAccounts: 'Your accounts and balances',
+        willDeleteCategories: 'Categories, tags and settings',
+        willDeleteUser: 'Your user and access to Wallet Bot',
+        confirmPrompt: 'To confirm, type',
+        confirmSubmit: 'Permanently delete my account',
+        deleteFailed: 'Could not delete the account',
+
+        doneTitle: 'Your account was deleted',
+        doneBody:
+            'We are permanently erasing all your data. Thanks for using Wallet Bot.',
+
+        invalidTitle: 'Invalid link',
+        invalidBody:
+            'This link is invalid, has expired, or was already used. If you still want to delete your account, request a new link.',
+        requestNewLink: 'Request a new link',
+    },
+
     auth: {
         signInToContinue: 'Sign in to continue',
         withAccount: 'With account',

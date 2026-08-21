@@ -9,6 +9,7 @@ class UserAccount {
     this.picture,
     this.sessionToken,
     this.requiresReauth = false,
+    this.serverDeleted = false,
   });
 
   final String id;
@@ -26,12 +27,21 @@ class UserAccount {
   /// locally so the user is never locked out — offline mode still works.
   final bool requiresReauth;
 
+  /// The server confirmed this user was **deleted** (`account_deleted` from
+  /// `POST /auth/refresh`), not merely signed out. Signing in again would mint
+  /// a brand-new user for the same address instead of restoring this one, so
+  /// the only honest offers are "remove from this device" or staying offline.
+  /// Set exclusively from that explicit code — never inferred from a bare 401,
+  /// which is an ordinary expired session.
+  final bool serverDeleted;
+
   UserAccount copyWith({
     String? name,
     String? email,
     String? picture,
     String? sessionToken,
     bool? requiresReauth,
+    bool? serverDeleted,
   }) {
     return UserAccount(
       id: id,
@@ -41,6 +51,7 @@ class UserAccount {
       picture: picture ?? this.picture,
       sessionToken: sessionToken ?? this.sessionToken,
       requiresReauth: requiresReauth ?? this.requiresReauth,
+      serverDeleted: serverDeleted ?? this.serverDeleted,
     );
   }
 
@@ -52,6 +63,7 @@ class UserAccount {
     'picture': picture,
     'sessionToken': sessionToken,
     'requiresReauth': requiresReauth,
+    'serverDeleted': serverDeleted,
   };
 
   factory UserAccount.fromJson(Map<String, Object?> json) {
@@ -64,6 +76,7 @@ class UserAccount {
       // Accept legacy `refreshToken` key from pre-setAuthWithRefresh storage.
       sessionToken: (json['sessionToken'] ?? json['refreshToken']) as String?,
       requiresReauth: json['requiresReauth'] as bool? ?? false,
+      serverDeleted: json['serverDeleted'] as bool? ?? false,
     );
   }
 }

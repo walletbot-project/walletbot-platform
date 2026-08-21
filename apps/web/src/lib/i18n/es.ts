@@ -72,6 +72,58 @@ export const es = {
         featureFlags: 'Feature flags',
     },
 
+    deleteAccount: {
+        // Settings tile — same copy as the native tile
+        // (`deleteUserAccount*` in apps/native/lib/l10n/app_es.arb).
+        tile: 'Eliminar mi cuenta',
+        tileDescription: 'Eliminá tu cuenta y todos tus datos para siempre',
+
+        // Request page (/delete-account)
+        title: 'Eliminar tu cuenta',
+        subtitle:
+            'Ingresá tu correo y te enviamos un enlace para confirmar la eliminación.',
+        warning:
+            'Se van a borrar tu cuenta y todos tus datos de forma permanente. Esta acción no se puede deshacer.',
+        emailLabel: 'Correo',
+        submit: 'Enviar enlace de eliminación',
+        sendFailed:
+            'No pudimos enviar el correo. Probá de nuevo en unos minutos.',
+
+        // Link-sent state. With a session we know the address is ours, so the
+        // copy is definite; without one it has to stay non-committal or the
+        // page would leak whether an address is registered.
+        sentTitle: 'Revisá tu correo',
+        sentDefinite: (p: { email: string }) =>
+            `Te enviamos un enlace a ${p.email} para eliminar tu cuenta.`,
+        sentGeneric: (p: { email: string }) =>
+            `Si existe una cuenta para ${p.email}, le enviamos un enlace para eliminarla.`,
+        sentHint: 'El enlace vence en 24 horas.',
+        backHome: 'Volver al inicio',
+
+        // Confirmation page (/delete-account/confirm)
+        // Typed by the user, so it has to be a word in their own language.
+        confirmWord: 'ELIMINAR',
+        confirmTitle: '¿Eliminar tu cuenta definitivamente?',
+        confirmSubtitle: 'Esta acción es permanente y no se puede deshacer.',
+        willDeleteTitle: 'Se va a borrar para siempre:',
+        willDeleteTransactions: 'Todas tus transacciones',
+        willDeleteAccounts: 'Tus cuentas y saldos',
+        willDeleteCategories: 'Categorías, etiquetas y configuración',
+        willDeleteUser: 'Tu usuario y acceso a Wallet Bot',
+        confirmPrompt: 'Para confirmar, escribí',
+        confirmSubmit: 'Eliminar mi cuenta definitivamente',
+        deleteFailed: 'No se pudo eliminar la cuenta',
+
+        doneTitle: 'Tu cuenta fue eliminada',
+        doneBody:
+            'Estamos borrando todos tus datos de forma permanente. Gracias por haber usado Wallet Bot.',
+
+        invalidTitle: 'Enlace no válido',
+        invalidBody:
+            'El enlace no es válido, ya venció o ya fue usado. Si todavía querés eliminar tu cuenta, pedí un enlace nuevo.',
+        requestNewLink: 'Pedir un enlace nuevo',
+    },
+
     auth: {
         signInToContinue: 'Iniciá sesión para continuar',
         withAccount: 'Con cuenta',
