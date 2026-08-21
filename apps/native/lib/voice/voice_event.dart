@@ -148,6 +148,97 @@ const Set<String> kConversationEventTypes = {
   'tool_cancelled',
 };
 
+/// Builds the transcript seed a (re)connect sends to the model as its first
+/// client message, restoring conversation context from the durable log.
+///
+/// Gemini session-resumption handles are not reliable for this: after an
+/// abrupt disconnect (airplane mode, background kill — anything that dies
+/// without a close frame) a handle stops resuming within seconds, and the
+/// server then silently opens a BLANK session instead of failing (verified
+/// against the live API, 2026-08-21). Re-seeding from the local log is
+/// deterministic and guarantees the model's context always matches the
+/// conversation the user sees on screen.
+///
+/// [pendingTexts] are typed messages still queued for live delivery after
+/// the seed — their trailing `send_message` log entries are excluded so the
+/// model doesn't see them twice. Returns null when there is nothing to
+/// restore.
+String? buildConversationSeed(
+  List<VoiceEvent> events, {
+  List<String> pendingTexts = const [],
+  int maxChars = 6000,
+}) {
+  final lines = <({String role, String text})>[];
+  final user = StringBuffer();
+  final agent = StringBuffer();
+
+  void flushUser() {
+    final text = user.toString().trim();
+    if (text.isNotEmpty) lines.add((role: 'User', text: text));
+    user.clear();
+  }
+
+  void flushAgent() {
+    final text = agent.toString().trim();
+    if (text.isNotEmpty) lines.add((role: 'Assistant', text: text));
+    agent.clear();
+  }
+
+  for (final event in events) {
+    switch (event) {
+      case VoiceUserTranscriptDelta(:final text):
+        flushAgent();
+        user.write(text);
+      case VoiceAgentTranscriptDelta(:final text):
+        flushUser();
+        agent.write(text);
+      case VoiceAgentTurnComplete():
+      case VoiceAgentInterruptedEvent():
+        flushAgent();
+      case VoiceClientActionEvent(:final action, :final details)
+          when action == 'send_message':
+        final text = details['text'];
+        if (text is String && text.isNotEmpty) {
+          flushUser();
+          flushAgent();
+          lines.add((role: 'User', text: text));
+        }
+      default:
+        break;
+    }
+  }
+  flushUser();
+  flushAgent();
+
+  // Trailing user messages that are still queued for live delivery would
+  // otherwise appear twice: once in the seed, once when the queue flushes.
+  final pending = List<String>.of(pendingTexts);
+  while (lines.isNotEmpty && pending.isNotEmpty) {
+    final last = lines.last;
+    if (last.role != 'User') break;
+    final index = pending.indexOf(last.text);
+    if (index < 0) break;
+    pending.removeAt(index);
+    lines.removeLast();
+  }
+
+  if (lines.isEmpty) return null;
+
+  var transcript = lines.map((line) => '${line.role}: ${line.text}').join('\n');
+  var truncated = false;
+  if (transcript.length > maxChars) {
+    transcript = transcript.substring(transcript.length - maxChars);
+    truncated = true;
+  }
+  final scope = truncated
+      ? 'the recent part of the conversation'
+      : 'the conversation';
+  return '[Context restore: the previous connection dropped. This is '
+      '$scope so far:]\n$transcript\n'
+      '[End of transcript. Continue this conversation naturally in the same '
+      'language. Do not greet again and do not mention the reconnection.]';
+}
+
 /// Rebuilds the [VoiceEvent] for a persisted session-event row, the inverse of
 /// the command's event-record encoding. Returns null for rows that carry no
 /// renderable conversation content.

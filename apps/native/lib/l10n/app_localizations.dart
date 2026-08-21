@@ -2282,12 +2282,6 @@ abstract class AppLocalizations {
   /// **'(interrupted)'**
   String get interrupted;
 
-  /// No description provided for @voiceRuntimeError.
-  ///
-  /// In en, this message translates to:
-  /// **'Voice error: {error}'**
-  String voiceRuntimeError(Object error);
-
   /// No description provided for @toolRunning.
   ///
   /// In en, this message translates to:
@@ -2387,8 +2381,8 @@ abstract class AppLocalizations {
   /// No description provided for @voiceStartFailed.
   ///
   /// In en, this message translates to:
-  /// **'Failed to start: {error}'**
-  String voiceStartFailed(Object error);
+  /// **'Couldn\'t start the conversation. Please try again.'**
+  String get voiceStartFailed;
 
   /// No description provided for @microphoneOpenFailed.
   ///
@@ -2401,12 +2395,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Audio stream error: {error}'**
   String audioStreamFailed(Object error);
-
-  /// No description provided for @voiceStopFailed.
-  ///
-  /// In en, this message translates to:
-  /// **'Failed to stop cleanly: {error}'**
-  String voiceStopFailed(Object error);
 
   /// No description provided for @toolResponseUnmatched.
   ///

@@ -52,7 +52,7 @@ class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
   _AgentBubbleItem? _pendingAgent;
   _SystemItem? _connectionNotice;
 
-  String? _pendingTextSend;
+  final List<String> _pendingTexts = [];
   bool _isStarting = false;
   bool _isConnected = false;
   bool _isReconnecting = false;
@@ -275,7 +275,7 @@ class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
         _UserBubbleItem(at: DateTime.now(), text: text, isFinal: true),
       );
       if (!wasConnected) {
-        _pendingTextSend = text;
+        _pendingTexts.add(text);
       }
     });
 
@@ -292,11 +292,15 @@ class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
     _scrollToBottom(force: true);
   }
 
-  void _flushPendingText() {
-    final pending = _pendingTextSend;
-    if (pending == null) return;
-    _pendingTextSend = null;
-    unawaited(_command?.sendText(pending));
+  void _flushPendingTexts() {
+    if (_pendingTexts.isEmpty) return;
+    final pending = List<String>.of(_pendingTexts);
+    _pendingTexts.clear();
+    // Same semantics as a live typed send: expect a silent text-only reply.
+    _command?.setAudioPlaybackEnabled(false);
+    for (final text in pending) {
+      unawaited(_command?.sendText(text));
+    }
   }
 
   // -- Session lifecycle ----------------------------------------------------
@@ -326,8 +330,27 @@ class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
       await _command?.start(respondWithAudio: respondWithAudio);
       _command?.recordClientEvent('screen_attached', {'startMode': mode.name});
     } catch (error) {
-      _addSystemSetState(l10n.voiceStartFailed(error), kind: _SystemKind.error);
-      await _stop();
+      // Unexpected startup failure (connect errors retry inside the command
+      // and never surface here). Release the command without ending the
+      // logged session: the conversation stays restorable/resumable and any
+      // queued text is kept for the next attempt. Raw errors never reach the
+      // chat — details go to the debug console and the session log.
+      debugPrint('[voice] start failed: $error');
+      final failedSubscription = _commandEventsSubscription;
+      final failedCommand = _command;
+      _commandEventsSubscription = null;
+      _command = null;
+      if (mounted) {
+        setState(() {
+          _isStarting = false;
+          _isReconnecting = false;
+          _clearConnectionNotice();
+          _addSystem(l10n.voiceStartFailed, kind: _SystemKind.error);
+        });
+        _scrollToBottom();
+      }
+      await failedSubscription?.cancel();
+      await failedCommand?.dispose();
       return;
     }
 
@@ -460,13 +483,14 @@ class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
   }
 
   Future<void> _stop() async {
-    final l10n = context.l10n;
     await _stopMicCapture();
 
     try {
       await _command?.stop();
     } catch (error) {
-      _addSystemSetState(l10n.voiceStopFailed(error), kind: _SystemKind.error);
+      // Never surface raw errors in the chat. _endConversation's discard
+      // still ends the logged session even when stop() failed midway.
+      debugPrint('[voice] stop failed: $error');
     } finally {
       await _commandEventsSubscription?.cancel();
       _commandEventsSubscription = null;
@@ -479,7 +503,7 @@ class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
       _isConnected = false;
       _isStarting = false;
       _isReconnecting = false;
-      _pendingTextSend = null;
+      _pendingTexts.clear();
       _clearConnectionNotice();
       _finalisePending();
     });
@@ -525,14 +549,14 @@ class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
           _isReconnecting = false;
           conversationChanged = _connectionNotice != null;
           _clearConnectionNotice();
-          _flushPendingText();
+          _flushPendingTexts();
         case VoiceDisconnectedEvent():
           conversationChanged = true;
           _isConnected = false;
           _isReconnecting = _command?.isActive ?? false;
-          // Text queued during the outage is flushed on the next
-          // VoiceConnectedEvent; only a dead session drops it.
-          if (!_isReconnecting) _pendingTextSend = null;
+          // Queued text is never dropped here: it flushes on the next
+          // VoiceConnectedEvent, and even across a session teardown the next
+          // start resumes the same logged conversation.
           _finalisePending();
           if (_isReconnecting) {
             _showConnectionNotice();
@@ -540,16 +564,14 @@ class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
             _clearConnectionNotice();
           }
         case VoiceErrorEvent(:final message, :final isTransient):
-          conversationChanged = true;
+          // Raw error text never reaches the chat; details are persisted in
+          // the session log. The session keeps running (and reconnecting)
+          // through errors — the End button is the explicit way out.
+          debugPrint('[voice] error (transient: $isTransient): $message');
           if (isTransient) {
+            conversationChanged = true;
             _isReconnecting = true;
             _showConnectionNotice();
-          } else {
-            _pendingTextSend = null;
-            _addSystem(
-              context.l10n.voiceRuntimeError(message),
-              kind: _SystemKind.error,
-            );
           }
         case VoiceSystemEvent():
         case VoiceClientActionEvent():

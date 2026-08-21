@@ -281,7 +281,6 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
   Future<void>? _connectFuture;
   Completer<void>? _setupComplete;
   String? _sessionId;
-  String? _resumeHandle;
   Future<String>? _prefetchedToken;
   bool _active = false;
   bool _connected = false;
@@ -326,7 +325,6 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
     final startStopwatch = Stopwatch()..start();
     final session = await sessionRepository.openOrCreate(model: _model);
     _sessionId = session.id;
-    _resumeHandle = session.resumeHandle;
     _active = true;
     _explicitlyStopped = false;
     remoteSync?.schedule(delay: Duration.zero);
@@ -360,10 +358,26 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
     await _connect();
   }
 
+  /// Runs one connection attempt, deduplicating concurrent callers.
+  ///
+  /// A failed attempt never propagates: any connect error (network loss,
+  /// token mint failure, setup timeout) is recorded as a transient event and
+  /// retried on the standard backoff, so no caller can turn a bad connection
+  /// into a session teardown. The user always keeps the conversation and the
+  /// explicit End button.
   Future<void> _connect() {
     final existing = _connectFuture;
     if (existing != null) return existing;
-    final future = _connectOnce();
+    final future = _connectOnce().then<void>(
+      (_) {},
+      onError: (Object error) {
+        if (!isActive) return;
+        _emit(
+          VoiceErrorEvent('Connect attempt failed: $error', isTransient: true),
+        );
+        _scheduleReconnect();
+      },
+    );
     _connectFuture = future;
     return future.whenComplete(() {
       if (identical(_connectFuture, future)) _connectFuture = null;
@@ -427,9 +441,13 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
         },
         'inputAudioTranscription': <String, dynamic>{},
         'outputAudioTranscription': <String, dynamic>{},
-        'sessionResumption': {
-          if (_resumeHandle != null) 'handle': _resumeHandle,
-        },
+        // No resume handle is presented: after an abrupt disconnect a stale
+        // handle makes the server silently open a BLANK session (see
+        // buildConversationSeed). Context is restored by the transcript seed
+        // sent right after setup instead. Resumption updates still arrive
+        // (the minted token enables them) and their timestamps drive the
+        // local session-freshness gate.
+        'sessionResumption': <String, dynamic>{},
         'contextWindowCompression': {'slidingWindow': <String, dynamic>{}},
       },
     };
@@ -444,12 +462,79 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
       rethrow;
     }
     if (generation != _connectionGeneration || !isActive) return;
+    // Every connect is a fresh server session; restore the conversation from
+    // the durable log before anything else is sent, so queued messages and
+    // live audio land after the model regained its context.
+    final seed = await _buildContextSeed();
+    if (generation != _connectionGeneration || !isActive) return;
     _connected = true;
     _reconnectAttempt = 0;
     _logConnectionPhase('setup_complete', connectStopwatch);
     unawaited(sessionRepository.markStatus(_sessionId!, 'active'));
+    if (seed != null) {
+      _sendNow({
+        'clientContent': {
+          'turns': [
+            {
+              'role': 'user',
+              'parts': [
+                {'text': seed},
+              ],
+            },
+          ],
+          'turnComplete': false,
+        },
+      });
+      _logConnectionPhase('context_seeded', connectStopwatch, {
+        'chars': seed.length,
+      });
+    }
     _emit(VoiceConnectedEvent());
     _flushPendingMessages();
+  }
+
+  /// Transcript seed for the fresh server session this connect just opened —
+  /// [buildConversationSeed] over the durable log of the session being
+  /// continued. Null when there is no prior conversation to restore.
+  Future<String?> _buildContextSeed() async {
+    try {
+      final rows = await sessionRepository.resumableConversationEvents(
+        types: kConversationEventTypes,
+      );
+      if (rows.isEmpty) return null;
+      final events = <VoiceEvent>[];
+      for (final row in rows) {
+        final decoded = jsonDecode(row.payloadJson);
+        if (decoded is! Map) continue;
+        final event = voiceEventFromRecord(
+          type: row.type,
+          payload: decoded.cast<String, Object?>(),
+          at: DateTime.fromMillisecondsSinceEpoch(row.occurredAt.toInt()),
+        );
+        if (event != null) events.add(event);
+      }
+      final pendingTexts = <String>[];
+      for (final message in _pendingMessages) {
+        final content = message['clientContent'];
+        if (content is! Map) continue;
+        final turns = content['turns'];
+        if (turns is! List || turns.isEmpty) continue;
+        final firstTurn = turns.first;
+        if (firstTurn is! Map) continue;
+        final parts = firstTurn['parts'];
+        if (parts is! List || parts.isEmpty) continue;
+        final firstPart = parts.first;
+        if (firstPart is Map) {
+          final text = firstPart['text'];
+          if (text is String && text.isNotEmpty) pendingTexts.add(text);
+        }
+      }
+      return buildConversationSeed(events, pendingTexts: pendingTexts);
+    } catch (error) {
+      // A failed restore must never block the connection itself.
+      debugPrint('[voice] context seed failed: $error');
+      return null;
+    }
   }
 
   /// Fetches a fresh single-use token. The backend mints tokens with
@@ -644,7 +729,10 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
     final sessionId = _sessionId;
     if (sessionId != null) await sessionRepository.endExplicitly(sessionId);
     await sessionRepository.flush();
-    await remoteSync?.flush();
+    // Best-effort replication: offline this can sit on the Convex client's
+    // 30 s operation timeout, and ending the conversation must never wait on
+    // it. Unsynced rows stay in the durable outbox and retry later.
+    unawaited(remoteSync?.flush());
     onEnded();
     return VoiceExpenseCommandResult(message: summary);
   }
@@ -736,7 +824,8 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
       ),
     );
     if (!hasHandle) return;
-    _resumeHandle = handle;
+    // Handles are persisted for their freshness timestamp (the local
+    // resumable-session gate), not to be presented on reconnect.
     final sessionId = _sessionId;
     if (sessionId != null) {
       unawaited(
@@ -755,7 +844,8 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
     final timeLeft = goAway['timeLeft']?.toString();
     _emit(VoiceGoAwayEvent(timeLeft));
     _goAwayTimer?.cancel();
-    if (_resumeHandle == null) return;
+    // Reconnect shortly before the announced kill; the transcript seed
+    // restores context on the new connection.
     final remaining =
         _parseGoogleDuration(timeLeft) ?? const Duration(seconds: 5);
     final delay = remaining > const Duration(seconds: 2)
