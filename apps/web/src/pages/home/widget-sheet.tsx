@@ -39,7 +39,9 @@ import { CURRENCY_CODES, SUGGESTED_CURRENCIES } from '@/lib/currencies'
 import { COLOR_OPTIONS } from '@/lib/entity-colors'
 import { type Messages, useFormatLocale, useT } from '@/lib/i18n'
 import { newId } from '@/lib/new-id'
+import { useTheme } from '@/lib/theme'
 import type { DashboardWidgetRow } from '@/pages/home/dashboard'
+import { readableWidgetBackground } from '@/pages/home/dashboard-colors'
 import { widgetTypeLabel, widthLabel } from '@/pages/home/labels'
 
 type WidgetSheetProps = {
@@ -436,8 +438,15 @@ function BackgroundEditor({
     onChange: (next: BackgroundStyle) => void
 }) {
     const t = useT()
+    const { brightness } = useTheme()
     const modes: BackgroundMode[] = ['none', 'fixed', 'value']
     const value = background.value ?? DEFAULT_VALUE_BACKGROUND
+    // The swatches preview each color as the widget will actually paint it in
+    // this theme, the way native's `_ColorSwatches` does
+    // (apps/native/lib/components/dashboard/add_widget_sheet.dart) — the stored
+    // value stays the raw accent.
+    const preview = (color: string) =>
+        readableWidgetBackground(color, brightness)
 
     return (
         <Section label={t.dashboard.background}>
@@ -467,6 +476,7 @@ function BackgroundEditor({
                         onChange({ ...background, fixedColor: color })
                     }
                     options={COLOR_OPTIONS}
+                    previewColor={preview}
                 />
             ) : null}
 
@@ -526,6 +536,7 @@ function BackgroundEditor({
                                     })
                                 }
                                 options={COLOR_OPTIONS}
+                                previewColor={preview}
                             />
                         </div>
                     ))}
