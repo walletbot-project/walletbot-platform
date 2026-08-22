@@ -24,11 +24,20 @@ const jsonError = (status: number, code: string, message: string): Response =>
 
 // Browser CORS for the /auth/* surface. Native mobile clients never send an
 // Origin header and are unaffected. Flutter web dev servers pick a random
-// port, so any localhost origin is allowed; when a web build gets a real
-// domain it goes in ALLOWED_WEB_ORIGINS. These endpoints authenticate via
-// explicit tokens in the body or Authorization header (never cookies), so
-// reflecting the origin adds no CSRF surface.
-const ALLOWED_WEB_ORIGINS: readonly string[] = []
+// port, so any localhost origin is allowed; the deployed web app lives at
+// SITE_URL, so its origin is allowed too (the web sign-up form posts here).
+// These endpoints authenticate via explicit tokens in the body or
+// Authorization header (never cookies), so reflecting the origin adds no CSRF
+// surface.
+const ALLOWED_WEB_ORIGINS: readonly string[] = (() => {
+    const siteUrl = process.env.SITE_URL
+    if (!siteUrl) return []
+    try {
+        return [new URL(siteUrl).origin]
+    } catch {
+        return []
+    }
+})()
 
 const LOCALHOST_ORIGIN_PATTERN = /^https?:\/\/localhost(:\d+)?$/
 

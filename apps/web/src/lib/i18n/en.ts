@@ -140,6 +140,11 @@ export const en: Messages = {
         privacyLinkLabel: 'Privacy Policy',
         termsRequired:
             'You must accept the Terms and the Privacy Policy to create your account.',
+        accountExists:
+            'An account already exists for this email. Sign in instead.',
+        signUpRateLimited: 'Too many attempts. Wait a minute and try again.',
+        signUpEmailSendFailed:
+            "We couldn't send the email. Try again in a few minutes.",
         termsGateSubtitle: 'Review the terms to continue',
         termsGateTitle: 'Terms and privacy',
         termsGateDescription:

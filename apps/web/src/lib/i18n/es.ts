@@ -147,6 +147,11 @@ export const es = {
         privacyLinkLabel: 'Política de Privacidad',
         termsRequired:
             'Tenés que aceptar los Términos y la Política de Privacidad para crear tu cuenta.',
+        accountExists: 'Ya existe una cuenta con ese correo. Iniciá sesión.',
+        signUpRateLimited:
+            'Demasiados intentos. Esperá un minuto y probá de nuevo.',
+        signUpEmailSendFailed:
+            'No pudimos enviar el correo. Probá de nuevo en unos minutos.',
         termsGateSubtitle: 'Revisá los términos para continuar',
         termsGateTitle: 'Términos y privacidad',
         termsGateDescription:
