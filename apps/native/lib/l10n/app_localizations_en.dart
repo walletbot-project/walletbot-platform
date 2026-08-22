@@ -1240,11 +1240,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get interrupted => '(interrupted)';
 
   @override
-  String voiceRuntimeError(Object error) {
-    return 'Voice error: $error';
-  }
-
-  @override
   String get toolRunning => 'Running';
 
   @override
@@ -1296,9 +1291,8 @@ class AppLocalizationsEn extends AppLocalizations {
       'PCM 16-bit streaming is not supported on this device';
 
   @override
-  String voiceStartFailed(Object error) {
-    return 'Failed to start: $error';
-  }
+  String get voiceStartFailed =>
+      'Couldn\'t start the conversation. Please try again.';
 
   @override
   String microphoneOpenFailed(Object error) {
@@ -1308,11 +1302,6 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String audioStreamFailed(Object error) {
     return 'Audio stream error: $error';
-  }
-
-  @override
-  String voiceStopFailed(Object error) {
-    return 'Failed to stop cleanly: $error';
   }
 
   @override
