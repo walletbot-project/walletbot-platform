@@ -16,6 +16,11 @@ export const userDeletionRequests = defineTable({
     .index('by_tokenHash', ['tokenHash'])
     .index('by_email', ['email'])
     .index('by_userId', ['userId'])
+    // Lets the stalled-deletion cron find rows stuck in 'processing' without
+    // scanning. A scheduled Convex mutation that throws is never retried, so a
+    // purge batch that dies would otherwise strand the row — and the user's
+    // data — forever.
+    .index('by_status', ['status'])
 
 // Denylist of users whose deletion has been confirmed. Rows are tiny and kept
 // forever: native access JWTs are stateless with a 24h TTL and requireAuth

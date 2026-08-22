@@ -1,12 +1,41 @@
 import { v } from 'convex/values'
 import { internal } from '../_generated/api'
 import type { Id, TableNames } from '../_generated/dataModel'
-import { internalMutation, internalQuery } from '../_generated/server'
+import {
+    internalMutation,
+    internalQuery,
+    type MutationCtx,
+} from '../_generated/server'
 import { inflowsByAccount, outflowsByAccount } from '../aggregates'
 import { createAuth } from '../auth'
 import { MAX_REQUESTS_PER_HOUR } from './helpers'
 
 const HOUR_MS = 60 * 60 * 1000
+
+// A deletion whose purge chain died gets retried after this long. Generous
+// enough that a healthy purge (which reschedules itself immediately) is never
+// mistaken for a stalled one.
+const STALLED_AFTER_MS = 15 * 60 * 1000
+
+// How many stalled deletions one cron tick revives.
+const STALLED_BATCH = 10
+
+/**
+ * Removes the better-auth user (sessions, OAuth/credential accounts, user row).
+ *
+ * Idempotent by design: `findUserById` returns null once the row is gone, so
+ * the recovery branch of `consumeToken` and the stalled-deletion cron can both
+ * run this again without failing. Never look the user up by email here — the
+ * address is released by this very call, so an email lookup could later match a
+ * *different* person who has since signed up with it.
+ */
+async function deleteAuthUser(ctx: MutationCtx, userId: string): Promise<void> {
+    const auth = createAuth(ctx)
+    const { internalAdapter } = await auth.$context
+    const existing = await internalAdapter.findUserById(userId)
+    if (!existing) return
+    await internalAdapter.deleteUser(userId)
+}
 
 // How many rows a single purge invocation may delete before rescheduling
 // itself. Transactions cost extra (two aggregate ops per row), so this stays
@@ -98,7 +127,9 @@ export const consumeToken = internalMutation({
         if (row.status === 'processing') {
             // Second click, or a purge chain that died before finalizing —
             // the purge is idempotent, so rescheduling it doubles as the
-            // recovery path.
+            // recovery path. Re-run the auth delete too: a chain that died
+            // before it landed would otherwise leave a signable-in account.
+            await deleteAuthUser(ctx, row.userId)
             await ctx.scheduler.runAfter(
                 0,
                 internal.userDeletion.internal.purgeUserData,
@@ -124,6 +155,15 @@ export const consumeToken = internalMutation({
                 deletedAt: Date.now(),
             })
         }
+
+        // Drop the better-auth user in the SAME transaction that denylists it.
+        // These two facts have to move together: a denylisted user whose auth
+        // row still exists can still sign in (Google re-attaches to it) and
+        // then fails every authorized call — an account that is impossible to
+        // use and whose email is impossible to reuse. Deleting it here also
+        // frees the address immediately, so signing up again is a clean new
+        // account instead of waiting on the batched purge below.
+        await deleteAuthUser(ctx, row.userId)
 
         await ctx.scheduler.runAfter(
             0,
@@ -313,16 +353,16 @@ export const purgeUserData = internalMutation({
     },
 })
 
-// Last step: remove the better-auth user (sessions, credential + OAuth
-// accounts, user row), then hand off to the request-row sweep.
+// Last step, and a backstop rather than the primary delete: `consumeToken`
+// already removed the better-auth user up front, so this normally finds
+// nothing. It stays because a deletion started by an older build reached this
+// path with the user row still present.
 // The deletedUsers denylist row is kept forever — it's what rejects the
 // user's still-valid stateless native JWTs.
 export const finalizeDeletion = internalMutation({
     args: { userId: v.string() },
     handler: async (ctx, { userId }) => {
-        const auth = createAuth(ctx)
-        const authCtx = await auth.$context
-        await authCtx.internalAdapter.deleteUser(userId)
+        await deleteAuthUser(ctx, userId)
 
         // Separate mutation so the reschedule loop below can't re-run
         // deleteUser on an already-deleted user.
@@ -331,6 +371,50 @@ export const finalizeDeletion = internalMutation({
             internal.userDeletion.internal.purgeDeletionRequests,
             { userId },
         )
+        return null
+    },
+})
+
+/**
+ * Revives deletions whose purge chain died.
+ *
+ * `purgeUserData` only reschedules itself on its success path, and Convex does
+ * not retry a scheduled mutation that throws — so one failed batch used to
+ * strand the request row in 'processing' forever, leaving the user's data on
+ * disk and (before the auth delete moved up front) an account that could still
+ * be signed into but never used. Any row still 'processing' well past the point
+ * a healthy chain would have finished is therefore a dead chain: re-running the
+ * purge is safe because every step is idempotent.
+ */
+export const reviveStalledDeletions = internalMutation({
+    args: {},
+    handler: async (ctx) => {
+        const cutoff = Date.now() - STALLED_AFTER_MS
+        // Indexed read, ordered by _creationTime, so the oldest stalled rows
+        // come first and a healthy backlog never hides them.
+        const stalled = await ctx.db
+            .query('userDeletionRequests')
+            .withIndex('by_status', (q) => q.eq('status', 'processing'))
+            .take(STALLED_BATCH)
+
+        for (const row of stalled) {
+            if (row._creationTime > cutoff) continue
+            console.warn(
+                'userDeletion: reviving stalled deletion',
+                JSON.stringify({
+                    userId: row.userId,
+                    stalledSinceMs: Date.now() - row._creationTime,
+                }),
+            )
+            // The auth row is the part that traps the user, so retry it here
+            // and not only in the purge chain.
+            await deleteAuthUser(ctx, row.userId)
+            await ctx.scheduler.runAfter(
+                0,
+                internal.userDeletion.internal.purgeUserData,
+                { userId: row.userId },
+            )
+        }
         return null
     },
 })
