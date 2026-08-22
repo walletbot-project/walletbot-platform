@@ -620,6 +620,18 @@ abstract class AppLocalizations {
   /// **'Could not send the email. Try again in a few minutes.'**
   String get deleteUserAccountFailed;
 
+  /// No description provided for @deleteUserAccountAlreadyDeleted.
+  ///
+  /// In en, this message translates to:
+  /// **'That account was already deleted.'**
+  String get deleteUserAccountAlreadyDeleted;
+
+  /// No description provided for @deleteUserAccountRateLimited.
+  ///
+  /// In en, this message translates to:
+  /// **'You already requested several deletion links. Wait an hour and try again.'**
+  String get deleteUserAccountRateLimited;
+
   /// No description provided for @accountDeletedBanner.
   ///
   /// In en, this message translates to:
@@ -1895,7 +1907,7 @@ abstract class AppLocalizations {
   /// No description provided for @resetEmailSent.
   ///
   /// In en, this message translates to:
-  /// **'If an account exists for {email}, we sent it a link to reset the password. The link opens in your browser.'**
+  /// **'We sent a link to {email} to reset your password. The link opens in your browser.'**
   String resetEmailSent(String email);
 
   /// No description provided for @resetEmailSentReturnHint.
@@ -1969,6 +1981,30 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'That email isn\'t verified yet. We sent you a new link.'**
   String get emailStillNotVerified;
+
+  /// No description provided for @accountNotFoundForEmail.
+  ///
+  /// In en, this message translates to:
+  /// **'There is no account for {email}.'**
+  String accountNotFoundForEmail(String email);
+
+  /// No description provided for @emailAlreadyVerified.
+  ///
+  /// In en, this message translates to:
+  /// **'That email is already verified. Sign in with your account.'**
+  String get emailAlreadyVerified;
+
+  /// No description provided for @tooManyAttempts.
+  ///
+  /// In en, this message translates to:
+  /// **'Too many attempts. Wait a minute and try again.'**
+  String get tooManyAttempts;
+
+  /// No description provided for @emailSendFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not send the email. Try again in a few minutes.'**
+  String get emailSendFailed;
 
   /// No description provided for @localAccountFailed.
   ///

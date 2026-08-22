@@ -13,6 +13,7 @@ import {
     AuthTextField,
 } from '@/components/auth/auth-scaffold'
 import { authClient } from '@/lib/auth-client'
+import { signUpWithEmail } from '@/lib/auth-signup'
 import { useT } from '@/lib/i18n'
 import { ForgotPasswordPanel } from '@/pages/auth/forgot-password-panel'
 import { VerifyPendingPanel } from '@/pages/auth/verify-pending-panel'
@@ -103,22 +104,39 @@ export function Login({ mode }: { mode: AuthMode }) {
                 return
             }
 
-            // No callbackURL: the verification link's landing page is
-            // canonicalized server-side to /verify-email.
-            const result = await authClient.signUp.email({
+            // Posts to the backend's own sign-up endpoint (not
+            // authClient.signUp.email) so a re-sign-up of an unverified
+            // address re-sends the link instead of stranding the user on the
+            // verify screen waiting for mail better-auth never sent — see
+            // lib/auth-signup.ts. No callbackURL: the verification link's
+            // landing page is canonicalized server-side to /verify-email.
+            const outcome = await signUpWithEmail({
                 name: name || email,
                 email,
                 password,
             })
 
-            if (result.error) {
-                throw new Error(result.error.message ?? t.auth.authFailed)
+            switch (outcome.status) {
+                case 'verify-pending':
+                    // No session yet (verification required) — for a new
+                    // account and an unverified re-send alike. Either way an
+                    // email really went out.
+                    setPendingEmail(email)
+                    setFlow('verify-pending')
+                    return
+                case 'account-exists':
+                    setError(t.auth.accountExists)
+                    return
+                case 'rate-limited':
+                    setError(t.auth.rateLimited)
+                    return
+                case 'email-send-failed':
+                    setError(t.auth.emailSendFailed)
+                    return
+                case 'error':
+                    setError(outcome.message)
+                    return
             }
-
-            // With email verification required there is no session yet — for
-            // new and already-registered emails alike (anti-enumeration).
-            setPendingEmail(email)
-            setFlow('verify-pending')
         } catch (err) {
             const message = err instanceof Error ? err.message : String(err)
             // Generic, account-independent hint so users who actually signed up

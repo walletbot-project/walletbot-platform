@@ -89,16 +89,19 @@ export const es = {
         sendFailed:
             'No pudimos enviar el correo. Probá de nuevo en unos minutos.',
 
-        // Link-sent state. With a session we know the address is ours, so the
-        // copy is definite; without one it has to stay non-committal or the
-        // page would leak whether an address is registered.
+        // Sólo se muestra cuando el servidor confirmó el envío, así que la
+        // copia es afirmativa. Todo otro resultado es un error de abajo.
         sentTitle: 'Revisá tu correo',
         sentDefinite: (p: { email: string }) =>
             `Te enviamos un enlace a ${p.email} para eliminar tu cuenta.`,
-        sentGeneric: (p: { email: string }) =>
-            `Si existe una cuenta para ${p.email}, le enviamos un enlace para eliminarla.`,
         sentHint: 'El enlace vence en 24 horas.',
         backHome: 'Volver al inicio',
+
+        accountNotFound: (p: { email: string }) =>
+            `No existe una cuenta para ${p.email}, así que no hay nada que eliminar.`,
+        alreadyDeleted: 'Esa cuenta ya fue eliminada.',
+        rateLimited:
+            'Ya pediste varios enlaces de eliminación. Esperá una hora y probá de nuevo.',
 
         // Confirmation page (/delete-account/confirm)
         // Typed by the user, so it has to be a word in their own language.
@@ -158,13 +161,25 @@ export const es = {
         resendVerificationFailed: 'No se pudo reenviar el correo.',
         backToSignIn: 'Volver a iniciar sesión',
 
+        // Resultados que el servidor ahora nombra, para que ninguna pantalla
+        // diga que mandó un correo que nunca salió.
+        accountExists:
+            'Ya existe una cuenta con ese correo. Iniciá sesión con tu contraseña o con Google.',
+        accountNotFound: (p: { email: string }) =>
+            `No existe una cuenta para ${p.email}.`,
+        emailAlreadyVerified:
+            'Ese correo ya está verificado. Iniciá sesión con tu cuenta.',
+        rateLimited: 'Demasiados intentos. Esperá un minuto y probá de nuevo.',
+        emailSendFailed:
+            'No pudimos enviar el correo. Probá de nuevo en unos minutos.',
+
         resetPasswordTitle: 'Restablecer contraseña',
         resetPasswordSubtitle:
             'Ingresá tu correo y te enviamos un enlace para restablecerla.',
         sendResetLink: 'Enviar enlace',
         sendResetLinkFailed: 'No se pudo enviar el correo',
         resetEmailSent: (p: { email: string }) =>
-            `Si existe una cuenta para ${p.email}, le enviamos un enlace para restablecer la contraseña.`,
+            `Te enviamos un enlace a ${p.email} para restablecer tu contraseña.`,
         resetEmailSentReturnHint:
             'Cuando la restablezcas, volvé acá e iniciá sesión con tu contraseña nueva.',
 

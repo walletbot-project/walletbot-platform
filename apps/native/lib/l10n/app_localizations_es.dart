@@ -293,6 +293,13 @@ class AppLocalizationsEs extends AppLocalizations {
       'No pudimos enviar el correo. Probá de nuevo en unos minutos.';
 
   @override
+  String get deleteUserAccountAlreadyDeleted => 'Esa cuenta ya fue eliminada.';
+
+  @override
+  String get deleteUserAccountRateLimited =>
+      'Ya pediste varios enlaces de eliminación. Esperá una hora y probá de nuevo.';
+
+  @override
   String get accountDeletedBanner => 'Esta cuenta fue eliminada';
 
   @override
@@ -1008,7 +1015,7 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String resetEmailSent(String email) {
-    return 'Si existe una cuenta para $email, le enviamos un enlace para restablecer la contraseña. El enlace se abre en el navegador.';
+    return 'Te enviamos un enlace a $email para restablecer tu contraseña. El enlace se abre en el navegador.';
   }
 
   @override
@@ -1058,6 +1065,23 @@ class AppLocalizationsEs extends AppLocalizations {
   @override
   String get emailStillNotVerified =>
       'Ese correo todavía no está verificado. Te enviamos un enlace nuevo.';
+
+  @override
+  String accountNotFoundForEmail(String email) {
+    return 'No existe una cuenta para $email.';
+  }
+
+  @override
+  String get emailAlreadyVerified =>
+      'Ese correo ya está verificado. Iniciá sesión con tu cuenta.';
+
+  @override
+  String get tooManyAttempts =>
+      'Demasiados intentos. Esperá un minuto y probá de nuevo.';
+
+  @override
+  String get emailSendFailed =>
+      'No pudimos enviar el correo. Probá de nuevo en unos minutos.';
 
   @override
   String localAccountFailed(Object error) {

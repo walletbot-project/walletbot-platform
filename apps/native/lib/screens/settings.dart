@@ -97,16 +97,30 @@ class SettingsScreen extends StatelessWidget {
 
     try {
       await auth.requestAccountDeletion(email: email);
+      // Reached only when the deletion email really went out. The endpoint
+      // used to answer the same 200 when it was throttled, when the account
+      // was already deleted, and when the send itself failed — so this
+      // snackbar claimed a link that had gone nowhere.
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(context.l10n.deleteUserAccountEmailSent)),
       );
     } catch (err) {
-      // Keep the forensic trail — the snackbar copy is generic on purpose.
+      // Keep the forensic trail: the snackbar names the outcome, not the
+      // underlying error.
       debugPrint('requestAccountDeletion failed: $err');
       if (!context.mounted) return;
+      final l10n = context.l10n;
+      final code = err is AuthHttpError ? err.code : null;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(context.l10n.deleteUserAccountFailed)),
+        SnackBar(
+          content: Text(switch (code) {
+            'account_not_found' => l10n.accountNotFoundForEmail(email),
+            'account_already_deleted' => l10n.deleteUserAccountAlreadyDeleted,
+            'rate_limited' => l10n.deleteUserAccountRateLimited,
+            _ => l10n.deleteUserAccountFailed,
+          }),
+        ),
       );
     }
   }

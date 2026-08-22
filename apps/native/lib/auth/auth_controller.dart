@@ -103,22 +103,26 @@ class AuthController extends ChangeNotifier {
     );
   }
 
-  /// Requests a password-reset email. Enumeration-safe: unknown emails still
-  /// return 200. Throws [AuthHttpError] when the server failed to send the
-  /// email (`email_send_failed`), or on network failure.
+  /// Requests a password-reset email. Returning normally means an email was
+  /// really handed to Resend — every other outcome throws [AuthHttpError] with
+  /// a `code` the caller renders: `account_not_found` (no account for that
+  /// address), `rate_limited`, `email_send_failed`. These used to answer 200
+  /// as well, to keep the endpoint enumeration-safe, which meant the UI
+  /// promised mail that never went out.
   Future<void> requestPasswordReset({required String email}) async {
     await _postJson('/auth/password/forgot', {'email': email});
   }
 
-  /// Re-sends the verification email. Enumeration-safe like
-  /// [requestPasswordReset], and throws on the same failures.
+  /// Re-sends the verification email. Same contract as
+  /// [requestPasswordReset], plus `email_already_verified` — there is nothing
+  /// to re-send for an address that is verified (every Google-registered one).
   Future<void> resendVerificationEmail({required String email}) async {
     await _postJson('/auth/email/resend-verification', {'email': email});
   }
 
   /// Requests an account-deletion email. The emailed link opens the web app,
-  /// where the user confirms the irreversible deletion. Enumeration-safe like
-  /// [requestPasswordReset], and throws on the same failures.
+  /// where the user confirms the irreversible deletion. Same contract as
+  /// [requestPasswordReset], plus `account_already_deleted`.
   Future<void> requestAccountDeletion({required String email}) async {
     await _postJson('/v1/account-deletion/request', {'email': email});
   }

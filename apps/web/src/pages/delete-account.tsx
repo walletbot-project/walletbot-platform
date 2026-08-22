@@ -12,12 +12,13 @@ import {
     AuthTextField,
 } from '@/components/auth/auth-scaffold'
 import { useCachedSession } from '@/hooks/use-cached-session'
+import { requestAccountDeletion } from '@/lib/account-deletion'
 import { useT } from '@/lib/i18n'
 
 // Guard-free page (see router.tsx): works logged in (reached from the settings
 // tile, email prefilled) and logged out (Play's data-deletion policy requires
-// a web-accessible deletion URL). The endpoint never discloses whether the
-// email exists.
+// a web-accessible deletion URL). The endpoint reports exactly what happened,
+// including whether the address has an account (docs/riesgos.md R-002).
 export function DeleteAccount() {
     const t = useT()
     const navigate = useNavigate()
@@ -35,29 +36,33 @@ export function DeleteAccount() {
             .trim()
             .toLowerCase()
 
-        try {
-            const res = await fetch(
-                `${import.meta.env.VITE_CONVEX_SITE_URL}/v1/account-deletion/request`,
-                {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ email }),
-                },
-            )
-            if (!res.ok) {
-                const body = (await res.json().catch(() => null)) as {
-                    message?: string
-                } | null
-                throw new Error(body?.message ?? t.deleteAccount.sendFailed)
-            }
-            setSentTo(email)
-        } catch (err) {
-            toast.error(
-                err instanceof Error ? err.message : t.deleteAccount.sendFailed,
-            )
-        } finally {
-            setLoading(false)
+        // Only a send the server confirmed flips to the sent panel. It used to
+        // flip on any non-error response, and the endpoint answered `{ ok }`
+        // for an unknown address, a throttled request, an already-deleted
+        // account and a failed send alike — so the page cheerfully reported a
+        // link it had never sent anywhere.
+        const outcome = await requestAccountDeletion(email)
+        switch (outcome.status) {
+            case 'sent':
+                setSentTo(email)
+                break
+            case 'account-not-found':
+                toast.error(t.deleteAccount.accountNotFound({ email }))
+                break
+            case 'already-deleted':
+                toast.error(t.deleteAccount.alreadyDeleted)
+                break
+            case 'rate-limited':
+                toast.error(t.deleteAccount.rateLimited)
+                break
+            case 'email-send-failed':
+                toast.error(t.deleteAccount.sendFailed)
+                break
+            case 'error':
+                toast.error(outcome.message || t.deleteAccount.sendFailed)
+                break
         }
+        setLoading(false)
     }
 
     // The email field is uncontrolled, so `defaultValue` is only read at mount.
@@ -81,14 +86,13 @@ export function DeleteAccount() {
                 <AuthMessagePanel
                     icon="mark_email_read"
                     title={t.deleteAccount.sentTitle}
-                    // With a session the address is provably the user's own, so
-                    // there is nothing to protect by hedging. Anonymous callers
-                    // keep the non-committal wording.
-                    subtitle={
-                        session
-                            ? t.deleteAccount.sentDefinite({ email: sentTo })
-                            : t.deleteAccount.sentGeneric({ email: sentTo })
-                    }
+                    // Reaching this panel now means the server confirmed the
+                    // send, so the copy is definite for everyone. It used to
+                    // pick the wording off the session, on the assumption that
+                    // a signed-in user could only be requesting their own
+                    // address — but the field is editable, so typing any
+                    // address at all produced "we sent a link to <address>".
+                    subtitle={t.deleteAccount.sentDefinite({ email: sentTo })}
                     actionLabel={t.deleteAccount.backHome}
                     onAction={() => navigate('/')}
                 >

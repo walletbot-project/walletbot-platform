@@ -53,9 +53,11 @@ export const isUserDeleted = internalQuery({
     },
 })
 
-// Returns null when the email should silently NOT be sent (user already
-// deleted, or the address hit the hourly cap) — the HTTP handler answers
-// with the same generic success either way, so callers can't enumerate.
+// Refusals name their reason so the HTTP handler can tell the user what
+// actually happened. It used to return a bare null for both, because every
+// outcome collapsed into the same generic success — which meant a throttled
+// request, or a request for an account already being deleted, still read as
+// "check your inbox" for mail that was never sent.
 // On success returns the row id so the caller can roll the row back if the
 // send fails; otherwise a transient Resend error would burn a slot against
 // the hourly cap and lock the user out of their own deletion link.
@@ -71,7 +73,7 @@ export const createRequest = internalMutation({
             .query('deletedUsers')
             .withIndex('by_userId', (q) => q.eq('userId', args.userId))
             .first()
-        if (deleted) return null
+        if (deleted) return { ok: false as const, reason: 'already_deleted' }
 
         const now = Date.now()
         const recent = await ctx.db
@@ -83,7 +85,9 @@ export const createRequest = internalMutation({
         const withinHour = recent.filter(
             (row) => row._creationTime > now - HOUR_MS,
         )
-        if (withinHour.length >= MAX_REQUESTS_PER_HOUR) return null
+        if (withinHour.length >= MAX_REQUESTS_PER_HOUR) {
+            return { ok: false as const, reason: 'rate_limited' }
+        }
 
         // Opportunistic cleanup: expired links for this address are dead
         // weight (there is no cron sweeping this table).
@@ -93,10 +97,11 @@ export const createRequest = internalMutation({
             }
         }
 
-        return await ctx.db.insert('userDeletionRequests', {
+        const requestId = await ctx.db.insert('userDeletionRequests', {
             ...args,
             status: 'pending',
         })
+        return { ok: true as const, requestId }
     },
 })
 

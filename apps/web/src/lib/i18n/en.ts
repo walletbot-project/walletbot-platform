@@ -82,13 +82,19 @@ export const en: Messages = {
         submit: 'Send deletion link',
         sendFailed: 'Could not send the email. Try again in a few minutes.',
 
+        // Only ever shown for a send the server confirmed, so the copy is
+        // definite. Every other outcome is an error below.
         sentTitle: 'Check your email',
         sentDefinite: (p: { email: string }) =>
             `We sent a link to ${p.email} to delete your account.`,
-        sentGeneric: (p: { email: string }) =>
-            `If an account exists for ${p.email}, we sent it a link to delete it.`,
         sentHint: 'The link expires in 24 hours.',
         backHome: 'Back to home',
+
+        accountNotFound: (p: { email: string }) =>
+            `There is no account for ${p.email}, so there is nothing to delete.`,
+        alreadyDeleted: 'That account was already deleted.',
+        rateLimited:
+            'You already requested several deletion links. Wait an hour and try again.',
 
         confirmWord: 'DELETE',
         confirmTitle: 'Delete your account for good?',
@@ -143,13 +149,24 @@ export const en: Messages = {
         resendVerificationFailed: 'Could not resend the email.',
         backToSignIn: 'Back to sign in',
 
+        // Sign-up and resend outcomes the server now reports by name, so no
+        // screen claims an email that was never sent.
+        accountExists:
+            'An account with that email already exists. Sign in with your password or with Google.',
+        accountNotFound: (p) => `There is no account for ${p.email}.`,
+        emailAlreadyVerified:
+            'That email is already verified. Sign in with your account.',
+        rateLimited: 'Too many attempts. Wait a minute and try again.',
+        emailSendFailed:
+            'Could not send the email. Try again in a few minutes.',
+
         resetPasswordTitle: 'Reset your password',
         resetPasswordSubtitle:
             "Enter your email and we'll send you a reset link.",
         sendResetLink: 'Send reset link',
         sendResetLinkFailed: 'Could not send the email',
         resetEmailSent: (p) =>
-            `If an account exists for ${p.email}, we sent it a link to reset the password.`,
+            `We sent a link to ${p.email} to reset your password.`,
         resetEmailSentReturnHint:
             'After resetting it, come back here and sign in with your new password.',
 

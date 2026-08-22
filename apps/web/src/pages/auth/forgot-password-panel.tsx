@@ -8,13 +8,13 @@ import {
     AuthPrimaryButton,
     AuthTextField,
 } from '@/components/auth/auth-scaffold'
-import { authClient } from '@/lib/auth-client'
+import { requestPasswordReset } from '@/lib/auth-password-reset'
 import { useT } from '@/lib/i18n'
 
 /**
  * The reset-password request, porting the native `_ForgotPasswordPanel`: an
- * email form that flips to a "check your inbox" state once the request went
- * through. Rendered inline by the login screen and by the `/forgot-password`
+ * email form that flips to a "check your inbox" state once an email really
+ * went out. Rendered inline by the login screen and by the `/forgot-password`
  * route, which exists for the links that point straight at it.
  */
 export function ForgotPasswordPanel({ onBack }: { onBack: () => void }) {
@@ -32,24 +32,28 @@ export function ForgotPasswordPanel({ onBack }: { onBack: () => void }) {
             .trim()
             .toLowerCase()
 
-        try {
-            // No redirectTo: the backend canonicalizes the link to land on
-            // /reset-password. The endpoint never discloses whether the email
-            // exists, so any non-error response flips to the sent state.
-            const result = await authClient.requestPasswordReset({ email })
-            if (result.error) {
-                throw new Error(
-                    result.error.message ?? t.auth.sendResetLinkFailed,
-                )
-            }
-            setSentTo(email)
-        } catch (err) {
-            toast.error(
-                err instanceof Error ? err.message : t.auth.sendResetLinkFailed,
-            )
-        } finally {
-            setSubmitting(false)
+        // Only a confirmed send flips the panel; the form used to flip on any
+        // non-error response, which meant an address with no account behind it
+        // landed on "check your inbox" too.
+        const outcome = await requestPasswordReset(email)
+        switch (outcome.status) {
+            case 'sent':
+                setSentTo(email)
+                break
+            case 'account-not-found':
+                toast.error(t.auth.accountNotFound({ email }))
+                break
+            case 'rate-limited':
+                toast.error(t.auth.rateLimited)
+                break
+            case 'email-send-failed':
+                toast.error(t.auth.emailSendFailed)
+                break
+            case 'error':
+                toast.error(outcome.message || t.auth.sendResetLinkFailed)
+                break
         }
+        setSubmitting(false)
     }
 
     if (sentTo !== null) {
