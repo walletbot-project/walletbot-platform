@@ -305,9 +305,11 @@ jobs:
           cache: true
 
       # .env is gitignored but declared as a Flutter asset — the build needs it
-      # to exist. Actual backend URLs come from --dart-define below, which wins
-      # over the (empty) .env values — see apps/native/lib/config.dart.
-      - run: touch .env
+      # to exist, and non-empty: flutter_dotenv throws EmptyEnvFileError on a
+      # zero-byte file, crashing the app before runApp() ever runs. The actual
+      # backend URLs come from --dart-define below, which wins over these
+      # placeholder .env values — see apps/native/lib/config.dart.
+      - run: cp .env.example .env
         working-directory: apps/native
 
       - run: flutter pub get
