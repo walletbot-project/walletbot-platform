@@ -60,3 +60,14 @@ export const sendResetPasswordEmail = async (
         args,
     )
 }
+
+export const sendAccountDeletionEmail = async (
+    ctx: RunMutationCtx<DataModel>,
+    args: SendArgs,
+): Promise<void> => {
+    await runSendEmailAction(
+        ctx,
+        internal.emails.nodeActions.sendAccountDeletionEmail,
+        args,
+    )
+}

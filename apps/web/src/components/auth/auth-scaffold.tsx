@@ -147,11 +147,18 @@ export function AuthPanelTitle({
 export function AuthPrimaryButton({
     label,
     submitting,
+    disabled = false,
     type = 'button',
     onPress,
 }: {
     label: string
     submitting: boolean
+    /**
+     * Blocks the action without claiming work is in flight — an unmet
+     * precondition rather than a pending request, so it stays a dead button
+     * instead of a spinner.
+     */
+    disabled?: boolean
     type?: 'button' | 'submit'
     onPress?: () => void
 }) {
@@ -164,7 +171,7 @@ export function AuthPrimaryButton({
                 height: 54,
                 '--md-filled-button-container-shape': '16px',
             }}
-            isDisabled={submitting}
+            isDisabled={submitting || disabled}
             onPress={onPress}
         >
             {submitting ? (

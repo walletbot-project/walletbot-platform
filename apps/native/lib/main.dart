@@ -453,6 +453,12 @@ class _AppMainState extends State<AppMain> {
     final needsReauth = context.select<AuthController, bool>(
       (a) => a.activeAccount?.requiresReauth ?? false,
     );
+    // A deleted account is also `requiresReauth`, but offering "Reconnect"
+    // there would sign the user into a brand-new empty account, so it gets its
+    // own terminal banner.
+    final serverDeleted = context.select<AuthController, bool>(
+      (a) => a.activeAccount?.serverDeleted ?? false,
+    );
     final selectedIndex = context.watch<AppNavigation>().index;
     final useRail = windowSizeClassOf(context) != WindowSizeClass.compact;
 
@@ -460,7 +466,10 @@ class _AppMainState extends State<AppMain> {
     // both, or the GlobalKey would be duplicated within a single frame.
     final tabs = Column(
       children: [
-        if (needsReauth) const _ReauthBanner(),
+        if (serverDeleted)
+          const _AccountDeletedBanner()
+        else if (needsReauth)
+          const _ReauthBanner(),
         Expanded(
           child: IndexedStack(
             key: _tabStackKey,
@@ -639,6 +648,76 @@ class _VoiceFabIcon extends StatelessWidget {
       width: _size,
       height: _size,
       colorFilter: ColorFilter.mode(color, BlendMode.srcIn),
+    );
+  }
+}
+
+/// Terminal state for an account deleted on the server. Unlike
+/// [_ReauthBanner] it never offers to sign in again: the user id is gone, so a
+/// fresh sign-in would create a *different* account with the same email rather
+/// than restore this one. The local data stays readable offline until the user
+/// explicitly removes it.
+class _AccountDeletedBanner extends StatelessWidget {
+  const _AccountDeletedBanner();
+
+  Future<void> _confirmRemove(BuildContext context) async {
+    final auth = context.read<AuthController>();
+    final accountId = auth.activeAccount?.id;
+    if (accountId == null) return;
+
+    final l10n = context.l10n;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(l10n.accountDeletedConfirmTitle),
+        content: Text(l10n.accountDeletedConfirmBody),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: Text(l10n.cancel),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: Text(l10n.accountDeletedRemoveConfirm),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    await auth.removeDeletedAccount(accountId);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Material(
+      color: theme.colorScheme.errorContainer,
+      child: SafeArea(
+        bottom: false,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          child: Row(
+            children: [
+              Icon(
+                Icons.person_off_rounded,
+                color: theme.colorScheme.onErrorContainer,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  context.l10n.accountDeletedBanner,
+                  style: TextStyle(color: theme.colorScheme.onErrorContainer),
+                ),
+              ),
+              TextButton(
+                onPressed: () => _confirmRemove(context),
+                child: Text(context.l10n.accountDeletedRemove),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
