@@ -1,42 +1,22 @@
 import { api } from '@wallet-bot/backend/api'
+import type { SimpleFilter } from '@wallet-bot/shared'
 import { computeExchangeRate } from '@wallet-bot/shared'
+import { CircularProgress, IconButton, Select, SelectOption } from 'actify'
 import { useMutation, useQuery } from 'convex/react'
 import type { FunctionReturnType } from 'convex/server'
-import {
-    ArrowRightLeft,
-    CalendarDays,
-    Check,
-    Clock3,
-    FileText,
-    HelpCircle,
-    Pencil,
-    Tags,
-    Trash2,
-    WalletCards,
-    X,
-} from 'lucide-react'
-import { type FormEvent, type ReactNode, useId, useState } from 'react'
+import { ArrowRightLeft } from 'lucide-react'
+import { type ReactNode, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 import { AccountIcon } from '@/components/account-icon'
 import { CategoryIcon } from '@/components/category-icon'
+import { AppBar } from '@/components/m3/app-bar'
+import { DateField } from '@/components/m3/date-field'
+import { DialogAction, M3Dialog } from '@/components/m3/dialog'
+import { Icon } from '@/components/m3/icon'
+import { TimeField } from '@/components/m3/time-field'
 import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
-import {
-    Dialog,
-    DialogContent,
-    DialogFooter,
-    DialogHeader,
-    DialogTitle,
-} from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
-import {
-    Sheet,
-    SheetContent,
-    SheetFooter,
-    SheetHeader,
-    SheetTitle,
-} from '@/components/ui/sheet'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Textarea } from '@/components/ui/textarea'
 import {
@@ -48,11 +28,7 @@ import { useFormatLocale, useT } from '@/lib/i18n'
 import { formatMoney } from '@/lib/money'
 import { normalizeTagColor } from '@/lib/tag-colors'
 import { cn } from '@/lib/utils'
-import type {
-    TransactionFilters,
-    TransactionTimeStatus,
-    TransactionTransferSide,
-} from './helpers'
+import type { TransactionTimeStatus, TransactionTransferSide } from './helpers'
 
 type Transaction = NonNullable<
     FunctionReturnType<typeof api.v1.transactions.queries.get>
@@ -66,53 +42,50 @@ type AccountBalance = FunctionReturnType<
     typeof api.v1.transactions.queries.balanceAroundTransaction
 >
 
-type TransactionDetailsSheetProps = {
-    transactionId: string | null
+type TransactionDetailProps = {
+    transactionId: string
     transferSide?: TransactionTransferSide
-    open: boolean
-    onOpenChange: (open: boolean) => void
     initialEditing?: boolean
     // When provided, the read-mode date/category/tag chips apply the filter in
     // place (used by the Activity page, which owns the filter state). Without
     // it, they deep-link to /activity via the router.
-    onApplyFilter?: (filters: Partial<TransactionFilters>) => void
+    onApplyFilter?: (filter: Partial<SimpleFilter>) => void
+    onClose: () => void
 }
 
-export function TransactionDetailsSheet({
+/**
+ * A transaction's details, with an inline edit mode. It is a PAGE below the
+ * split and the right pane above it — never a sheet — because the native
+ * Activity screen presents it as a real `MaterialPageRoute` (activity.dart:49).
+ * Its route therefore carries `handle: { fullScreen: true }`, and it heads
+ * itself with the standard `AppBar` at every width.
+ */
+export function TransactionDetail({
     transactionId,
     transferSide,
-    open,
-    onOpenChange,
     initialEditing = false,
     onApplyFilter,
-}: TransactionDetailsSheetProps) {
+    onClose,
+}: TransactionDetailProps) {
     const t = useT()
-    const transaction = useQuery(
-        api.v1.transactions.queries.get,
-        open && transactionId ? { id: transactionId } : 'skip',
-    )
-    const accounts = useQuery(
-        api.v1.accounts.queries.list,
-        open ? { includeArchived: true } : 'skip',
-    )
-    const categories = useQuery(
-        api.v1.categories.queries.listActive,
-        open ? {} : 'skip',
-    )
+    const transaction = useQuery(api.v1.transactions.queries.get, {
+        id: transactionId,
+    })
+    const accounts = useQuery(api.v1.accounts.queries.list, {
+        includeArchived: true,
+    })
+    const categories = useQuery(api.v1.categories.queries.listActive)
     const currentCategory = useQuery(
         api.v1.categories.queries.get,
-        open && transaction?.categoryId
-            ? { id: transaction.categoryId }
-            : 'skip',
+        transaction?.categoryId ? { id: transaction.categoryId } : 'skip',
     )
-    const tags = useQuery(api.v1.tags.queries.listActive, open ? {} : 'skip')
+    const tags = useQuery(api.v1.tags.queries.listActive)
 
     const isLoading =
         transaction === undefined ||
         accounts === undefined ||
         categories === undefined ||
-        (transaction !== undefined &&
-            transaction !== null &&
+        (transaction !== null &&
             transaction.categoryId !== '' &&
             currentCategory === undefined) ||
         tags === undefined
@@ -124,34 +97,26 @@ export function TransactionDetailsSheet({
             ? [...categories, currentCategory]
             : categories
 
+    if (isLoading) return <TransactionDetailsSkeleton />
+    if (transaction === null) {
+        return (
+            <div className="m3-body-large flex flex-1 items-center justify-center p-8 text-on-surface-variant">
+                {t.transaction.gone}
+            </div>
+        )
+    }
     return (
-        <Sheet open={open} onOpenChange={onOpenChange}>
-            <SheetContent
-                side="right"
-                className="w-full gap-0 p-0 sm:max-w-lg"
-                showCloseButton={false}
-            >
-                {isLoading ? (
-                    <TransactionDetailsSkeleton />
-                ) : transaction === null ? (
-                    <div className="flex flex-1 items-center justify-center p-8 text-sm text-muted-foreground">
-                        {t.transaction.gone}
-                    </div>
-                ) : (
-                    <TransactionDetailsContent
-                        key={`${transaction.id}-${transaction.updatedAt}`}
-                        transaction={transaction}
-                        accounts={accounts}
-                        categories={categoryOptions ?? categories}
-                        tags={tags}
-                        transferSide={transferSide}
-                        initialEditing={initialEditing}
-                        onApplyFilter={onApplyFilter}
-                        onClose={() => onOpenChange(false)}
-                    />
-                )}
-            </SheetContent>
-        </Sheet>
+        <TransactionDetailsContent
+            key={`${transaction.id}-${transaction.updatedAt}`}
+            transaction={transaction}
+            accounts={accounts}
+            categories={categoryOptions ?? categories}
+            tags={tags}
+            transferSide={transferSide}
+            initialEditing={initialEditing}
+            onApplyFilter={onApplyFilter}
+            onClose={onClose}
+        />
     )
 }
 
@@ -171,7 +136,7 @@ function TransactionDetailsContent({
     tags: Tag[]
     transferSide?: TransactionTransferSide
     initialEditing: boolean
-    onApplyFilter?: (filters: Partial<TransactionFilters>) => void
+    onApplyFilter?: (filter: Partial<SimpleFilter>) => void
     onClose: () => void
 }) {
     const navigate = useNavigate()
@@ -197,11 +162,11 @@ function TransactionDetailsContent({
 
     // Apply a filter to the Activity list and dismiss the sheet. Prefer the
     // in-place callback (Activity owns the filter state); otherwise deep-link.
-    const applyFilter = (filters: Partial<TransactionFilters>) => {
+    const applyFilter = (filter: Partial<SimpleFilter>) => {
         if (onApplyFilter) {
-            onApplyFilter(filters)
+            onApplyFilter(filter)
         } else {
-            void navigate('/activity', { state: filters })
+            void navigate('/activity', { state: filter })
         }
         onClose()
     }
@@ -209,7 +174,6 @@ function TransactionDetailsContent({
     const archiveTransaction = useMutation(
         api.v1.transactions.mutations.archive,
     )
-    const formId = useId()
 
     const [editing, setEditing] = useState(initialEditing)
     const [saving, setSaving] = useState(false)
@@ -262,8 +226,7 @@ function TransactionDetailsContent({
             ? (transaction.toCurrency ?? transaction.currency)
             : transaction.currency
 
-    const handleSubmit = async (event: FormEvent) => {
-        event.preventDefault()
+    const handleSave = async () => {
         const trimmedName = name.trim()
         if (!trimmedName) {
             toast.error(t.common.nameCannotBeEmpty)
@@ -273,7 +236,11 @@ function TransactionDetailsContent({
             toast.error(t.transaction.chooseAccount)
             return
         }
-        if (isTransfer && (!destinationAccount || accountId === toAccountId)) {
+        if (isTransfer && !destinationAccount) {
+            toast.error(t.transaction.chooseAccount)
+            return
+        }
+        if (isTransfer && accountId === toAccountId) {
             toast.error(t.transaction.sameAccounts)
             return
         }
@@ -357,53 +324,77 @@ function TransactionDetailsContent({
 
     return (
         <>
-            <SheetHeader className="flex-row items-center border-b">
-                <SheetTitle className="flex-1">
-                    {editing
-                        ? t.transaction.editActivity
-                        : t.transaction.detail}
-                </SheetTitle>
-                {editing ? (
-                    // Keep the edit button's space occupied. Besides avoiding
-                    // header movement, this prevents the event that opened the
-                    // editor from landing on another actionable control.
-                    <span className="size-8 shrink-0" aria-hidden />
-                ) : (
-                    <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon-sm"
-                        onClick={() => setEditing(true)}
-                        aria-label={t.common.edit}
+            {/*
+             * The standard top app bar, identical to every other one in the
+             * app. This screen is a page at every width (the native Activity
+             * pushes it as a real route), so unlike `DetailPaneHeader` the bar
+             * is never hidden — but it is the same `AppBar`, with the same
+             * height and leading inset, and no border: Material 3 app bars
+             * separate themselves with a surface tint on scroll, and no app bar
+             * in the native app carries a rule.
+             */}
+            <AppBar
+                title={
+                    editing ? t.transaction.editActivity : t.transaction.detail
+                }
+                leading={
+                    <IconButton
+                        aria-label={t.common.close}
+                        onPress={onClose}
+                        isDisabled={saving}
+                        className="text-on-surface-variant"
                     >
-                        <Pencil />
-                    </Button>
-                )}
-                <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon-sm"
-                    onClick={() => setDeleteOpen(true)}
-                    disabled={saving}
-                    aria-label={t.common.delete}
-                >
-                    <Trash2 />
-                </Button>
-                <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon-sm"
-                    onClick={onClose}
-                    disabled={saving}
-                    aria-label={t.common.close}
-                >
-                    <X />
-                </Button>
-            </SheetHeader>
+                        <Icon name="close" />
+                    </IconButton>
+                }
+                actions={
+                    <>
+                        {/*
+                         * One action toggles between reading and editing, as in
+                         * native's `_toggleEditing`
+                         * (`transaction_details_sheet.dart:601`): a pencil while
+                         * reading, a check that commits while editing, and a
+                         * spinner in its place while the save is in flight.
+                         */}
+                        {saving ? (
+                            <span
+                                className="flex size-10 shrink-0 items-center justify-center"
+                                aria-hidden
+                            >
+                                <CircularProgress isIndeterminate size="xs" />
+                            </span>
+                        ) : (
+                            <IconButton
+                                aria-label={
+                                    editing ? t.common.save : t.common.edit
+                                }
+                                onPress={() =>
+                                    editing
+                                        ? void handleSave()
+                                        : setEditing(true)
+                                }
+                                className="text-on-surface-variant"
+                            >
+                                <Icon name={editing ? 'check' : 'edit'} />
+                            </IconButton>
+                        )}
+                        <IconButton
+                            aria-label={t.common.delete}
+                            onPress={() => setDeleteOpen(true)}
+                            isDisabled={saving}
+                            className="text-on-surface-variant"
+                        >
+                            <Icon name="delete" />
+                        </IconButton>
+                    </>
+                }
+            />
 
             <form
-                id={formId}
-                onSubmit={(event) => void handleSubmit(event)}
+                onSubmit={(event) => {
+                    event.preventDefault()
+                    void handleSave()
+                }}
                 className="min-h-0 flex-1 overflow-y-auto p-4"
             >
                 <div className="overflow-hidden rounded-2xl border bg-card shadow-xs">
@@ -414,7 +405,7 @@ function TransactionDetailsContent({
                         >
                             <CategoryIcon
                                 name={category?.icon}
-                                className="size-8"
+                                size={32}
                                 color={categoryColor}
                             />
                         </span>
@@ -469,7 +460,7 @@ function TransactionDetailsContent({
 
                     <div className="divide-y px-6">
                         <ReceiptRow
-                            icon={<FileText />}
+                            icon={<Icon name="description" filled />}
                             label={t.common.description}
                             stacked
                         >
@@ -490,9 +481,9 @@ function TransactionDetailsContent({
                         <ReceiptRow
                             icon={
                                 dateConfirmed ? (
-                                    <CalendarDays />
+                                    <Icon name="calendar_month" filled />
                                 ) : (
-                                    <HelpCircle />
+                                    <Icon name="help" />
                                 )
                             }
                             label={
@@ -503,16 +494,16 @@ function TransactionDetailsContent({
                             attention={!dateConfirmed}
                         >
                             {editing ? (
-                                <Input
-                                    type="date"
+                                <DateField
                                     value={date}
-                                    onChange={(event) => {
-                                        setDate(event.target.value)
+                                    onChange={(next) => {
+                                        setDate(next)
                                         setDateConfirmed(true)
                                         setDateTouched(true)
                                     }}
+                                    label={t.transaction.date}
+                                    compact
                                     className="w-auto"
-                                    required
                                 />
                             ) : (
                                 <button
@@ -520,11 +511,13 @@ function TransactionDetailsContent({
                                     className="cursor-pointer"
                                     onClick={() =>
                                         applyFilter({
-                                            dateFrom: new Date(
-                                                Number(transaction.date),
+                                            // The canonical filter carries days
+                                            // as local ISO dates, not instants.
+                                            dateFrom: dateInputValue(
+                                                transaction.date,
                                             ),
-                                            dateTo: new Date(
-                                                Number(transaction.date),
+                                            dateTo: dateInputValue(
+                                                transaction.date,
                                             ),
                                         })
                                     }
@@ -536,7 +529,11 @@ function TransactionDetailsContent({
 
                         <ReceiptRow
                             icon={
-                                timeNeedsAttention ? <HelpCircle /> : <Clock3 />
+                                timeNeedsAttention ? (
+                                    <Icon name="help" />
+                                ) : (
+                                    <Icon name="schedule" />
+                                )
                             }
                             label={
                                 timeNeedsAttention
@@ -546,16 +543,15 @@ function TransactionDetailsContent({
                             attention={timeNeedsAttention}
                         >
                             {editing ? (
-                                <Input
-                                    type="time"
+                                <TimeField
                                     value={time}
-                                    onChange={(event) => {
-                                        setTime(event.target.value)
+                                    onChange={(next) => {
+                                        setTime(next)
                                         setTimeStatus('confirmed')
                                         setTimeTouched(true)
                                     }}
-                                    className="w-auto"
-                                    required
+                                    label={t.transaction.time}
+                                    compact
                                 />
                             ) : (
                                 formatTime(transaction.date, formatLocale)
@@ -566,7 +562,7 @@ function TransactionDetailsContent({
                             icon={
                                 <AccountIcon
                                     name={account?.icon}
-                                    className="size-4"
+                                    size={16}
                                     color={normalizeColor(
                                         account?.color,
                                         ACCOUNT_DEFAULT_COLOR,
@@ -588,6 +584,11 @@ function TransactionDetailsContent({
                                         isTransfer ? toAccountId : undefined
                                     }
                                     onChange={setAccountId}
+                                    label={
+                                        isTransfer
+                                            ? t.transaction.sourceAccount
+                                            : t.transaction.account
+                                    }
                                 />
                             ) : (
                                 <div className="space-y-1">
@@ -623,7 +624,12 @@ function TransactionDetailsContent({
 
                         {isTransfer ? (
                             <ReceiptRow
-                                icon={<WalletCards />}
+                                icon={
+                                    <Icon
+                                        name="account_balance_wallet"
+                                        filled
+                                    />
+                                }
                                 label={t.transaction.destinationAccount}
                                 stacked
                             >
@@ -633,6 +639,7 @@ function TransactionDetailsContent({
                                         accounts={accounts}
                                         excludedId={accountId}
                                         onChange={setToAccountId}
+                                        label={t.transaction.destinationAccount}
                                     />
                                 ) : (
                                     <div className="space-y-1">
@@ -689,30 +696,28 @@ function TransactionDetailsContent({
                                 icon={
                                     <CategoryIcon
                                         name={category?.icon}
-                                        className="size-4"
+                                        size={16}
                                         color={categoryColor}
                                     />
                                 }
                                 label={t.transaction.category}
                             >
                                 {editing ? (
-                                    <select
-                                        value={categoryId}
-                                        onChange={(event) =>
-                                            setCategoryId(event.target.value)
+                                    <Select
+                                        aria-label={t.transaction.category}
+                                        variant="outlined"
+                                        className="max-w-52"
+                                        selectedKey={categoryId}
+                                        onSelectionChange={(key) =>
+                                            setCategoryId(String(key))
                                         }
-                                        className="h-9 max-w-52 rounded-md border bg-transparent px-3 text-sm"
-                                        required
                                     >
                                         {categories.map((item) => (
-                                            <option
-                                                key={item.id}
-                                                value={item.id}
-                                            >
+                                            <SelectOption key={item.id}>
                                                 {item.name}
-                                            </option>
+                                            </SelectOption>
                                         ))}
-                                    </select>
+                                    </Select>
                                 ) : category ? (
                                     <button
                                         type="button"
@@ -730,7 +735,7 @@ function TransactionDetailsContent({
                         ) : null}
 
                         <ReceiptRow
-                            icon={<Tags />}
+                            icon={<Icon name="sell" filled />}
                             label={t.transaction.tags}
                             stacked
                         >
@@ -821,48 +826,29 @@ function TransactionDetailsContent({
                 </div>
             </form>
 
-            {editing ? (
-                <SheetFooter className="border-t bg-background">
-                    <Button
-                        type="submit"
-                        form={formId}
-                        disabled={saving}
-                        className="w-full"
-                    >
-                        <Check />
-                        {saving ? t.common.saving : t.transaction.saveChanges}
-                    </Button>
-                </SheetFooter>
-            ) : null}
-
-            <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
-                <DialogContent>
-                    <DialogHeader>
-                        <DialogTitle>{t.transaction.deleteTitle}</DialogTitle>
-                    </DialogHeader>
-                    <p className="text-sm text-muted-foreground">
-                        {t.transaction.deleteConfirm({
-                            name: transaction.name,
-                        })}
-                    </p>
-                    <DialogFooter>
-                        <Button
-                            variant="outline"
-                            onClick={() => setDeleteOpen(false)}
-                            disabled={saving}
-                        >
-                            {t.common.cancel}
-                        </Button>
-                        <Button
-                            variant="destructive"
-                            onClick={() => void handleDelete()}
-                            disabled={saving}
-                        >
-                            {t.common.delete}
-                        </Button>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
+            <M3Dialog
+                open={deleteOpen}
+                onOpenChange={setDeleteOpen}
+                title={t.transaction.deleteTitle}
+                description={t.transaction.deleteConfirm({
+                    name: transaction.name,
+                })}
+                actions={
+                    <>
+                        <DialogAction
+                            label={t.common.cancel}
+                            onPress={() => setDeleteOpen(false)}
+                            isDisabled={saving}
+                        />
+                        <DialogAction
+                            label={t.common.delete}
+                            onPress={() => void handleDelete()}
+                            isDisabled={saving}
+                            destructive
+                        />
+                    </>
+                }
+            />
         </>
     )
 }
@@ -945,18 +931,21 @@ function AccountSelect({
     accounts,
     excludedId,
     onChange,
+    label,
 }: {
     value: string
     accounts: Account[]
     excludedId?: string
     onChange: (value: string) => void
+    label: string
 }) {
     return (
-        <select
-            value={value}
-            onChange={(event) => onChange(event.target.value)}
-            className="h-9 w-full rounded-md border bg-transparent px-3 text-sm"
-            required
+        <Select
+            aria-label={label}
+            variant="outlined"
+            className="w-full"
+            selectedKey={value}
+            onSelectionChange={(key) => onChange(String(key))}
         >
             {accounts
                 .filter(
@@ -965,11 +954,11 @@ function AccountSelect({
                         (!account.isArchived && account.id !== excludedId),
                 )
                 .map((account) => (
-                    <option key={account.id} value={account.id}>
-                        {account.name} · {account.currency}
-                    </option>
+                    <SelectOption key={account.id}>
+                        {`${account.name} · ${account.currency}`}
+                    </SelectOption>
                 ))}
-        </select>
+        </Select>
     )
 }
 

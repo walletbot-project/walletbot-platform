@@ -328,6 +328,7 @@
   "unknownAccount": "Cuenta desconocida",
   "enterWidgetTitle": "Ingresá un título",
   "selectWidgetCurrency": "Seleccioná una moneda",
+  "configureWidgetFilter": "Configurá un filtro para este widget",
   "widgetSaveFailed": "No se pudo guardar el widget: {error}",
   "widgetType": "Tipo",
   "widgetTitle": "Título",

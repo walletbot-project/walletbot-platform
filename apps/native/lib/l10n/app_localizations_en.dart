@@ -1106,6 +1106,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get selectWidgetCurrency => 'Select a currency';
 
   @override
+  String get configureWidgetFilter => 'Configure a filter for this widget';
+
+  @override
   String widgetSaveFailed(Object error) {
     return 'Could not save the widget: $error';
   }

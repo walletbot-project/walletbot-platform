@@ -2066,6 +2066,12 @@ abstract class AppLocalizations {
   /// **'Select a currency'**
   String get selectWidgetCurrency;
 
+  /// No description provided for @configureWidgetFilter.
+  ///
+  /// In en, this message translates to:
+  /// **'Configure a filter for this widget'**
+  String get configureWidgetFilter;
+
   /// No description provided for @widgetSaveFailed.
   ///
   /// In en, this message translates to:

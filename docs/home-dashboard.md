@@ -162,6 +162,17 @@ automatically; horizontal gaps within a row are kept. The floating tile menu
 also offers up/down/left/right arrows for one-cell nudges and the
 `1/3 · 1/2 · 2/3 · 1/1` width controls.
 
+**Edit mode always keeps one spare row below the board.** Without it the bottom
+row is a dead end: two `third`s side by side there can neither slide sideways
+nor move up, so neither can be shifted out of the way and neither can grow. The
+spare row is a full-height (88dp) dashed drop area with its own `+`, not a
+16dp band, and it only becomes a real row once something lands in it. The
+down-nudge follows the same rule — it may move a tile onto a row that does not
+exist yet, but *not* when the tile is alone on the last row, because that would
+vacate the row it left and the empty-row collapse would put it straight back.
+With the spare row present the last row drops its bottom insert band; the spare
+row does that job more legibly.
+
 The layout engine (`dashboard_layout.dart`) is pure Dart: it resolves stored
 coordinates into placements (falling back to the legacy auto-flow for any widget
 that predates manual placement, so old dashboards upgrade cleanly) and computes
@@ -296,7 +307,13 @@ unchanged — only advanced (disjunctive) filters take the anchor+predicate path
 1. **Foundation** ✅ — Drift tables + local aggregation queries + layout/flow renderer.
 2. **Widgets** ✅ — Stat, Balance card, Transaction list, and Breakdown chart (pie / bar / line, group-by category / account / month) renderers.
 3. **Editing** ✅ — add / remove / reorder, width control, background options, and simple/advanced filter editing.
-4. **Sync** ✅ (native + Convex) — both tables wired into `SyncEngine` and the backend push/pull. **Web parity still pending.**
+4. **Sync** ✅ (native + Convex) — both tables wired into `SyncEngine` and the backend push/pull.
+5. **Web parity** ✅ — `convex/v1/dashboard/` serves layout, CRUD, seed and the
+   aggregations straight to the web client (anchor + predicate, see § Querying);
+   the filter model and the 6-unit layout engine live in
+   `packages/shared/src/dashboard/` so both clients resolve and repair a stored
+   layout identically; the UI is in `apps/web/src/pages/home/`. Web edits filters
+   in **simple mode only** — an advanced tree renders read-only there.
 
 > **Status:** the `savedFilters` + `dashboardWidgets` Drift tables persist the
 > layout and sync through the existing `SyncEngine` ↔ Convex `sync/` pipeline
@@ -320,7 +337,50 @@ unchanged — only advanced (disjunctive) filters take the anchor+predicate path
 > filters and dashboard widgets, using the same canonical filter JSON and
 > widget option JSON as the UI.
 >
-> **Still pending:** **web parity** (the web home is still a placeholder — see
-> risk R-004).
-</content>
-</invoke>
+> **Web (2026-08-15):** the same tables are read through `v1/dashboard/queries`
+> (`layout`, `stat`, `transactions`, `currencyBalance`, `breakdown`) and written
+> through `v1/dashboard/mutations`. The web seed uses the **same deterministic
+> ids** as `default_dashboard.dart`, so a device and the web app seeding one
+> fresh account converge under LWW instead of duplicating, and it refuses to
+> seed when a dashboard tombstone exists. As on native, a mouse starts dragging
+> on movement while touch waits out a hold, so the page keeps its scroll.
+>
+> **Web editing is at parity (2026-08-19).** The whole
+> `DashboardGridLayout` op set — `place`, `swap`, `insertRowAt`, `insertInRow`,
+> `nudge`, `resize`, `fitWidth`, `enabledDirections` and the empty-row collapse —
+> now lives in `packages/shared/src/dashboard/layout.ts`, so both clients compute
+> the same move from the same snapshot. The web board offers all four native drop
+> affordances (another tile to swap, a free unit to move and shrink to the run,
+> the seam between two tiles to wedge into that row, a row's edge band to open a
+> new row), the dashed `+` placeholder in every empty run that adds a widget
+> right there capped to the free span, the floating menu's widths / nudges /
+> edit / delete, a delete confirmation, and outside edit mode a tap that opens
+> the activity list scoped to the tile's own filter plus a press-and-hold that
+> arms the editor. Layout writes are optimistic (`withOptimisticUpdate`), so a
+> dropped tile lands under the pointer and rolls back with a toast if the
+> mutation fails.
+>
+> Two deliberate web-only refinements: a width the tile cannot take is
+> **disabled** rather than silently doing nothing, and a same-row swap between
+> unequal widths that would overlap is **refused** — `DashboardGridLayout.swap`
+> on native still has that hole and would persist an overlap the resolver then
+> discards to the legacy auto-flow.
+>
+> **A widget must carry a filter (2026-08-21, both clients).** A widget of a
+> transaction-reading type (stat / list / chart) cannot be created without one:
+> the confirm button stays disabled while the filter is empty, and the submit
+> path refuses it a second time (a toast on web, a snackbar on native), the same
+> shape as native's existing title and currency guards. Web also gained the
+> non-empty-title requirement native's `_canSubmit` already had, and trims the
+> title the way native does.
+>
+> The rule exempts a tile *already stored* without a filter — the default seed
+> writes `seed-wgt-recientes` that way in both clients — so that tile stays
+> editable; the exemption is keyed on the stored type, so converting a balance
+> card into a filtered type does not inherit it. Enforcement is client-side
+> only, deliberately: `v1/dashboard/mutations:createWidget` must keep accepting
+> a null `filterId` because `seedDefaultIfEmpty` and the agent's
+> `createDashboardWidget` both write one. Covered by
+> `apps/native/test/components/dashboard/add_widget_sheet_test.dart`.
+>
+> **Still pending:** the advanced (tree) filter editor on web.
