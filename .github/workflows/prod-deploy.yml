@@ -64,3 +64,58 @@ jobs:
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           workingDirectory: apps/landing
           command: pages deploy dist --project-name=walletbot-landing --branch=main
+
+  build-apk:
+    needs: deploy
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # required to publish/update the GitHub Release below
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: 3.41.6
+          cache: true
+
+      # .env is gitignored but declared as a Flutter asset — the build needs it
+      # to exist. Actual backend URLs come from --dart-define below, which wins
+      # over the (empty) .env values — see apps/native/lib/config.dart.
+      - run: touch .env
+        working-directory: apps/native
+
+      - run: flutter pub get
+        working-directory: apps/native
+
+      - name: Build production APK
+        working-directory: apps/native
+        env:
+          CONVEX_URL: ${{ vars.VITE_CONVEX_URL }}
+          CONVEX_SITE_URL: ${{ vars.VITE_CONVEX_SITE_URL }}
+          GOOGLE_SERVER_CLIENT_ID: ${{ secrets.GOOGLE_SERVER_CLIENT_ID }}
+        run: |
+          flutter build apk --release \
+            --dart-define=CONVEX_URL="$CONVEX_URL" \
+            --dart-define=CONVEX_SITE_URL="$CONVEX_SITE_URL" \
+            --dart-define=GOOGLE_SERVER_CLIENT_ID="$GOOGLE_SERVER_CLIENT_ID"
+
+      # A single rolling release/tag (`production-latest`) rather than one
+      # release per push, so there's always exactly one obvious "current
+      # production APK" download link.
+      - name: Publish production APK release
+        working-directory: apps/native
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          apk=build/app/outputs/flutter-apk/app-release.apk
+          notes="Automatically built from main @ ${GITHUB_SHA}. Connected to the production backend."
+          if gh release view production-latest >/dev/null 2>&1; then
+            gh release upload production-latest "$apk" --clobber
+            gh release edit production-latest --notes "$notes"
+          else
+            gh release create production-latest "$apk" \
+              --title "Production APK (latest)" \
+              --notes "$notes"
+          fi
