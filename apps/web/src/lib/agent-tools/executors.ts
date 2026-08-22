@@ -1,12 +1,34 @@
 import { api } from '@wallet-bot/backend/api'
-import type { ToolName } from '@wallet-bot/shared'
-import {
-    parseAmountToCents,
-    parseOptionalDate,
-    parseTransactionDate,
-    toolSchemas,
+import type {
+    BackgroundMode,
+    BreakdownChartKind,
+    BreakdownGroupBy,
+    DashboardWidth,
+    StatAggregation,
+    ToolName,
+    WidgetOptions,
+    WidgetType,
 } from '@wallet-bot/shared'
 import {
+    backgroundToJson,
+    collapseEmptyRows,
+    DASHBOARD_WIDTHS,
+    filterConfigToJson,
+    filterFromCanonical,
+    isFilterEmpty,
+    mergeWidgetOptions,
+    parseAmountToCents,
+    parseFilterConfig,
+    parseOptionalDate,
+    parseTransactionDate,
+    parseWidgetOptions,
+    resolvePlacements,
+    toolSchemas,
+    WIDGET_TYPES,
+} from '@wallet-bot/shared'
+import { newId } from '@/lib/new-id'
+import {
+    type AgentToolContext,
     defineTool,
     resolutionError,
     resolveAccount,
@@ -15,19 +37,6 @@ import {
     resolveTagIds,
     type ToolExecutor,
 } from './helpers'
-
-function newId(): string {
-    return crypto.randomUUID()
-}
-
-function nativeDashboardOnly() {
-    return {
-        ok: false,
-        error: 'native_only',
-        message:
-            'Home dashboard filters and widgets are only implemented in the native app right now.',
-    }
-}
 
 export const toolExecutors = {
     // ───── Accounts ─────
@@ -637,38 +646,226 @@ export const toolExecutors = {
         },
     ),
 
-    // ───── Native home dashboard ─────
-    listSavedFilters: defineTool(toolSchemas.listSavedFilters, async () =>
-        nativeDashboardOnly(),
+    // ───── Home dashboard: saved filters ─────
+    //
+    // Ported from the native executors (apps/native/lib/voice/tool_executors.dart,
+    // § "Saved filter tools" / "Dashboard widget tools"): same arguments, same
+    // error strings, same result shapes and the same stored JSON, so one tool
+    // call means the same thing on both clients. Web reaches the rows through
+    // Convex instead of Drift; the dashboard itself already writes them
+    // (apps/web/src/pages/home/widget-sheet.tsx).
+    listSavedFilters: defineTool(toolSchemas.listSavedFilters, async (ctx) => {
+        const layout = await ctx.client.query(api.v1.dashboard.queries.layout)
+        return { ok: true, filters: layout.filters.map(serializeSavedFilter) }
+    }),
+    createSavedFilter: defineTool(
+        toolSchemas.createSavedFilter,
+        async (ctx, args) => {
+            const name = args.name.trim()
+            if (!name) return { ok: false, error: 'Filter name is required' }
+            const id = newId()
+            await ctx.client.mutation(
+                api.v1.dashboard.mutations.createSavedFilter,
+                {
+                    id,
+                    name,
+                    config: canonicalFilterConfig(args.filterConfigJson),
+                },
+            )
+            return { ok: true, id }
+        },
     ),
-    createSavedFilter: defineTool(toolSchemas.createSavedFilter, async () =>
-        nativeDashboardOnly(),
+    updateSavedFilter: defineTool(
+        toolSchemas.updateSavedFilter,
+        async (ctx, args) => {
+            // `layout` only returns live filters, so a miss covers both "never
+            // existed" and "archived" — the two cases native rejects together.
+            const layout = await ctx.client.query(
+                api.v1.dashboard.queries.layout,
+            )
+            if (!layout.filters.some((filter) => filter.id === args.id)) {
+                return { ok: false, error: 'Saved filter not found' }
+            }
+            await ctx.client.mutation(
+                api.v1.dashboard.mutations.updateSavedFilter,
+                {
+                    id: args.id,
+                    ...(args.name === undefined
+                        ? {}
+                        : { name: args.name.trim() }),
+                    ...(args.filterConfigJson === undefined
+                        ? {}
+                        : {
+                              config: canonicalFilterConfig(
+                                  args.filterConfigJson,
+                              ),
+                          }),
+                },
+            )
+            return { ok: true, id: args.id }
+        },
     ),
-    updateSavedFilter: defineTool(toolSchemas.updateSavedFilter, async () =>
-        nativeDashboardOnly(),
+    archiveSavedFilter: defineTool(
+        toolSchemas.archiveSavedFilter,
+        async (ctx, args) => {
+            await ctx.client.mutation(
+                api.v1.dashboard.mutations.archiveSavedFilter,
+                { id: args.id },
+            )
+            return { ok: true, id: args.id }
+        },
     ),
-    archiveSavedFilter: defineTool(toolSchemas.archiveSavedFilter, async () =>
-        nativeDashboardOnly(),
-    ),
+
+    // ───── Home dashboard: widgets ─────
     listDashboardWidgets: defineTool(
         toolSchemas.listDashboardWidgets,
-        async () => nativeDashboardOnly(),
+        async (ctx) => {
+            const layout = await ctx.client.query(
+                api.v1.dashboard.queries.layout,
+            )
+            const filtersById = new Map(
+                layout.filters.map((filter) => [filter.id, filter]),
+            )
+            return {
+                ok: true,
+                widgets: layout.widgets.map((widget) =>
+                    serializeDashboardWidget(widget, filtersById),
+                ),
+            }
+        },
     ),
     createDashboardWidget: defineTool(
         toolSchemas.createDashboardWidget,
-        async () => nativeDashboardOnly(),
+        async (ctx, args) => {
+            const title = args.title.trim()
+            if (!title) {
+                return { ok: false, error: 'Widget title is required' }
+            }
+            const built = widgetOptionsFor(
+                args.type,
+                title,
+                args,
+                parseWidgetOptions(''),
+            )
+            if ('error' in built) return { ok: false, error: built.error }
+
+            const layout = await ctx.client.query(
+                api.v1.dashboard.queries.layout,
+            )
+            const filterId = await createFilterForWidget(
+                ctx,
+                args.type,
+                title,
+                args.filterConfigJson,
+            )
+            const id = newId()
+            await ctx.client.mutation(api.v1.dashboard.mutations.createWidget, {
+                id,
+                type: args.type,
+                ...(filterId ? { filterId } : {}),
+                position: layout.widgets.length,
+                width: args.width ?? defaultWidthFor(args.type),
+                // A new tile lands on a fresh row below everything placed, so
+                // it can never overlap what is already there.
+                options: mergeWidgetOptions('', {
+                    ...built.options,
+                    layout: { row: nextFreeRow(layout.widgets), col: 0 },
+                }),
+            })
+            return { ok: true, id, filterId }
+        },
     ),
     updateDashboardWidget: defineTool(
         toolSchemas.updateDashboardWidget,
-        async () => nativeDashboardOnly(),
+        async (ctx, args) => {
+            const layout = await ctx.client.query(
+                api.v1.dashboard.queries.layout,
+            )
+            const existing = layout.widgets.find(
+                (widget) => widget.id === args.id,
+            )
+            if (!existing) {
+                return { ok: false, error: 'Dashboard widget not found' }
+            }
+
+            const currentOptions = parseWidgetOptions(existing.options)
+            // A widget stored with a type this build doesn't know (written by a
+            // newer client) is refused rather than rewritten as something else.
+            const nextType = args.type ?? asWidgetType(existing.type)
+            if (nextType === null) {
+                return { ok: false, error: 'Invalid widget type' }
+            }
+            const title = (args.title ?? currentOptions.title).trim()
+            if (!title) {
+                return { ok: false, error: 'Widget title is required' }
+            }
+            const built = widgetOptionsFor(
+                nextType,
+                title,
+                args,
+                currentOptions,
+            )
+            if ('error' in built) return { ok: false, error: built.error }
+
+            const filterId = await filterIdForWidgetUpdate(ctx, {
+                existingFilterId: existing.filterId,
+                type: nextType,
+                title,
+                filterConfigJson: args.filterConfigJson,
+                titleChanged: args.title !== undefined,
+            })
+            await ctx.client.mutation(api.v1.dashboard.mutations.updateWidget, {
+                id: args.id,
+                ...(args.type === undefined ? {} : { type: args.type }),
+                // Always sent: an explicit null is how a widget drops its
+                // filter when it becomes a balance card.
+                filterId,
+                ...(args.width === undefined ? {} : { width: args.width }),
+                options: mergeWidgetOptions(existing.options, built.options),
+            })
+            return { ok: true, id: args.id, filterId }
+        },
     ),
     reorderDashboardWidgets: defineTool(
         toolSchemas.reorderDashboardWidgets,
-        async () => nativeDashboardOnly(),
+        async (ctx, args) => {
+            // Native reorders by writing `position = index` in one transaction;
+            // `saveLayout` is web's transactional equivalent, so width and
+            // options go back unchanged and only the position moves. Ids that
+            // name no live widget are skipped without shifting the rest, the
+            // way native's `UPDATE ... WHERE id = ?` simply matches nothing.
+            const layout = await ctx.client.query(
+                api.v1.dashboard.queries.layout,
+            )
+            const byId = new Map(
+                layout.widgets.map((widget) => [widget.id, widget]),
+            )
+            await ctx.client.mutation(api.v1.dashboard.mutations.saveLayout, {
+                widgets: args.ids.flatMap((id, index) => {
+                    const widget = byId.get(id)
+                    if (!widget) return []
+                    return [
+                        {
+                            id,
+                            position: index,
+                            width: widget.width,
+                            options: widget.options,
+                        },
+                    ]
+                }),
+            })
+            return { ok: true, ids: args.ids }
+        },
     ),
     archiveDashboardWidget: defineTool(
         toolSchemas.archiveDashboardWidget,
-        async () => nativeDashboardOnly(),
+        async (ctx, args) => {
+            await ctx.client.mutation(
+                api.v1.dashboard.mutations.archiveWidget,
+                { id: args.id },
+            )
+            return { ok: true, id: args.id }
+        },
     ),
 } satisfies Record<ToolName, ToolExecutor>
 
@@ -759,4 +956,279 @@ async function collectAllInRange(
         safety -= 1
     }
     return out
+}
+
+// ───── Dashboard helpers ─────
+//
+// The counterparts of the private helpers at the bottom of native's
+// `tool_executors.dart`. Keeping the same shapes here is what makes a dashboard
+// built by voice on a phone editable from the browser and vice versa.
+
+type SavedFilterRow = { id: string; name: string; config: string }
+
+type DashboardWidgetRow = {
+    id: string
+    type: string
+    filterId: string | null
+    position: number
+    width: string
+    options: string
+}
+
+/** The optional per-type display arguments both widget tools accept. */
+type WidgetContentArgs = {
+    aggregation?: StatAggregation
+    limit?: number
+    currency?: string
+    groupBy?: BreakdownGroupBy
+    chartKind?: BreakdownChartKind
+    background?: {
+        mode: BackgroundMode
+        fixedColor?: string
+        low?: number
+        high?: number
+        lowColor?: string
+        betweenColor?: string
+        highColor?: string
+    }
+}
+
+function serializeSavedFilter(filter: SavedFilterRow) {
+    return {
+        id: filter.id,
+        name: filter.name,
+        filterConfigJson: filter.config,
+        filterConfig: decodeJson(filter.config),
+    }
+}
+
+function serializeDashboardWidget(
+    widget: DashboardWidgetRow,
+    filtersById: Map<string, SavedFilterRow>,
+) {
+    const filter = widget.filterId
+        ? (filtersById.get(widget.filterId) ?? null)
+        : null
+    return {
+        id: widget.id,
+        type: widget.type,
+        filterId: widget.filterId,
+        position: widget.position,
+        width: widget.width,
+        options: decodeJson(widget.options),
+        filterConfigJson: filter?.config ?? null,
+        filterConfig: filter ? decodeJson(filter.config) : null,
+    }
+}
+
+/** Parsed JSON, or the raw string when it isn't JSON — native's `_decodeJson`. */
+function decodeJson(raw: string): unknown {
+    if (!raw) return null
+    try {
+        return JSON.parse(raw)
+    } catch {
+        return raw
+    }
+}
+
+/**
+ * Re-serializes a model-supplied filter through the shared model, so whatever
+ * shorthand the model wrote is stored in exactly the form every client reads
+ * back. An advanced tree survives untouched via `advancedRoot`.
+ */
+function canonicalFilterConfig(raw: string): string {
+    const decoded: unknown = JSON.parse(raw)
+    if (typeof decoded !== 'object' || decoded === null) {
+        throw new Error('Filter config must be a JSON object')
+    }
+    return filterConfigToJson(filterFromCanonical(decoded))
+}
+
+/**
+ * The row a new tile lands on: one past the last occupied row, counted the way
+ * native's `DashboardGridLayout.rowCount` counts it — over the *normalized*
+ * layout, so a gap left by a deleted tile doesn't push the new one further down
+ * than the grid actually renders.
+ */
+function nextFreeRow(widgets: DashboardWidgetRow[]): number {
+    const { placements } = resolvePlacements(
+        widgets.map((widget) => ({
+            id: widget.id,
+            width: asDashboardWidth(widget.width),
+            coord: parseWidgetOptions(widget.options).layout,
+        })),
+    )
+    return collapseEmptyRows(placements).reduce(
+        (rows, placement) => Math.max(rows, placement.row + 1),
+        0,
+    )
+}
+
+function asDashboardWidth(width: string): DashboardWidth {
+    return (DASHBOARD_WIDTHS as readonly string[]).includes(width)
+        ? (width as DashboardWidth)
+        : 'full'
+}
+
+function asWidgetType(type: string): WidgetType | null {
+    return (WIDGET_TYPES as readonly string[]).includes(type)
+        ? (type as WidgetType)
+        : null
+}
+
+function defaultWidthFor(type: WidgetType): DashboardWidth {
+    switch (type) {
+        case 'stat':
+            return 'third'
+        case 'balance':
+            return 'half'
+        default:
+            return 'full'
+    }
+}
+
+/**
+ * The content half of a widget's `options`: only the keys its type uses, plus
+ * the background. Anything the caller left out keeps the widget's current
+ * value, so a partial update never blanks a field it didn't mention.
+ */
+function widgetOptionsFor(
+    type: WidgetType,
+    title: string,
+    args: WidgetContentArgs,
+    existing: WidgetOptions,
+): { options: Record<string, unknown> } | { error: string } {
+    const options: Record<string, unknown> = { title }
+    switch (type) {
+        case 'stat':
+            options.aggregation = args.aggregation ?? existing.aggregation
+            break
+        case 'list':
+            options.limit =
+                args.limit !== undefined && args.limit > 0
+                    ? Math.trunc(args.limit)
+                    : existing.limit
+            break
+        case 'balance': {
+            const currency = (args.currency ?? existing.currency).trim()
+            if (!currency) {
+                return { error: 'Balance widgets require currency' }
+            }
+            options.currency = currency.toUpperCase()
+            break
+        }
+        case 'chart':
+            options.groupBy = args.groupBy ?? existing.groupBy
+            options.chartKind = args.chartKind ?? existing.chartKind
+            break
+    }
+
+    const background =
+        args.background === undefined
+            ? backgroundToJson(existing.background)
+            : backgroundFromArgs(args.background)
+    if (background) options.background = background
+    return { options }
+}
+
+/**
+ * The flat background the tool schema declares, in the nested shape the stored
+ * options use. The literals are native's tool-executor defaults rather than
+ * `DEFAULT_VALUE_BACKGROUND` on purpose: the same tool call has to store the
+ * same JSON on both clients.
+ */
+function backgroundFromArgs(
+    background: NonNullable<WidgetContentArgs['background']>,
+): Record<string, unknown> | null {
+    switch (background.mode) {
+        case 'none':
+            return null
+        case 'fixed':
+            return {
+                mode: 'fixed',
+                fixedColor: hexColor(background.fixedColor) ?? '#C8F2D8',
+            }
+        case 'value':
+            return {
+                mode: 'value',
+                value: {
+                    low: background.low ?? 0,
+                    high: background.high ?? 10000,
+                    lowColor: hexColor(background.lowColor) ?? '#FFCBCB',
+                    betweenColor:
+                        hexColor(background.betweenColor) ?? '#FFE588',
+                    highColor: hexColor(background.highColor) ?? '#C8F2D8',
+                },
+            }
+    }
+}
+
+/** A colour the model may have written without its leading `#`. */
+function hexColor(raw: string | undefined): string | null {
+    const trimmed = raw?.trim()
+    if (!trimmed) return null
+    return trimmed.startsWith('#') ? trimmed : `#${trimmed}`
+}
+
+/** The saved filter a brand-new widget binds to, or null when it needs none. */
+async function createFilterForWidget(
+    ctx: AgentToolContext,
+    type: WidgetType,
+    title: string,
+    filterConfigJson: string | undefined,
+): Promise<string | null> {
+    if (type === 'balance' || filterConfigJson === undefined) return null
+    const config = canonicalFilterConfig(filterConfigJson)
+    if (isFilterEmpty(parseFilterConfig(config))) return null
+    const id = newId()
+    await ctx.client.mutation(api.v1.dashboard.mutations.createSavedFilter, {
+        id,
+        name: title,
+        config,
+    })
+    return id
+}
+
+/**
+ * The saved filter an updated widget ends up bound to: a new config edits the
+ * one it already has (or creates one), a balance card drops it, and a bare
+ * rename follows through to the filter's own name.
+ */
+async function filterIdForWidgetUpdate(
+    ctx: AgentToolContext,
+    args: {
+        existingFilterId: string | null
+        type: WidgetType
+        title: string
+        filterConfigJson: string | undefined
+        titleChanged: boolean
+    },
+): Promise<string | null> {
+    if (args.type === 'balance') return null
+
+    if (args.filterConfigJson !== undefined) {
+        const config = canonicalFilterConfig(args.filterConfigJson)
+        if (isFilterEmpty(parseFilterConfig(config))) return null
+        if (args.existingFilterId) {
+            await ctx.client.mutation(
+                api.v1.dashboard.mutations.updateSavedFilter,
+                { id: args.existingFilterId, name: args.title, config },
+            )
+            return args.existingFilterId
+        }
+        const id = newId()
+        await ctx.client.mutation(
+            api.v1.dashboard.mutations.createSavedFilter,
+            { id, name: args.title, config },
+        )
+        return id
+    }
+
+    if (args.existingFilterId && args.titleChanged) {
+        await ctx.client.mutation(
+            api.v1.dashboard.mutations.updateSavedFilter,
+            { id: args.existingFilterId, name: args.title },
+        )
+    }
+    return args.existingFilterId
 }

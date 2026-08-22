@@ -363,6 +363,7 @@
   "unknownAccount": "Unknown account",
   "enterWidgetTitle": "Enter a title",
   "selectWidgetCurrency": "Select a currency",
+  "configureWidgetFilter": "Configure a filter for this widget",
   "widgetSaveFailed": "Could not save the widget: {error}",
   "@widgetSaveFailed": {"placeholders": {"error": {"type": "Object"}}},
   "widgetType": "Type",

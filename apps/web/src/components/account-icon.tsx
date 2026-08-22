@@ -1,16 +1,26 @@
-import { ACCOUNT_FALLBACK_ICON, ACCOUNT_ICON_MAP } from '@/lib/account-icons'
+import { Icon } from '@/components/m3/icon'
+import { accountIcon } from '@/lib/account-icons'
 
 /** Renders an account's glyph by its stored name, falling back to the default. */
 export function AccountIcon({
     name,
-    className,
+    size,
     color,
+    className,
 }: {
     name?: string
-    className?: string
+    size?: number
     color?: string
+    className?: string
 }) {
-    const Glyph =
-        (name ? ACCOUNT_ICON_MAP[name] : undefined) ?? ACCOUNT_FALLBACK_ICON
-    return <Glyph className={className} style={color ? { color } : undefined} />
+    const option = accountIcon(name)
+    return (
+        <Icon
+            name={option.symbol}
+            filled={option.filled}
+            size={size}
+            className={className}
+            style={color ? { color } : undefined}
+        />
+    )
 }

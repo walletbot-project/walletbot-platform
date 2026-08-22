@@ -96,6 +96,16 @@ class DashboardView extends StatelessWidget {
   /// edge. Overlaid, so it doesn't change the between-row spacing.
   static const _rowBand = 16.0;
 
+  /// Height of the spare row kept below the board while editing. Shorter than a
+  /// tile — it reads as somewhere to put things, not as a widget.
+  static const _spareRowHeight = 88.0;
+
+  /// While editing, one empty row is always kept below the board. Without it a
+  /// tile on the bottom row has nowhere to go, so a neighbor that wants to grow
+  /// can never be moved out of the way. It only becomes a real row once
+  /// something lands in it.
+  bool get _hasSpareRow => editing && onPlaceInCell != null;
+
   @override
   Widget build(BuildContext context) {
     final layout = DashboardGridLayout.fromPlacements(
@@ -113,7 +123,7 @@ class DashboardView extends StatelessWidget {
     return LayoutBuilder(
       builder: (context, constraints) {
         final maxWidth = constraints.maxWidth;
-        final rowCount = layout.rowCount;
+        final rowCount = layout.rowCount + (_hasSpareRow ? 1 : 0);
         // Reflow, don't stretch: logical (row, col) coordinates — and the
         // persisted layout — always stay in 6-unit terms; wide layouts only
         // change how many logical rows sit side by side per visual band.
@@ -190,6 +200,9 @@ class DashboardView extends StatelessWidget {
     double span(int units) => units * unitWidth + (units - 1) * _gap;
     double columnLeft(int col) => col * (unitWidth + _gap);
 
+    // The spare row sits one past the real ones and holds nothing, so its whole
+    // width is a single empty run.
+    final isSpare = row >= layout.rowCount;
     final rowItems = layout.rowItems(row);
 
     // Base flow: tiles and (in edit mode) dashed gap placeholders, at exact
@@ -235,10 +248,21 @@ class DashboardView extends StatelessWidget {
       children: base,
     );
 
-    final canInsertInRow = editing && onInsertInRow != null;
-    final canInsertRow = editing && onInsertRow != null;
+    // Nothing in the spare row has an intrinsic height, so it gets a fixed one
+    // or it would be an invisible, unhittable strip. It has to be *tight*: a
+    // `minHeight`-only constraint leaves the maximum unbounded, and the row's
+    // [CrossAxisAlignment.stretch] then asks for infinite height.
+    Widget sized(Widget child) => isSpare
+        ? SizedBox(height: _spareRowHeight, child: child)
+        : IntrinsicHeight(child: child);
+
+    final canInsertInRow = editing && onInsertInRow != null && !isSpare;
+    // The spare row *is* the row below the board, so it paints no band of its
+    // own, and the last real row drops its bottom band — the spare row already
+    // does that job, and more legibly.
+    final canInsertRow = editing && onInsertRow != null && !isSpare;
     if (!canInsertInRow && !canInsertRow) {
-      return IntrinsicHeight(child: baseRow);
+      return sized(baseRow);
     }
 
     // All drop affordances live in a Stack overlay so their generous hit areas
@@ -288,7 +312,7 @@ class DashboardView extends StatelessWidget {
           ),
         ),
       );
-      if (row == layout.rowCount - 1) {
+      if (row == layout.rowCount - 1 && !_hasSpareRow) {
         overlay.add(
           Positioned(
             bottom: 0,
@@ -304,7 +328,7 @@ class DashboardView extends StatelessWidget {
       }
     }
 
-    return IntrinsicHeight(child: Stack(children: [baseRow, ...overlay]));
+    return sized(Stack(children: [baseRow, ...overlay]));
   }
 
   /// A contiguous run of empty units. In editing mode it renders as one merged

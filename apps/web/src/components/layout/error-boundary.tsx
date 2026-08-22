@@ -1,9 +1,9 @@
-import { ArrowLeft, ChevronDown, Home, OctagonAlert } from 'lucide-react'
 import {
     isRouteErrorResponse,
     useNavigate,
     useRouteError,
 } from 'react-router-dom'
+import { Icon } from '@/components/m3/icon'
 import { Button } from '@/components/ui/button'
 import {
     Collapsible,
@@ -43,11 +43,11 @@ export function GlobalErrorBoundary() {
                 </div>
                 <div className="flex items-center gap-3 pt-2">
                     <Button variant="outline" onClick={() => navigate(-1)}>
-                        <ArrowLeft />
+                        <Icon name="arrow_back" />
                         {t.common.goBack}
                     </Button>
                     <Button onClick={() => navigate('/')}>
-                        <Home />
+                        <Icon name="home" filled />
                         {t.common.home}
                     </Button>
                 </div>
@@ -60,7 +60,7 @@ export function GlobalErrorBoundary() {
     return (
         <div className="flex min-h-screen flex-col items-center justify-center gap-6 text-center px-4">
             <div className="bg-destructive/10 rounded-full p-4">
-                <OctagonAlert className="text-destructive size-10" />
+                <Icon name="error" filled size={40} className="text-error" />
             </div>
             <div className="flex flex-col gap-2">
                 <h2 className="text-2xl font-semibold tracking-tight">
@@ -78,7 +78,7 @@ export function GlobalErrorBoundary() {
                     {t.errors.refreshPage}
                 </Button>
                 <Button onClick={() => navigate('/')}>
-                    <Home />
+                    <Icon name="home" filled />
                     {t.common.home}
                 </Button>
             </div>
@@ -92,7 +92,12 @@ function ErrorDetails({ details }: { details: string }) {
     return (
         <Collapsible className="w-full max-w-lg mt-2">
             <CollapsibleTrigger className="text-muted-foreground hover:text-foreground flex items-center gap-1 mx-auto text-xs cursor-pointer transition-colors">
-                <ChevronDown className="size-3.5 transition-transform in-data-panel-open:rotate-180" />
+                <Icon
+                    name="expand_more"
+                    filled
+                    size={14}
+                    className="transition-transform in-data-panel-open:rotate-180"
+                />
                 {t.errors.viewErrorDetails}
             </CollapsibleTrigger>
             <CollapsibleContent className="mt-3">

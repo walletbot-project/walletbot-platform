@@ -1,68 +1,44 @@
-import { api } from '@wallet-bot/backend/api'
-import { useQuery } from 'convex/react'
+import { Fab } from 'actify'
+import { Outlet, useLocation, useNavigate } from 'react-router-dom'
+import { Icon } from '@/components/m3/icon'
 import {
-    Bookmark,
-    Flag,
-    Home,
-    Landmark,
-    List,
-    LogOut,
-    MessageCircle,
-    Mic,
-    Plus,
-    RefreshCw,
-    Trash2,
-    User,
-} from 'lucide-react'
-import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
-import {
-    DropdownMenu,
-    DropdownMenuContent,
-    DropdownMenuGroup,
-    DropdownMenuItem,
-    DropdownMenuLabel,
-    DropdownMenuSeparator,
-    DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
-import {
-    Sidebar,
-    SidebarContent,
-    SidebarFooter,
-    SidebarGroup,
-    SidebarGroupContent,
-    SidebarGroupLabel,
-    SidebarHeader,
-    SidebarInset,
-    SidebarMenu,
-    SidebarMenuButton,
-    SidebarMenuItem,
-    SidebarProvider,
-    SidebarTrigger,
-} from '@/components/ui/sidebar'
-import { useAuth, useUser } from '@/hooks/use-auth'
+    NavigationBar,
+    type NavigationDestination,
+    NavigationRail,
+} from '@/components/m3/navigation'
+import { useWindowSizeClass } from '@/hooks/use-window-size-class'
 import type { Messages } from '@/lib/i18n'
 import { useT } from '@/lib/i18n'
-import { LanguageMenu } from './language-menu'
+import { cn } from '@/lib/utils'
 
+/**
+ * The four primary destinations, in the same order as the native app's
+ * bottom bar / rail (apps/native/lib/main.dart), using the same Material
+ * icons.
+ */
 const NAV_ITEMS = [
-    { to: '/', label: (t: Messages) => t.nav.home, icon: Home, end: true },
+    {
+        to: '/',
+        label: (t: Messages) => t.nav.home,
+        icon: 'home',
+        end: true,
+    },
     {
         to: '/activity',
         label: (t: Messages) => t.nav.activity,
-        icon: List,
+        icon: 'calendar_view_month',
         end: false,
     },
     {
         to: '/accounts',
         label: (t: Messages) => t.nav.accounts,
-        icon: Landmark,
+        icon: 'account_balance',
         end: false,
     },
     {
         to: '/insights',
         label: (t: Messages) => t.nav.insights,
-        icon: Bookmark,
+        icon: 'bookmarks',
         end: false,
     },
 ] as const
@@ -71,217 +47,95 @@ function pathMatches(path: string, to: string, end: boolean) {
     return end ? path === to : path === to || path.startsWith(`${to}/`)
 }
 
+/**
+ * The app shell, mirroring the native `Scaffold` in `apps/native/lib/main.dart`:
+ * a bottom navigation bar with a centre-docked voice FAB on compact windows,
+ * and a navigation rail carrying the FAB in the middle of its destinations from
+ * medium windows up.
+ */
 export function RootLayout() {
     const location = useLocation()
     const navigate = useNavigate()
-    const auth = useAuth()
-    const user = useUser()
     const t = useT()
-    const isAdmin = useQuery(api.v1.featureFlags.queries.getMyAdminStatus)
+    const sizeClass = useWindowSizeClass()
+    const useRail = sizeClass !== 'compact'
 
-    const currentTitle =
-        NAV_ITEMS.find((item) =>
-            pathMatches(location.pathname, item.to, item.end),
-        )?.label(t) ??
-        (location.pathname.startsWith('/add/manual')
-            ? t.nav.addManually
-            : location.pathname.startsWith('/add')
-              ? t.nav.addWithGasti
-              : t.common.appName)
+    const destinations: NavigationDestination[] = NAV_ITEMS.map((item) => ({
+        to: item.to,
+        icon: item.icon,
+        label: item.label(t),
+        isActive: pathMatches(location.pathname, item.to, item.end),
+    }))
 
-    const initials = (user.name || user.email)
-        .split(' ')
-        .map((part) => part[0])
-        .filter(Boolean)
-        .slice(0, 2)
-        .join('')
-        .toUpperCase()
+    /*
+     * The glyph mirrors native's `_VoiceFabIcon` (apps/native/lib/main.dart): a
+     * speech bubble with a microphone tucked against its lower-right corner.
+     * The mic is pulled 6px left so it almost touches the bubble, and the pair
+     * is nudged 3px right to stay optically centred in the FAB.
+     */
+    const voiceFab = (
+        <span title={t.nav.addWithGasti}>
+            <Fab
+                aria-label={t.nav.addWithGasti}
+                onPress={() => navigate('/add')}
+                className="m3-fab"
+            >
+                <span className="flex translate-x-[3px] items-center">
+                    <Icon name="chat_bubble" />
+                    <Icon name="mic" className="-ml-1.5" />
+                </span>
+            </Fab>
+        </span>
+    )
 
+    /*
+     * ONE tree for both shells. The rail and the bottom bar are conditional
+     * siblings, but `<main>` — which holds the entire routed page — is emitted
+     * unconditionally and always at the same child index, so crossing 600px
+     * only rewrites classNames.
+     *
+     * This is load-bearing, not tidiness. Returning two different trees (which
+     * this file used to do) put `<Outlet />` at index 2 in one and index 0 in
+     * the other, so React unmounted and rebuilt the whole page every time the
+     * window crossed 600px. Every `useState` in the active page reset — which
+     * is what made an open Add Account / Add Tag / Add Category screen vanish
+     * on resize. Never reintroduce a second `return` here.
+     */
     return (
-        <SidebarProvider>
-            <Sidebar collapsible="icon">
-                <SidebarHeader>
-                    <div className="flex items-center gap-2 px-2 py-2">
-                        <div className="flex size-8 items-center justify-center rounded-md bg-primary text-primary-foreground">
-                            <span className="text-sm font-semibold">W</span>
-                        </div>
-                        <div className="flex flex-col group-data-[collapsible=icon]:hidden">
-                            <span className="text-sm font-semibold">
-                                {t.common.appName}
-                            </span>
-                            <span className="text-xs text-muted-foreground">
-                                {t.nav.tagline}
-                            </span>
-                        </div>
+        <div
+            className={cn(
+                'flex h-dvh w-full overflow-hidden bg-surface',
+                useRail ? 'flex-row' : 'flex-col',
+            )}
+        >
+            {useRail ? (
+                <NavigationRail
+                    destinations={destinations}
+                    agentButton={voiceFab}
+                />
+            ) : null}
+            {useRail ? (
+                <div
+                    aria-hidden
+                    className="w-px shrink-0 self-stretch bg-outline-variant"
+                />
+            ) : null}
+            <main className="flex min-h-0 flex-1 flex-col overflow-hidden">
+                <Outlet />
+            </main>
+            {useRail ? null : (
+                <div className="relative">
+                    {/*
+                     * Centre-docked FAB, matching
+                     * `FloatingActionButtonLocation.centerDocked`: it straddles
+                     * the top edge of the navigation bar.
+                     */}
+                    <div className="pointer-events-none absolute inset-x-0 -top-7 z-10 flex justify-center">
+                        <div className="pointer-events-auto">{voiceFab}</div>
                     </div>
-                </SidebarHeader>
-
-                <SidebarContent>
-                    <SidebarGroup>
-                        <SidebarGroupLabel>
-                            {t.nav.navigation}
-                        </SidebarGroupLabel>
-                        <SidebarGroupContent>
-                            <SidebarMenu>
-                                {NAV_ITEMS.map((item) => {
-                                    const isActive = pathMatches(
-                                        location.pathname,
-                                        item.to,
-                                        item.end,
-                                    )
-                                    const Icon = item.icon
-                                    const label = item.label(t)
-                                    return (
-                                        <SidebarMenuItem key={item.to}>
-                                            <SidebarMenuButton
-                                                tooltip={label}
-                                                isActive={isActive}
-                                                render={
-                                                    <NavLink
-                                                        to={item.to}
-                                                        end={item.end}
-                                                    />
-                                                }
-                                            >
-                                                <Icon className="size-4" />
-                                                <span>{label}</span>
-                                            </SidebarMenuButton>
-                                        </SidebarMenuItem>
-                                    )
-                                })}
-                            </SidebarMenu>
-                        </SidebarGroupContent>
-                    </SidebarGroup>
-
-                    <SidebarGroup>
-                        <SidebarGroupLabel>{t.nav.actions}</SidebarGroupLabel>
-                        <SidebarGroupContent>
-                            <SidebarMenu>
-                                <SidebarMenuItem>
-                                    <SidebarMenuButton
-                                        tooltip={t.nav.addWithGasti}
-                                        isActive={pathMatches(
-                                            location.pathname,
-                                            '/add',
-                                            true,
-                                        )}
-                                        render={<NavLink to="/add" />}
-                                    >
-                                        <span className="relative inline-flex size-4 items-center justify-center">
-                                            <MessageCircle className="size-4" />
-                                            <Mic className="absolute -right-1.5 -bottom-0.5 size-2.5" />
-                                        </span>
-                                        <span>{t.nav.addWithGasti}</span>
-                                    </SidebarMenuButton>
-                                </SidebarMenuItem>
-                                <SidebarMenuItem>
-                                    <SidebarMenuButton
-                                        tooltip={t.nav.addManually}
-                                        isActive={pathMatches(
-                                            location.pathname,
-                                            '/add/manual',
-                                            false,
-                                        )}
-                                        render={<NavLink to="/add/manual" />}
-                                    >
-                                        <Plus className="size-4" />
-                                        <span>{t.nav.addManually}</span>
-                                    </SidebarMenuButton>
-                                </SidebarMenuItem>
-                            </SidebarMenu>
-                        </SidebarGroupContent>
-                    </SidebarGroup>
-                </SidebarContent>
-
-                <SidebarFooter>
-                    <SidebarMenu>
-                        <SidebarMenuItem>
-                            <DropdownMenu>
-                                <DropdownMenuTrigger
-                                    render={
-                                        <SidebarMenuButton
-                                            size="lg"
-                                            tooltip={user.name || user.email}
-                                        />
-                                    }
-                                >
-                                    <Avatar size="sm" className="rounded-md">
-                                        {user.image ? (
-                                            <AvatarImage src={user.image} />
-                                        ) : null}
-                                        <AvatarFallback className="rounded-md">
-                                            {initials || (
-                                                <User className="size-3" />
-                                            )}
-                                        </AvatarFallback>
-                                    </Avatar>
-                                    <div className="flex min-w-0 flex-col text-left">
-                                        <span className="truncate text-sm font-medium">
-                                            {user.name || t.common.account}
-                                        </span>
-                                        <span className="truncate text-xs text-muted-foreground">
-                                            {user.email}
-                                        </span>
-                                    </div>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent
-                                    align="end"
-                                    side="top"
-                                    className="w-56"
-                                >
-                                    <DropdownMenuGroup>
-                                        <DropdownMenuLabel>
-                                            {user.name || user.email}
-                                        </DropdownMenuLabel>
-                                    </DropdownMenuGroup>
-                                    {isAdmin && (
-                                        <>
-                                            <DropdownMenuSeparator />
-                                            <DropdownMenuItem
-                                                onClick={() =>
-                                                    navigate(
-                                                        '/admin/feature-flags',
-                                                    )
-                                                }
-                                            >
-                                                <Flag className="size-4" />
-                                                Feature flags
-                                            </DropdownMenuItem>
-                                        </>
-                                    )}
-                                    <DropdownMenuSeparator />
-                                    <LanguageMenu />
-                                    <DropdownMenuSeparator />
-                                    <DropdownMenuItem disabled>
-                                        <RefreshCw className="size-4" />
-                                        {t.nav.connectToAccount}
-                                    </DropdownMenuItem>
-                                    <DropdownMenuItem disabled>
-                                        <Trash2 className="size-4" />
-                                        {t.nav.deleteData}
-                                    </DropdownMenuItem>
-                                    <DropdownMenuSeparator />
-                                    <DropdownMenuItem onClick={auth.signOut}>
-                                        <LogOut className="size-4" />
-                                        {t.nav.signOut}
-                                    </DropdownMenuItem>
-                                </DropdownMenuContent>
-                            </DropdownMenu>
-                        </SidebarMenuItem>
-                    </SidebarMenu>
-                </SidebarFooter>
-            </Sidebar>
-
-            <SidebarInset>
-                <header className="sticky top-0 z-10 flex h-14 shrink-0 items-center gap-2 border-b bg-background px-4">
-                    <SidebarTrigger />
-                    <div className="h-4 w-px bg-border" aria-hidden />
-                    <h1 className="text-sm font-medium">{currentTitle}</h1>
-                </header>
-                <div className="flex flex-1 flex-col">
-                    <Outlet />
+                    <NavigationBar destinations={destinations} />
                 </div>
-            </SidebarInset>
-        </SidebarProvider>
+            )}
+        </div>
     )
 }

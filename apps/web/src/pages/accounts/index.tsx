@@ -1,52 +1,111 @@
 import { api } from '@wallet-bot/backend/api'
+import { Button, IconButton } from 'actify'
 import { useMutation, useQuery } from 'convex/react'
-import { Landmark, Plus } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { useMemo } from 'react'
+import { useNavigate, useParams } from 'react-router-dom'
 import { toast } from 'sonner'
-import { Button } from '@/components/ui/button'
+import { DetailNotFound, DetailSkeleton } from '@/components/detail-fallbacks'
+import { AppBar } from '@/components/m3/app-bar'
+import { Icon } from '@/components/m3/icon'
+import { ListDetailLayout } from '@/components/m3/list-detail-layout'
+import { StateMessage } from '@/components/m3/state-message'
 import { Skeleton } from '@/components/ui/skeleton'
+import { GROUP_SPACING, groupedRadius } from '@/lib/grouped-list'
 import { type Messages, useT } from '@/lib/i18n'
+import { newId } from '@/lib/new-id'
 import {
-    AccountDetailsSheet,
+    AccountDetail,
     type AccountSummary,
-} from '@/pages/accounts/account-details-sheet'
+} from '@/pages/accounts/account-detail'
 import { accountErrorMessage } from '@/pages/accounts/account-errors'
 import {
-    AccountFormDialog,
+    AccountForm,
     type AccountFormValue,
-} from '@/pages/accounts/account-form-dialog'
+} from '@/pages/accounts/account-form'
 import { AccountTile } from '@/pages/accounts/account-tile'
 
-function newId() {
-    return `${Date.now()}${Math.random().toString(36).slice(2, 8)}`
-}
-
+/**
+ * The accounts list. What is open beside it — nothing, the create form, or one
+ * account's detail — is decided by the child route, never by local state, so it
+ * survives reload, back/forward and any window resize.
+ */
 export function Accounts() {
     const t = useT()
+    const navigate = useNavigate()
     const accounts = useQuery(api.v1.accounts.queries.listActive)
+
+    const list = (
+        <>
+            <AppBar
+                title={t.nav.accounts}
+                actions={
+                    <IconButton
+                        aria-label={t.accounts.newAccount}
+                        onPress={() => navigate('/accounts/new')}
+                        className="text-on-surface-variant"
+                    >
+                        <Icon name="add" />
+                    </IconButton>
+                }
+            />
+            <div className="min-h-0 flex-1 overflow-y-auto">
+                {accounts === undefined ? (
+                    <AccountsSkeleton />
+                ) : accounts.length === 0 ? (
+                    <EmptyState
+                        t={t}
+                        onCreate={() => navigate('/accounts/new')}
+                    />
+                ) : (
+                    <div
+                        className="flex flex-col px-4 pb-24"
+                        style={{ gap: GROUP_SPACING }}
+                    >
+                        {accounts.map((account, index) => (
+                            <AccountTile
+                                key={account.id}
+                                id={account.id}
+                                name={account.name}
+                                icon={account.icon}
+                                color={account.color}
+                                radius={groupedRadius(index, accounts.length)}
+                                onClick={() =>
+                                    navigate(`/accounts/${account.id}`)
+                                }
+                            />
+                        ))}
+                    </div>
+                )}
+            </div>
+        </>
+    )
+
+    return (
+        <ListDetailLayout
+            list={list}
+            closeTo="/accounts"
+            detailTitle={t.accounts.accountDetails}
+            placeholder={
+                <div className="flex flex-1 items-center justify-center p-8">
+                    <p className="m3-body-large max-w-xs text-center text-on-surface-variant">
+                        {t.accounts.selectDetail}
+                    </p>
+                </div>
+            }
+        />
+    )
+}
+
+/** `/accounts/new` — the create form as the layout's occupant. */
+export function AccountCreateRoute() {
+    const t = useT()
+    const navigate = useNavigate()
     const createAccount = useMutation(api.v1.accounts.mutations.create)
     const createBalanceAdjustment = useMutation(
         api.v1.transactions.mutations.createBalanceAdjustment,
     )
 
-    const [creating, setCreating] = useState(false)
-    const [selectedId, setSelectedId] = useState<string | null>(null)
-
-    // Derive the open account from the live query so edits saved in the sheet
-    // are reflected immediately (a stored snapshot would go stale on save).
-    const selected: AccountSummary | null = useMemo(() => {
-        if (selectedId === null || accounts === undefined) return null
-        const account = accounts.find((a) => a.id === selectedId)
-        return account
-            ? {
-                  id: account.id,
-                  name: account.name,
-                  currency: account.currency,
-                  color: account.color,
-                  icon: account.icon,
-              }
-            : null
-    }, [accounts, selectedId])
+    const close = () => navigate('/accounts')
 
     const handleCreate = async (value: AccountFormValue) => {
         const id = newId()
@@ -64,6 +123,12 @@ export function Accounts() {
                     accountId: id,
                     balanceAfter: BigInt(value.initialBalanceCents),
                     dateConfirmed: true,
+                    // The canonical name native writes for an opening balance
+                    // (apps/native/lib/data/repositories/account_repository.dart).
+                    // Omitting it took the backend's `Ajuste de saldo` default,
+                    // so the same action produced two different names depending
+                    // on which client did it.
+                    name: 'Balance inicial',
                 })
             }
         })()
@@ -73,81 +138,74 @@ export function Accounts() {
             error: (error) =>
                 accountErrorMessage(error, t, t.accounts.createFailed),
         })
-        await run
-        setCreating(false)
+        // The toast already reported the failure; swallowing it here keeps the
+        // form open without an unhandled rejection.
+        try {
+            await run
+        } catch {
+            return
+        }
+        close()
+    }
+
+    return <AccountForm onClose={close} onSubmit={handleCreate} />
+}
+
+/** `/accounts/:accountId` — one account's detail as the layout's occupant. */
+export function AccountDetailRoute() {
+    const navigate = useNavigate()
+    const { accountId } = useParams()
+    const accounts = useQuery(api.v1.accounts.queries.listActive)
+
+    const account: AccountSummary | null = useMemo(() => {
+        if (accounts === undefined || accountId === undefined) return null
+        const match = accounts.find((a) => a.id === accountId)
+        return match
+            ? {
+                  id: match.id,
+                  name: match.name,
+                  currency: match.currency,
+                  color: match.color,
+                  icon: match.icon,
+              }
+            : null
+    }, [accounts, accountId])
+
+    if (accounts === undefined) return <DetailSkeleton />
+
+    if (account === null) {
+        return <DetailNotFound onBack={() => navigate('/accounts')} />
     }
 
     return (
-        <div className="flex flex-1 flex-col">
-            <div className="flex items-center justify-end border-b px-4 py-2">
-                <Button size="sm" onClick={() => setCreating(true)}>
-                    <Plus data-icon="inline-start" />
-                    {t.accounts.newAccount}
-                </Button>
-            </div>
-
-            <div className="flex-1 p-4">
-                {accounts === undefined ? (
-                    <AccountsSkeleton />
-                ) : accounts.length === 0 ? (
-                    <EmptyState t={t} onCreate={() => setCreating(true)} />
-                ) : (
-                    <ul className="divide-y overflow-hidden rounded-md border bg-card">
-                        {accounts.map((account) => (
-                            <li key={account.id}>
-                                <AccountTile
-                                    id={account.id}
-                                    name={account.name}
-                                    icon={account.icon}
-                                    color={account.color}
-                                    onClick={() => setSelectedId(account.id)}
-                                />
-                            </li>
-                        ))}
-                    </ul>
-                )}
-            </div>
-
-            <AccountFormDialog
-                open={creating}
-                onOpenChange={setCreating}
-                onSubmit={handleCreate}
-            />
-
-            <AccountDetailsSheet
-                account={selected}
-                open={selectedId !== null}
-                onOpenChange={(open) => {
-                    if (!open) setSelectedId(null)
-                }}
-            />
-        </div>
+        <AccountDetail
+            account={account}
+            onClose={() => navigate('/accounts')}
+        />
     )
 }
 
 function EmptyState({ t, onCreate }: { t: Messages; onCreate: () => void }) {
     return (
-        <div className="flex flex-col items-center justify-center gap-4 py-16 text-center">
-            <Landmark className="size-12 text-muted-foreground" />
-            <div className="flex flex-col gap-1">
-                <p className="font-medium">{t.accounts.emptyTitle}</p>
-                <p className="text-sm text-muted-foreground">
-                    {t.accounts.emptyDescription}
-                </p>
-            </div>
-            <Button onClick={onCreate}>
-                <Plus data-icon="inline-start" />
-                {t.accounts.createAccount}
-            </Button>
-        </div>
+        <StateMessage
+            icon="account_balance_wallet"
+            title={t.accounts.emptyTitle}
+            detail={t.accounts.emptyDescription}
+            action={
+                <Button variant="filled" onPress={onCreate}>
+                    <Icon name="add" size={18} />
+                    {t.accounts.createAccount}
+                </Button>
+            }
+        />
     )
 }
 
 function AccountsSkeleton() {
     return (
-        <div className="space-y-2">
+        <div className="flex flex-col gap-group-seam px-4">
             {Array.from({ length: 5 }).map((_, i) => (
-                <Skeleton key={i} className="h-16 w-full" />
+                <Skeleton key={i} className="h-18 w-full rounded-lg" />
             ))}
         </div>
     )
