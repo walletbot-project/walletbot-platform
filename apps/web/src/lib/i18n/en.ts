@@ -339,6 +339,9 @@ export const en: Messages = {
             'An unexpected error occurred. Try refreshing the page or heading back.',
         refreshPage: 'Refresh page',
         viewErrorDetails: 'View error details',
+        sessionEndedTitle: 'Your session ended',
+        sessionEndedDescription:
+            'This session is no longer valid. Taking you back to sign in.',
     },
 
     accounts: {

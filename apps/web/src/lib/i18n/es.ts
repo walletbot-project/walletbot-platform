@@ -358,6 +358,9 @@ export const es = {
             'Ocurrió un error inesperado. Probá recargar la página o volver.',
         refreshPage: 'Recargar página',
         viewErrorDetails: 'Ver detalles del error',
+        sessionEndedTitle: 'Tu sesión terminó',
+        sessionEndedDescription:
+            'Esta sesión ya no es válida. Te llevamos a iniciar sesión de nuevo.',
     },
 
     accounts: {
