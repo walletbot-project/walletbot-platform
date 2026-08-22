@@ -125,7 +125,7 @@ abstract class AppLocalizations {
   /// No description provided for @insights.
   ///
   /// In en, this message translates to:
-  /// **'Insights'**
+  /// **'Organization'**
   String get insights;
 
   /// No description provided for @categories.

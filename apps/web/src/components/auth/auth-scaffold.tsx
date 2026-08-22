@@ -1,5 +1,6 @@
 import { Button, CircularProgress, TextField } from 'actify'
 import type { ComponentProps, ReactNode } from 'react'
+import appIcon from '@/assets/favicon.png'
 import { AuthBackdrop } from '@/components/auth/auth-backdrop'
 import { Icon } from '@/components/m3/icon'
 import { useT } from '@/lib/i18n'
@@ -28,9 +29,17 @@ export function AuthHeroHeader({ subtitle }: { subtitle: string }) {
     const t = useT()
     return (
         <div className="flex items-center gap-3.5">
-            <span className="flex size-14 shrink-0 items-center justify-center rounded-[18px] bg-primary text-on-primary shadow-[0_12px_22px_color-mix(in_srgb,var(--md-sys-color-primary)_26%,transparent)]">
-                <Icon name="account_balance_wallet" filled />
-            </span>
+            {/*
+             * No clip and no drop shadow: the artwork already carries its own
+             * rounded silhouette, and its transparent margins mean a shadow
+             * would trace the 56px box instead of the icon — reading as a dark
+             * rectangle behind it. Native's `_HeroHeader` matches.
+             */}
+            <img
+                src={appIcon}
+                alt=""
+                className="size-14 shrink-0 object-contain"
+            />
             <div className="flex min-w-0 flex-col">
                 <h1 className="m3-headline-medium font-black leading-none">
                     {t.common.appName}

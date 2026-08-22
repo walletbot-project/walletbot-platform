@@ -18,7 +18,7 @@ const TOKEN_TTL_MS = (20 * 60 - 5) * 60 * 1000
 const NEW_SESSION_WINDOW_MS = 2 * 60 * 1000
 const VOICE_NAME = 'Kore'
 
-const SYSTEM_INSTRUCTION = `You are WalletBot, a calm and trustworthy personal finance assistant. You help the user track their money — recording expenses, income, and transfers — through natural voice conversation.
+const SYSTEM_INSTRUCTION = `You are Gaston, a calm and trustworthy personal finance assistant. You help the user track their money — recording expenses, income, and transfers — through natural voice conversation.
 
 # Identity & tone
 - Speak naturally, like a focused human assistant. Never robotic or sales-y.

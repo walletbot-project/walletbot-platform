@@ -497,23 +497,16 @@ class _HeroHeader extends StatelessWidget {
       children: [
         Row(
           children: [
-            Container(
+            // No clip and no drop shadow: the artwork already carries its
+            // own rounded silhouette, and its transparent margins mean a
+            // shadow would trace the 56px box instead of the icon — reading
+            // as a dark rectangle behind it. Web's `AuthHeroHeader` matches.
+            SizedBox(
               width: 56,
               height: 56,
-              decoration: BoxDecoration(
-                color: colors.primary,
-                borderRadius: BorderRadius.circular(18),
-                boxShadow: [
-                  BoxShadow(
-                    color: colors.primary.withValues(alpha: 0.26),
-                    blurRadius: 22,
-                    offset: const Offset(0, 12),
-                  ),
-                ],
-              ),
-              child: Icon(
-                Icons.account_balance_wallet_rounded,
-                color: colors.onPrimary,
+              child: Image.asset(
+                'assets/icon/icon-android.png',
+                fit: BoxFit.contain,
               ),
             ),
             const SizedBox(width: 14),

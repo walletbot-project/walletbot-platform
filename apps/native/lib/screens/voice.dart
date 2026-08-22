@@ -1095,21 +1095,11 @@ class _AgentBubble extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            CircleAvatar(
-              radius: 14,
-              backgroundColor: theme.colorScheme.secondaryContainer,
-              child: Icon(
-                Icons.auto_awesome_rounded,
-                size: 16,
-                color: theme.colorScheme.onSecondaryContainer,
-              ),
-            ),
-            const SizedBox(width: 8),
             Flexible(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _RoleLabel(label: 'WalletBot', time: item.at),
+                  _RoleLabel(label: 'Gaston', time: item.at),
                   const SizedBox(height: 4),
                   Container(
                     padding: const EdgeInsets.symmetric(

@@ -18,7 +18,6 @@ import {
 import { useNavigate } from 'react-router-dom'
 import { AppBar } from '@/components/m3/app-bar'
 import { Icon } from '@/components/m3/icon'
-import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import type { ChatMessage } from '@/hooks/use-voice'
 import { useVoiceSession } from '@/hooks/use-voice-session'
 import { useFormatLocale, useT } from '@/lib/i18n'
@@ -207,11 +206,6 @@ function AgentBubble({
     return (
         <div className="flex justify-start">
             <div className="flex max-w-[82%] items-start gap-2">
-                <Avatar size="sm" className="mt-5 size-7">
-                    <AvatarFallback className="bg-secondary-container text-on-secondary-container">
-                        <Icon name="auto_awesome" filled size={14} />
-                    </AvatarFallback>
-                </Avatar>
                 <div className="flex flex-col items-start gap-1">
                     <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                         <span className="font-medium">{t.voice.agent}</span>

@@ -30,6 +30,7 @@ import 'package:convex_flutter/convex_flutter.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:provider/provider.dart';
 
@@ -508,7 +509,7 @@ class _AppMainState extends State<AppMain> {
               heroTag: 'voiceFab',
               onPressed: _openVoice,
               tooltip: context.l10n.voiceCommands,
-              child: const Text('🤖'),
+              child: const _VoiceFabIcon(),
             ),
       bottomNavigationBar: useRail
           ? null
@@ -530,7 +531,7 @@ class _AppMainState extends State<AppMain> {
                   label: context.l10n.accounts,
                 ),
                 NavigationDestination(
-                  icon: const Icon(Icons.stacked_line_chart_rounded),
+                  icon: const Icon(Icons.bookmarks_rounded),
                   label: context.l10n.insights,
                 ),
               ],
@@ -596,7 +597,7 @@ class _AgentCenteredRail extends StatelessWidget {
               elevation: 0,
               onPressed: onOpenVoice,
               tooltip: l10n.voiceCommands,
-              child: const Text('🤖'),
+              child: const _VoiceFabIcon(),
             ),
           ),
           Expanded(
@@ -614,7 +615,7 @@ class _AgentCenteredRail extends StatelessWidget {
                   label: Text(l10n.accounts),
                 ),
                 NavigationRailDestination(
-                  icon: const Icon(Icons.stacked_line_chart_rounded),
+                  icon: const Icon(Icons.bookmarks_rounded),
                   label: Text(l10n.insights),
                 ),
               ],
@@ -622,6 +623,31 @@ class _AgentCenteredRail extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// The voice-agent FAB glyph: a speech bubble with a microphone overlapping its
+/// lower-right corner, hinting at "talk to the assistant".
+/// `apps/web/src/components/m3/agent-glyph.tsx` is the same drawing for web.
+class _VoiceFabIcon extends StatelessWidget {
+  const _VoiceFabIcon();
+
+  static const double _size = 24;
+
+  @override
+  Widget build(BuildContext context) {
+    // The FAB hands its child an IconTheme carrying the foreground colour; SVG
+    // has no such channel, so read it off the theme and tint with it. The
+    // fallback is the FAB's own M3 default.
+    final color =
+        IconTheme.of(context).color ??
+        Theme.of(context).colorScheme.onPrimaryContainer;
+    return SvgPicture.asset(
+      'assets/agent-glyph.svg',
+      width: _size,
+      height: _size,
+      colorFilter: ColorFilter.mode(color, BlendMode.srcIn),
     );
   }
 }

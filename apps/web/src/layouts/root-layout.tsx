@@ -1,5 +1,6 @@
 import { Fab } from 'actify'
 import { Outlet, useLocation, useNavigate } from 'react-router-dom'
+import { AgentGlyph } from '@/components/m3/agent-glyph'
 import {
     NavigationBar,
     type NavigationDestination,
@@ -37,7 +38,7 @@ const NAV_ITEMS = [
     {
         to: '/insights',
         label: (t: Messages) => t.nav.insights,
-        icon: 'stacked_line_chart',
+        icon: 'bookmarks',
         end: false,
     },
 ] as const
@@ -66,6 +67,7 @@ export function RootLayout() {
         isActive: pathMatches(location.pathname, item.to, item.end),
     }))
 
+    /* The glyph mirrors native's `_VoiceFabIcon` (apps/native/lib/main.dart). */
     const voiceFab = (
         <span title={t.nav.addWithGasti}>
             <Fab
@@ -73,7 +75,7 @@ export function RootLayout() {
                 onPress={() => navigate('/add')}
                 className="m3-fab"
             >
-                <span className="text-2xl leading-none">🤖</span>
+                <AgentGlyph />
             </Fab>
         </span>
     )
