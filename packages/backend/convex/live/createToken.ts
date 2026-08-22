@@ -1,14 +1,21 @@
-'use node'
-
-import type { FunctionDeclaration, Schema } from '@google/genai'
-import { GoogleGenAI, Modality, Type } from '@google/genai'
 import type { ToolSchema } from '@wallet-bot/shared'
 import { TOOL_DEFINITIONS } from '@wallet-bot/shared'
 
+// Deliberately NOT 'use node': minting is one HTTPS call, kept in Convex's
+// default runtime so token requests never pay a Node cold start.
 const MODEL = 'gemini-3.1-flash-live-preview'
+// The clients open the Live constrained WebSocket against v1alpha; mint the
+// token against the same API version.
+const AUTH_TOKENS_URL =
+    'https://generativelanguage.googleapis.com/v1alpha/auth_tokens'
 // AuthToken.expireTime must be less than 20 hours in the future. Leave a small
 // safety margin for clock/network skew while using the maximum useful window.
 const TOKEN_TTL_MS = (20 * 60 - 5) * 60 * 1000
+// Tokens are minted with uses: 1 and consumed by the connection that requested
+// them, so they only need to authorize a session start briefly after minting.
+// Google's default for newSessionExpireTime is 1 minute; make the window
+// explicit and wide enough to absorb a slow fetch → connect path.
+const NEW_SESSION_WINDOW_MS = 2 * 60 * 1000
 const VOICE_NAME = 'Kore'
 
 const SYSTEM_INSTRUCTION = `You are WalletBot, a calm and trustworthy personal finance assistant. You help the user track their money — recording expenses, income, and transfers — through natural voice conversation.
@@ -81,20 +88,28 @@ function buildSystemInstruction() {
     return `${SYSTEM_INSTRUCTION}\n\nToday is ${dayOfWeek}, ${date}.`
 }
 
-// Shared → Google GenAI adapter
+// Shared → Google wire-format adapter. The REST JSON encoding of Google's
+// Schema uses the type-enum NAMES ("STRING", "OBJECT", …), which are exactly
+// the strings ToolSchema already carries — same bytes the SDK used to send.
 
-const SCHEMA_TYPE_MAP: Record<string, Type> = {
-    STRING: Type.STRING,
-    NUMBER: Type.NUMBER,
-    INTEGER: Type.INTEGER,
-    BOOLEAN: Type.BOOLEAN,
-    ARRAY: Type.ARRAY,
-    OBJECT: Type.OBJECT,
+type GoogleSchema = {
+    type: ToolSchema['type']
+    description?: ToolSchema['description']
+    enum?: ToolSchema['enum']
+    required?: ToolSchema['required']
+    properties?: Record<string, GoogleSchema>
+    items?: GoogleSchema
 }
 
-function toGoogleSchema(schema: ToolSchema): Schema {
-    const result: Schema = {
-        type: SCHEMA_TYPE_MAP[schema.type],
+type FunctionDeclaration = {
+    name: string
+    description: string
+    parameters: GoogleSchema
+}
+
+function toGoogleSchema(schema: ToolSchema): GoogleSchema {
+    const result: GoogleSchema = {
+        type: schema.type,
         description: schema.description,
         enum: schema.enum,
         required: schema.required,
@@ -129,45 +144,90 @@ function toFunctionDeclarations(
 
 const TOOL_DECLARATIONS = toFunctionDeclarations(TOOL_DEFINITIONS)
 
+// Stamped at module load. A small `moduleAgeMs` on an invocation means the
+// request paid a Node runtime cold start (module re-evaluation, including
+// the tool-declaration conversion above).
+const MODULE_LOADED_AT = Date.now()
+
 export async function createLiveToken() {
+    const startedAt = Date.now()
     const apiKey = process.env.GEMINI_API_KEY
     if (!apiKey) {
         throw new Error('GEMINI_API_KEY environment variable is not set')
     }
 
-    const client = new GoogleGenAI({ apiKey })
     const expireTime = new Date(Date.now() + TOKEN_TTL_MS).toISOString()
-
-    const token = await client.authTokens.create({
-        config: {
-            uses: 1,
-            expireTime,
-            liveConnectConstraints: {
-                model: MODEL,
-                config: {
-                    responseModalities: [Modality.AUDIO],
-                    systemInstruction: buildSystemInstruction(),
-                    tools: [{ functionDeclarations: TOOL_DECLARATIONS }],
-                    speechConfig: {
-                        voiceConfig: {
-                            prebuiltVoiceConfig: { voiceName: VOICE_NAME },
-                        },
+    // Wire shape of AuthToken creation: the Live session config travels as a
+    // BidiGenerateContentSetup message — the same shape the client sends in
+    // its WS `setup` frame — NOT as the SDK's `liveConnectConstraints`
+    // surface type (the SDK translates before sending; verified against
+    // @google/genai 1.49.0's createAuthTokenConfigToMldev converter and a
+    // live mint). No fieldMask: like the SDK with `lockAdditionalFields`
+    // unset, the server default locks the constrained fields.
+    const request = {
+        uses: 1,
+        expireTime,
+        newSessionExpireTime: new Date(
+            Date.now() + NEW_SESSION_WINDOW_MS,
+        ).toISOString(),
+        bidiGenerateContentSetup: {
+            model: `models/${MODEL}`,
+            generationConfig: {
+                responseModalities: ['AUDIO'],
+                speechConfig: {
+                    voiceConfig: {
+                        prebuiltVoiceConfig: { voiceName: VOICE_NAME },
                     },
-                    inputAudioTranscription: {},
-                    outputAudioTranscription: {},
-                    sessionResumption: {},
-                    contextWindowCompression: { slidingWindow: {} },
                 },
             },
-            httpOptions: {
-                apiVersion: 'v1alpha',
+            systemInstruction: {
+                role: 'user',
+                parts: [{ text: buildSystemInstruction() }],
             },
+            tools: [{ functionDeclarations: TOOL_DECLARATIONS }],
+            inputAudioTranscription: {},
+            outputAudioTranscription: {},
+            sessionResumption: {},
+            contextWindowCompression: { slidingWindow: {} },
         },
+    }
+
+    const googleStartedAt = Date.now()
+    const response = await fetch(AUTH_TOKENS_URL, {
+        method: 'POST',
+        headers: {
+            'x-goog-api-key': apiKey,
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(request),
     })
+    if (!response.ok) {
+        const detail = await response.text()
+        throw new Error(
+            `auth_tokens mint failed: ${response.status} ${detail}`,
+        )
+    }
+    const token = (await response.json()) as { name?: string }
+    if (typeof token.name !== 'string' || token.name.length === 0) {
+        throw new Error('auth_tokens mint response did not include name')
+    }
+
+    const finishedAt = Date.now()
+    // Where a slow mint spends its time: `googleMs` is the outbound call to
+    // Google, `mintMs` the whole function, `moduleAgeMs` the cold-start
+    // detector. Logged for the Convex dashboard and returned so the client's
+    // connection-phase log can print client-vs-server splits from a device.
+    const timings = {
+        googleMs: finishedAt - googleStartedAt,
+        mintMs: finishedAt - startedAt,
+        moduleAgeMs: startedAt - MODULE_LOADED_AT,
+    }
+    console.log('[live] token minted', timings)
 
     return {
         token: token.name,
         expireTime,
         model: MODEL,
+        timings,
     }
 }

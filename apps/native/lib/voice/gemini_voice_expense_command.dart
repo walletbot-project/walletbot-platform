@@ -1,7 +1,8 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
-import 'dart:typed_data';
+
+import 'package:flutter/foundation.dart';
 
 import 'package:convex_flutter/convex_flutter.dart';
 import 'package:http/http.dart' as http;
@@ -15,6 +16,75 @@ import 'voice_event.dart';
 import 'voice_expense_command.dart';
 import 'voice_session_remote_sync.dart';
 import 'voice_session_repository.dart';
+
+/// One-shot fetch of a constrained Gemini Live token from the backend,
+/// shared by the command's connect path and the factory's prefetch.
+///
+/// The Convex-action attempt is bounded to 6 s: the action rides the Convex
+/// WebSocket, which can itself be mid-reconnect exactly when a voice
+/// reconnect needs a token (network loss, resume from background) — without
+/// the bound it would sit out the client's full 30 s operation timeout
+/// before falling back. The HTTP endpoint is transport-independent.
+Future<String> _fetchLiveToken({
+  required bool useAuthenticatedTokenAction,
+  required ConvexClient convexClient,
+  required String? sessionToken,
+  required String convexSiteUrl,
+  void Function(String phase, Map<String, Object?> extra)? onPhase,
+}) async {
+  final fetchStopwatch = Stopwatch()..start();
+  Map<String, Object?>? body;
+  if (useAuthenticatedTokenAction) {
+    try {
+      final raw = await convexClient
+          .action(name: 'v1/live/actions:requestLiveToken', args: const {})
+          .timeout(const Duration(seconds: 6));
+      final decoded = decodeConvexResponse(raw);
+      if (decoded is! Map) {
+        throw StateError('Malformed Convex live token response');
+      }
+      body = decoded.cast<String, Object?>();
+    } catch (error) {
+      onPhase?.call('token_action_failed', {
+        'elapsedMs': fetchStopwatch.elapsedMilliseconds,
+        'error': error.toString(),
+      });
+    }
+  }
+  if (body == null) {
+    if (convexSiteUrl.isEmpty) return '';
+    final credential = sessionToken;
+    if (credential == null || credential.isEmpty) return '';
+    final base = Uri.parse(convexSiteUrl);
+    final response = await http
+        .post(
+          base.replace(path: '/v1/live/token'),
+          headers: {'Authorization': 'Bearer $credential'},
+        )
+        .timeout(const Duration(seconds: 15));
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw StateError(
+        'Convex live token request failed: '
+        '${response.statusCode} ${response.body}',
+      );
+    }
+    body = (jsonDecode(response.body) as Map).cast<String, Object?>();
+  }
+
+  final token = body['token'];
+  if (token is! String || token.isEmpty) {
+    throw StateError('Convex live token response did not include token');
+  }
+  onPhase?.call('token_received', {
+    'elapsedMs': fetchStopwatch.elapsedMilliseconds,
+    'model': body['model']?.toString(),
+    // Server-reported breakdown (google round trip, mint total, cold-start
+    // module age, action/http totals): elapsedMs minus the server total is
+    // network + Convex routing.
+    if (body['timings'] is Map) 'server': body['timings'],
+  });
+  return token;
+}
 
 class GeminiVoiceExpenseCommandFactory implements VoiceExpenseCommandFactory {
   GeminiVoiceExpenseCommandFactory({
@@ -40,10 +110,72 @@ class GeminiVoiceExpenseCommandFactory implements VoiceExpenseCommandFactory {
   final String convexSiteUrl;
   GeminiVoiceExpenseCommand? _active;
 
+  // Tokens are single-use with a 2-minute new-session window (see
+  // packages/backend/convex/live/createToken.ts). The freshness bound stays
+  // well inside that window so a consumed prefetch is always startable.
+  static const _prefetchFreshness = Duration(seconds: 60);
+  Future<String>? _prefetchedToken;
+  DateTime? _prefetchedAt;
+
   @override
   VoiceExpenseCommand? get activeCommand {
     final active = _active;
     return active != null && active.isActive ? active : null;
+  }
+
+  @override
+  void prefetchToken() {
+    if (liveToken.isNotEmpty) return;
+    final startedAt = _prefetchedAt;
+    if (_prefetchedToken != null &&
+        startedAt != null &&
+        DateTime.now().difference(startedAt) < _prefetchFreshness) {
+      return;
+    }
+    late final Future<String> future;
+    future = _fetchLiveToken(
+      useAuthenticatedTokenAction: useAuthenticatedTokenAction,
+      convexClient: convexClient,
+      sessionToken: sessionToken,
+      convexSiteUrl: convexSiteUrl,
+      onPhase: (phase, extra) =>
+          debugPrint('[voice] token prefetch $phase: $extra'),
+    );
+    // A failed or credential-less prefetch must not poison the real connect:
+    // drop it so takeFreshPrefetch hands out nothing and the command runs
+    // its own fetch (with its own error surfacing).
+    future.then(
+      (token) {
+        if (token.isEmpty && identical(_prefetchedToken, future)) {
+          _prefetchedToken = null;
+          _prefetchedAt = null;
+        }
+      },
+      onError: (Object error) {
+        debugPrint('[voice] token prefetch failed: $error');
+        if (identical(_prefetchedToken, future)) {
+          _prefetchedToken = null;
+          _prefetchedAt = null;
+        }
+      },
+    );
+    _prefetchedToken = future;
+    _prefetchedAt = DateTime.now();
+  }
+
+  /// Hands a still-fresh prefetched token fetch to a connecting command,
+  /// consuming it. Null when none was started or it aged out of the token's
+  /// new-session window.
+  Future<String>? takeFreshPrefetch() {
+    final future = _prefetchedToken;
+    final startedAt = _prefetchedAt;
+    _prefetchedToken = null;
+    _prefetchedAt = null;
+    if (future == null || startedAt == null) return null;
+    if (DateTime.now().difference(startedAt) >= _prefetchFreshness) {
+      return null;
+    }
+    return future;
   }
 
   @override
@@ -61,12 +193,38 @@ class GeminiVoiceExpenseCommandFactory implements VoiceExpenseCommandFactory {
       apiKey: apiKey,
       liveToken: liveToken,
       convexSiteUrl: convexSiteUrl,
+      takePrefetchedToken: takeFreshPrefetch,
       onEnded: () {
         if (identical(_active, command)) _active = null;
       },
     );
     _active = command;
     return command;
+  }
+
+  @override
+  Future<List<VoiceEvent>> restorableHistory() async {
+    final rows = await sessionRepository.resumableConversationEvents(
+      types: kConversationEventTypes,
+    );
+    final events = <VoiceEvent>[];
+    for (final row in rows) {
+      final decoded = jsonDecode(row.payloadJson);
+      if (decoded is! Map) continue;
+      final event = voiceEventFromRecord(
+        type: row.type,
+        payload: decoded.cast<String, Object?>(),
+        at: DateTime.fromMillisecondsSinceEpoch(row.occurredAt.toInt()),
+      );
+      if (event != null) events.add(event);
+    }
+    return events;
+  }
+
+  @override
+  Future<void> discardRestorableSession() async {
+    await sessionRepository.endResumableSession();
+    remoteSync?.schedule();
   }
 
   Future<void> dispose() async {
@@ -88,12 +246,12 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
     required this.liveToken,
     required this.convexSiteUrl,
     required this.onEnded,
+    this.takePrefetchedToken,
   }) : _executors = ToolExecutors(repositories);
 
   static const _model = 'gemini-3.1-flash-live-preview';
   static const _voiceName = 'Kore';
   static const _maxQueuedMessages = 200;
-  static const _tokenRefreshMargin = Duration(minutes: 2);
 
   final AppRepositories repositories;
   final VoiceSessionRepository sessionRepository;
@@ -105,6 +263,10 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
   final String liveToken;
   final String convexSiteUrl;
   final void Function() onEnded;
+
+  /// Consumes the factory's screen-open token prefetch, when one is still
+  /// inside the token's new-session window. Null result → fetch fresh.
+  final Future<String>? Function()? takePrefetchedToken;
   final ToolExecutors _executors;
   final _audioPlayer = PcmAudioPlayer();
   final _events = StreamController<VoiceEvent>.broadcast();
@@ -119,14 +281,13 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
   Future<void>? _connectFuture;
   Completer<void>? _setupComplete;
   String? _sessionId;
-  String? _resumeHandle;
-  String? _effectiveToken;
-  DateTime? _tokenExpiresAt;
+  Future<String>? _prefetchedToken;
   bool _active = false;
   bool _connected = false;
   bool _disposed = false;
   bool _explicitlyStopped = false;
   bool _audioPlaybackEnabled = true;
+  bool _mutedByDetach = false;
   bool _screenAttached = false;
   bool _discardInterruptedOutput = false;
   bool _audioStreamOpen = false;
@@ -140,10 +301,10 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
   String get label => 'Gemini Live voice expense command';
 
   @override
-  Stream<VoiceEvent> get events async* {
-    yield* Stream<VoiceEvent>.fromIterable(List.of(_history));
-    yield* _events.stream;
-  }
+  Stream<VoiceEvent> get events => _events.stream;
+
+  @override
+  List<VoiceEvent> get history => List.unmodifiable(_history);
 
   @override
   bool get isActive => _active && !_explicitlyStopped && !_disposed;
@@ -154,24 +315,33 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
   @override
   Future<void> start({bool respondWithAudio = true}) async {
     _audioPlaybackEnabled = respondWithAudio;
+    _mutedByDetach = false;
     if (isActive) {
-      if (!_connected) {
-        _reconnectTimer?.cancel();
-        await _connect();
-      }
+      await ensureConnected();
       return;
     }
     if (_disposed) throw StateError('Voice command is disposed');
 
+    final startStopwatch = Stopwatch()..start();
     final session = await sessionRepository.openOrCreate(model: _model);
     _sessionId = session.id;
-    _resumeHandle = session.resumeHandle;
     _active = true;
     _explicitlyStopped = false;
     remoteSync?.schedule(delay: Duration.zero);
+    _logConnectionPhase('session_opened', startStopwatch, {
+      'resumed': session.resumeHandle != null,
+    });
 
     _emit(VoiceConnectingEvent('Connecting to Gemini Live'));
+    // The token fetch and the audio engine spin-up are independent and each
+    // can take hundreds of milliseconds — overlap them. `_connectOnce`
+    // consumes the prefetched future (or fetches fresh on reconnects).
+    // Prefer a fetch the factory already started when the screen opened.
+    final tokenFetch = takePrefetchedToken?.call() ?? _resolveLiveToken();
+    tokenFetch.ignore();
+    _prefetchedToken = tokenFetch;
     final engineDiagnostics = await _audioPlayer.start(sampleRate: 24000);
+    _logConnectionPhase('audio_engine_started', startStopwatch);
     if (engineDiagnostics != null) {
       // iOS voice engine state (voice processing, formats, route). Persisted
       // with the session events so failed rounds are diagnosable without a
@@ -181,10 +351,33 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
     await _connect();
   }
 
+  @override
+  Future<void> ensureConnected() async {
+    if (!isActive || _connected) return;
+    _reconnectTimer?.cancel();
+    await _connect();
+  }
+
+  /// Runs one connection attempt, deduplicating concurrent callers.
+  ///
+  /// A failed attempt never propagates: any connect error (network loss,
+  /// token mint failure, setup timeout) is recorded as a transient event and
+  /// retried on the standard backoff, so no caller can turn a bad connection
+  /// into a session teardown. The user always keeps the conversation and the
+  /// explicit End button.
   Future<void> _connect() {
     final existing = _connectFuture;
     if (existing != null) return existing;
-    final future = _connectOnce();
+    final future = _connectOnce().then<void>(
+      (_) {},
+      onError: (Object error) {
+        if (!isActive) return;
+        _emit(
+          VoiceErrorEvent('Connect attempt failed: $error', isTransient: true),
+        );
+        _scheduleReconnect();
+      },
+    );
     _connectFuture = future;
     return future.whenComplete(() {
       if (identical(_connectFuture, future)) _connectFuture = null;
@@ -193,13 +386,21 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
 
   Future<void> _connectOnce() async {
     if (!isActive) return;
-    final effectiveToken = await _resolveLiveToken();
+    final connectStopwatch = Stopwatch()..start();
+    final prefetched = _prefetchedToken ?? takePrefetchedToken?.call();
+    _prefetchedToken = null;
+    final effectiveToken = prefetched != null
+        ? await prefetched
+        : await _resolveLiveToken();
     if (apiKey.isEmpty && effectiveToken.isEmpty) {
       throw StateError(
         'Missing Gemini credentials. Configure an authenticated Convex '
         'account, GEMINI_LIVE_TOKEN, or GEMINI_API_KEY.',
       );
     }
+    _logConnectionPhase('token_resolved', connectStopwatch, {
+      'prefetched': prefetched != null,
+    });
 
     final generation = ++_connectionGeneration;
     final uri = _connectionUri(effectiveToken);
@@ -207,7 +408,10 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
     _setupComplete = setupComplete;
     final channel = WebSocketChannel.connect(uri);
     _channel = channel;
-    await sessionRepository.markStatus(_sessionId!, 'connecting');
+    // Status writes queue behind the session's serialized write chain, which
+    // can be deep in buffered audio during a reconnect — keep them off the
+    // handshake's critical path. `_serial()` still preserves call order.
+    unawaited(sessionRepository.markStatus(_sessionId!, 'connecting'));
 
     _subscription = channel.stream.listen(
       (message) => _handleServerMessage(message, generation),
@@ -237,9 +441,13 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
         },
         'inputAudioTranscription': <String, dynamic>{},
         'outputAudioTranscription': <String, dynamic>{},
-        'sessionResumption': {
-          if (_resumeHandle != null) 'handle': _resumeHandle,
-        },
+        // No resume handle is presented: after an abrupt disconnect a stale
+        // handle makes the server silently open a BLANK session (see
+        // buildConversationSeed). Context is restored by the transcript seed
+        // sent right after setup instead. Resumption updates still arrive
+        // (the minted token enables them) and their timestamps drive the
+        // local session-freshness gate.
+        'sessionResumption': <String, dynamic>{},
         'contextWindowCompression': {'slidingWindow': <String, dynamic>{}},
       },
     };
@@ -254,69 +462,132 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
       rethrow;
     }
     if (generation != _connectionGeneration || !isActive) return;
+    // Every connect is a fresh server session; restore the conversation from
+    // the durable log before anything else is sent, so queued messages and
+    // live audio land after the model regained its context.
+    final seed = await _buildContextSeed();
+    if (generation != _connectionGeneration || !isActive) return;
     _connected = true;
     _reconnectAttempt = 0;
-    await sessionRepository.markStatus(_sessionId!, 'active');
+    _logConnectionPhase('setup_complete', connectStopwatch);
+    unawaited(sessionRepository.markStatus(_sessionId!, 'active'));
+    if (seed != null) {
+      _sendNow({
+        'clientContent': {
+          'turns': [
+            {
+              'role': 'user',
+              'parts': [
+                {'text': seed},
+              ],
+            },
+          ],
+          'turnComplete': false,
+        },
+      });
+      _logConnectionPhase('context_seeded', connectStopwatch, {
+        'chars': seed.length,
+      });
+    }
     _emit(VoiceConnectedEvent());
     _flushPendingMessages();
   }
 
+  /// Transcript seed for the fresh server session this connect just opened —
+  /// [buildConversationSeed] over the durable log of the session being
+  /// continued. Null when there is no prior conversation to restore.
+  Future<String?> _buildContextSeed() async {
+    try {
+      final rows = await sessionRepository.resumableConversationEvents(
+        types: kConversationEventTypes,
+      );
+      if (rows.isEmpty) return null;
+      final events = <VoiceEvent>[];
+      for (final row in rows) {
+        final decoded = jsonDecode(row.payloadJson);
+        if (decoded is! Map) continue;
+        final event = voiceEventFromRecord(
+          type: row.type,
+          payload: decoded.cast<String, Object?>(),
+          at: DateTime.fromMillisecondsSinceEpoch(row.occurredAt.toInt()),
+        );
+        if (event != null) events.add(event);
+      }
+      final pendingTexts = <String>[];
+      for (final message in _pendingMessages) {
+        final content = message['clientContent'];
+        if (content is! Map) continue;
+        final turns = content['turns'];
+        if (turns is! List || turns.isEmpty) continue;
+        final firstTurn = turns.first;
+        if (firstTurn is! Map) continue;
+        final parts = firstTurn['parts'];
+        if (parts is! List || parts.isEmpty) continue;
+        final firstPart = parts.first;
+        if (firstPart is Map) {
+          final text = firstPart['text'];
+          if (text is String && text.isNotEmpty) pendingTexts.add(text);
+        }
+      }
+      return buildConversationSeed(events, pendingTexts: pendingTexts);
+    } catch (error) {
+      // A failed restore must never block the connection itself.
+      debugPrint('[voice] context seed failed: $error');
+      return null;
+    }
+  }
+
+  /// Fetches a fresh single-use token. The backend mints tokens with
+  /// `uses: 1` and a short new-session window, so a token can never be
+  /// reused across connection attempts — every (re)connect resolves a new
+  /// one, and nothing is cached.
   Future<String> _resolveLiveToken() async {
     if (liveToken.isNotEmpty) return liveToken;
-    final cached = _effectiveToken;
-    final expiresAt = _tokenExpiresAt;
-    if (cached != null &&
-        (expiresAt == null ||
-            DateTime.now().add(_tokenRefreshMargin).isBefore(expiresAt))) {
-      return cached;
-    }
-
     _emit(VoiceSystemEvent('Requesting live token from Convex'));
-    Map<String, Object?>? body;
-    if (useAuthenticatedTokenAction) {
-      try {
-        final raw = await convexClient.action(
-          name: 'v1/live/actions:requestLiveToken',
-          args: const {},
-        );
-        final decoded = decodeConvexResponse(raw);
-        if (decoded is! Map) {
-          throw StateError('Malformed Convex live token response');
+    final token = await _fetchLiveToken(
+      useAuthenticatedTokenAction: useAuthenticatedTokenAction,
+      convexClient: convexClient,
+      sessionToken: sessionToken,
+      convexSiteUrl: convexSiteUrl,
+      onPhase: (phase, extra) {
+        if (phase == 'token_action_failed') {
+          _emit(
+            VoiceSystemEvent(
+              'Authenticated token action failed: ${extra['error']}',
+            ),
+          );
         }
-        body = decoded.cast<String, Object?>();
-      } catch (error) {
-        _emit(VoiceSystemEvent('Authenticated token action failed: $error'));
-      }
+        _logPhaseRecord(phase, extra);
+      },
+    );
+    if (token.isNotEmpty) {
+      _emit(VoiceSystemEvent('Live token received'));
     }
-    if (body == null) {
-      if (convexSiteUrl.isEmpty) return '';
-      final credential = sessionToken;
-      if (credential == null || credential.isEmpty) return '';
-      final base = Uri.parse(convexSiteUrl);
-      final response = await http.post(
-        base.replace(path: '/v1/live/token'),
-        headers: {'Authorization': 'Bearer $credential'},
-      );
-      if (response.statusCode < 200 || response.statusCode >= 300) {
-        throw StateError(
-          'Convex live token request failed: '
-          '${response.statusCode} ${response.body}',
-        );
-      }
-      body = (jsonDecode(response.body) as Map).cast<String, Object?>();
-    }
-
-    final token = body['token'];
-    if (token is! String || token.isEmpty) {
-      throw StateError('Convex live token response did not include token');
-    }
-    final expiration = body['expireTime'];
-    _tokenExpiresAt = expiration is String
-        ? DateTime.tryParse(expiration)
-        : null;
-    _effectiveToken = token;
-    _emit(VoiceSystemEvent('Live token received for model: ${body['model']}'));
     return token;
+  }
+
+  /// Persists a timestamped connection-phase marker to the durable session
+  /// log (and the debug console) so slow connects are diagnosable from an
+  /// exported session without a console attached.
+  void _logConnectionPhase(
+    String phase,
+    Stopwatch stopwatch, [
+    Map<String, Object?> extra = const {},
+  ]) {
+    _logPhaseRecord(phase, {
+      'elapsedMs': stopwatch.elapsedMilliseconds,
+      ...extra,
+    });
+  }
+
+  void _logPhaseRecord(String phase, Map<String, Object?> payload) {
+    final record = <String, Object?>{'phase': phase, ...payload};
+    debugPrint('[voice] connection phase: $record');
+    _persistProtocolEvent(
+      type: 'connection_phase',
+      direction: 'local',
+      payload: record,
+    );
   }
 
   Uri _connectionUri(String effectiveLiveToken) {
@@ -375,6 +646,7 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
 
   @override
   void setAudioPlaybackEnabled(bool enabled) {
+    _mutedByDetach = false;
     if (_audioPlaybackEnabled == enabled) return;
     _audioPlaybackEnabled = enabled;
     recordClientEvent('audio_playback_changed', {'enabled': enabled});
@@ -411,9 +683,21 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
     Map<String, Object?> details = const {},
   ]) {
     if (!isActive) return;
-    if (action == 'screen_attached') _screenAttached = true;
-    if (action == 'screen_detached') _screenAttached = false;
-    _emit(VoiceClientActionEvent(action, details));
+    if (action == 'screen_attached') {
+      _screenAttached = true;
+      // The screen's dispose mutes playback so a closed screen never plays
+      // audio. Undo that mute on re-entry — unless something explicit (a
+      // typed turn, a new start) set playback in the meantime.
+      if (_mutedByDetach) {
+        _mutedByDetach = false;
+        _audioPlaybackEnabled = true;
+      }
+    }
+    if (action == 'screen_detached') {
+      _screenAttached = false;
+      _mutedByDetach = _audioPlaybackEnabled;
+    }
+    _emit(VoiceClientActionEvent(action, details: details));
   }
 
   @override
@@ -433,6 +717,7 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
     recordClientEvent('end_session');
     _explicitlyStopped = true;
     _active = false;
+    _prefetchedToken = null;
     _reconnectTimer?.cancel();
     _goAwayTimer?.cancel();
     await _closeSocket(invalidateGeneration: true);
@@ -444,7 +729,10 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
     final sessionId = _sessionId;
     if (sessionId != null) await sessionRepository.endExplicitly(sessionId);
     await sessionRepository.flush();
-    await remoteSync?.flush();
+    // Best-effort replication: offline this can sit on the Convex client's
+    // 30 s operation timeout, and ending the conversation must never wait on
+    // it. Unsynced rows stay in the durable outbox and retry later.
+    unawaited(remoteSync?.flush());
     onEnded();
     return VoiceExpenseCommandResult(message: summary);
   }
@@ -454,6 +742,7 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
     if (_disposed) return;
     _disposed = true;
     _active = false;
+    _prefetchedToken = null;
     _reconnectTimer?.cancel();
     _goAwayTimer?.cancel();
     await _closeSocket(invalidateGeneration: true);
@@ -535,7 +824,8 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
       ),
     );
     if (!hasHandle) return;
-    _resumeHandle = handle;
+    // Handles are persisted for their freshness timestamp (the local
+    // resumable-session gate), not to be presented on reconnect.
     final sessionId = _sessionId;
     if (sessionId != null) {
       unawaited(
@@ -554,7 +844,8 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
     final timeLeft = goAway['timeLeft']?.toString();
     _emit(VoiceGoAwayEvent(timeLeft));
     _goAwayTimer?.cancel();
-    if (_resumeHandle == null) return;
+    // Reconnect shortly before the announced kill; the transcript seed
+    // restores context on the new connection.
     final remaining =
         _parseGoogleDuration(timeLeft) ?? const Duration(seconds: 5);
     final delay = remaining > const Duration(seconds: 2)

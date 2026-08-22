@@ -431,7 +431,7 @@ const refreshHandler = corsHttpAction(async (ctx, req) => {
     }
 
     const tokenHash = await hashSessionSecret(body.refreshToken)
-    const validation = await ctx.runMutation(
+    const validation = await ctx.runQuery(
         internal.authNative.mutations.validateSessionToken,
         { tokenHash },
     )
