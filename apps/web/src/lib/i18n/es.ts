@@ -142,6 +142,19 @@ export const es = {
         continueWithGoogle: 'Continuar con Google',
         signingIn: 'Iniciando sesión...',
         authFailed: 'No se pudo autenticar',
+
+        // El servidor de auth responde siempre en inglés y no conoce el
+        // idioma del cliente, así que `error.message` no se puede mostrar:
+        // interpolarlo dejaba frases mitad inglés ("Invalid email or
+        // password. Si te registraste con Google…"). Cada pantalla arma el
+        // texto a partir del `code`, que sí es estable.
+        invalidCredentials: 'Correo o contraseña incorrectos',
+        invalidEmail: 'El correo no es válido',
+        signUpFailed:
+            'No pudimos crear tu cuenta. Revisá los datos e intentá de nuevo.',
+        connectionFailed:
+            'No pudimos conectarnos con el servidor. Revisá tu conexión e intentá de nuevo.',
+
         googleHint: (p: { message: string }) =>
             `${p.message}. Si te registraste con Google, usá "Continuar con Google".`,
         forgotPassword: '¿Olvidaste tu contraseña?',

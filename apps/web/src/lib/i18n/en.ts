@@ -132,6 +132,14 @@ export const en: Messages = {
         continueWithGoogle: 'Continue with Google',
         signingIn: 'Signing in...',
         authFailed: 'Could not sign you in',
+
+        invalidCredentials: 'Incorrect email or password',
+        invalidEmail: 'That email is not valid',
+        signUpFailed:
+            'Could not create your account. Check your details and try again.',
+        connectionFailed:
+            'Could not reach the server. Check your connection and try again.',
+
         googleHint: (p) =>
             `${p.message}. If you signed up with Google, use "Continue with Google".`,
         forgotPassword: 'Forgot your password?',

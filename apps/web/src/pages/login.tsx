@@ -14,7 +14,7 @@ import {
 } from '@/components/auth/auth-scaffold'
 import { authClient } from '@/lib/auth-client'
 import { signUpWithEmail } from '@/lib/auth-signup'
-import { useT } from '@/lib/i18n'
+import { type Messages, useT } from '@/lib/i18n'
 import { ForgotPasswordPanel } from '@/pages/auth/forgot-password-panel'
 import { VerifyPendingPanel } from '@/pages/auth/verify-pending-panel'
 
@@ -26,6 +26,36 @@ type AuthMode = 'sign-in' | 'sign-up'
  * `_RemoteFlow` the native login screen switches on.
  */
 type RemoteFlow = 'credentials' | 'forgot-password' | 'verify-pending'
+
+/**
+ * Sign-in failures, rendered from better-auth's `error.code`.
+ *
+ * Never from `error.message`: the auth server answers in English and knows
+ * nothing about the client's locale, so folding that message into a localized
+ * sentence produced half-English copy ("Invalid email or password. Si te
+ * registraste con Google, usá…"). The codes are better-auth's `BASE_ERROR_CODES`.
+ * `EMAIL_NOT_VERIFIED` never arrives here — the caller turns it into a flow
+ * change instead.
+ */
+const signInErrorMessage = (code: string | undefined, t: Messages): string => {
+    switch (code) {
+        // A malformed address; signing up with Google is not a plausible
+        // explanation, so this one skips the hint.
+        case 'INVALID_EMAIL':
+            return t.auth.invalidEmail
+        // Wrong password, unknown address, and an address with no password
+        // account all collapse into this single code — which is exactly what
+        // makes the generic hint safe, since it discloses neither whether the
+        // email exists nor which provider it uses.
+        case 'INVALID_EMAIL_OR_PASSWORD':
+            return t.auth.googleHint({ message: t.auth.invalidCredentials })
+        // Anything unnamed (session creation, misconfiguration, a transport
+        // failure with no code): still worth the hint, since a Google-only
+        // account remains a plausible cause.
+        default:
+            return t.auth.googleHint({ message: t.auth.authFailed })
+    }
+}
 
 export function Login({ mode }: { mode: AuthMode }) {
     const location = useLocation()
@@ -97,7 +127,8 @@ export function Login({ mode }: { mode: AuthMode }) {
                         setFlow('verify-pending')
                         return
                     }
-                    throw new Error(result.error.message ?? t.auth.authFailed)
+                    setError(signInErrorMessage(result.error.code, t))
+                    return
                 }
 
                 navigate(from, { replace: true })
@@ -134,17 +165,20 @@ export function Login({ mode }: { mode: AuthMode }) {
                     setError(t.auth.emailSendFailed)
                     return
                 case 'error':
-                    setError(outcome.message)
+                    // Everything the endpoint does not name by code
+                    // (`bad_request`, `sign_up_failed`, a transport failure):
+                    // its `message` carries better-auth's English text or raw
+                    // server copy, so it goes to the console, not the screen.
+                    console.error('sign-up failed', outcome.message)
+                    setError(t.auth.signUpFailed)
                     return
             }
         } catch (err) {
-            const message = err instanceof Error ? err.message : String(err)
-            // Generic, account-independent hint so users who actually signed up
-            // with Google are nudged toward it — without disclosing whether the
-            // email exists or which provider it uses.
-            setError(
-                mode === 'sign-in' ? t.auth.googleHint({ message }) : message,
-            )
+            // Only genuine exceptions land here — both branches above report
+            // their own failures. There is no server code to name, so keep it
+            // generic rather than surfacing an untranslated `err.message`.
+            console.error('auth request threw', err)
+            setError(t.auth.connectionFailed)
         } finally {
             setLoading(null)
         }
