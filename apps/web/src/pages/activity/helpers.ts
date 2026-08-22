@@ -5,7 +5,13 @@
 // The label-producing helpers take the active catalog and BCP 47 tag rather
 // than reading a module-level locale, so they stay pure and testable.
 
-import type { Messages } from '@/lib/i18n'
+import {
+    EMPTY_FILTER,
+    parseFilterConfig,
+    type SimpleFilter,
+    TXN_TYPES,
+} from '@wallet-bot/shared'
+import { type Messages, transactionName } from '@/lib/i18n'
 
 export type TransactionType =
     | 'expense'
@@ -42,20 +48,79 @@ export type ActivityTransaction = {
     tagIds?: string[]
 }
 
-export type TransactionFilters = {
-    search: string
-    accountIds: string[]
-    categoryIds: string[]
-    tagIds: string[]
-    dateFrom?: Date
-    dateTo?: Date
+/**
+ * What another screen may hand the activity list through router state — an
+ * account's "see all", a tag on a transaction. Only the dimensions a deep link
+ * legitimately sets; the rest of the filter starts empty.
+ */
+export type ActivityFilterSeed = Partial<
+    Pick<
+        SimpleFilter,
+        | 'types'
+        | 'accountIds'
+        | 'categoryIds'
+        | 'tagIds'
+        | 'dateFrom'
+        | 'dateTo'
+        | 'search'
+    >
+>
+
+function stringList(value: unknown): string[] | null {
+    if (!Array.isArray(value)) return null
+    const items = value.filter(
+        (item): item is string => typeof item === 'string',
+    )
+    return items.length === value.length ? items : null
 }
 
-export const EMPTY_FILTERS: TransactionFilters = {
-    search: '',
-    accountIds: [],
-    categoryIds: [],
-    tagIds: [],
+/**
+ * Reads a seed off `location.state`, which is whatever the previous screen put
+ * there — untyped by React Router, so every field is checked rather than
+ * asserted. Returns null when nothing usable was passed.
+ */
+export function readFilterSeed(state: unknown): SimpleFilter | null {
+    if (typeof state !== 'object' || state === null) return null
+    const seed: Record<string, unknown> = { ...state }
+
+    // A dashboard tile hands over its whole saved filter rather than a few
+    // dimensions, so the activity list shows exactly what the tile counted
+    // (native `_activityFilterFor`). The canonical JSON is parsed, not trusted.
+    if (typeof seed.filterConfig === 'string' && seed.filterConfig) {
+        return parseFilterConfig(seed.filterConfig)
+    }
+
+    const types = stringList(seed.types)?.filter(
+        (value): value is SimpleFilter['types'][number] =>
+            (TXN_TYPES as readonly string[]).includes(value),
+    )
+    const accountIds = stringList(seed.accountIds)
+    const categoryIds = stringList(seed.categoryIds)
+    const tagIds = stringList(seed.tagIds)
+    const dateFrom = typeof seed.dateFrom === 'string' ? seed.dateFrom : null
+    const dateTo = typeof seed.dateTo === 'string' ? seed.dateTo : null
+    const search = typeof seed.search === 'string' ? seed.search : null
+
+    const carries =
+        (types && types.length > 0) ||
+        (accountIds && accountIds.length > 0) ||
+        (categoryIds && categoryIds.length > 0) ||
+        (tagIds && tagIds.length > 0) ||
+        dateFrom !== null ||
+        dateTo !== null ||
+        (search !== null && search !== '')
+    if (!carries) return null
+
+    return {
+        ...EMPTY_FILTER,
+        ...(types ? { types } : {}),
+        ...(accountIds ? { accountIds } : {}),
+        ...(categoryIds ? { categoryIds } : {}),
+        ...(tagIds ? { tagIds } : {}),
+        dateFrom,
+        dateTo,
+        search,
+    }
 }
 
 /** Capitalised weekday name in the active locale, e.g. `Lunes` / `Monday`. */
@@ -82,31 +147,8 @@ export function formatAmount(
     return `${currencySymbol}${groupThousands(whole, locale)}`
 }
 
-/** Signed amount, e.g. `+ $ 1.234` / `- $ 1.234`. */
-export function formatSignedAmount(
-    cents: number,
-    locale: string,
-    currencySymbol = '$',
-): string {
-    const sign = cents < 0 ? '-' : cents > 0 ? '+' : ''
-    const whole = Math.round(Math.abs(cents) / 100)
-    return `${sign ? `${sign} ` : ''}${currencySymbol} ${groupThousands(whole, locale)}`
-}
-
 function startOfDay(date: Date): Date {
     return new Date(date.getFullYear(), date.getMonth(), date.getDate())
-}
-
-function endOfDay(date: Date): Date {
-    return new Date(
-        date.getFullYear(),
-        date.getMonth(),
-        date.getDate(),
-        23,
-        59,
-        59,
-        999,
-    )
 }
 
 /** Numeric date in the active locale, e.g. `10/7/2026` (es) / `7/10/2026` (en). */
@@ -228,64 +270,24 @@ export function monthRange(now: Date): { from: bigint; to: bigint } {
     return { from: BigInt(start.getTime()), to: BigInt(end.getTime() - 1) }
 }
 
-export function dateFromMs(date: Date | undefined): bigint | undefined {
-    return date ? BigInt(startOfDay(date).getTime()) : undefined
-}
-
-export function dateToMs(date: Date | undefined): bigint | undefined {
-    return date ? BigInt(endOfDay(date).getTime()) : undefined
-}
-
-export function advancedFilterCount(f: TransactionFilters): number {
+/**
+ * How many filter groups the bar reports on its badge and renders as removable
+ * chips. Deliberately the same four native counts
+ * (`transaction_filters_bar.dart`), so the same filter shows the same badge on
+ * both clients — the type chips and the search field are their own controls,
+ * and the sheet's remaining dimensions are not summarised on either platform.
+ */
+export function activeFilterCount(filter: SimpleFilter): number {
     let count = 0
-    if (f.accountIds.length) count++
-    if (f.categoryIds.length) count++
-    if (f.tagIds.length) count++
-    if (f.dateFrom || f.dateTo) count++
+    if (filter.accountIds.length) count++
+    if (filter.categoryIds.length) count++
+    if (filter.tagIds.length) count++
+    if (filter.dateFrom || filter.dateTo || filter.datePreset) count++
     return count
 }
 
-export function hasAdvancedFilters(f: TransactionFilters): boolean {
-    return advancedFilterCount(f) > 0
-}
-
-/**
- * Client-side predicate applied on top of the server's index-narrowed page.
- * The backend narrows by a single account/category plus the date range; this
- * refines the rest (type chip, text search, multi-select, tags) so any filter
- * combination stays correct regardless of what the server could index.
- */
-export function matchesFilters(
-    t: ActivityTransaction,
-    f: TransactionFilters,
-    type: TransactionType | null,
-): boolean {
-    if (t.isArchived) return false
-    if (type && t.type !== type) return false
-
-    const search = f.search.trim().toLowerCase()
-    if (search) {
-        const nameMatches = t.name.toLowerCase().includes(search)
-        const descriptionMatches = (t.description ?? '')
-            .toLowerCase()
-            .includes(search)
-        if (!nameMatches && !descriptionMatches) return false
-    }
-
-    if (f.accountIds.length && !f.accountIds.includes(t.accountId)) return false
-    if (f.categoryIds.length && !f.categoryIds.includes(t.categoryId))
-        return false
-
-    if (f.tagIds.length) {
-        const ids = t.tagIds ?? []
-        if (!f.tagIds.some((id) => ids.includes(id))) return false
-    }
-
-    if (f.dateFrom && Number(t.date) < startOfDay(f.dateFrom).getTime())
-        return false
-    if (f.dateTo && Number(t.date) > endOfDay(f.dateTo).getTime()) return false
-
-    return true
+export function hasActiveFilters(filter: SimpleFilter): boolean {
+    return activeFilterCount(filter) > 0
 }
 
 export type ListEntry =
@@ -361,7 +363,7 @@ export function buildListEntries(
                 kind: 'txn',
                 key: t.id,
                 txn: t,
-                title: t.name,
+                title: transactionName(t.name, t.type, messages),
                 amountCents: signedAmountCents(t),
                 currency: t.currency,
                 accountId: t.accountId,

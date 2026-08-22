@@ -364,10 +364,22 @@ class DashboardGridLayout {
     return true;
   }
 
+  /// Whether [p] can be nudged down. Moving onto a row that does not exist yet
+  /// is allowed — it is how a tile boxed in on the bottom row gets out of the
+  /// way so a neighbor can grow — but only when the tile leaves something
+  /// behind. A tile *alone* on the last row would vacate that row, [_normalize]
+  /// would renumber the new row straight back to the old index, and nothing
+  /// would have moved.
+  bool _canNudgeDown(WidgetPlacement p) {
+    if (p.row < rowCount - 1) return true;
+    return rowItems(p.row).length > 1;
+  }
+
   /// One-cell nudge in [direction]. Horizontal moves slide by a single unit into
   /// adjacent free space; vertical moves jump to the same column on the
-  /// neighboring row when it's free. Returns null when blocked or out of bounds
-  /// (so the matching arrow button can disable).
+  /// neighboring row when it's free — including a fresh row past the last one
+  /// (see [_canNudgeDown]). Returns null when blocked or out of bounds (so the
+  /// matching arrow button can disable).
   DashboardGridLayout? nudge(String id, DashboardMoveDirection direction) {
     final p = byId(id);
     if (p == null) return null;
@@ -385,8 +397,7 @@ class DashboardGridLayout {
             ? place(id, p.row - 1, p.col)
             : null,
       DashboardMoveDirection.down =>
-        p.row < rowCount - 1 &&
-                _spanFree(p.row + 1, p.col, p.units, ignoreId: id)
+        _canNudgeDown(p) && _spanFree(p.row + 1, p.col, p.units, ignoreId: id)
             ? place(id, p.row + 1, p.col)
             : null,
     };

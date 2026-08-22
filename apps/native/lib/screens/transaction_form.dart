@@ -8,6 +8,7 @@ import 'package:app/components/readable_time_picker.dart';
 import 'package:app/data/data.dart';
 import 'package:app/database.dart';
 import 'package:app/l10n/l10n.dart';
+import 'package:app/shared/adaptive_modal.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -17,7 +18,12 @@ enum TransactionFormType { income, expense, transfer }
 enum _TransferAmountField { source, destination }
 
 class TransactionFormScreen extends StatefulWidget {
-  const TransactionFormScreen({super.key});
+  const TransactionFormScreen({super.key, this.onResult});
+
+  /// Embedded (split pane) mode: when set, the screen never pops its route —
+  /// save/cancel report here instead ([saved] tells whether a transaction
+  /// was recorded).
+  final void Function(bool saved)? onResult;
 
   @override
   State<TransactionFormScreen> createState() => _TransactionFormScreenState();
@@ -201,8 +207,8 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
     final selectedAccount = destination
         ? _selectedDestinationAccount
         : _selectedAccount;
-    final account = await showModalBottomSheet<Account>(
-      context: context,
+    final account = await showAdaptiveModal<Account>(
+      context,
       showDragHandle: true,
       builder: (context) {
         return SafeArea(
@@ -248,8 +254,8 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
   Future<void> _pickCategory() async {
     await _commitInlineEditing();
     if (!mounted) return;
-    final category = await showModalBottomSheet<Category>(
-      context: context,
+    final category = await showAdaptiveModal<Category>(
+      context,
       showDragHandle: true,
       builder: (context) {
         return SafeArea(
@@ -339,8 +345,8 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
           ),
         )
         .toList();
-    final tag = await showModalBottomSheet<_FormTag>(
-      context: context,
+    final tag = await showAdaptiveModal<_FormTag>(
+      context,
       showDragHandle: true,
       builder: (context) {
         return SafeArea(
@@ -473,7 +479,6 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
     }
 
     setState(() => _isSaving = true);
-    final navigator = Navigator.of(context);
 
     try {
       final amountValue = _parseAmount(_amountController.text)!;
@@ -551,7 +556,7 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
       }
 
       if (!mounted) return;
-      navigator.pop(true);
+      _close(saved: true);
     } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(
@@ -559,6 +564,17 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
       ).showSnackBar(SnackBar(content: Text(context.l10n.recordFailed(error))));
       setState(() => _isSaving = false);
     }
+  }
+
+  /// Exits the form: reports to [TransactionFormScreen.onResult] when
+  /// embedded in the split pane, pops the route with [saved] otherwise.
+  void _close({required bool saved}) {
+    final onResult = widget.onResult;
+    if (onResult != null) {
+      onResult(saved);
+      return;
+    }
+    Navigator.pop(context, saved);
   }
 
   @override
@@ -577,6 +593,16 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
 
     return Scaffold(
       resizeToAvoidBottomInset: true,
+      // The close action routes through _close, so it works in both
+      // presentations: reporting to onResult when embedded in the Activity
+      // split pane, popping the route otherwise.
+      appBar: AppBar(
+        leading: IconButton(
+          tooltip: MaterialLocalizations.of(context).closeButtonTooltip,
+          onPressed: _isSaving ? null : () => _close(saved: false),
+          icon: const Icon(Icons.close_rounded),
+        ),
+      ),
       body: SafeArea(
         child: Form(
           key: _formKey,
@@ -804,9 +830,7 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
                 children: [
                   Expanded(
                     child: FilledButton.tonalIcon(
-                      onPressed: _isSaving
-                          ? null
-                          : () => Navigator.pop(context),
+                      onPressed: _isSaving ? null : () => _close(saved: false),
                       icon: const Icon(Icons.close_rounded),
                       label: Text(context.l10n.cancel),
                       style: FilledButton.styleFrom(
@@ -1118,9 +1142,9 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
       final message = error is DuplicateAccountException
           ? context.l10n.accountDuplicateNameCurrency
           : context.l10n.accountCreateFailed;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(message)),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(message)));
       return null;
     }
   }

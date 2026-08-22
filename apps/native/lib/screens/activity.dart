@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:app/components/account_icons.dart';
 import 'package:app/components/category_icons.dart';
 import 'package:app/components/color_utils.dart';
@@ -6,7 +8,10 @@ import 'package:app/components/transaction_row.dart';
 import 'package:app/data/data.dart';
 import 'package:app/database.dart';
 import 'package:app/l10n/l10n.dart';
+import 'package:app/shared/adaptive_detail_view.dart'
+    show InstantEntranceMaterialPageRoute;
 import 'package:app/shared/app_navigation.dart';
+import 'package:app/shared/breakpoints.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:app/screens/transaction_form.dart';
@@ -40,42 +45,219 @@ class _ActivityScreenState extends State<ActivityScreen> {
   /// (we've reached the end).
   int _lastRenderedCount = 0;
 
-  Future<void> _openTransactionForm() async {
-    // Pushed routes sit above the account-scoped providers; re-provide them
-    // so the new route keeps using the active account's data layer.
-    final repos = context.read<AppRepositories>();
-    final saved = await Navigator.of(context).push<bool>(
-      MaterialPageRoute(
-        builder: (_) => Provider<AppRepositories>.value(
-          value: repos,
-          child: const TransactionFormScreen(),
-        ),
-      ),
-    );
-    if (!mounted || saved != true) return;
-    context.read<AppNavigation>().index = AppNavigation.activityTab;
+  /// Selection for the detail view — one source of truth for every window
+  /// size. Expanded windows render it inline in the split pane; smaller
+  /// windows present it as a REAL [MaterialPageRoute], keeping the exact
+  /// platform transition, back button/gestures, and route semantics.
+  String? _detailTransactionId;
+  TransactionDetailTransferSide? _detailTransferSide;
+
+  /// Pins the detail widget's Element so its State (including mid-edit
+  /// fields) survives moving between the split pane, the handoff bridge, and
+  /// the pushed route on window resize. The keyed widget is built somewhere
+  /// in EVERY frame, which is what makes the same-frame reparenting work.
+  /// Recreated per selection so a different transaction loads fresh.
+  GlobalKey _detailKey = GlobalKey(debugLabel: 'activityDetail');
+
+  /// The live mobile route, when the detail is presented as one. Nulled
+  /// BEFORE a programmatic removal, so the route's completion handler can
+  /// tell a user pop (clear the selection) from a resize handoff (keep it).
+  MaterialPageRoute<TransactionFilter?>? _detailRoute;
+
+  /// The new-transaction form: same machinery as the detail — one source of
+  /// truth, split pane on expanded windows, a real pushed route on smaller
+  /// ones, state-preserving handoffs on resize.
+  bool _formOpen = false;
+  GlobalKey _formKey = GlobalKey(debugLabel: 'activityForm');
+  MaterialPageRoute<bool?>? _formRoute;
+
+  void _openTransactionForm() {
+    setState(() {
+      _formOpen = true;
+      _formKey = GlobalKey(debugLabel: 'activityForm');
+      // The pane hosts one occupant at a time.
+      _detailTransactionId = null;
+      _detailTransferSide = null;
+    });
+    if (windowSizeClassOf(context) != WindowSizeClass.expanded) {
+      _pushFormRoute(instant: false);
+    }
   }
 
-  Future<void> _openTransactionDetails(
+  /// Presents the form as a real route (the original mobile behavior),
+  /// instant only when taking over from the split pane on window shrink.
+  void _pushFormRoute({required bool instant}) {
+    // Pushed routes sit above the account-scoped providers; re-provide them
+    // so the route keeps using the active account's data layer. The keyed
+    // form widget itself moves in/out of this wrapper on handoffs.
+    final repos = context.read<AppRepositories>();
+    Widget buildPage(BuildContext _) => Provider<AppRepositories>.value(
+      value: repos,
+      child: _buildForm(inRoute: true) ?? const SizedBox.shrink(),
+    );
+    final route = instant
+        ? InstantEntranceMaterialPageRoute<bool?>(builder: buildPage)
+        : MaterialPageRoute<bool?>(builder: buildPage);
+    _formRoute = route;
+    unawaited(
+      Navigator.of(context).push(route).then((saved) {
+        // Only a USER exit (back/cancel/save) reaches here with the route
+        // still owned — a resize handoff nulls _formRoute first.
+        if (!mounted || !identical(_formRoute, route)) return;
+        _formRoute = null;
+        setState(() => _formOpen = false);
+        if (saved == true) {
+          context.read<AppNavigation>().index = AppNavigation.activityTab;
+        }
+      }),
+    );
+    // Rebuild so the handoff bridge (if shown) is dropped in the same frame
+    // the route claims the GlobalKey — the Element moves, State intact.
+    setState(() {});
+  }
+
+  /// Route mode gets no [TransactionFormScreen.onResult], so the form pops
+  /// itself with its result — the original mobile behavior, unchanged.
+  Widget? _buildForm({required bool inRoute}) {
+    if (!_formOpen) return null;
+    return TransactionFormScreen(
+      key: _formKey,
+      onResult: inRoute ? null : _onFormResult,
+    );
+  }
+
+  void _onFormResult(bool saved) {
+    // The list is stream-driven, so a saved transaction shows up on its own.
+    setState(() => _formOpen = false);
+  }
+
+  /// Whether Activity is the tab currently on screen. Its detail and form
+  /// routes are pushed on the SHARED navigator, above every tab, so a hidden
+  /// Activity must own none of them — it would cover whatever tab the user is
+  /// actually looking at (leave a detail or the new-transaction form open,
+  /// switch to Home, shrink the window, and the route would slam over Home).
+  /// Hidden, the occupant stays in the bridge — State intact, painting
+  /// nothing inside the hidden tab — and is re-presented on return.
+  bool get _isActiveTab =>
+      context.read<AppNavigation>().index == AppNavigation.activityTab;
+
+  /// Form counterpart of [_reconcileDetailRoute].
+  void _reconcileFormRoute() {
+    if (!mounted) return;
+    final split = windowSizeClassOf(context) == WindowSizeClass.expanded;
+    final needsRoute = !split && _formOpen && _isActiveTab;
+    final route = _formRoute;
+    if (needsRoute && route == null) {
+      _pushFormRoute(instant: true);
+    } else if (!needsRoute && route != null) {
+      _formRoute = null;
+      Navigator.of(context).removeRoute(route);
+      setState(() {});
+    }
+  }
+
+  void _openTransactionDetails(
     String transactionId, {
     TransactionDetailTransferSide? transferSide,
-  }) async {
-    final repos = context.read<AppRepositories>();
-    // The details screen can pop back a filter (tapping its date/category/tag),
-    // asking Activity to show everything matching that dimension.
-    final result = await Navigator.of(context).push<TransactionFilter>(
-      MaterialPageRoute(
-        builder: (_) => TransactionDetailsScreen(
-          transactionId: transactionId,
-          repos: repos,
-          transferSide: transferSide,
-        ),
-      ),
-    );
-    if (!mounted || result == null) return;
+  }) {
     setState(() {
-      _filter = result;
-      _resetPagination();
+      if (transactionId != _detailTransactionId ||
+          transferSide != _detailTransferSide) {
+        _detailKey = GlobalKey(debugLabel: 'activityDetail');
+      }
+      _detailTransactionId = transactionId;
+      _detailTransferSide = transferSide;
+      // The pane hosts one occupant at a time.
+      _formOpen = false;
+    });
+    if (windowSizeClassOf(context) != WindowSizeClass.expanded) {
+      // Mobile: a real MaterialPageRoute, with the platform's own entrance
+      // animation — exactly as it always behaved.
+      _pushDetailRoute(instant: false);
+    }
+  }
+
+  /// Presents the detail as a real route. [instant] skips the entrance
+  /// animation — used only when the route takes over from the split pane on
+  /// window shrink, where the content is already on screen and must simply
+  /// stay in place. Popping always plays the standard animation.
+  void _pushDetailRoute({required bool instant}) {
+    final repos = context.read<AppRepositories>();
+    final route = instant
+        ? InstantEntranceMaterialPageRoute<TransactionFilter?>(
+            builder: (_) => _buildRouteDetail(repos),
+          )
+        : MaterialPageRoute<TransactionFilter?>(
+            builder: (_) => _buildRouteDetail(repos),
+          );
+    _detailRoute = route;
+    unawaited(
+      Navigator.of(context).push(route).then((result) {
+        // Only a USER exit (back/gesture/delete/filter tap) reaches here with
+        // the route still owned — a resize handoff nulls _detailRoute first.
+        if (!mounted || !identical(_detailRoute, route)) return;
+        _detailRoute = null;
+        setState(() {
+          _detailTransactionId = null;
+          _detailTransferSide = null;
+          if (result != null) {
+            _filter = result;
+            _resetPagination();
+          }
+        });
+      }),
+    );
+    // Rebuild so the handoff bridge (if shown) is dropped in the same frame
+    // the route claims the GlobalKey — the Element moves, State intact.
+    setState(() {});
+  }
+
+  /// Route-mode detail: no [TransactionDetailsScreen.onResult], so the screen
+  /// pops itself with its result and gets the automatic back button — the
+  /// original mobile behavior, unchanged.
+  Widget _buildRouteDetail(AppRepositories repos) {
+    final transactionId = _detailTransactionId;
+    if (transactionId == null) return const SizedBox.shrink();
+    return TransactionDetailsScreen(
+      key: _detailKey,
+      transactionId: transactionId,
+      repos: repos,
+      transferSide: _detailTransferSide,
+    );
+  }
+
+  /// Keeps the mobile route in sync with (window class × selection × tab
+  /// visibility): pushes an instant-entrance route when the window shrinks
+  /// with a detail open, removes the route without animation when the window
+  /// grows into the split or Activity stops being the visible tab.
+  /// Idempotent; runs post-frame, scheduled by build on mismatch.
+  void _reconcileDetailRoute() {
+    if (!mounted) return;
+    final split = windowSizeClassOf(context) == WindowSizeClass.expanded;
+    final needsRoute = !split && _detailTransactionId != null && _isActiveTab;
+    final route = _detailRoute;
+    if (needsRoute && route == null) {
+      _pushDetailRoute(instant: true);
+    } else if (!needsRoute && route != null) {
+      // Null first: the route's completion handler must treat this as a
+      // handoff (or a cleared selection) and not re-clear state.
+      _detailRoute = null;
+      Navigator.of(context).removeRoute(route);
+      setState(() {});
+    }
+  }
+
+  /// Close/result handler for the inline presentations (split pane and the
+  /// handoff bridge): clears the selection and applies a handed-back filter.
+  /// The pushed route reports through its pop result instead.
+  void _onDetailResult(TransactionFilter? filter) {
+    setState(() {
+      _detailTransactionId = null;
+      _detailTransferSide = null;
+      if (filter != null) {
+        _filter = filter;
+        _resetPagination();
+      }
     });
   }
 
@@ -91,6 +273,10 @@ class _ActivityScreenState extends State<ActivityScreen> {
     super.didUpdateWidget(oldWidget);
     if (widget.filterRevision == oldWidget.filterRevision) return;
     _filter = widget.initialFilter;
+    // Another surface asked for a filtered list: the list is the point, so
+    // an open detail closes.
+    _detailTransactionId = null;
+    _detailTransferSide = null;
     _resetPagination();
   }
 
@@ -123,6 +309,8 @@ class _ActivityScreenState extends State<ActivityScreen> {
     if (pending == null || !mounted) return;
     setState(() {
       _filter = pending;
+      _detailTransactionId = null;
+      _detailTransferSide = null;
       _resetPagination();
     });
   }
@@ -161,40 +349,167 @@ class _ActivityScreenState extends State<ActivityScreen> {
   @override
   Widget build(BuildContext context) {
     final repos = context.read<AppRepositories>();
+    final showDetailPane =
+        windowSizeClassOf(context) == WindowSizeClass.expanded;
 
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(context.l10n.activity),
-        actions: [
-          IconButton(
-            tooltip: context.l10n.addTransaction,
-            onPressed: _openTransactionForm,
-            icon: const Icon(Icons.add_rounded),
+    // The PageStorageKey keeps the scroll offset when the list moves between
+    // full-width and pane layouts on window resize (the storage identity is
+    // the key chain, not the tree position).
+    final list = CustomScrollView(
+      key: const PageStorageKey('activityTransactionList'),
+      controller: _scrollController,
+      slivers: [
+        const SliverToBoxAdapter(child: SizedBox(height: 8)),
+        SliverToBoxAdapter(
+          child: TransactionFiltersBar(
+            filter: _filter,
+            onChanged: _onFiltersChanged,
           ),
+        ),
+        const SliverToBoxAdapter(child: SizedBox(height: 16)),
+        SliverToBoxAdapter(
+          child: _FilterChips(
+            selected: _filter.types.length == 1 ? _filter.types.single : null,
+            onChanged: _updateTypeChip,
+          ),
+        ),
+        _buildTransactionsSliver(repos),
+      ],
+    );
+
+    final appBar = AppBar(
+      title: Text(context.l10n.activity),
+      actions: [
+        IconButton(
+          tooltip: context.l10n.addTransaction,
+          onPressed: _openTransactionForm,
+          icon: const Icon(Icons.add_rounded),
+        ),
+      ],
+    );
+
+    // The mobile routes follow (window class × selection × tab visibility);
+    // build only schedules the sync so pushes/removals happen between frames.
+    // Subscribed via select so a tab switch rebuilds and reconciles (see
+    // [_isActiveTab] for why a hidden Activity owns no route).
+    final isActiveTab = context.select<AppNavigation, bool>(
+      (nav) => nav.index == AppNavigation.activityTab,
+    );
+    final needsRoute =
+        !showDetailPane && _detailTransactionId != null && isActiveTab;
+    if (needsRoute != (_detailRoute != null)) {
+      WidgetsBinding.instance.addPostFrameCallback(
+        (_) => _reconcileDetailRoute(),
+      );
+    }
+    final needsFormRoute = !showDetailPane && _formOpen && isActiveTab;
+    if (needsFormRoute != (_formRoute != null)) {
+      WidgetsBinding.instance.addPostFrameCallback(
+        (_) => _reconcileFormRoute(),
+      );
+    }
+
+    // Build the detail ONCE per frame and inflate it in exactly one place —
+    // pane, bridge, or route. Its GlobalKey then reparents the live Element
+    // on every handoff, so its State (including mid-edit fields) survives
+    // window resizes in both directions.
+    final detail = _buildDetail(repos);
+
+    final Widget body;
+    if (showDetailPane) {
+      // Split layout: the Activity app bar belongs to the list column only,
+      // and the detail column brings its own (TransactionDetailsScreen's
+      // Scaffold), so the divider runs the full height of the body.
+      //
+      // A pane occupant may only claim its GlobalKey once its mobile route
+      // has released it: in the frame right after a grow — before the
+      // post-frame handoff removes the route — inflating it here would steal
+      // the Element out of the still-visible route (duplicate-key assert,
+      // hole in the route's page). The route covers the window that frame,
+      // so the fallback is never actually seen. The form wins the pane; the
+      // open methods enforce one occupant at a time anyway.
+      final formPane = _formOpen && _formRoute == null
+          ? _buildForm(inRoute: false)
+          : null;
+      final pane = _detailRoute == null ? detail : null;
+      body = Scaffold(
+        body: SafeArea(
+          child: Row(
+            children: [
+              Expanded(
+                child: Scaffold(appBar: appBar, body: list),
+              ),
+              const VerticalDivider(width: 1, thickness: 1),
+              Expanded(child: formPane ?? pane ?? _buildDetailPlaceholder()),
+            ],
+          ),
+        ),
+      );
+    } else {
+      // Small windows: detail and form live in REAL pushed routes (see
+      // _pushDetailRoute / _pushFormRoute). The bridges below render only
+      // during handoff frames — after a shrink, before the route claims the
+      // GlobalKey — so the content is built somewhere in every frame and its
+      // State survives. Each paints the same page its route shows, so the
+      // swap is invisible. User-initiated opens push synchronously, so no
+      // bridge frame exists for them.
+      final bridge = _detailRoute == null ? detail : null;
+      final formBridge = _formOpen && _formRoute == null
+          ? _buildForm(inRoute: false)
+          : null;
+      body = Stack(
+        fit: StackFit.expand,
+        children: [
+          Scaffold(
+            appBar: appBar,
+            body: SafeArea(child: list),
+          ),
+          ?bridge,
+          ?formBridge,
         ],
-      ),
-      body: SafeArea(
-        child: CustomScrollView(
-          controller: _scrollController,
-          slivers: [
-            const SliverToBoxAdapter(child: SizedBox(height: 8)),
-            SliverToBoxAdapter(
-              child: TransactionFiltersBar(
-                filter: _filter,
-                onChanged: _onFiltersChanged,
-              ),
-            ),
-            const SliverToBoxAdapter(child: SizedBox(height: 16)),
-            SliverToBoxAdapter(
-              child: _FilterChips(
-                selected: _filter.types.length == 1
-                    ? _filter.types.single
-                    : null,
-                onChanged: _updateTypeChip,
-              ),
-            ),
-            _buildTransactionsSliver(repos),
-          ],
+      );
+    }
+
+    // The routes handle system back natively. This safety net covers only
+    // the transient bridge frames, and only while Activity is the visible
+    // tab: back then closes the bridged occupant instead of leaving the app.
+    final detailBridging =
+        !showDetailPane && detail != null && _detailRoute == null;
+    final formBridging = !showDetailPane && _formOpen && _formRoute == null;
+    final interceptPop = (detailBridging || formBridging) && isActiveTab;
+    return PopScope(
+      canPop: !interceptPop,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) return;
+        if (formBridging) {
+          _onFormResult(false);
+        } else {
+          _onDetailResult(null);
+        }
+      },
+      child: body,
+    );
+  }
+
+  Widget? _buildDetail(AppRepositories repos) {
+    final transactionId = _detailTransactionId;
+    if (transactionId == null) return null;
+    return TransactionDetailsScreen(
+      key: _detailKey,
+      transactionId: transactionId,
+      repos: repos,
+      transferSide: _detailTransferSide,
+      onResult: _onDetailResult,
+    );
+  }
+
+  Widget _buildDetailPlaceholder() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Text(
+          context.l10n.selectTransactionDetail,
+          textAlign: TextAlign.center,
         ),
       ),
     );

@@ -1,25 +1,41 @@
 import { api } from '@wallet-bot/backend/api'
 import { parseAmountToCents, parseTransactionDate } from '@wallet-bot/shared'
-import { useMutation, useQuery } from 'convex/react'
-import { Check, Loader2, Plus, Repeat2, X } from 'lucide-react'
-import { type FormEvent, type ReactNode, useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { toast } from 'sonner'
-import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
 import {
-    Dialog,
-    DialogContent,
-    DialogFooter,
-    DialogHeader,
-    DialogTitle,
-} from '@/components/ui/dialog'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Textarea } from '@/components/ui/textarea'
-import { type Messages, useT } from '@/lib/i18n'
+    Button,
+    CircularProgress,
+    IconButton,
+    SegmentedButton,
+    SegmentedButtonSet,
+    Switch,
+    TextField,
+} from 'actify'
+import { useMutation, useQuery } from 'convex/react'
+import {
+    type FormEvent,
+    type ReactNode,
+    useEffect,
+    useMemo,
+    useState,
+} from 'react'
+import { toast } from 'sonner'
+import { ColorSwatches } from '@/components/color-swatches'
+import { DateField } from '@/components/m3/date-field'
+import { DialogAction, M3Dialog } from '@/components/m3/dialog'
+import { FormScreen } from '@/components/m3/form-screen'
+import { Icon } from '@/components/m3/icon'
+import { OptionSheet, type SheetOption } from '@/components/m3/option-sheet'
+import { PickerField } from '@/components/m3/picker-field'
+import { TagChip } from '@/components/m3/tag-chip'
+import { TimeField } from '@/components/m3/time-field'
+import {
+    CURRENCY_CODES,
+    currencyName,
+    DEFAULT_CURRENCY,
+    SUGGESTED_CURRENCIES,
+} from '@/lib/currencies'
+import { type Messages, useFormatLocale, useT } from '@/lib/i18n'
+import { newId } from '@/lib/new-id'
 import { TAG_COLOR_OPTIONS } from '@/lib/tag-colors'
-import { cn } from '@/lib/utils'
 
 type MovementType = 'income' | 'expense' | 'transfer'
 
@@ -46,10 +62,18 @@ const MOVEMENT_TYPES: readonly MovementType[] = [
     'transfer',
 ]
 
-const SELECTED_COLORS: Record<MovementType, string> = {
-    income: 'bg-[#5EF06A]',
-    expense: 'bg-[#FF3744] text-white',
-    transfer: 'bg-[#6DE7D8]',
+/**
+ * Accent per movement type. These sit outside the seeded color scheme on
+ * purpose — they are the same three literals the native transaction form uses
+ * for its type segmented button (apps/native/lib/screens/transaction_form.dart).
+ */
+const SELECTED_COLORS: Record<
+    MovementType,
+    { background: string; foreground: string }
+> = {
+    income: { background: '#00E676', foreground: '#000000' },
+    expense: { background: '#FF3744', foreground: '#FFFFFF' },
+    transfer: { background: '#6DE7D8', foreground: '#000000' },
 }
 
 function typeCopy(type: MovementType, t: Messages) {
@@ -112,12 +136,6 @@ function parseFormAmount(value: string): number | null {
     return parsed
 }
 
-function newId() {
-    return crypto.randomUUID()
-}
-
-const MOCK_CURRENCIES = ['ARS', 'USD', 'EUR', 'BRL'] as const
-
 function normalizeIdentity(value: string) {
     return value.trim().toLowerCase()
 }
@@ -155,13 +173,26 @@ function mergeTags(base: FormTag[], extra: FormTag[]): FormTag[] {
     )
 }
 
-export function AddManual() {
-    const navigate = useNavigate()
+/**
+ * The manual transaction form, ported from `TransactionFormScreen`. It never
+ * navigates on its own: the host decides where it lives (the divided view's
+ * pane on expanded windows, over the window below that) and what closing and
+ * saving mean, exactly like the native form's `onResult` contract.
+ */
+export function TransactionForm({
+    onClose,
+    onSaved,
+}: {
+    onClose: () => void
+    onSaved: () => void
+}) {
     const t = useT()
 
     const accounts = useQuery(api.v1.accounts.queries.listActive)
     const categories = useQuery(api.v1.categories.queries.listActive)
     const availableTags = useQuery(api.v1.tags.queries.listActive)
+    const settings = useQuery(api.v1.users.queries.getSettings, {})
+    const flags = useQuery(api.v1.featureFlags.queries.getMyFlags)
 
     const createIncome = useMutation(api.v1.transactions.mutations.createIncome)
     const createExpense = useMutation(
@@ -228,7 +259,10 @@ export function AddManual() {
     const [pendingTagColor, setPendingTagColor] = useState<string>(
         TAG_COLOR_OPTIONS[0],
     )
-    const [saved, setSaved] = useState(false)
+    // Display-only, exactly as on native: the recurring-expense feature isn't
+    // built yet, so the toggle is never read on save and never persisted
+    // (`_isRecurringExpense` in apps/native/lib/screens/transaction_form.dart).
+    const [isRecurringExpense, setIsRecurringExpense] = useState(false)
     const [isSaving, setIsSaving] = useState(false)
 
     useEffect(() => {
@@ -296,7 +330,7 @@ export function AddManual() {
         setTags([])
         setPendingTagName(null)
         setPendingTagColor(TAG_COLOR_OPTIONS[0])
-        setSaved(false)
+        setIsRecurringExpense(false)
     }
 
     const changeType = (nextType: MovementType) => {
@@ -346,11 +380,18 @@ export function AddManual() {
             name: pendingTagName,
             color: pendingTagColor,
         }
-        await createTag({
-            id: createdTag.id,
-            name: createdTag.name,
-            color: createdTag.color,
-        })
+        try {
+            await createTag({
+                id: createdTag.id,
+                name: createdTag.name,
+                color: createdTag.color,
+            })
+        } catch {
+            // Uncaught, this was an unhandled rejection: the color dialog hung
+            // open with no feedback.
+            toast.error(t.common.saveFailed)
+            return
+        }
         setCreatedTags((current) => [...current, createdTag])
         addResolvedTag(createdTag)
         setTagInput('')
@@ -543,7 +584,6 @@ export function AddManual() {
                     parseFormAmount(destinationAmount)
                 if (!parsedDestinationAmount) {
                     toast.error(t.addManual.destinationAmountGreaterThanZero)
-                    setIsSaving(false)
                     return
                 }
                 const destinationAccount = accountOptions.find(
@@ -577,9 +617,8 @@ export function AddManual() {
                 })
             }
 
-            setSaved(true)
             toast.success(t.addManual.saved)
-            navigate('/activity')
+            onSaved()
         } catch (error) {
             toast.error(
                 error instanceof Error ? error.message : t.addManual.saveFailed,
@@ -644,276 +683,227 @@ export function AddManual() {
 
     if (isLoading) {
         return (
-            <div className="flex min-h-full items-center justify-center bg-[#FFF8F8] px-4 py-10">
-                <Loader2 className="size-6 animate-spin text-muted-foreground" />
-            </div>
+            <FormScreen onClose={onClose}>
+                <div className="flex min-h-0 flex-1 items-center justify-center p-6">
+                    <CircularProgress isIndeterminate />
+                </div>
+            </FormScreen>
         )
     }
 
+    /*
+     * Field order, spacing and controls are a 1:1 port of the native
+     * `TransactionFormScreen.build` (apps/native/lib/screens/transaction_form.dart):
+     * a centred display headline, the type segmented button, then account /
+     * date / time / amount / title / description / category / tags, closed by
+     * the tonal-cancel + filled-record pair. The `SizedBox` heights below are
+     * the native ones.
+     */
     return (
-        <div className="flex min-h-full justify-center bg-[#FFF8F8] px-4 py-10">
+        <FormScreen onClose={onClose}>
             <form
                 onSubmit={(event) => void submit(event)}
-                className="flex w-full max-w-xl flex-col gap-10"
+                className="flex flex-col px-6 pt-12 pb-8"
             >
-                <header className="space-y-6 text-center">
-                    <div className="inline-flex rounded-full border border-[#D9D0D6] bg-white p-1 shadow-sm">
+                <h2 className="m3-display-small text-center font-extrabold text-on-surface">
+                    {t.addManual.newTransaction}
+                </h2>
+
+                {/*
+                 * The accent follows the *selected* type and is set once for
+                 * the whole set, exactly like native's single `selectedColor`
+                 * in the segmented button's `ButtonStyle`. It has to live on
+                 * the set rather than the segments: Actify's `SegmentedButton`
+                 * drops `style`, and custom properties inherit.
+                 */}
+                <div className="mt-7 flex justify-center">
+                    <SegmentedButtonSet
+                        className="m3-segmented-set"
+                        style={{
+                            '--md-outlined-segmented-button-selected-container-color':
+                                SELECTED_COLORS[type].background,
+                            '--md-outlined-segmented-button-selected-label-text-color':
+                                SELECTED_COLORS[type].foreground,
+                            '--md-outlined-segmented-button-selected-hover-label-text-color':
+                                SELECTED_COLORS[type].foreground,
+                            '--md-outlined-segmented-button-selected-focus-label-text-color':
+                                SELECTED_COLORS[type].foreground,
+                            '--md-outlined-segmented-button-selected-pressed-label-text-color':
+                                SELECTED_COLORS[type].foreground,
+                            '--md-outlined-segmented-button-selected-icon-color':
+                                SELECTED_COLORS[type].foreground,
+                            '--md-outlined-segmented-button-label-text-weight':
+                                '700',
+                        }}
+                    >
                         {MOVEMENT_TYPES.map((item) => (
-                            <button
+                            <SegmentedButton
                                 key={item}
-                                type="button"
-                                onClick={() => changeType(item)}
-                                className={cn(
-                                    'rounded-full px-4 py-2 text-sm font-bold text-black transition-colors',
-                                    type === item
-                                        ? SELECTED_COLORS[item]
-                                        : 'hover:bg-[#FFF4F6]',
-                                )}
-                            >
-                                {typeCopy(item, t).label}
-                            </button>
+                                label={typeCopy(item, t).label}
+                                selected={type === item}
+                                noCheckmark
+                                onPress={() => changeType(item)}
+                            />
                         ))}
-                    </div>
+                    </SegmentedButtonSet>
+                </div>
 
-                    <div className="space-y-3">
-                        <h1 className="text-3xl font-black tracking-tight text-black">
-                            {config.title}
-                        </h1>
-                        <p className="text-sm text-muted-foreground">
-                            {config.description}
-                        </p>
-                    </div>
-                </header>
-
-                {type === 'transfer' ? (
-                    <TransferAmounts
-                        accounts={accountOptions}
-                        sourceAmount={amount}
-                        destinationAmount={destinationAmount}
-                        sourceAccountId={accountId}
-                        destinationAccountId={destinationAccountId}
-                        onSourceAmountChange={updateSourceAmount}
-                        onDestinationAmountChange={updateDestinationAmount}
-                        onSourceAccountChange={updateSourceAccount}
-                        onDestinationAccountChange={updateDestinationAccount}
-                        onSwap={swapTransferSides}
-                        date={date}
-                        onDateChange={setDate}
-                        time={time}
-                        onTimeChange={setTime}
-                    />
-                ) : (
-                    <section className="space-y-5">
-                        <div className="space-y-2">
-                            <Label
-                                htmlFor="amount"
-                                className="text-base font-bold"
-                            >
-                                {config.amountLabel}
-                            </Label>
-                            <div className="relative">
-                                <Input
-                                    id="amount"
-                                    inputMode="decimal"
-                                    value={amount}
-                                    onFocus={() => {
-                                        if (amount === '0') setAmount('')
-                                    }}
-                                    onBlur={() => {
-                                        if (amount.trim() === '') setAmount('0')
-                                    }}
-                                    onChange={(event) =>
-                                        setAmount(
-                                            normalizeAmountInput(
-                                                event.target.value,
-                                            ),
-                                        )
-                                    }
-                                    placeholder="0,00"
-                                    className="h-16 rounded-xl border-[#D9D0D6] bg-white px-20 text-center text-4xl font-normal text-black shadow-sm"
-                                    required
-                                />
-                                <span className="absolute top-1/2 right-4 -translate-y-1/2 text-sm font-bold text-muted-foreground">
-                                    {selectedAccount?.currency}
-                                </span>
-                            </div>
-                        </div>
-
-                        <div className="grid gap-5 sm:grid-cols-2">
-                            <Field
-                                label={t.addManual.account}
-                                htmlFor="account"
-                                action={
-                                    <div className="flex items-center gap-2">
-                                        <Button
-                                            type="button"
-                                            variant="outline"
-                                            size="sm"
-                                            className="h-8 rounded-full"
-                                            onClick={() => setAccountId('')}
-                                            disabled={!accountId}
-                                        >
-                                            <X className="size-3" />
-                                        </Button>
-                                        <Button
-                                            type="button"
-                                            variant="outline"
-                                            size="sm"
-                                            className="h-8 rounded-full"
-                                            onClick={() =>
-                                                setIsCreateAccountOpen(true)
-                                            }
-                                        >
-                                            <Plus className="size-3" />
-                                            {t.addManual.newAccount}
-                                        </Button>
-                                    </div>
-                                }
-                            >
+                <div className="mt-9">
+                    {type === 'transfer' ? (
+                        <TransferAmounts
+                            accounts={accountOptions}
+                            sourceAmount={amount}
+                            destinationAmount={destinationAmount}
+                            sourceAccountId={accountId}
+                            destinationAccountId={destinationAccountId}
+                            onSourceAmountChange={updateSourceAmount}
+                            onDestinationAmountChange={updateDestinationAmount}
+                            onSourceAccountChange={updateSourceAccount}
+                            onDestinationAccountChange={
+                                updateDestinationAccount
+                            }
+                            onSwap={swapTransferSides}
+                        />
+                    ) : (
+                        // The account picker takes the row, and on an expense
+                        // the recurring toggle sits beside it — native's
+                        // `Row(Expanded(account), _RecurringExpenseControl)`.
+                        <div className="flex items-end gap-4">
+                            <div className="min-w-0 flex-1">
                                 <AccountSelect
-                                    id="account"
                                     value={accountId}
                                     onChange={setAccountId}
+                                    onCreate={() =>
+                                        setIsCreateAccountOpen(true)
+                                    }
                                     accounts={accountOptions}
+                                    label={t.addManual.account}
                                 />
-                            </Field>
-
-                            <Field label={t.addManual.date} htmlFor="date">
-                                <DateInput value={date} onChange={setDate} />
-                            </Field>
-
-                            <Field
-                                label={t.addManual.timeOptional}
-                                htmlFor="time"
-                            >
-                                <TimeInput value={time} onChange={setTime} />
-                            </Field>
+                            </div>
+                            {type === 'expense' && flags?.recurringExpense ? (
+                                <RecurringExpenseToggle
+                                    value={isRecurringExpense}
+                                    onChange={setIsRecurringExpense}
+                                    isDisabled={isSaving}
+                                />
+                            ) : null}
                         </div>
-                    </section>
+                    )}
+                </div>
+
+                <div className="mt-6">
+                    <DateInput value={date} onChange={setDate} />
+                </div>
+                <div className="mt-4.5">
+                    <TimeInput value={time} onChange={setTime} />
+                </div>
+
+                {type === 'transfer' ? null : (
+                    <>
+                        <div className="mt-4.5">
+                            <ClearableField
+                                id="amount"
+                                label={config.amountLabel}
+                                value={amount}
+                                onChange={(next: string) =>
+                                    setAmount(normalizeAmountInput(next))
+                                }
+                                onClear={() => setAmount('0')}
+                                suffixText={selectedAccount?.currency}
+                                inputMode="decimal"
+                                isRequired
+                            />
+                        </div>
+                        <div className="mt-4.5">
+                            <ClearableField
+                                id="title"
+                                label={t.addManual.title}
+                                value={title}
+                                onChange={setTitle}
+                                onClear={() => setTitle('')}
+                                placeholder={
+                                    type === 'income'
+                                        ? t.addManual.titlePlaceholderIncome
+                                        : t.addManual.titlePlaceholderExpense
+                                }
+                                isRequired
+                            />
+                        </div>
+                    </>
                 )}
 
-                <section className="space-y-5">
-                    <Field label={t.addManual.title} htmlFor="title">
-                        <Input
-                            id="title"
-                            value={title}
-                            onChange={(event) => setTitle(event.target.value)}
-                            placeholder={
-                                type === 'transfer'
-                                    ? t.addManual.titlePlaceholderTransfer
-                                    : type === 'income'
-                                      ? t.addManual.titlePlaceholderIncome
-                                      : t.addManual.titlePlaceholderExpense
-                            }
-                            className="h-11 rounded-xl border-[#D9D0D6] bg-white"
-                            required={type !== 'transfer'}
-                        />
-                    </Field>
-
-                    <Field
+                <div className="mt-4.5">
+                    <ClearableField
+                        id="description"
                         label={t.addManual.description}
-                        htmlFor="description"
-                    >
-                        <Textarea
-                            id="description"
-                            value={description}
-                            onChange={(event) =>
-                                setDescription(event.target.value)
-                            }
-                            placeholder={t.addManual.descriptionPlaceholder}
-                            rows={3}
-                            className="rounded-xl border-[#D9D0D6] bg-white"
-                        />
-                    </Field>
+                        value={description}
+                        onChange={setDescription}
+                        onClear={() => setDescription('')}
+                        placeholder={t.addManual.descriptionPlaceholder}
+                        multiline
+                    />
+                </div>
 
-                    <Field
+                <div className="mt-7">
+                    <CategorySelect
+                        value={categoryId}
+                        onChange={setCategoryId}
+                        onCreate={() => setIsCreateCategoryOpen(true)}
+                        categories={categoryOptions}
                         label={t.addManual.category}
-                        htmlFor="category"
-                        action={
-                            <div className="flex items-center gap-2">
-                                <Button
-                                    type="button"
-                                    variant="outline"
-                                    size="sm"
-                                    className="h-8 rounded-full"
-                                    onClick={() => setCategoryId('')}
-                                    disabled={!categoryId}
-                                >
-                                    <X className="size-3" />
-                                </Button>
-                                <Button
-                                    type="button"
-                                    variant="outline"
-                                    size="sm"
-                                    className="h-8 rounded-full"
-                                    onClick={() =>
-                                        setIsCreateCategoryOpen(true)
-                                    }
-                                >
-                                    <Plus className="size-3" />
-                                    {t.addManual.newCategory}
-                                </Button>
-                            </div>
+                    />
+                </div>
+
+                <div className="mt-6">
+                    <TagsField
+                        tags={tags}
+                        availableTags={knownTags}
+                        tagInput={tagInput}
+                        onTagInputChange={setTagInput}
+                        onAddTag={addTag}
+                        onRemoveTag={(name) =>
+                            setTags((current) =>
+                                current.filter((tag) => tag.name !== name),
+                            )
                         }
-                    >
-                        <select
-                            id="category"
-                            value={categoryId}
-                            onChange={(event) =>
-                                setCategoryId(event.target.value)
-                            }
-                            className="h-11 w-full rounded-xl border border-[#D9D0D6] bg-white px-3 text-sm outline-none focus-visible:border-[#21C4B6] focus-visible:ring-3 focus-visible:ring-[#21C4B6]/30"
-                            required
-                        >
-                            <option value="">{t.addManual.unselected}</option>
-                            {categoryOptions.map((item) => (
-                                <option key={item.id} value={item.id}>
-                                    {item.name}
-                                </option>
-                            ))}
-                        </select>
-                    </Field>
-                </section>
+                    />
+                </div>
 
-                <TagsField
-                    tags={tags}
-                    availableTags={knownTags}
-                    tagInput={tagInput}
-                    onTagInputChange={setTagInput}
-                    onAddTag={addTag}
-                    onRemoveTag={(name) =>
-                        setTags((current) =>
-                            current.filter((tag) => tag.name !== name),
-                        )
-                    }
-                />
-
-                {saved ? (
-                    <div className="rounded-xl border border-[#21C4B6]/30 bg-[#21C4B6]/10 px-4 py-3 text-sm font-medium text-[#11796F]">
-                        {t.addManual.savedNote}
-                    </div>
-                ) : null}
-
-                <footer className="flex gap-3 pt-2">
+                <footer className="mt-8 flex gap-4.5">
                     <Button
                         type="button"
-                        variant="outline"
-                        className="h-12 flex-1 rounded-xl border-[#F0C9CE] bg-[#F0C9CE] text-black hover:bg-[#E9B9C0]"
-                        onClick={() => resetFields()}
-                        disabled={isSaving}
+                        variant="filled"
+                        className="flex-1"
+                        // Actify paints the container itself, so the error pair
+                        // has to come through the component tokens — a
+                        // `bg-*` class loses to its own background. Native does
+                        // the same thing via `FilledButton.styleFrom`.
+                        style={{
+                            '--md-filled-button-container-color':
+                                'var(--md-sys-color-error-container)',
+                            '--md-filled-button-label-text-color':
+                                'var(--md-sys-color-on-error-container)',
+                            '--md-filled-button-container-height': '56px',
+                        }}
+                        onPress={onClose}
+                        isDisabled={isSaving}
                     >
-                        <X className="size-4" />
+                        <Icon name="close" size={18} />
                         {t.common.cancel}
                     </Button>
                     <Button
                         type="submit"
-                        className="h-12 flex-1 rounded-xl bg-[#21C4B6] text-white hover:bg-[#1BAEA2]"
-                        disabled={isSaving}
+                        variant="filled"
+                        className="flex-1"
+                        style={{
+                            '--md-filled-button-container-height': '56px',
+                        }}
+                        isDisabled={isSaving}
                     >
                         {isSaving ? (
-                            <Loader2 className="size-4 animate-spin" />
+                            <CircularProgress isIndeterminate size="xs" />
                         ) : (
-                            <Check className="size-4" />
+                            <Icon name="check" size={18} />
                         )}
                         {t.addManual.submit}
                     </Button>
@@ -926,15 +916,131 @@ export function AddManual() {
                 onCancel={() => setPendingTagName(null)}
                 onCreate={createPendingTag}
             />
-            <CreateAccountDialog
+            <CreateEntityDialog
                 open={isCreateAccountOpen}
                 onOpenChange={setIsCreateAccountOpen}
+                title={t.addManual.newAccount}
+                namePlaceholder={t.addManual.accountNamePlaceholder}
+                successToast={t.addManual.accountAdded}
+                withCurrency
+                defaultCurrency={settings?.defaultCurrency}
                 onCreate={addAccount}
             />
-            <CreateCategoryDialog
+            <CreateEntityDialog
                 open={isCreateCategoryOpen}
                 onOpenChange={setIsCreateCategoryOpen}
-                onCreate={addCategory}
+                title={t.addManual.newCategory}
+                namePlaceholder={t.addManual.categoryNamePlaceholder}
+                successToast={t.addManual.categoryAdded}
+                onCreate={(name) => addCategory(name)}
+            />
+        </FormScreen>
+    )
+}
+
+/**
+ * An outlined text field with the trailing clear action native puts on every
+ * text input in this form (`Icons.cancel_outlined` in the decoration's
+ * `suffixIcon`).
+ *
+ * `inputMode` goes through as a top-level prop, never through Actify's
+ * `inputProps`: that object *replaces* the field's own input props instead of
+ * merging with them, which strips `value`/`onChange` and leaves the field
+ * uncontrolled and permanently unpopulated — the label never floats and the
+ * text hides behind it on blur.
+ */
+function ClearableField({
+    id,
+    label,
+    value,
+    onChange,
+    onClear,
+    placeholder,
+    suffixText,
+    inputMode,
+    multiline = false,
+    isRequired = false,
+}: {
+    id?: string
+    label: string
+    value: string
+    onChange: (value: string) => void
+    onClear: () => void
+    placeholder?: string
+    suffixText?: string
+    inputMode?: 'decimal' | 'numeric'
+    multiline?: boolean
+    isRequired?: boolean
+}) {
+    const t = useT()
+    return (
+        <div className="relative">
+            <TextField
+                id={id}
+                variant="outlined"
+                className="w-full"
+                type={multiline ? 'textarea' : 'text'}
+                label={label}
+                value={value}
+                onChange={onChange}
+                placeholder={placeholder}
+                suffixText={suffixText}
+                isRequired={isRequired}
+                inputMode={inputMode}
+                trailingIcon={
+                    value ? (
+                        <button
+                            type="button"
+                            onClick={onClear}
+                            aria-label={t.common.clear}
+                            className="m3-state-layer flex size-8 cursor-pointer items-center justify-center rounded-full text-on-surface-variant"
+                        >
+                            <Icon name="cancel" size={20} />
+                        </button>
+                    ) : undefined
+                }
+            />
+        </div>
+    )
+}
+
+/** A form section heading, matching native's `_SectionLabel`. */
+function SectionLabel({ children }: { children: ReactNode }) {
+    return (
+        <h2 className="m3-title-large font-extrabold text-on-surface">
+            {children}
+        </h2>
+    )
+}
+
+/**
+ * The `recurringExpense` flag's toggle, porting native's
+ * `_RecurringExpenseControl`: a centred label over a switch, capped narrow so
+ * it never crowds the account picker beside it.
+ *
+ * The flag is registered as "feature not built yet", so this records nothing —
+ * flipping it changes no saved transaction, on either client.
+ */
+function RecurringExpenseToggle({
+    value,
+    onChange,
+    isDisabled,
+}: {
+    value: boolean
+    onChange: (value: boolean) => void
+    isDisabled: boolean
+}) {
+    const t = useT()
+    return (
+        <div className="flex max-w-33 shrink-0 flex-col items-center gap-1.5">
+            <span className="m3-body-medium text-center font-extrabold text-on-surface">
+                {t.addManual.recurringExpense}
+            </span>
+            <Switch
+                aria-label={t.addManual.recurringExpense}
+                isSelected={value}
+                onChange={onChange}
+                isDisabled={isDisabled}
             />
         </div>
     )
@@ -951,10 +1057,6 @@ function TransferAmounts({
     onSourceAccountChange,
     onDestinationAccountChange,
     onSwap,
-    date,
-    onDateChange,
-    time,
-    onTimeChange,
 }: {
     accounts: AccountOption[]
     sourceAmount: string
@@ -966,10 +1068,6 @@ function TransferAmounts({
     onSourceAccountChange: (value: string) => void
     onDestinationAccountChange: (value: string) => void
     onSwap: () => void
-    date: string
-    onDateChange: (value: string) => void
-    time: string
-    onTimeChange: (value: string) => void
 }) {
     const t = useT()
     const sourceAccount = accounts.find(
@@ -992,15 +1090,13 @@ function TransferAmounts({
                     onAccountChange={onSourceAccountChange}
                 />
                 <div className="flex justify-center pt-10">
-                    <Button
-                        type="button"
-                        variant="outline"
-                        onClick={onSwap}
+                    <IconButton
                         aria-label={t.addManual.swapSides}
-                        className="size-11 rounded-full border-[#D9D0D6] bg-[#E7FFFA] p-0 text-black hover:bg-[#CFFFF7]"
+                        onPress={onSwap}
+                        className="bg-primary-container text-on-primary-container"
                     >
-                        <Repeat2 className="size-5" />
-                    </Button>
+                        <Icon name="swap_vert" filled size={20} />
+                    </IconButton>
                 </div>
                 <TransferSide
                     accounts={accounts}
@@ -1011,15 +1107,6 @@ function TransferAmounts({
                     onAmountChange={onDestinationAmountChange}
                     onAccountChange={onDestinationAccountChange}
                 />
-            </div>
-
-            <div className="grid gap-5 sm:grid-cols-2">
-                <Field label={t.addManual.date} htmlFor="date">
-                    <DateInput value={date} onChange={onDateChange} />
-                </Field>
-                <Field label={t.addManual.timeOptional} htmlFor="time">
-                    <TimeInput value={time} onChange={onTimeChange} />
-                </Field>
             </div>
         </section>
     )
@@ -1043,35 +1130,28 @@ function TransferSide({
     onAccountChange: (value: string) => void
 }) {
     return (
-        <div className="space-y-3">
-            <Label className="block text-base font-black text-black">
+        <div className="flex flex-col gap-3">
+            <p className="m3-label-large text-center font-extrabold text-on-surface-variant">
                 {label}
-            </Label>
-            <div className="relative">
-                <Input
-                    inputMode="decimal"
-                    value={amount}
-                    onFocus={() => {
-                        if (amount === '0') onAmountChange('')
-                    }}
-                    onBlur={() => {
-                        if (amount.trim() === '') onAmountChange('0')
-                    }}
-                    onChange={(event) =>
-                        onAmountChange(normalizeAmountInput(event.target.value))
-                    }
-                    placeholder="0,00"
-                    className="h-13 rounded-xl border-[#D9D0D6] bg-white px-14 text-center text-2xl font-normal text-black shadow-sm"
-                    required
-                />
-                <span className="absolute top-1/2 right-3 -translate-y-1/2 text-xs font-bold text-muted-foreground">
-                    {currency}
-                </span>
-            </div>
+            </p>
+            <TextField
+                variant="outlined"
+                className="w-full"
+                aria-label={label}
+                label={label}
+                value={amount}
+                onChange={(next: string) =>
+                    onAmountChange(normalizeAmountInput(next))
+                }
+                suffixText={currency}
+                inputMode="decimal"
+                isRequired
+            />
             <AccountSelect
                 value={accountId}
                 onChange={onAccountChange}
                 accounts={accounts}
+                label={label}
             />
         </div>
     )
@@ -1093,74 +1173,125 @@ function TagsField({
     onRemoveTag: (name: string) => void
 }) {
     const t = useT()
-    return (
-        <section className="space-y-4">
-            <Field label={t.addManual.tags} htmlFor="tags">
-                <div className="flex gap-2">
-                    <Input
-                        id="tags"
-                        value={tagInput}
-                        onChange={(event) =>
-                            onTagInputChange(event.target.value)
-                        }
-                        onKeyDown={(event) => {
-                            if (event.key === 'Enter' || event.key === ',') {
-                                event.preventDefault()
-                                onAddTag(tagInput)
-                            }
-                        }}
-                        placeholder={t.addManual.addTag}
-                        className="h-11 rounded-xl border-[#D9D0D6] bg-white"
-                    />
-                    <Button
-                        type="button"
-                        variant="outline"
-                        onClick={() => onAddTag(tagInput)}
-                        className="h-11 rounded-xl border-[#D9D0D6] bg-white"
-                    >
-                        <Plus className="size-4" />
-                    </Button>
-                </div>
-            </Field>
+    const [pickerOpen, setPickerOpen] = useState(false)
+    const [creating, setCreating] = useState(false)
 
-            <div className="flex flex-wrap gap-2">
-                {availableTags.map((tag) => (
-                    <button
-                        key={tag.id ?? tag.name}
-                        type="button"
-                        onClick={() => onAddTag(tag.name)}
-                        className="h-8 rounded-full border px-3 text-sm font-medium"
-                        style={{
-                            backgroundColor: tag.color,
-                            borderColor: tag.color,
-                            color: '#111',
-                        }}
-                    >
-                        {tag.name}
-                    </button>
-                ))}
-            </div>
+    const selectable = availableTags.filter(
+        (tag) =>
+            !tags.some(
+                (selected) =>
+                    selected.name.toLowerCase() === tag.name.toLowerCase(),
+            ),
+    )
+
+    return (
+        <section className="flex flex-col gap-2.5">
+            <SectionLabel>{t.addManual.tags}</SectionLabel>
+            <PickerChip
+                label={t.addManual.addTag}
+                onClick={() => setPickerOpen(true)}
+            />
 
             {tags.length > 0 ? (
                 <div className="flex flex-wrap gap-2">
                     {tags.map((tag) => (
-                        <Badge
+                        <TagChip
                             key={tag.id ?? tag.name}
-                            variant="secondary"
-                            className="h-7 gap-1 rounded-full text-black"
-                            style={{ backgroundColor: tag.color }}
-                        >
-                            {tag.name}
-                            <button
-                                type="button"
-                                onClick={() => onRemoveTag(tag.name)}
-                            >
-                                <X className="size-3" />
-                            </button>
-                        </Badge>
+                            name={tag.name}
+                            color={tag.color}
+                            trailing={
+                                <button
+                                    type="button"
+                                    aria-label={t.common.delete}
+                                    onClick={() => onRemoveTag(tag.name)}
+                                    className="flex cursor-pointer items-center"
+                                >
+                                    <Icon name="close" size={16} />
+                                </button>
+                            }
+                        />
                     ))}
                 </div>
             ) : null}
+
+            <OptionSheet
+                open={pickerOpen}
+                onOpenChange={setPickerOpen}
+                title={t.addManual.tags}
+                options={selectable.map((tag) => ({
+                    id: tag.name,
+                    label: tag.name,
+                    leading: (
+                        <span
+                            aria-hidden
+                            className="size-6 shrink-0 rounded-full"
+                            style={{ backgroundColor: tag.color }}
+                        />
+                    ),
+                }))}
+                selected={null}
+                onSelect={(name) => {
+                    onAddTag(name)
+                    setPickerOpen(false)
+                }}
+                searchPlaceholder={t.insights.searchTags}
+                emptyMessage={t.insights.noTagsAvailable}
+                header={
+                    <NewEntityRow
+                        label={t.insights.newTag}
+                        onClick={() => {
+                            setPickerOpen(false)
+                            setCreating(true)
+                        }}
+                    />
+                }
+            />
+
+            <M3Dialog
+                open={creating}
+                onOpenChange={(open) => {
+                    if (!open) {
+                        setCreating(false)
+                        onTagInputChange('')
+                    }
+                }}
+                title={t.insights.newTag}
+                onKeyDownCapture={(event) => {
+                    if (event.key !== 'Enter' || !tagInput.trim()) return
+                    event.preventDefault()
+                    setCreating(false)
+                    onAddTag(tagInput)
+                }}
+                actions={
+                    <>
+                        <DialogAction
+                            label={t.common.cancel}
+                            onPress={() => {
+                                setCreating(false)
+                                onTagInputChange('')
+                            }}
+                        />
+                        <DialogAction
+                            label={t.common.create}
+                            isDisabled={!tagInput.trim()}
+                            onPress={() => {
+                                setCreating(false)
+                                onAddTag(tagInput)
+                            }}
+                        />
+                    </>
+                }
+            >
+                <TextField
+                    variant="outlined"
+                    className="w-full"
+                    label={t.insights.newTag}
+                    value={tagInput}
+                    onChange={onTagInputChange}
+                    placeholder={t.addManual.addTag}
+                    autoFocus
+                />
+            </M3Dialog>
         </section>
     )
 }
@@ -1180,97 +1311,194 @@ function TagColorDialog({
 }) {
     const t = useT()
     return (
-        <Dialog
+        <M3Dialog
             open={tagName !== null}
             onOpenChange={(open) => !open && onCancel()}
+            title={t.addManual.tagColorTitle({ name: tagName ?? '' })}
+            onKeyDownCapture={(event) => {
+                if (event.key !== 'Enter') return
+                event.preventDefault()
+                void onCreate()
+            }}
+            actions={
+                <>
+                    <DialogAction label={t.common.cancel} onPress={onCancel} />
+                    <DialogAction
+                        label={t.common.create}
+                        onPress={() => void onCreate()}
+                    />
+                </>
+            }
         >
-            <DialogContent
-                onKeyDownCapture={(event) => {
-                    if (event.key !== 'Enter') return
-                    event.preventDefault()
-                    void onCreate()
+            <ColorSwatches
+                value={selectedColor}
+                onChange={onSelectedColorChange}
+                options={TAG_COLOR_OPTIONS}
+            />
+        </M3Dialog>
+    )
+}
+
+/**
+ * The filled pill native uses to open a picker (`_PickerChip`): bright brand
+ * container, stadium shape, a caret in front of the current value.
+ */
+function PickerChip({
+    label,
+    onClick,
+}: {
+    label: string
+    onClick: () => void
+}) {
+    return (
+        <button
+            type="button"
+            onClick={onClick}
+            className="m3-state-layer flex max-w-[55%] cursor-pointer items-center gap-2 self-start rounded-full bg-primary-container px-3.5 py-2.5 font-bold text-[15px] text-on-primary-container"
+        >
+            <Icon name="keyboard_arrow_down" size={20} className="shrink-0" />
+            <span className="truncate">{label}</span>
+        </button>
+    )
+}
+
+/** The labeled chip + option-sheet picker both entity selects share. */
+function EntitySelect({
+    label,
+    chipLabel,
+    options,
+    value,
+    onChange,
+    searchPlaceholder,
+    createLabel,
+    onCreate,
+}: {
+    label: string
+    chipLabel: string
+    options: SheetOption[]
+    value: string
+    onChange: (value: string) => void
+    searchPlaceholder: string
+    createLabel: string
+    onCreate?: () => void
+}) {
+    const [open, setOpen] = useState(false)
+    return (
+        <section className="flex flex-col gap-2.5">
+            <SectionLabel>{label}</SectionLabel>
+            <PickerChip label={chipLabel} onClick={() => setOpen(true)} />
+            <OptionSheet
+                open={open}
+                onOpenChange={setOpen}
+                title={label}
+                options={options}
+                selected={value === '' ? null : value}
+                onSelect={(id) => {
+                    onChange(id)
+                    setOpen(false)
                 }}
-            >
-                <form
-                    onSubmit={(event) => {
-                        event.preventDefault()
-                        void onCreate()
-                    }}
-                >
-                    <DialogHeader>
-                        <DialogTitle>
-                            {t.addManual.tagColorTitle({ name: tagName ?? '' })}
-                        </DialogTitle>
-                    </DialogHeader>
-                    <div className="flex flex-wrap gap-3 py-2">
-                        {TAG_COLOR_OPTIONS.map((color) => (
-                            <button
-                                key={color}
-                                type="button"
-                                aria-label={t.addManual.chooseColor({ color })}
-                                onClick={() => onSelectedColorChange(color)}
-                                className={cn(
-                                    'flex size-10 items-center justify-center rounded-full border-2',
-                                    color === selectedColor
-                                        ? 'border-black'
-                                        : 'border-transparent',
-                                )}
-                                style={{ backgroundColor: color }}
-                            >
-                                {color === selectedColor ? (
-                                    <Check className="size-5 text-black" />
-                                ) : null}
-                            </button>
-                        ))}
-                    </div>
-                    <DialogFooter>
-                        <Button
-                            type="button"
-                            variant="outline"
-                            onClick={onCancel}
-                        >
-                            {t.common.cancel}
-                        </Button>
-                        <Button
-                            type="submit"
-                            className="bg-[#21C4B6] text-white hover:bg-[#1BAEA2]"
-                            autoFocus
-                        >
-                            {t.common.create}
-                        </Button>
-                    </DialogFooter>
-                </form>
-            </DialogContent>
-        </Dialog>
+                searchPlaceholder={searchPlaceholder}
+                header={
+                    onCreate ? (
+                        <NewEntityRow
+                            label={createLabel}
+                            onClick={() => {
+                                setOpen(false)
+                                onCreate()
+                            }}
+                        />
+                    ) : null
+                }
+            />
+        </section>
     )
 }
 
 function AccountSelect({
-    id,
     value,
     onChange,
+    onCreate,
     accounts,
+    label,
 }: {
-    id?: string
     value: string
     onChange: (value: string) => void
+    onCreate?: () => void
     accounts: AccountOption[]
+    label: string
 }) {
     const t = useT()
+    const selected = accounts.find((account) => account.id === value)
     return (
-        <select
-            id={id}
+        <EntitySelect
+            label={label}
+            chipLabel={
+                selected
+                    ? `${selected.name} · ${selected.currency}`
+                    : t.addManual.select
+            }
+            options={accounts.map((account) => ({
+                id: account.id,
+                label: account.name,
+                supporting: account.currency,
+            }))}
             value={value}
-            onChange={(event) => onChange(event.target.value)}
-            className="h-11 w-full rounded-xl border border-[#D9D0D6] bg-white px-3 text-sm outline-none focus-visible:border-[#21C4B6] focus-visible:ring-3 focus-visible:ring-[#21C4B6]/30"
+            onChange={onChange}
+            searchPlaceholder={t.addManual.account}
+            createLabel={t.addManual.newAccount}
+            onCreate={onCreate}
+        />
+    )
+}
+
+function CategorySelect({
+    value,
+    onChange,
+    onCreate,
+    categories,
+    label,
+}: {
+    value: string
+    onChange: (value: string) => void
+    onCreate: () => void
+    categories: CategoryOption[]
+    label: string
+}) {
+    const t = useT()
+    const selected = categories.find((category) => category.id === value)
+    return (
+        <EntitySelect
+            label={label}
+            chipLabel={selected?.name ?? t.addManual.select}
+            options={categories.map((category) => ({
+                id: category.id,
+                label: category.name,
+            }))}
+            value={value}
+            onChange={onChange}
+            searchPlaceholder={label}
+            createLabel={t.addManual.newCategory}
+            onCreate={onCreate}
+        />
+    )
+}
+
+function NewEntityRow({
+    label,
+    onClick,
+}: {
+    label: string
+    onClick: () => void
+}) {
+    return (
+        <button
+            type="button"
+            onClick={onClick}
+            className="m3-state-layer flex w-full cursor-pointer items-center gap-4 rounded-2xl px-3 py-3 text-left text-on-surface"
         >
-            <option value="">{t.addManual.unselected}</option>
-            {accounts.map((account) => (
-                <option key={account.id} value={account.id}>
-                    {account.name} · {account.currency}
-                </option>
-            ))}
-        </select>
+            <Icon name="add_circle" className="text-on-surface-variant" />
+            <span className="m3-body-large flex-1">{label}</span>
+        </button>
     )
 }
 
@@ -1281,14 +1509,15 @@ function DateInput({
     value: string
     onChange: (value: string) => void
 }) {
+    const t = useT()
     return (
-        <Input
+        <DateField
             id="date"
-            type="date"
             value={value}
-            onChange={(event) => onChange(event.target.value)}
-            className="h-11 rounded-xl border-[#D9D0D6] bg-white"
-            required
+            onChange={onChange}
+            label={t.common.date}
+            icon="calendar_month"
+            onClear={() => onChange(today())}
         />
     )
 }
@@ -1301,216 +1530,192 @@ function TimeInput({
     onChange: (value: string) => void
 }) {
     const t = useT()
+    const [open, setOpen] = useState(false)
     return (
-        <div className="flex gap-2">
-            <Input
-                id="time"
-                type="time"
+        <>
+            <PickerField
+                label={t.addManual.timeOptional}
                 value={value}
-                onChange={(event) => onChange(event.target.value)}
-                className="h-11 rounded-xl border-[#D9D0D6] bg-white"
+                placeholder={t.addManual.noTime}
+                icon="schedule"
+                onClick={() => setOpen(true)}
+                onClear={value ? () => onChange('') : undefined}
+                clearLabel={t.addManual.removeTime}
             />
-            {value ? (
-                <Button
-                    type="button"
-                    variant="outline"
-                    size="icon"
-                    className="h-11 w-11 shrink-0 rounded-xl border-[#D9D0D6] bg-white"
-                    onClick={() => onChange('')}
-                    aria-label={t.addManual.removeTime}
-                >
-                    <X className="size-4" />
-                </Button>
-            ) : null}
-        </div>
+            <M3Dialog
+                open={open}
+                onOpenChange={setOpen}
+                title={t.addManual.timeOptional}
+                actions={
+                    <DialogAction
+                        label={t.common.done}
+                        onPress={() => setOpen(false)}
+                    />
+                }
+            >
+                <TimeField
+                    value={value}
+                    onChange={onChange}
+                    label={t.addManual.timeOptional}
+                />
+            </M3Dialog>
+        </>
     )
 }
 
-function Field({
-    label,
-    htmlFor,
-    action,
-    children,
-}: {
-    label: string
-    htmlFor?: string
-    action?: ReactNode
-    children: ReactNode
-}) {
-    return (
-        <div className="space-y-2">
-            <div className="flex items-center justify-between gap-3">
-                <Label
-                    htmlFor={htmlFor}
-                    className="text-base font-bold text-black"
-                >
-                    {label}
-                </Label>
-                {action}
-            </div>
-            {children}
-        </div>
-    )
-}
-
-function CreateAccountDialog({
+/**
+ * The inline "new account / new category" dialog — one component, since the
+ * two differed only by copy and the account's currency picker.
+ */
+function CreateEntityDialog({
     open,
     onOpenChange,
+    title,
+    namePlaceholder,
+    successToast,
+    withCurrency = false,
+    defaultCurrency,
     onCreate,
 }: {
     open: boolean
     onOpenChange: (open: boolean) => void
+    title: string
+    namePlaceholder: string
+    successToast: string
+    /** Adds the currency picker; `onCreate` receives its value only then. */
+    withCurrency?: boolean
+    /** The user's default currency, or undefined while settings are loading. */
+    defaultCurrency?: string
     onCreate: (name: string, currency: string) => Promise<boolean>
 }) {
     const t = useT()
     const [name, setName] = useState('')
-    const [currency, setCurrency] =
-        useState<(typeof MOCK_CURRENCIES)[number]>('ARS')
+    // Null until the user picks one, so the field tracks the real default as it
+    // loads instead of sticking on the placeholder — the same rule native's
+    // create-account screen uses (`_currency ?? DefaultCurrencyController`).
+    const [pickedCurrency, setPickedCurrency] = useState<string | null>(null)
+    const currency = pickedCurrency ?? defaultCurrency ?? DEFAULT_CURRENCY
     const [isSubmitting, setIsSubmitting] = useState(false)
 
     const handleCreate = async () => {
         const trimmed = name.trim()
         if (!trimmed) return
         setIsSubmitting(true)
-        const created = await onCreate(trimmed, currency)
-        setIsSubmitting(false)
+        let created: boolean
+        try {
+            created = await onCreate(trimmed, currency)
+        } catch {
+            // A rejected mutation used to skip the reset below, leaving both
+            // dialog buttons disabled forever with no feedback.
+            toast.error(t.common.saveFailed)
+            return
+        } finally {
+            setIsSubmitting(false)
+        }
         if (!created) return
         setName('')
-        setCurrency('ARS')
+        setPickedCurrency(null)
         onOpenChange(false)
-        toast.success(t.addManual.accountAdded)
+        toast.success(successToast)
     }
 
     return (
-        <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent>
-                <DialogHeader>
-                    <DialogTitle>{t.addManual.newAccount}</DialogTitle>
-                </DialogHeader>
-                <form
-                    className="space-y-4"
-                    onSubmit={(event) => {
-                        event.preventDefault()
-                        handleCreate()
-                    }}
-                >
-                    <Field label={t.common.name} htmlFor="mock-account-name">
-                        <Input
-                            id="mock-account-name"
-                            value={name}
-                            onChange={(event) => setName(event.target.value)}
-                            placeholder={t.addManual.accountNamePlaceholder}
-                        />
-                    </Field>
-                    <Field
-                        label={t.common.currency}
-                        htmlFor="mock-account-currency"
-                    >
-                        <select
-                            id="mock-account-currency"
-                            value={currency}
-                            onChange={(event) =>
-                                setCurrency(
-                                    event.target
-                                        .value as (typeof MOCK_CURRENCIES)[number],
-                                )
-                            }
-                            className="h-11 w-full rounded-xl border border-[#D9D0D6] bg-white px-3 text-sm outline-none focus-visible:border-[#21C4B6] focus-visible:ring-3 focus-visible:ring-[#21C4B6]/30"
-                        >
-                            {MOCK_CURRENCIES.map((option) => (
-                                <option key={option} value={option}>
-                                    {option}
-                                </option>
-                            ))}
-                        </select>
-                    </Field>
-                </form>
-                <DialogFooter>
-                    <Button
-                        type="button"
-                        variant="outline"
-                        onClick={() => onOpenChange(false)}
-                        disabled={isSubmitting}
-                    >
-                        {t.common.cancel}
-                    </Button>
-                    <Button
-                        type="button"
-                        onClick={() => void handleCreate()}
-                        disabled={isSubmitting}
-                    >
-                        {t.common.create}
-                    </Button>
-                </DialogFooter>
-            </DialogContent>
-        </Dialog>
+        <M3Dialog
+            open={open}
+            onOpenChange={onOpenChange}
+            title={title}
+            actions={
+                <>
+                    <DialogAction
+                        label={t.common.cancel}
+                        onPress={() => onOpenChange(false)}
+                        isDisabled={isSubmitting}
+                    />
+                    <DialogAction
+                        label={t.common.create}
+                        onPress={() => void handleCreate()}
+                        isDisabled={isSubmitting}
+                    />
+                </>
+            }
+        >
+            <form
+                className="flex flex-col gap-4"
+                onSubmit={(event) => {
+                    event.preventDefault()
+                    void handleCreate()
+                }}
+            >
+                <TextField
+                    variant="outlined"
+                    className="w-full"
+                    label={t.common.name}
+                    value={name}
+                    onChange={setName}
+                    placeholder={namePlaceholder}
+                    autoFocus
+                />
+                {withCurrency ? (
+                    <CurrencyField
+                        id="new-account-currency"
+                        value={currency}
+                        onChange={setPickedCurrency}
+                    />
+                ) : null}
+            </form>
+        </M3Dialog>
     )
 }
 
-function CreateCategoryDialog({
-    open,
-    onOpenChange,
-    onCreate,
+/**
+ * Currency chooser for the inline account dialog, as a picker sheet. Offers the
+ * whole shared catalog with the common codes on top — the same list and the
+ * same sheet the full create-account form uses, so an account created inline
+ * isn't limited to a shorter set of currencies than one created from
+ * `/accounts/new`.
+ */
+function CurrencyField({
+    id,
+    value,
+    onChange,
 }: {
-    open: boolean
-    onOpenChange: (open: boolean) => void
-    onCreate: (name: string) => Promise<boolean>
+    id: string
+    value: string
+    onChange: (value: string) => void
 }) {
     const t = useT()
-    const [name, setName] = useState('')
-    const [isSubmitting, setIsSubmitting] = useState(false)
-
-    const handleCreate = async () => {
-        const trimmed = name.trim()
-        if (!trimmed) return
-        setIsSubmitting(true)
-        const created = await onCreate(trimmed)
-        setIsSubmitting(false)
-        if (!created) return
-        setName('')
-        onOpenChange(false)
-        toast.success(t.addManual.categoryAdded)
-    }
-
+    const formatLocale = useFormatLocale()
+    const [open, setOpen] = useState(false)
+    const options: SheetOption[] = useMemo(
+        () =>
+            CURRENCY_CODES.map((code) => ({
+                id: code,
+                label: code,
+                supporting: currencyName(code, formatLocale),
+            })),
+        [formatLocale],
+    )
     return (
-        <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent>
-                <DialogHeader>
-                    <DialogTitle>{t.addManual.newCategory}</DialogTitle>
-                </DialogHeader>
-                <form
-                    onSubmit={(event) => {
-                        event.preventDefault()
-                        handleCreate()
-                    }}
-                >
-                    <Field label={t.common.name} htmlFor="mock-category-name">
-                        <Input
-                            id="mock-category-name"
-                            value={name}
-                            onChange={(event) => setName(event.target.value)}
-                            placeholder={t.addManual.categoryNamePlaceholder}
-                        />
-                    </Field>
-                </form>
-                <DialogFooter>
-                    <Button
-                        type="button"
-                        variant="outline"
-                        onClick={() => onOpenChange(false)}
-                        disabled={isSubmitting}
-                    >
-                        {t.common.cancel}
-                    </Button>
-                    <Button
-                        type="button"
-                        onClick={() => void handleCreate()}
-                        disabled={isSubmitting}
-                    >
-                        {t.common.create}
-                    </Button>
-                </DialogFooter>
-            </DialogContent>
-        </Dialog>
+        <>
+            <PickerField
+                id={id}
+                label={t.common.currency}
+                value={value}
+                onClick={() => setOpen(true)}
+            />
+            <OptionSheet
+                open={open}
+                onOpenChange={setOpen}
+                title={t.accounts.chooseCurrency}
+                options={options}
+                selected={value}
+                onSelect={(code) => {
+                    onChange(code)
+                    setOpen(false)
+                }}
+                searchPlaceholder={t.accounts.searchCurrency}
+                suggested={SUGGESTED_CURRENCIES}
+            />
+        </>
     )
 }
