@@ -1,6 +1,7 @@
 'use node'
 
 import { v } from 'convex/values'
+import { accountDeletionEmail } from '../../emails/account-deletion-email'
 import { resetPasswordEmail } from '../../emails/reset-password-email'
 import { verificationEmail } from '../../emails/verification-email'
 import { internalAction } from '../_generated/server'
@@ -32,6 +33,18 @@ export const sendResetPasswordEmail = internalAction({
     args: sendArgs,
     handler: async (ctx, { to, name, url }) => {
         const { subject, html, text } = await resetPasswordEmail({ name, url })
+        await resend.sendEmail(ctx, { from: FROM, to, subject, html, text })
+        return null
+    },
+})
+
+export const sendAccountDeletionEmail = internalAction({
+    args: sendArgs,
+    handler: async (ctx, { to, name, url }) => {
+        const { subject, html, text } = await accountDeletionEmail({
+            name,
+            url,
+        })
         await resend.sendEmail(ctx, { from: FROM, to, subject, html, text })
         return null
     },

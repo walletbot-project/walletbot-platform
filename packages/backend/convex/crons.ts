@@ -56,4 +56,14 @@ crons.interval(
     },
 )
 
+// A purge batch that throws is never retried by the scheduler, which used to
+// leave an account half-deleted forever. This is the only thing that finishes
+// the job when that happens.
+crons.interval(
+    'revive stalled account deletions',
+    { minutes: 10 },
+    internal.userDeletion.internal.reviveStalledDeletions,
+    {},
+)
+
 export default crons

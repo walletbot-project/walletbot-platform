@@ -7,7 +7,9 @@ import { hashSessionSecret } from './authNative/utils'
 import { registerConfigRoutes } from './config/http'
 import { resend } from './emails/helpers'
 import { jsonResponse } from './httpHelpers'
+import { createLiveToken } from './live/createToken'
 import { registerTelemetryRoutes } from './telemetry/http'
+import { registerUserDeletionRoutes } from './userDeletion/http'
 
 const http = httpRouter()
 
@@ -23,7 +25,12 @@ registerTelemetryRoutes(http)
 // - `/v1/account-config` = account layer (remote session token or local label)
 registerConfigRoutes(http)
 
+// Account deletion (request by email + emailed-link confirmation). Public,
+// unauthenticated by design — see userDeletion/http.ts.
+registerUserDeletionRoutes(http)
+
 const liveTokenHandler = httpAction(async (ctx, req) => {
+    const requestStartedAt = Date.now()
     const authorization = req.headers.get('authorization')
     const secret = authorization?.startsWith('Bearer ')
         ? authorization.slice('Bearer '.length)
@@ -31,7 +38,7 @@ const liveTokenHandler = httpAction(async (ctx, req) => {
     if (!secret) {
         return jsonResponse({ error: 'unauthenticated' }, { status: 401 })
     }
-    const validation = await ctx.runMutation(
+    const validation = await ctx.runQuery(
         internal.authNative.mutations.validateSessionToken,
         { tokenHash: await hashSessionSecret(secret) },
     )
@@ -41,12 +48,19 @@ const liveTokenHandler = httpAction(async (ctx, req) => {
             { status: 401 },
         )
     }
-    const result = await ctx.runAction(
-        internal.v1.live.actions.requestLiveTokenForHttp,
-        {},
-    )
+    const validatedAt = Date.now()
+    // Direct call: createLiveToken runs in the default runtime (no Node
+    // APIs), so no cross-runtime action hop is needed.
+    const result = await createLiveToken()
 
-    return jsonResponse(result)
+    return jsonResponse({
+        ...result,
+        timings: {
+            ...result.timings,
+            authMs: validatedAt - requestStartedAt,
+            httpTotalMs: Date.now() - requestStartedAt,
+        },
+    })
 })
 
 http.route({

@@ -584,6 +584,90 @@ abstract class AppLocalizations {
   /// **'Could not save the setting. Try again.'**
   String get settingsSaveFailed;
 
+  /// No description provided for @deleteUserAccount.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete my account'**
+  String get deleteUserAccount;
+
+  /// No description provided for @deleteUserAccountDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Permanently delete your account and all your data'**
+  String get deleteUserAccountDescription;
+
+  /// No description provided for @deleteUserAccountConfirmTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete your account?'**
+  String get deleteUserAccountConfirmTitle;
+
+  /// No description provided for @deleteUserAccountConfirmBody.
+  ///
+  /// In en, this message translates to:
+  /// **'We will send a confirmation link to {email}. Deleting your account is permanent and cannot be undone.'**
+  String deleteUserAccountConfirmBody(String email);
+
+  /// No description provided for @deleteUserAccountSend.
+  ///
+  /// In en, this message translates to:
+  /// **'Send link'**
+  String get deleteUserAccountSend;
+
+  /// No description provided for @deleteUserAccountEmailSent.
+  ///
+  /// In en, this message translates to:
+  /// **'Check your email: we sent you a link to confirm the deletion.'**
+  String get deleteUserAccountEmailSent;
+
+  /// No description provided for @deleteUserAccountFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not send the email. Try again in a few minutes.'**
+  String get deleteUserAccountFailed;
+
+  /// No description provided for @deleteUserAccountAlreadyDeleted.
+  ///
+  /// In en, this message translates to:
+  /// **'That account was already deleted.'**
+  String get deleteUserAccountAlreadyDeleted;
+
+  /// No description provided for @deleteUserAccountRateLimited.
+  ///
+  /// In en, this message translates to:
+  /// **'You already requested several deletion links. Wait an hour and try again.'**
+  String get deleteUserAccountRateLimited;
+
+  /// No description provided for @accountDeletedBanner.
+  ///
+  /// In en, this message translates to:
+  /// **'This account was deleted'**
+  String get accountDeletedBanner;
+
+  /// No description provided for @accountDeletedRemove.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove'**
+  String get accountDeletedRemove;
+
+  /// No description provided for @accountDeletedConfirmTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove this account from the device?'**
+  String get accountDeletedConfirmTitle;
+
+  /// No description provided for @accountDeletedConfirmBody.
+  ///
+  /// In en, this message translates to:
+  /// **'The account is already deleted on the server. This erases its data from this device too, which is the last copy.'**
+  String get accountDeletedConfirmBody;
+
+  /// No description provided for @accountDeletedRemoveConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove'**
+  String get accountDeletedRemoveConfirm;
+
   /// No description provided for @updateRequiredTitle.
   ///
   /// In en, this message translates to:
@@ -1829,7 +1913,7 @@ abstract class AppLocalizations {
   /// No description provided for @resetEmailSent.
   ///
   /// In en, this message translates to:
-  /// **'If an account exists for {email}, we sent it a link to reset the password. The link opens in your browser.'**
+  /// **'We sent a link to {email} to reset your password. The link opens in your browser.'**
   String resetEmailSent(String email);
 
   /// No description provided for @resetEmailSentReturnHint.
@@ -1903,6 +1987,30 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'That email isn\'t verified yet. We sent you a new link.'**
   String get emailStillNotVerified;
+
+  /// No description provided for @accountNotFoundForEmail.
+  ///
+  /// In en, this message translates to:
+  /// **'There is no account for {email}.'**
+  String accountNotFoundForEmail(String email);
+
+  /// No description provided for @emailAlreadyVerified.
+  ///
+  /// In en, this message translates to:
+  /// **'That email is already verified. Sign in with your account.'**
+  String get emailAlreadyVerified;
+
+  /// No description provided for @tooManyAttempts.
+  ///
+  /// In en, this message translates to:
+  /// **'Too many attempts. Wait a minute and try again.'**
+  String get tooManyAttempts;
+
+  /// No description provided for @emailSendFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not send the email. Try again in a few minutes.'**
+  String get emailSendFailed;
 
   /// No description provided for @localAccountFailed.
   ///
@@ -2336,12 +2444,6 @@ abstract class AppLocalizations {
   /// **'(interrupted)'**
   String get interrupted;
 
-  /// No description provided for @voiceRuntimeError.
-  ///
-  /// In en, this message translates to:
-  /// **'Voice error: {error}'**
-  String voiceRuntimeError(Object error);
-
   /// No description provided for @toolRunning.
   ///
   /// In en, this message translates to:
@@ -2441,8 +2543,8 @@ abstract class AppLocalizations {
   /// No description provided for @voiceStartFailed.
   ///
   /// In en, this message translates to:
-  /// **'Failed to start: {error}'**
-  String voiceStartFailed(Object error);
+  /// **'Couldn\'t start the conversation. Please try again.'**
+  String get voiceStartFailed;
 
   /// No description provided for @microphoneOpenFailed.
   ///
@@ -2455,12 +2557,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Audio stream error: {error}'**
   String audioStreamFailed(Object error);
-
-  /// No description provided for @voiceStopFailed.
-  ///
-  /// In en, this message translates to:
-  /// **'Failed to stop cleanly: {error}'**
-  String voiceStopFailed(Object error);
 
   /// No description provided for @toolResponseUnmatched.
   ///

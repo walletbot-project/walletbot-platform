@@ -69,6 +69,55 @@ export const en: Messages = {
         featureFlags: 'Feature flags',
     },
 
+    deleteAccount: {
+        tile: 'Delete my account',
+        tileDescription: 'Permanently delete your account and all your data',
+
+        title: 'Delete your account',
+        subtitle:
+            'Enter your email and we will send you a link to confirm the deletion.',
+        warning:
+            'Your account and all your data will be permanently deleted. This cannot be undone.',
+        emailLabel: 'Email',
+        submit: 'Send deletion link',
+        sendFailed: 'Could not send the email. Try again in a few minutes.',
+
+        // Only ever shown for a send the server confirmed, so the copy is
+        // definite. Every other outcome is an error below.
+        sentTitle: 'Check your email',
+        sentDefinite: (p: { email: string }) =>
+            `We sent a link to ${p.email} to delete your account.`,
+        sentHint: 'The link expires in 24 hours.',
+        backHome: 'Back to home',
+
+        accountNotFound: (p: { email: string }) =>
+            `There is no account for ${p.email}, so there is nothing to delete.`,
+        alreadyDeleted: 'That account was already deleted.',
+        rateLimited:
+            'You already requested several deletion links. Wait an hour and try again.',
+
+        confirmWord: 'DELETE',
+        confirmTitle: 'Delete your account for good?',
+        confirmSubtitle: 'This action is permanent and cannot be undone.',
+        willDeleteTitle: 'This will be deleted forever:',
+        willDeleteTransactions: 'All your transactions',
+        willDeleteAccounts: 'Your accounts and balances',
+        willDeleteCategories: 'Categories, tags and settings',
+        willDeleteUser: 'Your user and access to Wallet Bot',
+        confirmPrompt: 'To confirm, type',
+        confirmSubmit: 'Permanently delete my account',
+        deleteFailed: 'Could not delete the account',
+
+        doneTitle: 'Your account was deleted',
+        doneBody:
+            'We are permanently erasing all your data. Thanks for using Wallet Bot.',
+
+        invalidTitle: 'Invalid link',
+        invalidBody:
+            'This link is invalid, has expired, or was already used. If you still want to delete your account, request a new link.',
+        requestNewLink: 'Request a new link',
+    },
+
     auth: {
         signInToContinue: 'Sign in to continue',
         withAccount: 'With account',
@@ -83,6 +132,14 @@ export const en: Messages = {
         continueWithGoogle: 'Continue with Google',
         signingIn: 'Signing in...',
         authFailed: 'Could not sign you in',
+
+        invalidCredentials: 'Incorrect email or password',
+        invalidEmail: 'That email is not valid',
+        signUpFailed:
+            'Could not create your account. Check your details and try again.',
+        connectionFailed:
+            'Could not reach the server. Check your connection and try again.',
+
         googleHint: (p) =>
             `${p.message}. If you signed up with Google, use "Continue with Google".`,
         forgotPassword: 'Forgot your password?',
@@ -100,13 +157,24 @@ export const en: Messages = {
         resendVerificationFailed: 'Could not resend the email.',
         backToSignIn: 'Back to sign in',
 
+        // Sign-up and resend outcomes the server now reports by name, so no
+        // screen claims an email that was never sent.
+        accountExists:
+            'An account with that email already exists. Sign in with your password or with Google.',
+        accountNotFound: (p) => `There is no account for ${p.email}.`,
+        emailAlreadyVerified:
+            'That email is already verified. Sign in with your account.',
+        rateLimited: 'Too many attempts. Wait a minute and try again.',
+        emailSendFailed:
+            'Could not send the email. Try again in a few minutes.',
+
         resetPasswordTitle: 'Reset your password',
         resetPasswordSubtitle:
             "Enter your email and we'll send you a reset link.",
         sendResetLink: 'Send reset link',
         sendResetLinkFailed: 'Could not send the email',
         resetEmailSent: (p) =>
-            `If an account exists for ${p.email}, we sent it a link to reset the password.`,
+            `We sent a link to ${p.email} to reset your password.`,
         resetEmailSentReturnHint:
             'After resetting it, come back here and sign in with your new password.',
 
@@ -296,6 +364,9 @@ export const en: Messages = {
             'An unexpected error occurred. Try refreshing the page or heading back.',
         refreshPage: 'Refresh page',
         viewErrorDetails: 'View error details',
+        sessionEndedTitle: 'Your session ended',
+        sessionEndedDescription:
+            'This session is no longer valid. Taking you back to sign in.',
     },
 
     accounts: {

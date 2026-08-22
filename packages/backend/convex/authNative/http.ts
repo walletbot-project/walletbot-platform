@@ -23,11 +23,20 @@ const jsonError = (status: number, code: string, message: string): Response =>
 
 // Browser CORS for the /auth/* surface. Native mobile clients never send an
 // Origin header and are unaffected. Flutter web dev servers pick a random
-// port, so any localhost origin is allowed; when a web build gets a real
-// domain it goes in ALLOWED_WEB_ORIGINS. These endpoints authenticate via
+// port, so any localhost origin is allowed; the deployed web app lives at
+// SITE_URL, so its origin is allowed too (web sign-up, forgot-password and
+// resend-verification all post here). These endpoints authenticate via
 // explicit tokens in the body or Authorization header (never cookies), so
 // reflecting the origin adds no CSRF surface.
-const ALLOWED_WEB_ORIGINS: readonly string[] = []
+const ALLOWED_WEB_ORIGINS: readonly string[] = (() => {
+    const siteUrl = process.env.SITE_URL
+    if (!siteUrl) return []
+    try {
+        return [new URL(siteUrl).origin]
+    } catch {
+        return []
+    }
+})()
 
 const LOCALHOST_ORIGIN_PATTERN = /^https?:\/\/localhost(:\d+)?$/
 
@@ -348,12 +357,12 @@ const getEmail = (body: EmailOnlyBody | null): string | Response => {
     return body.email.trim().toLowerCase()
 }
 
-// Enumeration safety comes from better-auth itself: an unknown (or already
-// verified) email resolves successfully WITHOUT invoking the send hook, so a
-// throw here never means "user not found" — it is a real failure (Resend
-// config, enqueue, template). Masking those as success left users waiting
-// for emails that never went out; surface them as 500 instead. The client
-// still can't learn whether an email exists.
+// better-auth resolves an unknown (or already verified) email successfully
+// WITHOUT invoking the send hook, so a throw here never means "user not
+// found" — those cases are caught by the explicit lookups below. A throw is
+// a real failure (Resend config, enqueue, template). Masking those as
+// success left users waiting for emails that never went out; surface them as
+// 500 instead.
 const emailSendFailedResponse = (op: string, err: unknown): Response => {
     // This log is the only server-side forensic trail — keep the stack.
     console.error(
@@ -380,16 +389,31 @@ const rateLimitedResponse = (): Response =>
         'Demasiados intentos. Esperá un minuto y probá de nuevo.',
     )
 
+// An address with no account behind it. better-auth answers these with a
+// success that sends nothing, so both handlers below look the address up
+// first: `{ ok: true }` from either route now means an email really was
+// handed to Resend, and nothing else. This discloses whether an address is
+// registered, the same trade `/auth/email/sign-up` already makes
+// (docs/riesgos.md R-002).
+const accountNotFoundResponse = (): Response =>
+    jsonError(404, 'account_not_found', 'No existe una cuenta con ese correo.')
+
 const forgotPasswordHandler = corsHttpAction(async (ctx, req) => {
     const email = getEmail(await parseJsonBody<EmailOnlyBody>(req))
     if (email instanceof Response) return email
 
+    // Before the lookup, so probing an address still costs a rate-limit slot.
     const { ok } = await authRateLimiter.limit(ctx, 'passwordResetEmail', {
         key: email,
     })
     if (!ok) return rateLimitedResponse()
 
     const { auth, headers } = await authComponent.getAuth(createAuth, ctx)
+    const { internalAdapter } = await auth.$context
+    if (!(await internalAdapter.findUserByEmail(email))) {
+        return accountNotFoundResponse()
+    }
+
     try {
         await auth.api.requestPasswordReset({ body: { email }, headers })
     } catch (err) {
@@ -408,6 +432,21 @@ const resendVerificationHandler = corsHttpAction(async (ctx, req) => {
     if (!ok) return rateLimitedResponse()
 
     const { auth, headers } = await authComponent.getAuth(createAuth, ctx)
+    const { internalAdapter } = await auth.$context
+    const existing = await internalAdapter.findUserByEmail(email)
+    if (!existing) return accountNotFoundResponse()
+
+    // Nothing to re-send. Reached by tapping "resend" after verifying in the
+    // browser, and by Google-registered addresses (already verified), which
+    // used to be told the link was on its way forever.
+    if (existing.user.emailVerified) {
+        return jsonError(
+            409,
+            'email_already_verified',
+            'Ese correo ya está verificado. Iniciá sesión.',
+        )
+    }
+
     try {
         await auth.api.sendVerificationEmail({ body: { email }, headers })
     } catch (err) {
@@ -418,7 +457,19 @@ const resendVerificationHandler = corsHttpAction(async (ctx, req) => {
 
 type RefreshBody = {
     refreshToken?: string
+    /**
+     * The account's better-auth user id, sent so a refresh that fails because
+     * the account was deleted can be told apart from an ordinary expired or
+     * revoked session. `purgeUserData` deletes `refreshTokens` first, so by the
+     * time the client notices, the token row is gone and the id is the only
+     * thing left to look up. Optional: older clients omit it and keep the
+     * generic `invalid_refresh_token`.
+     */
+    userId?: string
 }
+
+const isDeletedUser = (ctx: ActionCtx, userId: string): Promise<boolean> =>
+    ctx.runQuery(internal.userDeletion.internal.isUserDeleted, { userId })
 
 const refreshHandler = corsHttpAction(async (ctx, req) => {
     const body = await parseJsonBody<RefreshBody>(req)
@@ -431,13 +482,30 @@ const refreshHandler = corsHttpAction(async (ctx, req) => {
     }
 
     const tokenHash = await hashSessionSecret(body.refreshToken)
-    const validation = await ctx.runMutation(
+    const validation = await ctx.runQuery(
         internal.authNative.mutations.validateSessionToken,
         { tokenHash },
     )
 
     if (!validation.ok) {
+        // The token is gone or dead. If the caller named an account we know is
+        // deleted, say so: re-authenticating would mint a *new* user for the
+        // same address, which is exactly the duplicate-account trap.
+        if (
+            typeof body.userId === 'string' &&
+            body.userId.length > 0 &&
+            (await isDeletedUser(ctx, body.userId))
+        ) {
+            return jsonError(401, 'account_deleted', 'account was deleted')
+        }
         return jsonError(401, 'invalid_refresh_token', validation.reason)
+    }
+
+    // The token outlived the denylist entry — the purge is batched, so it may
+    // not have reached `refreshTokens` yet. Minting here would hand out an
+    // access token that every `requireAuth` call rejects anyway.
+    if (await isDeletedUser(ctx, validation.userId)) {
+        return jsonError(401, 'account_deleted', 'account was deleted')
     }
 
     const access = await mintAccessToken(validation.userId)

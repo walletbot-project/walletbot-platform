@@ -71,7 +71,7 @@ const accountFromBody = async (
     }
 
     const tokenHash = await hashSessionSecret(account.token)
-    const validation = await ctx.runMutation(
+    const validation = await ctx.runQuery(
         internal.authNative.mutations.validateSessionToken,
         { tokenHash },
     )
