@@ -90,6 +90,7 @@ export {
     widthForUnits,
     writeLayout,
 } from './dashboard/widgets'
+export { computeExchangeRate } from './exchange-rate'
 export type { ToolArgs, ToolName } from './tools'
 export { TOOL_DEFINITIONS, TOOL_MAP, toolSchemas } from './tools'
 export type { ToolDefinition, ToolSchema } from './tools/helpers'

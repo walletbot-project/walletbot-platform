@@ -40,6 +40,7 @@
   "date": "Date",
   "category": "Category",
   "account": "Account",
+  "exchangeRate": "Exchange rate",
   "status": "Status",
   "type": "Type",
   "text": "Text",

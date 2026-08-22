@@ -129,6 +129,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get account => 'Account';
 
   @override
+  String get exchangeRate => 'Exchange rate';
+
+  @override
   String get status => 'Status';
 
   @override

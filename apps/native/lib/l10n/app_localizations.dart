@@ -338,6 +338,12 @@ abstract class AppLocalizations {
   /// **'Account'**
   String get account;
 
+  /// No description provided for @exchangeRate.
+  ///
+  /// In en, this message translates to:
+  /// **'Exchange rate'**
+  String get exchangeRate;
+
   /// No description provided for @status.
   ///
   /// In en, this message translates to:

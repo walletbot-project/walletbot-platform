@@ -484,6 +484,7 @@ export const es = {
         account: 'Cuenta',
         sourceAccount: 'Cuenta origen',
         destinationAccount: 'Cuenta destino',
+        exchangeRate: 'Tipo de cambio',
         deletedAccount: 'Cuenta eliminada',
         category: 'Categoría',
         tags: 'Etiquetas',

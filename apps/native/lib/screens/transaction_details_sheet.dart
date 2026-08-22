@@ -11,6 +11,7 @@ import 'package:app/l10n/l10n.dart';
 import 'package:app/shared/adaptive_modal.dart';
 import 'package:app/shared/breakpoints.dart';
 import 'package:app/shared/money.dart';
+import 'package:app/transactions/exchange_rate.dart';
 import 'package:drift/drift.dart' show Value;
 import 'package:flutter/material.dart';
 
@@ -264,7 +265,10 @@ class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
         exchangeRate = sameCurrency || sourceAmount == BigInt.zero
             ? const Value<double?>(null)
             : Value<double?>(
-                destinationAmount.toDouble() / sourceAmount.toDouble(),
+                computeExchangeRate(
+                  sourceAmount.toDouble(),
+                  destinationAmount.toDouble(),
+                ),
               );
       } else {
         amount = Value(parsedAmount);
@@ -734,6 +738,7 @@ class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
                 )
               : null,
         ),
+      ?_exchangeRateRow(transaction),
       _ReceiptRow(
         icon: categoryIcon,
         iconColor: category == null ? null : categoryColor,
@@ -967,6 +972,39 @@ class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
         label: Text(tag.name),
         labelStyle: style.labelStyle,
         backgroundColor: style.background,
+      ),
+    );
+  }
+
+  /// Read-only "tipo de cambio" row for cross-currency transfers, shaped as
+  /// `1 <strong> → <rate> <weak>`. Prefers the stored `exchangeRate` (backfilled
+  /// to the current rule) and only recomputes from the amounts as a fallback for
+  /// rows without one. Returns null for same-currency transfers and non-transfers.
+  _ReceiptRow? _exchangeRateRow(Transaction t) {
+    if (t.type != 'transfer') return null;
+    final toCurrency = t.toCurrency;
+    final toAmount = t.toAmount;
+    if (toCurrency == null || toAmount == null || toCurrency == t.currency) {
+      return null;
+    }
+    final sourceCents = t.amount.toDouble();
+    final destCents = toAmount.toDouble();
+    final rate = t.exchangeRate ?? computeExchangeRate(sourceCents, destCents);
+    if (rate == null) return null;
+
+    // The rate is always >= 1; its base is the stronger currency — the leg with
+    // the smaller amount, since fewer of its units carry the same value.
+    // Comparing cents works because both legs are scaled by the same 100 factor.
+    final sourceIsBase = sourceCents <= destCents;
+    final baseCurrency = sourceIsBase ? t.currency : toCurrency;
+    final quoteCurrency = sourceIsBase ? toCurrency : t.currency;
+
+    return _ReceiptRow(
+      icon: Icons.currency_exchange_rounded,
+      label: context.l10n.exchangeRate,
+      value: Text(
+        '1 $baseCurrency  →  ${formatExchangeRate(rate)} '
+        '$quoteCurrency',
       ),
     );
   }
