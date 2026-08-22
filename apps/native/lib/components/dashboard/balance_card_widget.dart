@@ -6,9 +6,9 @@ import 'package:app/l10n/l10n.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-/// Renders a [BalanceCardWidgetSpec] as a card showing the live total balance
-/// for a currency, reactive to writes/sync via
-/// [AccountRepository.watchBalanceForCurrency].
+/// Renders a [BalanceCardWidgetSpec] as a card showing the live balance for a
+/// currency — or for just the accounts the card is scoped to — reactive to
+/// writes/sync via [AccountRepository.watchBalanceForCurrency].
 class BalanceCardWidget extends StatelessWidget {
   const BalanceCardWidget({super.key, required this.spec});
 
@@ -19,7 +19,10 @@ class BalanceCardWidget extends StatelessWidget {
     final repos = context.read<AppRepositories>();
 
     return StreamBuilder<BigInt>(
-      stream: repos.accounts.watchBalanceForCurrency(spec.currency),
+      stream: repos.accounts.watchBalanceForCurrency(
+        spec.currency,
+        accountIds: spec.accountIds,
+      ),
       builder: (context, snapshot) {
         final cents = snapshot.data;
         return DashboardCell(

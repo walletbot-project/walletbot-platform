@@ -331,6 +331,75 @@ void main() {
     },
   );
 
+  test(
+    'a balance widget keeps its account scope across a partial edit',
+    () async {
+      final cash = await repos.accounts.create(
+        name: 'Efectivo',
+        currency: 'ARS',
+      );
+
+      final created = await tools.execute('createDashboardWidget', {
+        'type': 'balance',
+        'title': 'Solo caja',
+        'currency': 'ars',
+        'accountIds': [cash],
+      });
+      expect(created['ok'], isTrue);
+      final id = created['id'] as String;
+
+      Future<Map> optionsOf() async {
+        final listed = await tools.execute('listDashboardWidgets', {});
+        final widget =
+            (listed['widgets'] as List).single as Map<String, dynamic>;
+        return widget['options'] as Map;
+      }
+
+      expect(await optionsOf(), containsPair('currency', 'ARS'));
+      expect(await optionsOf(), containsPair('accountIds', [cash]));
+
+      // `accountIds` is a content key, so the merge drops it before writing: a
+      // title-only edit must re-state it rather than silently widening the card
+      // back to every account in the currency.
+      final updated = await tools.execute('updateDashboardWidget', {
+        'id': id,
+        'title': 'Caja',
+      });
+      expect(updated['ok'], isTrue);
+
+      final options = await optionsOf();
+      expect(options['title'], 'Caja');
+      expect(options['accountIds'], [cash]);
+    },
+  );
+
+  test(
+    'a balance widget scope can be cleared back to the whole currency',
+    () async {
+      final cash = await repos.accounts.create(
+        name: 'Efectivo',
+        currency: 'ARS',
+      );
+
+      final created = await tools.execute('createDashboardWidget', {
+        'type': 'balance',
+        'title': 'Solo caja',
+        'currency': 'ARS',
+        'accountIds': [cash],
+      });
+      final id = created['id'] as String;
+
+      await tools.execute('updateDashboardWidget', {
+        'id': id,
+        'accountIds': <String>[],
+      });
+
+      final listed = await tools.execute('listDashboardWidgets', {});
+      final widget = (listed['widgets'] as List).single as Map<String, dynamic>;
+      expect((widget['options'] as Map)['accountIds'], isEmpty);
+    },
+  );
+
   test('dashboard widget edit updates linked filter and can archive', () async {
     final initialFilter = {
       'combinator': 'and',

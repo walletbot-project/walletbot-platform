@@ -41,6 +41,15 @@ extension DashboardWidthUnits on DashboardWidth {
   };
 }
 
+/// The fraction a width reads as in the UI. Locale-independent, so the widget
+/// sheet's width chips and the tile menu's width buttons always agree.
+String dashboardWidthLabel(DashboardWidth width) => switch (width) {
+  DashboardWidth.full => '1/1',
+  DashboardWidth.twoThirds => '2/3',
+  DashboardWidth.half => '1/2',
+  DashboardWidth.third => '1/3',
+};
+
 /// The widest width that fits within [maxUnits] grid units, or null when not
 /// even the narrowest width ([DashboardWidth.third]) fits (a 1-unit leftover).
 DashboardWidth? dashboardWidthForUnits(int maxUnits) {
@@ -116,19 +125,25 @@ class TransactionListWidgetSpec extends DashboardWidgetSpec {
   final int limit;
 }
 
-/// A Balance card: the live total balance across all accounts in [currency]
-/// "as of now" (not date-bounded). Backed by
-/// `AccountRepository.watchBalanceForCurrency`.
+/// A Balance card: the live balance "as of now" (not date-bounded) across the
+/// accounts in [currency], narrowed to [accountIds] when that list is not
+/// empty. Backed by `AccountRepository.watchBalanceForCurrency`.
+///
+/// An empty [accountIds] means "every account in [currency]" — the only shape
+/// stored before account scoping existed, so an older card keeps reading as a
+/// currency total instead of an empty selection summing to zero.
 class BalanceCardWidgetSpec extends DashboardWidgetSpec {
   const BalanceCardWidgetSpec({
     required this.title,
     required this.currency,
+    this.accountIds = const [],
     super.background,
     super.width = DashboardWidth.half,
   });
 
   final String title;
   final String currency;
+  final List<String> accountIds;
 }
 
 /// A Breakdown chart: the transactions matching [filter] bucketed by [groupBy]
@@ -195,6 +210,7 @@ DashboardWidgetSpec? dashboardSpecFromRow(
       return BalanceCardWidgetSpec(
         title: title,
         currency: rawCurrency is String ? rawCurrency : '',
+        accountIds: dashboardIdListFromJson(options['accountIds']),
         background: background,
         width: width ?? DashboardWidth.half,
       );
@@ -224,6 +240,20 @@ DashboardWidgetSpec? dashboardSpecFromRow(
 String encodeWidgetOptions(Map<String, Object?> options) {
   final encoded = {...options}..removeWhere((_, value) => value == null);
   return jsonEncode(encoded);
+}
+
+/// A stored id list, de-duplicated and stripped of anything that is not a
+/// non-empty string. Sync input is untrusted, so a malformed entry is dropped
+/// rather than carried into a query. Mirrors `idListFromJson` in
+/// `packages/shared/src/dashboard/widgets.ts`.
+List<String> dashboardIdListFromJson(Object? raw) {
+  if (raw is! List) return const [];
+  final ids = <String>[];
+  for (final entry in raw) {
+    if (entry is! String || entry.isEmpty) continue;
+    if (!ids.contains(entry)) ids.add(entry);
+  }
+  return ids;
 }
 
 Map<String, Object?> _decodeOptions(String raw) {
@@ -256,6 +286,7 @@ String mergeWidgetOptions(
     'aggregation',
     'limit',
     'currency',
+    'accountIds',
     'groupBy',
     'chartKind',
     'background',

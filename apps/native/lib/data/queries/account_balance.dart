@@ -54,14 +54,25 @@ Stream<BigInt> watchAccountBalance(AppDatabase db, String accountId) {
       .map((rows) => accountBalanceFromRows(rows, accountId));
 }
 
-/// Live total balance across every active account in [currency] — the sum of
+/// Live total balance across the active accounts in [currency] — the sum of
 /// each account's [accountBalanceFromRows] balance. Reactive to both account
 /// changes (a new account, an archive) and transaction changes (any write or
 /// sync merge), so a Balance-card widget stays current "as of now".
 ///
+/// [accountIds] narrows the sum to those accounts; empty (the default) is every
+/// account in [currency], which is what every Balance card stored before
+/// account scoping existed. Ids are still intersected with [currency], so a
+/// stale id — an account since archived, deleted, or re-denominated — drops out
+/// of the sum instead of being counted.
+///
 /// Reuses [accountBalanceFromRows] per account so the arithmetic can never
 /// diverge from the per-account balance or the sync recompute.
-Stream<BigInt> watchTotalBalanceForCurrency(AppDatabase db, String currency) {
+Stream<BigInt> watchTotalBalanceForCurrency(
+  AppDatabase db,
+  String currency, {
+  List<String> accountIds = const [],
+}) {
+  final scope = accountIds.toSet();
   final accountsStream =
       (db.select(db.accounts)
             ..where((a) => a.archived.equals(false))
@@ -73,6 +84,7 @@ Stream<BigInt> watchTotalBalanceForCurrency(AppDatabase db, String currency) {
   return combineLatest2(accountsStream, txnsStream, (accounts, txns) {
     var total = BigInt.zero;
     for (final a in accounts) {
+      if (scope.isNotEmpty && !scope.contains(a.id)) continue;
       total += accountBalanceFromRows(txns, a.id);
     }
     return total;

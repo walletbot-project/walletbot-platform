@@ -328,6 +328,12 @@ export const toolSchemas = {
         aggregation: statAggregation.optional(),
         limit: z.number().int().optional(),
         currency: z.string().optional(),
+        accountIds: z
+            .array(z.string())
+            .optional()
+            .describe(
+                'Balance widgets: the account ids to sum, all within `currency`. Omit or pass an empty list for every account in that currency.',
+            ),
         groupBy: breakdownGroupBy.optional(),
         chartKind: breakdownChartKind.optional(),
         background: dashboardBackground,
@@ -341,6 +347,12 @@ export const toolSchemas = {
         aggregation: statAggregation.optional(),
         limit: z.number().int().optional(),
         currency: z.string().optional(),
+        accountIds: z
+            .array(z.string())
+            .optional()
+            .describe(
+                'Balance widgets: the account ids to sum, all within `currency`. Omit or pass an empty list for every account in that currency.',
+            ),
         groupBy: breakdownGroupBy.optional(),
         chartKind: breakdownChartKind.optional(),
         background: dashboardBackground,

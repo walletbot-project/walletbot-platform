@@ -119,8 +119,13 @@ export function BalanceCardWidget({ spec }: { spec: WidgetSpec }) {
     const formatLocale = useFormatLocale()
     const { brightness } = useTheme()
     const currency = spec.options.currency
+    // `accountIds` is stable across renders (it comes from the memoized
+    // `parseWidgetOptions` in `dashboard.tsx`), so this doesn't re-subscribe on
+    // every paint. Empty means the whole currency — the backend reads it that
+    // way, so no branch is needed here.
     const result = useQuery(api.v1.dashboard.queries.currencyBalance, {
         currency,
+        accountIds: spec.options.accountIds,
     })
 
     return (

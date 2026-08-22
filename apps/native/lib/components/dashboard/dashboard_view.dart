@@ -1116,14 +1116,7 @@ class _DashboardFloatingMenu extends StatelessWidget {
     );
   }
 
-  String _labelForWidth(DashboardWidth width) {
-    return switch (width) {
-      DashboardWidth.full => '1/1',
-      DashboardWidth.twoThirds => '2/3',
-      DashboardWidth.half => '1/2',
-      DashboardWidth.third => '1/3',
-    };
-  }
+  String _labelForWidth(DashboardWidth width) => dashboardWidthLabel(width);
 }
 
 class _MoveButton extends StatelessWidget {

@@ -1164,6 +1164,13 @@ class ToolExecutors {
         }
         options['title'] = title;
         options['currency'] = currency.trim().toUpperCase();
+        // `accountIds` is a content key, so it is dropped before the merge: it
+        // has to be re-stated on every write or a partial update that never
+        // mentioned it would silently widen the card back to the whole
+        // currency.
+        options['accountIds'] = args.containsKey('accountIds')
+            ? dashboardIdListFromJson(args['accountIds'])
+            : dashboardIdListFromJson(existingOptions['accountIds']);
       case WidgetType.chart:
         options['title'] = title;
         options['groupBy'] =
