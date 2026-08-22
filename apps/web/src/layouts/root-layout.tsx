@@ -1,6 +1,6 @@
 import { Fab } from 'actify'
 import { Outlet, useLocation, useNavigate } from 'react-router-dom'
-import { Icon } from '@/components/m3/icon'
+import { AgentGlyph } from '@/components/m3/agent-glyph'
 import {
     NavigationBar,
     type NavigationDestination,
@@ -67,12 +67,7 @@ export function RootLayout() {
         isActive: pathMatches(location.pathname, item.to, item.end),
     }))
 
-    /*
-     * The glyph mirrors native's `_VoiceFabIcon` (apps/native/lib/main.dart): a
-     * speech bubble with a microphone tucked against its lower-right corner.
-     * The mic is pulled 6px left so it almost touches the bubble, and the pair
-     * is nudged 3px right to stay optically centred in the FAB.
-     */
+    /* The glyph mirrors native's `_VoiceFabIcon` (apps/native/lib/main.dart). */
     const voiceFab = (
         <span title={t.nav.addWithGasti}>
             <Fab
@@ -80,10 +75,7 @@ export function RootLayout() {
                 onPress={() => navigate('/add')}
                 className="m3-fab"
             >
-                <span className="flex translate-x-[3px] items-center">
-                    <Icon name="chat_bubble" />
-                    <Icon name="mic" className="-ml-1.5" />
-                </span>
+                <AgentGlyph />
             </Fab>
         </span>
     )

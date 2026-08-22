@@ -30,6 +30,7 @@ import 'package:convex_flutter/convex_flutter.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:provider/provider.dart';
 
@@ -617,28 +618,27 @@ class _AgentCenteredRail extends StatelessWidget {
   }
 }
 
-/// The voice-agent FAB glyph: a speech bubble with a microphone tucked into
-/// its lower-right corner, hinting at "talk to the assistant".
+/// The voice-agent FAB glyph: a speech bubble with a microphone overlapping its
+/// lower-right corner, hinting at "talk to the assistant".
+/// `apps/web/src/components/m3/agent-glyph.tsx` is the same drawing for web.
 class _VoiceFabIcon extends StatelessWidget {
   const _VoiceFabIcon();
 
+  static const double _size = 24;
+
   @override
   Widget build(BuildContext context) {
-    // The mic is nudged 6px left to sit almost against the bubble; that shift
-    // is visual only (Transform doesn't affect layout), so offset the whole row
-    // 3px right to keep the pair optically centred in the FAB.
-    return Transform.translate(
-      offset: const Offset(6, 0),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Icon(Icons.chat_bubble_outline_rounded),
-          Transform.translate(
-            offset: const Offset(-6, 0),
-            child: const Icon(Icons.mic_none_rounded),
-          ),
-        ],
-      ),
+    // The FAB hands its child an IconTheme carrying the foreground colour; SVG
+    // has no such channel, so read it off the theme and tint with it. The
+    // fallback is the FAB's own M3 default.
+    final color =
+        IconTheme.of(context).color ??
+        Theme.of(context).colorScheme.onPrimaryContainer;
+    return SvgPicture.asset(
+      'assets/agent-glyph.svg',
+      width: _size,
+      height: _size,
+      colorFilter: ColorFilter.mode(color, BlendMode.srcIn),
     );
   }
 }
