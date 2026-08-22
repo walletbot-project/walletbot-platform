@@ -267,6 +267,56 @@ class AppLocalizationsEs extends AppLocalizations {
       'No se pudo guardar la configuración. Intentá de nuevo.';
 
   @override
+  String get deleteUserAccount => 'Eliminar mi cuenta';
+
+  @override
+  String get deleteUserAccountDescription =>
+      'Eliminá tu cuenta y todos tus datos para siempre';
+
+  @override
+  String get deleteUserAccountConfirmTitle => '¿Eliminar tu cuenta?';
+
+  @override
+  String deleteUserAccountConfirmBody(String email) {
+    return 'Te vamos a enviar un enlace de confirmación a $email. Eliminar tu cuenta es permanente y no se puede deshacer.';
+  }
+
+  @override
+  String get deleteUserAccountSend => 'Enviar enlace';
+
+  @override
+  String get deleteUserAccountEmailSent =>
+      'Revisá tu correo: te enviamos un enlace para confirmar la eliminación.';
+
+  @override
+  String get deleteUserAccountFailed =>
+      'No pudimos enviar el correo. Probá de nuevo en unos minutos.';
+
+  @override
+  String get deleteUserAccountAlreadyDeleted => 'Esa cuenta ya fue eliminada.';
+
+  @override
+  String get deleteUserAccountRateLimited =>
+      'Ya pediste varios enlaces de eliminación. Esperá una hora y probá de nuevo.';
+
+  @override
+  String get accountDeletedBanner => 'Esta cuenta fue eliminada';
+
+  @override
+  String get accountDeletedRemove => 'Quitar';
+
+  @override
+  String get accountDeletedConfirmTitle =>
+      '¿Quitar esta cuenta del dispositivo?';
+
+  @override
+  String get accountDeletedConfirmBody =>
+      'La cuenta ya fue eliminada en el servidor. Esto borra también sus datos de este dispositivo, que son la última copia.';
+
+  @override
+  String get accountDeletedRemoveConfirm => 'Quitar';
+
+  @override
   String get updateRequiredTitle => 'Actualización obligatoria';
 
   @override
@@ -965,7 +1015,7 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String resetEmailSent(String email) {
-    return 'Si existe una cuenta para $email, le enviamos un enlace para restablecer la contraseña. El enlace se abre en el navegador.';
+    return 'Te enviamos un enlace a $email para restablecer tu contraseña. El enlace se abre en el navegador.';
   }
 
   @override
@@ -1015,6 +1065,23 @@ class AppLocalizationsEs extends AppLocalizations {
   @override
   String get emailStillNotVerified =>
       'Ese correo todavía no está verificado. Te enviamos un enlace nuevo.';
+
+  @override
+  String accountNotFoundForEmail(String email) {
+    return 'No existe una cuenta para $email.';
+  }
+
+  @override
+  String get emailAlreadyVerified =>
+      'Ese correo ya está verificado. Iniciá sesión con tu cuenta.';
+
+  @override
+  String get tooManyAttempts =>
+      'Demasiados intentos. Esperá un minuto y probá de nuevo.';
+
+  @override
+  String get emailSendFailed =>
+      'No pudimos enviar el correo. Probá de nuevo en unos minutos.';
 
   @override
   String localAccountFailed(Object error) {

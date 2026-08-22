@@ -1,3 +1,5 @@
+import 'package:app/auth/account.dart';
+import 'package:app/auth/auth_controller.dart';
 import 'package:app/l10n/l10n.dart';
 import 'package:app/screens/settings.dart';
 import 'package:app/settings/display_settings.dart';
@@ -103,6 +105,35 @@ void main() {
       Brightness.dark,
     );
   });
+
+  testWidgets('shows the delete account tile only for remote accounts', (
+    tester,
+  ) async {
+    final settings = DisplaySettingsController(
+      store: MemoryDisplaySettingsStore(),
+    );
+    await tester.pumpWidget(_SettingsTestApp(settings: settings));
+    expect(find.text('Delete my account'), findsNothing);
+
+    final remote = _FakeAuthController(
+      active: const UserAccount(
+        id: 'u1',
+        type: AccountType.remote,
+        email: 'a@b.c',
+      ),
+    );
+    await tester.pumpWidget(_SettingsTestApp(settings: settings, auth: remote));
+    expect(find.text('Delete my account'), findsOneWidget);
+
+    await tester.tap(find.text('Delete my account'));
+    await tester.pumpAndSettle();
+    expect(find.text('Delete your account?'), findsOneWidget);
+    expect(find.textContaining('a@b.c'), findsOneWidget);
+
+    await tester.tap(find.text('Cancel'));
+    await tester.pumpAndSettle();
+    expect(find.text('Delete your account?'), findsNothing);
+  });
 }
 
 /// The choice pickers are bottom sheets only below [Breakpoints.medium] — at
@@ -131,16 +162,37 @@ void _expectVerticalOrder(WidgetTester tester, List<String> labels) {
   expect(positions, orderedEquals([...positions]..sort()));
 }
 
+/// SettingsScreen only reads `activeAccount`, so the fake overrides just
+/// that — a real AuthController would need ConvexClient, which can't
+/// initialize under `flutter test`. Never disposed, same as the controllers
+/// in auth_controller_email_flows_test.dart.
+class _FakeAuthController extends AuthController {
+  _FakeAuthController({UserAccount? active}) : _active = active;
+
+  final UserAccount? _active;
+
+  @override
+  UserAccount? get activeAccount => _active;
+}
+
+final _noAccountAuth = _FakeAuthController();
+
 class _SettingsTestApp extends StatelessWidget {
-  const _SettingsTestApp({required this.settings});
+  const _SettingsTestApp({required this.settings, this.auth});
 
   final DisplaySettingsController settings;
+  final AuthController? auth;
 
   @override
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: [
-        ChangeNotifierProvider.value(value: settings),
+        ChangeNotifierProvider<DisplaySettingsController>.value(
+          value: settings,
+        ),
+        ChangeNotifierProvider<AuthController>.value(
+          value: auth ?? _noAccountAuth,
+        ),
         ChangeNotifierProvider(
           create: (_) =>
               DefaultCurrencyController(accountId: 'test', isRemote: false),

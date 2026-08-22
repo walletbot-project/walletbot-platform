@@ -92,18 +92,35 @@ export function Settings() {
             icon: 'language',
             title: t.settings.language,
             value: languageLabel,
+            destructive: false,
+            onClick: () => setOpen('language'),
         },
         {
             key: 'theme' as const,
             icon: 'palette',
             title: t.settings.theme,
             value: themeLabel,
+            destructive: false,
+            onClick: () => setOpen('theme'),
         },
         {
             key: 'currency' as const,
             icon: 'attach_money',
             title: t.common.currency,
             value: settings?.defaultCurrency ?? '—',
+            destructive: false,
+            onClick: () => setOpen('currency'),
+        },
+        // Mirrors the native settings screen's fourth, destructive tile
+        // (apps/native/lib/screens/settings.dart). It opens the public
+        // deletion page, which prefills the email from the session.
+        {
+            key: 'delete-account' as const,
+            icon: 'person_off',
+            title: t.deleteAccount.tile,
+            value: t.deleteAccount.tileDescription,
+            destructive: true,
+            onClick: () => navigate('/delete-account'),
         },
     ]
 
@@ -130,14 +147,26 @@ export function Settings() {
                         <GroupedCard
                             key={tile.key}
                             radius={groupedRadius(index, tiles.length)}
-                            onClick={() => setOpen(tile.key)}
+                            onClick={tile.onClick}
                         >
                             <div className="flex items-center gap-4 px-4 py-4">
-                                <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-primary-container text-on-primary-container">
+                                <span
+                                    className={
+                                        tile.destructive
+                                            ? 'flex size-10 shrink-0 items-center justify-center rounded-full bg-error-container text-on-error-container'
+                                            : 'flex size-10 shrink-0 items-center justify-center rounded-full bg-primary-container text-on-primary-container'
+                                    }
+                                >
                                     <Icon name={tile.icon} filled size={22} />
                                 </span>
                                 <div className="flex min-w-0 flex-1 flex-col">
-                                    <span className="m3-body-large truncate">
+                                    <span
+                                        className={
+                                            tile.destructive
+                                                ? 'm3-body-large truncate text-error'
+                                                : 'm3-body-large truncate'
+                                        }
+                                    >
                                         {tile.title}
                                     </span>
                                     <span className="m3-body-small truncate text-on-surface-variant">
