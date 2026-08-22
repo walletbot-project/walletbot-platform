@@ -63,6 +63,11 @@ class RecordMicCapture implements MicCapture {
     noiseSuppress: true,
     autoGain: false,
     streamBufferSize: 3200,
+    // The plugin pauses capture on ANY audio-focus loss — a notification
+    // sound is enough — and its default mode (`pause`) never resumes it,
+    // leaving the mic silently dead. `pauseResume` resumes capture when
+    // focus returns (see record_android AudioRecorder.requestAudioFocus).
+    audioInterruption: AudioInterruptionMode.pauseResume,
     androidConfig: AndroidRecordConfig(
       audioSource: AndroidAudioSource.voiceCommunication,
     ),

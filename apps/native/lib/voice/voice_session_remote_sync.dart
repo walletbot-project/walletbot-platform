@@ -42,7 +42,10 @@ class VoiceSessionRemoteSync {
     _timer = null;
     if (_inFlight != null) {
       _trailing = true;
-      return _inFlight;
+      // Join the in-flight drain without leaking its error to this caller:
+      // the flush() call that started it already logs the failure and
+      // schedules the retry.
+      return _inFlight!.catchError((Object _) {});
     }
     final run = _drain();
     _inFlight = run;

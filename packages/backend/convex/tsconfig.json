@@ -11,6 +11,10 @@
         "jsx": "react-jsx",
         "skipLibCheck": true,
         "allowSyntheticDefaultImports": true,
+        /* process.env is used across runtimes (Convex provides it in both).
+         * Declared explicitly: node globals used to enter the program only
+         * via @google/genai's type references, which was accidental. */
+        "types": ["node"],
 
         /* These compiler options are required by Convex */
         "target": "ESNext",
