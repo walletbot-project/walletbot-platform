@@ -234,6 +234,44 @@ class AppLocalizationsEs extends AppLocalizations {
   String get yourAccounts => 'Tus cuentas';
 
   @override
+  String get currentAccount => 'Cuenta actual';
+
+  @override
+  String get otherAccounts => 'Otras cuentas';
+
+  @override
+  String get chooseAccountToContinue =>
+      'Elegí una cuenta para continuar, o agregá otra.';
+
+  @override
+  String get signOut => 'Cerrar sesión';
+
+  @override
+  String get deleteLocalAccount => 'Eliminar esta cuenta';
+
+  @override
+  String signOutConfirmTitle(String name) {
+    return '¿Cerrar sesión en «$name»?';
+  }
+
+  @override
+  String get signOutConfirmBody =>
+      'Se quitan de este dispositivo los datos de la cuenta. Tus datos siguen en tu cuenta: volvé a iniciar sesión para recuperarlos.';
+
+  @override
+  String get signOutUnsyncedWarning =>
+      'Hay cambios que todavía no se sincronizaron. Si cerrás sesión ahora, se pierden para siempre.';
+
+  @override
+  String deleteLocalAccountConfirmTitle(String name) {
+    return '¿Eliminar «$name»?';
+  }
+
+  @override
+  String get deleteLocalAccountConfirmBody =>
+      'Esta cuenta solo existe en este dispositivo. Al eliminarla, sus datos se borran para siempre: no hay copia en ningún otro lado.';
+
+  @override
   String get settings => 'Configuración';
 
   @override
