@@ -11,6 +11,11 @@ name: Staging Previews
 # Removing a label tears down what it created. Since create-staging-mobile
 # implies the web job, the backend + web preview are only torn down once
 # BOTH create-staging-web and create-staging-mobile are absent.
+#
+# On a `synchronize` push, `web` and `mobile` redeploy independently based on
+# which paths that specific push touched (see the `changes` job) — a
+# native-only commit doesn't recreate the backend preview (which would wipe
+# its data), and a backend-only commit doesn't rebuild the APK.
 on:
   pull_request:
     branches:
@@ -27,11 +32,69 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  web:
+  # Backend/web and mobile redeploy independently of each other based on what
+  # a `synchronize` push actually touched, so a native-only commit doesn't
+  # recreate the (data-wiping) backend preview, and a backend-only commit
+  # doesn't rebuild the APK. `labeled`/`opened`/`reopened`/`unlabeled` have no
+  # meaningful single-push diff, so those always mark everything changed —
+  # correct, since those are exactly the events that need to create things.
+  changes:
     runs-on: ubuntu-latest
     if: |
       contains(github.event.pull_request.labels.*.name, 'create-staging-web') ||
       contains(github.event.pull_request.labels.*.name, 'create-staging-mobile')
+    permissions:
+      contents: read
+    outputs:
+      backend: ${{ steps.filter.outputs.backend }}
+      native: ${{ steps.filter.outputs.native }}
+    steps:
+      - name: Detect changed areas
+        id: filter
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          EVENT_ACTION: ${{ github.event.action }}
+        run: |
+          set -uo pipefail
+
+          if [ "$EVENT_ACTION" != "synchronize" ]; then
+            echo "backend=true" >> "$GITHUB_OUTPUT"
+            echo "native=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          files="$(gh api "repos/${{ github.repository }}/compare/${{ github.event.before }}...${{ github.event.after }}" --jq '.files[].filename')"
+          if [ $? -ne 0 ]; then
+            echo "::warning::Could not diff ${{ github.event.before }}...${{ github.event.after }}; treating as changed"
+            echo "backend=true" >> "$GITHUB_OUTPUT"
+            echo "native=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          backend=false
+          native=false
+          while IFS= read -r f; do
+            [ -z "$f" ] && continue
+            case "$f" in
+              packages/backend/*|packages/shared/*|apps/web/*|.github/workflows/preview-deploy.yml|.github/actions/*)
+                backend=true ;;
+            esac
+            case "$f" in
+              apps/native/*|.github/workflows/preview-deploy.yml|.github/actions/*)
+                native=true ;;
+            esac
+          done <<< "$files"
+
+          echo "backend=$backend" >> "$GITHUB_OUTPUT"
+          echo "native=$native" >> "$GITHUB_OUTPUT"
+
+  web:
+    needs: changes
+    runs-on: ubuntu-latest
+    if: |
+      (contains(github.event.pull_request.labels.*.name, 'create-staging-web') ||
+       contains(github.event.pull_request.labels.*.name, 'create-staging-mobile')) &&
+      needs.changes.outputs.backend == 'true'
     permissions:
       contents: read
       pull-requests: write
@@ -289,14 +352,56 @@ jobs:
             🗑️ **Landing staging preview removed**
 
   mobile:
-    needs: web
+    needs: [web, changes]
     runs-on: ubuntu-latest
-    if: contains(github.event.pull_request.labels.*.name, 'create-staging-mobile')
+    if: |
+      contains(github.event.pull_request.labels.*.name, 'create-staging-mobile') &&
+      needs.changes.outputs.native == 'true' &&
+      (needs.web.result == 'success' || needs.web.result == 'skipped')
     permissions:
       contents: read
       pull-requests: write
     steps:
       - uses: actions/checkout@v4
+
+      - uses: ./.github/actions/resolve-pr-branch
+        id: branch
+
+      # `web` only redeploys the backend when this push touched backend/web
+      # paths (see the `changes` job) — most pushes to a native-only PR won't.
+      # When it was skipped, look up the already-running preview's URL instead
+      # of redeploying it (redeploying would wipe the preview's data on every
+      # unrelated native commit).
+      - name: Resolve existing backend preview URL
+        id: existing-backend
+        if: needs.web.result == 'skipped'
+        env:
+          CONVEX_TEAM_ACCESS_TOKEN: ${{ secrets.CONVEX_TEAM_ACCESS_TOKEN }}
+          CONVEX_TEAM_SLUG: ${{ vars.CONVEX_TEAM_SLUG }}
+          CONVEX_PROJECT_SLUG: ${{ vars.CONVEX_PROJECT_SLUG }}
+          BRANCH_NAME: ${{ steps.branch.outputs.name }}
+        run: |
+          set -euo pipefail
+
+          project_id="$(curl -sf \
+            -H "Authorization: Bearer $CONVEX_TEAM_ACCESS_TOKEN" \
+            "https://api.convex.dev/v1/teams/$CONVEX_TEAM_SLUG/projects/$CONVEX_PROJECT_SLUG/deployment?defaultProd=true" \
+            | jq -r '.projectId')"
+
+          url="$(curl -sf \
+            -H "Authorization: Bearer $CONVEX_TEAM_ACCESS_TOKEN" \
+            "https://api.convex.dev/v1/projects/$project_id/list_deployments?deploymentType=preview" \
+            | jq -r --arg branch "$BRANCH_NAME" '[.[] | select(.previewIdentifier == $branch)][0].deploymentUrl // empty')"
+
+          if [ -z "$url" ]; then
+            echo "::error::No existing Convex preview deployment found for branch $BRANCH_NAME — add the create-staging-web label (or push a backend change) at least once before mobile-only pushes can resolve its URL."
+            exit 1
+          fi
+
+          {
+            echo "convex_url=$url"
+            echo "convex_site_url=${url/.convex.cloud/.convex.site}"
+          } >> "$GITHUB_OUTPUT"
 
       - uses: subosito/flutter-action@v2
         with:
@@ -324,8 +429,8 @@ jobs:
       - name: Build staging APK
         working-directory: apps/native
         env:
-          CONVEX_URL: ${{ needs.web.outputs.convex_url }}
-          CONVEX_SITE_URL: ${{ needs.web.outputs.convex_site_url }}
+          CONVEX_URL: ${{ needs.web.outputs.convex_url || steps.existing-backend.outputs.convex_url }}
+          CONVEX_SITE_URL: ${{ needs.web.outputs.convex_site_url || steps.existing-backend.outputs.convex_site_url }}
           GOOGLE_SERVER_CLIENT_ID: ${{ secrets.GOOGLE_SERVER_CLIENT_ID }}
         run: |
           flutter build apk --debug \
@@ -345,7 +450,7 @@ jobs:
           body: |
             🚀 **Mobile staging APK built**
 
-            Connected to this PR's staging backend: ${{ needs.web.outputs.convex_url }}
+            Connected to this PR's staging backend: ${{ needs.web.outputs.convex_url || steps.existing-backend.outputs.convex_url }}
 
             Download it from the [workflow run artifacts](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) (requires a GitHub login). Remove the `create-staging-mobile` label to remove this build.
 
