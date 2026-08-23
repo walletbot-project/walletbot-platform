@@ -315,6 +315,12 @@ jobs:
       - run: flutter pub get
         working-directory: apps/native
 
+      # --debug, not --release: apps/native/lib/app_config/bootstrap.dart only
+      # skips the L0 bootstrap fetch (which always wins in release builds and
+      # would silently redirect this APK to production once it succeeds) when
+      # `!kReleaseMode && AppConfig.hasConfiguredBackendUrls` — i.e. a debug
+      # build with these --dart-define values honors them instead of
+      # overriding them from https://app.walletbot.live/_native/bootstrap.json.
       - name: Build staging APK
         working-directory: apps/native
         env:
@@ -322,7 +328,7 @@ jobs:
           CONVEX_SITE_URL: ${{ needs.web.outputs.convex_site_url }}
           GOOGLE_SERVER_CLIENT_ID: ${{ secrets.GOOGLE_SERVER_CLIENT_ID }}
         run: |
-          flutter build apk --release \
+          flutter build apk --debug \
             --dart-define=CONVEX_URL="$CONVEX_URL" \
             --dart-define=CONVEX_SITE_URL="$CONVEX_SITE_URL" \
             --dart-define=GOOGLE_SERVER_CLIENT_ID="$GOOGLE_SERVER_CLIENT_ID"
@@ -330,7 +336,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: staging-apk-pr-${{ github.event.pull_request.number }}
-          path: apps/native/build/app/outputs/flutter-apk/app-release.apk
+          path: apps/native/build/app/outputs/flutter-apk/app-debug.apk
           retention-days: 14
 
       - uses: ./.github/actions/sticky-pr-comment
