@@ -14,6 +14,7 @@ type ReservedMetricExport = Doc<'telemetryMetrics'> & {
     cumulativeValue: number
     cumulativeStartTime: number
 }
+type ReservedMetricName = ReservedMetricExport['name']
 
 const parseKeyValueList = (raw: string | undefined): Record<string, string> => {
     if (!raw) return {}
@@ -143,6 +144,7 @@ const toOtlpMetricAttributes = (
         }
     }> = [{ key: 'metric.source', value: { stringValue: metric.source } }]
 
+    const exportableKeys = exportableMetricAttributeKeys(metric.name)
     const metricAttributes = metric.attributes
     if (
         typeof metricAttributes === 'object' &&
@@ -150,6 +152,7 @@ const toOtlpMetricAttributes = (
         !Array.isArray(metricAttributes)
     ) {
         for (const [key, value] of Object.entries(metricAttributes)) {
+            if (!exportableKeys.has(key)) continue
             if (typeof value === 'string') {
                 attributes.push({ key, value: { stringValue: value } })
             } else if (typeof value === 'number' && Number.isFinite(value)) {
@@ -173,6 +176,37 @@ const toOtlpMetricAttributes = (
         })
     }
     return attributes
+}
+
+const exportableMetricAttributeKeys = (name: ReservedMetricName): Set<string> => {
+    switch (name) {
+        case 'business.financial_accounts.created_count':
+        case 'business.movements.created_count':
+            return new Set(['created_by', 'ingest_path'])
+        case 'business.transfers.created_count':
+            return new Set(['created_by', 'ingest_path', 'cross_currency'])
+        case 'business.user_accounts.created_count':
+            return new Set(['auth_method'])
+        case 'business.user_accounts.signed_in_count':
+            return new Set(['auth_method', 'client_platform'])
+        case 'agent.session.cost_usd':
+        case 'agent.interaction.cost_usd':
+            return new Set([
+                'model',
+                'mode',
+                'cost_source',
+                'pricing_effective_from',
+            ])
+        case 'agent.user.monthly_cost_usd':
+            return new Set(['user_hash', 'rank', 'month', 'model', 'mode'])
+        case 'agent.interactions.completed_count':
+            return new Set(['model', 'mode', 'interaction_type'])
+        case 'agent.session.cost_bucket_count':
+            return new Set(['model', 'mode', 'cost_bucket'])
+        case 'business.users.registered_total':
+        case 'agent.session.cost_outlier_count':
+            return new Set()
+    }
 }
 
 const toOtlpMetricsPayload = (metrics: Array<ReservedMetricExport>) => {

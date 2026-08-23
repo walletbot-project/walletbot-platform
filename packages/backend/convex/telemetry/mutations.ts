@@ -227,7 +227,7 @@ export const reserveEventExports = internalMutation({
             .withIndex('by_exportStatus_and_receivedAt', (q) =>
                 q.eq('exportStatus', 'pending'),
             )
-            .take(Math.min(Math.max(args.limit, 1), 100))
+            .take(Math.min(Math.max(args.limit, 1), 1000))
 
         for (const row of rows) {
             await ctx.db.patch(row._id, { exportStatus: 'exporting' })
@@ -247,7 +247,7 @@ export const reserveMetricExports = internalMutation({
             .withIndex('by_exportStatus_and_receivedAt', (q) =>
                 q.eq('exportStatus', 'pending'),
             )
-            .take(Math.min(Math.max(args.limit, 1), 100))
+            .take(Math.min(Math.max(args.limit, 1), 1000))
 
         const reserved = []
         for (const metric of rows) {
@@ -338,7 +338,7 @@ export const resetRetryableFailedEvents = internalMutation({
             .withIndex('by_exportStatus_and_receivedAt', (q) =>
                 q.eq('exportStatus', 'failed'),
             )
-            .take(Math.min(Math.max(args.limit, 1), 100))
+            .take(Math.min(Math.max(args.limit, 1), 1000))
 
         let reset = 0
         for (const row of rows) {
@@ -394,7 +394,7 @@ export const resetRetryableFailedMetrics = internalMutation({
             .withIndex('by_exportStatus_and_receivedAt', (q) =>
                 q.eq('exportStatus', 'failed'),
             )
-            .take(Math.min(Math.max(args.limit, 1), 100))
+            .take(Math.min(Math.max(args.limit, 1), 1000))
 
         let reset = 0
         let discarded = 0
@@ -442,7 +442,7 @@ export const deleteOldExportedTelemetryMetrics = internalMutation({
             .withIndex('by_exportStatus_and_receivedAt', (q) =>
                 q.eq('exportStatus', 'exported').lt('receivedAt', cutoff),
             )
-            .take(Math.min(Math.max(args.limit, 1), 100))
+            .take(Math.min(Math.max(args.limit, 1), 1000))
 
         for (const row of rows) {
             await ctx.db.delete(row._id)

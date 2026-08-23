@@ -52,7 +52,7 @@ crons.interval(
     internal.telemetry.mutations.deleteOldExportedTelemetryMetrics,
     {
         olderThanMs: 90 * 24 * 60 * 60 * 1000,
-        limit: 100,
+        limit: 1000,
     },
 )
 
@@ -62,7 +62,7 @@ crons.interval(
     internal.telemetry.mutations.deleteOldExportedTelemetryEvents,
     {
         olderThanMs: 90 * 24 * 60 * 60 * 1000,
-        limit: 100,
+        limit: 1000,
     },
 )
 
@@ -72,7 +72,7 @@ crons.interval(
     internal.telemetry.mutations.deleteOldFailedTelemetryMetrics,
     {
         olderThanMs: 14 * 24 * 60 * 60 * 1000,
-        limit: 100,
+        limit: 1000,
     },
 )
 
@@ -82,7 +82,7 @@ crons.interval(
     internal.telemetry.mutations.deleteOldFailedTelemetryEvents,
     {
         olderThanMs: 14 * 24 * 60 * 60 * 1000,
-        limit: 100,
+        limit: 1000,
     },
 )
 
@@ -92,7 +92,7 @@ crons.interval(
     internal.telemetry.mutations.deleteOldAgentUsageSamples,
     {
         olderThanMs: 90 * 24 * 60 * 60 * 1000,
-        limit: 100,
+        limit: 1000,
     },
 )
 

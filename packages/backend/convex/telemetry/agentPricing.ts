@@ -115,10 +115,7 @@ export const normalizeAgentCostMetric = (
 ): MetricInput | null => {
     if (!isAgentCostMetric(metric.name)) return metric
 
-    if (!hasTokenAttributes(metric.attributes)) {
-        if (!Number.isFinite(metric.value) || metric.value <= 0) return null
-        return metric
-    }
+    if (!hasTokenAttributes(metric.attributes)) return null
 
     const model = stringAttribute(metric.attributes, 'model') ?? 'unknown'
     const price = priceFor(model, metric.timestamp)

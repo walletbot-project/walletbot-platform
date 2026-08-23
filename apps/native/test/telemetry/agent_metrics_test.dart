@@ -112,7 +112,6 @@ void main() {
       'model': 'gemini-3.1-flash-live-preview',
       'mode': 'text',
       'cost_source': 'estimated',
-      'token_output_text': 1000,
       'token_total': 1000,
     });
 

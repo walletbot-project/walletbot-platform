@@ -181,14 +181,6 @@ class AgentMetrics {
       totalTokens: responseTokens,
       details: responseDetails,
     );
-    if (!attributes.containsKey('token_input_text') &&
-        !attributes.containsKey('token_input_audio') &&
-        !attributes.containsKey('token_input_media') &&
-        !attributes.containsKey('token_output_text') &&
-        !attributes.containsKey('token_output_audio') &&
-        !attributes.containsKey('token_output_media')) {
-      _addPositive(attributes, 'token_output_text', totalTokens);
-    }
     _addPositive(
       attributes,
       'token_thinking',

@@ -136,7 +136,7 @@
                 "wideLayout": true
               }
             },
-            "version": "13.2.0-31683987170"
+            "version": "13.2.0-31997728368"
           }
         }
       },
@@ -220,7 +220,7 @@
                 "wideLayout": true
               }
             },
-            "version": "13.2.0-31683987170"
+            "version": "13.2.0-31997728368"
           }
         }
       },
@@ -324,7 +324,7 @@
                 }
               }
             },
-            "version": "13.2.0-31683987170"
+            "version": "13.2.0-31997728368"
           }
         }
       },
@@ -434,7 +434,7 @@
                 "xTickLabelSpacing": 0
               }
             },
-            "version": "13.2.0-31683987170"
+            "version": "13.2.0-31997728368"
           }
         }
       },
@@ -547,7 +547,7 @@
                 "showHeader": true
               }
             },
-            "version": "13.2.0-31683987170"
+            "version": "13.2.0-31997728368"
           }
         }
       },
@@ -662,7 +662,7 @@
                 }
               }
             },
-            "version": "13.2.0-31683987170"
+            "version": "13.2.0-31997728368"
           }
         }
       },
@@ -747,7 +747,7 @@
                 "wideLayout": true
               }
             },
-            "version": "13.2.0-31683987170"
+            "version": "13.2.0-31997728368"
           }
         }
       },
@@ -769,9 +769,9 @@
                       "group": "prometheus",
                       "kind": "DataQuery",
                       "spec": {
-                        "editorMode": "builder",
+                        "editorMode": "code",
                         "exemplar": false,
-                        "expr": "count(agent_session_cost_usd)",
+                        "expr": "sum by (mode) (increase(agent_session_cost_bucket_count[$__range]))",
                         "instant": true,
                         "legendFormat": "{{mode}}",
                         "range": true
@@ -829,7 +829,7 @@
                 "wideLayout": true
               }
             },
-            "version": "13.2.0-31683987170"
+            "version": "13.2.0-31997728368"
           }
         }
       },
@@ -933,7 +933,7 @@
                 }
               }
             },
-            "version": "13.2.0-31683987170"
+            "version": "13.2.0-31997728368"
           }
         }
       },
@@ -1017,7 +1017,7 @@
                 "wideLayout": true
               }
             },
-            "version": "13.2.0-31683987170"
+            "version": "13.2.0-31997728368"
           }
         }
       },
@@ -1120,7 +1120,7 @@
                 ]
               }
             },
-            "version": "13.2.0-31683987170"
+            "version": "13.2.0-31997728368"
           }
         }
       }
@@ -1335,7 +1335,7 @@
         "1d"
       ],
       "fiscalYearStartMonth": 0,
-      "from": "now-12h",
+      "from": "now-30d",
       "hideTimepicker": false,
       "timezone": "browser",
       "to": "now"
