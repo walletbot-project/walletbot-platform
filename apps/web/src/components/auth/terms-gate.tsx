@@ -11,6 +11,7 @@ import {
     AuthScaffold,
 } from '@/components/auth/auth-scaffold'
 import { TermsCheckbox } from '@/components/auth/terms-checkbox'
+import { useAuth } from '@/hooks/use-auth'
 import { useFormatLocale, useT } from '@/lib/i18n'
 
 /**
@@ -24,6 +25,9 @@ import { useFormatLocale, useT } from '@/lib/i18n'
  * - anything else → the same panel with a "Not now" escape, once per page
  *   load — `reacceptRequested` today, and by contract any status this build
  *   doesn't recognize, so a future state can never hard-block an old client.
+ *
+ * Either panel can also sign out: declining the documents has to be possible,
+ * and the gate replaces the whole app, account menu included.
  *
  * Propagation: the query is reactive to the acceptance ROW, not to the policy,
  * which lives in code. Convex subscriptions are invalidated by writes to the
@@ -74,10 +78,13 @@ function TermsGatePanel({
 }) {
     const t = useT()
     const formatLocale = useFormatLocale()
+    const auth = useAuth()
     const accept = useMutation(api.v1.legal.mutations.accept)
     const [accepted, setAccepted] = useState(false)
     const [submitting, setSubmitting] = useState(false)
+    const [signingOut, setSigningOut] = useState(false)
     const [error, setError] = useState<string | null>(null)
+    const busy = submitting || signingOut
 
     const handleContinue = async () => {
         setError(null)
@@ -89,6 +96,22 @@ function TermsGatePanel({
         } catch {
             setError(t.auth.termsAcceptFailed)
             setSubmitting(false)
+        }
+    }
+
+    // The way out for someone who does not want to accept. Without it the
+    // blocking gate has no exit at all: it replaces the whole app, including
+    // the account menu that holds the only other sign-out.
+    const handleSignOut = async () => {
+        setError(null)
+        setSigningOut(true)
+        try {
+            await auth.signOut()
+            // No reset on success: signing out unmounts this panel (the guard
+            // above it redirects to /login).
+        } catch {
+            setError(t.auth.termsSignOutFailed)
+            setSigningOut(false)
         }
     }
 
@@ -118,27 +141,35 @@ function TermsGatePanel({
                         <TermsCheckbox
                             isSelected={accepted}
                             onChange={setAccepted}
-                            isDisabled={submitting}
+                            isDisabled={busy}
                         />
                         {error ? <AuthErrorNote message={error} /> : null}
                         <AuthPrimaryButton
                             label={t.auth.termsContinue}
                             submitting={submitting}
-                            isDisabled={!accepted}
+                            isDisabled={!accepted || signingOut}
                             onPress={() => void handleContinue()}
                         />
-                        {onDismiss !== null ? (
-                            <div className="flex justify-center">
+                        <div className="flex flex-wrap items-center justify-center gap-1">
+                            {onDismiss !== null ? (
                                 <Button
                                     type="button"
                                     variant="text"
-                                    isDisabled={submitting}
+                                    isDisabled={busy}
                                     onPress={onDismiss}
                                 >
                                     {t.auth.termsLater}
                                 </Button>
-                            </div>
-                        ) : null}
+                            ) : null}
+                            <Button
+                                type="button"
+                                variant="text"
+                                isDisabled={busy}
+                                onPress={() => void handleSignOut()}
+                            >
+                                {t.nav.signOut}
+                            </Button>
+                        </div>
                     </div>
                 </AuthPanel>
             </div>

@@ -21,12 +21,11 @@ type SignUpArgs = {
     password: string
     /**
      * Legal-documents version shown next to the acceptance checkbox. The
-     * endpoint validates it and hands it to better-auth as an
-     * `additionalFields` entry, so the acceptance is recorded against the real
-     * user insert by the user-create hook (see `convex/auth.ts`). Web sign-up
-     * moved onto this endpoint, so dropping the field here would silently lose
-     * the acceptance and leave the post-login gate re-prompting every new
-     * account.
+     * endpoint validates it and records the acceptance in `termsAcceptances`
+     * against the account it just created (see `convex/authNative/http.ts`).
+     * Web sign-up moved onto this endpoint, so dropping the field here would
+     * silently lose the acceptance and leave the post-login gate re-prompting
+     * every new account.
      */
     termsAcceptedVersion: string
 }

@@ -217,6 +217,7 @@ export const en: Messages = {
         termsDeadline: (p) =>
             `We updated the documents. You can review and accept them until ${p.date}.`,
         termsAcceptFailed: 'Could not record your acceptance. Try again.',
+        termsSignOutFailed: 'Could not sign you out. Try again.',
     },
 
     dashboard: {

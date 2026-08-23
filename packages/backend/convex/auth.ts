@@ -42,23 +42,34 @@ const withWebCallback = (rawUrl: string, landingPath: string): string => {
     return url.toString()
 }
 
+/**
+ * Which sign-up path wrote a user row, from the better-auth endpoint that ran,
+ * or `null` when the write is not an account creation we count.
+ *
+ * `/sign-in/social` only creates a user on its ID-token branch (the redirect
+ * branch returns a URL and writes nothing), and the native app is its only
+ * caller, always with Google's token. The web social flow creates its user in
+ * the OAuth callback instead — a different path, deliberately not counted
+ * here, exactly as before.
+ */
+const accountCreationMethod = (
+    path: string | undefined,
+): 'email_password' | 'google' | null => {
+    switch (path) {
+        case '/sign-up/email':
+            return 'email_password'
+        case '/sign-in/social':
+            return 'google'
+        default:
+            return null
+    }
+}
+
 export const createAuth = (ctx: GenericCtx<DataModel>) => {
     return betterAuth({
         baseURL: convexSiteUrl,
         trustedOrigins: [siteUrl, 'flutter://'],
         database: authComponent.adapter(ctx),
-        user: {
-            additionalFields: {
-                // Legal-documents version the client showed at sign-up.
-                // Carried through /sign-up/email so the create hook below can
-                // record the acceptance against the real user insert; the
-                // canonical record lives in the `termsAcceptances` table.
-                termsAcceptedVersion: {
-                    type: 'string',
-                    required: false,
-                },
-            },
-        },
         emailAndPassword: {
             enabled: true,
             requireEmailVerification: true,
@@ -90,38 +101,28 @@ export const createAuth = (ctx: GenericCtx<DataModel>) => {
                     // new account from a duplicate attempt. This hook only runs
                     // when a row is actually written, so duplicates never count.
                     //
-                    // Scoped to the email path: social sign-in creates users
-                    // through `/sign-in/social`, and `googleSignIn` in
-                    // `authNative/http.ts` already records those.
+                    // Native Google sign-in is here for the same reason: its
+                    // `/sign-in/social` response carries no "is this a new
+                    // user" flag at all (`{redirect, token, url, user}`), so
+                    // `authNative/http.ts` cannot tell either.
+                    //
+                    // Terms acceptance is deliberately NOT recorded here. It
+                    // would need a `user.additionalFields` entry to reach this
+                    // hook, and the better-auth component's `create` validator
+                    // is generated from its own schema — an unknown field
+                    // fails the whole insert. The auth endpoints record it
+                    // directly instead (`authNative/http.ts`).
                     after: async (user, context) => {
-                        if (context?.path !== '/sign-up/email') return
+                        const authMethod = accountCreationMethod(context?.path)
+                        if (authMethod === null) return
                         await requireRunMutationCtx(ctx).runMutation(
                             internal.telemetry.mutations
                                 .recordUserAccountCreated,
                             {
                                 userId: user.id,
-                                authMethod: 'email_password',
+                                authMethod,
                             },
                         )
-                        // Terms acceptance ticked on the sign-up form (web
-                        // client and the native /auth/email/sign-up endpoint
-                        // both pass it through the sign-up body). Recording
-                        // hangs off the real insert for the same reason as
-                        // the telemetry above; accounts created without it
-                        // are re-prompted by the post-auth gate.
-                        const termsAcceptedVersion = user.termsAcceptedVersion
-                        if (
-                            typeof termsAcceptedVersion === 'string' &&
-                            termsAcceptedVersion.length > 0
-                        ) {
-                            await requireRunMutationCtx(ctx).runMutation(
-                                internal.legal.internal.recordSignupAcceptance,
-                                {
-                                    userId: user.id,
-                                    documentVersion: termsAcceptedVersion,
-                                },
-                            )
-                        }
                     },
                 },
             },

@@ -163,8 +163,8 @@ export function Login({ mode }: { mode: AuthMode }) {
                 name: name || email,
                 email,
                 password,
-                // Recorded against the real user insert by the user-create
-                // hook (packages/backend/convex/auth.ts).
+                // Recorded in `termsAcceptances` by the endpoint itself
+                // (packages/backend/convex/authNative/http.ts).
                 termsAcceptedVersion: legalVersion,
             })
 

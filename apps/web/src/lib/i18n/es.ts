@@ -237,6 +237,7 @@ export const es = {
             `Actualizamos los documentos. Podés revisarlos y aceptarlos hasta el ${p.date}.`,
         termsAcceptFailed:
             'No se pudo registrar tu aceptación. Probá de nuevo.',
+        termsSignOutFailed: 'No se pudo cerrar la sesión. Probá de nuevo.',
     },
 
     dashboard: {

@@ -290,8 +290,9 @@ class _LoginScreenState extends State<LoginScreen> {
     final l10n = context.l10n;
     try {
       // In sign-up mode the ticked checkbox travels with the request and the
-      // backend records it if this creates the account; otherwise a new
-      // Google user is caught by the post-auth acceptance gate.
+      // backend records the acceptance for the resolved account; without it
+      // (sign-in mode, or an unticked box) a new Google user is caught by the
+      // post-auth acceptance gate instead.
       await context.read<AuthController>().signInWithGoogle(
         rejectExisting: widget.canDismiss,
         termsAcceptedVersion:

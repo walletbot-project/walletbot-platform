@@ -56,133 +56,146 @@ class _TermsAcceptanceScreenState extends State<TermsAcceptanceScreen> {
 
     return Scaffold(
       body: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
-          children: [
-            Align(
-              alignment: Alignment.topCenter,
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 480),
-                // Mirrors `_Panel` in screens/login.dart so the gate reads as
-                // part of the same auth surface.
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    color: colors.surface.withValues(alpha: 0.92),
-                    borderRadius: BorderRadius.circular(26),
-                    border: Border.all(
-                      color: colors.outlineVariant.withValues(alpha: 0.8),
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: colors.shadow.withValues(alpha: 0.1),
-                        blurRadius: 30,
-                        offset: const Offset(0, 18),
+        // Centred in the viewport, and still scrollable once the panel is
+        // taller than the window (large text scales, small phones): the
+        // minHeight floor makes the scroll view's content fill the viewport so
+        // Center has room to work, without ever forcing a scrollbar of its
+        // own. The web gate's AuthScaffold does the same with `my-auto`.
+        child: LayoutBuilder(
+          builder: (context, constraints) => SingleChildScrollView(
+            child: ConstrainedBox(
+              constraints: BoxConstraints(minHeight: constraints.maxHeight),
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
+                child: Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 480),
+                    // Mirrors `_Panel` in screens/login.dart so the gate reads as
+                    // part of the same auth surface.
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        color: colors.surface.withValues(alpha: 0.92),
+                        borderRadius: BorderRadius.circular(26),
+                        border: Border.all(
+                          color: colors.outlineVariant.withValues(alpha: 0.8),
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: colors.shadow.withValues(alpha: 0.1),
+                            blurRadius: 30,
+                            offset: const Offset(0, 18),
+                          ),
+                        ],
                       ),
-                    ],
-                  ),
-                  child: Padding(
-                    padding: const EdgeInsets.all(18),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        Row(
+                      child: Padding(
+                        padding: const EdgeInsets.all(18),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
-                            Container(
-                              width: 42,
-                              height: 42,
-                              decoration: BoxDecoration(
-                                color: colors.primaryContainer,
-                                borderRadius: BorderRadius.circular(14),
+                            Row(
+                              children: [
+                                Container(
+                                  width: 42,
+                                  height: 42,
+                                  decoration: BoxDecoration(
+                                    color: colors.primaryContainer,
+                                    borderRadius: BorderRadius.circular(14),
+                                  ),
+                                  child: Icon(
+                                    Icons.verified_user_rounded,
+                                    color: colors.onPrimaryContainer,
+                                    size: 22,
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        context.l10n.termsGateTitle,
+                                        style: theme.textTheme.titleMedium
+                                            ?.copyWith(
+                                              fontWeight: FontWeight.w900,
+                                            ),
+                                      ),
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        context.l10n.termsGateDescription,
+                                        style: theme.textTheme.bodySmall
+                                            ?.copyWith(
+                                              color: colors.onSurfaceVariant,
+                                              fontWeight: FontWeight.w600,
+                                              height: 1.2,
+                                            ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                            if (deadline != null) ...[
+                              const SizedBox(height: 12),
+                              Text(
+                                context.l10n.termsDeadline(deadline),
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  color: colors.onSurfaceVariant,
+                                  fontWeight: FontWeight.w600,
+                                ),
                               ),
-                              child: Icon(
-                                Icons.verified_user_rounded,
-                                color: colors.onPrimaryContainer,
-                                size: 22,
+                            ],
+                            const SizedBox(height: 18),
+                            TermsAcceptanceCheckbox(
+                              value: _accepted,
+                              enabled: !_submitting,
+                              onChanged: (value) =>
+                                  setState(() => _accepted = value),
+                            ),
+                            const SizedBox(height: 16),
+                            SizedBox(
+                              height: 54,
+                              child: FilledButton(
+                                onPressed: _submitting || !_accepted
+                                    ? null
+                                    : () => unawaited(_continue()),
+                                style: FilledButton.styleFrom(
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(16),
+                                  ),
+                                ),
+                                child: _submitting
+                                    ? const SizedBox.square(
+                                        dimension: 20,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                        ),
+                                      )
+                                    : Text(context.l10n.termsContinue),
                               ),
                             ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    context.l10n.termsGateTitle,
-                                    style: theme.textTheme.titleMedium
-                                        ?.copyWith(fontWeight: FontWeight.w900),
-                                  ),
-                                  const SizedBox(height: 2),
-                                  Text(
-                                    context.l10n.termsGateDescription,
-                                    style: theme.textTheme.bodySmall?.copyWith(
-                                      color: colors.onSurfaceVariant,
-                                      fontWeight: FontWeight.w600,
-                                      height: 1.2,
-                                    ),
-                                  ),
-                                ],
+                            if (dismissible) ...[
+                              const SizedBox(height: 6),
+                              Center(
+                                child: TextButton(
+                                  onPressed: _submitting
+                                      ? null
+                                      : () => context
+                                            .read<TermsAcceptanceController>()
+                                            .dismissPrompt(),
+                                  child: Text(context.l10n.termsLater),
+                                ),
                               ),
-                            ),
+                            ],
                           ],
                         ),
-                        if (deadline != null) ...[
-                          const SizedBox(height: 12),
-                          Text(
-                            context.l10n.termsDeadline(deadline),
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              color: colors.onSurfaceVariant,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ],
-                        const SizedBox(height: 18),
-                        TermsAcceptanceCheckbox(
-                          value: _accepted,
-                          enabled: !_submitting,
-                          onChanged: (value) =>
-                              setState(() => _accepted = value),
-                        ),
-                        const SizedBox(height: 16),
-                        SizedBox(
-                          height: 54,
-                          child: FilledButton(
-                            onPressed: _submitting || !_accepted
-                                ? null
-                                : () => unawaited(_continue()),
-                            style: FilledButton.styleFrom(
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(16),
-                              ),
-                            ),
-                            child: _submitting
-                                ? const SizedBox.square(
-                                    dimension: 20,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                    ),
-                                  )
-                                : Text(context.l10n.termsContinue),
-                          ),
-                        ),
-                        if (dismissible) ...[
-                          const SizedBox(height: 6),
-                          Center(
-                            child: TextButton(
-                              onPressed: _submitting
-                                  ? null
-                                  : () => context
-                                        .read<TermsAcceptanceController>()
-                                        .dismissPrompt(),
-                              child: Text(context.l10n.termsLater),
-                            ),
-                          ),
-                        ],
-                      ],
+                      ),
                     ),
                   ),
                 ),
               ),
             ),
-          ],
+          ),
         ),
       ),
     );

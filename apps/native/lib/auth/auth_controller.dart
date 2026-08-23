@@ -55,9 +55,10 @@ class AuthController extends ChangeNotifier {
   }
 
   /// [termsAcceptedVersion] carries the legal-documents version the user
-  /// accepted on the sign-up panel; the backend records it only when this
-  /// sign-in actually creates the account. Accounts that end up without a
-  /// record are re-prompted by the in-app acceptance gate.
+  /// accepted on the sign-up panel, and must be sent ONLY when the box was
+  /// actually ticked: the backend records it against whatever account this
+  /// sign-in resolves to, created here or pre-existing. Accounts that end up
+  /// without a record are re-prompted by the in-app acceptance gate.
   Future<UserAccount> signInWithGoogle({
     bool rejectExisting = false,
     String? termsAcceptedVersion,

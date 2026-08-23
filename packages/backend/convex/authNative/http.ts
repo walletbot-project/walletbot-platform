@@ -112,10 +112,35 @@ type NativeAuthUser = {
     image?: string | null
 }
 
-const isNewSocialUserResult = (value: unknown): boolean => {
-    if (typeof value !== 'object' || value === null) return false
-    const record = value as Record<string, unknown>
-    return record.isNewUser === true || record.newUser === true
+/**
+ * Files the acceptance ticked on a sign-up panel against the account that
+ * request resolved to.
+ *
+ * Recorded here rather than through a better-auth `user.additionalFields`
+ * entry: the acceptance would then travel as a column on the user row, and the
+ * better-auth component's `create` validator is generated from its own schema —
+ * a field it does not know fails the insert, which took the whole sign-up down
+ * with it.
+ *
+ * A failure must never break account creation, so it is swallowed: the
+ * post-auth gate re-prompts any account that ends up without a record.
+ */
+const recordSignupTerms = async (
+    ctx: ActionCtx,
+    userId: string,
+    documentVersion: string,
+): Promise<void> => {
+    try {
+        await ctx.runMutation(internal.legal.internal.recordSignupAcceptance, {
+            userId,
+            documentVersion,
+        })
+    } catch (err) {
+        console.error(
+            'authNative: recording signup terms acceptance failed',
+            err instanceof Error ? (err.stack ?? err.message) : String(err),
+        )
+    }
 }
 
 const issueNativeSession = async (
@@ -194,28 +219,21 @@ const googleSignIn = corsHttpAction(async (ctx, req) => {
         return jsonError(500, 'sign_in_failed', 'sign-in did not return a user')
     }
 
-    if (isNewSocialUserResult(result)) {
-        await ctx.runMutation(
-            internal.telemetry.mutations.recordUserAccountCreated,
-            {
-                userId: result.user.id,
-                authMethod: 'google',
-            },
-        )
-        // Google account creation happens through the sign-in call, so the
-        // acceptance ticked on the native sign-up panel arrives here rather
-        // than through /sign-up/email. Recorded only for genuinely new users;
-        // existing accounts without a record hit the post-auth gate instead.
-        const termsAcceptedVersion = getTermsAcceptedVersion(body)
-        if (termsAcceptedVersion) {
-            await ctx.runMutation(
-                internal.legal.internal.recordSignupAcceptance,
-                {
-                    userId: result.user.id,
-                    documentVersion: termsAcceptedVersion,
-                },
-            )
-        }
+    // Acceptance ticked on the native sign-up panel. Google account creation
+    // happens through this sign-in call, so it arrives here rather than
+    // through /sign-up/email — and not only for new accounts: the client sends
+    // the version only when the box was actually ticked in this session
+    // (apps/native/lib/screens/login.dart), so it is a genuine affirmative
+    // acceptance either way, and recording it for an address that already had
+    // an account simply clears that account's gate. `recordAcceptance` is
+    // idempotent per (user, version), so a returning user costs one read.
+    //
+    // Whether this call CREATED the account is deliberately not consulted:
+    // better-auth's social response carries no such flag, which is also why
+    // account-creation telemetry moved to the user-create hook in `auth.ts`.
+    const termsAcceptedVersion = getTermsAcceptedVersion(body)
+    if (termsAcceptedVersion) {
+        await recordSignupTerms(ctx, result.user.id, termsAcceptedVersion)
     }
 
     return issueNativeSession(ctx, req, result.user)
@@ -349,12 +367,27 @@ const emailSignUp = corsHttpAction(async (ctx, req) => {
                 name,
                 email: parsed.email,
                 password: parsed.password,
-                // Declared as a better-auth `additionalFields` entry; the
-                // user-create hook in auth.ts records the acceptance.
-                ...(termsAcceptedVersion ? { termsAcceptedVersion } : {}),
             },
             headers,
         })
+
+        // The acceptance goes against a FRESH lookup, never `result.user.id`:
+        // a duplicate sign-up answers with a synthetic user carrying a
+        // generated id, and while the check above rules that out for this
+        // request, two concurrent sign-ups for one address can still race past
+        // it — filing the acceptance under the synthetic id would attach it to
+        // an account that does not exist and leave the real one gated.
+        if (termsAcceptedVersion) {
+            const created = await internalAdapter.findUserByEmail(parsed.email)
+            if (created) {
+                await recordSignupTerms(
+                    ctx,
+                    created.user.id,
+                    termsAcceptedVersion,
+                )
+            }
+        }
+
         // With requireEmailVerification there is no session yet (`token` is
         // null) and duplicate emails return a SYNTHETIC user with a fake id —
         // gate on the token, never mint a session from `result.user` alone.
