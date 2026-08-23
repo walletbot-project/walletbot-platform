@@ -518,6 +518,66 @@ abstract class AppLocalizations {
   /// **'Your accounts'**
   String get yourAccounts;
 
+  /// No description provided for @currentAccount.
+  ///
+  /// In en, this message translates to:
+  /// **'Current account'**
+  String get currentAccount;
+
+  /// No description provided for @otherAccounts.
+  ///
+  /// In en, this message translates to:
+  /// **'Other accounts'**
+  String get otherAccounts;
+
+  /// No description provided for @chooseAccountToContinue.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose an account to continue, or add another one.'**
+  String get chooseAccountToContinue;
+
+  /// No description provided for @signOut.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign out'**
+  String get signOut;
+
+  /// No description provided for @deleteLocalAccount.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete this account'**
+  String get deleteLocalAccount;
+
+  /// No description provided for @signOutConfirmTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign out of “{name}”?'**
+  String signOutConfirmTitle(String name);
+
+  /// No description provided for @signOutConfirmBody.
+  ///
+  /// In en, this message translates to:
+  /// **'This removes the account\'s data from this device. Your data stays in your account — sign in again to bring it back.'**
+  String get signOutConfirmBody;
+
+  /// No description provided for @signOutUnsyncedWarning.
+  ///
+  /// In en, this message translates to:
+  /// **'Some changes have not synced yet. Signing out now discards them for good.'**
+  String get signOutUnsyncedWarning;
+
+  /// No description provided for @deleteLocalAccountConfirmTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete “{name}”?'**
+  String deleteLocalAccountConfirmTitle(String name);
+
+  /// No description provided for @deleteLocalAccountConfirmBody.
+  ///
+  /// In en, this message translates to:
+  /// **'This account only exists on this device. Deleting it erases its data for good — there is no copy anywhere else.'**
+  String get deleteLocalAccountConfirmBody;
+
   /// No description provided for @settings.
   ///
   /// In en, this message translates to:

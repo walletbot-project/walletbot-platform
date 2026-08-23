@@ -10,6 +10,7 @@ import 'package:app/config.dart';
 import 'package:app/data/data.dart';
 import 'package:app/database.dart';
 import 'package:app/l10n/l10n.dart';
+import 'package:app/screens/account_switcher.dart';
 import 'package:app/screens/accounts.dart';
 import 'package:app/screens/activity.dart';
 import 'package:app/screens/home.dart';
@@ -278,13 +279,28 @@ class _AuthGate extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final active = context.watch<AuthController>().activeAccount;
-    if (active == null) return const LoginScreen();
+    final auth = context.watch<AuthController>();
+    final active = auth.activeAccount;
+    if (active == null) {
+      // Signing out of — or removing — the active account used to land here
+      // on the sign-in screen even when the device still held other accounts,
+      // which are only reachable from the switcher inside the app. Offer them
+      // instead; signing in stays one tap away and is the only option left
+      // once the last account is gone.
+      return auth.accounts.isEmpty
+          ? const LoginScreen()
+          : const AccountChooserScreen();
+    }
     return MultiProvider(
-      // Recreate account-scoped services when re-auth replaces the account
-      // object, so factories never retain an obsolete session token. ObjectKey
-      // avoids embedding the secret itself in diagnostic key output.
-      key: ObjectKey(active),
+      // Device-scoped half: everything that owns, or is derived from, this
+      // account's local database. Keyed by the account *id*, so re-auth —
+      // which mints a new session token and therefore a new UserAccount
+      // object for the same person — leaves it standing. Keying it by object
+      // identity used to reopen the same sqlite file in the frame before the
+      // outgoing connection closed, which is drift's "created the database
+      // class multiple times" warning in its one genuinely dangerous form:
+      // two live connections to one file.
+      key: ValueKey(active.id),
       providers: [
         Provider<AppDatabase>(
           create: (_) => AppDatabase.forUser(active.id),
@@ -320,52 +336,67 @@ class _AuthGate extends StatelessWidget {
             remoteEnabled: active.type == AccountType.remote,
           ),
         ),
-        if (active.type == AccountType.remote)
-          Provider<VoiceSessionRemoteSync>(
-            lazy: false,
-            create: (ctx) {
-              final sync = VoiceSessionRemoteSync(
-                repository: ctx.read<VoiceSessionRepository>(),
-                ownerId: active.id,
-              );
-              sync.schedule(delay: Duration.zero);
-              return sync;
-            },
-            dispose: (_, sync) => unawaited(sync.dispose()),
-          ),
-        Provider<GeminiVoiceExpenseCommandFactory>(
-          create: (ctx) => GeminiVoiceExpenseCommandFactory(
-            repositories: ctx.read<AppRepositories>(),
-            sessionRepository: ctx.read<VoiceSessionRepository>(),
-            remoteSync: active.type == AccountType.remote
-                ? ctx.read<VoiceSessionRemoteSync>()
-                : null,
-            useAuthenticatedTokenAction: active.type == AccountType.remote,
-            sessionToken: active.sessionToken,
-            convexSiteUrl: AppConfig.convexSiteUrl,
-          ),
-          dispose: (_, factory) => unawaited(factory.dispose()),
-        ),
-        // Drives the bottom-nav tab selection and lets one tab hand a filter to
-        // another (e.g. an account's "Ver todas" opens Activity filtered to it).
-        ChangeNotifierProvider<AppNavigation>(create: (_) => AppNavigation()),
-        // SyncEngine only attaches for remote accounts. For local accounts
-        // we still create one (so `Provider.of<SyncEngine>` is non-null
-        // throughout the tree) but never call `.start()`, keeping it inert.
-        ChangeNotifierProvider<SyncEngine>(
-          create: (ctx) => SyncEngine(
-            db: ctx.read<AppDatabase>(),
-            client: ConvexClient.instance,
-            clientInfo: ctx.read<ClientInfo>(),
-            // Backstop for the client-side gate: if the server rejects this
-            // client as outdated, reflect it so the hard update banner shows
-            // and sync stays gated off.
-            onClientOutdated: () =>
-                ctx.read<AppConfigController>().markUnsupported(),
-          ),
-        ),
       ],
-      child: const _SyncStarter(child: AppMain()),
+      child: MultiProvider(
+        // Session-scoped half: everything holding, or talking over, the
+        // server session. These *must* be rebuilt when re-auth replaces the
+        // account object — the voice factory captures `sessionToken` — so
+        // this half keeps the object-identity key the whole subtree used to
+        // carry. ObjectKey avoids embedding the secret itself in diagnostic
+        // key output.
+        key: ObjectKey(active),
+        providers: [
+          if (active.type == AccountType.remote)
+            Provider<VoiceSessionRemoteSync>(
+              lazy: false,
+              create: (ctx) {
+                final sync = VoiceSessionRemoteSync(
+                  repository: ctx.read<VoiceSessionRepository>(),
+                  ownerId: active.id,
+                );
+                sync.schedule(delay: Duration.zero);
+                return sync;
+              },
+              dispose: (_, sync) => unawaited(sync.dispose()),
+            ),
+          Provider<GeminiVoiceExpenseCommandFactory>(
+            create: (ctx) => GeminiVoiceExpenseCommandFactory(
+              repositories: ctx.read<AppRepositories>(),
+              sessionRepository: ctx.read<VoiceSessionRepository>(),
+              remoteSync: active.type == AccountType.remote
+                  ? ctx.read<VoiceSessionRemoteSync>()
+                  : null,
+              useAuthenticatedTokenAction: active.type == AccountType.remote,
+              sessionToken: active.sessionToken,
+              convexSiteUrl: AppConfig.convexSiteUrl,
+            ),
+            dispose: (_, factory) => unawaited(factory.dispose()),
+          ),
+          // Drives the bottom-nav tab selection and lets one tab hand a filter
+          // to another (e.g. an account's "Ver todas" opens Activity filtered
+          // to it).
+          ChangeNotifierProvider<AppNavigation>(create: (_) => AppNavigation()),
+          // SyncEngine only attaches for remote accounts. For local accounts
+          // we still create one (so `Provider.of<SyncEngine>` is non-null
+          // throughout the tree) but never call `.start()`, keeping it inert.
+          // Session-scoped on purpose: a fresh engine after re-auth is what
+          // re-establishes the counter subscription the dead session dropped,
+          // and `_SyncStarter` below is remounted with it to kick it.
+          ChangeNotifierProvider<SyncEngine>(
+            create: (ctx) => SyncEngine(
+              db: ctx.read<AppDatabase>(),
+              client: ConvexClient.instance,
+              clientInfo: ctx.read<ClientInfo>(),
+              // Backstop for the client-side gate: if the server rejects this
+              // client as outdated, reflect it so the hard update banner shows
+              // and sync stays gated off.
+              onClientOutdated: () =>
+                  ctx.read<AppConfigController>().markUnsupported(),
+            ),
+          ),
+        ],
+        child: const _SyncStarter(child: AppMain()),
+      ),
     );
   }
 }
