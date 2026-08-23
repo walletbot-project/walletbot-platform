@@ -1512,20 +1512,19 @@ class AppLocalizationsEs extends AppLocalizations {
   String get legalAgeConfirm => 'Tengo 18 años o más';
 
   @override
-  String get legalAcceptTerms => 'Acepto los Términos y Condiciones';
+  String get legalAcceptTerms => 'Acepto los [[terms]]';
 
   @override
-  String get legalAcceptPrivacy => 'Acepto la Política de Privacidad';
+  String get legalAcceptPrivacy => 'Acepto la [[privacy]]';
 
   @override
-  String get legalAcceptBoth =>
-      'Acepto los Términos y Condiciones y la Política de Privacidad';
+  String get legalAcceptBoth => 'Acepto los [[terms]] y la [[privacy]]';
 
   @override
-  String get legalReadTerms => 'Leer los Términos y Condiciones';
+  String get legalTermsName => 'Términos y Condiciones';
 
   @override
-  String get legalReadPrivacy => 'Leer la Política de Privacidad';
+  String get legalPrivacyName => 'Política de Privacidad';
 
   @override
   String get legalAcceptAction => 'Aceptar y continuar';

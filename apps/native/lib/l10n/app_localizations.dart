@@ -2771,32 +2771,32 @@ abstract class AppLocalizations {
   /// No description provided for @legalAcceptTerms.
   ///
   /// In en, this message translates to:
-  /// **'I accept the Terms and Conditions'**
+  /// **'I accept the [[terms]]'**
   String get legalAcceptTerms;
 
   /// No description provided for @legalAcceptPrivacy.
   ///
   /// In en, this message translates to:
-  /// **'I accept the Privacy Policy'**
+  /// **'I accept the [[privacy]]'**
   String get legalAcceptPrivacy;
 
   /// No description provided for @legalAcceptBoth.
   ///
   /// In en, this message translates to:
-  /// **'I accept the Terms and Conditions and the Privacy Policy'**
+  /// **'I accept the [[terms]] and the [[privacy]]'**
   String get legalAcceptBoth;
 
-  /// No description provided for @legalReadTerms.
+  /// No description provided for @legalTermsName.
   ///
   /// In en, this message translates to:
-  /// **'Read the Terms and Conditions'**
-  String get legalReadTerms;
+  /// **'Terms and Conditions'**
+  String get legalTermsName;
 
-  /// No description provided for @legalReadPrivacy.
+  /// No description provided for @legalPrivacyName.
   ///
   /// In en, this message translates to:
-  /// **'Read the Privacy Policy'**
-  String get legalReadPrivacy;
+  /// **'Privacy Policy'**
+  String get legalPrivacyName;
 
   /// No description provided for @legalAcceptAction.
   ///

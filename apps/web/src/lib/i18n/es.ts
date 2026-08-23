@@ -239,13 +239,16 @@ export const es = {
             'Podés seguir usando la app por ahora, pero vamos a necesitar tu aceptación.',
 
         ageConfirm: 'Tengo 18 años o más',
-        acceptTerms: 'Acepto los Términos y Condiciones',
-        acceptPrivacy: 'Acepto la Política de Privacidad',
-        acceptBoth:
-            'Acepto los Términos y Condiciones y la Política de Privacidad',
 
-        readTerms: 'Leer los Términos y Condiciones',
-        readPrivacy: 'Leer la Política de Privacidad',
+        // `[[terms]]` y `[[privacy]]` se reemplazan por enlaces al documento
+        // publicado (ver `components/auth/legal-consent.tsx`). Van dentro de la
+        // frase, no en una lista aparte, para no gastar alto en la tarjeta —
+        // y así cada idioma acomoda artículos y orden a su manera.
+        acceptTerms: 'Acepto los [[terms]]',
+        acceptPrivacy: 'Acepto la [[privacy]]',
+        acceptBoth: 'Acepto los [[terms]] y la [[privacy]]',
+        termsName: 'Términos y Condiciones',
+        privacyName: 'Política de Privacidad',
 
         acceptAction: 'Aceptar y continuar',
         later: 'Más tarde',

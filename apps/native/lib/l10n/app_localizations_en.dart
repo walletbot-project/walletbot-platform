@@ -1505,20 +1505,19 @@ class AppLocalizationsEn extends AppLocalizations {
   String get legalAgeConfirm => 'I am 18 or older';
 
   @override
-  String get legalAcceptTerms => 'I accept the Terms and Conditions';
+  String get legalAcceptTerms => 'I accept the [[terms]]';
 
   @override
-  String get legalAcceptPrivacy => 'I accept the Privacy Policy';
+  String get legalAcceptPrivacy => 'I accept the [[privacy]]';
 
   @override
-  String get legalAcceptBoth =>
-      'I accept the Terms and Conditions and the Privacy Policy';
+  String get legalAcceptBoth => 'I accept the [[terms]] and the [[privacy]]';
 
   @override
-  String get legalReadTerms => 'Read the Terms and Conditions';
+  String get legalTermsName => 'Terms and Conditions';
 
   @override
-  String get legalReadPrivacy => 'Read the Privacy Policy';
+  String get legalPrivacyName => 'Privacy Policy';
 
   @override
   String get legalAcceptAction => 'Accept and continue';

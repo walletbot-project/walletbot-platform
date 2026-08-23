@@ -1,7 +1,6 @@
 import { type LegalDocument, legalDocumentUrl } from '@wallet-bot/shared'
 import { Checkbox } from 'actify'
 
-import { Icon } from '@/components/m3/icon'
 import { useI18n, useT } from '@/lib/i18n'
 
 /**
@@ -31,7 +30,7 @@ export function LegalConsentChecks({
 }) {
     const t = useT()
 
-    const acceptLabel =
+    const acceptTemplate =
         documents.length > 1
             ? t.legal.acceptBoth
             : documents[0] === 'privacy'
@@ -39,7 +38,7 @@ export function LegalConsentChecks({
               : t.legal.acceptTerms
 
     return (
-        <div className="flex flex-col gap-2">
+        <div className="flex flex-col gap-1">
             <Checkbox
                 isSelected={ageConfirmed}
                 onChange={onAgeConfirmedChange}
@@ -52,43 +51,58 @@ export function LegalConsentChecks({
                 onChange={onAcceptedChange}
                 isDisabled={disabled}
             >
-                <span className="m3-body-medium">{acceptLabel}</span>
+                <ConsentLabel template={acceptTemplate} />
             </Checkbox>
-            <LegalDocumentLinks documents={documents} />
         </div>
     )
 }
 
+/** `[[terms]]` / `[[privacy]]`, as written in the message catalogs. */
+const DOCUMENT_MARKER = /\[\[(terms|privacy)\]\]/
+
 /**
- * Links to the published documents (`apps/landing` renders `docs/legal/*.md`
- * at `www.walletbot.live`). They open in a new tab: a half-filled sign-up form
- * must survive reading the Terms.
+ * The accept label with each document name as a link to its published text
+ * (`apps/landing` serves them at `www.walletbot.live`).
+ *
+ * The links live inside the sentence rather than in a list under it: the panel
+ * is short, and a separate "read X" row per document cost two lines. The
+ * catalog keeps the marker form so each language can place the names — and its
+ * own articles — where they belong.
  */
-export function LegalDocumentLinks({
-    documents,
-}: {
-    documents: readonly LegalDocument[]
-}) {
+function ConsentLabel({ template }: { template: string }) {
     const t = useT()
     const { locale } = useI18n()
 
     return (
-        <ul className="mt-1 flex flex-col gap-1">
-            {documents.map((document) => (
-                <li key={document}>
-                    <a
-                        href={legalDocumentUrl(document, locale)}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="m3-label-large inline-flex items-center gap-1 text-on-surface-variant underline underline-offset-4 hover:text-on-surface"
-                    >
-                        {document === 'terms'
-                            ? t.legal.readTerms
-                            : t.legal.readPrivacy}
-                        <Icon name="open_in_new" size={16} />
-                    </a>
-                </li>
-            ))}
-        </ul>
+        <span className="m3-body-medium">
+            {template
+                .split(/(\[\[(?:terms|privacy)\]\])/)
+                .map((part, index) => {
+                    const marker = DOCUMENT_MARKER.exec(part)
+                    if (!marker) return part
+                    const document = marker[1] as LegalDocument
+                    return (
+                        <a
+                            // biome-ignore lint/suspicious/noArrayIndexKey: the
+                            // parts come from a fixed template, so their order and
+                            // count never change between renders.
+                            key={index}
+                            href={legalDocumentUrl(document, locale)}
+                            target="_blank"
+                            rel="noreferrer"
+                            // The label wraps the checkbox input, so a click here
+                            // would toggle the box on the way out. Reading the
+                            // terms must not tick the box that says you accept
+                            // them.
+                            onClick={(event) => event.stopPropagation()}
+                            className="font-semibold underline underline-offset-2"
+                        >
+                            {document === 'terms'
+                                ? t.legal.termsName
+                                : t.legal.privacyName}
+                        </a>
+                    )
+                })}
+        </span>
     )
 }

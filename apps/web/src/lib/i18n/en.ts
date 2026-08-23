@@ -215,12 +215,12 @@ export const en: Messages = {
             'You can keep using the app for now, but we will need your acceptance.',
 
         ageConfirm: 'I am 18 or older',
-        acceptTerms: 'I accept the Terms and Conditions',
-        acceptPrivacy: 'I accept the Privacy Policy',
-        acceptBoth: 'I accept the Terms and Conditions and the Privacy Policy',
 
-        readTerms: 'Read the Terms and Conditions',
-        readPrivacy: 'Read the Privacy Policy',
+        acceptTerms: 'I accept the [[terms]]',
+        acceptPrivacy: 'I accept the [[privacy]]',
+        acceptBoth: 'I accept the [[terms]] and the [[privacy]]',
+        termsName: 'Terms and Conditions',
+        privacyName: 'Privacy Policy',
 
         acceptAction: 'Accept and continue',
         later: 'Later',

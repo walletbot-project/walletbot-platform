@@ -59,11 +59,14 @@ void main() {
   Future<void> acceptLegalChecks(WidgetTester tester) async {
     await tester.tap(find.text('Tengo 18 años o más'));
     await tester.pump();
-    await tester.tap(
-      find.text(
-        'Acepto los Términos y Condiciones y la Política de Privacidad',
-      ),
+    // The accept label carries the document links inline, and tapping one of
+    // those opens the document instead of ticking the box. Aim at the start of
+    // the sentence ("Acepto los "), which is always plain text.
+    final label = find.text(
+      'Acepto los Términos y Condiciones y la Política de Privacidad',
     );
+    final topLeft = tester.getTopLeft(label);
+    await tester.tapAt(Offset(topLeft.dx + 20, topLeft.dy + 8));
     await tester.pump();
   }
 

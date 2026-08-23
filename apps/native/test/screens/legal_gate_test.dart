@@ -116,8 +116,6 @@ void main() {
       findsOneWidget,
     );
     expect(find.text('Tengo 18 años o más'), findsOneWidget);
-    expect(find.textContaining('Leer los Términos'), findsOneWidget);
-    expect(find.textContaining('Leer la Política'), findsOneWidget);
     // Blocking: no "later", but never a dead end either.
     expect(find.text('Más tarde'), findsNothing);
     expect(find.text('Cerrar sesión'), findsOneWidget);
@@ -136,8 +134,8 @@ void main() {
 
     expect(find.text('Actualizamos la Política de Privacidad'), findsOneWidget);
     expect(find.text('Acepto la Política de Privacidad'), findsOneWidget);
-    // The unchanged document is not re-asked, so its link is absent too.
-    expect(find.textContaining('Leer los Términos'), findsNothing);
+    // The unchanged document is not re-asked, so it is not named either.
+    expect(find.textContaining('Términos y Condiciones'), findsNothing);
     expect(find.text('Más tarde'), findsOneWidget);
   });
 
@@ -172,6 +170,41 @@ void main() {
 
     expect(controller.shouldShowGate, isFalse);
     expect(await db.select(db.legalAcceptances).get(), hasLength(2));
+  });
+
+  testWidgets('tapping a document link does not tick the accept box', (
+    tester,
+  ) async {
+    final controller = await pumpGate(tester, versions: _versions());
+
+    // The label is one rich Text; the link is a span inside it, so tap the
+    // document name at its own offset rather than the tile's centre.
+    final label = find.text(
+      'Acepto los Términos y Condiciones y la Política de Privacidad',
+    );
+    final box = tester.renderObject<RenderBox>(label);
+    final topLeft = tester.getTopLeft(label);
+    // "Términos y Condiciones" starts a third of the way into the sentence;
+    // anywhere inside it is a link hit.
+    await tester.tapAt(
+      Offset(topLeft.dx + box.size.width * 0.45, topLeft.dy + 8),
+    );
+    await tester.pumpAndSettle();
+
+    expect(controller.shouldShowGate, isTrue);
+    expect(await db.select(db.legalAcceptances).get(), isEmpty);
+    // Still dead, because the box was never ticked.
+    expect(
+      tester
+          .widget<FilledButton>(
+            find.ancestor(
+              of: find.text('Aceptar y continuar'),
+              matching: find.byType(FilledButton),
+            ),
+          )
+          .onPressed,
+      isNull,
+    );
   });
 
   testWidgets('"later" dismisses the prompt without recording anything', (
