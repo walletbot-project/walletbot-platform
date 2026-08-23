@@ -308,6 +308,20 @@ export const purgeUserData = internalMutation({
                         .withIndex('by_user', (q) => q.eq('userId', userId))
                         .take(n),
                 ),
+            // Terms/Privacy acceptance history. Purged with everything else:
+            // the rows carry the user's id, and Privacy §9/§10 promise that
+            // account data is hard-deleted, leaving only the post-deletion
+            // security record. Keeping them as proof of contract would need a
+            // policy amendment first.
+            async (n) =>
+                deleteRows(
+                    await ctx.db
+                        .query('legalAcceptances')
+                        .withIndex('by_user_document_version', (q) =>
+                            q.eq('userId', userId),
+                        )
+                        .take(n),
+                ),
             // Holds the user's email as well as their id, so leaving it behind
             // would keep an address alive after the account is "deleted".
             async (n) =>

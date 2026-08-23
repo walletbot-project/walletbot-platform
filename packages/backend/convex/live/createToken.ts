@@ -203,9 +203,7 @@ export async function createLiveToken() {
     })
     if (!response.ok) {
         const detail = await response.text()
-        throw new Error(
-            `auth_tokens mint failed: ${response.status} ${detail}`,
-        )
+        throw new Error(`auth_tokens mint failed: ${response.status} ${detail}`)
     }
     const token = (await response.json()) as { name?: string }
     if (typeof token.name !== 'string' || token.name.length === 0) {

@@ -10,11 +10,13 @@ import 'package:app/config.dart';
 import 'package:app/data/data.dart';
 import 'package:app/database.dart';
 import 'package:app/l10n/l10n.dart';
+import 'package:app/legal/legal_acceptance_controller.dart';
 import 'package:app/screens/account_switcher.dart';
 import 'package:app/screens/accounts.dart';
 import 'package:app/screens/activity.dart';
 import 'package:app/screens/home.dart';
 import 'package:app/screens/insights.dart';
+import 'package:app/screens/legal_gate.dart';
 import 'package:app/screens/login.dart';
 import 'package:app/screens/voice.dart';
 import 'package:app/settings/display_settings.dart';
@@ -320,6 +322,25 @@ class _AuthGate extends StatelessWidget {
             return controller;
           },
         ),
+        // Terms/Privacy acceptance for this account. Device-scoped half
+        // because it reads and writes the account's own `legal_acceptances`
+        // table — the only record there is for a local-only account.
+        ChangeNotifierProvider<LegalAcceptanceController>(
+          create: (ctx) {
+            final controller = LegalAcceptanceController(
+              db: ctx.read<AppDatabase>(),
+              accountId: active.id,
+              isRemote: active.type == AccountType.remote,
+              clientInfo: ctx.read<ClientInfo>(),
+              locale: _resolvedLocaleTag(
+                ctx.read<DisplaySettingsController>(),
+              ),
+              appConfig: ctx.read<AppConfigController>(),
+            );
+            unawaited(controller.load());
+            return controller;
+          },
+        ),
         // The app-facing data layer: all reads/writes from screens and the
         // voice agent go through this. Scoped to the account subtree so it is
         // recreated together with the database on account switch.
@@ -395,9 +416,58 @@ class _AuthGate extends StatelessWidget {
             ),
           ),
         ],
-        child: const _SyncStarter(child: AppMain()),
+        // Sync starts regardless of the acceptance gate: pausing it would risk
+        // stranding writes the user already made, and the gate is about
+        // consent to the documents, not about authorizing data access.
+        child: const _SyncStarter(child: _LegalGate(child: AppMain())),
       ),
     );
+  }
+}
+
+/// Shows the Terms/Privacy acceptance gate instead of the app while this
+/// account still owes an acceptance.
+///
+/// Deliberately keeps [child] out of the tree until the verdict is known: a
+/// resolved-later gate would mount the app and then tear it down, which is how
+/// in-progress screens lose their state. The wait is a local database read,
+/// except on the first launch of a remote account, where the backend is the
+/// only source of truth — and that call fails open, so it is bounded.
+class _LegalGate extends StatefulWidget {
+  const _LegalGate({required this.child});
+
+  final Widget child;
+
+  @override
+  State<_LegalGate> createState() => _LegalGateState();
+}
+
+class _LegalGateState extends State<_LegalGate> {
+  bool _kicked = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final auth = context.watch<AuthController>();
+    final legal = context.watch<LegalAcceptanceController>();
+
+    // A remote account's verdict comes from an authenticated Convex query, so
+    // it can only be asked for once the socket is authenticated — the same
+    // precondition `_SyncStarter` waits on. Asking earlier returns
+    // `Unauthenticated`, which is how the gate ended up never appearing after
+    // a fresh sign-in.
+    if (!_kicked && legal.remoteRefreshPending && auth.convexAuthenticated) {
+      _kicked = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        unawaited(context.read<LegalAcceptanceController>().refreshRemote());
+      });
+    }
+
+    if (!legal.resolved) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+    if (legal.shouldShowGate) return const LegalGateScreen();
+    return widget.child;
   }
 }
 

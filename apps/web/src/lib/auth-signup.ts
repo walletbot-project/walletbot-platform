@@ -1,3 +1,4 @@
+import type { LegalDocument } from '@wallet-bot/shared'
 import { postAuthEndpoint } from '@/lib/auth-endpoint'
 
 /**
@@ -19,6 +20,19 @@ type SignUpArgs = {
     name: string
     email: string
     password: string
+    /**
+     * The affirmative acceptance the form collected. Recorded server-side
+     * against the created user (`legal/helpers.ts:recordAcceptances`), because
+     * email sign-up mints no session — there is no authenticated caller to run
+     * `v1/legal/mutations:accept` at this point. The server stamps the
+     * versions; nothing here names one.
+     */
+    acceptance: {
+        documents: readonly LegalDocument[]
+        ageConfirmed: boolean
+        platform: 'web'
+        locale: string
+    }
 }
 
 export type SignUpOutcome =

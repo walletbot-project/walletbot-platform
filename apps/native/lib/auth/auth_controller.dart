@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:app/auth/account.dart';
 import 'package:app/config.dart';
 import 'package:app/database.dart';
+import 'package:app/legal/legal_acceptance_payload.dart';
 import 'package:convex_flutter/convex_flutter.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -86,16 +87,23 @@ class AuthController extends ChangeNotifier {
   /// [EmailNotVerifiedException] on successful account creation (the backend
   /// sends the verification email and returns no session). The caller must
   /// route to the verification-pending state.
+  ///
+  /// [acceptance] carries the sign-up form's Terms/Privacy consent. It is
+  /// recorded against the created user by the endpoint, which is the only
+  /// moment those checkboxes can be tied to an account: this call issues no
+  /// session, so nothing afterwards could authenticate the write.
   Future<UserAccount> signUpWithEmail({
     required String name,
     required String email,
     required String password,
+    LegalAcceptancePayload? acceptance,
     bool rejectExisting = false,
   }) async {
     final body = await _postJson('/auth/email/sign-up', {
       'name': name,
       'email': email,
       'password': password,
+      if (acceptance != null) 'acceptance': acceptance.toJson(),
     });
     return _saveRemoteAccountFromAuthResponse(
       body,

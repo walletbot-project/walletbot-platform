@@ -7,6 +7,7 @@ import {
     featureFlagOverrides,
     featureFlags,
 } from './schema/featureFlags'
+import { legalAcceptances } from './schema/legal'
 import { refreshTokens } from './schema/refreshTokens'
 import { syncCounters, tombstones } from './schema/sync'
 import { tags } from './schema/tags'
@@ -29,6 +30,7 @@ export default defineSchema({
     deletedUsers,
     featureFlagOverrides,
     featureFlags,
+    legalAcceptances,
     refreshTokens,
     savedFilters,
     syncCounters,

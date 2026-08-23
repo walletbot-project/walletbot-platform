@@ -1483,6 +1483,64 @@ class AppLocalizationsEs extends AppLocalizations {
   String get tagSaveFailed => 'No se pudo guardar la etiqueta';
 
   @override
+  String get legalFirstTitle => 'Antes de empezar';
+
+  @override
+  String get legalFirstSubtitle =>
+      'Necesitamos tu aceptación para crear tu cuenta y darte el servicio.';
+
+  @override
+  String get legalUpdatedTermsTitle => 'Actualizamos los Términos';
+
+  @override
+  String get legalUpdatedPrivacyTitle =>
+      'Actualizamos la Política de Privacidad';
+
+  @override
+  String get legalUpdatedBothTitle =>
+      'Actualizamos los Términos y la Privacidad';
+
+  @override
+  String get legalUpdatedSubtitle =>
+      'Revisá los cambios y aceptalos para seguir usando Wallet Bot.';
+
+  @override
+  String get legalUpdatedSubtitleGrace =>
+      'Podés seguir usando la app por ahora, pero vamos a necesitar tu aceptación.';
+
+  @override
+  String get legalAgeConfirm => 'Tengo 18 años o más';
+
+  @override
+  String get legalAcceptTerms => 'Acepto los Términos y Condiciones';
+
+  @override
+  String get legalAcceptPrivacy => 'Acepto la Política de Privacidad';
+
+  @override
+  String get legalAcceptBoth =>
+      'Acepto los Términos y Condiciones y la Política de Privacidad';
+
+  @override
+  String get legalReadTerms => 'Leer los Términos y Condiciones';
+
+  @override
+  String get legalReadPrivacy => 'Leer la Política de Privacidad';
+
+  @override
+  String get legalAcceptAction => 'Aceptar y continuar';
+
+  @override
+  String get legalLater => 'Más tarde';
+
+  @override
+  String get legalUseAnotherAccount => 'Usar otra cuenta';
+
+  @override
+  String get legalAcceptFailed =>
+      'No pudimos registrar tu aceptación. Revisá tu conexión e intentá de nuevo.';
+
+  @override
   String get actionLoadFailed => 'No se pudo cargar la acción';
 
   @override

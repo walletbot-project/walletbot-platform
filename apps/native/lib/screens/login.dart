@@ -1,8 +1,13 @@
 import 'dart:async';
 
 import 'package:app/app_config/app_config_banner_list.dart';
+import 'package:app/app_config/client_info.dart';
 import 'package:app/auth/auth_controller.dart';
+import 'package:app/database.dart' show LegalDocumentKind;
 import 'package:app/l10n/l10n.dart';
+import 'package:app/legal/legal_acceptance_payload.dart';
+import 'package:app/legal/legal_consent_checks.dart';
+import 'package:app/screens/auth_scaffold.dart';
 import 'package:app/telemetry/business_metrics.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
@@ -47,6 +52,14 @@ class _LoginScreenState extends State<LoginScreen> {
   _EmailAuthMode _emailMode = _EmailAuthMode.signIn;
   _RemoteFlow _remoteFlow = _RemoteFlow.credentials;
   bool _submitting = false;
+
+  /// Sign-up consent. Never pre-ticked, and the sign-up button stays dead
+  /// until both are: affirmative acceptance, not browse-wrap
+  /// (docs/legal/README.md). Only the email sign-up path collects them —
+  /// Google sign-in and local accounts reach the acceptance gate instead,
+  /// which is where an already-registered user is never asked twice.
+  bool _ageConfirmed = false;
+  bool _acceptedLegal = false;
 
   /// Email echoed in the pending/sent copy of the new flows.
   String _pendingEmail = '';
@@ -100,11 +113,21 @@ class _LoginScreenState extends State<LoginScreen> {
           rejectExisting: widget.canDismiss,
         );
       } else {
+        final clientInfo = context.read<ClientInfo?>();
         await auth.signUpWithEmail(
           name: _remoteNameController.text.trim(),
           email: email,
           password: password,
           rejectExisting: widget.canDismiss,
+          // Both documents: a new account accepts the whole agreement, and the
+          // button cannot be pressed unless both boxes are ticked.
+          acceptance: LegalAcceptancePayload(
+            documents: LegalDocumentKind.values,
+            ageConfirmed: _ageConfirmed,
+            platform: clientInfo?.platform ?? clientPlatform(),
+            appVersion: clientInfo?.appVersion,
+            locale: Localizations.localeOf(context).toLanguageTag(),
+          ),
         );
       }
     } on AccountAlreadyAddedError {
@@ -289,7 +312,7 @@ class _LoginScreenState extends State<LoginScreen> {
     return Scaffold(
       body: Stack(
         children: [
-          const Positioned.fill(child: _LoginBackdrop()),
+          const Positioned.fill(child: AuthBackdrop()),
           SafeArea(
             child: Stack(
               children: [
@@ -327,6 +350,12 @@ class _LoginScreenState extends State<LoginScreen> {
                                     nameController: _remoteNameController,
                                     emailController: _emailController,
                                     passwordController: _passwordController,
+                                    ageConfirmed: _ageConfirmed,
+                                    acceptedLegal: _acceptedLegal,
+                                    onAgeConfirmedChanged: (value) =>
+                                        setState(() => _ageConfirmed = value),
+                                    onAcceptedLegalChanged: (value) =>
+                                        setState(() => _acceptedLegal = value),
                                     onModeChanged: (mode) =>
                                         setState(() => _emailMode = mode),
                                     onSubmit: _submitRemote,
@@ -387,102 +416,7 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 }
 
-class _LoginBackdrop extends StatelessWidget {
-  const _LoginBackdrop();
 
-  @override
-  Widget build(BuildContext context) {
-    return CustomPaint(
-      painter: _LoginBackdropPainter(Theme.of(context).colorScheme),
-    );
-  }
-}
-
-class _LoginBackdropPainter extends CustomPainter {
-  const _LoginBackdropPainter(this.colors);
-
-  final ColorScheme colors;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final base = Paint()..color = colors.surface;
-    canvas.drawRect(Offset.zero & size, base);
-
-    final gridPaint = Paint()
-      ..color = colors.outlineVariant.withValues(alpha: 0.2)
-      ..strokeWidth = 1;
-    const step = 34.0;
-    for (var x = 0.0; x < size.width; x += step) {
-      canvas.drawLine(Offset(x, 0), Offset(x, size.height), gridPaint);
-    }
-    for (var y = 0.0; y < size.height; y += step) {
-      canvas.drawLine(Offset(0, y), Offset(size.width, y), gridPaint);
-    }
-
-    final accentA = Paint()
-      ..shader =
-          RadialGradient(
-            colors: [
-              colors.tertiaryContainer.withValues(alpha: 0.72),
-              colors.tertiaryContainer.withValues(alpha: 0),
-            ],
-          ).createShader(
-            Rect.fromCircle(
-              center: Offset(size.width * 0.12, size.height * 0.14),
-              radius: size.shortestSide * 0.46,
-            ),
-          );
-    canvas.drawCircle(
-      Offset(size.width * 0.12, size.height * 0.14),
-      size.shortestSide * 0.46,
-      accentA,
-    );
-
-    final accentB = Paint()
-      ..shader =
-          RadialGradient(
-            colors: [
-              colors.secondaryContainer.withValues(alpha: 0.64),
-              colors.secondaryContainer.withValues(alpha: 0),
-            ],
-          ).createShader(
-            Rect.fromCircle(
-              center: Offset(size.width * 0.92, size.height * 0.76),
-              radius: size.shortestSide * 0.5,
-            ),
-          );
-    canvas.drawCircle(
-      Offset(size.width * 0.92, size.height * 0.76),
-      size.shortestSide * 0.5,
-      accentB,
-    );
-
-    final ribbon = Paint()
-      ..color = colors.primary.withValues(alpha: 0.12)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 18;
-    final path = Path()
-      ..moveTo(-40, size.height * 0.68)
-      ..quadraticBezierTo(
-        size.width * 0.32,
-        size.height * 0.53,
-        size.width * 0.66,
-        size.height * 0.64,
-      )
-      ..quadraticBezierTo(
-        size.width * 0.86,
-        size.height * 0.71,
-        size.width + 40,
-        size.height * 0.56,
-      );
-    canvas.drawPath(path, ribbon);
-  }
-
-  @override
-  bool shouldRepaint(covariant _LoginBackdropPainter oldDelegate) {
-    return oldDelegate.colors != colors;
-  }
-}
 
 class _HeroHeader extends StatelessWidget {
   const _HeroHeader();
@@ -688,6 +622,10 @@ class _RemoteLoginPanel extends StatelessWidget {
     required this.nameController,
     required this.emailController,
     required this.passwordController,
+    required this.ageConfirmed,
+    required this.acceptedLegal,
+    required this.onAgeConfirmedChanged,
+    required this.onAcceptedLegalChanged,
     required this.onModeChanged,
     required this.onSubmit,
     required this.onGoogle,
@@ -697,6 +635,10 @@ class _RemoteLoginPanel extends StatelessWidget {
   final _EmailAuthMode mode;
   final bool submitting;
   final GlobalKey<FormState> formKey;
+  final bool ageConfirmed;
+  final bool acceptedLegal;
+  final ValueChanged<bool> onAgeConfirmedChanged;
+  final ValueChanged<bool> onAcceptedLegalChanged;
   final TextEditingController nameController;
   final TextEditingController emailController;
   final TextEditingController passwordController;
@@ -710,11 +652,11 @@ class _RemoteLoginPanel extends StatelessWidget {
     final theme = Theme.of(context);
     final colors = theme.colorScheme;
 
-    return _Panel(
+    return AuthPanel(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _PanelTitle(
+          AuthPanelTitle(
             icon: Icons.sync_rounded,
             title: context.l10n.withAccount,
             subtitle: context.l10n.withAccountDescription,
@@ -804,10 +746,27 @@ class _RemoteLoginPanel extends StatelessWidget {
                           height: 16,
                         ),
                 ),
-                _PrimaryActionButton(
+                if (mode == _EmailAuthMode.signUp) ...[
+                  LegalConsentChecks(
+                    documents: LegalDocumentKind.values,
+                    ageConfirmed: ageConfirmed,
+                    accepted: acceptedLegal,
+                    enabled: !submitting,
+                    onAgeConfirmedChanged: onAgeConfirmedChanged,
+                    onAcceptedChanged: onAcceptedLegalChanged,
+                  ),
+                  const SizedBox(height: 10),
+                ],
+                AuthPrimaryActionButton(
                   submitting: submitting,
                   label: mode.primaryButtonLabel(context.l10n),
-                  onPressed: onSubmit,
+                  // Dead until both boxes are ticked on sign-up; a spinner
+                  // would claim work is in flight that never started.
+                  onPressed:
+                      mode == _EmailAuthMode.signUp &&
+                          !(ageConfirmed && acceptedLegal)
+                      ? null
+                      : onSubmit,
                 ),
                 const SizedBox(height: 10),
                 Center(
@@ -878,13 +837,13 @@ class _LocalLoginPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return _Panel(
+    return AuthPanel(
       child: Form(
         key: formKey,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            _PanelTitle(
+            AuthPanelTitle(
               icon: Icons.phone_iphone_rounded,
               title: context.l10n.withoutAccount,
               subtitle: context.l10n.localAccountDescription,
@@ -906,7 +865,7 @@ class _LocalLoginPanel extends StatelessWidget {
               },
             ),
             const SizedBox(height: 16),
-            _PrimaryActionButton(
+            AuthPrimaryActionButton(
               submitting: submitting,
               label: context.l10n.continueLocally,
               onPressed: onSubmit,
@@ -918,87 +877,7 @@ class _LocalLoginPanel extends StatelessWidget {
   }
 }
 
-class _Panel extends StatelessWidget {
-  const _Panel({required this.child});
 
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: colors.surface.withValues(alpha: 0.92),
-        borderRadius: BorderRadius.circular(26),
-        border: Border.all(color: colors.outlineVariant.withValues(alpha: 0.8)),
-        boxShadow: [
-          BoxShadow(
-            color: colors.shadow.withValues(alpha: 0.1),
-            blurRadius: 30,
-            offset: const Offset(0, 18),
-          ),
-        ],
-      ),
-      child: Padding(padding: const EdgeInsets.all(18), child: child),
-    );
-  }
-}
-
-class _PanelTitle extends StatelessWidget {
-  const _PanelTitle({
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-  });
-
-  final IconData icon;
-  final String title;
-  final String subtitle;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colors = theme.colorScheme;
-
-    return Row(
-      children: [
-        Container(
-          width: 42,
-          height: 42,
-          decoration: BoxDecoration(
-            color: colors.primaryContainer,
-            borderRadius: BorderRadius.circular(14),
-          ),
-          child: Icon(icon, color: colors.onPrimaryContainer, size: 22),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                title,
-                style: theme.textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w900,
-                ),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                subtitle,
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: colors.onSurfaceVariant,
-                  fontWeight: FontWeight.w600,
-                  height: 1.2,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-}
 
 class _EmailModeToggleButton extends StatelessWidget {
   const _EmailModeToggleButton({
@@ -1100,38 +979,6 @@ class _LoginTextField extends StatelessWidget {
   }
 }
 
-class _PrimaryActionButton extends StatelessWidget {
-  const _PrimaryActionButton({
-    required this.submitting,
-    required this.label,
-    required this.onPressed,
-  });
-
-  final bool submitting;
-  final String label;
-  final VoidCallback onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      height: 54,
-      child: FilledButton(
-        onPressed: submitting ? null : onPressed,
-        style: FilledButton.styleFrom(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-          ),
-        ),
-        child: submitting
-            ? const SizedBox.square(
-                dimension: 20,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              )
-            : Text(label),
-      ),
-    );
-  }
-}
 
 extension on _EmailAuthMode {
   String primaryButtonLabel(AppLocalizations l10n) {

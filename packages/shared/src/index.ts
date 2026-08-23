@@ -91,6 +91,18 @@ export {
     writeLayout,
 } from './dashboard/widgets'
 export { computeExchangeRate } from './exchange-rate'
+export {
+    isLegalDocument,
+    isLegalVersionAtLeast,
+    LEGAL_DOCUMENTS,
+    LEGAL_VERSIONS,
+    type LegalDocument,
+    type LegalDocumentStatus,
+    type LegalDocumentVersions,
+    type LegalLocale,
+    legalDocumentStatus,
+    legalDocumentUrl,
+} from './legal'
 export type { ToolArgs, ToolName } from './tools'
 export { TOOL_DEFINITIONS, TOOL_MAP, toolSchemas } from './tools'
 export type { ToolDefinition, ToolSchema } from './tools/helpers'

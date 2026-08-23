@@ -1,13 +1,13 @@
 # Wallet Bot — Términos y Condiciones
 
-**Fecha de entrada en vigencia:** 6 de agosto de 2026
-**Última actualización:** 6 de agosto de 2026
+**Fecha de entrada en vigencia:** 23 de agosto de 2026
+**Última actualización:** 23 de agosto de 2026
 
 > Estos Términos se publican en español y en inglés. Para los consumidores residentes en la República Argentina, la versión en español es el texto jurídicamente operativo y prevalece en caso de discrepancia (Ley N° 24.240, artículo 10). Para los demás usuarios prevalece la versión en inglés, siendo la versión en español una traducción de cortesía.
 
 ## 1. Aceptación de estos Términos
 
-Estos Términos y Condiciones (los "**Términos**") constituyen un acuerdo vinculante entre usted ("**usted**", el "**Usuario**") y **[NOMBRE LEGAL DEL RESPONSABLE]**, con domicilio en [DOMICILIO DEL RESPONSABLE, ARGENTINA] ("**Wallet Bot**", "**nosotros**"), que rige el uso de las aplicaciones y servicios de Wallet Bot (el "**Servicio**").
+Estos Términos y Condiciones (los "**Términos**") constituyen un acuerdo vinculante entre usted ("**usted**", el "**Usuario**") y **Tomás Cichero**, CUIT 20-43920814-8, con domicilio en Estanislao del Campo 1260, B1604ADH Florida Oeste, Provincia de Buenos Aires, Argentina ("**Wallet Bot**", "**nosotros**"), que rige el uso de las aplicaciones y servicios de Wallet Bot (el "**Servicio**").
 
 Usted acepta estos Términos manifestando expresamente su aceptación al crear una cuenta o, en el caso del uso en modo local, al usar la aplicación por primera vez. La mera navegación de nuestro sitio web no crea por sí sola un contrato; siempre solicitaremos su aceptación afirmativa. Si no está de acuerdo con estos Términos, no utilice el Servicio.
 
@@ -154,6 +154,6 @@ Estos Términos se otorgan en español y en inglés. Para los consumidores resid
 
 ## 21. Contacto
 
-**[NOMBRE LEGAL DEL RESPONSABLE]**
-[DOMICILIO DEL RESPONSABLE, ARGENTINA]
+**Tomás Cichero**, CUIT 20-43920814-8
+Estanislao del Campo 1260, B1604ADH Florida Oeste, Provincia de Buenos Aires, Argentina
 support@walletbot.live
