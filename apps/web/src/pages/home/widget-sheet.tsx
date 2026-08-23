@@ -1,5 +1,6 @@
 import { api } from '@wallet-bot/backend/api'
 import {
+    BACKGROUND_MODES,
     type BackgroundMode,
     type BackgroundStyle,
     BREAKDOWN_CHART_KINDS,
@@ -30,12 +31,12 @@ import { useMutation, useQuery } from 'convex/react'
 import { useCallback, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import { ColorSwatches } from '@/components/color-swatches'
+import { ChipPicker } from '@/components/filters/filter-controls'
 import { FilterSheet } from '@/components/filters/filter-sheet'
 import { BottomSheet } from '@/components/m3/bottom-sheet'
 import { ChoiceChip } from '@/components/m3/chip'
 import { OptionSheet, type SheetOption } from '@/components/m3/option-sheet'
 import { PickerField } from '@/components/m3/picker-field'
-import { CURRENCY_CODES, SUGGESTED_CURRENCIES } from '@/lib/currencies'
 import { COLOR_OPTIONS } from '@/lib/entity-colors'
 import { type Messages, useFormatLocale, useT } from '@/lib/i18n'
 import { newId } from '@/lib/new-id'
@@ -88,6 +89,11 @@ export function WidgetSheet({
         api.v1.dashboard.mutations.updateSavedFilter,
     )
 
+    // The balance card's scope is picked from the accounts the user actually
+    // has, so the currency list can't offer one with no accounts behind it
+    // (native reads them the same way, `_loadCurrencies`).
+    const accounts = useQuery(api.v1.accounts.queries.listActive)
+
     const existingOptions = useMemo(
         () => parseWidgetOptions(widget?.options ?? ''),
         [widget],
@@ -113,6 +119,10 @@ export function WidgetSheet({
     const [limit, setLimit] = useState(String(existingOptions.limit))
     const [currency, setCurrency] = useState(
         existingOptions.currency || DEFAULT_CURRENCY,
+    )
+    /** Empty = every account in `currency`, the pre-scoping meaning. */
+    const [accountIds, setAccountIds] = useState<string[]>(
+        existingOptions.accountIds,
     )
     const [groupBy, setGroupBy] = useState<BreakdownGroupBy>(
         existingOptions.groupBy,
@@ -152,17 +162,50 @@ export function WidgetSheet({
     const [submitting, setSubmitting] = useState(false)
 
     const formatLocale = useFormatLocale()
-    const currencyOptions: SheetOption[] = useMemo(
+    /**
+     * The currencies the user holds, plus whatever this card already stores —
+     * an account since archived or re-denominated must not drop the card's own
+     * currency out of the picker and leave it uneditable. `DEFAULT_CURRENCY`
+     * backs the list when there are no accounts at all, mirroring native's
+     * `ARS` fallback.
+     */
+    const currencyOptions: SheetOption[] = useMemo(() => {
+        const held = new Set(
+            (accounts ?? []).map((account) => account.currency),
+        )
+        if (currency) held.add(currency)
+        if (held.size === 0) held.add(DEFAULT_CURRENCY)
+        return [...held].sort().map((code) => ({
+            id: code,
+            label: code,
+            supporting: new Intl.DisplayNames([formatLocale], {
+                type: 'currency',
+            }).of(code),
+        }))
+    }, [accounts, currency, formatLocale])
+
+    /** Only accounts in the chosen currency: one card sums one currency. */
+    const accountOptions = useMemo(
         () =>
-            CURRENCY_CODES.map((code) => ({
-                id: code,
-                label: code,
-                supporting: new Intl.DisplayNames([formatLocale], {
-                    type: 'currency',
-                }).of(code),
-            })),
-        [formatLocale],
+            (accounts ?? [])
+                .filter((account) => account.currency === currency)
+                .map((account) => ({ id: account.id, label: account.name }))
+                .sort((a, b) => a.label.localeCompare(b.label)),
+        [accounts, currency],
     )
+
+    /**
+     * What actually gets stored: ids are kept only while they still belong to
+     * the chosen currency, so switching currency (or archiving an account)
+     * silently widens the card back to "all accounts" instead of storing a
+     * scope that sums to zero. Derived rather than reset in an effect, so the
+     * selection survives a flip back to the original currency.
+     */
+    const scopedAccountIds = useMemo(() => {
+        if (accounts === undefined) return accountIds
+        const allowed = new Set(accountOptions.map((option) => option.id))
+        return accountIds.filter((id) => allowed.has(id))
+    }, [accountIds, accountOptions, accounts])
 
     const usesFilter = type !== 'balance'
     /**
@@ -227,7 +270,9 @@ export function WidgetSheet({
                 ...(type === 'list'
                     ? { limit: parsedLimit > 0 ? parsedLimit : 5 }
                     : {}),
-                ...(type === 'balance' ? { currency } : {}),
+                ...(type === 'balance'
+                    ? { currency, accountIds: scopedAccountIds }
+                    : {}),
                 ...(type === 'chart' ? { groupBy, chartKind } : {}),
                 background: backgroundToJson(background),
             })
@@ -329,12 +374,29 @@ export function WidgetSheet({
                 ) : null}
 
                 {type === 'balance' ? (
-                    <PickerField
-                        label={t.common.currency}
-                        value={currency}
-                        onClick={() => setCurrencyOpen(true)}
-                        disabled={submitting}
-                    />
+                    <>
+                        <PickerField
+                            label={t.common.currency}
+                            value={currency}
+                            onClick={() => setCurrencyOpen(true)}
+                            disabled={submitting}
+                        />
+                        <Section label={t.dashboard.accounts}>
+                            <ChipPicker
+                                options={accountOptions}
+                                selected={scopedAccountIds}
+                                onToggle={setAccountIds}
+                                emptyText={t.filters.noAccountsYet}
+                            />
+                            {accountOptions.length > 0 ? (
+                                <span className="m3-body-small text-on-surface-variant">
+                                    {scopedAccountIds.length === 0
+                                        ? t.dashboard.accountsAllHint
+                                        : t.dashboard.accountsScopedHint}
+                                </span>
+                            ) : null}
+                        </Section>
+                    </>
                 ) : null}
 
                 {type === 'chart' ? (
@@ -433,7 +495,6 @@ export function WidgetSheet({
                     setCurrencyOpen(false)
                 }}
                 searchPlaceholder={t.accounts.searchCurrency}
-                suggested={SUGGESTED_CURRENCIES}
             />
 
             {/*
@@ -478,7 +539,12 @@ function BackgroundEditor({
 }) {
     const t = useT()
     const { brightness } = useTheme()
-    const modes: BackgroundMode[] = ['none', 'fixed', 'value']
+    // Same gate as native's `_enableValueBackgroundMode`: the value-range mode
+    // is off by default but stays offered on a widget already using it (the
+    // agent can still write one), so such a widget is never uneditable.
+    const modes: BackgroundMode[] = BACKGROUND_MODES.filter(
+        (mode) => mode !== 'value' || background.mode === 'value',
+    )
     const value = background.value ?? DEFAULT_VALUE_BACKGROUND
     // The swatches preview each color as the widget will actually paint it in
     // this theme, the way native's `_ColorSwatches` does

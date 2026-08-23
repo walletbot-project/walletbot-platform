@@ -1,4 +1,7 @@
+import 'dart:convert';
+
 import 'package:app/components/dashboard/add_widget_sheet.dart';
+import 'package:app/components/dashboard/dashboard_models.dart';
 import 'package:app/data/data.dart';
 import 'package:app/database.dart';
 import 'package:app/l10n/l10n.dart';
@@ -74,10 +77,22 @@ void main() {
     await settle(tester);
   }
 
-  Future<void> tapChip(WidgetTester tester, String label) async {
-    await tester.tap(find.text(label));
+  /// The sheet scrolls, and it is taller than the 800x600 test viewport, so a
+  /// control near the bottom has to be brought into view before it can be hit.
+  Future<void> tapVisible(WidgetTester tester, Finder finder) async {
+    await tester.ensureVisible(finder);
+    await settle(tester);
+    await tester.tap(finder);
     await settle(tester);
   }
+
+  Future<void> tapChip(WidgetTester tester, String label) =>
+      tapVisible(tester, find.text(label));
+
+  /// Taps the sheet's confirm button — `Add` when creating, `Save` when
+  /// editing — and lets the write settle.
+  Future<void> submit(WidgetTester tester, {required bool editing}) =>
+      tapVisible(tester, find.text(editing ? 'Save' : 'Add'));
 
   DashboardWidget storedWidget({required String type, String? filterId}) =>
       DashboardWidget(
@@ -94,6 +109,12 @@ void main() {
       );
 
   const someFilter = TransactionFilter(types: {TxnType.expense});
+
+  /// The single stored widget row, decoded.
+  Future<Map<String, Object?>> storedOptions() async {
+    final rows = await repos.dashboard.listActive();
+    return jsonDecode(rows.single.options) as Map<String, Object?>;
+  }
 
   group('creating', () {
     testWidgets('a stat with no title and no filter cannot be added', (
@@ -116,6 +137,126 @@ void main() {
       await tapChip(tester, 'Balance');
       await typeTitle(tester, 'Total');
       expect(confirmEnabled(tester, editing: false), isTrue);
+    });
+
+    testWidgets('the picked width is stored, not just the type default', (
+      tester,
+    ) async {
+      await openSheet(tester, (context) => showAddWidgetSheet(context, repos));
+      await tapChip(tester, 'Balance');
+      await typeTitle(tester, 'Total');
+      // The balance card defaults to `half` (1/2); pick the full width chip.
+      await tapChip(tester, '1/1');
+      await submit(tester, editing: false);
+
+      final rows = await repos.dashboard.listActive();
+      expect(rows.single.width, 'full');
+    });
+
+    testWidgets('a width too wide for the target cell is not offered', (
+      tester,
+    ) async {
+      await openSheet(
+        tester,
+        (context) => showAddWidgetSheet(
+          context,
+          repos,
+          at: const DashboardLayoutCoord(row: 0, col: 4),
+          maxUnits: 2,
+        ),
+      );
+      // 2 units is exactly a `1/3`; everything wider must be off the picker.
+      expect(find.text('1/3'), findsOneWidget);
+      expect(find.text('1/2'), findsNothing);
+      expect(find.text('2/3'), findsNothing);
+      expect(find.text('1/1'), findsNothing);
+    });
+  });
+
+  group('balance card scope', () {
+    testWidgets('with no account chosen it stores an empty scope', (
+      tester,
+    ) async {
+      await repos.accounts.create(name: 'Efectivo', currency: 'ARS');
+
+      await openSheet(tester, (context) => showAddWidgetSheet(context, repos));
+      await tapChip(tester, 'Balance');
+      await typeTitle(tester, 'Total');
+      await submit(tester, editing: false);
+
+      final options = await storedOptions();
+      expect(options['currency'], 'ARS');
+      expect(options['accountIds'], isEmpty);
+    });
+
+    testWidgets('a chosen account is stored as the scope', (tester) async {
+      final cash = await repos.accounts.create(
+        name: 'Efectivo',
+        currency: 'ARS',
+      );
+      await repos.accounts.create(name: 'Banco', currency: 'ARS');
+
+      await openSheet(tester, (context) => showAddWidgetSheet(context, repos));
+      await tapChip(tester, 'Balance');
+      await typeTitle(tester, 'Solo caja');
+      await tapVisible(tester, find.widgetWithText(FilterChip, 'Efectivo'));
+      await submit(tester, editing: false);
+
+      expect((await storedOptions())['accountIds'], [cash]);
+    });
+
+    testWidgets('only accounts of the chosen currency are offered', (
+      tester,
+    ) async {
+      await repos.accounts.create(name: 'Efectivo', currency: 'ARS');
+      await repos.accounts.create(name: 'Dolares', currency: 'USD');
+
+      await openSheet(tester, (context) => showAddWidgetSheet(context, repos));
+      await tapChip(tester, 'Balance');
+      // ARS sorts first, so it is the currency the sheet lands on.
+      expect(find.widgetWithText(FilterChip, 'Efectivo'), findsOneWidget);
+      expect(find.widgetWithText(FilterChip, 'Dolares'), findsNothing);
+
+      await tapChip(tester, 'USD');
+      expect(find.widgetWithText(FilterChip, 'Efectivo'), findsNothing);
+      expect(find.widgetWithText(FilterChip, 'Dolares'), findsOneWidget);
+    });
+
+    testWidgets('an edit that does not touch the scope keeps it', (
+      tester,
+    ) async {
+      final cash = await repos.accounts.create(
+        name: 'Efectivo',
+        currency: 'ARS',
+      );
+      await repos.dashboard.create(
+        type: 'balance',
+        position: 0,
+        width: 'half',
+        options: jsonEncode({
+          'title': 'Efectivo',
+          'currency': 'ARS',
+          'accountIds': [cash],
+          'layout': {'row': 0, 'col': 0},
+        }),
+      );
+      final stored = (await repos.dashboard.listActive()).single;
+
+      await openSheet(
+        tester,
+        (context) => showEditWidgetSheet(
+          context,
+          repos,
+          stored,
+          const TransactionFilter(),
+        ),
+      );
+      await typeTitle(tester, 'Caja');
+      await submit(tester, editing: true);
+
+      final options = await storedOptions();
+      expect(options['title'], 'Caja');
+      expect(options['accountIds'], [cash]);
     });
   });
 

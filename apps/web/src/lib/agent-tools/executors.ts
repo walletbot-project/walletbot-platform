@@ -980,6 +980,7 @@ type WidgetContentArgs = {
     aggregation?: StatAggregation
     limit?: number
     currency?: string
+    accountIds?: string[]
     groupBy?: BreakdownGroupBy
     chartKind?: BreakdownChartKind
     background?: {
@@ -1115,6 +1116,11 @@ function widgetOptionsFor(
                 return { error: 'Balance widgets require currency' }
             }
             options.currency = currency.toUpperCase()
+            // `accountIds` is a content key, so it is dropped before the merge:
+            // it has to be re-stated on every write or a partial update that
+            // never mentioned it would silently widen the card back to the
+            // whole currency.
+            options.accountIds = args.accountIds ?? existing.accountIds
             break
         }
         case 'chart':

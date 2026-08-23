@@ -30,7 +30,7 @@ A visual instance bound to a Filter + display options.
 | Widget | Binds to | Shows | Default width |
 |---|---|---|---|
 | **Stat block** | Filter + aggregation (sum / net / count) + currency | one number, optional Δ vs previous period | third / half |
-| **Balance card** | account(s) or currency | current balance *as of now* (not date-bounded) | half / full |
+| **Balance card** | currency, optionally narrowed to account(s) | current balance *as of now* (not date-bounded) | half / full |
 | **Transaction list** | Filter + limit | recent N matching rows, tap → full filtered list | full |
 | **Breakdown chart** | Filter + group-by (category / account / time) | pie / bar / line | full |
 
@@ -197,7 +197,7 @@ Both tables carry the standard sync columns (`id` UUID, `seq`, `isArchived`,
 additive, not a rewrite.
 
 - **`savedFilters`** — `id`, `name`, `config` (JSON of the Filter fields above) + sync columns.
-- **`dashboardWidgets`** — `id`, `type`, `filterId` (→ savedFilters, nullable for balance-by-account), `position`, `width`, `options` (JSON: title, aggregation, groupBy, limit, chartKind, comparePrevPeriod) + sync columns.
+- **`dashboardWidgets`** — `id`, `type`, `filterId` (→ savedFilters, always null for the balance card, which scopes itself), `position`, `width`, `options` (JSON: title, aggregation, groupBy, limit, chartKind, currency, accountIds) + sync columns.
 
 Widget `options.background` is optional and applies to every widget type:
 
@@ -323,8 +323,8 @@ unchanged — only advanced (disjunctive) filters take the anchor+predicate path
 > accounts seed immediately. Remote accounts wait until their initial pull has
 > completed; pulled dashboard tombstones suppress seeding so an intentionally
 > emptied dashboard is not resurrected. Editing lives
-> in `apps/native/lib/components/dashboard/` (`dashboard_editor.dart`,
-> `add_widget_sheet.dart`) and reuses `showFilterSheet`
+> in `apps/native/lib/components/dashboard/` (`add_widget_sheet.dart`, plus the
+> tile menu in `dashboard_view.dart`) and reuses `showFilterSheet`
 > (`apps/native/lib/components/filter_sheet.dart`).
 >
 > The Breakdown chart widget (`fl_chart`, pie / bar / line, group-by category /
@@ -383,4 +383,31 @@ unchanged — only advanced (disjunctive) filters take the anchor+predicate path
 > `createDashboardWidget` both write one. Covered by
 > `apps/native/test/components/dashboard/add_widget_sheet_test.dart`.
 >
-> **Still pending:** the advanced (tree) filter editor on web.
+> **Balance by account (2026-08-22, both clients).** The Balance card scopes to
+> a currency and, optionally, to specific accounts *within* that currency —
+> `options.accountIds`, a content key in both `parseWidgetOptions`
+> (`packages/shared/src/dashboard/widgets.ts`) and native's
+> `mergeWidgetOptions`. An empty or absent list keeps the original meaning,
+> "every account in the currency", so every card written before this change
+> reads unchanged. Ids are always intersected with the currency at read time
+> (`v1/dashboard/queries:currencyBalance` and
+> `watchTotalBalanceForCurrency`), so an account since archived, deleted or
+> re-denominated drops out of the sum rather than being counted or throwing.
+> Both add/edit sheets offer the accounts of the chosen currency, and both agent
+> tool paths accept and preserve `accountIds`. No schema or sync change: the ids
+> ride the opaque `options` JSON.
+>
+> **Cross-platform convergences shipped with it.** Web's balance-card currency
+> picker now lists the currencies the user actually holds (plus the card's own,
+> so an existing card stays editable) instead of the whole ISO catalogue, which
+> is what native always did and what the filter sheet already did on web. Web's
+> value-range background mode is gated exactly like native's
+> `_enableValueBackgroundMode` — off by default, still offered on a widget
+> already using it. Native's add/edit sheet gained the width chips web has had,
+> so width no longer has to be set from the tile menu after the fact; the chips
+> honour the free span at a targeted `+` cell, and the sheet now writes `width`
+> on update as web does.
+>
+> **Still pending:** the advanced (tree) filter editor on web; the Stat block's
+> Δ-vs-previous-period (`comparePrevPeriod` is specified above but implemented
+> nowhere); and time grouping on the Breakdown chart beyond `month`.
