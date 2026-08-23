@@ -2738,6 +2738,108 @@ abstract class AppLocalizations {
   /// **'Could not save the tag'**
   String get tagSaveFailed;
 
+  /// No description provided for @legalFirstTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Before you start'**
+  String get legalFirstTitle;
+
+  /// No description provided for @legalFirstSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'We need your acceptance to create your account and provide the service.'**
+  String get legalFirstSubtitle;
+
+  /// No description provided for @legalUpdatedTermsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'We updated the Terms'**
+  String get legalUpdatedTermsTitle;
+
+  /// No description provided for @legalUpdatedPrivacyTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'We updated the Privacy Policy'**
+  String get legalUpdatedPrivacyTitle;
+
+  /// No description provided for @legalUpdatedBothTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'We updated the Terms and the Privacy Policy'**
+  String get legalUpdatedBothTitle;
+
+  /// No description provided for @legalUpdatedSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Review the changes and accept them to keep using Wallet Bot.'**
+  String get legalUpdatedSubtitle;
+
+  /// No description provided for @legalUpdatedSubtitleGrace.
+  ///
+  /// In en, this message translates to:
+  /// **'You can keep using the app for now, but we will need your acceptance.'**
+  String get legalUpdatedSubtitleGrace;
+
+  /// No description provided for @legalAgeConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'I am 18 or older'**
+  String get legalAgeConfirm;
+
+  /// No description provided for @legalAcceptTerms.
+  ///
+  /// In en, this message translates to:
+  /// **'I accept the [[terms]]'**
+  String get legalAcceptTerms;
+
+  /// No description provided for @legalAcceptPrivacy.
+  ///
+  /// In en, this message translates to:
+  /// **'I accept the [[privacy]]'**
+  String get legalAcceptPrivacy;
+
+  /// No description provided for @legalAcceptBoth.
+  ///
+  /// In en, this message translates to:
+  /// **'I accept the [[terms]] and the [[privacy]]'**
+  String get legalAcceptBoth;
+
+  /// No description provided for @legalTermsName.
+  ///
+  /// In en, this message translates to:
+  /// **'Terms and Conditions'**
+  String get legalTermsName;
+
+  /// No description provided for @legalPrivacyName.
+  ///
+  /// In en, this message translates to:
+  /// **'Privacy Policy'**
+  String get legalPrivacyName;
+
+  /// No description provided for @legalAcceptAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Accept and continue'**
+  String get legalAcceptAction;
+
+  /// No description provided for @legalLater.
+  ///
+  /// In en, this message translates to:
+  /// **'Later'**
+  String get legalLater;
+
+  /// No description provided for @legalUseAnotherAccount.
+  ///
+  /// In en, this message translates to:
+  /// **'Use another account'**
+  String get legalUseAnotherAccount;
+
+  /// No description provided for @legalAcceptFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'We could not record your acceptance. Check your connection and try again.'**
+  String get legalAcceptFailed;
+
   /// No description provided for @actionLoadFailed.
   ///
   /// In en, this message translates to:

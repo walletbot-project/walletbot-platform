@@ -53,6 +53,23 @@ void main() {
     await tester.pump(const Duration(seconds: 31));
   }
 
+  // Sign-up cannot be submitted until both consent boxes are ticked, so every
+  // sign-up path has to do this first (the labels are asserted here on
+  // purpose: the copy is what the user is agreeing to).
+  Future<void> acceptLegalChecks(WidgetTester tester) async {
+    await tester.tap(find.text('Tengo 18 años o más'));
+    await tester.pump();
+    // The accept label carries the document links inline, and tapping one of
+    // those opens the document instead of ticking the box. Aim at the start of
+    // the sentence ("Acepto los "), which is always plain text.
+    final label = find.text(
+      'Acepto los Términos y Condiciones y la Política de Privacidad',
+    );
+    final topLeft = tester.getTopLeft(label);
+    await tester.tapAt(Offset(topLeft.dx + 20, topLeft.dy + 8));
+    await tester.pump();
+  }
+
   testWidgets('sign-up blocked by verification shows the pending panel', (
     tester,
   ) async {
@@ -74,6 +91,11 @@ void main() {
     await tester.enterText(find.byType(TextFormField).at(0), 'Ana');
     await tester.enterText(find.byType(TextFormField).at(1), 'ana@test.com');
     await tester.enterText(find.byType(TextFormField).at(2), 'password123');
+    await acceptLegalChecks(tester);
+    // The consent block pushes the submit button below the fold on a short
+    // window; the panel is a scroll view, so bring it into view first.
+    await tester.ensureVisible(find.text('Registrarme'));
+    await tester.pump();
     await tester.tap(find.text('Registrarme'));
     await tester.pumpAndSettle();
 
@@ -86,6 +108,63 @@ void main() {
 
     await drainResendCooldown(tester);
     expect(find.text('Reenviar correo'), findsOneWidget);
+  });
+
+  testWidgets('sign-up is blocked until both consent boxes are ticked', (
+    tester,
+  ) async {
+    final requests = <http.Request>[];
+    final auth = AuthController(
+      httpClient: MockClient((request) async {
+        requests.add(request);
+        return http.Response(
+          jsonEncode({'code': 'email_not_verified', 'message': 'verify'}),
+          403,
+        );
+      }),
+    );
+    await pumpLogin(tester, auth);
+
+    await tester.tap(find.text('¿Necesitás una cuenta? Registrate'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextFormField).at(0), 'Ana');
+    await tester.enterText(find.byType(TextFormField).at(1), 'ana@test.com');
+    await tester.enterText(find.byType(TextFormField).at(2), 'password123');
+
+    // Age alone is not acceptance: the button must stay dead, and nothing may
+    // reach the network.
+    await tester.tap(find.text('Tengo 18 años o más'));
+    await tester.pump();
+    await tester.ensureVisible(find.text('Registrarme'));
+    await tester.pump();
+    await tester.tap(find.text('Registrarme'));
+    await tester.pumpAndSettle();
+    expect(requests, isEmpty);
+
+    await tester.ensureVisible(
+      find.text(
+        'Acepto los Términos y Condiciones y la Política de Privacidad',
+      ),
+    );
+    await tester.pump();
+    await tester.tap(
+      find.text(
+        'Acepto los Términos y Condiciones y la Política de Privacidad',
+      ),
+    );
+    await tester.pump();
+    await tester.ensureVisible(find.text('Registrarme'));
+    await tester.pump();
+    await tester.tap(find.text('Registrarme'));
+    await tester.pumpAndSettle();
+
+    expect(requests.single.url.path, '/auth/email/sign-up');
+    final body = jsonDecode(requests.single.body) as Map<String, Object?>;
+    final acceptance = body['acceptance'] as Map<String, Object?>;
+    expect(acceptance['documents'], ['terms', 'privacy']);
+    expect(acceptance['ageConfirmed'], isTrue);
+    // The server stamps the version; the client never names one.
+    expect(acceptance.containsKey('version'), isFalse);
   });
 
   testWidgets('sign-up on a registered email says so instead of pending', (
@@ -107,6 +186,11 @@ void main() {
     await tester.enterText(find.byType(TextFormField).at(0), 'Ana');
     await tester.enterText(find.byType(TextFormField).at(1), 'ana@test.com');
     await tester.enterText(find.byType(TextFormField).at(2), 'password123');
+    await acceptLegalChecks(tester);
+    // The consent block pushes the submit button below the fold on a short
+    // window; the panel is a scroll view, so bring it into view first.
+    await tester.ensureVisible(find.text('Registrarme'));
+    await tester.pump();
     await tester.tap(find.text('Registrarme'));
     await tester.pumpAndSettle();
 

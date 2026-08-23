@@ -221,6 +221,42 @@ export const es = {
             'El enlace no es válido. Volvé a iniciar sesión para recibir un enlace nuevo.',
     },
 
+    // Aceptación de Términos y Condiciones y Política de Privacidad. Los
+    // documentos se publican en www.walletbot.live (apps/landing renderiza
+    // docs/legal/*.md), así que acá solo va la interfaz de aceptación.
+    legal: {
+        firstTitle: 'Antes de empezar',
+        firstSubtitle:
+            'Necesitamos tu aceptación para crear tu cuenta y darte el servicio.',
+        // Una sola cosa cambió: nombrala, para no pedir de nuevo lo que ya
+        // aceptaste.
+        updatedTermsTitle: 'Actualizamos los Términos',
+        updatedPrivacyTitle: 'Actualizamos la Política de Privacidad',
+        updatedBothTitle: 'Actualizamos los Términos y la Privacidad',
+        updatedSubtitle:
+            'Revisá los cambios y aceptalos para seguir usando Wallet Bot.',
+        updatedSubtitleGrace:
+            'Podés seguir usando la app por ahora, pero vamos a necesitar tu aceptación.',
+
+        ageConfirm: 'Tengo 18 años o más',
+
+        // `[[terms]]` y `[[privacy]]` se reemplazan por enlaces al documento
+        // publicado (ver `components/auth/legal-consent.tsx`). Van dentro de la
+        // frase, no en una lista aparte, para no gastar alto en la tarjeta —
+        // y así cada idioma acomoda artículos y orden a su manera.
+        acceptTerms: 'Acepto los [[terms]]',
+        acceptPrivacy: 'Acepto la [[privacy]]',
+        acceptBoth: 'Acepto los [[terms]] y la [[privacy]]',
+        termsName: 'Términos y Condiciones',
+        privacyName: 'Política de Privacidad',
+
+        acceptAction: 'Aceptar y continuar',
+        later: 'Más tarde',
+        acceptFailed:
+            'No pudimos registrar tu aceptación. Revisá tu conexión e intentá de nuevo.',
+        acceptRequired: 'Marcá las dos casillas para continuar.',
+    },
+
     dashboard: {
         widget: 'Widget',
         editDashboard: 'Editar tablero',

@@ -1,13 +1,13 @@
 # Wallet Bot — Terms and Conditions
 
-**Effective date:** August 6, 2026
-**Last updated:** August 6, 2026
+**Effective date:** August 23, 2026
+**Last updated:** August 23, 2026
 
 > These Terms are published in Spanish and English. For consumers residing in the Argentine Republic, the Spanish version ("Términos y Condiciones") is the legally operative text and prevails in case of any discrepancy. For all other users, this English version prevails and the Spanish version is a convenience translation.
 
 ## 1. Acceptance of these Terms
 
-These Terms and Conditions (the "**Terms**") are a binding agreement between you ("**you**", the "**User**") and **[CONTROLLER LEGAL NAME]**, domiciled at [CONTROLLER ADDRESS, ARGENTINA] ("**Wallet Bot**", "**we**", "**us**"), governing your use of the Wallet Bot applications and services (the "**Service**").
+These Terms and Conditions (the "**Terms**") are a binding agreement between you ("**you**", the "**User**") and **Tomás Cichero**, CUIT 20-43920814-8, domiciled at Estanislao del Campo 1260, B1604ADH Florida Oeste, Provincia de Buenos Aires, Argentina ("**Wallet Bot**", "**we**", "**us**"), governing your use of the Wallet Bot applications and services (the "**Service**").
 
 You accept these Terms by expressly indicating your acceptance when creating an account or, for local-only use, when first using the app. Mere navigation of our website does not by itself create a contract; we will always ask for your affirmative acceptance. If you do not agree with these Terms, do not use the Service.
 
@@ -154,6 +154,6 @@ These Terms are executed in Spanish and English. For consumers residing in Argen
 
 ## 21. Contact
 
-**[CONTROLLER LEGAL NAME]**
-[CONTROLLER ADDRESS, ARGENTINA]
+**Tomás Cichero**, CUIT 20-43920814-8
+Estanislao del Campo 1260, B1604ADH Florida Oeste, Provincia de Buenos Aires, Argentina
 support@walletbot.live

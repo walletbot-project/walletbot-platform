@@ -30,11 +30,11 @@ class _ForgotPasswordPanel extends StatelessWidget {
     final l10n = context.l10n;
 
     if (emailSent) {
-      return _Panel(
+      return AuthPanel(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            _PanelTitle(
+            AuthPanelTitle(
               icon: Icons.mark_email_read_rounded,
               title: l10n.resetPasswordTitle,
               subtitle: l10n.resetEmailSent(sentToEmail),
@@ -49,7 +49,7 @@ class _ForgotPasswordPanel extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 16),
-            _PrimaryActionButton(
+            AuthPrimaryActionButton(
               submitting: false,
               label: l10n.backToSignIn,
               onPressed: onBack,
@@ -59,13 +59,13 @@ class _ForgotPasswordPanel extends StatelessWidget {
       );
     }
 
-    return _Panel(
+    return AuthPanel(
       child: Form(
         key: formKey,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            _PanelTitle(
+            AuthPanelTitle(
               icon: Icons.lock_reset_rounded,
               title: l10n.resetPasswordTitle,
               subtitle: l10n.resetPasswordSubtitle,
@@ -88,7 +88,7 @@ class _ForgotPasswordPanel extends StatelessWidget {
               },
             ),
             const SizedBox(height: 16),
-            _PrimaryActionButton(
+            AuthPrimaryActionButton(
               submitting: submitting,
               label: l10n.sendResetLink,
               onPressed: onSubmit,
@@ -132,11 +132,11 @@ class _VerifyEmailPendingPanel extends StatelessWidget {
     final l10n = context.l10n;
     final canResend = resendCooldown <= 0 && !submitting;
 
-    return _Panel(
+    return AuthPanel(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _PanelTitle(
+          AuthPanelTitle(
             icon: Icons.mark_email_unread_rounded,
             title: l10n.verifyEmailTitle,
             subtitle: l10n.verifyEmailSent(email),
@@ -151,7 +151,7 @@ class _VerifyEmailPendingPanel extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 16),
-          _PrimaryActionButton(
+          AuthPrimaryActionButton(
             submitting: submitting,
             label: l10n.verifyEmailDone,
             onPressed: onSignIn,

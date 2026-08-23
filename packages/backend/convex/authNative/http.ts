@@ -1,3 +1,4 @@
+import { isLegalDocument, type LegalDocument } from '@wallet-bot/shared'
 import { APIError } from 'better-auth/api'
 import type { HttpRouter } from 'convex/server'
 import { internal } from '../_generated/api'
@@ -89,6 +90,53 @@ type EmailSignInBody = {
 
 type EmailSignUpBody = EmailSignInBody & {
     name?: string
+    acceptance?: unknown
+}
+
+type AcceptanceInput = {
+    documents: LegalDocument[]
+    ageConfirmed: boolean
+    platform: string
+    appVersion?: string
+    locale?: string
+}
+
+/**
+ * The Terms/Privacy acceptance a sign-up form collected, off an untrusted body.
+ *
+ * Optional on purpose: already-released native builds don't send it, and a
+ * missing acceptance must not break sign-up — the in-app gate catches those
+ * users on their first sign-in. Anything malformed, or an unchecked age box,
+ * parses to `null` and is simply not recorded: showing the documents is never
+ * acceptance (docs/legal/README.md), and neither is a half-filled form.
+ *
+ * No version is read from the body; `recordAcceptances` stamps the server's
+ * own `current`.
+ */
+const parseAcceptanceInput = (raw: unknown): AcceptanceInput | null => {
+    if (typeof raw !== 'object' || raw === null) return null
+    const record = raw as Record<string, unknown>
+    if (record.ageConfirmed !== true) return null
+    if (!Array.isArray(record.documents)) return null
+
+    const documents = record.documents.filter(
+        (document): document is LegalDocument =>
+            typeof document === 'string' && isLegalDocument(document),
+    )
+    if (documents.length === 0) return null
+
+    return {
+        documents,
+        ageConfirmed: true,
+        platform:
+            typeof record.platform === 'string' && record.platform.length > 0
+                ? record.platform
+                : 'unknown',
+        ...(typeof record.appVersion === 'string'
+            ? { appVersion: record.appVersion }
+            : {}),
+        ...(typeof record.locale === 'string' ? { locale: record.locale } : {}),
+    }
 }
 
 type NativeAuthUser = {
@@ -328,6 +376,35 @@ const emailSignUp = corsHttpAction(async (ctx, req) => {
         // Account-creation telemetry can't live here for the same reason: this
         // branch is taken for BOTH cases. It hangs off the real row insert in
         // `databaseHooks.user.create.after` (see `auth.ts`) instead.
+        //
+        // Acceptance is recorded here, before either return: the account row
+        // exists in both branches (verification pending or session issued),
+        // and this is the only moment a sign-up form's checkboxes can be tied
+        // to a user id — email sign-up mints no session, so there is no
+        // authenticated caller to run `v1/legal/mutations:accept`.
+        const acceptance = parseAcceptanceInput(body?.acceptance)
+        if (acceptance) {
+            // Re-resolve rather than trusting `result.user.id`: that id is
+            // synthetic for a duplicate sign-up, and a legal record must never
+            // hang off a fake user. Failure here is logged, not fatal — the
+            // account exists, and the in-app gate is the backstop.
+            const created = await internalAdapter.findUserByEmail(parsed.email)
+            if (created) {
+                try {
+                    await ctx.runMutation(
+                        internal.legal.internal.recordAcceptancesForUser,
+                        { userId: created.user.id, acceptance },
+                    )
+                } catch (err) {
+                    console.error(
+                        'authNative: recording sign-up acceptance failed',
+                        err instanceof Error
+                            ? (err.stack ?? err.message)
+                            : String(err),
+                    )
+                }
+            }
+        }
         if (!result.token) {
             return jsonError(
                 403,

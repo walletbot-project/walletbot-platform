@@ -1486,6 +1486,62 @@ class AppLocalizationsEn extends AppLocalizations {
   String get tagSaveFailed => 'Could not save the tag';
 
   @override
+  String get legalFirstTitle => 'Before you start';
+
+  @override
+  String get legalFirstSubtitle =>
+      'We need your acceptance to create your account and provide the service.';
+
+  @override
+  String get legalUpdatedTermsTitle => 'We updated the Terms';
+
+  @override
+  String get legalUpdatedPrivacyTitle => 'We updated the Privacy Policy';
+
+  @override
+  String get legalUpdatedBothTitle =>
+      'We updated the Terms and the Privacy Policy';
+
+  @override
+  String get legalUpdatedSubtitle =>
+      'Review the changes and accept them to keep using Wallet Bot.';
+
+  @override
+  String get legalUpdatedSubtitleGrace =>
+      'You can keep using the app for now, but we will need your acceptance.';
+
+  @override
+  String get legalAgeConfirm => 'I am 18 or older';
+
+  @override
+  String get legalAcceptTerms => 'I accept the [[terms]]';
+
+  @override
+  String get legalAcceptPrivacy => 'I accept the [[privacy]]';
+
+  @override
+  String get legalAcceptBoth => 'I accept the [[terms]] and the [[privacy]]';
+
+  @override
+  String get legalTermsName => 'Terms and Conditions';
+
+  @override
+  String get legalPrivacyName => 'Privacy Policy';
+
+  @override
+  String get legalAcceptAction => 'Accept and continue';
+
+  @override
+  String get legalLater => 'Later';
+
+  @override
+  String get legalUseAnotherAccount => 'Use another account';
+
+  @override
+  String get legalAcceptFailed =>
+      'We could not record your acceptance. Check your connection and try again.';
+
+  @override
   String get actionLoadFailed => 'Could not load the action';
 
   @override

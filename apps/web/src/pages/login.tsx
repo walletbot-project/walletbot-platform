@@ -1,3 +1,4 @@
+import { LEGAL_DOCUMENTS } from '@wallet-bot/shared'
 import { Button } from 'actify'
 import { type FormEvent, useEffect, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
@@ -12,9 +13,10 @@ import {
     AuthPrimaryButton,
     AuthTextField,
 } from '@/components/auth/auth-scaffold'
+import { LegalConsentChecks } from '@/components/auth/legal-consent'
 import { authClient } from '@/lib/auth-client'
 import { signUpWithEmail } from '@/lib/auth-signup'
-import { type Messages, useT } from '@/lib/i18n'
+import { type Messages, useI18n, useT } from '@/lib/i18n'
 import { ForgotPasswordPanel } from '@/pages/auth/forgot-password-panel'
 import { VerifyPendingPanel } from '@/pages/auth/verify-pending-panel'
 
@@ -61,6 +63,7 @@ export function Login({ mode }: { mode: AuthMode }) {
     const location = useLocation()
     const navigate = useNavigate()
     const t = useT()
+    const { locale } = useI18n()
     const from = location.state?.from?.pathname || '/'
 
     const [loading, setLoading] = useState<'email' | 'google' | null>(null)
@@ -68,6 +71,13 @@ export function Login({ mode }: { mode: AuthMode }) {
     const [flow, setFlow] = useState<RemoteFlow>('credentials')
     /** Email echoed in the copy of the verify-pending panel. */
     const [pendingEmail, setPendingEmail] = useState('')
+    /**
+     * Sign-up consent. Lifted out of the panel because the submit handler has
+     * to send it and the primary button stays dead until both are ticked —
+     * affirmative acceptance, never a pre-checked box (docs/legal/README.md).
+     */
+    const [ageConfirmed, setAgeConfirmed] = useState(false)
+    const [acceptedLegal, setAcceptedLegal] = useState(false)
 
     // Sign-in and create are separate routes; clear any stale error as the user
     // moves between them.
@@ -145,6 +155,15 @@ export function Login({ mode }: { mode: AuthMode }) {
                 name: name || email,
                 email,
                 password,
+                // Both documents, always: a new account accepts the whole
+                // agreement. The button cannot be pressed unless both boxes
+                // are ticked, so these are the values the user actually gave.
+                acceptance: {
+                    documents: LEGAL_DOCUMENTS,
+                    ageConfirmed,
+                    platform: 'web',
+                    locale,
+                },
             })
 
             switch (outcome.status) {
@@ -206,6 +225,10 @@ export function Login({ mode }: { mode: AuthMode }) {
                     mode={mode}
                     loading={loading}
                     error={error}
+                    ageConfirmed={ageConfirmed}
+                    acceptedLegal={acceptedLegal}
+                    onAgeConfirmedChange={setAgeConfirmed}
+                    onAcceptedLegalChange={setAcceptedLegal}
                     onSubmit={handleEmailSubmit}
                     onGoogle={() => void handleGoogleSignIn()}
                     onModeChange={goToMode}
@@ -224,6 +247,10 @@ function CredentialsPanel({
     mode,
     loading,
     error,
+    ageConfirmed,
+    acceptedLegal,
+    onAgeConfirmedChange,
+    onAcceptedLegalChange,
     onSubmit,
     onGoogle,
     onModeChange,
@@ -232,6 +259,10 @@ function CredentialsPanel({
     mode: AuthMode
     loading: 'email' | 'google' | null
     error: string | null
+    ageConfirmed: boolean
+    acceptedLegal: boolean
+    onAgeConfirmedChange: (value: boolean) => void
+    onAcceptedLegalChange: (value: boolean) => void
     onSubmit: (event: FormEvent<HTMLFormElement>) => void
     onGoogle: () => void
     onModeChange: (mode: AuthMode) => void
@@ -307,11 +338,25 @@ function CredentialsPanel({
                     <div className="h-1" />
                 )}
 
+                {mode === 'sign-up' ? (
+                    <LegalConsentChecks
+                        documents={LEGAL_DOCUMENTS}
+                        ageConfirmed={ageConfirmed}
+                        accepted={acceptedLegal}
+                        onAgeConfirmedChange={onAgeConfirmedChange}
+                        onAcceptedChange={onAcceptedLegalChange}
+                        disabled={submitting}
+                    />
+                ) : null}
+
                 {error ? <AuthErrorNote message={error} /> : null}
 
                 <AuthPrimaryButton
                     type="submit"
                     submitting={loading === 'email'}
+                    disabled={
+                        mode === 'sign-up' && (!ageConfirmed || !acceptedLegal)
+                    }
                     label={mode === 'sign-in' ? t.auth.signIn : t.auth.signUp}
                 />
 

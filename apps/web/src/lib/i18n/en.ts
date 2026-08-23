@@ -202,6 +202,33 @@ export const en: Messages = {
             'The link is not valid. Sign in again to receive a new one.',
     },
 
+    legal: {
+        firstTitle: 'Before you start',
+        firstSubtitle:
+            'We need your acceptance to create your account and provide the service.',
+        updatedTermsTitle: 'We updated the Terms',
+        updatedPrivacyTitle: 'We updated the Privacy Policy',
+        updatedBothTitle: 'We updated the Terms and the Privacy Policy',
+        updatedSubtitle:
+            'Review the changes and accept them to keep using Wallet Bot.',
+        updatedSubtitleGrace:
+            'You can keep using the app for now, but we will need your acceptance.',
+
+        ageConfirm: 'I am 18 or older',
+
+        acceptTerms: 'I accept the [[terms]]',
+        acceptPrivacy: 'I accept the [[privacy]]',
+        acceptBoth: 'I accept the [[terms]] and the [[privacy]]',
+        termsName: 'Terms and Conditions',
+        privacyName: 'Privacy Policy',
+
+        acceptAction: 'Accept and continue',
+        later: 'Later',
+        acceptFailed:
+            'We could not record your acceptance. Check your connection and try again.',
+        acceptRequired: 'Tick both boxes to continue.',
+    },
+
     dashboard: {
         widget: 'Widget',
         editDashboard: 'Edit dashboard',
