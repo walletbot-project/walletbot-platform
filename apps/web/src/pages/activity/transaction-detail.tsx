@@ -1,8 +1,10 @@
 import { api } from '@wallet-bot/backend/api'
 import type { SimpleFilter } from '@wallet-bot/shared'
+import { computeExchangeRate } from '@wallet-bot/shared'
 import { CircularProgress, IconButton, Select, SelectOption } from 'actify'
 import { useMutation, useQuery } from 'convex/react'
 import type { FunctionReturnType } from 'convex/server'
+import { ArrowRightLeft } from 'lucide-react'
 import { type ReactNode, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
@@ -215,6 +217,7 @@ function TransactionDetailsContent({
         transaction.type === 'transfer'
     const canEditAccount = transaction.type !== 'balance_adjustment'
     const isTransfer = transaction.type === 'transfer'
+    const exchangeRate = crossCurrencyExchangeRate(transaction)
     const hasSelectedTags = tags.some((tag) => selectedTagIds.has(tag.id))
     const timeNeedsAttention = timeStatus !== 'confirmed'
     const signedAmount = displaySignedAmount(transaction, transferSide)
@@ -672,6 +675,22 @@ function TransactionDetailsContent({
                             </ReceiptRow>
                         ) : null}
 
+                        {exchangeRate ? (
+                            <ReceiptRow
+                                icon={<ArrowRightLeft />}
+                                label={t.transaction.exchangeRate}
+                            >
+                                <span className="tabular-nums">
+                                    1 {exchangeRate.base} →{' '}
+                                    {new Intl.NumberFormat(formatLocale, {
+                                        minimumFractionDigits: 2,
+                                        maximumFractionDigits: 2,
+                                    }).format(exchangeRate.rate)}{' '}
+                                    {exchangeRate.quote}
+                                </span>
+                            </ReceiptRow>
+                        ) : null}
+
                         {transaction.type !== 'balance_adjustment' ? (
                             <ReceiptRow
                                 icon={
@@ -960,6 +979,34 @@ function displayAmount(
     return side === 'destination'
         ? (transaction.toAmount ?? transaction.amount)
         : transaction.amount
+}
+
+/// Read-only "tipo de cambio" display data for a cross-currency transfer, shaped
+/// as `1 <base> → <rate> <quote>`. Prefers the stored `exchangeRate` (backfilled
+/// to the current rule) and only recomputes from the amounts as a fallback for
+/// rows without one. The base is the stronger currency — the leg with the
+/// smaller amount, since fewer of its units carry the same value (comparing
+/// cents works because both legs are scaled by the same factor of 100). Returns
+/// null when not applicable.
+function crossCurrencyExchangeRate(
+    transaction: Transaction,
+): { base: string; quote: string; rate: number } | null {
+    if (transaction.type !== 'transfer') return null
+    const { currency, toCurrency, amount, toAmount } = transaction
+    if (toCurrency == null || toAmount == null || toCurrency === currency) {
+        return null
+    }
+    const sourceCents = Number(amount)
+    const destCents = Number(toAmount)
+    const rate =
+        transaction.exchangeRate ?? computeExchangeRate(sourceCents, destCents)
+    if (rate == null) return null
+    const sourceIsBase = sourceCents <= destCents
+    return {
+        base: sourceIsBase ? currency : toCurrency,
+        quote: sourceIsBase ? toCurrency : currency,
+        rate,
+    }
 }
 
 function displaySignedAmount(

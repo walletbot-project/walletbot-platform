@@ -21,7 +21,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get accounts => 'Accounts';
 
   @override
-  String get insights => 'Insights';
+  String get insights => 'Organization';
 
   @override
   String get categories => 'Categories';
@@ -127,6 +127,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get account => 'Account';
+
+  @override
+  String get exchangeRate => 'Exchange rate';
 
   @override
   String get status => 'Status';
@@ -262,6 +265,57 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get settingsSaveFailed => 'Could not save the setting. Try again.';
+
+  @override
+  String get deleteUserAccount => 'Delete my account';
+
+  @override
+  String get deleteUserAccountDescription =>
+      'Permanently delete your account and all your data';
+
+  @override
+  String get deleteUserAccountConfirmTitle => 'Delete your account?';
+
+  @override
+  String deleteUserAccountConfirmBody(String email) {
+    return 'We will send a confirmation link to $email. Deleting your account is permanent and cannot be undone.';
+  }
+
+  @override
+  String get deleteUserAccountSend => 'Send link';
+
+  @override
+  String get deleteUserAccountEmailSent =>
+      'Check your email: we sent you a link to confirm the deletion.';
+
+  @override
+  String get deleteUserAccountFailed =>
+      'Could not send the email. Try again in a few minutes.';
+
+  @override
+  String get deleteUserAccountAlreadyDeleted =>
+      'That account was already deleted.';
+
+  @override
+  String get deleteUserAccountRateLimited =>
+      'You already requested several deletion links. Wait an hour and try again.';
+
+  @override
+  String get accountDeletedBanner => 'This account was deleted';
+
+  @override
+  String get accountDeletedRemove => 'Remove';
+
+  @override
+  String get accountDeletedConfirmTitle =>
+      'Remove this account from the device?';
+
+  @override
+  String get accountDeletedConfirmBody =>
+      'The account is already deleted on the server. This erases its data from this device too, which is the last copy.';
+
+  @override
+  String get accountDeletedRemoveConfirm => 'Remove';
 
   @override
   String get updateRequiredTitle => 'Update required';
@@ -1037,7 +1091,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String resetEmailSent(String email) {
-    return 'If an account exists for $email, we sent it a link to reset the password. The link opens in your browser.';
+    return 'We sent a link to $email to reset your password. The link opens in your browser.';
   }
 
   @override
@@ -1086,6 +1140,23 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get emailStillNotVerified =>
       'That email isn\'t verified yet. We sent you a new link.';
+
+  @override
+  String accountNotFoundForEmail(String email) {
+    return 'There is no account for $email.';
+  }
+
+  @override
+  String get emailAlreadyVerified =>
+      'That email is already verified. Sign in with your account.';
+
+  @override
+  String get tooManyAttempts =>
+      'Too many attempts. Wait a minute and try again.';
+
+  @override
+  String get emailSendFailed =>
+      'Could not send the email. Try again in a few minutes.';
 
   @override
   String localAccountFailed(Object error) {
@@ -1317,11 +1388,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get interrupted => '(interrupted)';
 
   @override
-  String voiceRuntimeError(Object error) {
-    return 'Voice error: $error';
-  }
-
-  @override
   String get toolRunning => 'Running';
 
   @override
@@ -1373,9 +1439,8 @@ class AppLocalizationsEn extends AppLocalizations {
       'PCM 16-bit streaming is not supported on this device';
 
   @override
-  String voiceStartFailed(Object error) {
-    return 'Failed to start: $error';
-  }
+  String get voiceStartFailed =>
+      'Couldn\'t start the conversation. Please try again.';
 
   @override
   String microphoneOpenFailed(Object error) {
@@ -1385,11 +1450,6 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String audioStreamFailed(Object error) {
     return 'Audio stream error: $error';
-  }
-
-  @override
-  String voiceStopFailed(Object error) {
-    return 'Failed to stop cleanly: $error';
   }
 
   @override

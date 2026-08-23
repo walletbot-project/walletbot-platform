@@ -90,6 +90,7 @@ export {
     widthForUnits,
     writeLayout,
 } from './dashboard/widgets'
+export { computeExchangeRate } from './exchange-rate'
 export {
     FEEDBACK_MAX_FILE_BYTES,
     FEEDBACK_MAX_FILE_MB,

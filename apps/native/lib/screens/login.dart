@@ -178,12 +178,26 @@ class _LoginScreenState extends State<LoginScreen> {
 
     try {
       await auth.requestPasswordReset(email: email);
+      // Only reached when an email really went out, so the panel's copy can
+      // name the address. It used to flip on any 200, and an address with no
+      // account behind it answered 200 without sending anything.
       if (mounted) {
         setState(() {
           _pendingEmail = email;
           _resetEmailSent = true;
         });
       }
+    } on AuthHttpError catch (e) {
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(switch (e.code) {
+            'account_not_found' => l10n.accountNotFoundForEmail(email),
+            'rate_limited' => l10n.tooManyAttempts,
+            'email_send_failed' => l10n.emailSendFailed,
+            _ => l10n.resetRequestFailed(e),
+          }),
+        ),
+      );
     } catch (e) {
       messenger.showSnackBar(
         SnackBar(content: Text(l10n.resetRequestFailed(e))),
@@ -207,7 +221,21 @@ class _LoginScreenState extends State<LoginScreen> {
       messenger.showSnackBar(
         SnackBar(content: Text(l10n.verificationEmailResent)),
       );
+      // Only a confirmed send earns the cooldown — the outcomes below never
+      // produce an email, so locking the button would just hide the reason.
       _startResendCooldown();
+    } on AuthHttpError catch (e) {
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(switch (e.code) {
+            'account_not_found' => l10n.accountNotFoundForEmail(_pendingEmail),
+            'email_already_verified' => l10n.emailAlreadyVerified,
+            'rate_limited' => l10n.tooManyAttempts,
+            'email_send_failed' => l10n.emailSendFailed,
+            _ => l10n.resendVerificationFailed(e),
+          }),
+        ),
+      );
     } catch (e) {
       messenger.showSnackBar(
         SnackBar(content: Text(l10n.resendVerificationFailed(e))),
@@ -509,23 +537,16 @@ class _HeroHeader extends StatelessWidget {
       children: [
         Row(
           children: [
-            Container(
+            // No clip and no drop shadow: the artwork already carries its
+            // own rounded silhouette, and its transparent margins mean a
+            // shadow would trace the 56px box instead of the icon — reading
+            // as a dark rectangle behind it. Web's `AuthHeroHeader` matches.
+            SizedBox(
               width: 56,
               height: 56,
-              decoration: BoxDecoration(
-                color: colors.primary,
-                borderRadius: BorderRadius.circular(18),
-                boxShadow: [
-                  BoxShadow(
-                    color: colors.primary.withValues(alpha: 0.26),
-                    blurRadius: 22,
-                    offset: const Offset(0, 12),
-                  ),
-                ],
-              ),
-              child: Icon(
-                Icons.account_balance_wallet_rounded,
-                color: colors.onPrimary,
+              child: Image.asset(
+                'assets/icon/icon-android.png',
+                fit: BoxFit.contain,
               ),
             ),
             const SizedBox(width: 14),

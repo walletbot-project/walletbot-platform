@@ -32,6 +32,7 @@ import 'package:convex_flutter/convex_flutter.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:provider/provider.dart';
 
@@ -517,6 +518,12 @@ class _AppMainState extends State<AppMain> {
     final needsReauth = context.select<AuthController, bool>(
       (a) => a.activeAccount?.requiresReauth ?? false,
     );
+    // A deleted account is also `requiresReauth`, but offering "Reconnect"
+    // there would sign the user into a brand-new empty account, so it gets its
+    // own terminal banner.
+    final serverDeleted = context.select<AuthController, bool>(
+      (a) => a.activeAccount?.serverDeleted ?? false,
+    );
     final selectedIndex = context.watch<AppNavigation>().index;
     final useRail = windowSizeClassOf(context) != WindowSizeClass.compact;
 
@@ -524,7 +531,10 @@ class _AppMainState extends State<AppMain> {
     // both, or the GlobalKey would be duplicated within a single frame.
     final tabs = Column(
       children: [
-        if (needsReauth) const _ReauthBanner(),
+        if (serverDeleted)
+          const _AccountDeletedBanner()
+        else if (needsReauth)
+          const _ReauthBanner(),
         Expanded(
           child: IndexedStack(
             key: _tabStackKey,
@@ -564,7 +574,7 @@ class _AppMainState extends State<AppMain> {
               heroTag: 'voiceFab',
               onPressed: _openVoice,
               tooltip: context.l10n.voiceCommands,
-              child: const Text('🤖'),
+              child: const _VoiceFabIcon(),
             ),
       bottomNavigationBar: useRail
           ? null
@@ -586,7 +596,7 @@ class _AppMainState extends State<AppMain> {
                   label: context.l10n.accounts,
                 ),
                 NavigationDestination(
-                  icon: const Icon(Icons.stacked_line_chart_rounded),
+                  icon: const Icon(Icons.bookmarks_rounded),
                   label: context.l10n.insights,
                 ),
               ],
@@ -652,7 +662,7 @@ class _AgentCenteredRail extends StatelessWidget {
               elevation: 0,
               onPressed: onOpenVoice,
               tooltip: l10n.voiceCommands,
-              child: const Text('🤖'),
+              child: const _VoiceFabIcon(),
             ),
           ),
           Expanded(
@@ -670,13 +680,108 @@ class _AgentCenteredRail extends StatelessWidget {
                   label: Text(l10n.accounts),
                 ),
                 NavigationRailDestination(
-                  icon: const Icon(Icons.stacked_line_chart_rounded),
+                  icon: const Icon(Icons.bookmarks_rounded),
                   label: Text(l10n.insights),
                 ),
               ],
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// The voice-agent FAB glyph: a speech bubble with a microphone overlapping its
+/// lower-right corner, hinting at "talk to the assistant".
+/// `apps/web/src/components/m3/agent-glyph.tsx` is the same drawing for web.
+class _VoiceFabIcon extends StatelessWidget {
+  const _VoiceFabIcon();
+
+  static const double _size = 24;
+
+  @override
+  Widget build(BuildContext context) {
+    // The FAB hands its child an IconTheme carrying the foreground colour; SVG
+    // has no such channel, so read it off the theme and tint with it. The
+    // fallback is the FAB's own M3 default.
+    final color =
+        IconTheme.of(context).color ??
+        Theme.of(context).colorScheme.onPrimaryContainer;
+    return SvgPicture.asset(
+      'assets/agent-glyph.svg',
+      width: _size,
+      height: _size,
+      colorFilter: ColorFilter.mode(color, BlendMode.srcIn),
+    );
+  }
+}
+
+/// Terminal state for an account deleted on the server. Unlike
+/// [_ReauthBanner] it never offers to sign in again: the user id is gone, so a
+/// fresh sign-in would create a *different* account with the same email rather
+/// than restore this one. The local data stays readable offline until the user
+/// explicitly removes it.
+class _AccountDeletedBanner extends StatelessWidget {
+  const _AccountDeletedBanner();
+
+  Future<void> _confirmRemove(BuildContext context) async {
+    final auth = context.read<AuthController>();
+    final accountId = auth.activeAccount?.id;
+    if (accountId == null) return;
+
+    final l10n = context.l10n;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(l10n.accountDeletedConfirmTitle),
+        content: Text(l10n.accountDeletedConfirmBody),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: Text(l10n.cancel),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: Text(l10n.accountDeletedRemoveConfirm),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    await auth.removeDeletedAccount(accountId);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Material(
+      color: theme.colorScheme.errorContainer,
+      child: SafeArea(
+        bottom: false,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          child: Row(
+            children: [
+              Icon(
+                Icons.person_off_rounded,
+                color: theme.colorScheme.onErrorContainer,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  context.l10n.accountDeletedBanner,
+                  style: TextStyle(color: theme.colorScheme.onErrorContainer),
+                ),
+              ),
+              TextButton(
+                onPressed: () => _confirmRemove(context),
+                child: Text(context.l10n.accountDeletedRemove),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

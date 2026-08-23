@@ -116,17 +116,28 @@ class AuthController extends ChangeNotifier {
     );
   }
 
-  /// Requests a password-reset email. Enumeration-safe: unknown emails still
-  /// return 200. Throws [AuthHttpError] when the server failed to send the
-  /// email (`email_send_failed`), or on network failure.
+  /// Requests a password-reset email. Returning normally means an email was
+  /// really handed to Resend — every other outcome throws [AuthHttpError] with
+  /// a `code` the caller renders: `account_not_found` (no account for that
+  /// address), `rate_limited`, `email_send_failed`. These used to answer 200
+  /// as well, to keep the endpoint enumeration-safe, which meant the UI
+  /// promised mail that never went out.
   Future<void> requestPasswordReset({required String email}) async {
     await _postJson('/auth/password/forgot', {'email': email});
   }
 
-  /// Re-sends the verification email. Enumeration-safe like
-  /// [requestPasswordReset], and throws on the same failures.
+  /// Re-sends the verification email. Same contract as
+  /// [requestPasswordReset], plus `email_already_verified` — there is nothing
+  /// to re-send for an address that is verified (every Google-registered one).
   Future<void> resendVerificationEmail({required String email}) async {
     await _postJson('/auth/email/resend-verification', {'email': email});
+  }
+
+  /// Requests an account-deletion email. The emailed link opens the web app,
+  /// where the user confirms the irreversible deletion. Same contract as
+  /// [requestPasswordReset], plus `account_already_deleted`.
+  Future<void> requestAccountDeletion({required String email}) async {
+    await _postJson('/v1/account-deletion/request', {'email': email});
   }
 
   /// [termsAcceptedVersion] is the legal-documents version accepted on the
@@ -265,9 +276,29 @@ class AuthController extends ChangeNotifier {
       throw AccountAlreadyAddedError(account.email);
     }
 
+    // Deleting an account server-side and signing up again with the same
+    // address mints a *new* user id, so matching on id alone would leave the
+    // dead entry behind and append a second one — two accounts, same email.
+    // Drop any server-deleted entry for this address (its local database goes
+    // with it) so re-signing in replaces the corpse instead of sitting next to
+    // it. Live accounts are matched by id exactly as before.
+    final email = account.email;
+    final supersededIds = [
+      for (final a in _accounts)
+        if (a.id != account.id &&
+            a.serverDeleted &&
+            a.type == AccountType.remote &&
+            email != null &&
+            a.email == email)
+          a.id,
+    ];
+    for (final id in supersededIds) {
+      await AppDatabase.deleteForUser(id);
+    }
+
     _accounts = [
       for (final a in _accounts)
-        if (a.id != account.id) a,
+        if (a.id != account.id && !supersededIds.contains(a.id)) a,
       account,
     ];
     _activeId = account.id;
@@ -315,12 +346,24 @@ class AuthController extends ChangeNotifier {
     if (active == null || session == null) return null;
     try {
       debugPrint('auth: refreshing access token');
-      final body = await _postJson('/auth/refresh', {'refreshToken': session});
+      // `userId` lets the server distinguish a deleted account from an
+      // ordinary dead session: the purge deletes refreshTokens first, so by
+      // now the token row is gone and the id is all it can look up.
+      final body = await _postJson('/auth/refresh', {
+        'refreshToken': session,
+        'userId': active.id,
+      });
       return body['accessToken'] as String;
     } catch (e) {
       debugPrint('auth: token refresh failed: $e');
       if (e is AuthHttpError && e.statusCode == 401) {
-        await _markRequiresReauth(active.id);
+        // Only the explicit code means "deleted". A bare 401 is an expired or
+        // revoked session, which stays recoverable by signing in again.
+        if (e.code == 'account_deleted') {
+          await _markServerDeleted(active.id);
+        } else {
+          await _markRequiresReauth(active.id);
+        }
       }
       rethrow;
     }
@@ -334,6 +377,40 @@ class AuthController extends ChangeNotifier {
     final updated = [..._accounts];
     updated[idx] = updated[idx].copyWith(requiresReauth: true);
     _accounts = updated;
+    await _persist();
+    notifyListeners();
+  }
+
+  /// The account was deleted server-side. Also sets [requiresReauth] so sync
+  /// stops, but the local database is left untouched: the user keeps offline
+  /// access to their data until they choose to remove it from the device.
+  Future<void> _markServerDeleted(String accountId) async {
+    final idx = _accounts.indexWhere((a) => a.id == accountId);
+    if (idx == -1 || _accounts[idx].serverDeleted) return;
+    final updated = [..._accounts];
+    updated[idx] = updated[idx].copyWith(
+      requiresReauth: true,
+      serverDeleted: true,
+    );
+    _accounts = updated;
+    await _persist();
+    notifyListeners();
+  }
+
+  /// Drops a server-deleted account and its local database from this device.
+  /// Deliberately narrow: it refuses any account the server has not confirmed
+  /// deleted, so a transient auth failure can never take local data with it.
+  Future<void> removeDeletedAccount(String id) async {
+    final account = _accounts.firstWhere((a) => a.id == id);
+    if (!account.serverDeleted) {
+      throw StateError('removeDeletedAccount called on a live account: $id');
+    }
+    await AppDatabase.deleteForUser(id);
+    _accounts = _accounts.where((a) => a.id != id).toList();
+    if (_activeId == id) {
+      _activeId = null;
+      await _detachAuth();
+    }
     await _persist();
     notifyListeners();
   }

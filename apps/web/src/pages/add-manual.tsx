@@ -1,5 +1,9 @@
 import { api } from '@wallet-bot/backend/api'
-import { parseAmountToCents, parseTransactionDate } from '@wallet-bot/shared'
+import {
+    computeExchangeRate,
+    parseAmountToCents,
+    parseTransactionDate,
+} from '@wallet-bot/shared'
 import {
     Button,
     CircularProgress,
@@ -591,7 +595,10 @@ export function TransactionForm({
                 )
                 const exchangeRate =
                     selectedAccount.currency !== destinationAccount?.currency
-                        ? parsedDestinationAmount / parsedAmount
+                        ? computeExchangeRate(
+                              parsedAmount,
+                              parsedDestinationAmount,
+                          )
                         : undefined
 
                 await createTransfer({

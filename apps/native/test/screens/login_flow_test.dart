@@ -281,8 +281,10 @@ void main() {
     final request = requests.single;
     expect(request.url.path, '/auth/password/forgot');
     expect(jsonDecode(request.body), {'email': 'ana@test.com'});
+    // A 200 from this endpoint now means the email really went out, so the
+    // copy names the address instead of hedging with "if an account exists".
     expect(
-      find.textContaining('le enviamos un enlace para restablecer'),
+      find.textContaining('Te enviamos un enlace a ana@test.com'),
       findsOneWidget,
     );
 
@@ -291,5 +293,78 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('ana@test.com'), findsOneWidget);
     expect(find.text('¿Olvidaste tu contraseña?'), findsOneWidget);
+  });
+
+  testWidgets('forgot password on an unknown address does not claim a send', (
+    tester,
+  ) async {
+    final auth = AuthController(
+      httpClient: MockClient(
+        (request) async => http.Response(
+          jsonEncode({'code': 'account_not_found', 'message': 'no account'}),
+          404,
+        ),
+      ),
+    );
+    await pumpLogin(tester, auth);
+
+    await tester.enterText(find.byType(TextFormField).at(0), 'ghost@test.com');
+    await tester.tap(find.text('¿Olvidaste tu contraseña?'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Enviar enlace'));
+    await tester.pumpAndSettle();
+
+    // The form used to flip to the sent state on any 200, and the endpoint
+    // answered 200 for addresses it had never sent anything to.
+    expect(find.textContaining('Te enviamos un enlace'), findsNothing);
+    expect(find.text('No existe una cuenta para ghost@test.com.'), findsOneWidget);
+    // Still on the form, so the address can be corrected and retried.
+    expect(find.text('Enviar enlace'), findsOneWidget);
+  });
+
+  testWidgets('resending to an already verified address says so', (
+    tester,
+  ) async {
+    var call = 0;
+    final auth = AuthController(
+      httpClient: MockClient((request) async {
+        call += 1;
+        // First call is the blocked sign-in that opens the pending panel; the
+        // second is the resend.
+        return call == 1
+            ? http.Response(
+                jsonEncode({'code': 'email_not_verified', 'message': 'verify'}),
+                403,
+              )
+            : http.Response(
+                jsonEncode({
+                  'code': 'email_already_verified',
+                  'message': 'verified',
+                }),
+                409,
+              );
+      }),
+    );
+    await pumpLogin(tester, auth);
+
+    await tester.enterText(find.byType(TextFormField).at(0), 'ana@test.com');
+    await tester.enterText(find.byType(TextFormField).at(1), 'password123');
+    await tester.tap(find.text('Iniciar sesión').last);
+    await tester.pumpAndSettle();
+    expect(find.text('Verificá tu correo'), findsOneWidget);
+
+    await drainResendCooldown(tester);
+    await tester.tap(find.text('Reenviar correo'));
+    await tester.pumpAndSettle();
+
+    // There was nothing to re-send — every Google-registered address lands
+    // here, and used to be told the link was on its way.
+    expect(find.text('Te reenviamos el correo de verificación.'), findsNothing);
+    expect(
+      find.text('Ese correo ya está verificado. Iniciá sesión con tu cuenta.'),
+      findsOneWidget,
+    );
+    // And no cooldown, so the reason stays reachable instead of a dead button.
+    expect(find.text('Reenviar correo'), findsOneWidget);
   });
 }

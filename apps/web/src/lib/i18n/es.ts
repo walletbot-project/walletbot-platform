@@ -49,7 +49,7 @@ export const es = {
         home: 'Inicio',
         activity: 'Actividad',
         accounts: 'Cuentas',
-        insights: 'Análisis',
+        insights: 'Organización',
         addWithGasti: 'Añadir con Gasti',
         addManually: 'Añadir manualmente',
         sendFeedback: 'Enviar comentarios',
@@ -73,6 +73,61 @@ export const es = {
         featureFlags: 'Feature flags',
     },
 
+    deleteAccount: {
+        // Settings tile — same copy as the native tile
+        // (`deleteUserAccount*` in apps/native/lib/l10n/app_es.arb).
+        tile: 'Eliminar mi cuenta',
+        tileDescription: 'Eliminá tu cuenta y todos tus datos para siempre',
+
+        // Request page (/delete-account)
+        title: 'Eliminar tu cuenta',
+        subtitle:
+            'Ingresá tu correo y te enviamos un enlace para confirmar la eliminación.',
+        warning:
+            'Se van a borrar tu cuenta y todos tus datos de forma permanente. Esta acción no se puede deshacer.',
+        emailLabel: 'Correo',
+        submit: 'Enviar enlace de eliminación',
+        sendFailed:
+            'No pudimos enviar el correo. Probá de nuevo en unos minutos.',
+
+        // Sólo se muestra cuando el servidor confirmó el envío, así que la
+        // copia es afirmativa. Todo otro resultado es un error de abajo.
+        sentTitle: 'Revisá tu correo',
+        sentDefinite: (p: { email: string }) =>
+            `Te enviamos un enlace a ${p.email} para eliminar tu cuenta.`,
+        sentHint: 'El enlace vence en 24 horas.',
+        backHome: 'Volver al inicio',
+
+        accountNotFound: (p: { email: string }) =>
+            `No existe una cuenta para ${p.email}, así que no hay nada que eliminar.`,
+        alreadyDeleted: 'Esa cuenta ya fue eliminada.',
+        rateLimited:
+            'Ya pediste varios enlaces de eliminación. Esperá una hora y probá de nuevo.',
+
+        // Confirmation page (/delete-account/confirm)
+        // Typed by the user, so it has to be a word in their own language.
+        confirmWord: 'ELIMINAR',
+        confirmTitle: '¿Eliminar tu cuenta definitivamente?',
+        confirmSubtitle: 'Esta acción es permanente y no se puede deshacer.',
+        willDeleteTitle: 'Se va a borrar para siempre:',
+        willDeleteTransactions: 'Todas tus transacciones',
+        willDeleteAccounts: 'Tus cuentas y saldos',
+        willDeleteCategories: 'Categorías, etiquetas y configuración',
+        willDeleteUser: 'Tu usuario y acceso a Wallet Bot',
+        confirmPrompt: 'Para confirmar, escribí',
+        confirmSubmit: 'Eliminar mi cuenta definitivamente',
+        deleteFailed: 'No se pudo eliminar la cuenta',
+
+        doneTitle: 'Tu cuenta fue eliminada',
+        doneBody:
+            'Estamos borrando todos tus datos de forma permanente. Gracias por haber usado Wallet Bot.',
+
+        invalidTitle: 'Enlace no válido',
+        invalidBody:
+            'El enlace no es válido, ya venció o ya fue usado. Si todavía querés eliminar tu cuenta, pedí un enlace nuevo.',
+        requestNewLink: 'Pedir un enlace nuevo',
+    },
+
     auth: {
         signInToContinue: 'Iniciá sesión para continuar',
         withAccount: 'Con cuenta',
@@ -88,6 +143,19 @@ export const es = {
         continueWithGoogle: 'Continuar con Google',
         signingIn: 'Iniciando sesión...',
         authFailed: 'No se pudo autenticar',
+
+        // El servidor de auth responde siempre en inglés y no conoce el
+        // idioma del cliente, así que `error.message` no se puede mostrar:
+        // interpolarlo dejaba frases mitad inglés ("Invalid email or
+        // password. Si te registraste con Google…"). Cada pantalla arma el
+        // texto a partir del `code`, que sí es estable.
+        invalidCredentials: 'Correo o contraseña incorrectos',
+        invalidEmail: 'El correo no es válido',
+        signUpFailed:
+            'No pudimos crear tu cuenta. Revisá los datos e intentá de nuevo.',
+        connectionFailed:
+            'No pudimos conectarnos con el servidor. Revisá tu conexión e intentá de nuevo.',
+
         googleHint: (p: { message: string }) =>
             `${p.message}. Si te registraste con Google, usá "Continuar con Google".`,
         forgotPassword: '¿Olvidaste tu contraseña?',
@@ -107,13 +175,25 @@ export const es = {
         resendVerificationFailed: 'No se pudo reenviar el correo.',
         backToSignIn: 'Volver a iniciar sesión',
 
+        // Resultados que el servidor ahora nombra, para que ninguna pantalla
+        // diga que mandó un correo que nunca salió.
+        accountExists:
+            'Ya existe una cuenta con ese correo. Iniciá sesión con tu contraseña o con Google.',
+        accountNotFound: (p: { email: string }) =>
+            `No existe una cuenta para ${p.email}.`,
+        emailAlreadyVerified:
+            'Ese correo ya está verificado. Iniciá sesión con tu cuenta.',
+        rateLimited: 'Demasiados intentos. Esperá un minuto y probá de nuevo.',
+        emailSendFailed:
+            'No pudimos enviar el correo. Probá de nuevo en unos minutos.',
+
         resetPasswordTitle: 'Restablecer contraseña',
         resetPasswordSubtitle:
             'Ingresá tu correo y te enviamos un enlace para restablecerla.',
         sendResetLink: 'Enviar enlace',
         sendResetLinkFailed: 'No se pudo enviar el correo',
         resetEmailSent: (p: { email: string }) =>
-            `Si existe una cuenta para ${p.email}, le enviamos un enlace para restablecer la contraseña.`,
+            `Te enviamos un enlace a ${p.email} para restablecer tu contraseña.`,
         resetEmailSentReturnHint:
             'Cuando la restablezcas, volvé acá e iniciá sesión con tu contraseña nueva.',
 
@@ -324,6 +404,9 @@ export const es = {
             'Ocurrió un error inesperado. Probá recargar la página o volver.',
         refreshPage: 'Recargar página',
         viewErrorDetails: 'Ver detalles del error',
+        sessionEndedTitle: 'Tu sesión terminó',
+        sessionEndedDescription:
+            'Esta sesión ya no es válida. Te llevamos a iniciar sesión de nuevo.',
     },
 
     accounts: {
@@ -419,6 +502,7 @@ export const es = {
         account: 'Cuenta',
         sourceAccount: 'Cuenta origen',
         destinationAccount: 'Cuenta destino',
+        exchangeRate: 'Tipo de cambio',
         deletedAccount: 'Cuenta eliminada',
         category: 'Categoría',
         tags: 'Etiquetas',
@@ -512,7 +596,7 @@ export const es = {
         statusConnected: 'conectado',
         speaking: 'Hablando',
         you: 'Vos',
-        agent: 'WalletBot',
+        agent: 'Gaston',
         interrupted: '(interrumpido)',
         tool: 'Herramienta',
         toolRunning: 'Ejecutando',

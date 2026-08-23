@@ -128,11 +128,26 @@ class _HomeScreenState extends State<HomeScreen> {
                     leading: _AccountAvatar(account: account),
                     title: Text(
                       account.name ?? account.email ?? context.l10n.noName,
+                      style: account.serverDeleted
+                          ? TextStyle(
+                              color: Theme.of(dialogContext).colorScheme.error,
+                            )
+                          : null,
                     ),
+                    // A deleted account stays in the list — its local data is
+                    // still readable offline — so the row has to say why it
+                    // will never sync again.
                     subtitle: Text(
-                      account.type == AccountType.local
+                      account.serverDeleted
+                          ? context.l10n.accountDeletedBanner
+                          : account.type == AccountType.local
                           ? context.l10n.localAccount
                           : account.email ?? context.l10n.syncedAccount,
+                      style: account.serverDeleted
+                          ? TextStyle(
+                              color: Theme.of(dialogContext).colorScheme.error,
+                            )
+                          : null,
                     ),
                     trailing: Row(
                       mainAxisSize: MainAxisSize.min,
@@ -435,6 +450,17 @@ class _AccountAvatar extends StatelessWidget {
     final colors = Theme.of(context).colorScheme;
     final isLocal = account.type == AccountType.local;
     final picture = account.picture;
+
+    // A deleted account drops its photo on purpose: a familiar face reads as a
+    // working account, which is the one thing this row must not look like.
+    if (account.serverDeleted) {
+      return CircleAvatar(
+        radius: 20,
+        backgroundColor: colors.errorContainer,
+        foregroundColor: colors.onErrorContainer,
+        child: const Icon(Icons.person_off_rounded),
+      );
+    }
 
     return CircleAvatar(
       radius: 20,

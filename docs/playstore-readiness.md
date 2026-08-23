@@ -92,14 +92,17 @@ financial data, audio, and device identifiers, and streams audio to a
 third-party model (`packages/backend/convex/v1/live/actions.ts`) — all of which
 must be declared, including third-party sharing.
 
-### 7. No user-account deletion
+### 7. No user-account deletion — resolved (2026-08-06)
 
 Play's data-deletion policy requires an in-app deletion path plus a
-web-accessible deletion URL for apps with account creation.
-`packages/backend/convex/users/` only exposes `requireAuth`;
-`packages/backend/convex/authNative/mutations.ts` exposes only session
-insert / validate / revoke. The `deleteAccount` strings in `lib/l10n/*.arb`
-refer to *financial* accounts, not the user account.
+web-accessible deletion URL for apps with account creation. Both now exist:
+native Settings → "Delete my account" requests a confirmation email
+(`POST /v1/account-deletion/request`), and the web app serves the public
+deletion URL at `${SITE_URL}/delete-account` (works logged out). The emailed
+link lands on `/delete-account/confirm`, which warns the action is
+irreversible and purges all user data plus the better-auth user
+(`packages/backend/convex/userDeletion/`). Remaining Play Console task:
+declare the deletion URL in the Data safety form.
 
 ### 8. No terms of service
 

@@ -20,6 +20,7 @@ import {
 import { termsAcceptances } from './schema/termsAcceptances'
 import { transactions } from './schema/transactions'
 import { transactionTags } from './schema/transactionTags'
+import { deletedUsers, userDeletionRequests } from './schema/userDeletion'
 import { userSettings } from './schema/userSettings'
 import { voiceSessionEvents, voiceSessions } from './schema/voice'
 
@@ -28,6 +29,7 @@ export default defineSchema({
     admins,
     categories,
     dashboardWidgets,
+    deletedUsers,
     featureFlagOverrides,
     featureFlags,
     feedback,
@@ -43,6 +45,7 @@ export default defineSchema({
     tombstones,
     transactionTags,
     transactions,
+    userDeletionRequests,
     userSettings,
     voiceSessionEvents,
     voiceSessions,

@@ -1,5 +1,6 @@
 import { Button } from 'actify'
 import { useEffect, useState } from 'react'
+import { toast } from 'sonner'
 import {
     AuthPanel,
     AuthPanelTitle,
@@ -38,14 +39,38 @@ export function VerifyPendingPanel({
 
     const handleResend = async () => {
         setSubmitting(true)
-        try {
-            await resendVerificationEmail(email, t)
-            setCooldown(RESEND_COOLDOWN_SECONDS)
-        } catch {
-            // Already surfaced by the toast in resendVerificationEmail.
-        } finally {
-            setSubmitting(false)
+        const toastId = toast.loading(t.auth.resendingVerificationEmail)
+        const outcome = await resendVerificationEmail(email)
+        // Only a confirmed send says "sent again", and only a confirmed send
+        // earns the cooldown — the other outcomes never produce an email, so
+        // blocking the button for 30s would just hide the reason.
+        switch (outcome.status) {
+            case 'sent':
+                toast.success(t.auth.verificationEmailResent, { id: toastId })
+                setCooldown(RESEND_COOLDOWN_SECONDS)
+                break
+            case 'account-not-found':
+                toast.error(t.auth.accountNotFound({ email }), { id: toastId })
+                break
+            case 'already-verified':
+                toast.error(t.auth.emailAlreadyVerified, { id: toastId })
+                break
+            case 'rate-limited':
+                toast.error(t.auth.rateLimited, { id: toastId })
+                break
+            case 'email-send-failed':
+                toast.error(t.auth.emailSendFailed, { id: toastId })
+                break
+            case 'error':
+                toast.error(
+                    outcome.message || t.auth.resendVerificationFailed,
+                    {
+                        id: toastId,
+                    },
+                )
+                break
         }
+        setSubmitting(false)
     }
 
     return (
