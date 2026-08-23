@@ -17,7 +17,7 @@ void main() {
       sessionId: 'app-session-1',
       httpClient: MockClient((request) async {
         captured = request;
-        return http.Response('{"ok":true,"accepted":2}', 200);
+        return http.Response('{"ok":true,"accepted":1}', 200);
       }),
     );
     final metrics = AgentMetrics(telemetry);
@@ -46,7 +46,7 @@ void main() {
 
     final body = jsonDecode(captured!.body) as Map<String, Object?>;
     final sent = body['metrics'] as List<Object?>;
-    expect(sent, hasLength(2));
+    expect(sent, hasLength(1));
 
     final costMetric = sent.first as Map<String, Object?>;
     expect(costMetric['name'], 'agent.session.cost_usd');
@@ -58,58 +58,9 @@ void main() {
       'model': 'gemini-3.1-flash-live-preview',
       'mode': 'text',
       'cost_source': 'estimated',
+      'token_input_text': 1000,
+      'token_output_text': 1000,
     });
-
-    final bucketMetric = sent[1] as Map<String, Object?>;
-    expect(bucketMetric['name'], 'agent.session.cost_bucket_count');
-    expect(bucketMetric['attributes'], {
-      'model': 'gemini-3.1-flash-live-preview',
-      'mode': 'text',
-      'cost_bucket': '0-0.01',
-    });
-
-    telemetry.dispose();
-  });
-
-  test('sends session cost bucket for higher cost sessions', () async {
-    FlutterSecureStorage.setMockInitialValues({});
-
-    http.Request? captured;
-    final telemetry = TelemetryClient(
-      convexSiteUrl: 'https://example.convex.site',
-      httpClient: MockClient((request) async {
-        captured = request;
-        return http.Response('{"ok":true,"accepted":2}', 200);
-      }),
-    );
-    final metrics = AgentMetrics(telemetry);
-
-    await metrics.recordSessionCostFromUsage(
-      sessionId: 'voice-session-2',
-      model: 'gemini-3.1-flash-live-preview',
-      mode: 'voice',
-      usage: {
-        'responseTokenCount': 10000,
-        'responseTokensDetails': [
-          {'modality': 'AUDIO', 'tokenCount': 10000},
-        ],
-      },
-    );
-
-    final body = jsonDecode(captured!.body) as Map<String, Object?>;
-    final sent = (body['metrics'] as List<Object?>)
-        .cast<Map<String, Object?>>();
-    expect(sent, hasLength(2));
-    expect(
-      sent.singleWhere(
-        (metric) => metric['name'] == 'agent.session.cost_bucket_count',
-      )['attributes'],
-      {
-        'model': 'gemini-3.1-flash-live-preview',
-        'mode': 'voice',
-        'cost_bucket': '0.10-0.50',
-      },
-    );
 
     telemetry.dispose();
   });
@@ -151,7 +102,7 @@ void main() {
     expect(sent, hasLength(2));
 
     final costMetric = sent[0] as Map<String, Object?>;
-    expect(costMetric['name'], 'agent.session.cost_usd');
+    expect(costMetric['name'], 'agent.interaction.cost_usd');
     expect(costMetric['type'], 'gauge');
     expect(costMetric['unit'], 'usd');
     expect(costMetric['value'], closeTo(0.0045, 0.000001));
@@ -161,6 +112,8 @@ void main() {
       'model': 'gemini-3.1-flash-live-preview',
       'mode': 'text',
       'cost_source': 'estimated',
+      'token_output_text': 1000,
+      'token_total': 1000,
     });
 
     final interactionMetric = sent[1] as Map<String, Object?>;

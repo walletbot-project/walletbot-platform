@@ -1,8 +1,9 @@
 import { v } from 'convex/values'
-import { components, internal } from '../_generated/api'
+import { internal } from '../_generated/api'
 import type { Doc } from '../_generated/dataModel'
 import type { ActionCtx } from '../_generated/server'
-import { action, internalAction } from '../_generated/server'
+import { internalAction } from '../_generated/server'
+import { authComponent } from '../auth'
 import type { MetricInput } from './types'
 
 const defaultServiceName = 'walletbot-backend'
@@ -216,34 +217,8 @@ const toOtlpMetricsPayload = (metrics: Array<ReservedMetricExport>) => {
 }
 
 const countRegisteredUsers = async (ctx: ActionCtx): Promise<number> => {
-    let cursor: string | null = null
-    let count = 0
-    do {
-        const page = (await ctx.runQuery(
-            components.betterAuth.adapter.findMany,
-            {
-                model: 'user',
-                paginationOpts: { cursor, numItems: 100 },
-            },
-        )) as
-            | unknown[]
-            | {
-                  page?: unknown[]
-                  docs?: unknown[]
-                  continueCursor?: string | null
-                  isDone?: boolean
-              }
-        if (Array.isArray(page)) {
-            count += page.length
-            cursor = null
-            continue
-        }
-
-        const docs = page.page ?? page.docs ?? []
-        count += docs.length
-        cursor = page.isDone === false ? (page.continueCursor ?? null) : null
-    } while (cursor !== null)
-    return count
+    const adapter = authComponent.adapter(ctx)({})
+    return await adapter.count({ model: 'user' })
 }
 
 const recordRegisteredUsersTotalMetric = async (
@@ -281,10 +256,19 @@ const normalizeAgentMode = (mode: string): 'voice' | 'text' | 'mixed' => {
     return 'mixed'
 }
 
+const userHash = async (userId: string): Promise<string> => {
+    const input = new TextEncoder().encode(userId)
+    const digest = await crypto.subtle.digest('SHA-256', input)
+    return Array.from(new Uint8Array(digest))
+        .slice(0, 12)
+        .map((byte) => byte.toString(16).padStart(2, '0'))
+        .join('')
+}
+
 const recordAgentMonthlyUsageMetric = async (
     ctx: ActionCtx,
     month = currentMonth(),
-): Promise<{ rows: number; accepted: number }> => {
+): Promise<{ rows: number; exportedRows: number; accepted: number }> => {
     const rows: Array<{
         userId: string
         month: string
@@ -296,12 +280,17 @@ const recordAgentMonthlyUsageMetric = async (
         { month },
     )
 
-    if (rows.length === 0) return { rows: 0, accepted: 0 }
+    if (rows.length === 0) return { rows: 0, exportedRows: 0, accepted: 0 }
 
     const now = Date.now()
-    const metrics: MetricInput[] = rows.map((row) => {
+    const topRows = rows
+        .filter((row) => row.estimatedCostUsd > 0)
+        .sort((a, b) => b.estimatedCostUsd - a.estimatedCostUsd)
+        .slice(0, 20)
+    const metrics: MetricInput[] = []
+    for (const [index, row] of topRows.entries()) {
         const mode = normalizeAgentMode(row.mode)
-        return {
+        metrics.push({
             name: 'agent.user.monthly_cost_usd',
             timestamp: now,
             source: 'backend',
@@ -310,13 +299,17 @@ const recordAgentMonthlyUsageMetric = async (
             unit: 'usd',
             userId: row.userId,
             attributes: {
-                user_id: row.userId,
+                user_hash: await userHash(row.userId),
+                rank: `${index + 1}`,
                 month: row.month,
                 model: row.model,
                 mode,
             },
-        }
-    })
+        })
+    }
+    if (metrics.length === 0) {
+        return { rows: rows.length, exportedRows: 0, accepted: 0 }
+    }
     const result: { accepted: number } = await ctx.runMutation(
         internal.telemetry.mutations.insertMetricBatchMutation,
         {
@@ -324,7 +317,11 @@ const recordAgentMonthlyUsageMetric = async (
             metrics,
         },
     )
-    return { rows: rows.length, accepted: result.accepted }
+    return {
+        rows: rows.length,
+        exportedRows: metrics.length,
+        accepted: result.accepted,
+    }
 }
 
 export const recordRegisteredUsersTotal = internalAction({
@@ -332,15 +329,9 @@ export const recordRegisteredUsersTotal = internalAction({
     handler: async (ctx) => recordRegisteredUsersTotalMetric(ctx),
 })
 
-export const recordRegisteredUsersTotalNow = action({
-    args: { adminToken: v.string() },
-    handler: async (ctx, args) => {
-        const expected = process.env.TELEMETRY_ADMIN_TOKEN?.trim()
-        if (!expected || args.adminToken !== expected) {
-            throw new Error('Unauthorized')
-        }
-        return recordRegisteredUsersTotalMetric(ctx)
-    },
+export const recordRegisteredUsersTotalNow = internalAction({
+    args: {},
+    handler: async (ctx) => recordRegisteredUsersTotalMetric(ctx),
 })
 
 export const recordAgentMonthlyUsage = internalAction({
@@ -348,24 +339,14 @@ export const recordAgentMonthlyUsage = internalAction({
     handler: async (ctx) => recordAgentMonthlyUsageMetric(ctx),
 })
 
-export const recordAgentMonthlyUsageNow = action({
-    args: { adminToken: v.string(), month: v.optional(v.string()) },
-    handler: async (ctx, args) => {
-        const expected = process.env.TELEMETRY_ADMIN_TOKEN?.trim()
-        if (!expected || args.adminToken !== expected) {
-            throw new Error('Unauthorized')
-        }
-        return recordAgentMonthlyUsageMetric(ctx, args.month)
-    },
+export const recordAgentMonthlyUsageNow = internalAction({
+    args: { month: v.optional(v.string()) },
+    handler: async (ctx, args) => recordAgentMonthlyUsageMetric(ctx, args.month),
 })
 
-export const deleteDeprecatedAgentCostOutlierMetricsNow = action({
-    args: { adminToken: v.string(), limit: v.optional(v.number()) },
+export const deleteDeprecatedAgentCostOutlierMetricsNow = internalAction({
+    args: { limit: v.optional(v.number()) },
     handler: async (ctx, args): Promise<{ deleted: number }> => {
-        const expected = process.env.TELEMETRY_ADMIN_TOKEN?.trim()
-        if (!expected || args.adminToken !== expected) {
-            throw new Error('Unauthorized')
-        }
         return await ctx.runMutation(
             internal.telemetry.mutations
                 .deleteDeprecatedAgentCostOutlierMetrics,

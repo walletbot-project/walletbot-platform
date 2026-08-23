@@ -106,10 +106,8 @@ are not counted as sign-ins unless the user later performs a sign-in flow.
 
 ### `agent.session.cost_usd`
 
-Records the estimated USD cost reported by Gemini Live usage metadata for an
-agent interaction. Native emits this gauge whenever Gemini Live sends
-`usageMetadata`, which happens after completed turns/interactions rather than
-only when the logical session is explicitly ended.
+Records the estimated total USD cost for a logical agent session. Native emits
+this gauge when the session is explicitly ended.
 
 Attributes:
 
@@ -119,26 +117,45 @@ Attributes:
 
 Sources:
 
-- Native Gemini Live usage metadata after completed turns/interactions.
+- Native Gemini Live usage metadata when a session ends.
 
 The voice session id is sent as the metric envelope `sessionId`, not as a
 metric attribute, so dashboards can detect expensive sessions without creating
 high-cardinality Grafana series.
 
-For authenticated users, backend also stores each accepted cost sample in
-`agentUsageSamples` and rolls it up into `agentUsageMonthly` by
+### `agent.interaction.cost_usd`
+
+Records the estimated USD cost delta for one completed agent interaction.
+Native emits this gauge whenever Gemini Live sends new `usageMetadata`.
+
+Attributes:
+
+- `model`: stable model name, such as `gemini-3.1-flash-live-preview`
+- `mode`: `voice`, `text`, or `mixed`
+- `cost_source`: `estimated`, `provider_usage`, or `reconciled`
+
+Sources:
+
+- Native Gemini Live usage metadata after completed turns/interactions. Native
+  sends token-count attributes; backend recalculates the USD value from the
+  server-side pricing table before storing/exporting the metric.
+
+For authenticated users, backend stores each accepted interaction cost sample
+in `agentUsageSamples` and rolls it up into `agentUsageMonthly` by
 `userId + month + model + mode`. The native client sends a low-cardinality
 metric plus a non-label `sampleId`; backend uses `sampleId` for idempotency
 without exporting it as a Grafana label.
 
 ### `agent.user.monthly_cost_usd`
 
-Records the current accumulated estimated AI cost for each user in the current
-UTC month. It is emitted every 6 hours from the backend rollup table.
+Records the current accumulated estimated AI cost for the top 20
+`user + model + mode` rows in the current UTC month. It is emitted every 6
+hours from the backend rollup table.
 
 Attributes:
 
-- `user_id`: application user id
+- `user_hash`: stable SHA-256 prefix of the application user id
+- `rank`: rank in the monthly top 20 export
 - `month`: UTC month in `YYYY-MM` format
 - `model`: stable model name
 - `mode`: `voice`, `text`, or `mixed`
@@ -156,8 +173,9 @@ state, not the delta since the previous export.
 ### `agent.interactions.completed_count`
 
 Counts completed agent interactions. Native emits it together with
-`agent.session.cost_usd` only when the estimated cost differs from the previous
-usage metadata sample, so repeated identical samples are not counted again.
+`agent.interaction.cost_usd` only when the estimated cost differs from the
+previous usage metadata sample, so repeated identical samples are not counted
+again.
 
 Attributes:
 
@@ -182,7 +200,8 @@ Attributes:
 
 Sources:
 
-- Native Gemini Live usage metadata at session end.
+- Backend telemetry ingestion, derived from the accepted
+  `agent.session.cost_usd` metric after server-side cost normalization.
 
 ## Architecture
 

@@ -1,5 +1,6 @@
 import { internal } from '../_generated/api'
 import type { MutationCtx } from '../_generated/server'
+import { costBucket, normalizeAgentCostMetric } from './agentPricing'
 import type { MetricAttributeValue, MetricInput, MetricName } from './types'
 
 type CreatedBy = 'form' | 'agent'
@@ -24,7 +25,7 @@ const recordAgentUsageMonthly = async (
     ctx: MutationCtx,
     metric: MetricInput,
 ): Promise<void> => {
-    if (metric.name !== 'agent.session.cost_usd') return
+    if (metric.name !== 'agent.interaction.cost_usd') return
     if (!metric.userId || !metric.sampleId || metric.value <= 0) return
 
     const model = stringAttribute(metric.attributes, 'model') ?? 'unknown'
@@ -194,14 +195,58 @@ export const insertMetricBatch = async (
     ctx: MutationCtx,
     args: { metrics: MetricInput[]; receivedAt: number },
 ): Promise<{ accepted: number }> => {
+    let accepted = 0
     for (const metric of args.metrics) {
-        await recordAgentUsageMonthly(ctx, metric)
+        const normalizedMetric = normalizeAgentCostMetric(metric)
+        if (!normalizedMetric) continue
+
+        await recordAgentUsageMonthly(ctx, normalizedMetric)
         await ctx.db.insert('telemetryMetrics', {
-            ...metric,
+            ...normalizedMetric,
             receivedAt: args.receivedAt,
             exportStatus: 'pending',
             exportAttempts: 0,
         })
+        accepted += 1
+
+        if (normalizedMetric.name === 'agent.session.cost_usd') {
+            await ctx.db.insert('telemetryMetrics', {
+                name: 'agent.session.cost_bucket_count',
+                timestamp: normalizedMetric.timestamp,
+                receivedAt: args.receivedAt,
+                source: normalizedMetric.source,
+                type: 'counter',
+                value: 1,
+                unit: 'count',
+                attributes: {
+                    model:
+                        stringAttribute(normalizedMetric.attributes, 'model') ??
+                        'unknown',
+                    mode:
+                        stringAttribute(normalizedMetric.attributes, 'mode') ??
+                        'mixed',
+                    cost_bucket: costBucket(normalizedMetric.value),
+                },
+                ...(normalizedMetric.userId
+                    ? { userId: normalizedMetric.userId }
+                    : {}),
+                ...(normalizedMetric.sessionId
+                    ? { sessionId: normalizedMetric.sessionId }
+                    : {}),
+                ...(normalizedMetric.installationId
+                    ? { installationId: normalizedMetric.installationId }
+                    : {}),
+                ...(normalizedMetric.appVersion
+                    ? { appVersion: normalizedMetric.appVersion }
+                    : {}),
+                ...(normalizedMetric.platform
+                    ? { platform: normalizedMetric.platform }
+                    : {}),
+                exportStatus: 'pending',
+                exportAttempts: 0,
+            })
+            accepted += 1
+        }
     }
 
     await ctx.scheduler.runAfter(
@@ -210,5 +255,5 @@ export const insertMetricBatch = async (
         {},
     )
 
-    return { accepted: args.metrics.length }
+    return { accepted }
 }

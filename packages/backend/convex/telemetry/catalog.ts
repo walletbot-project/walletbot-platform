@@ -5,6 +5,7 @@ import type {
     MetricType,
     MetricUnit,
 } from './types'
+import { agentPricingAttributeSpec } from './agentPricing'
 
 export const metricNames = new Set<MetricName>([
     'business.user_accounts.created_count',
@@ -14,6 +15,7 @@ export const metricNames = new Set<MetricName>([
     'business.users.registered_total',
     'business.user_accounts.signed_in_count',
     'agent.session.cost_usd',
+    'agent.interaction.cost_usd',
     'agent.user.monthly_cost_usd',
     'agent.interactions.completed_count',
     'agent.session.cost_bucket_count',
@@ -95,13 +97,25 @@ export const metricCatalog: Record<
             model: 'string',
             mode: new Set(['voice', 'text', 'mixed']),
             cost_source: new Set(['provider_usage', 'estimated', 'reconciled']),
+            ...agentPricingAttributeSpec,
+        },
+    },
+    'agent.interaction.cost_usd': {
+        type: 'gauge',
+        unit: 'usd',
+        attributes: {
+            model: 'string',
+            mode: new Set(['voice', 'text', 'mixed']),
+            cost_source: new Set(['provider_usage', 'estimated', 'reconciled']),
+            ...agentPricingAttributeSpec,
         },
     },
     'agent.user.monthly_cost_usd': {
         type: 'gauge',
         unit: 'usd',
         attributes: {
-            user_id: 'string',
+            user_hash: 'string',
+            rank: 'string',
             month: 'string',
             model: 'string',
             mode: new Set(['voice', 'text', 'mixed']),

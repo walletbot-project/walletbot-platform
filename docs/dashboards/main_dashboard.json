@@ -1040,7 +1040,7 @@
                       "kind": "DataQuery",
                       "spec": {
                         "editorMode": "code",
-                        "expr": "sum by (user_id) (last_over_time(agent_user_monthly_cost_usd[$__range]))",
+                        "expr": "sum by (user_hash) (last_over_time(agent_user_monthly_cost_usd[$__range]))",
                         "format": "table",
                         "instant": true,
                         "legendFormat": "__auto",
@@ -1064,7 +1064,7 @@
                       },
                       "renameByName": {
                         "Value": "Consumo (USD)",
-                        "user_id": "Usuario"
+                        "user_hash": "Usuario"
                       }
                     }
                   }

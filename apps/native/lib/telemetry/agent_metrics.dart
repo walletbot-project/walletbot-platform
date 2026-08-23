@@ -5,10 +5,8 @@ import 'telemetry_client.dart';
 class AgentMetrics {
   const AgentMetrics(this._telemetry);
 
-  // Gemini 3.1 Flash Live Preview paid-tier list prices per 1M tokens,
-  // from Google AI pricing last updated 2026-07-21. Keep these values
-  // conservative and mark emitted costs as estimated until provider billing
-  // reconciliation is available.
+  // Local estimate only used for client-side delta detection. Backend pricing
+  // recalculates USD from token attributes before storing/exporting metrics.
   static const _gemini31FlashLiveInputTextUsdPerMillion = 0.75;
   static const _gemini31FlashLiveInputAudioUsdPerMillion = 3.00;
   static const _gemini31FlashLiveInputMediaUsdPerMillion = 1.00;
@@ -28,24 +26,12 @@ class AgentMetrics {
     final normalizedMode = _normalizeMode(mode);
     final metrics = <TelemetryMetric>[
       _costGaugeMetric(
+        name: 'agent.session.cost_usd',
         sessionId: sessionId,
         model: model,
         mode: normalizedMode,
         costUsd: costUsd,
-      ),
-      TelemetryMetric(
-        name: 'agent.session.cost_bucket_count',
-        timestamp: DateTime.now(),
-        source: 'native',
-        type: 'counter',
-        value: 1,
-        unit: 'count',
-        attributes: {
-          'model': model,
-          'mode': normalizedMode,
-          'cost_bucket': _costBucket(costUsd),
-        },
-        sessionId: sessionId,
+        tokenAttributes: usageTokenAttributes(usage),
       ),
     ];
 
@@ -71,6 +57,7 @@ class AgentMetrics {
       mode: mode,
       interactionType: interactionType,
       costUsd: costUsd,
+      tokenAttributes: usageTokenAttributes(usage),
     );
     return costUsd;
   }
@@ -82,14 +69,17 @@ class AgentMetrics {
     required String mode,
     required String interactionType,
     required double costUsd,
+    Map<String, int> tokenAttributes = const {},
   }) async {
     await _telemetry?.sendMetricBatch([
       _costGaugeMetric(
+        name: 'agent.interaction.cost_usd',
         sessionId: sessionId,
         sampleId: sampleId,
         model: model,
         mode: _normalizeMode(mode),
         costUsd: costUsd,
+        tokenAttributes: tokenAttributes,
       ),
       TelemetryMetric(
         name: 'agent.interactions.completed_count',
@@ -151,6 +141,7 @@ class AgentMetrics {
     required String mode,
     required String interactionType,
     required double costUsd,
+    Map<String, int> tokenAttributes = const {},
   }) {
     unawaited(
       recordInteractionCost(
@@ -160,8 +151,61 @@ class AgentMetrics {
         mode: mode,
         interactionType: interactionType,
         costUsd: costUsd,
+        tokenAttributes: tokenAttributes,
       ),
     );
+  }
+
+  static Map<String, int> usageTokenAttributes(Map<String, Object?> usage) {
+    final promptTokens = _staticIntValue(usage['promptTokenCount']);
+    final responseTokens =
+        _staticIntValue(usage['responseTokenCount']) ??
+        _staticIntValue(usage['candidatesTokenCount']);
+    final totalTokens = _staticIntValue(usage['totalTokenCount']);
+
+    final promptDetails = _staticTokenDetails(usage['promptTokensDetails']);
+    final responseDetails =
+        _staticTokenDetails(usage['responseTokensDetails']) ??
+        _staticTokenDetails(usage['candidatesTokensDetails']);
+
+    final attributes = <String, int>{};
+    _addTokenDetails(
+      attributes,
+      prefix: 'token_input',
+      totalTokens: promptTokens,
+      details: promptDetails,
+    );
+    _addTokenDetails(
+      attributes,
+      prefix: 'token_output',
+      totalTokens: responseTokens,
+      details: responseDetails,
+    );
+    if (!attributes.containsKey('token_input_text') &&
+        !attributes.containsKey('token_input_audio') &&
+        !attributes.containsKey('token_input_media') &&
+        !attributes.containsKey('token_output_text') &&
+        !attributes.containsKey('token_output_audio') &&
+        !attributes.containsKey('token_output_media')) {
+      _addPositive(attributes, 'token_output_text', totalTokens);
+    }
+    _addPositive(
+      attributes,
+      'token_thinking',
+      _staticIntValue(usage['thoughtsTokenCount']),
+    );
+    _addPositive(
+      attributes,
+      'token_tool_use_prompt',
+      _staticIntValue(usage['toolUsePromptTokenCount']),
+    );
+    _addPositive(
+      attributes,
+      'token_cached_input',
+      _staticIntValue(usage['cachedContentTokenCount']),
+    );
+    _addPositive(attributes, 'token_total', totalTokens);
+    return attributes;
   }
 
   double? estimateSessionCostUsd(Map<String, Object?> usage) {
@@ -196,19 +240,26 @@ class AgentMetrics {
   }
 
   TelemetryMetric _costGaugeMetric({
+    required String name,
     required String sessionId,
     String? sampleId,
     required String model,
     required String mode,
     required double costUsd,
+    required Map<String, int> tokenAttributes,
   }) => TelemetryMetric(
-    name: 'agent.session.cost_usd',
+    name: name,
     timestamp: DateTime.now(),
     source: 'native',
     type: 'gauge',
     value: costUsd,
     unit: 'usd',
-    attributes: {'model': model, 'mode': mode, 'cost_source': 'estimated'},
+    attributes: {
+      'model': model,
+      'mode': mode,
+      'cost_source': 'estimated',
+      ...tokenAttributes,
+    },
     sessionId: sessionId,
     sampleId: sampleId,
   );
@@ -269,6 +320,14 @@ class AgentMetrics {
       tokens * usdPerMillion / 1000000;
 
   Map<String, int>? _tokenDetails(Object? value) {
+    return _staticTokenDetails(value);
+  }
+
+  int? _intValue(Object? value) {
+    return _staticIntValue(value);
+  }
+
+  static Map<String, int>? _staticTokenDetails(Object? value) {
     if (value is! List) return null;
     final details = <String, int>{};
     for (final item in value) {
@@ -277,7 +336,7 @@ class AgentMetrics {
           item['modality']?.toString() ??
           item['modalityType']?.toString() ??
           'text';
-      final tokens = _intValue(item['tokenCount']);
+      final tokens = _staticIntValue(item['tokenCount']);
       if (tokens == null) continue;
       final normalized = modality.toLowerCase();
       details[normalized] = (details[normalized] ?? 0) + tokens;
@@ -285,11 +344,47 @@ class AgentMetrics {
     return details;
   }
 
-  int? _intValue(Object? value) {
+  static int? _staticIntValue(Object? value) {
     if (value is int) return value;
     if (value is num) return value.round();
     if (value is String) return int.tryParse(value);
     return null;
+  }
+
+  static void _addTokenDetails(
+    Map<String, int> attributes, {
+    required String prefix,
+    required int? totalTokens,
+    required Map<String, int>? details,
+  }) {
+    if (details == null || details.isEmpty) {
+      _addPositive(attributes, '${prefix}_text', totalTokens);
+      return;
+    }
+
+    var detailedTokens = 0;
+    for (final entry in details.entries) {
+      detailedTokens += entry.value;
+      final suffix = switch (entry.key) {
+        'audio' => 'audio',
+        'image' || 'video' => 'media',
+        _ => 'text',
+      };
+      attributes['${prefix}_$suffix'] =
+          (attributes['${prefix}_$suffix'] ?? 0) + entry.value;
+    }
+
+    final remainder = totalTokens == null ? 0 : totalTokens - detailedTokens;
+    _addPositive(attributes, '${prefix}_text', remainder);
+  }
+
+  static void _addPositive(
+    Map<String, int> attributes,
+    String key,
+    int? value,
+  ) {
+    if (value == null || value <= 0) return;
+    attributes[key] = (attributes[key] ?? 0) + value;
   }
 
   String _normalizeMode(String mode) => switch (mode) {
@@ -301,13 +396,4 @@ class AgentMetrics {
     'voice' || 'text' || 'mixed' || 'tool' => value,
     _ => 'mixed',
   };
-
-  String _costBucket(double costUsd) {
-    if (costUsd < 0.01) return '0-0.01';
-    if (costUsd < 0.05) return '0.01-0.05';
-    if (costUsd < 0.10) return '0.05-0.10';
-    if (costUsd < 0.50) return '0.10-0.50';
-    if (costUsd < 1.00) return '0.50-1.00';
-    return '1.00+';
-  }
 }

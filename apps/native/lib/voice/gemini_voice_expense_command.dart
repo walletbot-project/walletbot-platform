@@ -9,6 +9,7 @@ import 'package:web_socket_channel/web_socket_channel.dart';
 
 import '../data/data.dart';
 import '../sync/wire.dart';
+import '../telemetry/agent_interaction_cost_tracker.dart';
 import '../telemetry/agent_metrics.dart';
 import 'pcm_audio_player.dart';
 import 'tool_executors.dart';
@@ -143,9 +144,8 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
   int _outputAudioChunks = 0;
   int _outputAudioBytes = 0;
   bool _sessionCostMetricSent = false;
-  bool _toolCallSinceLastUsage = false;
-  int _interactionSequence = 0;
-  double? _lastInteractionTotalCostUsd;
+  final AgentInteractionCostTracker _interactionCostTracker =
+      AgentInteractionCostTracker();
   Map<String, Object?>? _latestUsageMetadata;
 
   @override
@@ -674,7 +674,7 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
           ? rawArgs.cast<String, dynamic>()
           : <String, dynamic>{};
       _emit(VoiceToolCallEvent(id: id, name: name, args: args));
-      _toolCallSinceLastUsage = true;
+      _interactionCostTracker.markToolCall();
       if (_cancelledToolIds.contains(id)) continue;
 
       final result = await _executors.execute(name, args);
@@ -796,31 +796,22 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
     if (metrics == null) return;
     final totalCostUsd = metrics.estimateSessionCostUsd(usage);
     if (totalCostUsd == null) return;
-    final previousTotalCostUsd = _lastInteractionTotalCostUsd;
-    if (totalCostUsd == previousTotalCostUsd) return;
-    final interactionCostUsd =
-        previousTotalCostUsd == null || totalCostUsd < previousTotalCostUsd
-        ? totalCostUsd
-        : totalCostUsd - previousTotalCostUsd;
-    _lastInteractionTotalCostUsd = totalCostUsd;
-    if (interactionCostUsd <= 0) return;
-    final interactionType = _interactionType();
-    _interactionSequence += 1;
-    final sampleId = '$sessionId:$_interactionSequence';
-    _toolCallSinceLastUsage = false;
+    final sample = _interactionCostTracker.nextSample(
+      sessionId: sessionId,
+      totalCostUsd: totalCostUsd,
+      fallbackInteractionType: _sessionMode(),
+      tokenAttributes: AgentMetrics.usageTokenAttributes(usage),
+    );
+    if (sample == null) return;
     metrics.recordInteractionCostBestEffort(
       sessionId: sessionId,
-      sampleId: sampleId,
+      sampleId: sample.sampleId,
       model: _model,
       mode: _sessionMode(),
-      interactionType: interactionType,
-      costUsd: interactionCostUsd,
+      interactionType: sample.interactionType,
+      costUsd: sample.costUsd,
+      tokenAttributes: sample.tokenAttributes,
     );
-  }
-
-  String _interactionType() {
-    if (_toolCallSinceLastUsage) return 'tool';
-    return _sessionMode();
   }
 
   String _sessionMode() {

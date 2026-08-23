@@ -10,7 +10,6 @@ import { Label } from '@/components/ui/label'
 import { Separator } from '@/components/ui/separator'
 import { authClient } from '@/lib/auth-client'
 import { useT } from '@/lib/i18n'
-import { trackMetric } from '@/lib/telemetry'
 
 type AuthMode = 'sign-in' | 'sign-up'
 
@@ -76,16 +75,6 @@ export function Login({ mode }: { mode: AuthMode }) {
                         result.error.message ?? 'No se pudo autenticar',
                     )
                 }
-
-                void trackMetric('business.user_accounts.signed_in_count', {
-                    type: 'counter',
-                    value: 1,
-                    unit: 'count',
-                    attributes: {
-                        auth_method: 'email_password',
-                        client_platform: 'web',
-                    },
-                })
 
                 navigate(from, { replace: true })
                 return

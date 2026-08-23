@@ -34,6 +34,7 @@ export type MetricName =
     | 'business.users.registered_total'
     | 'business.user_accounts.signed_in_count'
     | 'agent.session.cost_usd'
+    | 'agent.interaction.cost_usd'
     | 'agent.user.monthly_cost_usd'
     | 'agent.interactions.completed_count'
     | 'agent.session.cost_bucket_count'

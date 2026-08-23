@@ -16,6 +16,7 @@ export const agentUsageSamples = defineTable({
     .index('by_sampleKey', ['sampleKey'])
     .index('by_user_month', ['userId', 'month'])
     .index('by_month', ['month'])
+    .index('by_createdAt', ['createdAt'])
 
 export const agentUsageMonthly = defineTable({
     key: v.string(),

@@ -397,20 +397,40 @@ export const resetRetryableFailedMetrics = internalMutation({
             .take(Math.min(Math.max(args.limit, 1), 100))
 
         let reset = 0
+        let discarded = 0
         for (const row of rows) {
+            if (row.receivedAt > cutoff) continue
+
             if (
-                row.receivedAt <= cutoff &&
-                row.exportAttempts < args.maxAttempts
+                row.type === 'counter' &&
+                row.reservedCumulativeValue !== undefined
             ) {
+                const existing = await ctx.db
+                    .query('telemetryMetricSeries')
+                    .withIndex('by_key', (q) =>
+                        q.eq('key', metricSeriesKey(row)),
+                    )
+                    .unique()
+                if (
+                    existing &&
+                    existing.cumulativeValue > row.reservedCumulativeValue
+                ) {
+                    await ctx.db.delete(row._id)
+                    discarded += 1
+                    continue
+                }
+            }
+
+            if (row.exportAttempts < args.maxAttempts) {
                 await ctx.db.patch(row._id, { exportStatus: 'pending' })
                 reset += 1
             }
         }
-        return { reset }
+        return { reset, discarded }
     },
 })
 
-export const deleteOldExportedMetrics = internalMutation({
+export const deleteOldExportedTelemetryMetrics = internalMutation({
     args: {
         olderThanMs: v.number(),
         limit: v.number(),
@@ -422,6 +442,88 @@ export const deleteOldExportedMetrics = internalMutation({
             .withIndex('by_exportStatus_and_receivedAt', (q) =>
                 q.eq('exportStatus', 'exported').lt('receivedAt', cutoff),
             )
+            .take(Math.min(Math.max(args.limit, 1), 100))
+
+        for (const row of rows) {
+            await ctx.db.delete(row._id)
+        }
+        return { deleted: rows.length }
+    },
+})
+
+export const deleteOldExportedTelemetryEvents = internalMutation({
+    args: {
+        olderThanMs: v.number(),
+        limit: v.number(),
+    },
+    handler: async (ctx, args) => {
+        const cutoff = Date.now() - args.olderThanMs
+        const rows = await ctx.db
+            .query('telemetryEvents')
+            .withIndex('by_exportStatus_and_receivedAt', (q) =>
+                q.eq('exportStatus', 'exported').lt('receivedAt', cutoff),
+            )
+            .take(Math.min(Math.max(args.limit, 1), 100))
+
+        for (const row of rows) {
+            await ctx.db.delete(row._id)
+        }
+        return { deleted: rows.length }
+    },
+})
+
+export const deleteOldFailedTelemetryMetrics = internalMutation({
+    args: {
+        olderThanMs: v.number(),
+        limit: v.number(),
+    },
+    handler: async (ctx, args) => {
+        const cutoff = Date.now() - args.olderThanMs
+        const rows = await ctx.db
+            .query('telemetryMetrics')
+            .withIndex('by_exportStatus_and_receivedAt', (q) =>
+                q.eq('exportStatus', 'failed').lt('receivedAt', cutoff),
+            )
+            .take(Math.min(Math.max(args.limit, 1), 100))
+
+        for (const row of rows) {
+            await ctx.db.delete(row._id)
+        }
+        return { deleted: rows.length }
+    },
+})
+
+export const deleteOldFailedTelemetryEvents = internalMutation({
+    args: {
+        olderThanMs: v.number(),
+        limit: v.number(),
+    },
+    handler: async (ctx, args) => {
+        const cutoff = Date.now() - args.olderThanMs
+        const rows = await ctx.db
+            .query('telemetryEvents')
+            .withIndex('by_exportStatus_and_receivedAt', (q) =>
+                q.eq('exportStatus', 'failed').lt('receivedAt', cutoff),
+            )
+            .take(Math.min(Math.max(args.limit, 1), 100))
+
+        for (const row of rows) {
+            await ctx.db.delete(row._id)
+        }
+        return { deleted: rows.length }
+    },
+})
+
+export const deleteOldAgentUsageSamples = internalMutation({
+    args: {
+        olderThanMs: v.number(),
+        limit: v.number(),
+    },
+    handler: async (ctx, args) => {
+        const cutoff = Date.now() - args.olderThanMs
+        const rows = await ctx.db
+            .query('agentUsageSamples')
+            .withIndex('by_createdAt', (q) => q.lt('createdAt', cutoff))
             .take(Math.min(Math.max(args.limit, 1), 100))
 
         for (const row of rows) {

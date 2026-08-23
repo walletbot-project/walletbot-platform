@@ -29,6 +29,7 @@ export const metricName = v.union(
     v.literal('business.users.registered_total'),
     v.literal('business.user_accounts.signed_in_count'),
     v.literal('agent.session.cost_usd'),
+    v.literal('agent.interaction.cost_usd'),
     v.literal('agent.user.monthly_cost_usd'),
     v.literal('agent.interactions.completed_count'),
     v.literal('agent.session.cost_bucket_count'),
