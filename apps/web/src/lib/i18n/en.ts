@@ -259,6 +259,10 @@ export const en: Messages = {
         aggregationCount: 'Count',
         rowLimit: 'Row limit',
 
+        accounts: 'Accounts',
+        accountsAllHint: 'Every account in this currency.',
+        accountsScopedHint: 'Only the selected accounts.',
+
         groupBy: 'Group by',
         groupByCategory: 'Category',
         groupByAccount: 'Account',

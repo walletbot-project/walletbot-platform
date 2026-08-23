@@ -1259,6 +1259,15 @@ class AppLocalizationsEn extends AppLocalizations {
   String get noAccountsUseArs => 'There are no accounts yet; ARS will be used.';
 
   @override
+  String get widgetWidth => 'Width';
+
+  @override
+  String get widgetAccountsAllHint => 'Every account in this currency.';
+
+  @override
+  String get widgetAccountsScopedHint => 'Only the selected accounts.';
+
+  @override
   String get noColor => 'No color';
 
   @override

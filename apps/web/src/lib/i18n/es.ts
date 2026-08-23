@@ -287,6 +287,10 @@ export const es = {
         aggregationCount: 'Cantidad',
         rowLimit: 'Cantidad de filas',
 
+        accounts: 'Cuentas',
+        accountsAllHint: 'Todas las cuentas de esta moneda.',
+        accountsScopedHint: 'Solo las cuentas seleccionadas.',
+
         groupBy: 'Agrupar por',
         groupByCategory: 'Categoría',
         groupByAccount: 'Cuenta',

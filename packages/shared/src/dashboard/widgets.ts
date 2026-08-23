@@ -77,6 +77,13 @@ export type WidgetOptions = {
     aggregation: StatAggregation
     limit: number
     currency: string
+    /**
+     * Balance card: the accounts it sums, all of them within `currency`. Empty
+     * means "every account in `currency`" — the only shape written before
+     * account scoping existed, so an old card keeps reading as a currency
+     * total rather than as an empty selection summing to zero.
+     */
+    accountIds: string[]
     groupBy: BreakdownGroupBy
     chartKind: BreakdownChartKind
     background: BackgroundStyle
@@ -91,6 +98,7 @@ const CONTENT_KEYS = [
     'aggregation',
     'limit',
     'currency',
+    'accountIds',
     'groupBy',
     'chartKind',
     'background',
@@ -162,6 +170,21 @@ function stringOr(value: unknown, fallback: string): string {
     return typeof value === 'string' && value ? value : fallback
 }
 
+/**
+ * A stored id list, de-duplicated and stripped of anything that isn't a
+ * non-empty string. Sync input is untrusted, so a malformed entry is dropped
+ * rather than carried into a query argument.
+ */
+function idListFromJson(raw: unknown): string[] {
+    if (!Array.isArray(raw)) return []
+    const ids: string[] = []
+    for (const entry of raw) {
+        if (typeof entry !== 'string' || entry === '') continue
+        if (!ids.includes(entry)) ids.push(entry)
+    }
+    return ids
+}
+
 function layoutFromJson(raw: unknown): LayoutCoord | null {
     const record = asRecord(raw)
     if (!record) return null
@@ -186,6 +209,7 @@ export function parseWidgetOptions(raw: string): WidgetOptions {
                 ? Math.trunc(decoded.limit)
                 : 5,
         currency: typeof decoded.currency === 'string' ? decoded.currency : '',
+        accountIds: idListFromJson(decoded.accountIds),
         groupBy: oneOf(BREAKDOWN_GROUP_BYS, decoded.groupBy, 'category'),
         chartKind: oneOf(BREAKDOWN_CHART_KINDS, decoded.chartKind, 'pie'),
         background: backgroundFromJson(decoded.background),

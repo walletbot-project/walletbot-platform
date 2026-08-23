@@ -1264,6 +1264,15 @@ class AppLocalizationsEs extends AppLocalizations {
   String get noAccountsUseArs => 'No hay cuentas todavía; se usará ARS.';
 
   @override
+  String get widgetWidth => 'Ancho';
+
+  @override
+  String get widgetAccountsAllHint => 'Todas las cuentas de esta moneda.';
+
+  @override
+  String get widgetAccountsScopedHint => 'Solo las cuentas seleccionadas.';
+
+  @override
   String get noColor => 'Sin color';
 
   @override

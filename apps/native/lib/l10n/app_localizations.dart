@@ -2324,6 +2324,24 @@ abstract class AppLocalizations {
   /// **'There are no accounts yet; ARS will be used.'**
   String get noAccountsUseArs;
 
+  /// No description provided for @widgetWidth.
+  ///
+  /// In en, this message translates to:
+  /// **'Width'**
+  String get widgetWidth;
+
+  /// No description provided for @widgetAccountsAllHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Every account in this currency.'**
+  String get widgetAccountsAllHint;
+
+  /// No description provided for @widgetAccountsScopedHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Only the selected accounts.'**
+  String get widgetAccountsScopedHint;
+
   /// No description provided for @noColor.
   ///
   /// In en, this message translates to:

@@ -101,11 +101,21 @@ export const transactions = query({
 })
 
 /**
- * Total balance across every non-archived account in `currency`, "as of now"
- * (never date-bounded) — the balance-card contract from the design doc.
+ * Balance "as of now" (never date-bounded) — the balance-card contract from the
+ * design doc.
+ *
+ * Scope: every non-archived account in `currency`, narrowed to `accountIds`
+ * when that list is non-empty. An empty or omitted list is the whole currency,
+ * which is what every card written before account scoping stores, so those keep
+ * their meaning. Ids are still intersected with the currency, so a stale id —
+ * an account since archived, deleted, or switched to another currency — drops
+ * out of the sum instead of being counted or throwing.
  */
 export const currencyBalance = query({
-    args: { currency: v.string() },
+    args: {
+        currency: v.string(),
+        accountIds: v.optional(v.array(v.string())),
+    },
     handler: async (ctx, args) => {
         const userId = await requireAuth(ctx)
         const accounts = await ctx.db
@@ -114,8 +124,11 @@ export const currencyBalance = query({
                 q.eq('userId', userId).eq('isArchived', false),
             )
             .take(MAX_DASHBOARD_ROWS)
+        const scope = args.accountIds ?? []
         const matching = accounts.filter(
-            (account) => account.currency === args.currency,
+            (account) =>
+                account.currency === args.currency &&
+                (scope.length === 0 || scope.includes(account.id)),
         )
         if (matching.length === 0) {
             return { balance: 0n, accountCount: 0 }
