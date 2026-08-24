@@ -6,7 +6,10 @@ import 'package:drift/drift.dart' show Value;
 
 import '../data/data.dart';
 import '../database.dart';
+import '../settings/display_settings.dart';
 import '../shared/money.dart' show centsToDouble;
+import '../user_settings/default_currency_controller.dart';
+import 'agent_generated.dart';
 import 'tool_parsing.dart';
 
 // Native tool executors. All operations run against the local database via
@@ -19,9 +22,19 @@ import 'tool_parsing.dart';
 // model's prompt expects. Data semantics live in the repositories.
 
 class ToolExecutors {
-  ToolExecutors(this.repos);
+  ToolExecutors(this.repos, {this.displaySettings, this.defaultCurrency});
 
   final AppRepositories repos;
+
+  /// Device-scoped display settings (app-scoped controller, passed by
+  /// reference at factory construction — see main.dart). Null in contexts
+  /// that have no display surface (some tests); `updateSettings` then reports
+  /// the setting as unavailable instead of crashing.
+  final DisplaySettingsController? displaySettings;
+
+  /// The account's default currency controller (account-scoped, same subtree
+  /// as [repos]).
+  final DefaultCurrencyController? defaultCurrency;
 
   Future<Map<String, dynamic>> execute(
     String name,
@@ -69,8 +82,6 @@ class ToolExecutors {
           return await _listTransactions(args);
         case 'getTransaction':
           return await _getTransaction(args);
-        case 'getRecentTransactions':
-          return await _getRecentTransactions(args);
         // Transactions: write
         case 'addExpense':
           return await _addExpense(args);
@@ -84,15 +95,9 @@ class ToolExecutors {
           return await _updateTransaction(args);
         case 'deleteTransaction':
           return await _deleteTransaction(args);
-        case 'tagTransaction':
-          return await _tagTransaction(args);
-        case 'untagTransaction':
-          return await _untagTransaction(args);
         // Summaries
-        case 'summarizeByCategory':
-          return await _summarizeByCategory(args);
-        case 'summarizeByAccount':
-          return await _summarizeByAccount(args);
+        case 'summarizeTransactions':
+          return await _summarizeTransactions(args);
         // Saved filters
         case 'listSavedFilters':
           return await _listSavedFilters(args);
@@ -113,6 +118,19 @@ class ToolExecutors {
           return await _reorderDashboardWidgets(args);
         case 'archiveDashboardWidget':
           return await _archiveDashboardWidget(args);
+        // Agent memory
+        case 'addMemory':
+          return await _addMemory(args);
+        case 'updateMemory':
+          return await _updateMemory(args);
+        case 'forgetMemory':
+          return await _forgetMemory(args);
+        // Settings
+        case 'updateSettings':
+          return await _updateSettings(args);
+        // Skills
+        case 'readSkill':
+          return _readSkill(args);
         default:
           return {'ok': false, 'error': 'Unknown tool: $name'};
       }
@@ -267,6 +285,7 @@ class ToolExecutors {
               'description': c.description,
               'color': c.color,
               'icon': c.icon,
+              'isArchived': c.archived,
             },
           )
           .toList(),
@@ -358,6 +377,7 @@ class ToolExecutors {
               'name': t.name,
               'parentId': t.parentId,
               'color': t.color,
+              'isArchived': t.archived,
             },
           )
           .toList(),
@@ -450,7 +470,17 @@ class ToolExecutors {
   Future<Map<String, dynamic>> _listTransactions(
     Map<String, dynamic> args,
   ) async {
-    final limit = (args['limit'] as num?)?.toInt() ?? 50;
+    // With no filters at all this is the "recent movements" read the old
+    // getRecentTransactions tool used to serve: default to 10.
+    final hasFilters =
+        args['type'] != null ||
+        args['accountIdOrName'] != null ||
+        args['categoryIdOrName'] != null ||
+        args['tagIdOrName'] != null ||
+        args['status'] != null ||
+        args['dateFrom'] != null ||
+        args['dateTo'] != null;
+    final limit = (args['limit'] as num?)?.toInt() ?? (hasFilters ? 50 : 10);
 
     String? accountId;
     if (args['accountIdOrName'] != null) {
@@ -523,18 +553,6 @@ class ToolExecutors {
     final result = _serializeTransaction(txn);
     result['tagIds'] = await repos.transactions.tagIdsOf(id);
     return {'ok': true, 'transaction': result};
-  }
-
-  Future<Map<String, dynamic>> _getRecentTransactions(
-    Map<String, dynamic> args,
-  ) async {
-    final limit = (args['limit'] as num?)?.toInt() ?? 10;
-    final items = await repos.transactions.list(
-      const TransactionFilter(),
-      limit: limit,
-      ordering: TxnOrdering.dateDesc,
-    );
-    return {'ok': true, 'items': items.map(_serializeTransaction).toList()};
   }
 
   // ───── Transaction writes ─────
@@ -757,7 +775,48 @@ class ToolExecutors {
           ? Value(args['status'] as String)
           : const Value.absent(),
     );
-    return _transactionWriteResult(id);
+
+    // Tag changes ride the same tool call as the field edits. Unknown names
+    // are skipped and reported back in `missing`, never created on the fly.
+    final missing = <String>[];
+    final toAdd = await _resolveTagIdsReporting(
+      args['addTagIdsOrNames'],
+      missing,
+    );
+    final toRemove = await _resolveTagIdsReporting(
+      args['removeTagIdsOrNames'],
+      missing,
+    );
+    if (toRemove.isNotEmpty) {
+      await repos.transactions.removeTags(id, toRemove);
+    }
+    if (toAdd.isNotEmpty) {
+      await repos.transactions.addTags(id, toAdd);
+    }
+
+    final result = await _transactionWriteResult(id);
+    if (missing.isNotEmpty) result['missing'] = missing;
+    return result;
+  }
+
+  /// Resolves a loosely typed tag id/name list, appending unresolved entries
+  /// to [missing]. Non-list or non-string input resolves to nothing.
+  Future<List<String>> _resolveTagIdsReporting(
+    dynamic raw,
+    List<String> missing,
+  ) async {
+    if (raw is! List) return const [];
+    final ids = <String>[];
+    for (final item in raw) {
+      if (item is! String) continue;
+      final tag = _valueOrNull(await repos.resolver.tag(item));
+      if (tag == null) {
+        missing.add(item);
+      } else {
+        ids.add(tag.id);
+      }
+    }
+    return ids;
   }
 
   Future<Map<String, dynamic>> _deleteTransaction(
@@ -782,94 +841,53 @@ class ToolExecutors {
     };
   }
 
-  Future<Map<String, dynamic>> _tagTransaction(
-    Map<String, dynamic> args,
-  ) async {
-    final transactionId = args['transactionId'] as String;
-    final raw = (args['tagIdsOrNames'] as List).cast<String>();
-    final missing = <String>[];
-    final resolved = <String>[];
-    for (final item in raw) {
-      final tag = _valueOrNull(await repos.resolver.tag(item));
-      if (tag == null) {
-        missing.add(item);
-      } else {
-        resolved.add(tag.id);
-      }
-    }
-    final added = await repos.transactions.addTags(transactionId, resolved);
-    return {'ok': true, 'added': added, 'missing': missing};
-  }
-
-  Future<Map<String, dynamic>> _untagTransaction(
-    Map<String, dynamic> args,
-  ) async {
-    final transactionId = args['transactionId'] as String;
-    final raw = (args['tagIdsOrNames'] as List).cast<String>();
-    final missing = <String>[];
-    final resolved = <String>[];
-    for (final item in raw) {
-      final tag = _valueOrNull(await repos.resolver.tag(item));
-      if (tag == null) {
-        missing.add(item);
-      } else {
-        resolved.add(tag.id);
-      }
-    }
-    final removed = await repos.transactions.removeTags(
-      transactionId,
-      resolved,
-    );
-    return {'ok': true, 'removed': removed, 'missing': missing};
-  }
-
   // ───── Summaries ─────
 
-  Future<Map<String, dynamic>> _summarizeByCategory(
+  Future<Map<String, dynamic>> _summarizeTransactions(
     Map<String, dynamic> args,
   ) async {
-    final rows = await repos.summaries.byCategory(
-      fromMs: parseNaturalDate(args['dateFrom'] as String),
-      toMs: parseNaturalDate(args['dateTo'] as String),
-      type: args['type'] as String?,
-      currency: args['currency'] as String?,
-    );
-    return {
-      'ok': true,
-      'rows': rows
-          .map(
-            (r) => {
-              'categoryId': r.categoryId,
-              'name': r.name,
-              'total': centsToDouble(r.totalCents),
-            },
-          )
-          .toList(),
-    };
-  }
-
-  Future<Map<String, dynamic>> _summarizeByAccount(
-    Map<String, dynamic> args,
-  ) async {
-    final rows = await repos.summaries.byAccount(
-      fromMs: parseNaturalDate(args['dateFrom'] as String),
-      toMs: parseNaturalDate(args['dateTo'] as String),
-    );
-    return {
-      'ok': true,
-      'rows': rows
-          .map(
-            (r) => {
-              'accountId': r.accountId,
-              'name': r.name,
-              'currency': r.currency,
-              'in': centsToDouble(r.inCents),
-              'out': centsToDouble(r.outCents),
-              'net': centsToDouble(r.netCents),
-            },
-          )
-          .toList(),
-    };
+    final groupBy = args['groupBy'];
+    final fromMs = parseNaturalDate(args['dateFrom'] as String);
+    final toMs = parseNaturalDate(args['dateTo'] as String);
+    if (groupBy == 'category') {
+      final rows = await repos.summaries.byCategory(
+        fromMs: fromMs,
+        toMs: toMs,
+        type: args['type'] as String?,
+        currency: args['currency'] as String?,
+      );
+      return {
+        'ok': true,
+        'rows': rows
+            .map(
+              (r) => {
+                'categoryId': r.categoryId,
+                'name': r.name,
+                'total': centsToDouble(r.totalCents),
+              },
+            )
+            .toList(),
+      };
+    }
+    if (groupBy == 'account') {
+      final rows = await repos.summaries.byAccount(fromMs: fromMs, toMs: toMs);
+      return {
+        'ok': true,
+        'rows': rows
+            .map(
+              (r) => {
+                'accountId': r.accountId,
+                'name': r.name,
+                'currency': r.currency,
+                'in': centsToDouble(r.inCents),
+                'out': centsToDouble(r.outCents),
+                'net': centsToDouble(r.netCents),
+              },
+            )
+            .toList(),
+      };
+    }
+    return {'ok': false, 'error': 'Invalid groupBy: $groupBy'};
   }
 
   // ───── Saved filter tools ─────
@@ -1053,6 +1071,131 @@ class ToolExecutors {
     final id = args['id'] as String;
     await repos.dashboard.archive(id);
     return {'ok': true, 'id': id};
+  }
+
+  // ───── Agent memory tools ─────
+
+  Future<Map<String, dynamic>> _addMemory(Map<String, dynamic> args) async {
+    try {
+      final id = await repos.agentMemories.create(
+        content: args['content'] as String,
+      );
+      return {'ok': true, 'id': id};
+    } on StateError catch (e) {
+      // The "consolidate first" cap — surface the message without the
+      // "Bad state:" prefix the generic catch would add.
+      return {'ok': false, 'error': e.message};
+    }
+  }
+
+  Future<Map<String, dynamic>> _updateMemory(Map<String, dynamic> args) async {
+    final id = args['id'] as String;
+    final updated = await repos.agentMemories.update(
+      id,
+      content: args['content'] as String,
+    );
+    if (!updated) return {'ok': false, 'error': 'Memory not found'};
+    return {'ok': true, 'id': id};
+  }
+
+  Future<Map<String, dynamic>> _forgetMemory(Map<String, dynamic> args) async {
+    final id = args['id'] as String;
+    // Idempotent, like deleteTransaction: forgetting a missing memory is ok.
+    await repos.agentMemories.archive(id);
+    return {'ok': true, 'id': id};
+  }
+
+  // ───── Settings tool ─────
+
+  Future<Map<String, dynamic>> _updateSettings(
+    Map<String, dynamic> args,
+  ) async {
+    final language = args['language'] as String?;
+    final theme = args['theme'] as String?;
+    final currency = args['defaultCurrency'] as String?;
+    if (language == null && theme == null && currency == null) {
+      return {
+        'ok': false,
+        'error': 'Nothing to change — pass language, theme, or defaultCurrency',
+      };
+    }
+
+    final changed = <String>[];
+    if (language != null || theme != null) {
+      final settings = displaySettings;
+      if (settings == null) {
+        return {
+          'ok': false,
+          'error': 'Display settings are not available in this session',
+        };
+      }
+      if (language != null) {
+        final value = switch (language) {
+          'system' => DisplayLanguage.system,
+          'es' => DisplayLanguage.spanish,
+          'en' => DisplayLanguage.english,
+          _ => null,
+        };
+        if (value == null) {
+          return {'ok': false, 'error': 'Invalid language: $language'};
+        }
+        await settings.setLanguage(value);
+        changed.add('language=$language (this device only)');
+      }
+      if (theme != null) {
+        final value = switch (theme) {
+          'system' => DisplayTheme.system,
+          'light' => DisplayTheme.light,
+          'dark' => DisplayTheme.dark,
+          _ => null,
+        };
+        if (value == null) {
+          return {'ok': false, 'error': 'Invalid theme: $theme'};
+        }
+        await settings.setTheme(value);
+        changed.add('theme=$theme (this device only)');
+      }
+    }
+    if (currency != null) {
+      final controller = defaultCurrency;
+      if (controller == null) {
+        return {
+          'ok': false,
+          'error': 'Default currency is not available in this session',
+        };
+      }
+      final normalized = currency.trim().toUpperCase();
+      if (!RegExp(r'^[A-Z]{3}$').hasMatch(normalized)) {
+        return {'ok': false, 'error': 'Invalid currency code: $currency'};
+      }
+      // Remote accounts persist through the backend inside setValue; a
+      // rejected write rolls back and propagates as the generic error
+      // envelope.
+      await controller.setValue(normalized);
+      changed.add('defaultCurrency=$normalized (account-wide)');
+    }
+    return {'ok': true, 'changed': changed};
+  }
+
+  // ───── Skills tool ─────
+
+  Map<String, dynamic> _readSkill(Map<String, dynamic> args) {
+    final slug = args['slug'] as String?;
+    for (final skill in kAgentSkills) {
+      if (skill.slug == slug) {
+        return {
+          'ok': true,
+          'slug': skill.slug,
+          'title': skill.title,
+          'body': skill.body,
+        };
+      }
+    }
+    return {
+      'ok': false,
+      'error': 'Unknown skill: $slug',
+      'availableSlugs': [for (final skill in kAgentSkills) skill.slug],
+    };
   }
 
   // ───── Internal helpers ─────

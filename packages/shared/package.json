@@ -2,13 +2,17 @@
     "name": "@wallet-bot/shared",
     "type": "module",
     "scripts": {
-        "typecheck": "tsc --noEmit"
+        "typecheck": "tsc --noEmit",
+        "generate:agent": "tsx scripts/generate-agent.ts",
+        "test": "vitest run"
     },
     "exports": {
         ".": "./src/index.ts"
     },
     "devDependencies": {
-        "typescript": "catalog:"
+        "tsx": "^4.20.6",
+        "typescript": "catalog:",
+        "vitest": "^3.2.4"
     },
     "dependencies": {
         "zod": "^3.25.76"

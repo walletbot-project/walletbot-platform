@@ -24,7 +24,11 @@ BigInt parseNaturalDate(String input, {DateTime? now}) {
       .replaceAll(RegExp('[éèëê]'), 'e')
       .replaceAll(RegExp('[íìïî]'), 'i')
       .replaceAll(RegExp('[óòöô]'), 'o')
-      .replaceAll(RegExp('[úùüû]'), 'u');
+      .replaceAll(RegExp('[úùüû]'), 'u')
+      // The TS mirror strips combining marks via NFD, which also turns
+      // "mañana" into "manana" — without this, the ñ kept the word from ever
+      // matching and native rejected a date web accepted.
+      .replaceAll('ñ', 'n');
 
   BigInt asDayOffset(int offset) {
     // Build the target calendar day from date components (DateTime normalizes
@@ -33,6 +37,25 @@ BigInt parseNaturalDate(String input, {DateTime? now}) {
     // e.g. after spring-forward it lands at 23:00 the previous calendar day.
     final d = DateTime(reference.year, reference.month, reference.day + offset);
     return BigInt.from(d.millisecondsSinceEpoch);
+  }
+
+  // Date-only ISO values are validated by components before parsing: Dart's
+  // DateTime.parse silently normalizes overflow ("2026-02-30" → March 2),
+  // while the TS mirror rejects it — an invalid day must fail identically on
+  // both platforms. (A date-only DateTime.parse is already local midnight,
+  // matching the TS mirror's explicit local construction.)
+  final isoDate = RegExp(r'^(\d{4})-(\d{2})-(\d{2})$').firstMatch(normalized);
+  if (isoDate != null) {
+    final year = int.parse(isoDate.group(1)!);
+    final month = int.parse(isoDate.group(2)!);
+    final day = int.parse(isoDate.group(3)!);
+    final localDate = DateTime(year, month, day);
+    if (localDate.year != year ||
+        localDate.month != month ||
+        localDate.day != day) {
+      throw FormatException('Unrecognized date: $input');
+    }
+    return BigInt.from(localDate.millisecondsSinceEpoch);
   }
 
   switch (normalized) {

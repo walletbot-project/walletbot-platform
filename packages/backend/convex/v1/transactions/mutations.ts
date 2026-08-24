@@ -235,7 +235,11 @@ export const createTransfer = mutation({
         toAccountId: v.string(),
         toAmount: v.optional(v.int64()),
         exchangeRate: v.optional(v.number()),
-        categoryId: v.string(),
+        // Optional: transfers move money between the user's own accounts and
+        // are excluded from category breakdowns, so a category is decoration.
+        // Stored as '' when absent — the same representation the native app
+        // and the sync wire already use for a category-less transfer.
+        categoryId: v.optional(v.string()),
         date: v.optional(v.int64()),
         dateConfirmed: v.boolean(),
         timeStatus: v.optional(transactionTimeStatus),
@@ -254,8 +258,10 @@ export const createTransfer = mutation({
         if (!fromAcc) throw new Error('Source account not found')
         const toAcc = await getAccount(ctx, userId, args.toAccountId)
         if (!toAcc) throw new Error('Destination account not found')
-        const category = await getCategory(ctx, userId, args.categoryId)
-        if (!category) throw new Error('Category not found')
+        if (args.categoryId) {
+            const category = await getCategory(ctx, userId, args.categoryId)
+            if (!category) throw new Error('Category not found')
+        }
 
         const sameCurrency = fromAcc.currency === toAcc.currency
         const toAmount =
@@ -282,7 +288,7 @@ export const createTransfer = mutation({
             dateConfirmed: args.dateConfirmed,
             timeStatus,
             accountId: args.accountId,
-            categoryId: args.categoryId,
+            categoryId: args.categoryId ?? '',
             amount: args.amount,
             currency: fromAcc.currency,
             toAccountId: args.toAccountId,

@@ -49,9 +49,52 @@ const liveTokenHandler = httpAction(async (ctx, req) => {
         )
     }
     const validatedAt = Date.now()
+    // The mint options ride in the JSON body. Old builds POST an empty body —
+    // they get the base prompt and only the tools their binaries can execute.
+    // `createLiveToken` sanitizes/caps the context itself, so the raw JSON is
+    // safe to hand over.
+    let options: {
+        platform?: string
+        appVersion?: string
+        locale?: string
+        timezone?: string
+        timezoneOffsetMinutes?: number
+        context?: unknown
+    } = {}
+    try {
+        const body: unknown = await req.json()
+        if (typeof body === 'object' && body !== null && !Array.isArray(body)) {
+            const record = body as Record<string, unknown>
+            options = {
+                platform:
+                    typeof record.platform === 'string'
+                        ? record.platform
+                        : undefined,
+                appVersion:
+                    typeof record.appVersion === 'string'
+                        ? record.appVersion
+                        : undefined,
+                locale:
+                    typeof record.locale === 'string'
+                        ? record.locale
+                        : undefined,
+                timezone:
+                    typeof record.timezone === 'string'
+                        ? record.timezone
+                        : undefined,
+                timezoneOffsetMinutes:
+                    typeof record.timezoneOffsetMinutes === 'number'
+                        ? record.timezoneOffsetMinutes
+                        : undefined,
+                context: record.context,
+            }
+        }
+    } catch {
+        // Empty or non-JSON body — mint with defaults.
+    }
     // Direct call: createLiveToken runs in the default runtime (no Node
     // APIs), so no cross-runtime action hop is needed.
-    const result = await createLiveToken()
+    const result = await createLiveToken(options)
 
     return jsonResponse({
         ...result,

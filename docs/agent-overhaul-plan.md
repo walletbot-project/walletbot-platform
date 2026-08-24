@@ -1,6 +1,10 @@
 # Gaston agent overhaul — plan
 
-Status: agreed direction, pending team sign-off on the schema v4 bump in Phase 6.
+Status: IMPLEMENTED 2026-08-24 (all six phases, one change set). Open questions
+resolved at implementation time: (1) `addTransfer.categoryIdOrName` is optional;
+(2) the five drafted skill slugs shipped as-is; (3) memory cap 200 with the
+"consolidate first" rejection; (4) `updateSettings` applies immediately and
+then mentions the change. Rollout risk tracked as R-023 in `docs/riesgos.md`.
 Scope: the Gemini Live agent ("Gaston", branded "Gasti") on native and web — tools, prompts,
 context, memory, settings, skills, and the web reconnection bug.
 

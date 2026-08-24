@@ -4,10 +4,11 @@ import { z } from 'zod'
 //
 // Conventions:
 // - `idOrName` accepts either a UUID or a human name; executors resolve to the
-//   underlying entity. On ambiguity the executor returns
-//   `{ ok: false, error: "ambiguous", candidates: [...] }`.
-// - Amounts are decimal in user-facing units (e.g. 12.50). Executors convert to
-//   cents (int64) before persisting.
+//   underlying entity. On failure the executor returns
+//   `{ ok: false, error: "<Entity> not found" }`, and on a name matching more
+//   than one entity `{ ok: false, error: "<Entity> is ambiguous", candidates }`.
+// - Amounts are decimal in user-facing display units (e.g. 12.50). Executors
+//   convert to cents (int64) before persisting.
 // - Transaction dates are ISO 8601 strings or natural-language
 //   ("today", "yesterday"). The executor parses to ms-epoch and applies the
 //   timeStatus contract below.
@@ -32,6 +33,7 @@ const dashboardWidth = z.enum(['full', 'two_thirds', 'half', 'third'])
 const statAggregation = z.enum(['sum', 'net', 'count'])
 const breakdownGroupBy = z.enum(['category', 'account', 'month'])
 const breakdownChartKind = z.enum(['pie', 'bar', 'line'])
+const summaryGroupBy = z.enum(['category', 'account'])
 
 const idOrName = z.string().describe('UUID or human name of the entity')
 const optionalIdOrName = idOrName.optional()
@@ -48,12 +50,12 @@ const dateConfirmed = z
 const tagList = z
     .array(idOrName)
     .describe(
-        'Tag UUIDs or names. Created on the fly if names are unknown? No — must exist.',
+        'Tag UUIDs or names. Tags must already exist — unknown names are skipped and reported back in `missing`, never created on the fly.',
     )
 const canonicalFilterJson = z
     .string()
     .describe(
-        'Canonical saved-filter JSON string: { "combinator": "and"|"or", "not"?: boolean, "children": [...] }. Use fields type, status, date, account, category, tag, currency, amount, text. Omit or use an empty group for all transactions.',
+        'Canonical saved-filter JSON string: { "combinator": "and"|"or", "not"?: boolean, "children": [...] }. Use fields type, status, date, account, category, tag, currency, amount, text. Omit or use an empty group for all transactions. Amount values inside filter JSON are stored in cents.',
     )
 const dashboardBackground = z
     .object({
@@ -67,7 +69,7 @@ const dashboardBackground = z
     })
     .optional()
     .describe(
-        'Optional widget background. fixed uses fixedColor. value compares the displayed widget value against low/high and uses lowColor/betweenColor/highColor.',
+        'Optional widget background. fixed uses fixedColor. value compares the displayed widget value against low/high (in display units) and uses lowColor/betweenColor/highColor.',
     )
 
 export const toolSchemas = {
@@ -119,7 +121,10 @@ export const toolSchemas = {
 
     // ───── Categories ─────
     listCategories: z.object({
-        includeArchived: z.boolean().optional(),
+        includeArchived: z
+            .boolean()
+            .optional()
+            .describe('Include archived categories. Defaults to false.'),
     }),
     getCategory: z.object({
         idOrName: idOrName,
@@ -153,7 +158,10 @@ export const toolSchemas = {
 
     // ───── Tags ─────
     listTags: z.object({
-        includeArchived: z.boolean().optional(),
+        includeArchived: z
+            .boolean()
+            .optional()
+            .describe('Include archived tags. Defaults to false.'),
     }),
     getTag: z.object({
         idOrName: idOrName,
@@ -193,13 +201,12 @@ export const toolSchemas = {
             .number()
             .int()
             .optional()
-            .describe('Max results. Defaults to 50.'),
+            .describe(
+                'Max results. Defaults to 10 when no filters are given (recent movements), 50 otherwise.',
+            ),
     }),
     getTransaction: z.object({
         id: z.string().describe('Transaction UUID'),
-    }),
-    getRecentTransactions: z.object({
-        limit: z.number().int().optional().describe('Defaults to 10'),
     }),
 
     // ───── Transactions: write (split per type) ─────
@@ -241,7 +248,9 @@ export const toolSchemas = {
             ),
         exchangeRate: z.number().optional(),
         name: z.string(),
-        categoryIdOrName: optionalIdOrName,
+        categoryIdOrName: optionalIdOrName.describe(
+            'Optional. Transfers are excluded from category breakdowns, so omit it unless the user names one.',
+        ),
         date: isoOrNaturalDate.optional(),
         dateConfirmed,
         timeStatus: transactionTimeStatus,
@@ -278,29 +287,37 @@ export const toolSchemas = {
         amount: z.number().optional(),
         categoryIdOrName: optionalIdOrName,
         status: transactionStatus.optional(),
+        addTagIdsOrNames: tagList
+            .optional()
+            .describe(
+                'Tags to attach. Tag UUIDs or names; unknown names are skipped and reported in `missing`.',
+            ),
+        removeTagIdsOrNames: tagList
+            .optional()
+            .describe(
+                'Tags to detach. Tag UUIDs or names; unknown names are skipped and reported in `missing`.',
+            ),
     }),
     deleteTransaction: z.object({
         id: z.string(),
     }),
-    tagTransaction: z.object({
-        transactionId: z.string(),
-        tagIdsOrNames: tagList,
-    }),
-    untagTransaction: z.object({
-        transactionId: z.string(),
-        tagIdsOrNames: tagList,
-    }),
 
     // ───── Summaries ─────
-    summarizeByCategory: z.object({
+    summarizeTransactions: z.object({
+        groupBy: summaryGroupBy.describe(
+            'category: totals per category (transfers excluded). account: per-account money-in/money-out/net flows.',
+        ),
         dateFrom: isoOrNaturalDate,
         dateTo: isoOrNaturalDate,
-        type: transactionType.optional(),
-        currency: z.string().optional(),
-    }),
-    summarizeByAccount: z.object({
-        dateFrom: isoOrNaturalDate,
-        dateTo: isoOrNaturalDate,
+        type: transactionType
+            .optional()
+            .describe('Only meaningful with groupBy category.'),
+        currency: z
+            .string()
+            .optional()
+            .describe(
+                'Only meaningful with groupBy category: restrict the totals to one currency. Without it, amounts across currencies are added together as raw numbers.',
+            ),
     }),
 
     // ───── Dashboard saved filters ─────
@@ -318,7 +335,7 @@ export const toolSchemas = {
         id: z.string(),
     }),
 
-    // ───── Home dashboard widgets (native-only v1) ─────
+    // ───── Home dashboard widgets ─────
     listDashboardWidgets: z.object({}),
     createDashboardWidget: z.object({
         type: dashboardWidgetType,
@@ -360,9 +377,64 @@ export const toolSchemas = {
     reorderDashboardWidgets: z.object({
         ids: z
             .array(z.string())
-            .describe('Dashboard widget ids in display order.'),
+            .describe(
+                'ALL live dashboard widget ids in the desired display order — a partial list silently skips the missing ones.',
+            ),
     }),
     archiveDashboardWidget: z.object({
         id: z.string(),
+    }),
+
+    // ───── Agent memory ─────
+    addMemory: z.object({
+        content: z
+            .string()
+            .describe(
+                'One durable fact or preference, self-contained and concise (e.g. "If no account is stated, use Galicia."). Never secrets, never one-off transaction details.',
+            ),
+    }),
+    updateMemory: z.object({
+        id: z
+            .string()
+            .describe(
+                'Memory id, from the Memories block in your instructions or a previous memory tool result.',
+            ),
+        content: z.string().describe('The full replacement text.'),
+    }),
+    forgetMemory: z.object({
+        id: z
+            .string()
+            .describe(
+                'Memory id, from the Memories block in your instructions or a previous memory tool result.',
+            ),
+    }),
+
+    // ───── Settings ─────
+    updateSettings: z.object({
+        language: z
+            .enum(['system', 'es', 'en'])
+            .optional()
+            .describe(
+                'Display language preference. Applies to THIS device only.',
+            ),
+        theme: z
+            .enum(['system', 'light', 'dark'])
+            .optional()
+            .describe('Theme preference. Applies to THIS device only.'),
+        defaultCurrency: z
+            .string()
+            .optional()
+            .describe(
+                'ISO 4217 code (e.g. "ARS"). Account-wide — applies on every device.',
+            ),
+    }),
+
+    // ───── Skills ─────
+    readSkill: z.object({
+        slug: z
+            .string()
+            .describe(
+                'A skill slug from the skills index in your instructions.',
+            ),
     }),
 } satisfies Record<string, z.ZodType>

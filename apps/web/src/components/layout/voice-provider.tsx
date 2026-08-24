@@ -1,5 +1,10 @@
 import { useConvex } from 'convex/react'
+import { useCallback, useContext, useMemo } from 'react'
 import { useVoice } from '@/hooks/use-voice'
+import { buildLiveTokenMintArgs } from '@/lib/agent-context'
+import { AuthContext } from '@/lib/auth-context'
+import { useI18n } from '@/lib/i18n'
+import { ThemeContext } from '@/lib/theme/context'
 import { VoiceSessionContext } from '@/lib/voice-context'
 
 /**
@@ -19,10 +24,43 @@ import { VoiceSessionContext } from '@/lib/voice-context'
  * Sitting inside `AuthProvider` is what ends the session when the account goes
  * away — the provider unmounts, `useVoice` disconnects. That is native's
  * `PopOnAccountSwitch`.
+ *
+ * It also assembles the mint request for `requestLiveToken`: the auth and
+ * i18n contexts all sit above this provider, so this is where the user's
+ * identity, locale and data snapshot come together.
  */
 export function VoiceProvider({ children }: { children: React.ReactNode }) {
     const client = useConvex()
-    const voice = useVoice({ context: { client } })
+    const auth = useContext(AuthContext)
+    const { formatLocale, setPreference: setLanguage } = useI18n()
+    const theme = useContext(ThemeContext)
+    const setTheme = theme?.setPreference
+
+    const user = auth?.user ?? null
+    const buildMintArgs = useCallback(
+        () =>
+            buildLiveTokenMintArgs({
+                client,
+                user: user ? { name: user.name, email: user.email } : null,
+                locale: formatLocale,
+            }),
+        [client, user, formatLocale],
+    )
+
+    // The `updateSettings` tool writes device settings through the providers
+    // that own them (i18n + theme both sit above this provider).
+    const settings = useMemo(
+        () =>
+            setTheme
+                ? {
+                      setLanguage,
+                      setTheme,
+                  }
+                : undefined,
+        [setLanguage, setTheme],
+    )
+
+    const voice = useVoice({ context: { client, settings }, buildMintArgs })
 
     return (
         <VoiceSessionContext.Provider value={voice}>

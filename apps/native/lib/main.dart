@@ -26,6 +26,7 @@ import 'package:app/sync/sync_engine.dart';
 import 'package:app/telemetry/business_metrics.dart';
 import 'package:app/telemetry/telemetry_client.dart';
 import 'package:app/user_settings/default_currency_controller.dart';
+import 'package:app/voice/agent_context.dart';
 import 'package:app/voice/gemini_voice_expense_command.dart';
 import 'package:app/voice/voice_session_remote_sync.dart';
 import 'package:app/voice/voice_session_repository.dart';
@@ -381,16 +382,43 @@ class _AuthGate extends StatelessWidget {
               dispose: (_, sync) => unawaited(sync.dispose()),
             ),
           Provider<GeminiVoiceExpenseCommandFactory>(
-            create: (ctx) => GeminiVoiceExpenseCommandFactory(
-              repositories: ctx.read<AppRepositories>(),
-              sessionRepository: ctx.read<VoiceSessionRepository>(),
-              remoteSync: active.type == AccountType.remote
-                  ? ctx.read<VoiceSessionRemoteSync>()
-                  : null,
-              useAuthenticatedTokenAction: active.type == AccountType.remote,
-              sessionToken: active.sessionToken,
-              convexSiteUrl: AppConfig.convexSiteUrl,
-            ),
+            create: (ctx) {
+              // Captured here (not read from ctx inside the closure below):
+              // the mint-args builder outlives this create call, and the
+              // controllers are references whose current values are read at
+              // each (re)connect.
+              final repositories = ctx.read<AppRepositories>();
+              final clientInfo = ctx.read<ClientInfo>();
+              final displaySettings = ctx.read<DisplaySettingsController>();
+              final defaultCurrency = ctx.read<DefaultCurrencyController>();
+              return GeminiVoiceExpenseCommandFactory(
+                repositories: repositories,
+                sessionRepository: ctx.read<VoiceSessionRepository>(),
+                remoteSync: active.type == AccountType.remote
+                    ? ctx.read<VoiceSessionRemoteSync>()
+                    : null,
+                useAuthenticatedTokenAction: active.type == AccountType.remote,
+                sessionToken: active.sessionToken,
+                convexSiteUrl: AppConfig.convexSiteUrl,
+                // The updateSettings tool writes through these controllers.
+                displaySettings: displaySettings,
+                defaultCurrency: defaultCurrency,
+                buildMintArgs: () => buildLiveTokenMintArgs(
+                  repositories: repositories,
+                  clientInfo: clientInfo,
+                  localeTag: _resolvedLocaleTag(displaySettings),
+                  userName: active.name,
+                  userEmail: active.email,
+                  defaultCurrency: defaultCurrency.value,
+                  language: switch (displaySettings.language) {
+                    DisplayLanguage.system => 'system',
+                    DisplayLanguage.english => 'en',
+                    DisplayLanguage.spanish => 'es',
+                  },
+                  theme: displaySettings.theme.name,
+                ),
+              );
+            },
             dispose: (_, factory) => unawaited(factory.dispose()),
           ),
           // Drives the bottom-nav tab selection and lets one tab hand a filter

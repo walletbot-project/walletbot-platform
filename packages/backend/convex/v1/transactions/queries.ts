@@ -418,6 +418,141 @@ function newestFirst(a: Doc<'transactions'>, b: Doc<'transactions'>): number {
     return a.id > b.id ? -1 : 1
 }
 
+/**
+ * Server-side aggregation behind the agent's `summarizeTransactions` tool
+ * (native computes the same thing locally over Drift — see
+ * `SummaryRepository.byCategory` / `byAccount`, which this mirrors).
+ *
+ * Replaces the web executor's old client-side walk over `listPaginated`
+ * (50 pages × 200 rows). The scan is bounded by the `by_user_date` index over
+ * the requested window and capped at `MAX_SCAN` rows; `truncated` reports when
+ * the cap cut the window short so the caller can say the totals are partial.
+ *
+ * Amounts are returned in cents (int64); callers convert to display units.
+ */
+export const summarize = query({
+    args: {
+        groupBy: v.union(v.literal('category'), v.literal('account')),
+        dateFrom: v.int64(),
+        dateTo: v.int64(),
+        type: v.optional(
+            v.union(
+                v.literal('expense'),
+                v.literal('income'),
+                v.literal('transfer'),
+            ),
+        ),
+        currency: v.optional(v.string()),
+    },
+    handler: async (ctx, args) => {
+        const userId = await requireAuth(ctx)
+
+        const stream = ctx.db
+            .query('transactions')
+            .withIndex('by_user_date', (q) =>
+                q
+                    .eq('userId', userId)
+                    .gte('date', args.dateFrom)
+                    .lte('date', args.dateTo),
+            )
+            .order('desc')
+
+        let scanned = 0
+        let truncated = false
+
+        if (args.groupBy === 'category') {
+            const totals = new Map<string, bigint>()
+            for await (const t of stream) {
+                scanned++
+                if (scanned > MAX_SCAN) {
+                    truncated = true
+                    break
+                }
+                if (t.isArchived) continue
+                if (args.type && t.type !== args.type) continue
+                // Transfers move money between the user's own accounts, so
+                // they never contribute to category totals (same rule as
+                // native's SummaryRepository and the dashboard breakdowns).
+                if (t.type === 'transfer') continue
+                if (args.currency && t.currency !== args.currency) continue
+                totals.set(
+                    t.categoryId,
+                    (totals.get(t.categoryId) ?? 0n) + t.amount,
+                )
+            }
+            const cats = await ctx.db
+                .query('categories')
+                .withIndex('by_user_archived', (q) =>
+                    q.eq('userId', userId).eq('isArchived', false),
+                )
+                .collect()
+            const nameById = new Map(cats.map((c) => [c.id, c.name]))
+            return {
+                groupBy: 'category' as const,
+                truncated,
+                rows: [...totals.entries()].map(([categoryId, total]) => ({
+                    categoryId,
+                    name: nameById.get(categoryId) ?? '(unknown)',
+                    totalCents: total,
+                })),
+            }
+        }
+
+        const accounts = await ctx.db
+            .query('accounts')
+            .withIndex('by_user_archived', (q) =>
+                q.eq('userId', userId).eq('isArchived', false),
+            )
+            .collect()
+        const flows = new Map<
+            string,
+            { name: string; currency: string; in: bigint; out: bigint }
+        >()
+        for (const a of accounts) {
+            flows.set(a.id, {
+                name: a.name,
+                currency: a.currency,
+                in: 0n,
+                out: 0n,
+            })
+        }
+        for await (const t of stream) {
+            scanned++
+            if (scanned > MAX_SCAN) {
+                truncated = true
+                break
+            }
+            if (t.isArchived) continue
+            const row = flows.get(t.accountId)
+            if (row) {
+                if (t.type === 'expense') row.out += t.amount
+                else if (t.type === 'income') row.in += t.amount
+                else if (t.type === 'transfer') row.out += t.amount
+                else if (t.type === 'balance_adjustment') {
+                    if (t.amount >= 0n) row.in += t.amount
+                    else row.out += -t.amount
+                }
+            }
+            if (t.type === 'transfer' && t.toAccountId) {
+                const dest = flows.get(t.toAccountId)
+                if (dest) dest.in += t.toAmount ?? t.amount
+            }
+        }
+        return {
+            groupBy: 'account' as const,
+            truncated,
+            rows: [...flows.entries()].map(([accountId, row]) => ({
+                accountId,
+                name: row.name,
+                currency: row.currency,
+                inCents: row.in,
+                outCents: row.out,
+                netCents: row.in - row.out,
+            })),
+        }
+    },
+})
+
 // O(log n) balance read backed by two TableAggregates over `transactions`.
 // See aggregates.ts for the namespace/sumValue contracts.
 export async function computeAccountBalance(
