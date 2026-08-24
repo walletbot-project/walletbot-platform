@@ -42,6 +42,21 @@ const withWebCallback = (rawUrl: string, landingPath: string): string => {
     return url.toString()
 }
 
+const authMethodForWebSession = (
+    context: { path?: string; request?: Request } | null,
+): 'email_password' | 'google' | null => {
+    if (!context) return null
+    if (
+        context.request?.headers.get('x-walletbot-client-platform') ===
+        'native'
+    ) {
+        return null
+    }
+    if (context.path === '/sign-in/email') return 'email_password'
+    if (context.path === '/callback/:id') return 'google'
+    return null
+}
+
 export const createAuth = (ctx: GenericCtx<DataModel>) => {
     return betterAuth({
         baseURL: convexSiteUrl,
@@ -89,6 +104,23 @@ export const createAuth = (ctx: GenericCtx<DataModel>) => {
                             {
                                 userId: user.id,
                                 authMethod: 'email_password',
+                            },
+                        )
+                    },
+                },
+            },
+            session: {
+                create: {
+                    after: async (session, context) => {
+                        const authMethod = authMethodForWebSession(context)
+                        if (!authMethod) return
+                        await requireRunMutationCtx(ctx).runMutation(
+                            internal.telemetry.mutations
+                                .recordUserAccountSignedIn,
+                            {
+                                userId: session.userId,
+                                authMethod,
+                                clientPlatform: 'web',
                             },
                         )
                     },

@@ -23,6 +23,7 @@ import 'package:app/settings/display_settings.dart';
 import 'package:app/shared/app_navigation.dart';
 import 'package:app/shared/breakpoints.dart';
 import 'package:app/sync/sync_engine.dart';
+import 'package:app/telemetry/agent_metrics.dart';
 import 'package:app/telemetry/business_metrics.dart';
 import 'package:app/telemetry/telemetry_client.dart';
 import 'package:app/user_settings/default_currency_controller.dart';
@@ -181,6 +182,10 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
           Provider<BusinessMetrics>(
             create: (_) => BusinessMetrics(widget.telemetry!),
           ),
+        if (widget.telemetry != null)
+          Provider<AgentMetrics>(
+            create: (_) => AgentMetrics(widget.telemetry!),
+          ),
       ],
       child: _TelemetryStarter(
         child: Consumer<DisplaySettingsController>(
@@ -332,9 +337,7 @@ class _AuthGate extends StatelessWidget {
               accountId: active.id,
               isRemote: active.type == AccountType.remote,
               clientInfo: ctx.read<ClientInfo>(),
-              locale: _resolvedLocaleTag(
-                ctx.read<DisplaySettingsController>(),
-              ),
+              locale: _resolvedLocaleTag(ctx.read<DisplaySettingsController>()),
               appConfig: ctx.read<AppConfigController>(),
             );
             unawaited(controller.load());
@@ -387,6 +390,7 @@ class _AuthGate extends StatelessWidget {
               remoteSync: active.type == AccountType.remote
                   ? ctx.read<VoiceSessionRemoteSync>()
                   : null,
+              agentMetrics: ctx.read<AgentMetrics?>(),
               useAuthenticatedTokenAction: active.type == AccountType.remote,
               sessionToken: active.sessionToken,
               convexSiteUrl: AppConfig.convexSiteUrl,

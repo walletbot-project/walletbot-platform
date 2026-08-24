@@ -1,5 +1,6 @@
 import { defineSchema } from 'convex/server'
 import { accounts } from './schema/accounts'
+import { agentUsageMonthly, agentUsageSamples } from './schema/agentUsage'
 import { categories } from './schema/categories'
 import { dashboardWidgets, savedFilters } from './schema/dashboard'
 import {
@@ -24,6 +25,8 @@ import { voiceSessionEvents, voiceSessions } from './schema/voice'
 
 export default defineSchema({
     accounts,
+    agentUsageMonthly,
+    agentUsageSamples,
     admins,
     categories,
     dashboardWidgets,

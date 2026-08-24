@@ -49,11 +49,65 @@ crons.interval(
 crons.interval(
     'delete exported telemetry metrics',
     { hours: 6 },
-    internal.telemetry.mutations.deleteOldExportedMetrics,
+    internal.telemetry.mutations.deleteOldExportedTelemetryMetrics,
     {
-        olderThanMs: 24 * 60 * 60 * 1000,
-        limit: 100,
+        olderThanMs: 90 * 24 * 60 * 60 * 1000,
+        limit: 1000,
     },
+)
+
+crons.interval(
+    'delete exported telemetry events',
+    { hours: 6 },
+    internal.telemetry.mutations.deleteOldExportedTelemetryEvents,
+    {
+        olderThanMs: 90 * 24 * 60 * 60 * 1000,
+        limit: 1000,
+    },
+)
+
+crons.interval(
+    'delete failed telemetry metrics',
+    { hours: 6 },
+    internal.telemetry.mutations.deleteOldFailedTelemetryMetrics,
+    {
+        olderThanMs: 14 * 24 * 60 * 60 * 1000,
+        limit: 1000,
+    },
+)
+
+crons.interval(
+    'delete failed telemetry events',
+    { hours: 6 },
+    internal.telemetry.mutations.deleteOldFailedTelemetryEvents,
+    {
+        olderThanMs: 14 * 24 * 60 * 60 * 1000,
+        limit: 1000,
+    },
+)
+
+crons.interval(
+    'delete old agent usage samples',
+    { hours: 6 },
+    internal.telemetry.mutations.deleteOldAgentUsageSamples,
+    {
+        olderThanMs: 90 * 24 * 60 * 60 * 1000,
+        limit: 1000,
+    },
+)
+
+crons.interval(
+    'record registered users total',
+    { hours: 6 },
+    internal.telemetry.actions.recordRegisteredUsersTotal,
+    {},
+)
+
+crons.interval(
+    'record agent monthly usage',
+    { hours: 6 },
+    internal.telemetry.actions.recordAgentMonthlyUsage,
+    {},
 )
 
 // A purge batch that throws is never retried by the scheduler, which used to

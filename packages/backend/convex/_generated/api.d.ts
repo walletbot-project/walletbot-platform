@@ -8,6 +8,7 @@
  * @module
  */
 
+import type * as agentUsage_queries from "../agentUsage/queries.js";
 import type * as aggregates from "../aggregates.js";
 import type * as auth from "../auth.js";
 import type * as authNative_http from "../authNative/http.js";
@@ -32,6 +33,7 @@ import type * as legal_validators from "../legal/validators.js";
 import type * as live_createToken from "../live/createToken.js";
 import type * as migrations from "../migrations.js";
 import type * as schema_accounts from "../schema/accounts.js";
+import type * as schema_agentUsage from "../schema/agentUsage.js";
 import type * as schema_categories from "../schema/categories.js";
 import type * as schema_dashboard from "../schema/dashboard.js";
 import type * as schema_featureFlags from "../schema/featureFlags.js";
@@ -91,6 +93,7 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  "agentUsage/queries": typeof agentUsage_queries;
   aggregates: typeof aggregates;
   auth: typeof auth;
   "authNative/http": typeof authNative_http;
@@ -115,6 +118,7 @@ declare const fullApi: ApiFromModules<{
   "live/createToken": typeof live_createToken;
   migrations: typeof migrations;
   "schema/accounts": typeof schema_accounts;
+  "schema/agentUsage": typeof schema_agentUsage;
   "schema/categories": typeof schema_categories;
   "schema/dashboard": typeof schema_dashboard;
   "schema/featureFlags": typeof schema_featureFlags;
