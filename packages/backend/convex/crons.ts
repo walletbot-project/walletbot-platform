@@ -1,5 +1,6 @@
 import { cronJobs } from 'convex/server'
 import { internal } from './_generated/api'
+import { ORPHAN_ATTACHMENT_TTL_MS } from './feedback/utils'
 
 const crons = cronJobs()
 
@@ -52,6 +53,19 @@ crons.interval(
     internal.telemetry.mutations.deleteOldExportedMetrics,
     {
         olderThanMs: 24 * 60 * 60 * 1000,
+        limit: 100,
+    },
+)
+
+// Feedback attachments go straight from the client to a Convex upload URL, so an
+// abandoned or rejected submission leaves stored bytes with nothing pointing at
+// them.
+crons.interval(
+    'delete orphaned feedback attachments',
+    { hours: 6 },
+    internal.feedback.internal.deleteOrphanAttachments,
+    {
+        olderThanMs: ORPHAN_ATTACHMENT_TTL_MS,
         limit: 100,
     },
 )

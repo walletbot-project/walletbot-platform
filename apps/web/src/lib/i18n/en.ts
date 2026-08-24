@@ -50,8 +50,38 @@ export const en: Messages = {
         insights: 'Organization',
         addWithGasti: 'Add with Gasti',
         addManually: 'Add manually',
+        sendFeedback: 'Send feedback',
         signOut: 'Sign out',
         language: 'Language',
+    },
+
+    feedback: {
+        title: 'Send feedback',
+        subtitle:
+            'Tell us what went wrong or what you would like to see. You can attach screenshots or files.',
+        messageLabel: 'Your feedback',
+        messagePlaceholder: 'What would you like to tell us?',
+        attach: 'Attach files',
+        attachmentsCount: (p: {
+            count: number
+            max: number
+            maxSize: string
+        }) => `Attachments: ${p.count}/${p.max} · up to ${p.maxSize} each`,
+        removeAttachment: 'Remove attachment',
+        send: 'Send',
+        sending: 'Sending feedback…',
+        sent: 'Thank you! We got your feedback',
+        sendFailed: 'Could not send your feedback',
+        messageRequired: 'Write your feedback before sending',
+        tooManyFiles: (p: { max: number }) =>
+            `You can attach up to ${p.max} files`,
+        fileTooLarge: (p: { name: string; max: string }) =>
+            `"${p.name}" is larger than the ${p.max} limit`,
+        rateLimited: 'You have sent several messages already. Try again later.',
+        attachmentRejected:
+            'We could not process the attachments. Remove them and try again.',
+        uploading: (p: { current: number; total: number }) =>
+            `Uploading file ${p.current} of ${p.total}…`,
     },
 
     settings: {

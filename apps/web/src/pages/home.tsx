@@ -13,6 +13,7 @@ import { useAuth, useUser } from '@/hooks/use-auth'
 import { GROUP_SPACING, groupedRadius } from '@/lib/grouped-list'
 import { useT } from '@/lib/i18n'
 import { Dashboard, type DashboardWidgetRow } from '@/pages/home/dashboard'
+import { FeedbackSheet } from '@/pages/home/feedback-sheet'
 import { WidgetSheet } from '@/pages/home/widget-sheet'
 
 export default function Home() {
@@ -20,6 +21,7 @@ export default function Home() {
     const navigate = useNavigate()
     const [menuOpen, setMenuOpen] = useState(false)
     const [editing, setEditing] = useState(false)
+    const [feedbackOpen, setFeedbackOpen] = useState(false)
     // `null` while closed; `{ widget: null }` is the add flow, and `at` marks
     // the grid cell a `+` placeholder targeted (null = a fresh bottom row).
     const [sheet, setSheet] = useState<{
@@ -30,6 +32,7 @@ export default function Home() {
     } | null>(null)
 
     const layout = useQuery(api.v1.dashboard.queries.layout)
+    const flags = useQuery(api.v1.featureFlags.queries.getMyFlags)
     // A new tile lands on its own row past everything already placed.
     const nextRow = (layout?.widgets ?? []).reduce((max, widget) => {
         const coord = parseWidgetOptions(widget.options).layout
@@ -107,6 +110,13 @@ export default function Home() {
                             // at it.
                             onClick={() => navigate('/activity/new')}
                         />
+                        {flags?.feedback ? (
+                            <HomeActionCard
+                                label={t.nav.sendFeedback}
+                                icon="feedback"
+                                onClick={() => setFeedbackOpen(true)}
+                            />
+                        ) : null}
                     </div>
                 </div>
             </div>
@@ -124,6 +134,8 @@ export default function Home() {
                     nextPosition={nextPosition}
                 />
             ) : null}
+
+            <FeedbackSheet open={feedbackOpen} onOpenChange={setFeedbackOpen} />
 
             <AccountMenu open={menuOpen} onOpenChange={setMenuOpen} />
         </>

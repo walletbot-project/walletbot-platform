@@ -419,6 +419,71 @@ class AppLocalizationsEn extends AppLocalizations {
   String get addManually => 'Add manually';
 
   @override
+  String get sendFeedback => 'Send feedback';
+
+  @override
+  String get feedbackTitle => 'Send feedback';
+
+  @override
+  String get feedbackSubtitle =>
+      'Tell us what went wrong or what you would like to see. You can attach screenshots or files.';
+
+  @override
+  String get feedbackMessageLabel => 'Your feedback';
+
+  @override
+  String get feedbackMessageHint => 'What would you like to tell us?';
+
+  @override
+  String get feedbackAttach => 'Attach files';
+
+  @override
+  String feedbackAttachmentsCount(int count, int max, String max_size) {
+    return 'Attachments: $count/$max · up to $max_size each';
+  }
+
+  @override
+  String get feedbackRemoveAttachment => 'Remove attachment';
+
+  @override
+  String get feedbackSend => 'Send';
+
+  @override
+  String get feedbackSending => 'Sending feedback…';
+
+  @override
+  String feedbackUploading(int current, int total) {
+    return 'Uploading file $current of $total…';
+  }
+
+  @override
+  String get feedbackSent => 'Thank you! We got your feedback';
+
+  @override
+  String get feedbackSendFailed => 'Could not send your feedback';
+
+  @override
+  String get feedbackMessageRequired => 'Write your feedback before sending';
+
+  @override
+  String feedbackTooManyFiles(int max) {
+    return 'You can attach up to $max files';
+  }
+
+  @override
+  String feedbackFileTooLarge(String name, String max_size) {
+    return '“$name” is larger than the $max_size limit';
+  }
+
+  @override
+  String get feedbackRateLimited =>
+      'You have sent several messages already. Try again later.';
+
+  @override
+  String get feedbackAttachmentRejected =>
+      'We could not process the attachments. Remove them and try again.';
+
+  @override
   String get addTransaction => 'Add transaction';
 
   @override

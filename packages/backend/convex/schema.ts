@@ -7,6 +7,11 @@ import {
     featureFlagOverrides,
     featureFlags,
 } from './schema/featureFlags'
+import {
+    feedback,
+    feedbackAttachments,
+    feedbackSweepState,
+} from './schema/feedback'
 import { legalAcceptances } from './schema/legal'
 import { refreshTokens } from './schema/refreshTokens'
 import { syncCounters, tombstones } from './schema/sync'
@@ -30,6 +35,9 @@ export default defineSchema({
     deletedUsers,
     featureFlagOverrides,
     featureFlags,
+    feedback,
+    feedbackAttachments,
+    feedbackSweepState,
     legalAcceptances,
     refreshTokens,
     savedFilters,

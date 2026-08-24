@@ -842,6 +842,114 @@ abstract class AppLocalizations {
   /// **'Add manually'**
   String get addManually;
 
+  /// No description provided for @sendFeedback.
+  ///
+  /// In en, this message translates to:
+  /// **'Send feedback'**
+  String get sendFeedback;
+
+  /// No description provided for @feedbackTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Send feedback'**
+  String get feedbackTitle;
+
+  /// No description provided for @feedbackSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Tell us what went wrong or what you would like to see. You can attach screenshots or files.'**
+  String get feedbackSubtitle;
+
+  /// No description provided for @feedbackMessageLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Your feedback'**
+  String get feedbackMessageLabel;
+
+  /// No description provided for @feedbackMessageHint.
+  ///
+  /// In en, this message translates to:
+  /// **'What would you like to tell us?'**
+  String get feedbackMessageHint;
+
+  /// No description provided for @feedbackAttach.
+  ///
+  /// In en, this message translates to:
+  /// **'Attach files'**
+  String get feedbackAttach;
+
+  /// No description provided for @feedbackAttachmentsCount.
+  ///
+  /// In en, this message translates to:
+  /// **'Attachments: {count}/{max} · up to {max_size} each'**
+  String feedbackAttachmentsCount(int count, int max, String max_size);
+
+  /// No description provided for @feedbackRemoveAttachment.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove attachment'**
+  String get feedbackRemoveAttachment;
+
+  /// No description provided for @feedbackSend.
+  ///
+  /// In en, this message translates to:
+  /// **'Send'**
+  String get feedbackSend;
+
+  /// No description provided for @feedbackSending.
+  ///
+  /// In en, this message translates to:
+  /// **'Sending feedback…'**
+  String get feedbackSending;
+
+  /// No description provided for @feedbackUploading.
+  ///
+  /// In en, this message translates to:
+  /// **'Uploading file {current} of {total}…'**
+  String feedbackUploading(int current, int total);
+
+  /// No description provided for @feedbackSent.
+  ///
+  /// In en, this message translates to:
+  /// **'Thank you! We got your feedback'**
+  String get feedbackSent;
+
+  /// No description provided for @feedbackSendFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not send your feedback'**
+  String get feedbackSendFailed;
+
+  /// No description provided for @feedbackMessageRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Write your feedback before sending'**
+  String get feedbackMessageRequired;
+
+  /// No description provided for @feedbackTooManyFiles.
+  ///
+  /// In en, this message translates to:
+  /// **'You can attach up to {max} files'**
+  String feedbackTooManyFiles(int max);
+
+  /// No description provided for @feedbackFileTooLarge.
+  ///
+  /// In en, this message translates to:
+  /// **'“{name}” is larger than the {max_size} limit'**
+  String feedbackFileTooLarge(String name, String max_size);
+
+  /// No description provided for @feedbackRateLimited.
+  ///
+  /// In en, this message translates to:
+  /// **'You have sent several messages already. Try again later.'**
+  String get feedbackRateLimited;
+
+  /// No description provided for @feedbackAttachmentRejected.
+  ///
+  /// In en, this message translates to:
+  /// **'We could not process the attachments. Remove them and try again.'**
+  String get feedbackAttachmentRejected;
+
   /// No description provided for @addTransaction.
   ///
   /// In en, this message translates to:

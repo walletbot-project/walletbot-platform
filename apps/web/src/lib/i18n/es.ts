@@ -52,8 +52,39 @@ export const es = {
         insights: 'Organización',
         addWithGasti: 'Añadir con Gasti',
         addManually: 'Añadir manualmente',
+        sendFeedback: 'Enviar comentarios',
         signOut: 'Cerrar sesión',
         language: 'Idioma',
+    },
+
+    feedback: {
+        title: 'Enviar comentarios',
+        subtitle:
+            'Contanos qué salió mal o qué te gustaría ver. Podés adjuntar capturas o archivos.',
+        messageLabel: 'Tu comentario',
+        messagePlaceholder: '¿Qué querés contarnos?',
+        attach: 'Adjuntar archivos',
+        attachmentsCount: (p: {
+            count: number
+            max: number
+            maxSize: string
+        }) => `Adjuntos: ${p.count}/${p.max} · hasta ${p.maxSize} cada uno`,
+        removeAttachment: 'Quitar adjunto',
+        send: 'Enviar',
+        sending: 'Enviando comentarios…',
+        sent: '¡Gracias! Recibimos tus comentarios',
+        sendFailed: 'No se pudieron enviar tus comentarios',
+        messageRequired: 'Escribí un comentario antes de enviar',
+        tooManyFiles: (p: { max: number }) =>
+            `Podés adjuntar hasta ${p.max} archivos`,
+        fileTooLarge: (p: { name: string; max: string }) =>
+            `"${p.name}" supera el máximo de ${p.max}`,
+        rateLimited:
+            'Ya enviaste varios comentarios. Probá de nuevo más tarde.',
+        attachmentRejected:
+            'No pudimos procesar los adjuntos. Quitalos e intentá de nuevo.',
+        uploading: (p: { current: number; total: number }) =>
+            `Subiendo archivo ${p.current} de ${p.total}…`,
     },
 
     settings: {
