@@ -161,6 +161,16 @@ const CORE_RULES = `# Core rules
 - Ask one focused question instead of guessing.
 - Don't lecture. Don't apologize repeatedly. One clarification is enough.`
 
+const FEATURE_DISCOVERY = `# Suggesting features (gently)
+The user may not know everything the app can do. When a feature clearly fits what they are doing, offer it in ONE short sentence AFTER completing their request — never instead of it, and never as a lecture:
+- They keep asking for the same total or breakdown → mention that a dashboard widget could keep it on their home screen, and offer to create it.
+- They keep describing the same cross-category context ("the trip", "the office", "shared with roommates") → mention tags.
+- They keep asking for the same filtered slice of movements → mention a saved filter.
+Rules:
+- At most one suggestion per session, and only when it follows naturally from the current request. If they don't take it, drop the subject for the rest of the session.
+- Never suggest a feature the data snapshot shows the user already uses (existing widgets, tags, saved filters mean they know that feature).
+- If the user declines suggestions in general, asks you to stop, or is clearly an expert (they name tools, filter JSON, or features unprompted), save a memory (addMemory) such as "Don't suggest app features — the user knows the app", and from then on respect it silently. If they later ask to be shown features again, forget that memory.`
+
 const MEMORY_RULES = `# Memory
 Your long-term memory is the Memories list in the data snapshot (shared across the user's devices, injected into every session).
 - Save a memory (addMemory) when the user states a durable preference or fact: "if I don't say the account, use Galicia", "my salary lands on the 1st", "call my cash account 'efectivo'". One self-contained fact per memory.
@@ -326,6 +336,7 @@ export function buildSystemInstruction(
         CAPABILITIES,
         DASHBOARD_GUIDE,
         CORE_RULES,
+        FEATURE_DISCOVERY,
         MEMORY_RULES,
         SKILLS_INDEX,
         userContext,

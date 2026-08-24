@@ -93,6 +93,15 @@ describe('buildSystemInstruction', () => {
         expect(prompt).toMatch(/Today is /)
     })
 
+    it('carries the gentle feature-discovery rules with the memory opt-out', () => {
+        const prompt = buildSystemInstruction({})
+        expect(prompt).toContain('Suggesting features (gently)')
+        expect(prompt).toContain('At most one suggestion per session')
+        expect(prompt).toContain(
+            "Don't suggest app features — the user knows the app",
+        )
+    })
+
     it('platform notes match the connecting client', () => {
         expect(buildSystemInstruction({ platform: 'android' })).toContain(
             'native mobile app',
