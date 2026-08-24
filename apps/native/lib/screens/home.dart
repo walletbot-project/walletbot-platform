@@ -1,14 +1,13 @@
 import 'package:app/auth/account.dart';
 import 'package:app/auth/auth_controller.dart';
-import 'package:app/auth/pop_on_account_switch.dart';
 import 'package:app/app_config/app_config_banner_list.dart';
 import 'package:app/components/dashboard/add_widget_sheet.dart';
 import 'package:app/components/dashboard/dashboard_section.dart';
 import 'package:app/components/dashboard/default_dashboard.dart';
 import 'package:app/data/data.dart';
+import 'package:app/database.dart';
 import 'package:app/l10n/l10n.dart';
-import 'package:app/screens/login.dart';
-import 'package:app/screens/settings.dart';
+import 'package:app/screens/account_switcher.dart';
 import 'package:app/screens/transaction_form.dart';
 import 'package:app/shared/app_navigation.dart';
 import 'package:app/sync/sync_engine.dart';
@@ -104,151 +103,14 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void showUserMenu() {
-    showDialog(
-      context: context,
-      useSafeArea: false,
-      builder: (dialogContext) {
-        final auth = dialogContext.watch<AuthController>();
-        return Dialog.fullscreen(
-          child: Scaffold(
-            appBar: AppBar(
-              title: Text(context.l10n.yourAccounts),
-              leading: IconButton(
-                icon: const Icon(Icons.close),
-                onPressed: () => Navigator.pop(dialogContext),
-              ),
-            ),
-            body: ListView(
-              children: [
-                for (final account in auth.accounts)
-                  ListTile(
-                    leading: _AccountAvatar(account: account),
-                    title: Text(
-                      account.name ?? account.email ?? context.l10n.noName,
-                    ),
-                    subtitle: Text(
-                      account.type == AccountType.local
-                          ? context.l10n.localAccount
-                          : account.email ?? context.l10n.syncedAccount,
-                    ),
-                    trailing: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        if (account.id == auth.activeId)
-                          const Padding(
-                            padding: EdgeInsets.only(right: 4),
-                            child: Icon(Icons.check_circle),
-                          ),
-                        IconButton(
-                          icon: const Icon(Icons.delete_outline_rounded),
-                          tooltip: context.l10n.removeAccount,
-                          onPressed: () =>
-                              _confirmRemoveAccount(dialogContext, account),
-                        ),
-                      ],
-                    ),
-                    onTap: () async {
-                      if (account.id != auth.activeId) {
-                        await auth.switchTo(account.id);
-                      }
-                      if (dialogContext.mounted) Navigator.pop(dialogContext);
-                    },
-                  ),
-                const Divider(),
-                ListTile(
-                  leading: const Icon(Icons.person_add_alt_1_rounded),
-                  title: Text(context.l10n.addAccount),
-                  onTap: () {
-                    final previousId = auth.activeId;
-                    Navigator.pop(dialogContext);
-                    Navigator.of(context, rootNavigator: true).push(
-                      MaterialPageRoute<void>(
-                        builder: (_) => PopOnAccountSwitch(
-                          accountId: previousId,
-                          child: const LoginScreen(canDismiss: true),
-                        ),
-                      ),
-                    );
-                  },
-                ),
-                const Divider(),
-                ListTile(
-                  leading: const Icon(Icons.settings_rounded),
-                  title: Text(context.l10n.settings),
-                  onTap: () {
-                    // Pushed routes sit above the account-scoped providers;
-                    // re-provide the ones SettingsScreen reads (same pattern
-                    // as accounts.dart's _openCreate).
-                    final defaultCurrency = context
-                        .read<DefaultCurrencyController>();
-                    Navigator.of(dialogContext).push(
-                      MaterialPageRoute<void>(
-                        builder: (_) =>
-                            ChangeNotifierProvider<
-                              DefaultCurrencyController
-                            >.value(
-                              value: defaultCurrency,
-                              child: const SettingsScreen(),
-                            ),
-                      ),
-                    );
-                  },
-                ),
-              ],
-            ),
-          ),
-        );
-      },
+    // Everything the switcher needs is handed over by value: its route lives
+    // above the account-scoped providers and outlives this State, which the
+    // next account switch unmounts. See `showAccountSwitcher`.
+    showAccountSwitcher(
+      context,
+      defaultCurrency: context.read<DefaultCurrencyController>(),
+      database: context.read<AppDatabase>(),
     );
-  }
-
-  Future<void> _confirmRemoveAccount(
-    BuildContext dialogContext,
-    UserAccount account,
-  ) async {
-    final auth = dialogContext.read<AuthController>();
-    final l10n = dialogContext.l10n;
-    final label = account.name ?? account.email ?? context.l10n.thisAccount;
-    final confirmed = await showDialog<bool>(
-      context: dialogContext,
-      builder: (confirmContext) => AlertDialog(
-        title: Text(context.l10n.removeAccount),
-        content: Text(context.l10n.removeAccountConfirmation(label)),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(confirmContext, false),
-            child: Text(context.l10n.cancel),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(confirmContext, true),
-            child: Text(context.l10n.remove),
-          ),
-        ],
-      ),
-    );
-    if (confirmed != true) return;
-
-    final wasActive = account.id == auth.activeId;
-    try {
-      if (account.type == AccountType.local) {
-        await auth.deleteLocal(account.id);
-      } else {
-        await auth.signOutRemote(account.id);
-      }
-    } catch (e) {
-      if (dialogContext.mounted) {
-        ScaffoldMessenger.of(
-          dialogContext,
-        ).showSnackBar(SnackBar(content: Text(l10n.removeAccountFailed(e))));
-      }
-      return;
-    }
-
-    // Removing the active account drops us back to the login screen; close the
-    // switcher so it is not left floating above it.
-    if (wasActive && dialogContext.mounted) {
-      Navigator.pop(dialogContext);
-    }
   }
 
   Future<void> _openManualAdd() async {
@@ -396,33 +258,6 @@ class _HomeActionCard extends StatelessWidget {
           ),
         ),
       ),
-    );
-  }
-}
-
-class _AccountAvatar extends StatelessWidget {
-  const _AccountAvatar({required this.account});
-
-  final UserAccount account;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    final isLocal = account.type == AccountType.local;
-    final picture = account.picture;
-
-    return CircleAvatar(
-      radius: 20,
-      backgroundColor: isLocal
-          ? colors.secondaryContainer
-          : colors.tertiaryContainer,
-      foregroundColor: isLocal
-          ? colors.onSecondaryContainer
-          : colors.onTertiaryContainer,
-      backgroundImage: picture == null ? null : NetworkImage(picture),
-      child: picture == null
-          ? Icon(isLocal ? Icons.person_outline : Icons.cloud_outlined)
-          : null,
     );
   }
 }

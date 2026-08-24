@@ -8,6 +8,7 @@ import {
     featureFlagOverrides,
     featureFlags,
 } from './schema/featureFlags'
+import { legalAcceptances } from './schema/legal'
 import { refreshTokens } from './schema/refreshTokens'
 import { syncCounters, tombstones } from './schema/sync'
 import { tags } from './schema/tags'
@@ -18,6 +19,7 @@ import {
 } from './schema/telemetry'
 import { transactions } from './schema/transactions'
 import { transactionTags } from './schema/transactionTags'
+import { deletedUsers, userDeletionRequests } from './schema/userDeletion'
 import { userSettings } from './schema/userSettings'
 import { voiceSessionEvents, voiceSessions } from './schema/voice'
 
@@ -28,8 +30,10 @@ export default defineSchema({
     admins,
     categories,
     dashboardWidgets,
+    deletedUsers,
     featureFlagOverrides,
     featureFlags,
+    legalAcceptances,
     refreshTokens,
     savedFilters,
     syncCounters,
@@ -40,6 +44,7 @@ export default defineSchema({
     tombstones,
     transactionTags,
     transactions,
+    userDeletionRequests,
     userSettings,
     voiceSessionEvents,
     voiceSessions,

@@ -10,10 +10,13 @@ import 'package:app/config.dart';
 import 'package:app/data/data.dart';
 import 'package:app/database.dart';
 import 'package:app/l10n/l10n.dart';
+import 'package:app/legal/legal_acceptance_controller.dart';
+import 'package:app/screens/account_switcher.dart';
 import 'package:app/screens/accounts.dart';
 import 'package:app/screens/activity.dart';
 import 'package:app/screens/home.dart';
 import 'package:app/screens/insights.dart';
+import 'package:app/screens/legal_gate.dart';
 import 'package:app/screens/login.dart';
 import 'package:app/screens/voice.dart';
 import 'package:app/settings/display_settings.dart';
@@ -31,6 +34,7 @@ import 'package:convex_flutter/convex_flutter.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:provider/provider.dart';
 
@@ -282,13 +286,28 @@ class _AuthGate extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final active = context.watch<AuthController>().activeAccount;
-    if (active == null) return const LoginScreen();
+    final auth = context.watch<AuthController>();
+    final active = auth.activeAccount;
+    if (active == null) {
+      // Signing out of — or removing — the active account used to land here
+      // on the sign-in screen even when the device still held other accounts,
+      // which are only reachable from the switcher inside the app. Offer them
+      // instead; signing in stays one tap away and is the only option left
+      // once the last account is gone.
+      return auth.accounts.isEmpty
+          ? const LoginScreen()
+          : const AccountChooserScreen();
+    }
     return MultiProvider(
-      // Recreate account-scoped services when re-auth replaces the account
-      // object, so factories never retain an obsolete session token. ObjectKey
-      // avoids embedding the secret itself in diagnostic key output.
-      key: ObjectKey(active),
+      // Device-scoped half: everything that owns, or is derived from, this
+      // account's local database. Keyed by the account *id*, so re-auth —
+      // which mints a new session token and therefore a new UserAccount
+      // object for the same person — leaves it standing. Keying it by object
+      // identity used to reopen the same sqlite file in the frame before the
+      // outgoing connection closed, which is drift's "created the database
+      // class multiple times" warning in its one genuinely dangerous form:
+      // two live connections to one file.
+      key: ValueKey(active.id),
       providers: [
         Provider<AppDatabase>(
           create: (_) => AppDatabase.forUser(active.id),
@@ -303,6 +322,23 @@ class _AuthGate extends StatelessWidget {
             final controller = DefaultCurrencyController(
               accountId: active.id,
               isRemote: active.type == AccountType.remote,
+            );
+            unawaited(controller.load());
+            return controller;
+          },
+        ),
+        // Terms/Privacy acceptance for this account. Device-scoped half
+        // because it reads and writes the account's own `legal_acceptances`
+        // table — the only record there is for a local-only account.
+        ChangeNotifierProvider<LegalAcceptanceController>(
+          create: (ctx) {
+            final controller = LegalAcceptanceController(
+              db: ctx.read<AppDatabase>(),
+              accountId: active.id,
+              isRemote: active.type == AccountType.remote,
+              clientInfo: ctx.read<ClientInfo>(),
+              locale: _resolvedLocaleTag(ctx.read<DisplaySettingsController>()),
+              appConfig: ctx.read<AppConfigController>(),
             );
             unawaited(controller.load());
             return controller;
@@ -324,54 +360,118 @@ class _AuthGate extends StatelessWidget {
             remoteEnabled: active.type == AccountType.remote,
           ),
         ),
-        if (active.type == AccountType.remote)
-          Provider<VoiceSessionRemoteSync>(
-            lazy: false,
-            create: (ctx) {
-              final sync = VoiceSessionRemoteSync(
-                repository: ctx.read<VoiceSessionRepository>(),
-                ownerId: active.id,
-              );
-              sync.schedule(delay: Duration.zero);
-              return sync;
-            },
-            dispose: (_, sync) => unawaited(sync.dispose()),
-          ),
-        Provider<GeminiVoiceExpenseCommandFactory>(
-          create: (ctx) => GeminiVoiceExpenseCommandFactory(
-            repositories: ctx.read<AppRepositories>(),
-            sessionRepository: ctx.read<VoiceSessionRepository>(),
-            remoteSync: active.type == AccountType.remote
-                ? ctx.read<VoiceSessionRemoteSync>()
-                : null,
-            agentMetrics: ctx.read<AgentMetrics?>(),
-            useAuthenticatedTokenAction: active.type == AccountType.remote,
-            sessionToken: active.sessionToken,
-            convexSiteUrl: AppConfig.convexSiteUrl,
-          ),
-          dispose: (_, factory) => unawaited(factory.dispose()),
-        ),
-        // Drives the bottom-nav tab selection and lets one tab hand a filter to
-        // another (e.g. an account's "Ver todas" opens Activity filtered to it).
-        ChangeNotifierProvider<AppNavigation>(create: (_) => AppNavigation()),
-        // SyncEngine only attaches for remote accounts. For local accounts
-        // we still create one (so `Provider.of<SyncEngine>` is non-null
-        // throughout the tree) but never call `.start()`, keeping it inert.
-        ChangeNotifierProvider<SyncEngine>(
-          create: (ctx) => SyncEngine(
-            db: ctx.read<AppDatabase>(),
-            client: ConvexClient.instance,
-            clientInfo: ctx.read<ClientInfo>(),
-            // Backstop for the client-side gate: if the server rejects this
-            // client as outdated, reflect it so the hard update banner shows
-            // and sync stays gated off.
-            onClientOutdated: () =>
-                ctx.read<AppConfigController>().markUnsupported(),
-          ),
-        ),
       ],
-      child: const _SyncStarter(child: AppMain()),
+      child: MultiProvider(
+        // Session-scoped half: everything holding, or talking over, the
+        // server session. These *must* be rebuilt when re-auth replaces the
+        // account object — the voice factory captures `sessionToken` — so
+        // this half keeps the object-identity key the whole subtree used to
+        // carry. ObjectKey avoids embedding the secret itself in diagnostic
+        // key output.
+        key: ObjectKey(active),
+        providers: [
+          if (active.type == AccountType.remote)
+            Provider<VoiceSessionRemoteSync>(
+              lazy: false,
+              create: (ctx) {
+                final sync = VoiceSessionRemoteSync(
+                  repository: ctx.read<VoiceSessionRepository>(),
+                  ownerId: active.id,
+                );
+                sync.schedule(delay: Duration.zero);
+                return sync;
+              },
+              dispose: (_, sync) => unawaited(sync.dispose()),
+            ),
+          Provider<GeminiVoiceExpenseCommandFactory>(
+            create: (ctx) => GeminiVoiceExpenseCommandFactory(
+              repositories: ctx.read<AppRepositories>(),
+              sessionRepository: ctx.read<VoiceSessionRepository>(),
+              remoteSync: active.type == AccountType.remote
+                  ? ctx.read<VoiceSessionRemoteSync>()
+                  : null,
+              agentMetrics: ctx.read<AgentMetrics?>(),
+              useAuthenticatedTokenAction: active.type == AccountType.remote,
+              sessionToken: active.sessionToken,
+              convexSiteUrl: AppConfig.convexSiteUrl,
+            ),
+            dispose: (_, factory) => unawaited(factory.dispose()),
+          ),
+          // Drives the bottom-nav tab selection and lets one tab hand a filter
+          // to another (e.g. an account's "Ver todas" opens Activity filtered
+          // to it).
+          ChangeNotifierProvider<AppNavigation>(create: (_) => AppNavigation()),
+          // SyncEngine only attaches for remote accounts. For local accounts
+          // we still create one (so `Provider.of<SyncEngine>` is non-null
+          // throughout the tree) but never call `.start()`, keeping it inert.
+          // Session-scoped on purpose: a fresh engine after re-auth is what
+          // re-establishes the counter subscription the dead session dropped,
+          // and `_SyncStarter` below is remounted with it to kick it.
+          ChangeNotifierProvider<SyncEngine>(
+            create: (ctx) => SyncEngine(
+              db: ctx.read<AppDatabase>(),
+              client: ConvexClient.instance,
+              clientInfo: ctx.read<ClientInfo>(),
+              // Backstop for the client-side gate: if the server rejects this
+              // client as outdated, reflect it so the hard update banner shows
+              // and sync stays gated off.
+              onClientOutdated: () =>
+                  ctx.read<AppConfigController>().markUnsupported(),
+            ),
+          ),
+        ],
+        // Sync starts regardless of the acceptance gate: pausing it would risk
+        // stranding writes the user already made, and the gate is about
+        // consent to the documents, not about authorizing data access.
+        child: const _SyncStarter(child: _LegalGate(child: AppMain())),
+      ),
     );
+  }
+}
+
+/// Shows the Terms/Privacy acceptance gate instead of the app while this
+/// account still owes an acceptance.
+///
+/// Deliberately keeps [child] out of the tree until the verdict is known: a
+/// resolved-later gate would mount the app and then tear it down, which is how
+/// in-progress screens lose their state. The wait is a local database read,
+/// except on the first launch of a remote account, where the backend is the
+/// only source of truth — and that call fails open, so it is bounded.
+class _LegalGate extends StatefulWidget {
+  const _LegalGate({required this.child});
+
+  final Widget child;
+
+  @override
+  State<_LegalGate> createState() => _LegalGateState();
+}
+
+class _LegalGateState extends State<_LegalGate> {
+  bool _kicked = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final auth = context.watch<AuthController>();
+    final legal = context.watch<LegalAcceptanceController>();
+
+    // A remote account's verdict comes from an authenticated Convex query, so
+    // it can only be asked for once the socket is authenticated — the same
+    // precondition `_SyncStarter` waits on. Asking earlier returns
+    // `Unauthenticated`, which is how the gate ended up never appearing after
+    // a fresh sign-in.
+    if (!_kicked && legal.remoteRefreshPending && auth.convexAuthenticated) {
+      _kicked = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        unawaited(context.read<LegalAcceptanceController>().refreshRemote());
+      });
+    }
+
+    if (!legal.resolved) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+    if (legal.shouldShowGate) return const LegalGateScreen();
+    return widget.child;
   }
 }
 
@@ -458,6 +558,12 @@ class _AppMainState extends State<AppMain> {
     final needsReauth = context.select<AuthController, bool>(
       (a) => a.activeAccount?.requiresReauth ?? false,
     );
+    // A deleted account is also `requiresReauth`, but offering "Reconnect"
+    // there would sign the user into a brand-new empty account, so it gets its
+    // own terminal banner.
+    final serverDeleted = context.select<AuthController, bool>(
+      (a) => a.activeAccount?.serverDeleted ?? false,
+    );
     final selectedIndex = context.watch<AppNavigation>().index;
     final useRail = windowSizeClassOf(context) != WindowSizeClass.compact;
 
@@ -465,7 +571,10 @@ class _AppMainState extends State<AppMain> {
     // both, or the GlobalKey would be duplicated within a single frame.
     final tabs = Column(
       children: [
-        if (needsReauth) const _ReauthBanner(),
+        if (serverDeleted)
+          const _AccountDeletedBanner()
+        else if (needsReauth)
+          const _ReauthBanner(),
         Expanded(
           child: IndexedStack(
             key: _tabStackKey,
@@ -505,7 +614,7 @@ class _AppMainState extends State<AppMain> {
               heroTag: 'voiceFab',
               onPressed: _openVoice,
               tooltip: context.l10n.voiceCommands,
-              child: const Text('🤖'),
+              child: const _VoiceFabIcon(),
             ),
       bottomNavigationBar: useRail
           ? null
@@ -527,7 +636,7 @@ class _AppMainState extends State<AppMain> {
                   label: context.l10n.accounts,
                 ),
                 NavigationDestination(
-                  icon: const Icon(Icons.stacked_line_chart_rounded),
+                  icon: const Icon(Icons.bookmarks_rounded),
                   label: context.l10n.insights,
                 ),
               ],
@@ -593,7 +702,7 @@ class _AgentCenteredRail extends StatelessWidget {
               elevation: 0,
               onPressed: onOpenVoice,
               tooltip: l10n.voiceCommands,
-              child: const Text('🤖'),
+              child: const _VoiceFabIcon(),
             ),
           ),
           Expanded(
@@ -611,13 +720,108 @@ class _AgentCenteredRail extends StatelessWidget {
                   label: Text(l10n.accounts),
                 ),
                 NavigationRailDestination(
-                  icon: const Icon(Icons.stacked_line_chart_rounded),
+                  icon: const Icon(Icons.bookmarks_rounded),
                   label: Text(l10n.insights),
                 ),
               ],
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// The voice-agent FAB glyph: a speech bubble with a microphone overlapping its
+/// lower-right corner, hinting at "talk to the assistant".
+/// `apps/web/src/components/m3/agent-glyph.tsx` is the same drawing for web.
+class _VoiceFabIcon extends StatelessWidget {
+  const _VoiceFabIcon();
+
+  static const double _size = 24;
+
+  @override
+  Widget build(BuildContext context) {
+    // The FAB hands its child an IconTheme carrying the foreground colour; SVG
+    // has no such channel, so read it off the theme and tint with it. The
+    // fallback is the FAB's own M3 default.
+    final color =
+        IconTheme.of(context).color ??
+        Theme.of(context).colorScheme.onPrimaryContainer;
+    return SvgPicture.asset(
+      'assets/agent-glyph.svg',
+      width: _size,
+      height: _size,
+      colorFilter: ColorFilter.mode(color, BlendMode.srcIn),
+    );
+  }
+}
+
+/// Terminal state for an account deleted on the server. Unlike
+/// [_ReauthBanner] it never offers to sign in again: the user id is gone, so a
+/// fresh sign-in would create a *different* account with the same email rather
+/// than restore this one. The local data stays readable offline until the user
+/// explicitly removes it.
+class _AccountDeletedBanner extends StatelessWidget {
+  const _AccountDeletedBanner();
+
+  Future<void> _confirmRemove(BuildContext context) async {
+    final auth = context.read<AuthController>();
+    final accountId = auth.activeAccount?.id;
+    if (accountId == null) return;
+
+    final l10n = context.l10n;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(l10n.accountDeletedConfirmTitle),
+        content: Text(l10n.accountDeletedConfirmBody),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: Text(l10n.cancel),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: Text(l10n.accountDeletedRemoveConfirm),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    await auth.removeDeletedAccount(accountId);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Material(
+      color: theme.colorScheme.errorContainer,
+      child: SafeArea(
+        bottom: false,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          child: Row(
+            children: [
+              Icon(
+                Icons.person_off_rounded,
+                color: theme.colorScheme.onErrorContainer,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  context.l10n.accountDeletedBanner,
+                  style: TextStyle(color: theme.colorScheme.onErrorContainer),
+                ),
+              ),
+              TextButton(
+                onPressed: () => _confirmRemove(context),
+                child: Text(context.l10n.accountDeletedRemove),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

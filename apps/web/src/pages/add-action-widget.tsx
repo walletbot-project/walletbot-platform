@@ -1,29 +1,18 @@
 import { api } from '@wallet-bot/backend/api'
+import { Select, SelectOption } from 'actify'
 import { useMutation, useQuery } from 'convex/react'
-import {
-    ArrowDownLeft,
-    ArrowLeftRight,
-    ArrowUpRight,
-    Pencil,
-    Scale,
-    Tag,
-} from 'lucide-react'
 import { type FormEvent, type ReactNode, useId, useState } from 'react'
 import { toast } from 'sonner'
 import { AccountIcon } from '@/components/account-icon'
 import { CategoryIcon } from '@/components/category-icon'
 import { ColorSwatches } from '@/components/color-swatches'
 import { IconPicker } from '@/components/icon-picker'
+import { BottomSheet } from '@/components/m3/bottom-sheet'
+import { Icon } from '@/components/m3/icon'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import {
-    Sheet,
-    SheetContent,
-    SheetFooter,
-    SheetHeader,
-    SheetTitle,
-} from '@/components/ui/sheet'
+import { SheetFooter, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Textarea } from '@/components/ui/textarea'
 import type { ChatMessage, EditableToolName } from '@/hooks/use-voice'
@@ -35,11 +24,16 @@ import {
     COLOR_OPTIONS,
     normalizeColor,
 } from '@/lib/entity-colors'
-import { type Messages, useFormatLocale, useT } from '@/lib/i18n'
+import {
+    type Messages,
+    transactionName,
+    useFormatLocale,
+    useT,
+} from '@/lib/i18n'
 import { normalizeTagColor } from '@/lib/tag-colors'
 import { cn } from '@/lib/utils'
 import { accountErrorMessage } from '@/pages/accounts/account-errors'
-import { TransactionDetailsSheet } from './activity/transaction-details-sheet'
+import { TransactionDetail } from './activity/transaction-detail'
 
 type ActionResultMessage = Extract<ChatMessage, { kind: 'action-result' }>
 
@@ -60,6 +54,9 @@ function isTransactionToolName(
         toolName,
     )
 }
+
+/** Collection keys can't be empty strings, so "no parent" gets a sentinel. */
+const NO_PARENT = '__none__'
 
 export function ActionWidget({ message }: { message: ActionResultMessage }) {
     const { toolName, entityId } = message
@@ -103,23 +100,7 @@ export function ActionWidget({ message }: { message: ActionResultMessage }) {
     }
 }
 
-type TxnDoc = {
-    id: string
-    type: 'expense' | 'income' | 'transfer' | 'balance_adjustment'
-    name: string
-    description?: string | null
-    date: bigint
-    dateConfirmed: boolean
-    amount: bigint
-    currency: string
-    balanceAfter?: bigint
-    categoryId: string
-    accountId: string
-    toAccountId?: string
-    toAmount?: bigint
-    toCurrency?: string
-    status: 'pending' | 'cleared'
-}
+type TxnType = 'expense' | 'income' | 'transfer' | 'balance_adjustment'
 
 function TransactionActionWidget({
     entityId,
@@ -143,7 +124,7 @@ function TransactionActionWidget({
     const toAccount = txn.toAccountId
         ? accounts.find((item) => item.id === txn.toAccountId)
         : undefined
-    const { Icon, iconCls, label } = txnTypeConfig(txn.type, t)
+    const { icon, iconCls, label } = txnTypeConfig(txn.type, t)
     const amount =
         txn.type === 'transfer' &&
         txn.toAmount !== undefined &&
@@ -163,10 +144,17 @@ function TransactionActionWidget({
         <>
             <ActionCard>
                 <div className={cn('rounded-full p-1.5', iconCls.bg)}>
-                    <Icon className={cn('size-4', iconCls.text)} />
+                    <Icon
+                        name={icon}
+                        filled
+                        size={16}
+                        className={iconCls.text}
+                    />
                 </div>
                 <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium">{txn.name}</p>
+                    <p className="truncate text-sm font-medium">
+                        {transactionName(txn.name, txn.type, t)}
+                    </p>
                     <p className="truncate text-xs text-muted-foreground">
                         {wasUpdated
                             ? t.actionWidget.transactionUpdated({ type: label })
@@ -180,23 +168,21 @@ function TransactionActionWidget({
                 </div>
                 <EditButton onClick={() => setEditOpen(true)} />
             </ActionCard>
-            <TransactionDetailsSheet
-                transactionId={txn.id}
+            <BottomSheet
                 open={editOpen}
                 onOpenChange={setEditOpen}
-                initialEditing
-            />
+                title={t.transaction.editActivity}
+            >
+                {editOpen ? (
+                    <TransactionDetail
+                        transactionId={txn.id}
+                        initialEditing
+                        onClose={() => setEditOpen(false)}
+                    />
+                ) : null}
+            </BottomSheet>
         </>
     )
-}
-
-type AccountDoc = {
-    id: string
-    name: string
-    currency: string
-    description?: string | null
-    color?: string
-    icon?: string
 }
 
 function AccountActionWidget({
@@ -208,6 +194,7 @@ function AccountActionWidget({
 }) {
     const t = useT()
     const account = useQuery(api.v1.accounts.queries.get, { id: entityId })
+    const updateAccount = useMutation(api.v1.accounts.mutations.update)
     const [editOpen, setEditOpen] = useState(false)
     if (account === undefined) return <ActionSkeleton />
     if (account === null) return null
@@ -217,11 +204,7 @@ function AccountActionWidget({
         <>
             <ActionCard>
                 <EntityIcon color={accent}>
-                    <AccountIcon
-                        name={account.icon}
-                        className="size-4"
-                        color={accent}
-                    />
+                    <AccountIcon name={account.icon} size={16} color={accent} />
                 </EntityIcon>
                 <ActionCopy
                     title={account.name}
@@ -232,116 +215,33 @@ function AccountActionWidget({
                 />
                 <EditButton onClick={() => setEditOpen(true)} />
             </ActionCard>
-            <ActionSheet open={editOpen} onOpenChange={setEditOpen}>
-                <AccountEditContent
-                    account={account}
+            <ActionSheet
+                open={editOpen}
+                onOpenChange={setEditOpen}
+                title={t.actionWidget.editAccount}
+            >
+                <EntityEditContent
+                    title={t.actionWidget.editAccount}
+                    initialName={account.name}
+                    initialDescription={account.description ?? ''}
+                    initialColor={normalizeColor(
+                        account.color,
+                        ACCOUNT_DEFAULT_COLOR,
+                    )}
+                    initialIcon={account.icon ?? 'wallet'}
+                    icons={ACCOUNT_ICONS}
+                    savedToast={t.actionWidget.accountSaved}
+                    errorToast={(error) =>
+                        accountErrorMessage(error, t, t.common.saveFailed)
+                    }
+                    onSave={(value) =>
+                        updateAccount({ id: account.id, ...value })
+                    }
                     onClose={() => setEditOpen(false)}
                 />
             </ActionSheet>
         </>
     )
-}
-
-function AccountEditContent({
-    account,
-    onClose,
-}: {
-    account: AccountDoc
-    onClose: () => void
-}) {
-    const t = useT()
-    const updateAccount = useMutation(api.v1.accounts.mutations.update)
-    const formId = useId()
-    const [name, setName] = useState(account.name)
-    const [description, setDescription] = useState(account.description ?? '')
-    const [color, setColor] = useState(() =>
-        normalizeColor(account.color, ACCOUNT_DEFAULT_COLOR),
-    )
-    const [icon, setIcon] = useState(account.icon ?? 'wallet')
-    const [saving, setSaving] = useState(false)
-
-    const handleSubmit = async (event: FormEvent) => {
-        event.preventDefault()
-        const nextDescription = description.trim()
-        setSaving(true)
-        const promise = updateAccount({
-            id: account.id,
-            name: name.trim(),
-            description:
-                nextDescription !== (account.description ?? '')
-                    ? nextDescription
-                    : undefined,
-            color,
-            icon,
-        })
-        toast.promise(promise, {
-            loading: t.common.saving,
-            success: t.actionWidget.accountSaved,
-            error: (error) =>
-                accountErrorMessage(error, t, t.common.saveFailed),
-        })
-        try {
-            await promise
-            onClose()
-        } catch {
-            // toast.promise owns the user-facing error state.
-        } finally {
-            setSaving(false)
-        }
-    }
-
-    return (
-        <>
-            <SheetHeader>
-                <SheetTitle>{t.actionWidget.editAccount}</SheetTitle>
-            </SheetHeader>
-            <form
-                id={formId}
-                onSubmit={handleSubmit}
-                className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-4 py-2"
-            >
-                <EditField label={t.common.name} id={`${formId}-name`}>
-                    <Input
-                        id={`${formId}-name`}
-                        value={name}
-                        onChange={(event) => setName(event.target.value)}
-                        required
-                    />
-                </EditField>
-                <EditField
-                    label={t.common.description}
-                    id={`${formId}-description`}
-                >
-                    <Textarea
-                        id={`${formId}-description`}
-                        value={description}
-                        onChange={(event) => setDescription(event.target.value)}
-                        rows={3}
-                    />
-                </EditField>
-                <VisualIdentityFields
-                    color={color}
-                    onColorChange={setColor}
-                    icon={icon}
-                    onIconChange={setIcon}
-                    icons={ACCOUNT_ICONS}
-                />
-            </form>
-            <ActionSheetFooter
-                formId={formId}
-                saving={saving}
-                onClose={onClose}
-            />
-        </>
-    )
-}
-
-type CategoryDoc = {
-    id: string
-    name: string
-    description?: string | null
-    color?: string
-    icon?: string
 }
 
 function CategoryActionWidget({
@@ -353,6 +253,7 @@ function CategoryActionWidget({
 }) {
     const t = useT()
     const category = useQuery(api.v1.categories.queries.get, { id: entityId })
+    const updateCategory = useMutation(api.v1.categories.mutations.update)
     const [editOpen, setEditOpen] = useState(false)
     if (category === undefined) return <ActionSkeleton />
     if (category === null) return null
@@ -364,7 +265,7 @@ function CategoryActionWidget({
                 <EntityIcon color={accent}>
                     <CategoryIcon
                         name={category.icon}
-                        className="size-4"
+                        size={16}
                         color={accent}
                     />
                 </EntityIcon>
@@ -376,9 +277,26 @@ function CategoryActionWidget({
                 />
                 <EditButton onClick={() => setEditOpen(true)} />
             </ActionCard>
-            <ActionSheet open={editOpen} onOpenChange={setEditOpen}>
-                <CategoryEditContent
-                    category={category}
+            <ActionSheet
+                open={editOpen}
+                onOpenChange={setEditOpen}
+                title={t.actionWidget.editCategory}
+            >
+                <EntityEditContent
+                    title={t.actionWidget.editCategory}
+                    initialName={category.name}
+                    initialDescription={category.description ?? ''}
+                    initialColor={normalizeColor(
+                        category.color,
+                        CATEGORY_DEFAULT_COLOR,
+                    )}
+                    initialIcon={category.icon ?? 'category'}
+                    icons={CATEGORY_ICONS}
+                    savedToast={t.actionWidget.categorySaved}
+                    errorToast={t.common.saveFailed}
+                    onSave={(value) =>
+                        updateCategory({ id: category.id, ...value })
+                    }
                     onClose={() => setEditOpen(false)}
                 />
             </ActionSheet>
@@ -386,33 +304,55 @@ function CategoryActionWidget({
     )
 }
 
-function CategoryEditContent({
-    category,
+/**
+ * The account/category edit form — one component, since the two differed only
+ * in mutation, defaults, icon set and toast copy. The description is sent only
+ * when it changed, so an untouched field can't clobber a concurrent edit.
+ */
+function EntityEditContent({
+    title,
+    initialName,
+    initialDescription,
+    initialColor,
+    initialIcon,
+    icons,
+    savedToast,
+    errorToast,
+    onSave,
     onClose,
 }: {
-    category: CategoryDoc
+    title: string
+    initialName: string
+    initialDescription: string
+    initialColor: string
+    initialIcon: string
+    icons: typeof ACCOUNT_ICONS | typeof CATEGORY_ICONS
+    savedToast: string
+    errorToast: string | ((error: unknown) => string)
+    onSave: (value: {
+        name: string
+        description: string | undefined
+        color: string
+        icon: string
+    }) => Promise<unknown>
     onClose: () => void
 }) {
     const t = useT()
-    const updateCategory = useMutation(api.v1.categories.mutations.update)
     const formId = useId()
-    const [name, setName] = useState(category.name)
-    const [description, setDescription] = useState(category.description ?? '')
-    const [color, setColor] = useState(() =>
-        normalizeColor(category.color, CATEGORY_DEFAULT_COLOR),
-    )
-    const [icon, setIcon] = useState(category.icon ?? 'category')
+    const [name, setName] = useState(initialName)
+    const [description, setDescription] = useState(initialDescription)
+    const [color, setColor] = useState(initialColor)
+    const [icon, setIcon] = useState(initialIcon)
     const [saving, setSaving] = useState(false)
 
     const handleSubmit = async (event: FormEvent) => {
         event.preventDefault()
         const nextDescription = description.trim()
         setSaving(true)
-        const promise = updateCategory({
-            id: category.id,
+        const promise = onSave({
             name: name.trim(),
             description:
-                nextDescription !== (category.description ?? '')
+                nextDescription !== initialDescription
                     ? nextDescription
                     : undefined,
             color,
@@ -420,8 +360,8 @@ function CategoryEditContent({
         })
         toast.promise(promise, {
             loading: t.common.saving,
-            success: t.actionWidget.categorySaved,
-            error: t.common.saveFailed,
+            success: savedToast,
+            error: errorToast,
         })
         try {
             await promise
@@ -436,7 +376,7 @@ function CategoryEditContent({
     return (
         <>
             <SheetHeader>
-                <SheetTitle>{t.actionWidget.editCategory}</SheetTitle>
+                <SheetTitle>{title}</SheetTitle>
             </SheetHeader>
             <form
                 id={formId}
@@ -467,7 +407,7 @@ function CategoryEditContent({
                     onColorChange={setColor}
                     icon={icon}
                     onIconChange={setIcon}
-                    icons={CATEGORY_ICONS}
+                    icons={icons}
                 />
             </form>
             <ActionSheetFooter
@@ -505,7 +445,12 @@ function TagActionWidget({
         <>
             <ActionCard>
                 <EntityIcon color={accent}>
-                    <Tag className="size-4" style={{ color: accent }} />
+                    <Icon
+                        name="sell"
+                        filled
+                        size={16}
+                        style={{ color: accent }}
+                    />
                 </EntityIcon>
                 <ActionCopy
                     title={tag.name}
@@ -513,7 +458,11 @@ function TagActionWidget({
                 />
                 <EditButton onClick={() => setEditOpen(true)} />
             </ActionCard>
-            <ActionSheet open={editOpen} onOpenChange={setEditOpen}>
+            <ActionSheet
+                open={editOpen}
+                onOpenChange={setEditOpen}
+                title={t.actionWidget.editTag}
+            >
                 <TagEditContent tag={tag} onClose={() => setEditOpen(false)} />
             </ActionSheet>
         </>
@@ -594,20 +543,28 @@ function TagEditContent({
                     label={t.actionWidget.parentTag}
                     id={`${formId}-parent`}
                 >
-                    <select
+                    <Select
                         id={`${formId}-parent`}
-                        value={parentId}
-                        onChange={(event) => setParentId(event.target.value)}
-                        disabled={tags === undefined}
-                        className="h-9 w-full rounded-md border bg-transparent px-3 text-sm outline-none focus-visible:border-primary disabled:opacity-50"
+                        aria-label={t.actionWidget.parentTag}
+                        variant="outlined"
+                        className="w-full"
+                        isDisabled={tags === undefined}
+                        selectedKey={parentId === '' ? NO_PARENT : parentId}
+                        onSelectionChange={(key) =>
+                            setParentId(key === NO_PARENT ? '' : String(key))
+                        }
                     >
-                        <option value="">{t.actionWidget.noParentTag}</option>
-                        {parentOptions?.map((item) => (
-                            <option key={item.id} value={item.id}>
-                                {item.name}
-                            </option>
-                        ))}
-                    </select>
+                        {[
+                            <SelectOption key={NO_PARENT}>
+                                {t.actionWidget.noParentTag}
+                            </SelectOption>,
+                            ...(parentOptions ?? []).map((item) => (
+                                <SelectOption key={item.id}>
+                                    {item.name}
+                                </SelectOption>
+                            )),
+                        ]}
+                    </Select>
                 </EditField>
                 <EditField
                     label={t.common.description}
@@ -641,18 +598,20 @@ function TagEditContent({
 function ActionSheet({
     open,
     onOpenChange,
+    title,
     children,
 }: {
     open: boolean
     onOpenChange: (open: boolean) => void
+    title: string
     children: ReactNode
 }) {
+    // The native voice widget edits in a modal bottom sheet
+    // (voice_action_widget.dart), not a side sheet.
     return (
-        <Sheet open={open} onOpenChange={onOpenChange}>
-            <SheetContent side="right" className="w-full sm:max-w-md">
-                {children}
-            </SheetContent>
-        </Sheet>
+        <BottomSheet open={open} onOpenChange={onOpenChange} title={title}>
+            <div className="flex min-h-0 flex-1 flex-col">{children}</div>
+        </BottomSheet>
     )
 }
 
@@ -712,7 +671,7 @@ function EditButton({ onClick }: { onClick: () => void }) {
             className="shrink-0 gap-1.5"
             onClick={onClick}
         >
-            <Pencil className="size-3.5" />
+            <Icon name="edit" size={14} />
             {t.common.edit}
         </Button>
     )
@@ -779,10 +738,11 @@ function VisualIdentityFields({
     onIconChange: (icon: string) => void
     icons: typeof ACCOUNT_ICONS | typeof CATEGORY_ICONS
 }) {
+    const t = useT()
     return (
         <>
             <div className="flex flex-col gap-2">
-                <Label>Color</Label>
+                <Label>{t.common.color}</Label>
                 <ColorSwatches
                     value={color}
                     onChange={onColorChange}
@@ -790,7 +750,7 @@ function VisualIdentityFields({
                 />
             </div>
             <div className="flex flex-col gap-2">
-                <Label>Ícono</Label>
+                <Label>{t.common.icon}</Label>
                 <IconPicker
                     icon={icon}
                     color={color}
@@ -802,13 +762,11 @@ function VisualIdentityFields({
     )
 }
 
-type TxnType = TxnDoc['type']
-
 function txnTypeConfig(type: TxnType, t: Messages) {
     switch (type) {
         case 'expense':
             return {
-                Icon: ArrowDownLeft,
+                icon: 'arrow_downward',
                 iconCls: {
                     bg: 'bg-red-100 dark:bg-red-900/30',
                     text: 'text-red-600 dark:text-red-400',
@@ -817,7 +775,7 @@ function txnTypeConfig(type: TxnType, t: Messages) {
             }
         case 'income':
             return {
-                Icon: ArrowUpRight,
+                icon: 'arrow_upward',
                 iconCls: {
                     bg: 'bg-green-100 dark:bg-green-900/30',
                     text: 'text-green-600 dark:text-green-400',
@@ -826,7 +784,7 @@ function txnTypeConfig(type: TxnType, t: Messages) {
             }
         case 'transfer':
             return {
-                Icon: ArrowLeftRight,
+                icon: 'swap_horiz',
                 iconCls: {
                     bg: 'bg-blue-100 dark:bg-blue-900/30',
                     text: 'text-blue-600 dark:text-blue-400',
@@ -835,7 +793,7 @@ function txnTypeConfig(type: TxnType, t: Messages) {
             }
         case 'balance_adjustment':
             return {
-                Icon: Scale,
+                icon: 'balance',
                 iconCls: {
                     bg: 'bg-amber-100 dark:bg-amber-900/30',
                     text: 'text-amber-700 dark:text-amber-400',

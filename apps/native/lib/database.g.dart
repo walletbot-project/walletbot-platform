@@ -6551,6 +6551,592 @@ class VoiceSessionEventsCompanion extends UpdateCompanion<VoiceSessionEvent> {
   }
 }
 
+class $LegalAcceptancesTable extends LegalAcceptances
+    with TableInfo<$LegalAcceptancesTable, LegalAcceptance> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $LegalAcceptancesTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  @override
+  late final GeneratedColumnWithTypeConverter<LegalDocumentKind, String>
+  document = GeneratedColumn<String>(
+    'document',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  ).withConverter<LegalDocumentKind>($LegalAcceptancesTable.$converterdocument);
+  static const VerificationMeta _versionMeta = const VerificationMeta(
+    'version',
+  );
+  @override
+  late final GeneratedColumn<String> version = GeneratedColumn<String>(
+    'version',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _acceptedAtMeta = const VerificationMeta(
+    'acceptedAt',
+  );
+  @override
+  late final GeneratedColumn<BigInt> acceptedAt = GeneratedColumn<BigInt>(
+    'accepted_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.bigInt,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _ageConfirmedMeta = const VerificationMeta(
+    'ageConfirmed',
+  );
+  @override
+  late final GeneratedColumn<bool> ageConfirmed = GeneratedColumn<bool>(
+    'age_confirmed',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("age_confirmed" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _platformMeta = const VerificationMeta(
+    'platform',
+  );
+  @override
+  late final GeneratedColumn<String> platform = GeneratedColumn<String>(
+    'platform',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _appVersionMeta = const VerificationMeta(
+    'appVersion',
+  );
+  @override
+  late final GeneratedColumn<String> appVersion = GeneratedColumn<String>(
+    'app_version',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _localeMeta = const VerificationMeta('locale');
+  @override
+  late final GeneratedColumn<String> locale = GeneratedColumn<String>(
+    'locale',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  @override
+  late final GeneratedColumnWithTypeConverter<LegalAcceptanceSource, String>
+  source =
+      GeneratedColumn<String>(
+        'source',
+        aliasedName,
+        false,
+        type: DriftSqlType.string,
+        requiredDuringInsert: true,
+      ).withConverter<LegalAcceptanceSource>(
+        $LegalAcceptancesTable.$convertersource,
+      );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    document,
+    version,
+    acceptedAt,
+    ageConfirmed,
+    platform,
+    appVersion,
+    locale,
+    source,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'legal_acceptances';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<LegalAcceptance> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('version')) {
+      context.handle(
+        _versionMeta,
+        version.isAcceptableOrUnknown(data['version']!, _versionMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_versionMeta);
+    }
+    if (data.containsKey('accepted_at')) {
+      context.handle(
+        _acceptedAtMeta,
+        acceptedAt.isAcceptableOrUnknown(data['accepted_at']!, _acceptedAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_acceptedAtMeta);
+    }
+    if (data.containsKey('age_confirmed')) {
+      context.handle(
+        _ageConfirmedMeta,
+        ageConfirmed.isAcceptableOrUnknown(
+          data['age_confirmed']!,
+          _ageConfirmedMeta,
+        ),
+      );
+    }
+    if (data.containsKey('platform')) {
+      context.handle(
+        _platformMeta,
+        platform.isAcceptableOrUnknown(data['platform']!, _platformMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_platformMeta);
+    }
+    if (data.containsKey('app_version')) {
+      context.handle(
+        _appVersionMeta,
+        appVersion.isAcceptableOrUnknown(data['app_version']!, _appVersionMeta),
+      );
+    }
+    if (data.containsKey('locale')) {
+      context.handle(
+        _localeMeta,
+        locale.isAcceptableOrUnknown(data['locale']!, _localeMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  LegalAcceptance map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return LegalAcceptance(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      document: $LegalAcceptancesTable.$converterdocument.fromSql(
+        attachedDatabase.typeMapping.read(
+          DriftSqlType.string,
+          data['${effectivePrefix}document'],
+        )!,
+      ),
+      version: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}version'],
+      )!,
+      acceptedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.bigInt,
+        data['${effectivePrefix}accepted_at'],
+      )!,
+      ageConfirmed: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}age_confirmed'],
+      )!,
+      platform: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}platform'],
+      )!,
+      appVersion: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}app_version'],
+      ),
+      locale: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}locale'],
+      ),
+      source: $LegalAcceptancesTable.$convertersource.fromSql(
+        attachedDatabase.typeMapping.read(
+          DriftSqlType.string,
+          data['${effectivePrefix}source'],
+        )!,
+      ),
+    );
+  }
+
+  @override
+  $LegalAcceptancesTable createAlias(String alias) {
+    return $LegalAcceptancesTable(attachedDatabase, alias);
+  }
+
+  static JsonTypeConverter2<LegalDocumentKind, String, String>
+  $converterdocument = const EnumNameConverter<LegalDocumentKind>(
+    LegalDocumentKind.values,
+  );
+  static JsonTypeConverter2<LegalAcceptanceSource, String, String>
+  $convertersource = const EnumNameConverter<LegalAcceptanceSource>(
+    LegalAcceptanceSource.values,
+  );
+}
+
+class LegalAcceptance extends DataClass implements Insertable<LegalAcceptance> {
+  final String id;
+  final LegalDocumentKind document;
+  final String version;
+  final BigInt acceptedAt;
+  final bool ageConfirmed;
+  final String platform;
+  final String? appVersion;
+  final String? locale;
+  final LegalAcceptanceSource source;
+  const LegalAcceptance({
+    required this.id,
+    required this.document,
+    required this.version,
+    required this.acceptedAt,
+    required this.ageConfirmed,
+    required this.platform,
+    this.appVersion,
+    this.locale,
+    required this.source,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    {
+      map['document'] = Variable<String>(
+        $LegalAcceptancesTable.$converterdocument.toSql(document),
+      );
+    }
+    map['version'] = Variable<String>(version);
+    map['accepted_at'] = Variable<BigInt>(acceptedAt);
+    map['age_confirmed'] = Variable<bool>(ageConfirmed);
+    map['platform'] = Variable<String>(platform);
+    if (!nullToAbsent || appVersion != null) {
+      map['app_version'] = Variable<String>(appVersion);
+    }
+    if (!nullToAbsent || locale != null) {
+      map['locale'] = Variable<String>(locale);
+    }
+    {
+      map['source'] = Variable<String>(
+        $LegalAcceptancesTable.$convertersource.toSql(source),
+      );
+    }
+    return map;
+  }
+
+  LegalAcceptancesCompanion toCompanion(bool nullToAbsent) {
+    return LegalAcceptancesCompanion(
+      id: Value(id),
+      document: Value(document),
+      version: Value(version),
+      acceptedAt: Value(acceptedAt),
+      ageConfirmed: Value(ageConfirmed),
+      platform: Value(platform),
+      appVersion: appVersion == null && nullToAbsent
+          ? const Value.absent()
+          : Value(appVersion),
+      locale: locale == null && nullToAbsent
+          ? const Value.absent()
+          : Value(locale),
+      source: Value(source),
+    );
+  }
+
+  factory LegalAcceptance.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return LegalAcceptance(
+      id: serializer.fromJson<String>(json['id']),
+      document: $LegalAcceptancesTable.$converterdocument.fromJson(
+        serializer.fromJson<String>(json['document']),
+      ),
+      version: serializer.fromJson<String>(json['version']),
+      acceptedAt: serializer.fromJson<BigInt>(json['acceptedAt']),
+      ageConfirmed: serializer.fromJson<bool>(json['ageConfirmed']),
+      platform: serializer.fromJson<String>(json['platform']),
+      appVersion: serializer.fromJson<String?>(json['appVersion']),
+      locale: serializer.fromJson<String?>(json['locale']),
+      source: $LegalAcceptancesTable.$convertersource.fromJson(
+        serializer.fromJson<String>(json['source']),
+      ),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'document': serializer.toJson<String>(
+        $LegalAcceptancesTable.$converterdocument.toJson(document),
+      ),
+      'version': serializer.toJson<String>(version),
+      'acceptedAt': serializer.toJson<BigInt>(acceptedAt),
+      'ageConfirmed': serializer.toJson<bool>(ageConfirmed),
+      'platform': serializer.toJson<String>(platform),
+      'appVersion': serializer.toJson<String?>(appVersion),
+      'locale': serializer.toJson<String?>(locale),
+      'source': serializer.toJson<String>(
+        $LegalAcceptancesTable.$convertersource.toJson(source),
+      ),
+    };
+  }
+
+  LegalAcceptance copyWith({
+    String? id,
+    LegalDocumentKind? document,
+    String? version,
+    BigInt? acceptedAt,
+    bool? ageConfirmed,
+    String? platform,
+    Value<String?> appVersion = const Value.absent(),
+    Value<String?> locale = const Value.absent(),
+    LegalAcceptanceSource? source,
+  }) => LegalAcceptance(
+    id: id ?? this.id,
+    document: document ?? this.document,
+    version: version ?? this.version,
+    acceptedAt: acceptedAt ?? this.acceptedAt,
+    ageConfirmed: ageConfirmed ?? this.ageConfirmed,
+    platform: platform ?? this.platform,
+    appVersion: appVersion.present ? appVersion.value : this.appVersion,
+    locale: locale.present ? locale.value : this.locale,
+    source: source ?? this.source,
+  );
+  LegalAcceptance copyWithCompanion(LegalAcceptancesCompanion data) {
+    return LegalAcceptance(
+      id: data.id.present ? data.id.value : this.id,
+      document: data.document.present ? data.document.value : this.document,
+      version: data.version.present ? data.version.value : this.version,
+      acceptedAt: data.acceptedAt.present
+          ? data.acceptedAt.value
+          : this.acceptedAt,
+      ageConfirmed: data.ageConfirmed.present
+          ? data.ageConfirmed.value
+          : this.ageConfirmed,
+      platform: data.platform.present ? data.platform.value : this.platform,
+      appVersion: data.appVersion.present
+          ? data.appVersion.value
+          : this.appVersion,
+      locale: data.locale.present ? data.locale.value : this.locale,
+      source: data.source.present ? data.source.value : this.source,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('LegalAcceptance(')
+          ..write('id: $id, ')
+          ..write('document: $document, ')
+          ..write('version: $version, ')
+          ..write('acceptedAt: $acceptedAt, ')
+          ..write('ageConfirmed: $ageConfirmed, ')
+          ..write('platform: $platform, ')
+          ..write('appVersion: $appVersion, ')
+          ..write('locale: $locale, ')
+          ..write('source: $source')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    document,
+    version,
+    acceptedAt,
+    ageConfirmed,
+    platform,
+    appVersion,
+    locale,
+    source,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is LegalAcceptance &&
+          other.id == this.id &&
+          other.document == this.document &&
+          other.version == this.version &&
+          other.acceptedAt == this.acceptedAt &&
+          other.ageConfirmed == this.ageConfirmed &&
+          other.platform == this.platform &&
+          other.appVersion == this.appVersion &&
+          other.locale == this.locale &&
+          other.source == this.source);
+}
+
+class LegalAcceptancesCompanion extends UpdateCompanion<LegalAcceptance> {
+  final Value<String> id;
+  final Value<LegalDocumentKind> document;
+  final Value<String> version;
+  final Value<BigInt> acceptedAt;
+  final Value<bool> ageConfirmed;
+  final Value<String> platform;
+  final Value<String?> appVersion;
+  final Value<String?> locale;
+  final Value<LegalAcceptanceSource> source;
+  final Value<int> rowid;
+  const LegalAcceptancesCompanion({
+    this.id = const Value.absent(),
+    this.document = const Value.absent(),
+    this.version = const Value.absent(),
+    this.acceptedAt = const Value.absent(),
+    this.ageConfirmed = const Value.absent(),
+    this.platform = const Value.absent(),
+    this.appVersion = const Value.absent(),
+    this.locale = const Value.absent(),
+    this.source = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  LegalAcceptancesCompanion.insert({
+    required String id,
+    required LegalDocumentKind document,
+    required String version,
+    required BigInt acceptedAt,
+    this.ageConfirmed = const Value.absent(),
+    required String platform,
+    this.appVersion = const Value.absent(),
+    this.locale = const Value.absent(),
+    required LegalAcceptanceSource source,
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       document = Value(document),
+       version = Value(version),
+       acceptedAt = Value(acceptedAt),
+       platform = Value(platform),
+       source = Value(source);
+  static Insertable<LegalAcceptance> custom({
+    Expression<String>? id,
+    Expression<String>? document,
+    Expression<String>? version,
+    Expression<BigInt>? acceptedAt,
+    Expression<bool>? ageConfirmed,
+    Expression<String>? platform,
+    Expression<String>? appVersion,
+    Expression<String>? locale,
+    Expression<String>? source,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (document != null) 'document': document,
+      if (version != null) 'version': version,
+      if (acceptedAt != null) 'accepted_at': acceptedAt,
+      if (ageConfirmed != null) 'age_confirmed': ageConfirmed,
+      if (platform != null) 'platform': platform,
+      if (appVersion != null) 'app_version': appVersion,
+      if (locale != null) 'locale': locale,
+      if (source != null) 'source': source,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  LegalAcceptancesCompanion copyWith({
+    Value<String>? id,
+    Value<LegalDocumentKind>? document,
+    Value<String>? version,
+    Value<BigInt>? acceptedAt,
+    Value<bool>? ageConfirmed,
+    Value<String>? platform,
+    Value<String?>? appVersion,
+    Value<String?>? locale,
+    Value<LegalAcceptanceSource>? source,
+    Value<int>? rowid,
+  }) {
+    return LegalAcceptancesCompanion(
+      id: id ?? this.id,
+      document: document ?? this.document,
+      version: version ?? this.version,
+      acceptedAt: acceptedAt ?? this.acceptedAt,
+      ageConfirmed: ageConfirmed ?? this.ageConfirmed,
+      platform: platform ?? this.platform,
+      appVersion: appVersion ?? this.appVersion,
+      locale: locale ?? this.locale,
+      source: source ?? this.source,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (document.present) {
+      map['document'] = Variable<String>(
+        $LegalAcceptancesTable.$converterdocument.toSql(document.value),
+      );
+    }
+    if (version.present) {
+      map['version'] = Variable<String>(version.value);
+    }
+    if (acceptedAt.present) {
+      map['accepted_at'] = Variable<BigInt>(acceptedAt.value);
+    }
+    if (ageConfirmed.present) {
+      map['age_confirmed'] = Variable<bool>(ageConfirmed.value);
+    }
+    if (platform.present) {
+      map['platform'] = Variable<String>(platform.value);
+    }
+    if (appVersion.present) {
+      map['app_version'] = Variable<String>(appVersion.value);
+    }
+    if (locale.present) {
+      map['locale'] = Variable<String>(locale.value);
+    }
+    if (source.present) {
+      map['source'] = Variable<String>(
+        $LegalAcceptancesTable.$convertersource.toSql(source.value),
+      );
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('LegalAcceptancesCompanion(')
+          ..write('id: $id, ')
+          ..write('document: $document, ')
+          ..write('version: $version, ')
+          ..write('acceptedAt: $acceptedAt, ')
+          ..write('ageConfirmed: $ageConfirmed, ')
+          ..write('platform: $platform, ')
+          ..write('appVersion: $appVersion, ')
+          ..write('locale: $locale, ')
+          ..write('source: $source, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
@@ -6570,6 +7156,9 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $VoiceSessionsTable voiceSessions = $VoiceSessionsTable(this);
   late final $VoiceSessionEventsTable voiceSessionEvents =
       $VoiceSessionEventsTable(this);
+  late final $LegalAcceptancesTable legalAcceptances = $LegalAcceptancesTable(
+    this,
+  );
   late final Index accountsArchived = Index(
     'accounts_archived',
     'CREATE INDEX accounts_archived ON accounts (is_archived)',
@@ -6726,6 +7315,10 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     'voice_events_remote_synced',
     'CREATE INDEX voice_events_remote_synced ON voice_session_events (remote_synced)',
   );
+  late final Index legalAcceptancesDocumentVersion = Index(
+    'legal_acceptances_document_version',
+    'CREATE INDEX legal_acceptances_document_version ON legal_acceptances (document, version)',
+  );
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -6742,6 +7335,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     tombstones,
     voiceSessions,
     voiceSessionEvents,
+    legalAcceptances,
     accountsArchived,
     accountsUpdatedAt,
     accountsNeedsSync,
@@ -6781,6 +7375,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     voiceSessionsUpdatedAt,
     voiceEventsSessionId,
     voiceEventsRemoteSynced,
+    legalAcceptancesDocumentVersion,
   ];
 }
 
@@ -9994,6 +10589,300 @@ typedef $$VoiceSessionEventsTableProcessedTableManager =
       VoiceSessionEvent,
       PrefetchHooks Function()
     >;
+typedef $$LegalAcceptancesTableCreateCompanionBuilder =
+    LegalAcceptancesCompanion Function({
+      required String id,
+      required LegalDocumentKind document,
+      required String version,
+      required BigInt acceptedAt,
+      Value<bool> ageConfirmed,
+      required String platform,
+      Value<String?> appVersion,
+      Value<String?> locale,
+      required LegalAcceptanceSource source,
+      Value<int> rowid,
+    });
+typedef $$LegalAcceptancesTableUpdateCompanionBuilder =
+    LegalAcceptancesCompanion Function({
+      Value<String> id,
+      Value<LegalDocumentKind> document,
+      Value<String> version,
+      Value<BigInt> acceptedAt,
+      Value<bool> ageConfirmed,
+      Value<String> platform,
+      Value<String?> appVersion,
+      Value<String?> locale,
+      Value<LegalAcceptanceSource> source,
+      Value<int> rowid,
+    });
+
+class $$LegalAcceptancesTableFilterComposer
+    extends Composer<_$AppDatabase, $LegalAcceptancesTable> {
+  $$LegalAcceptancesTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnWithTypeConverterFilters<LegalDocumentKind, LegalDocumentKind, String>
+  get document => $composableBuilder(
+    column: $table.document,
+    builder: (column) => ColumnWithTypeConverterFilters(column),
+  );
+
+  ColumnFilters<String> get version => $composableBuilder(
+    column: $table.version,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<BigInt> get acceptedAt => $composableBuilder(
+    column: $table.acceptedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get ageConfirmed => $composableBuilder(
+    column: $table.ageConfirmed,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get platform => $composableBuilder(
+    column: $table.platform,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get appVersion => $composableBuilder(
+    column: $table.appVersion,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get locale => $composableBuilder(
+    column: $table.locale,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnWithTypeConverterFilters<
+    LegalAcceptanceSource,
+    LegalAcceptanceSource,
+    String
+  >
+  get source => $composableBuilder(
+    column: $table.source,
+    builder: (column) => ColumnWithTypeConverterFilters(column),
+  );
+}
+
+class $$LegalAcceptancesTableOrderingComposer
+    extends Composer<_$AppDatabase, $LegalAcceptancesTable> {
+  $$LegalAcceptancesTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get document => $composableBuilder(
+    column: $table.document,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get version => $composableBuilder(
+    column: $table.version,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<BigInt> get acceptedAt => $composableBuilder(
+    column: $table.acceptedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get ageConfirmed => $composableBuilder(
+    column: $table.ageConfirmed,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get platform => $composableBuilder(
+    column: $table.platform,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get appVersion => $composableBuilder(
+    column: $table.appVersion,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get locale => $composableBuilder(
+    column: $table.locale,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get source => $composableBuilder(
+    column: $table.source,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$LegalAcceptancesTableAnnotationComposer
+    extends Composer<_$AppDatabase, $LegalAcceptancesTable> {
+  $$LegalAcceptancesTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumnWithTypeConverter<LegalDocumentKind, String> get document =>
+      $composableBuilder(column: $table.document, builder: (column) => column);
+
+  GeneratedColumn<String> get version =>
+      $composableBuilder(column: $table.version, builder: (column) => column);
+
+  GeneratedColumn<BigInt> get acceptedAt => $composableBuilder(
+    column: $table.acceptedAt,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<bool> get ageConfirmed => $composableBuilder(
+    column: $table.ageConfirmed,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get platform =>
+      $composableBuilder(column: $table.platform, builder: (column) => column);
+
+  GeneratedColumn<String> get appVersion => $composableBuilder(
+    column: $table.appVersion,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get locale =>
+      $composableBuilder(column: $table.locale, builder: (column) => column);
+
+  GeneratedColumnWithTypeConverter<LegalAcceptanceSource, String> get source =>
+      $composableBuilder(column: $table.source, builder: (column) => column);
+}
+
+class $$LegalAcceptancesTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $LegalAcceptancesTable,
+          LegalAcceptance,
+          $$LegalAcceptancesTableFilterComposer,
+          $$LegalAcceptancesTableOrderingComposer,
+          $$LegalAcceptancesTableAnnotationComposer,
+          $$LegalAcceptancesTableCreateCompanionBuilder,
+          $$LegalAcceptancesTableUpdateCompanionBuilder,
+          (
+            LegalAcceptance,
+            BaseReferences<
+              _$AppDatabase,
+              $LegalAcceptancesTable,
+              LegalAcceptance
+            >,
+          ),
+          LegalAcceptance,
+          PrefetchHooks Function()
+        > {
+  $$LegalAcceptancesTableTableManager(
+    _$AppDatabase db,
+    $LegalAcceptancesTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$LegalAcceptancesTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$LegalAcceptancesTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$LegalAcceptancesTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<LegalDocumentKind> document = const Value.absent(),
+                Value<String> version = const Value.absent(),
+                Value<BigInt> acceptedAt = const Value.absent(),
+                Value<bool> ageConfirmed = const Value.absent(),
+                Value<String> platform = const Value.absent(),
+                Value<String?> appVersion = const Value.absent(),
+                Value<String?> locale = const Value.absent(),
+                Value<LegalAcceptanceSource> source = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => LegalAcceptancesCompanion(
+                id: id,
+                document: document,
+                version: version,
+                acceptedAt: acceptedAt,
+                ageConfirmed: ageConfirmed,
+                platform: platform,
+                appVersion: appVersion,
+                locale: locale,
+                source: source,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                required LegalDocumentKind document,
+                required String version,
+                required BigInt acceptedAt,
+                Value<bool> ageConfirmed = const Value.absent(),
+                required String platform,
+                Value<String?> appVersion = const Value.absent(),
+                Value<String?> locale = const Value.absent(),
+                required LegalAcceptanceSource source,
+                Value<int> rowid = const Value.absent(),
+              }) => LegalAcceptancesCompanion.insert(
+                id: id,
+                document: document,
+                version: version,
+                acceptedAt: acceptedAt,
+                ageConfirmed: ageConfirmed,
+                platform: platform,
+                appVersion: appVersion,
+                locale: locale,
+                source: source,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$LegalAcceptancesTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $LegalAcceptancesTable,
+      LegalAcceptance,
+      $$LegalAcceptancesTableFilterComposer,
+      $$LegalAcceptancesTableOrderingComposer,
+      $$LegalAcceptancesTableAnnotationComposer,
+      $$LegalAcceptancesTableCreateCompanionBuilder,
+      $$LegalAcceptancesTableUpdateCompanionBuilder,
+      (
+        LegalAcceptance,
+        BaseReferences<_$AppDatabase, $LegalAcceptancesTable, LegalAcceptance>,
+      ),
+      LegalAcceptance,
+      PrefetchHooks Function()
+    >;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;
@@ -10019,4 +10908,6 @@ class $AppDatabaseManager {
       $$VoiceSessionsTableTableManager(_db, _db.voiceSessions);
   $$VoiceSessionEventsTableTableManager get voiceSessionEvents =>
       $$VoiceSessionEventsTableTableManager(_db, _db.voiceSessionEvents);
+  $$LegalAcceptancesTableTableManager get legalAcceptances =>
+      $$LegalAcceptancesTableTableManager(_db, _db.legalAcceptances);
 }

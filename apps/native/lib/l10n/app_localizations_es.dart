@@ -21,7 +21,7 @@ class AppLocalizationsEs extends AppLocalizations {
   String get accounts => 'Cuentas';
 
   @override
-  String get insights => 'Análisis';
+  String get insights => 'Organización';
 
   @override
   String get categories => 'Categorías';
@@ -129,6 +129,9 @@ class AppLocalizationsEs extends AppLocalizations {
   String get account => 'Cuenta';
 
   @override
+  String get exchangeRate => 'Tipo de cambio';
+
+  @override
   String get status => 'Estado';
 
   @override
@@ -231,6 +234,44 @@ class AppLocalizationsEs extends AppLocalizations {
   String get yourAccounts => 'Tus cuentas';
 
   @override
+  String get currentAccount => 'Cuenta actual';
+
+  @override
+  String get otherAccounts => 'Otras cuentas';
+
+  @override
+  String get chooseAccountToContinue =>
+      'Elegí una cuenta para continuar, o agregá otra.';
+
+  @override
+  String get signOut => 'Cerrar sesión';
+
+  @override
+  String get deleteLocalAccount => 'Eliminar esta cuenta';
+
+  @override
+  String signOutConfirmTitle(String name) {
+    return '¿Cerrar sesión en «$name»?';
+  }
+
+  @override
+  String get signOutConfirmBody =>
+      'Se quitan de este dispositivo los datos de la cuenta. Tus datos siguen en tu cuenta: volvé a iniciar sesión para recuperarlos.';
+
+  @override
+  String get signOutUnsyncedWarning =>
+      'Hay cambios que todavía no se sincronizaron. Si cerrás sesión ahora, se pierden para siempre.';
+
+  @override
+  String deleteLocalAccountConfirmTitle(String name) {
+    return '¿Eliminar «$name»?';
+  }
+
+  @override
+  String get deleteLocalAccountConfirmBody =>
+      'Esta cuenta solo existe en este dispositivo. Al eliminarla, sus datos se borran para siempre: no hay copia en ningún otro lado.';
+
+  @override
   String get settings => 'Configuración';
 
   @override
@@ -265,6 +306,56 @@ class AppLocalizationsEs extends AppLocalizations {
   @override
   String get settingsSaveFailed =>
       'No se pudo guardar la configuración. Intentá de nuevo.';
+
+  @override
+  String get deleteUserAccount => 'Eliminar mi cuenta';
+
+  @override
+  String get deleteUserAccountDescription =>
+      'Eliminá tu cuenta y todos tus datos para siempre';
+
+  @override
+  String get deleteUserAccountConfirmTitle => '¿Eliminar tu cuenta?';
+
+  @override
+  String deleteUserAccountConfirmBody(String email) {
+    return 'Te vamos a enviar un enlace de confirmación a $email. Eliminar tu cuenta es permanente y no se puede deshacer.';
+  }
+
+  @override
+  String get deleteUserAccountSend => 'Enviar enlace';
+
+  @override
+  String get deleteUserAccountEmailSent =>
+      'Revisá tu correo: te enviamos un enlace para confirmar la eliminación.';
+
+  @override
+  String get deleteUserAccountFailed =>
+      'No pudimos enviar el correo. Probá de nuevo en unos minutos.';
+
+  @override
+  String get deleteUserAccountAlreadyDeleted => 'Esa cuenta ya fue eliminada.';
+
+  @override
+  String get deleteUserAccountRateLimited =>
+      'Ya pediste varios enlaces de eliminación. Esperá una hora y probá de nuevo.';
+
+  @override
+  String get accountDeletedBanner => 'Esta cuenta fue eliminada';
+
+  @override
+  String get accountDeletedRemove => 'Quitar';
+
+  @override
+  String get accountDeletedConfirmTitle =>
+      '¿Quitar esta cuenta del dispositivo?';
+
+  @override
+  String get accountDeletedConfirmBody =>
+      'La cuenta ya fue eliminada en el servidor. Esto borra también sus datos de este dispositivo, que son la última copia.';
+
+  @override
+  String get accountDeletedRemoveConfirm => 'Quitar';
 
   @override
   String get updateRequiredTitle => 'Actualización obligatoria';
@@ -965,7 +1056,7 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String resetEmailSent(String email) {
-    return 'Si existe una cuenta para $email, le enviamos un enlace para restablecer la contraseña. El enlace se abre en el navegador.';
+    return 'Te enviamos un enlace a $email para restablecer tu contraseña. El enlace se abre en el navegador.';
   }
 
   @override
@@ -1015,6 +1106,23 @@ class AppLocalizationsEs extends AppLocalizations {
   @override
   String get emailStillNotVerified =>
       'Ese correo todavía no está verificado. Te enviamos un enlace nuevo.';
+
+  @override
+  String accountNotFoundForEmail(String email) {
+    return 'No existe una cuenta para $email.';
+  }
+
+  @override
+  String get emailAlreadyVerified =>
+      'Ese correo ya está verificado. Iniciá sesión con tu cuenta.';
+
+  @override
+  String get tooManyAttempts =>
+      'Demasiados intentos. Esperá un minuto y probá de nuevo.';
+
+  @override
+  String get emailSendFailed =>
+      'No pudimos enviar el correo. Probá de nuevo en unos minutos.';
 
   @override
   String localAccountFailed(Object error) {
@@ -1109,6 +1217,9 @@ class AppLocalizationsEs extends AppLocalizations {
   String get selectWidgetCurrency => 'Seleccioná una moneda';
 
   @override
+  String get configureWidgetFilter => 'Configurá un filtro para este widget';
+
+  @override
   String widgetSaveFailed(Object error) {
     return 'No se pudo guardar el widget: $error';
   }
@@ -1151,6 +1262,15 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get noAccountsUseArs => 'No hay cuentas todavía; se usará ARS.';
+
+  @override
+  String get widgetWidth => 'Ancho';
+
+  @override
+  String get widgetAccountsAllHint => 'Todas las cuentas de esta moneda.';
+
+  @override
+  String get widgetAccountsScopedHint => 'Solo las cuentas seleccionadas.';
 
   @override
   String get noColor => 'Sin color';
@@ -1243,11 +1363,6 @@ class AppLocalizationsEs extends AppLocalizations {
   String get interrupted => '(interrumpido)';
 
   @override
-  String voiceRuntimeError(Object error) {
-    return 'Error de voz: $error';
-  }
-
-  @override
   String get toolRunning => 'En curso';
 
   @override
@@ -1300,9 +1415,8 @@ class AppLocalizationsEs extends AppLocalizations {
       'Este dispositivo no admite streaming PCM de 16 bits';
 
   @override
-  String voiceStartFailed(Object error) {
-    return 'No se pudo iniciar: $error';
-  }
+  String get voiceStartFailed =>
+      'No se pudo iniciar la conversación. Intentá de nuevo.';
 
   @override
   String microphoneOpenFailed(Object error) {
@@ -1312,11 +1426,6 @@ class AppLocalizationsEs extends AppLocalizations {
   @override
   String audioStreamFailed(Object error) {
     return 'Error del audio: $error';
-  }
-
-  @override
-  String voiceStopFailed(Object error) {
-    return 'No se pudo finalizar correctamente: $error';
   }
 
   @override
@@ -1381,6 +1490,63 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get tagSaveFailed => 'No se pudo guardar la etiqueta';
+
+  @override
+  String get legalFirstTitle => 'Antes de empezar';
+
+  @override
+  String get legalFirstSubtitle =>
+      'Necesitamos tu aceptación para crear tu cuenta y darte el servicio.';
+
+  @override
+  String get legalUpdatedTermsTitle => 'Actualizamos los Términos';
+
+  @override
+  String get legalUpdatedPrivacyTitle =>
+      'Actualizamos la Política de Privacidad';
+
+  @override
+  String get legalUpdatedBothTitle =>
+      'Actualizamos los Términos y la Privacidad';
+
+  @override
+  String get legalUpdatedSubtitle =>
+      'Revisá los cambios y aceptalos para seguir usando Wallet Bot.';
+
+  @override
+  String get legalUpdatedSubtitleGrace =>
+      'Podés seguir usando la app por ahora, pero vamos a necesitar tu aceptación.';
+
+  @override
+  String get legalAgeConfirm => 'Tengo 18 años o más';
+
+  @override
+  String get legalAcceptTerms => 'Acepto los [[terms]]';
+
+  @override
+  String get legalAcceptPrivacy => 'Acepto la [[privacy]]';
+
+  @override
+  String get legalAcceptBoth => 'Acepto los [[terms]] y la [[privacy]]';
+
+  @override
+  String get legalTermsName => 'Términos y Condiciones';
+
+  @override
+  String get legalPrivacyName => 'Política de Privacidad';
+
+  @override
+  String get legalAcceptAction => 'Aceptar y continuar';
+
+  @override
+  String get legalLater => 'Más tarde';
+
+  @override
+  String get legalUseAnotherAccount => 'Usar otra cuenta';
+
+  @override
+  String get legalAcceptFailed =>
+      'No pudimos registrar tu aceptación. Revisá tu conexión e intentá de nuevo.';
 
   @override
   String get actionLoadFailed => 'No se pudo cargar la acción';

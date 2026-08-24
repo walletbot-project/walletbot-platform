@@ -125,7 +125,7 @@ abstract class AppLocalizations {
   /// No description provided for @insights.
   ///
   /// In en, this message translates to:
-  /// **'Insights'**
+  /// **'Organization'**
   String get insights;
 
   /// No description provided for @categories.
@@ -338,6 +338,12 @@ abstract class AppLocalizations {
   /// **'Account'**
   String get account;
 
+  /// No description provided for @exchangeRate.
+  ///
+  /// In en, this message translates to:
+  /// **'Exchange rate'**
+  String get exchangeRate;
+
   /// No description provided for @status.
   ///
   /// In en, this message translates to:
@@ -512,6 +518,66 @@ abstract class AppLocalizations {
   /// **'Your accounts'**
   String get yourAccounts;
 
+  /// No description provided for @currentAccount.
+  ///
+  /// In en, this message translates to:
+  /// **'Current account'**
+  String get currentAccount;
+
+  /// No description provided for @otherAccounts.
+  ///
+  /// In en, this message translates to:
+  /// **'Other accounts'**
+  String get otherAccounts;
+
+  /// No description provided for @chooseAccountToContinue.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose an account to continue, or add another one.'**
+  String get chooseAccountToContinue;
+
+  /// No description provided for @signOut.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign out'**
+  String get signOut;
+
+  /// No description provided for @deleteLocalAccount.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete this account'**
+  String get deleteLocalAccount;
+
+  /// No description provided for @signOutConfirmTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign out of “{name}”?'**
+  String signOutConfirmTitle(String name);
+
+  /// No description provided for @signOutConfirmBody.
+  ///
+  /// In en, this message translates to:
+  /// **'This removes the account\'s data from this device. Your data stays in your account — sign in again to bring it back.'**
+  String get signOutConfirmBody;
+
+  /// No description provided for @signOutUnsyncedWarning.
+  ///
+  /// In en, this message translates to:
+  /// **'Some changes have not synced yet. Signing out now discards them for good.'**
+  String get signOutUnsyncedWarning;
+
+  /// No description provided for @deleteLocalAccountConfirmTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete “{name}”?'**
+  String deleteLocalAccountConfirmTitle(String name);
+
+  /// No description provided for @deleteLocalAccountConfirmBody.
+  ///
+  /// In en, this message translates to:
+  /// **'This account only exists on this device. Deleting it erases its data for good — there is no copy anywhere else.'**
+  String get deleteLocalAccountConfirmBody;
+
   /// No description provided for @settings.
   ///
   /// In en, this message translates to:
@@ -577,6 +643,90 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Could not save the setting. Try again.'**
   String get settingsSaveFailed;
+
+  /// No description provided for @deleteUserAccount.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete my account'**
+  String get deleteUserAccount;
+
+  /// No description provided for @deleteUserAccountDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Permanently delete your account and all your data'**
+  String get deleteUserAccountDescription;
+
+  /// No description provided for @deleteUserAccountConfirmTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete your account?'**
+  String get deleteUserAccountConfirmTitle;
+
+  /// No description provided for @deleteUserAccountConfirmBody.
+  ///
+  /// In en, this message translates to:
+  /// **'We will send a confirmation link to {email}. Deleting your account is permanent and cannot be undone.'**
+  String deleteUserAccountConfirmBody(String email);
+
+  /// No description provided for @deleteUserAccountSend.
+  ///
+  /// In en, this message translates to:
+  /// **'Send link'**
+  String get deleteUserAccountSend;
+
+  /// No description provided for @deleteUserAccountEmailSent.
+  ///
+  /// In en, this message translates to:
+  /// **'Check your email: we sent you a link to confirm the deletion.'**
+  String get deleteUserAccountEmailSent;
+
+  /// No description provided for @deleteUserAccountFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not send the email. Try again in a few minutes.'**
+  String get deleteUserAccountFailed;
+
+  /// No description provided for @deleteUserAccountAlreadyDeleted.
+  ///
+  /// In en, this message translates to:
+  /// **'That account was already deleted.'**
+  String get deleteUserAccountAlreadyDeleted;
+
+  /// No description provided for @deleteUserAccountRateLimited.
+  ///
+  /// In en, this message translates to:
+  /// **'You already requested several deletion links. Wait an hour and try again.'**
+  String get deleteUserAccountRateLimited;
+
+  /// No description provided for @accountDeletedBanner.
+  ///
+  /// In en, this message translates to:
+  /// **'This account was deleted'**
+  String get accountDeletedBanner;
+
+  /// No description provided for @accountDeletedRemove.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove'**
+  String get accountDeletedRemove;
+
+  /// No description provided for @accountDeletedConfirmTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove this account from the device?'**
+  String get accountDeletedConfirmTitle;
+
+  /// No description provided for @accountDeletedConfirmBody.
+  ///
+  /// In en, this message translates to:
+  /// **'The account is already deleted on the server. This erases its data from this device too, which is the last copy.'**
+  String get accountDeletedConfirmBody;
+
+  /// No description provided for @accountDeletedRemoveConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove'**
+  String get accountDeletedRemoveConfirm;
 
   /// No description provided for @updateRequiredTitle.
   ///
@@ -1823,7 +1973,7 @@ abstract class AppLocalizations {
   /// No description provided for @resetEmailSent.
   ///
   /// In en, this message translates to:
-  /// **'If an account exists for {email}, we sent it a link to reset the password. The link opens in your browser.'**
+  /// **'We sent a link to {email} to reset your password. The link opens in your browser.'**
   String resetEmailSent(String email);
 
   /// No description provided for @resetEmailSentReturnHint.
@@ -1897,6 +2047,30 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'That email isn\'t verified yet. We sent you a new link.'**
   String get emailStillNotVerified;
+
+  /// No description provided for @accountNotFoundForEmail.
+  ///
+  /// In en, this message translates to:
+  /// **'There is no account for {email}.'**
+  String accountNotFoundForEmail(String email);
+
+  /// No description provided for @emailAlreadyVerified.
+  ///
+  /// In en, this message translates to:
+  /// **'That email is already verified. Sign in with your account.'**
+  String get emailAlreadyVerified;
+
+  /// No description provided for @tooManyAttempts.
+  ///
+  /// In en, this message translates to:
+  /// **'Too many attempts. Wait a minute and try again.'**
+  String get tooManyAttempts;
+
+  /// No description provided for @emailSendFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not send the email. Try again in a few minutes.'**
+  String get emailSendFailed;
 
   /// No description provided for @localAccountFailed.
   ///
@@ -2060,6 +2234,12 @@ abstract class AppLocalizations {
   /// **'Select a currency'**
   String get selectWidgetCurrency;
 
+  /// No description provided for @configureWidgetFilter.
+  ///
+  /// In en, this message translates to:
+  /// **'Configure a filter for this widget'**
+  String get configureWidgetFilter;
+
   /// No description provided for @widgetSaveFailed.
   ///
   /// In en, this message translates to:
@@ -2143,6 +2323,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'There are no accounts yet; ARS will be used.'**
   String get noAccountsUseArs;
+
+  /// No description provided for @widgetWidth.
+  ///
+  /// In en, this message translates to:
+  /// **'Width'**
+  String get widgetWidth;
+
+  /// No description provided for @widgetAccountsAllHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Every account in this currency.'**
+  String get widgetAccountsAllHint;
+
+  /// No description provided for @widgetAccountsScopedHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Only the selected accounts.'**
+  String get widgetAccountsScopedHint;
 
   /// No description provided for @noColor.
   ///
@@ -2324,12 +2522,6 @@ abstract class AppLocalizations {
   /// **'(interrupted)'**
   String get interrupted;
 
-  /// No description provided for @voiceRuntimeError.
-  ///
-  /// In en, this message translates to:
-  /// **'Voice error: {error}'**
-  String voiceRuntimeError(Object error);
-
   /// No description provided for @toolRunning.
   ///
   /// In en, this message translates to:
@@ -2429,8 +2621,8 @@ abstract class AppLocalizations {
   /// No description provided for @voiceStartFailed.
   ///
   /// In en, this message translates to:
-  /// **'Failed to start: {error}'**
-  String voiceStartFailed(Object error);
+  /// **'Couldn\'t start the conversation. Please try again.'**
+  String get voiceStartFailed;
 
   /// No description provided for @microphoneOpenFailed.
   ///
@@ -2443,12 +2635,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Audio stream error: {error}'**
   String audioStreamFailed(Object error);
-
-  /// No description provided for @voiceStopFailed.
-  ///
-  /// In en, this message translates to:
-  /// **'Failed to stop cleanly: {error}'**
-  String voiceStopFailed(Object error);
 
   /// No description provided for @toolResponseUnmatched.
   ///
@@ -2551,6 +2737,108 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Could not save the tag'**
   String get tagSaveFailed;
+
+  /// No description provided for @legalFirstTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Before you start'**
+  String get legalFirstTitle;
+
+  /// No description provided for @legalFirstSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'We need your acceptance to create your account and provide the service.'**
+  String get legalFirstSubtitle;
+
+  /// No description provided for @legalUpdatedTermsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'We updated the Terms'**
+  String get legalUpdatedTermsTitle;
+
+  /// No description provided for @legalUpdatedPrivacyTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'We updated the Privacy Policy'**
+  String get legalUpdatedPrivacyTitle;
+
+  /// No description provided for @legalUpdatedBothTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'We updated the Terms and the Privacy Policy'**
+  String get legalUpdatedBothTitle;
+
+  /// No description provided for @legalUpdatedSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Review the changes and accept them to keep using Wallet Bot.'**
+  String get legalUpdatedSubtitle;
+
+  /// No description provided for @legalUpdatedSubtitleGrace.
+  ///
+  /// In en, this message translates to:
+  /// **'You can keep using the app for now, but we will need your acceptance.'**
+  String get legalUpdatedSubtitleGrace;
+
+  /// No description provided for @legalAgeConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'I am 18 or older'**
+  String get legalAgeConfirm;
+
+  /// No description provided for @legalAcceptTerms.
+  ///
+  /// In en, this message translates to:
+  /// **'I accept the [[terms]]'**
+  String get legalAcceptTerms;
+
+  /// No description provided for @legalAcceptPrivacy.
+  ///
+  /// In en, this message translates to:
+  /// **'I accept the [[privacy]]'**
+  String get legalAcceptPrivacy;
+
+  /// No description provided for @legalAcceptBoth.
+  ///
+  /// In en, this message translates to:
+  /// **'I accept the [[terms]] and the [[privacy]]'**
+  String get legalAcceptBoth;
+
+  /// No description provided for @legalTermsName.
+  ///
+  /// In en, this message translates to:
+  /// **'Terms and Conditions'**
+  String get legalTermsName;
+
+  /// No description provided for @legalPrivacyName.
+  ///
+  /// In en, this message translates to:
+  /// **'Privacy Policy'**
+  String get legalPrivacyName;
+
+  /// No description provided for @legalAcceptAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Accept and continue'**
+  String get legalAcceptAction;
+
+  /// No description provided for @legalLater.
+  ///
+  /// In en, this message translates to:
+  /// **'Later'**
+  String get legalLater;
+
+  /// No description provided for @legalUseAnotherAccount.
+  ///
+  /// In en, this message translates to:
+  /// **'Use another account'**
+  String get legalUseAnotherAccount;
+
+  /// No description provided for @legalAcceptFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'We could not record your acceptance. Check your connection and try again.'**
+  String get legalAcceptFailed;
 
   /// No description provided for @actionLoadFailed.
   ///

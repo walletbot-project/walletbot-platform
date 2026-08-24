@@ -310,6 +310,118 @@ void main() {
       await disposeStreams(tester);
     });
   });
+
+  // Two thirds side by side on the last row can neither slide sideways nor go
+  // up, so without a row underneath neither can be moved out of the way and
+  // neither can grow. Edit mode therefore always keeps one spare row below the
+  // board, and a tile dropped into it lands on the row past the last one.
+  group('spare row', () {
+    ({int row, int col, DashboardWidth width})? placed;
+    ({int row, int col, int maxUnits})? added;
+
+    Future<void> pumpBoard(WidgetTester tester, {required bool editing}) async {
+      placed = null;
+      added = null;
+      final items = [
+        for (final (index, col) in const [0, 2].indexed)
+          DashboardViewItem(
+            row: _row('stat-$index', index, 'third', 0, col),
+            spec: StatWidgetSpec(
+              title: 'stat-$index',
+              filter: const TransactionFilter(),
+              aggregation: StatAggregation.count,
+              width: DashboardWidth.third,
+            ),
+          ),
+      ];
+      await tester.pumpWidget(
+        Provider<AppRepositories>.value(
+          value: repos,
+          child: MaterialApp(
+            locale: const Locale('en'),
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            home: Scaffold(
+              body: Align(
+                alignment: Alignment.topCenter,
+                child: SizedBox(
+                  width: 416,
+                  child: DashboardView(
+                    items: items,
+                    editing: editing,
+                    onPlaceInCell: (_, row, col, width) =>
+                        placed = (row: row, col: col, width: width),
+                    onAddWidget: (row, col, maxUnits) =>
+                        added = (row: row, col: col, maxUnits: maxUnits),
+                    onSwap: (_, _) {},
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+    }
+
+    Future<void> disposeStreams(WidgetTester tester) async {
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump(const Duration(milliseconds: 1));
+    }
+
+    testWidgets('is there while editing and gone in view mode', (tester) async {
+      await pumpBoard(tester, editing: true);
+      final editingHeight = tester.getSize(find.byType(DashboardView)).height;
+      expect(tester.takeException(), isNull);
+      await disposeStreams(tester);
+
+      await pumpBoard(tester, editing: false);
+      final viewHeight = tester.getSize(find.byType(DashboardView)).height;
+      expect(tester.takeException(), isNull);
+
+      // Exactly one spare row taller, gap included.
+      expect(editingHeight - viewHeight, 88.0 + 4.0);
+
+      await disposeStreams(tester);
+    });
+
+    testWidgets('accepts a tile dropped past the last row', (tester) async {
+      await pumpBoard(tester, editing: true);
+
+      // The spare row's own band: below the single real row of tiles.
+      final board = tester.getRect(find.byType(DashboardView));
+      final target = Offset(board.left + 40, board.bottom - 40);
+      final gesture = await tester.startGesture(
+        tester.getCenter(find.text('stat-1')),
+        kind: PointerDeviceKind.mouse,
+      );
+      await gesture.moveTo(target);
+      await tester.pump();
+      await gesture.up();
+      await tester.pumpAndSettle();
+
+      expect(placed, isNotNull);
+      expect(placed!.row, 1, reason: 'the row past the last real one');
+      expect(placed!.col, 0);
+
+      await disposeStreams(tester);
+    });
+
+    testWidgets('its + adds a widget on the row past the last', (tester) async {
+      await pumpBoard(tester, editing: true);
+
+      final board = tester.getRect(find.byType(DashboardView));
+      await tester.tapAt(Offset(board.center.dx, board.bottom - 40));
+      await tester.pumpAndSettle();
+
+      expect(added, isNotNull);
+      expect(added!.row, 1);
+      expect(added!.col, 0);
+      expect(added!.maxUnits, dashboardGridUnits);
+
+      await disposeStreams(tester);
+    });
+  });
 }
 
 DashboardWidget _row(String id, int position, String width, int row, int col) {

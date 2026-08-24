@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:app/app_config/client_info.dart';
 import 'package:app/auth/account.dart';
 import 'package:app/config.dart';
+import 'package:app/legal/legal_versions.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
@@ -156,6 +157,10 @@ class AppConfigController extends ChangeNotifier {
   bool _supported = true; // fail open
   bool _updateAvailable = false;
   String? _updateUrl;
+  // Fail open to the bundled copy until a verdict (cached or fresh) says
+  // otherwise, so a local-only account can be asked for acceptance on a device
+  // that has never reached the backend.
+  LegalVersions _legalVersions = LegalVersions.bundled;
   List<AppConfigBanner> _deviceBanners = const [];
   List<AppConfigBanner> _accountBanners = const [];
   Map<String, bool> _accountFlags = const {};
@@ -186,6 +191,10 @@ class AppConfigController extends ChangeNotifier {
   /// [isFlagEnabled].
   Map<String, bool> get flags => _accountFlags;
   bool isFlagEnabled(String key) => _accountFlags[key] ?? false;
+
+  /// Current/minimum version of each legal document, as served by
+  /// `/v1/config`. Locale-neutral, so a language switch keeps it.
+  LegalVersions get legalVersions => _legalVersions;
 
   /// Sync is allowed only for supported clients.
   bool get syncAllowed => _supported;
@@ -405,6 +414,9 @@ class AppConfigController extends ChangeNotifier {
     _supported = data['supported'] as bool? ?? true;
     _updateAvailable = data['updateAvailable'] as bool? ?? false;
     _updateUrl = data['updateUrl'] as String?;
+    // A response without a usable `legal` block leaves the previous value in
+    // place (bundled on first run): never downgrade what we already know.
+    _legalVersions = LegalVersions.fromJson(data['legal']) ?? _legalVersions;
     _deviceBanners = _parseBanners(data, allowVersionFallback: true);
   }
 

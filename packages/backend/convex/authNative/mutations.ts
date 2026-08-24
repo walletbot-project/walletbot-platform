@@ -1,6 +1,6 @@
 import { v } from 'convex/values'
 import { internal } from '../_generated/api'
-import { internalMutation } from '../_generated/server'
+import { internalMutation, internalQuery } from '../_generated/server'
 
 export const insertSessionToken = internalMutation({
     args: {
@@ -15,7 +15,9 @@ export const insertSessionToken = internalMutation({
     },
 })
 
-export const validateSessionToken = internalMutation({
+// A pure read: registered as a query (not a mutation) so token validation on
+// hot HTTP paths doesn't pay for a write transaction.
+export const validateSessionToken = internalQuery({
     args: { tokenHash: v.string() },
     handler: async (ctx, args) => {
         const row = await ctx.db

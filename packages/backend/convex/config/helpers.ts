@@ -1,3 +1,4 @@
+import { LEGAL_VERSIONS, type LegalDocument } from '@wallet-bot/shared'
 import { internal } from '../_generated/api'
 import type { ActionCtx } from '../_generated/server'
 import type { FlagKey } from '../featureFlags/utils'
@@ -49,6 +50,16 @@ export type ConfigVerdict = {
     latestVersion: string
     updateUrl: string | null
     banners: ConfigBanner[]
+    /**
+     * Current/minimum version of each legal document
+     * (`@wallet-bot/shared`'s `legal.ts`). Served here because native needs
+     * them for LOCAL-only accounts, which have no backend user and therefore
+     * cannot ask `v1/legal/queries:acceptanceStatus`. Additive: older clients
+     * ignore the field, and a client that never reaches the endpoint falls
+     * back to its bundled copy
+     * (`apps/native/lib/legal/legal_versions.dart`).
+     */
+    legal: Record<LegalDocument, { current: string; min: string }>
 }
 
 export type AccountConfigVerdict = {
@@ -251,6 +262,7 @@ export function resolveConfigVerdict(args: {
             latestVersion: config.latestVersion,
             updateUrl: null,
             banners: sortBanners(configuredBanners),
+            legal: LEGAL_VERSIONS,
         }
     }
 
@@ -277,6 +289,7 @@ export function resolveConfigVerdict(args: {
         latestVersion: config.latestVersion,
         updateUrl,
         banners: sortBanners(banners),
+        legal: LEGAL_VERSIONS,
     }
 }
 
