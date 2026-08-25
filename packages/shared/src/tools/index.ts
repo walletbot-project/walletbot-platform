@@ -104,6 +104,12 @@ const toolDescriptions = {
     updateSettings:
         'Change user settings: language (this device), theme (this device), defaultCurrency (account-wide). Apply the change immediately, then tell the user what changed and that language/theme only affect this device. The result restates exactly that.',
 
+    // Math & dates
+    calculate:
+        'Evaluate arithmetic exactly instead of doing mental math — totals, percentages, splits, projections, conversions with a user-provided rate. Runs the steps in order; a step may bind its result to a name for later steps. Returns every step value (the last one is the final result). Purely numeric: no dates, currencies, units, or equation solving. Fails with a clear error on unsupported syntax, unknown names, or a non-finite result such as division by zero.',
+    calculateDate:
+        'Calendar date math. add/subtract N day/week/month/year (month and year steps clamp to the last day: Jan 31 + 1 month = Feb 28). diff counts whole units between date and otherDate, signed. startOf/endOf week/month/year (weeks run Monday–Sunday). dayOfWeek names the weekday. Dates accept the same ISO or natural-language forms as transaction dates. Returns ISO dates plus the English weekday name — translate it when speaking to the user.',
+
     // Skills
     readSkill:
         'Read one of your reference skills by slug (the index is in your instructions). Call it BEFORE answering questions about sync/offline behavior, currencies, filter JSON recipes, date semantics, or privacy/data handling. Unknown slug → { ok: false, availableSlugs }.',

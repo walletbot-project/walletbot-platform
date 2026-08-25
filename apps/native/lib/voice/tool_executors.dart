@@ -10,6 +10,7 @@ import '../settings/display_settings.dart';
 import '../shared/money.dart' show centsToDouble;
 import '../user_settings/default_currency_controller.dart';
 import 'agent_generated.dart';
+import 'tool_calc.dart';
 import 'tool_parsing.dart';
 
 // Native tool executors. All operations run against the local database via
@@ -128,6 +129,11 @@ class ToolExecutors {
         // Settings
         case 'updateSettings':
           return await _updateSettings(args);
+        // Math & dates
+        case 'calculate':
+          return _calculate(args);
+        case 'calculateDate':
+          return _calculateDate(args);
         // Skills
         case 'readSkill':
           return _readSkill(args);
@@ -1197,6 +1203,34 @@ class ToolExecutors {
       changed.add('defaultCurrency=$normalized (account-wide)');
     }
     return {'ok': true, 'changed': changed};
+  }
+
+  // ───── Math & date tools ─────
+  // Pure local computation (lib/voice/tool_calc.dart, mirroring
+  // packages/shared/src/tools/calc.ts + date-calc.ts) — no database involved.
+
+  Map<String, dynamic> _calculate(Map<String, dynamic> args) {
+    final steps = args['steps'];
+    if (steps is! List) {
+      return {
+        'ok': false,
+        'error': 'steps must be a list of {expression, name?} objects',
+      };
+    }
+    try {
+      final results = runCalculate(steps);
+      return {'ok': true, 'steps': results, 'result': results.last['value']};
+    } on FormatException catch (e) {
+      return {'ok': false, 'error': e.message};
+    }
+  }
+
+  Map<String, dynamic> _calculateDate(Map<String, dynamic> args) {
+    try {
+      return {'ok': true, ...runCalculateDate(args.cast<String, Object?>())};
+    } on FormatException catch (e) {
+      return {'ok': false, 'error': e.message};
+    }
   }
 
   // ───── Skills tool ─────

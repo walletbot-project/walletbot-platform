@@ -74,6 +74,10 @@ const NATIVE_TOOL_MIN_VERSION: Readonly<Record<string, string>> = {
     addMemory: '0.3.0',
     updateMemory: '0.3.0',
     forgetMemory: '0.3.0',
+    // Calculator executors land after 0.3.0 — the next native release must
+    // ship with a pubspec version of at least 0.3.1 for these to be declared.
+    calculate: '0.3.1',
+    calculateDate: '0.3.1',
 }
 
 export function declarationsFor(
@@ -160,6 +164,14 @@ const CORE_RULES = `# Core rules
 # When in doubt
 - Ask one focused question instead of guessing.
 - Don't lecture. Don't apologize repeatedly. One clarification is enough.`
+
+// Only included when the connecting client's binary actually declares the
+// calculator tools (see NATIVE_TOOL_MIN_VERSION) — the prompt must never
+// reference a tool the session cannot call.
+const MATH_GUIDE = `# Math
+- Never do mental arithmetic beyond a single trivial operation. Use calculate for totals, percentages, splits, and projections — send the steps (later ones can reference earlier results by name) and read back the result.
+- Use calculateDate for calendar questions: days until or since a date, N days/weeks/months before or after, period boundaries (startOf/endOf), or the weekday of a date.
+- Both are exact and instant — prefer them over estimating. Translate the returned English weekday names when speaking.`
 
 const FEATURE_DISCOVERY = `# Suggesting features (gently)
 The user may not know everything the app can do. When a feature clearly fits what they are doing, offer it in ONE short sentence AFTER completing their request — never instead of it, and never as a lecture:
@@ -329,6 +341,10 @@ export function buildSystemInstruction(
 
     const context = sanitizeAgentContext(options.context)
     const userContext = renderUserContext(context)
+    const hasCalculator = declarationsFor(
+        options.platform,
+        options.appVersion,
+    ).some((declaration) => declaration.name === 'calculate')
 
     const sections = [
         CORE_IDENTITY,
@@ -336,6 +352,7 @@ export function buildSystemInstruction(
         CAPABILITIES,
         DASHBOARD_GUIDE,
         CORE_RULES,
+        hasCalculator ? MATH_GUIDE : null,
         FEATURE_DISCOVERY,
         MEMORY_RULES,
         SKILLS_INDEX,

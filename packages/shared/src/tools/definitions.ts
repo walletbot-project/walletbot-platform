@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { DATE_CALC_OPERATIONS, DATE_CALC_UNITS } from './date-calc'
 
 // Zod schemas (source of truth for tool args)
 //
@@ -431,6 +432,58 @@ export const toolSchemas = {
             .optional()
             .describe(
                 'ISO 4217 code (e.g. "ARS"). Account-wide — applies on every device.',
+            ),
+    }),
+
+    // ───── Math & dates ─────
+    calculate: z.object({
+        steps: z
+            .array(
+                z.object({
+                    expression: z
+                        .string()
+                        .describe(
+                            'One math expression, e.g. "1200 * 0.21" or "total / 3". Allowed: numbers, + - * / ^, parentheses, names bound by earlier steps, and the functions abs, ceil, floor, max, min, pow, round (round(x) or round(x, digits)), sqrt. Multiplication must be explicit (2 * x, never 2x). No percent sign — write 21% as 0.21.',
+                        ),
+                    name: z
+                        .string()
+                        .optional()
+                        .describe(
+                            'Optional variable name binding this step result for use in later steps (e.g. "total").',
+                        ),
+                }),
+            )
+            .min(1)
+            .max(20)
+            .describe(
+                'Ordered calculation steps. Later steps can reference the names bound by earlier ones.',
+            ),
+    }),
+    calculateDate: z.object({
+        operation: z
+            .enum(DATE_CALC_OPERATIONS)
+            .describe(
+                'add/subtract: move date by amount × unit. diff: whole units from date to otherDate (signed). startOf/endOf: the period boundary containing date. dayOfWeek: name the weekday of date.',
+            ),
+        date: isoOrNaturalDate.describe(
+            'Base date: ISO 8601 or natural language ("today", "hoy", "el jueves pasado").',
+        ),
+        amount: z
+            .number()
+            .int()
+            .optional()
+            .describe('Whole number of units. Required for add and subtract.'),
+        unit: z
+            .enum(DATE_CALC_UNITS)
+            .optional()
+            .describe(
+                'Required for add, subtract and diff. For startOf/endOf: week, month or year (weeks run Monday–Sunday).',
+            ),
+        otherDate: z
+            .string()
+            .optional()
+            .describe(
+                'Required for diff: the end date, same formats as date. The result is positive when otherDate is after date.',
             ),
     }),
 

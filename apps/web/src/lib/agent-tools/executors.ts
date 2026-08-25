@@ -26,6 +26,8 @@ import {
     parseTransactionDate,
     parseWidgetOptions,
     resolvePlacements,
+    runCalculate,
+    runCalculateDate,
     toolSchemas,
     WIDGET_TYPES,
 } from '@wallet-bot/shared'
@@ -885,6 +887,29 @@ export const toolExecutors = {
             return { ok: true, changed }
         },
     ),
+
+    // ───── Math & dates ─────
+    calculate: defineTool(toolSchemas.calculate, async (_ctx, args) => {
+        try {
+            const steps = runCalculate(args.steps)
+            return { ok: true, steps, result: steps[steps.length - 1].value }
+        } catch (error) {
+            return {
+                ok: false,
+                error: error instanceof Error ? error.message : String(error),
+            }
+        }
+    }),
+    calculateDate: defineTool(toolSchemas.calculateDate, async (_ctx, args) => {
+        try {
+            return { ok: true, ...runCalculateDate(args) }
+        } catch (error) {
+            return {
+                ok: false,
+                error: error instanceof Error ? error.message : String(error),
+            }
+        }
+    }),
 
     // ───── Skills ─────
     readSkill: defineTool(toolSchemas.readSkill, async (_ctx, args) => {

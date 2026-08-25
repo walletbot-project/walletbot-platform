@@ -23,9 +23,16 @@ describe('declarationsFor (compatibility gating)', () => {
     })
 
     it('a current native build sees the full set', () => {
-        expect(declarationsFor('android', '0.3.0').map((d) => d.name)).toEqual(
+        expect(declarationsFor('android', '0.3.1').map((d) => d.name)).toEqual(
             TOOL_NAMES,
         )
+    })
+
+    it('a 0.3.0 native build never sees the calculator tools', () => {
+        const names = declarationsFor('android', '0.3.0').map((d) => d.name)
+        expect(names).not.toContain('calculate')
+        expect(names).not.toContain('calculateDate')
+        expect(names).toContain('readSkill')
     })
 
     it('a missing platform/version fails closed to the ungated set', () => {
@@ -107,6 +114,24 @@ describe('buildSystemInstruction', () => {
             'native mobile app',
         )
         expect(buildSystemInstruction({ platform: 'web' })).toContain('web app')
+    })
+
+    it('the math guide only appears when the calculator tools are declared', () => {
+        expect(buildSystemInstruction({ platform: 'web' })).toContain('# Math')
+        expect(
+            buildSystemInstruction({
+                platform: 'android',
+                appVersion: '0.3.1',
+            }),
+        ).toContain('# Math')
+        // A binary without the executors must not be told about the tools.
+        expect(
+            buildSystemInstruction({
+                platform: 'android',
+                appVersion: '0.3.0',
+            }),
+        ).not.toContain('# Math')
+        expect(buildSystemInstruction({})).not.toContain('# Math')
     })
 
     it('an oversized, hostile payload is capped, not rejected', () => {

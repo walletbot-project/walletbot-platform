@@ -51,6 +51,8 @@ const List<String> kAgentToolNames = [
   'updateMemory',
   'forgetMemory',
   'updateSettings',
+  'calculate',
+  'calculateDate',
   'readSkill',
 ];
 

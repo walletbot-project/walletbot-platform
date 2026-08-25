@@ -114,6 +114,13 @@ export {
     TOOL_NAMES,
     toolSchemas,
 } from './tools'
+export type { CalcStep, CalcStepResult } from './tools/calc'
+export {
+    CALC_FUNCTIONS,
+    CALC_MAX_STEPS,
+    runCalculate,
+    validateCalcExpression,
+} from './tools/calc'
 export type {
     AgentContextAccount,
     AgentContextCategory,
@@ -124,6 +131,17 @@ export type {
     AgentUserContext,
 } from './tools/context'
 export { AGENT_CONTEXT_CAPS, sanitizeAgentContext } from './tools/context'
+export type {
+    DateCalcArgs,
+    DateCalcOperation,
+    DateCalcResult,
+    DateCalcUnit,
+} from './tools/date-calc'
+export {
+    DATE_CALC_OPERATIONS,
+    DATE_CALC_UNITS,
+    runCalculateDate,
+} from './tools/date-calc'
 export type { ToolDefinition, ToolSchema } from './tools/helpers'
 export { SchemaType, zodToToolSchema } from './tools/helpers'
 export type { TransactionTimeStatus } from './tools/parsing'
