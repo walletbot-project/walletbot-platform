@@ -23,7 +23,7 @@ const toolDescriptions = {
     updateAccount:
         'Update an account name, description, color or icon. Currency cannot be changed; create a new account instead.',
     archiveAccount:
-        'Archive an account (soft delete, reversible from the app). Its transactions remain.',
+        'Archive an account (soft delete; there is no in-app restore yet). Its transactions remain.',
 
     // Categories
     listCategories:
@@ -34,7 +34,7 @@ const toolDescriptions = {
         'Create a category. Categories are type-agnostic — they classify both expenses and income. Returns the new category id.',
     updateCategory: 'Update a category name, description, color or icon.',
     archiveCategory:
-        'Archive a category (soft delete, reversible from the app). Its transactions remain.',
+        'Archive a category (soft delete; there is no in-app restore yet). Its transactions remain.',
 
     // Tags
     listTags:
@@ -64,7 +64,7 @@ const toolDescriptions = {
     updateTransaction:
         'Update a transaction: name, description, date/time, amount, category, status, and tags (addTagIdsOrNames / removeTagIdsOrNames apply atomically with the rest of the edit). Unknown tag names are skipped and reported in `missing`.',
     deleteTransaction:
-        'Delete a transaction. It is archived (soft delete, restorable from the app) and balances update accordingly. Idempotent: deleting an unknown id still reports ok.',
+        'Delete a transaction. It is archived (soft delete; there is no in-app restore yet) and balances update accordingly. Idempotent: deleting an unknown id still reports ok.',
 
     // Summaries
     summarizeTransactions:

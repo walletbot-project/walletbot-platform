@@ -246,7 +246,12 @@ export const toolSchemas = {
             .describe(
                 'Amount received on the destination account if different (cross-currency)',
             ),
-        exchangeRate: z.number().optional(),
+        exchangeRate: z
+            .number()
+            .optional()
+            .describe(
+                'Optional reference metadata only — it never derives toAmount. Cross-currency transfers still require toAmount.',
+            ),
         name: z.string(),
         categoryIdOrName: optionalIdOrName.describe(
             'Optional. Transfers are excluded from category breakdowns, so omit it unless the user names one.',

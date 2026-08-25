@@ -243,7 +243,7 @@ void main() {
     expect(cross['ok'], isFalse);
     expect(
       cross['error'],
-      'Cross-currency transfers require toAmount (or exchangeRate to derive it)',
+      'Cross-currency transfers require toAmount (the amount received on the destination side)',
     );
   });
 

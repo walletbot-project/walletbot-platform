@@ -32,7 +32,7 @@ export const AGENT_SKILLS: readonly AgentSkill[] = [
 - On the native mobile app, everything you record is written to the device's local database first and synced to the account in the background. Recording, listing, editing and summaries all work with no connection; changes upload automatically when the device is back online and appear on the user's other devices shortly after.
 - On the web app, changes go to the account directly, so they need a connection but appear on other devices as soon as those sync.
 - Conflicts resolve last-write-wins per row: if the same entity was edited on two offline devices, the most recent edit survives.
-- Deletes are soft everywhere: archived entities can be restored from the app, and deletions propagate across devices like any other change.
+- Deletes archive the entity instead of destroying it immediately, and deletions propagate across devices like any other change. There is currently no way to restore an archived entity from the app, so treat deletions as final when talking to the user.
 - Two ACTIVE accounts with the same name and the same currency are automatically merged into one when they sync (their movements are combined). Warn the user before creating an account whose name and currency match an existing active one, and prefer reusing the existing account.
 - Very old app versions are blocked from syncing until updated (they keep working offline). If the user says their devices stopped syncing, an app update is the first thing to suggest.`,
     },
@@ -48,7 +48,7 @@ export const AGENT_SKILLS: readonly AgentSkill[] = [
 - A movement's currency always comes from its account — never ask the user for a movement currency.
 - Two accounts may share a name only across different currencies. When a name matches several accounts, the one in the user's default currency wins automatically; otherwise ask which one, mentioning the currencies.
 - Same name AND same currency is not allowed: sync auto-merges such duplicates (see sync-and-offline). Reuse the existing account instead of creating a twin.
-- Transfers: same-currency transfers derive the received amount automatically. Cross-currency transfers require the amount received on the destination side (toAmount), or an exchangeRate to derive it. Transfers are excluded from category breakdowns and category summaries.
+- Transfers: same-currency transfers derive the received amount automatically. Cross-currency transfers require the amount received on the destination side (toAmount) — ask the user for it. exchangeRate is stored as reference metadata only and never derives toAmount. Transfers are excluded from category breakdowns and category summaries.
 - Balance adjustment records the user's observed truth: pass balanceAfter exactly as the user stated it and the system computes the signed difference against the current balance. Never compute a "spent" amount yourself.
 - Balances are per account, in that account's currency. There is no automatic currency conversion anywhere: totals never mix currencies meaningfully, so keep summaries and numeric widgets scoped to one currency.`,
     },
@@ -69,7 +69,7 @@ Fields and operators:
 - category: operator "in", value = category ids.
 - tag: operator "in", value = tag ids, optional "match":"any"|"all" and "includeSubtags":true.
 - currency: operator "in", value = ISO codes, e.g. ["ARS"].
-- amount: operator "between" (or ">=", "<="), value {"min":cents,"max":cents}. AMOUNTS IN FILTER JSON ARE CENTS: $500.00 is 50000.
+- amount: operator "between" (or ">=", "<="), value {"min":cents,"max":cents}. AMOUNTS IN FILTER JSON ARE CENTS: $500.00 is 50000. In a simple flat "and" filter, an amount condition is silently dropped on save unless the filter also carries a currency condition — always pair amount with currency.
 - text: operator "contains", value = substring matched against name and description.
 
 Always resolve human names to ids (the context snapshot carries them) before writing account/category/tag values.
@@ -119,11 +119,11 @@ Rules:
 What to tell the user when they ask about their data:
 
 - Financial data (accounts, movements, categories, tags, dashboards) belongs to their account and syncs to the backend so all their devices see it. On the native app a full local copy stays on the device and keeps working offline.
-- Conversation history: for signed-in accounts, the transcript of these sessions and the tools you call (including their arguments and results, which can contain amounts and movement names) are stored with the account as session history. Raw audio never leaves the device — only transcripts do.
+- Conversation history: for signed-in accounts, the transcript of these sessions and the tools you call (including their arguments and results, which can contain amounts and movement names) are stored with the account as session history. Voice audio is streamed directly from the device to Google's Gemini Live API for processing — it never passes through and is never stored on Wallet Bot's servers; only transcripts and tool-call records are stored with the account.
 - You must never ask for or store passwords, card numbers, tokens or any credential. If the user dictates something that looks like a secret, do not persist it anywhere and say why.
-- Deleting data: deleting a movement archives it (restorable from the app, and balances update immediately). Archiving accounts/categories/tags is likewise reversible.
+- Deleting data: deleting a movement archives it and balances update immediately; archiving accounts/categories/tags works the same way. There is currently no way to restore an archived entity from the app, so treat deletions as final and confirm before deleting.
 - Deleting the ACCOUNT is different and final: the user requests it from Settings (or the website), receives an email link, and confirms by typing a word. It permanently erases their user and data and cannot be undone. You cannot trigger account deletion with tools — point them to Settings.
-- Terms and Privacy Policy live at walletbot.live (per-language pages); the app records the user's acceptance.
+- Terms and Privacy Policy live at https://www.walletbot.live (per-language pages); the app records the user's acceptance.
 - If the user asks to export their data: there is no self-service export surface yet. Do not promise one.`,
     },
 ]

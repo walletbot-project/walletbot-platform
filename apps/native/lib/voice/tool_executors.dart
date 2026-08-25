@@ -583,6 +583,28 @@ class ToolExecutors {
     );
   }
 
+  // Partial temporal edits must preserve whichever of the calendar date /
+  // clock the caller omitted, instead of anchoring the missing half to "now"
+  // (mirrors the web executor). The omitted component is backfilled from the
+  // stored timestamp. The status forced into `parseTransactionDate` only
+  // drives parsing (an explicit clock is always respected); the persisted
+  // `timeStatus` comes from the args, handled separately at the call site.
+  BigInt _updatedTransactionDate(Map<String, dynamic> args, Transaction txn) {
+    final existing = DateTime.fromMillisecondsSinceEpoch(txn.date.toInt());
+    String pad(int n) => n.toString().padLeft(2, '0');
+    final date =
+        (args['date'] as String?) ??
+        '${existing.year}-${pad(existing.month)}-${pad(existing.day)}';
+    final time =
+        (args['time'] as String?) ??
+        '${pad(existing.hour)}:${pad(existing.minute)}';
+    return parseTransactionDate(
+      date,
+      timeStatus: TransactionTimeStatus.confirmed,
+      time: time,
+    );
+  }
+
   /// Resolves the loosely typed `tagIdsOrNames` argument to tag ids,
   /// silently skipping anything unresolvable (original attach behavior).
   Future<List<String>> _resolveTagIds(dynamic raw) async {
@@ -688,7 +710,7 @@ class ToolExecutors {
       return {
         'ok': false,
         'error':
-            'Cross-currency transfers require toAmount (or exchangeRate to derive it)',
+            'Cross-currency transfers require toAmount (the amount received on the destination side)',
       };
     }
 
@@ -759,7 +781,7 @@ class ToolExecutors {
           ? Value(args['description'] as String?)
           : const Value.absent(),
       date: args['date'] != null || args['time'] != null
-          ? Value(_transactionDateOf(args))
+          ? Value(_updatedTransactionDate(args, txn))
           : const Value.absent(),
       dateConfirmed: args['date'] != null
           ? const Value(true)

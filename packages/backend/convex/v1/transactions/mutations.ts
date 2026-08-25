@@ -268,7 +268,7 @@ export const createTransfer = mutation({
             args.toAmount ?? (sameCurrency ? args.amount : undefined)
         if (toAmount === undefined) {
             throw new Error(
-                'Cross-currency transfers require toAmount (or exchangeRate to derive it)',
+                'Cross-currency transfers require toAmount (the amount received on the destination side)',
             )
         }
         assertPositiveAmount(toAmount, 'Destination amount')
