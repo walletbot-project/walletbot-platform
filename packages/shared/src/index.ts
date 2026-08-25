@@ -142,6 +142,18 @@ export {
     DATE_CALC_UNITS,
     runCalculateDate,
 } from './tools/date-calc'
+export type { FxMarket, FxPath, FxQuote, FxResolution } from './tools/fx'
+export {
+    convertAmount,
+    DEFAULT_FX_MARKET,
+    FX_MARKETS,
+    FX_STALE_AFTER_MS,
+    fxAlternatives,
+    isFxMarket,
+    isFxQuoteStale,
+    normalizeCurrencyCode,
+    resolveFxQuote,
+} from './tools/fx'
 export type { ToolDefinition, ToolSchema } from './tools/helpers'
 export { SchemaType, zodToToolSchema } from './tools/helpers'
 export type { TransactionTimeStatus } from './tools/parsing'

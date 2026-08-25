@@ -8,6 +8,7 @@ import 'package:app/auth/account.dart';
 import 'package:app/auth/pop_on_account_switch.dart';
 import 'package:app/config.dart';
 import 'package:app/data/data.dart';
+import 'package:app/fx/fx_rates_controller.dart';
 import 'package:app/database.dart';
 import 'package:app/l10n/l10n.dart';
 import 'package:app/legal/legal_acceptance_controller.dart';
@@ -87,6 +88,12 @@ Future<void> main() async {
     storage: storage,
     locale: _resolvedLocaleTag(displaySettings),
   );
+  // Market exchange rates for the agent's getExchangeRate tool. App-scoped and
+  // device-cached (rates are public market data, not account data), and only
+  // fetched once the account config says the feature flag is on.
+  final fxRates = FxRatesController(appConfig: appConfig, storage: storage);
+  unawaited(fxRates.load());
+
   unawaited(appConfig.load());
   auth.addListener(() {
     unawaited(appConfig.loadAccount(auth.activeAccount));
@@ -100,6 +107,7 @@ Future<void> main() async {
       appConfig: appConfig,
       clientInfo: clientInfo,
       telemetry: telemetry,
+      fxRates: fxRates,
     ),
   );
 }
@@ -117,6 +125,7 @@ class MyApp extends StatefulWidget {
     required this.clientInfo,
     this.locale,
     this.telemetry,
+    this.fxRates,
   });
 
   final AuthController auth;
@@ -125,6 +134,11 @@ class MyApp extends StatefulWidget {
   final AppConfigController appConfig;
   final ClientInfo clientInfo;
   final TelemetryClient? telemetry;
+
+  /// Device-scoped exchange-rate cache. Optional: widget tests build MyApp
+  /// without one, and the getExchangeRate tool then reports rates as
+  /// unavailable instead of crashing.
+  final FxRatesController? fxRates;
 
   @override
   State<MyApp> createState() => _MyAppState();
@@ -176,6 +190,10 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
           value: widget.appConfig,
         ),
         Provider<ClientInfo>.value(value: widget.clientInfo),
+        if (widget.fxRates != null)
+          ChangeNotifierProvider<FxRatesController>.value(
+            value: widget.fxRates!,
+          ),
         if (widget.telemetry != null)
           Provider<TelemetryClient>.value(value: widget.telemetry!),
         if (widget.telemetry != null)
@@ -333,9 +351,7 @@ class _AuthGate extends StatelessWidget {
               accountId: active.id,
               isRemote: active.type == AccountType.remote,
               clientInfo: ctx.read<ClientInfo>(),
-              locale: _resolvedLocaleTag(
-                ctx.read<DisplaySettingsController>(),
-              ),
+              locale: _resolvedLocaleTag(ctx.read<DisplaySettingsController>()),
               appConfig: ctx.read<AppConfigController>(),
             );
             unawaited(controller.load());
@@ -391,6 +407,7 @@ class _AuthGate extends StatelessWidget {
               final clientInfo = ctx.read<ClientInfo>();
               final displaySettings = ctx.read<DisplaySettingsController>();
               final defaultCurrency = ctx.read<DefaultCurrencyController>();
+              final fxRates = ctx.read<FxRatesController?>();
               return GeminiVoiceExpenseCommandFactory(
                 repositories: repositories,
                 sessionRepository: ctx.read<VoiceSessionRepository>(),
@@ -403,6 +420,8 @@ class _AuthGate extends StatelessWidget {
                 // The updateSettings tool writes through these controllers.
                 displaySettings: displaySettings,
                 defaultCurrency: defaultCurrency,
+                // The getExchangeRate tool reads this cache.
+                fxRates: fxRates,
                 buildMintArgs: () => buildLiveTokenMintArgs(
                   repositories: repositories,
                   clientInfo: clientInfo,

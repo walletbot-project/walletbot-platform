@@ -8,6 +8,7 @@ import {
     TOOL_DEFINITIONS,
 } from '@wallet-bot/shared'
 import { compareVersions } from '../config/utils'
+import type { FlagKey } from '../featureFlags/utils'
 
 // Deliberately NOT 'use node': minting is one HTTPS call, kept in Convex's
 // default runtime so token requests never pay a Node cold start.
@@ -54,6 +55,12 @@ export type CreateLiveTokenOptions = {
     timezoneOffsetMinutes?: number
     /** Client-built user context payload; sanitized here, never trusted. */
     context?: unknown
+    /**
+     * Feature flags resolved server-side for the connecting user (the client
+     * never says which tools it may have). Missing → every gated tool stays
+     * off.
+     */
+    flags?: Partial<Record<FlagKey, boolean>>
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -78,15 +85,30 @@ const NATIVE_TOOL_MIN_VERSION: Readonly<Record<string, string>> = {
     // ship with a pubspec version of at least 0.3.1 for these to be declared.
     calculate: '0.3.1',
     calculateDate: '0.3.1',
+    // Ships in the same release as the calculators, plus the device-scoped
+    // rate cache the executor reads (apps/native/lib/fx/).
+    getExchangeRate: '0.3.1',
+}
+
+// Tools behind a feature flag, on every platform. Unlike the version gate
+// above this is an experiment switch: the flag is resolved for the connecting
+// user before minting, and a tool whose flag is off is never declared, so the
+// model cannot call something the rollout has not reached yet.
+const FLAG_GATED_TOOLS: Readonly<Record<string, FlagKey>> = {
+    getExchangeRate: 'exchangeRates',
 }
 
 export function declarationsFor(
     platform: string | undefined,
     appVersion: string | undefined,
+    flags: Partial<Record<FlagKey, boolean>> = {},
 ): FunctionDeclaration[] {
-    if (platform === 'web') return TOOL_DECLARATIONS
     const version = appVersion ?? '0.0.0'
     return TOOL_DECLARATIONS.filter((declaration) => {
+        const flag = FLAG_GATED_TOOLS[declaration.name]
+        if (flag !== undefined && flags[flag] !== true) return false
+        // Web ships with the backend, so only the flag gate applies there.
+        if (platform === 'web') return true
         const min = NATIVE_TOOL_MIN_VERSION[declaration.name]
         return min === undefined || compareVersions(version, min) >= 0
     })
@@ -172,6 +194,16 @@ const MATH_GUIDE = `# Math
 - Never do mental arithmetic beyond a single trivial operation. Use calculate for totals, percentages, splits, and projections — send the steps (later ones can reference earlier results by name) and read back the result.
 - Use calculateDate for calendar questions: days until or since a date, N days/weeks/months before or after, period boundaries (startOf/endOf), or the weekday of a date.
 - Both are exact and instant — prefer them over estimating. Translate the returned English weekday names when speaking.`
+
+// Only included when the connecting client actually declares
+// `getExchangeRate` (feature flag + native version) — the prompt must never
+// reference a tool the session cannot call.
+const FX_GUIDE = `# Exchange rates
+- getExchangeRate tells you what one currency is worth in another, and converts an amount when you pass one. Use it instead of guessing, and instead of reusing a rate from earlier in the conversation.
+- It changes nothing that is stored: balances, summaries and movements always stay in their own account's currency.
+- It defaults to the official market. Pass \`market\` when the user names another Argentine quote — blue, MEP (bolsa), CCL, tarjeta, cripto, mayorista. ARS results also carry the other quotes in \`alternatives\`, so you can mention them without asking again.
+- A market quote is never the user's own rate. On a real cross-currency transfer, ask what actually arrived on the destination side and record that as toAmount; offer the quote only as a suggestion to confirm.
+- Say the date when a result comes back \`stale\`, and read the exchange-rates skill before explaining any of this in depth.`
 
 const FEATURE_DISCOVERY = `# Suggesting features (gently)
 The user may not know everything the app can do. When a feature clearly fits what they are doing, offer it in ONE short sentence AFTER completing their request — never instead of it, and never as a lecture:
@@ -341,10 +373,13 @@ export function buildSystemInstruction(
 
     const context = sanitizeAgentContext(options.context)
     const userContext = renderUserContext(context)
-    const hasCalculator = declarationsFor(
-        options.platform,
-        options.appVersion,
-    ).some((declaration) => declaration.name === 'calculate')
+    const declared = new Set(
+        declarationsFor(
+            options.platform,
+            options.appVersion,
+            options.flags,
+        ).map((declaration) => declaration.name),
+    )
 
     const sections = [
         CORE_IDENTITY,
@@ -352,7 +387,8 @@ export function buildSystemInstruction(
         CAPABILITIES,
         DASHBOARD_GUIDE,
         CORE_RULES,
-        hasCalculator ? MATH_GUIDE : null,
+        declared.has('calculate') ? MATH_GUIDE : null,
+        declared.has('getExchangeRate') ? FX_GUIDE : null,
         FEATURE_DISCOVERY,
         MEMORY_RULES,
         SKILLS_INDEX,
@@ -470,6 +506,7 @@ export async function createLiveToken(
                     functionDeclarations: declarationsFor(
                         options.platform,
                         options.appVersion,
+                        options.flags,
                     ),
                 },
             ],

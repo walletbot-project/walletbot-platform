@@ -1,6 +1,8 @@
 import { v } from 'convex/values'
+import { internal } from '../../_generated/api'
 import { action } from '../../_generated/server'
 import { createLiveToken } from '../../live/createToken'
+import { requireAuth } from '../../users/helpers'
 
 // Wire validators for the client-built context payload (§ USER_CONTEXT in
 // live/createToken.ts). Everything is optional: old builds send nothing and
@@ -73,10 +75,13 @@ export const requestLiveToken = action({
     },
     handler: async (ctx, args) => {
         const startedAt = Date.now()
-        const identity = await ctx.auth.getUserIdentity()
-        if (!identity) {
-            throw new Error('Unauthenticated')
-        }
+        // Flag-gated tools are resolved server-side, never taken from the
+        // client: the mint decides what the session may call.
+        const userId = await requireAuth(ctx)
+        const flags = await ctx.runQuery(
+            internal.featureFlags.internal.resolveFlagsForUserInternal,
+            { userId },
+        )
 
         const result = await createLiveToken({
             platform: args.platform,
@@ -85,6 +90,7 @@ export const requestLiveToken = action({
             timezone: args.timezone,
             timezoneOffsetMinutes: args.timezoneOffsetMinutes,
             context: args.context,
+            flags,
         })
         return {
             ...result,

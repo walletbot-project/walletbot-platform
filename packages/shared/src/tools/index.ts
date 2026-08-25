@@ -110,6 +110,10 @@ const toolDescriptions = {
     calculateDate:
         'Calendar date math. add/subtract N day/week/month/year (month and year steps clamp to the last day: Jan 31 + 1 month = Feb 28). diff counts whole units between date and otherDate, signed. startOf/endOf week/month/year (weeks run Monday–Sunday). dayOfWeek names the weekday. Dates accept the same ISO or natural-language forms as transaction dates. Returns ISO dates plus the English weekday name — translate it when speaking to the user.',
 
+    // Exchange rates
+    getExchangeRate:
+        'Look up a market exchange rate between two currencies, and optionally convert an amount at it. Quotes come from the app backend, refreshed periodically; this NEVER converts stored money — balances, summaries and movements always stay in their own account currency. Defaults to the official market; ARS pairs also return `alternatives` with the other Argentine quotes so you can name them without asking again. Always carries `asOf` (and `stale: true` past three days) — mention the date when a quote is stale. Errors: "Unknown currency code: X", "from and to are the same currency", "No exchange rate available for X→Y", and "Exchange rates are unavailable right now" when the device has no snapshot cached. A market quote is never the user\'s own transaction rate: for a real cross-currency transfer, ask what actually arrived.',
+
     // Skills
     readSkill:
         'Read one of your reference skills by slug (the index is in your instructions). Call it BEFORE answering questions about sync/offline behavior, currencies, filter JSON recipes, date semantics, or privacy/data handling. Unknown slug → { ok: false, availableSlugs }.',

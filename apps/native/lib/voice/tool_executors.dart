@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:app/components/dashboard/dashboard_layout.dart';
 import 'package:app/components/dashboard/dashboard_models.dart';
+import 'package:app/widgets/currency_picker.dart' show currencies;
 import 'package:drift/drift.dart' show Value;
 
 import '../data/data.dart';
@@ -11,6 +12,7 @@ import '../shared/money.dart' show centsToDouble;
 import '../user_settings/default_currency_controller.dart';
 import 'agent_generated.dart';
 import 'tool_calc.dart';
+import 'tool_fx.dart';
 import 'tool_parsing.dart';
 
 // Native tool executors. All operations run against the local database via
@@ -23,7 +25,12 @@ import 'tool_parsing.dart';
 // model's prompt expects. Data semantics live in the repositories.
 
 class ToolExecutors {
-  ToolExecutors(this.repos, {this.displaySettings, this.defaultCurrency});
+  ToolExecutors(
+    this.repos, {
+    this.displaySettings,
+    this.defaultCurrency,
+    this.fxQuotes,
+  });
 
   final AppRepositories repos;
 
@@ -36,6 +43,14 @@ class ToolExecutors {
   /// The account's default currency controller (account-scoped, same subtree
   /// as [repos]).
   final DefaultCurrencyController? defaultCurrency;
+
+  /// Reads the device's cached exchange-rate snapshot (backed by
+  /// `FxRatesController`, passed by reference at factory construction — see
+  /// main.dart). A function rather than the controller itself so the executor
+  /// depends only on the quotes, never on the fetching. Null in contexts that
+  /// have no cache; `getExchangeRate` then reports the rates as unavailable
+  /// instead of crashing.
+  final List<FxQuote> Function()? fxQuotes;
 
   Future<Map<String, dynamic>> execute(
     String name,
@@ -134,6 +149,9 @@ class ToolExecutors {
           return _calculate(args);
         case 'calculateDate':
           return _calculateDate(args);
+        // Exchange rates
+        case 'getExchangeRate':
+          return _getExchangeRate(args);
         // Skills
         case 'readSkill':
           return _readSkill(args);
@@ -1234,6 +1252,70 @@ class ToolExecutors {
   }
 
   // ───── Skills tool ─────
+
+  // ───── Exchange rates ─────
+
+  /// Answers from the cached snapshot only (see FxRatesController): no
+  /// network call happens inside a tool executor, so this works offline and
+  /// returns instantly.
+  Map<String, dynamic> _getExchangeRate(Map<String, dynamic> args) {
+    final rawFrom = args['from'];
+    final rawTo = args['to'];
+    if (rawFrom is! String || rawTo is! String) {
+      return {'ok': false, 'error': 'from and to are required'};
+    }
+    final from = normalizeCurrencyCode(rawFrom);
+    final to = normalizeCurrencyCode(rawTo);
+    if (!currencies.contains(from)) {
+      return {'ok': false, 'error': 'Unknown currency code: $from'};
+    }
+    if (!currencies.contains(to)) {
+      return {'ok': false, 'error': 'Unknown currency code: $to'};
+    }
+    if (from == to) {
+      return {'ok': false, 'error': 'from and to are the same currency'};
+    }
+
+    final rawMarket = args['market'];
+    final market = rawMarket is String && isFxMarket(rawMarket)
+        ? rawMarket
+        : kDefaultFxMarket;
+
+    final snapshot = fxQuotes?.call() ?? const <FxQuote>[];
+    if (snapshot.isEmpty) {
+      return {'ok': false, 'error': 'Exchange rates are unavailable right now'};
+    }
+    final resolution = resolveFxQuote(snapshot, from, to, market);
+    if (resolution == null) {
+      return {
+        'ok': false,
+        'error': 'No exchange rate available for $from\u2192$to',
+      };
+    }
+
+    final rawAmount = args['amount'];
+    final amount = rawAmount is num ? rawAmount.toDouble() : null;
+    final alternatives = fxAlternatives(snapshot, from, to);
+    return {
+      'ok': true,
+      'from': resolution.from,
+      'to': resolution.to,
+      'market': resolution.market,
+      'rate': resolution.rate,
+      if (resolution.buy != null) 'buy': resolution.buy,
+      if (resolution.sell != null) 'sell': resolution.sell,
+      'source': resolution.source,
+      'asOf': resolution.asOf,
+      'path': resolution.path,
+      if (isFxQuoteStale(
+        resolution.asOf,
+        DateTime.now().millisecondsSinceEpoch,
+      ))
+        'stale': true,
+      if (amount != null) 'converted': convertAmount(amount, resolution.rate),
+      if (alternatives.isNotEmpty) 'alternatives': alternatives,
+    };
+  }
 
   Map<String, dynamic> _readSkill(Map<String, dynamic> args) {
     final slug = args['slug'] as String?;

@@ -9,6 +9,7 @@ import 'package:http/http.dart' as http;
 import 'package:web_socket_channel/web_socket_channel.dart';
 
 import '../data/data.dart';
+import '../fx/fx_rates_controller.dart';
 import '../settings/display_settings.dart';
 import '../sync/wire.dart';
 import '../user_settings/default_currency_controller.dart';
@@ -117,6 +118,7 @@ class GeminiVoiceExpenseCommandFactory implements VoiceExpenseCommandFactory {
     this.buildMintArgs,
     this.displaySettings,
     this.defaultCurrency,
+    this.fxRates,
     ConvexClient? convexClient,
     this.apiKey = const String.fromEnvironment('GEMINI_API_KEY'),
     this.liveToken = const String.fromEnvironment('GEMINI_LIVE_TOKEN'),
@@ -139,6 +141,9 @@ class GeminiVoiceExpenseCommandFactory implements VoiceExpenseCommandFactory {
   /// settings and this account's default-currency controller.
   final DisplaySettingsController? displaySettings;
   final DefaultCurrencyController? defaultCurrency;
+
+  /// Device-scoped exchange-rate cache the `getExchangeRate` tool reads.
+  final FxRatesController? fxRates;
   final ConvexClient convexClient;
   final String apiKey;
   final String liveToken;
@@ -228,6 +233,7 @@ class GeminiVoiceExpenseCommandFactory implements VoiceExpenseCommandFactory {
       buildMintArgs: buildMintArgs,
       displaySettings: displaySettings,
       defaultCurrency: defaultCurrency,
+      fxRates: fxRates,
       convexClient: convexClient,
       apiKey: apiKey,
       liveToken: liveToken,
@@ -289,10 +295,12 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
     this.takePrefetchedToken,
     DisplaySettingsController? displaySettings,
     DefaultCurrencyController? defaultCurrency,
+    FxRatesController? fxRates,
   }) : _executors = ToolExecutors(
          repositories,
          displaySettings: displaySettings,
          defaultCurrency: defaultCurrency,
+         fxQuotes: fxRates == null ? null : () => fxRates.quotes,
        );
 
   // Model + voice come from the generated shared constants

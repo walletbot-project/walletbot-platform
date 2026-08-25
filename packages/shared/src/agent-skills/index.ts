@@ -53,6 +53,43 @@ export const AGENT_SKILLS: readonly AgentSkill[] = [
 - Balances are per account, in that account's currency. There is no automatic currency conversion anywhere: totals never mix currencies meaningfully, so keep summaries and numeric widgets scoped to one currency.`,
     },
     {
+        slug: 'exchange-rates',
+        title: 'Exchange rates',
+        oneLiner:
+            'What getExchangeRate quotes, the Argentine market names, and why a quote is never the user’s own rate.',
+        body: `# Exchange rates
+
+\`getExchangeRate(from, to, amount?, market?)\` answers "what is X worth in Y" from quotes the backend refreshes periodically. Read this before quoting a rate or filling a cross-currency transfer.
+
+## What it is and is not
+- A quote reads: 1 \`from\` = \`rate\` \`to\`. When you pass \`amount\`, \`converted\` is that amount already converted — do not also call calculate.
+- It converts NOTHING that is stored. Balances, summaries, widgets and movements always stay in their own account's currency; there is no automatic conversion anywhere in the app (see accounts-and-currencies). Use a quote to answer a question or to propose a number, never to restate the user's history in another currency.
+- A market quote is NOT the user's own transaction rate. For a real cross-currency transfer, ask what actually arrived on the destination side and record that as toAmount; the bank, the exchange house or the card issuer gave them a different number than the market. Offer the quote as a suggestion to confirm, not as the answer.
+- The rate stored on a transfer follows a different convention: it is always >= 1 (the larger amount divided by the smaller), and its direction is recovered from the two amounts. Never feed a getExchangeRate number straight into that field as if it were the same thing.
+
+## Markets
+Argentina publishes several simultaneous prices for the same pair. Pass the one the user means:
+- official — bank / home banking. The default when the user says nothing.
+- blue — informal cash market.
+- mep (dólar bolsa) and ccl (contado con liquidación) — bought through securities.
+- card (dólar tarjeta) — purchases abroad with a card. The surcharge is ALREADY inside the number; never add a percentage on top.
+- crypto — stablecoin market.
+- wholesale (mayorista) — interbank. Not a price a person can transact at; only mention it if asked.
+
+Only ARS pairs carry more than one market. Any other pair falls back to official, and the result says which market it actually used. For ARS pairs the result also carries \`alternatives\` — every market quoted for that pair — so you can say "oficial 1530, blue 1565" without calling again.
+
+## Reading the result
+- \`buy\` / \`sell\` appear when the provider publishes both sides: buying the foreign currency costs \`sell\`, selling it gets \`buy\`. The plain \`rate\` is the reference number; use it unless the user is asking what a purchase or sale would cost them.
+- \`asOf\` is the provider's own timestamp, not when we fetched it. \`stale: true\` means it is more than three days old — say the date out loud in that case.
+- Markets close: on a weekend or a holiday the newest quote is Friday's, and that is correct, not broken.
+- \`path\` says how it was derived: direct, inverse (the reverse pair, inverted), or triangulated (through USD). A triangulated rate is an approximation of a real market price — flag that if the user is about to act on it.
+
+## When it fails
+- "Exchange rates are unavailable right now" means this device has no cached quotes (typically offline, first run, or the feature is off). Say so plainly and ask the user for the rate if the conversation needs one.
+- "No exchange rate available for X→Y" means the pair is not covered. Do not improvise one from memory.
+- Never invent, extrapolate or remember a rate from earlier in the session as if it were current, and never present a quote as financial advice or a prediction.`,
+    },
+    {
         slug: 'dashboard-filters-cookbook',
         title: 'Dashboard filter cookbook',
         oneLiner:

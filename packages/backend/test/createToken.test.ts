@@ -9,11 +9,14 @@ import {
     renderUserContext,
 } from '../convex/live/createToken'
 
+// Every flag-gated tool switched on, i.e. what a fully rolled-out user gets.
+const ALL_FLAGS = { exchangeRates: true } as const
+
 describe('declarationsFor (compatibility gating)', () => {
-    it('web is unrestricted', () => {
-        expect(declarationsFor('web', '0.0.0').map((d) => d.name)).toEqual(
-            TOOL_NAMES,
-        )
+    it('web is unrestricted by version', () => {
+        expect(
+            declarationsFor('web', '0.0.0', ALL_FLAGS).map((d) => d.name),
+        ).toEqual(TOOL_NAMES)
     })
 
     it('an old native build never sees tools it cannot execute', () => {
@@ -23,9 +26,9 @@ describe('declarationsFor (compatibility gating)', () => {
     })
 
     it('a current native build sees the full set', () => {
-        expect(declarationsFor('android', '0.3.1').map((d) => d.name)).toEqual(
-            TOOL_NAMES,
-        )
+        expect(
+            declarationsFor('android', '0.3.1', ALL_FLAGS).map((d) => d.name),
+        ).toEqual(TOOL_NAMES)
     })
 
     it('a 0.3.0 native build never sees the calculator tools', () => {
@@ -38,6 +41,29 @@ describe('declarationsFor (compatibility gating)', () => {
     it('a missing platform/version fails closed to the ungated set', () => {
         const names = declarationsFor(undefined, undefined).map((d) => d.name)
         expect(names).not.toContain('summarizeTransactions')
+    })
+
+    it('a flag-gated tool is off unless the flag says otherwise', () => {
+        // Default (no flags resolved) and an explicit false both withhold it,
+        // on every platform — the flag gate is not a version gate.
+        expect(
+            declarationsFor('web', '9.9.9').map((d) => d.name),
+        ).not.toContain('getExchangeRate')
+        expect(
+            declarationsFor('web', '9.9.9', { exchangeRates: false }).map(
+                (d) => d.name,
+            ),
+        ).not.toContain('getExchangeRate')
+        expect(
+            declarationsFor('android', '0.3.1', ALL_FLAGS).map((d) => d.name),
+        ).toContain('getExchangeRate')
+    })
+
+    it('the flag cannot hand a tool to a native build that lacks the executor', () => {
+        // Both gates apply: flag on, binary too old.
+        expect(
+            declarationsFor('android', '0.3.0', ALL_FLAGS).map((d) => d.name),
+        ).not.toContain('getExchangeRate')
     })
 })
 
@@ -132,6 +158,23 @@ describe('buildSystemInstruction', () => {
             }),
         ).not.toContain('# Math')
         expect(buildSystemInstruction({})).not.toContain('# Math')
+    })
+
+    it('the exchange-rate guide follows the tool, not the platform', () => {
+        expect(
+            buildSystemInstruction({ platform: 'web', flags: ALL_FLAGS }),
+        ).toContain('# Exchange rates')
+        // Flag off, or a binary without the executor: never mention the tool.
+        expect(buildSystemInstruction({ platform: 'web' })).not.toContain(
+            '# Exchange rates',
+        )
+        expect(
+            buildSystemInstruction({
+                platform: 'android',
+                appVersion: '0.3.0',
+                flags: ALL_FLAGS,
+            }),
+        ).not.toContain('# Exchange rates')
     })
 
     it('an oversized, hostile payload is capped, not rejected', () => {

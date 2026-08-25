@@ -6,6 +6,7 @@ import { registerAuthNativeRoutes } from './authNative/http'
 import { hashSessionSecret } from './authNative/utils'
 import { registerConfigRoutes } from './config/http'
 import { resend } from './emails/helpers'
+import { registerExchangeRateRoutes } from './exchangeRates/http'
 import { jsonResponse } from './httpHelpers'
 import { createLiveToken } from './live/createToken'
 import { registerTelemetryRoutes } from './telemetry/http'
@@ -24,6 +25,9 @@ registerTelemetryRoutes(http)
 // - `/v1/config` = device/client-version layer (unauthenticated)
 // - `/v1/account-config` = account layer (remote session token or local label)
 registerConfigRoutes(http)
+
+// Market exchange rates for the agent's getExchangeRate tool (public data).
+registerExchangeRateRoutes(http)
 
 // Account deletion (request by email + emailed-link confirmation). Public,
 // unauthenticated by design — see userDeletion/http.ts.
@@ -48,6 +52,12 @@ const liveTokenHandler = httpAction(async (ctx, req) => {
             { status: 401 },
         )
     }
+    // Flag-gated tools are resolved server-side from the validated session,
+    // never taken from the request body.
+    const flags = await ctx.runQuery(
+        internal.featureFlags.internal.resolveFlagsForUserInternal,
+        { userId: validation.userId },
+    )
     const validatedAt = Date.now()
     // The mint options ride in the JSON body. Old builds POST an empty body —
     // they get the base prompt and only the tools their binaries can execute.
@@ -94,7 +104,7 @@ const liveTokenHandler = httpAction(async (ctx, req) => {
     }
     // Direct call: createLiveToken runs in the default runtime (no Node
     // APIs), so no cross-runtime action hop is needed.
-    const result = await createLiveToken(options)
+    const result = await createLiveToken({ ...options, flags })
 
     return jsonResponse({
         ...result,

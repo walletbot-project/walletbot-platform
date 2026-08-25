@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { DATE_CALC_OPERATIONS, DATE_CALC_UNITS } from './date-calc'
+import { FX_MARKETS } from './fx'
 
 // Zod schemas (source of truth for tool args)
 //
@@ -484,6 +485,32 @@ export const toolSchemas = {
             .optional()
             .describe(
                 'Required for diff: the end date, same formats as date. The result is positive when otherDate is after date.',
+            ),
+    }),
+
+    // ───── Exchange rates ─────
+    getExchangeRate: z.object({
+        from: z
+            .string()
+            .describe(
+                'ISO 4217 code of the currency being converted FROM, e.g. "USD".',
+            ),
+        to: z
+            .string()
+            .describe(
+                'ISO 4217 code of the currency being converted TO, e.g. "ARS".',
+            ),
+        amount: z
+            .number()
+            .optional()
+            .describe(
+                'Optional amount expressed in `from`. When present the result adds `converted`, so there is no need to call calculate afterwards.',
+            ),
+        market: z
+            .enum(FX_MARKETS)
+            .optional()
+            .describe(
+                'Which quote to use. Defaults to official. Argentina publishes several prices for the same pair: official (bank / home banking), blue (informal cash), mep and ccl (through securities), card (purchases abroad — the surcharge is already inside the number), crypto (stablecoins), wholesale (interbank, not a retail price). Only ARS pairs carry more than one; any other pair falls back to official and says so in the result.',
             ),
     }),
 

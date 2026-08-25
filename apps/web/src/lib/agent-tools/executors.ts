@@ -14,17 +14,24 @@ import {
     AGENT_SKILLS_BY_SLUG,
     backgroundToJson,
     collapseEmptyRows,
+    convertAmount,
     DASHBOARD_WIDTHS,
+    DEFAULT_FX_MARKET,
     filterConfigToJson,
     filterFromCanonical,
+    fxAlternatives,
     isFilterEmpty,
+    isFxQuoteStale,
+    isValidCurrencyCode,
     mergeWidgetOptions,
+    normalizeCurrencyCode,
     parseAmountToCents,
     parseFilterConfig,
     parseNaturalDate,
     parseOptionalDate,
     parseTransactionDate,
     parseWidgetOptions,
+    resolveFxQuote,
     resolvePlacements,
     runCalculate,
     runCalculateDate,
@@ -910,6 +917,80 @@ export const toolExecutors = {
             }
         }
     }),
+
+    // ───── Exchange rates ─────
+    getExchangeRate: defineTool(
+        toolSchemas.getExchangeRate,
+        async (ctx, args) => {
+            const from = normalizeCurrencyCode(args.from)
+            const to = normalizeCurrencyCode(args.to)
+            if (!isValidCurrencyCode(from)) {
+                return { ok: false, error: `Unknown currency code: ${from}` }
+            }
+            if (!isValidCurrencyCode(to)) {
+                return { ok: false, error: `Unknown currency code: ${to}` }
+            }
+            if (from === to) {
+                return {
+                    ok: false,
+                    error: 'from and to are the same currency',
+                }
+            }
+            const snapshot = await ctx.client.query(
+                api.v1.exchangeRates.queries.snapshot,
+                {},
+            )
+            if (snapshot.length === 0) {
+                return {
+                    ok: false,
+                    error: 'Exchange rates are unavailable right now',
+                }
+            }
+            const resolution = resolveFxQuote(
+                snapshot,
+                from,
+                to,
+                args.market ?? DEFAULT_FX_MARKET,
+            )
+            if (!resolution) {
+                return {
+                    ok: false,
+                    error: `No exchange rate available for ${from}\u2192${to}`,
+                }
+            }
+            const alternatives = fxAlternatives(snapshot, from, to)
+            return {
+                ok: true,
+                from: resolution.from,
+                to: resolution.to,
+                market: resolution.market,
+                rate: resolution.rate,
+                ...(resolution.buy === undefined
+                    ? {}
+                    : { buy: resolution.buy }),
+                ...(resolution.sell === undefined
+                    ? {}
+                    : { sell: resolution.sell }),
+                source: resolution.source,
+                asOf: resolution.asOf,
+                path: resolution.path,
+                ...(isFxQuoteStale(resolution.asOf, Date.now())
+                    ? { stale: true }
+                    : {}),
+                ...(args.amount === undefined
+                    ? {}
+                    : {
+                          converted: convertAmount(
+                              args.amount,
+                              resolution.rate,
+                          ),
+                      }),
+                ...(Object.keys(alternatives).length > 0
+                    ? { alternatives }
+                    : {}),
+            }
+        },
+    ),
 
     // ───── Skills ─────
     readSkill: defineTool(toolSchemas.readSkill, async (_ctx, args) => {

@@ -3,6 +3,7 @@ import { accounts } from './schema/accounts'
 import { agentMemories } from './schema/agentMemories'
 import { categories } from './schema/categories'
 import { dashboardWidgets, savedFilters } from './schema/dashboard'
+import { exchangeRates } from './schema/exchangeRates'
 import {
     admins,
     featureFlagOverrides,
@@ -30,6 +31,7 @@ export default defineSchema({
     categories,
     dashboardWidgets,
     deletedUsers,
+    exchangeRates,
     featureFlagOverrides,
     featureFlags,
     legalAcceptances,
