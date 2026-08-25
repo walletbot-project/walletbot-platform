@@ -28,6 +28,7 @@ import 'package:app/telemetry/agent_metrics.dart';
 import 'package:app/telemetry/business_metrics.dart';
 import 'package:app/telemetry/telemetry_client.dart';
 import 'package:app/user_settings/default_currency_controller.dart';
+import 'package:app/user_settings/language_sync_controller.dart';
 import 'package:app/voice/agent_context.dart';
 import 'package:app/voice/gemini_voice_expense_command.dart';
 import 'package:app/voice/voice_session_remote_sync.dart';
@@ -74,9 +75,13 @@ Future<void> main() async {
   // and the sync engine so both gates identify the client the same way.
   final clientInfo = await ClientInfo.resolve(storage: storage);
 
-  final auth = AuthController();
+  // Loaded before the auth controller is built: `_postJson` sends the device's
+  // language as `Accept-Language`, which is the only locale signal a sign-up
+  // request carries and therefore the only way a brand-new account's
+  // verification email comes out in the right language.
   final displaySettings = DisplaySettingsController();
   await displaySettings.load();
+  final auth = AuthController(localeTag: () => displaySettings.localeTag);
   await auth.load();
   final telemetry = TelemetryClient(
     accessTokenProvider: auth.fetchAccessTokenForHttp,
@@ -87,7 +92,7 @@ Future<void> main() async {
   final appConfig = AppConfigController(
     clientInfo: clientInfo,
     storage: storage,
-    locale: _resolvedLocaleTag(displaySettings),
+    locale: displaySettings.localeTag,
   );
   // Market exchange rates for the agent's getExchangeRate tool. App-scoped and
   // device-cached (rates are public market data, not account data), and only
@@ -112,10 +117,6 @@ Future<void> main() async {
     ),
   );
 }
-
-String _resolvedLocaleTag(DisplaySettingsController settings) =>
-    (settings.locale ?? WidgetsBinding.instance.platformDispatcher.locale)
-        .toLanguageTag();
 
 class MyApp extends StatefulWidget {
   const MyApp({
@@ -346,6 +347,22 @@ class _AuthGate extends StatelessWidget {
             return controller;
           },
         ),
+        // Tells the backend which language to email this account in. Nothing
+        // reads it back, so it is registered only to be started and disposed
+        // with the account subtree.
+        Provider<LanguageSyncController>(
+          create: (ctx) {
+            final controller = LanguageSyncController(
+              accountId: active.id,
+              isRemote: active.type == AccountType.remote,
+              displaySettings: ctx.read<DisplaySettingsController>(),
+            );
+            unawaited(controller.start());
+            return controller;
+          },
+          dispose: (_, controller) => controller.dispose(),
+          lazy: false,
+        ),
         // Terms/Privacy acceptance for this account. Device-scoped half
         // because it reads and writes the account's own `legal_acceptances`
         // table — the only record there is for a local-only account.
@@ -356,7 +373,7 @@ class _AuthGate extends StatelessWidget {
               accountId: active.id,
               isRemote: active.type == AccountType.remote,
               clientInfo: ctx.read<ClientInfo>(),
-              locale: _resolvedLocaleTag(ctx.read<DisplaySettingsController>()),
+              locale: ctx.read<DisplaySettingsController>().localeTag,
               appConfig: ctx.read<AppConfigController>(),
             );
             unawaited(controller.load());
@@ -431,7 +448,7 @@ class _AuthGate extends StatelessWidget {
                 buildMintArgs: () => buildLiveTokenMintArgs(
                   repositories: repositories,
                   clientInfo: clientInfo,
-                  localeTag: _resolvedLocaleTag(displaySettings),
+                  localeTag: displaySettings.localeTag,
                   userName: active.name,
                   userEmail: active.email,
                   defaultCurrency: defaultCurrency.value,

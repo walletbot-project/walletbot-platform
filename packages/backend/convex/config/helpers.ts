@@ -1,4 +1,9 @@
-import { LEGAL_VERSIONS, type LegalDocument } from '@wallet-bot/shared'
+import {
+    LEGAL_VERSIONS,
+    type LegalDocument,
+    type Locale,
+    resolveLocale,
+} from '@wallet-bot/shared'
 import { internal } from '../_generated/api'
 import type { ActionCtx } from '../_generated/server'
 import type { FlagKey } from '../featureFlags/utils'
@@ -30,8 +35,7 @@ type ConfigBanner = {
     actions: ConfigBannerAction[]
 }
 
-export type ConfigLocale = 'en' | 'es'
-type LocalizedConfigBanner = Record<ConfigLocale, ConfigBanner>
+type LocalizedConfigBanner = Record<Locale, ConfigBanner>
 
 export const PLATFORM_ANDROID = 'android' as const
 export const PLATFORM_IOS = 'ios' as const
@@ -235,13 +239,6 @@ export const CLIENT_OUTDATED = 'client_outdated' as const
 const configForPlatform = (platform: string): NativeVersionConfig =>
     isNativePlatform(platform) ? CONFIG_BY_PLATFORM[platform] : DEFAULT_CONFIG
 
-export const resolveConfigLocale = (
-    locale: string | undefined,
-): ConfigLocale =>
-    locale?.trim().toLowerCase().replace('_', '-').startsWith('es')
-        ? 'es'
-        : 'en'
-
 export function resolveConfigVerdict(args: {
     platform: string
     appVersion: string
@@ -249,7 +246,7 @@ export function resolveConfigVerdict(args: {
     locale?: string
 }): ConfigVerdict {
     const config = configForPlatform(args.platform)
-    const locale = resolveConfigLocale(args.locale)
+    const locale = resolveLocale(args.locale)
     const configuredBanners = config.banners.map((banner) => banner[locale])
 
     // Fail open for a client that can't report its version: treat it as
