@@ -24,14 +24,21 @@ const isSupportAddress = (address: string): boolean =>
     SUPPORT_ADDRESSES.includes(address)
 
 /**
- * Convex caps a document at 1 MiB. `receiving.get` is called with
- * `html_format: 'cid'` so inline images stay as `cid:` references instead of
- * base64 `data:` URIs (the default, which would inline every image into the
- * body), but a long quoted thread can still be large on its own. Cap both
- * bodies and record `bodyTruncated` on the row.
+ * Convex caps a document at 1 MiB, measured on the UTF-8 bytes of its strings,
+ * so these are byte budgets and not character counts: a character costs 1 to 4
+ * bytes, and 512 K *characters* of CJK or emoji is over 1.5 MiB. Truncating by
+ * character count would let such a body through and fail the insert, which
+ * loses the email rather than shortening it. The two budgets together take
+ * 640 KiB, leaving the rest of the row (addresses, subject, attachment
+ * metadata) room under the limit.
+ *
+ * `receiving.get` is called with `html_format: 'cid'` so inline images stay as
+ * `cid:` references instead of base64 `data:` URIs (the default, which would
+ * inline every image into the body), but a long quoted thread can still be
+ * large on its own. Cap both bodies and record `bodyTruncated` on the row.
  */
-const MAX_HTML_CHARS = 512 * 1024
-const MAX_TEXT_CHARS = 128 * 1024
+const MAX_HTML_BYTES = 512 * 1024
+const MAX_TEXT_BYTES = 128 * 1024
 
 /**
  * Fallback envelope sender for the forwarded copy. Must be an address on a
@@ -129,15 +136,47 @@ export const isForwardLoop = (from: string, forwardTo: string): boolean => {
     return isSupportAddress(sender) || sender === extractAddress(forwardTo)
 }
 
+const utf8Length = (value: string): number =>
+    new TextEncoder().encode(value).length
+
+/**
+ * Longest prefix of `value` that fits in `maxBytes` UTF-8 bytes.
+ *
+ * Binary search on the character index because byte budget and string index do
+ * not line up. `maxBytes` is a safe upper bound for the index: a character
+ * never encodes to fewer bytes than the UTF-16 units it occupies.
+ */
+export const truncateToBytes = (value: string, maxBytes: number): string => {
+    if (utf8Length(value) <= maxBytes) return value
+
+    let low = 0
+    let high = Math.min(value.length, maxBytes)
+    while (low < high) {
+        const mid = Math.ceil((low + high) / 2)
+        if (utf8Length(value.slice(0, mid)) <= maxBytes) low = mid
+        else high = mid - 1
+    }
+
+    // Cutting between the halves of a surrogate pair leaves a lone surrogate,
+    // which has no UTF-8 encoding and would be rejected on insert. Drop it.
+    const lastUnit = value.charCodeAt(low - 1)
+    if (lastUnit >= 0xd800 && lastUnit <= 0xdbff) return value.slice(0, low - 1)
+    return value.slice(0, low)
+}
+
 type Body = { html: string | null; text: string | null; truncated: boolean }
 
-export const capBodies = (html: string | null, text: string | null): Body => ({
-    html: html === null ? null : html.slice(0, MAX_HTML_CHARS),
-    text: text === null ? null : text.slice(0, MAX_TEXT_CHARS),
-    truncated:
-        (html !== null && html.length > MAX_HTML_CHARS) ||
-        (text !== null && text.length > MAX_TEXT_CHARS),
-})
+export const capBodies = (html: string | null, text: string | null): Body => {
+    const cappedHtml =
+        html === null ? null : truncateToBytes(html, MAX_HTML_BYTES)
+    const cappedText =
+        text === null ? null : truncateToBytes(text, MAX_TEXT_BYTES)
+    return {
+        html: cappedHtml,
+        text: cappedText,
+        truncated: cappedHtml !== html || cappedText !== text,
+    }
+}
 
 /**
  * Resend sends timestamps as ISO strings. An unparseable one must not abort

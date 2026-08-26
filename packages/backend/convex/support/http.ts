@@ -25,6 +25,7 @@ const signatureHeader = (headers: Headers, name: string): string | null =>
 const verifyEvent = (
     payload: string,
     headers: Headers,
+    webhookSecret: string,
 ): WebhookEventPayload => {
     const id = signatureHeader(headers, 'id')
     const timestamp = signatureHeader(headers, 'timestamp')
@@ -35,7 +36,7 @@ const verifyEvent = (
     return getResendClient().webhooks.verify({
         payload,
         headers: { id, timestamp, signature },
-        webhookSecret: getInboundWebhookSecret(),
+        webhookSecret,
     })
 }
 
@@ -53,6 +54,14 @@ const verifyEvent = (
  * never called from a browser.
  */
 const inboundEmailHandler = httpAction(async (ctx, req) => {
+    // Read outside the try below so a deployment with no
+    // RESEND_INBOUND_WEBHOOK_SECRET throws and answers 500. That is our
+    // misconfiguration, not a bad request: on a 5xx Resend keeps retrying, so
+    // mail that arrives before the env var is set is still delivered once it
+    // is, whereas answering 401 spends the retries and drops the message.
+    // Same posture as /resend-webhook.
+    const webhookSecret = getInboundWebhookSecret()
+
     // Must be the raw body: "parsing the request as JSON before stringifying
     // it will break signature verification"
     // (resend.com/docs/webhooks/verify-webhooks-requests).
@@ -60,7 +69,7 @@ const inboundEmailHandler = httpAction(async (ctx, req) => {
 
     let event: WebhookEventPayload
     try {
-        event = verifyEvent(raw, req.headers)
+        event = verifyEvent(raw, req.headers, webhookSecret)
     } catch (error) {
         // 401 rather than 500: an unsigned or missigned request is not
         // something Resend should retry.

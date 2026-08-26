@@ -22,6 +22,7 @@ import type * as crons from "../crons.js";
 import type * as emails_helpers from "../emails/helpers.js";
 import type * as emails_internal from "../emails/internal.js";
 import type * as emails_nodeActions from "../emails/nodeActions.js";
+import type * as emails_utils from "../emails/utils.js";
 import type * as exchangeRates_helpers from "../exchangeRates/helpers.js";
 import type * as exchangeRates_http from "../exchangeRates/http.js";
 import type * as exchangeRates_internal from "../exchangeRates/internal.js";
@@ -125,6 +126,7 @@ declare const fullApi: ApiFromModules<{
   "emails/helpers": typeof emails_helpers;
   "emails/internal": typeof emails_internal;
   "emails/nodeActions": typeof emails_nodeActions;
+  "emails/utils": typeof emails_utils;
   "exchangeRates/helpers": typeof exchangeRates_helpers;
   "exchangeRates/http": typeof exchangeRates_http;
   "exchangeRates/internal": typeof exchangeRates_internal;
