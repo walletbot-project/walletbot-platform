@@ -656,6 +656,8 @@ export const en: Messages = {
         systemConnectedTyping: 'Connected. Sending your message…',
         systemConnectionFailed: (p) => `Connection failed: ${p.error}`,
         systemMicOpenFailed: (p) => `Failed to open the microphone: ${p.error}`,
+        systemReconnecting: (p) =>
+            `Connection dropped. Retrying in ${p.seconds}s… The conversation continues where it left off.`,
     },
 
     actionWidget: {

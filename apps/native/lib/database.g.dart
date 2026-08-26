@@ -4370,6 +4370,416 @@ class DashboardWidgetsCompanion extends UpdateCompanion<DashboardWidget> {
   }
 }
 
+class $AgentMemoriesTable extends AgentMemories
+    with TableInfo<$AgentMemoriesTable, AgentMemory> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $AgentMemoriesTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _contentMeta = const VerificationMeta(
+    'content',
+  );
+  @override
+  late final GeneratedColumn<String> content = GeneratedColumn<String>(
+    'content',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _archivedMeta = const VerificationMeta(
+    'archived',
+  );
+  @override
+  late final GeneratedColumn<bool> archived = GeneratedColumn<bool>(
+    'is_archived',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("is_archived" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<BigInt> createdAt = GeneratedColumn<BigInt>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.bigInt,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
+    'updatedAt',
+  );
+  @override
+  late final GeneratedColumn<BigInt> updatedAt = GeneratedColumn<BigInt>(
+    'updated_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.bigInt,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _dirtyMeta = const VerificationMeta('dirty');
+  @override
+  late final GeneratedColumn<bool> dirty = GeneratedColumn<bool>(
+    'dirty',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("dirty" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    content,
+    archived,
+    createdAt,
+    updatedAt,
+    dirty,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'agent_memories';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<AgentMemory> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('content')) {
+      context.handle(
+        _contentMeta,
+        content.isAcceptableOrUnknown(data['content']!, _contentMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_contentMeta);
+    }
+    if (data.containsKey('is_archived')) {
+      context.handle(
+        _archivedMeta,
+        archived.isAcceptableOrUnknown(data['is_archived']!, _archivedMeta),
+      );
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_createdAtMeta);
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(
+        _updatedAtMeta,
+        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_updatedAtMeta);
+    }
+    if (data.containsKey('dirty')) {
+      context.handle(
+        _dirtyMeta,
+        dirty.isAcceptableOrUnknown(data['dirty']!, _dirtyMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  AgentMemory map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return AgentMemory(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      content: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}content'],
+      )!,
+      archived: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}is_archived'],
+      )!,
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.bigInt,
+        data['${effectivePrefix}created_at'],
+      )!,
+      updatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.bigInt,
+        data['${effectivePrefix}updated_at'],
+      )!,
+      dirty: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}dirty'],
+      )!,
+    );
+  }
+
+  @override
+  $AgentMemoriesTable createAlias(String alias) {
+    return $AgentMemoriesTable(attachedDatabase, alias);
+  }
+}
+
+class AgentMemory extends DataClass implements Insertable<AgentMemory> {
+  final String id;
+  final String content;
+  final bool archived;
+  final BigInt createdAt;
+  final BigInt updatedAt;
+  final bool dirty;
+  const AgentMemory({
+    required this.id,
+    required this.content,
+    required this.archived,
+    required this.createdAt,
+    required this.updatedAt,
+    required this.dirty,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['content'] = Variable<String>(content);
+    map['is_archived'] = Variable<bool>(archived);
+    map['created_at'] = Variable<BigInt>(createdAt);
+    map['updated_at'] = Variable<BigInt>(updatedAt);
+    map['dirty'] = Variable<bool>(dirty);
+    return map;
+  }
+
+  AgentMemoriesCompanion toCompanion(bool nullToAbsent) {
+    return AgentMemoriesCompanion(
+      id: Value(id),
+      content: Value(content),
+      archived: Value(archived),
+      createdAt: Value(createdAt),
+      updatedAt: Value(updatedAt),
+      dirty: Value(dirty),
+    );
+  }
+
+  factory AgentMemory.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return AgentMemory(
+      id: serializer.fromJson<String>(json['id']),
+      content: serializer.fromJson<String>(json['content']),
+      archived: serializer.fromJson<bool>(json['archived']),
+      createdAt: serializer.fromJson<BigInt>(json['createdAt']),
+      updatedAt: serializer.fromJson<BigInt>(json['updatedAt']),
+      dirty: serializer.fromJson<bool>(json['dirty']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'content': serializer.toJson<String>(content),
+      'archived': serializer.toJson<bool>(archived),
+      'createdAt': serializer.toJson<BigInt>(createdAt),
+      'updatedAt': serializer.toJson<BigInt>(updatedAt),
+      'dirty': serializer.toJson<bool>(dirty),
+    };
+  }
+
+  AgentMemory copyWith({
+    String? id,
+    String? content,
+    bool? archived,
+    BigInt? createdAt,
+    BigInt? updatedAt,
+    bool? dirty,
+  }) => AgentMemory(
+    id: id ?? this.id,
+    content: content ?? this.content,
+    archived: archived ?? this.archived,
+    createdAt: createdAt ?? this.createdAt,
+    updatedAt: updatedAt ?? this.updatedAt,
+    dirty: dirty ?? this.dirty,
+  );
+  AgentMemory copyWithCompanion(AgentMemoriesCompanion data) {
+    return AgentMemory(
+      id: data.id.present ? data.id.value : this.id,
+      content: data.content.present ? data.content.value : this.content,
+      archived: data.archived.present ? data.archived.value : this.archived,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+      dirty: data.dirty.present ? data.dirty.value : this.dirty,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('AgentMemory(')
+          ..write('id: $id, ')
+          ..write('content: $content, ')
+          ..write('archived: $archived, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('dirty: $dirty')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode =>
+      Object.hash(id, content, archived, createdAt, updatedAt, dirty);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is AgentMemory &&
+          other.id == this.id &&
+          other.content == this.content &&
+          other.archived == this.archived &&
+          other.createdAt == this.createdAt &&
+          other.updatedAt == this.updatedAt &&
+          other.dirty == this.dirty);
+}
+
+class AgentMemoriesCompanion extends UpdateCompanion<AgentMemory> {
+  final Value<String> id;
+  final Value<String> content;
+  final Value<bool> archived;
+  final Value<BigInt> createdAt;
+  final Value<BigInt> updatedAt;
+  final Value<bool> dirty;
+  final Value<int> rowid;
+  const AgentMemoriesCompanion({
+    this.id = const Value.absent(),
+    this.content = const Value.absent(),
+    this.archived = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.dirty = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  AgentMemoriesCompanion.insert({
+    required String id,
+    required String content,
+    this.archived = const Value.absent(),
+    required BigInt createdAt,
+    required BigInt updatedAt,
+    this.dirty = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       content = Value(content),
+       createdAt = Value(createdAt),
+       updatedAt = Value(updatedAt);
+  static Insertable<AgentMemory> custom({
+    Expression<String>? id,
+    Expression<String>? content,
+    Expression<bool>? archived,
+    Expression<BigInt>? createdAt,
+    Expression<BigInt>? updatedAt,
+    Expression<bool>? dirty,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (content != null) 'content': content,
+      if (archived != null) 'is_archived': archived,
+      if (createdAt != null) 'created_at': createdAt,
+      if (updatedAt != null) 'updated_at': updatedAt,
+      if (dirty != null) 'dirty': dirty,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  AgentMemoriesCompanion copyWith({
+    Value<String>? id,
+    Value<String>? content,
+    Value<bool>? archived,
+    Value<BigInt>? createdAt,
+    Value<BigInt>? updatedAt,
+    Value<bool>? dirty,
+    Value<int>? rowid,
+  }) {
+    return AgentMemoriesCompanion(
+      id: id ?? this.id,
+      content: content ?? this.content,
+      archived: archived ?? this.archived,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      dirty: dirty ?? this.dirty,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (content.present) {
+      map['content'] = Variable<String>(content.value);
+    }
+    if (archived.present) {
+      map['is_archived'] = Variable<bool>(archived.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<BigInt>(createdAt.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<BigInt>(updatedAt.value);
+    }
+    if (dirty.present) {
+      map['dirty'] = Variable<bool>(dirty.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('AgentMemoriesCompanion(')
+          ..write('id: $id, ')
+          ..write('content: $content, ')
+          ..write('archived: $archived, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('dirty: $dirty, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 class $SyncStateTable extends SyncState
     with TableInfo<$SyncStateTable, SyncStateData> {
   @override
@@ -7151,6 +7561,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $DashboardWidgetsTable dashboardWidgets = $DashboardWidgetsTable(
     this,
   );
+  late final $AgentMemoriesTable agentMemories = $AgentMemoriesTable(this);
   late final $SyncStateTable syncState = $SyncStateTable(this);
   late final $TombstonesTable tombstones = $TombstonesTable(this);
   late final $VoiceSessionsTable voiceSessions = $VoiceSessionsTable(this);
@@ -7287,6 +7698,18 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     'dashboard_widgets_needs_sync',
     'CREATE INDEX dashboard_widgets_needs_sync ON dashboard_widgets (updated_at) WHERE dirty = 1',
   );
+  late final Index agentMemoriesArchived = Index(
+    'agent_memories_archived',
+    'CREATE INDEX agent_memories_archived ON agent_memories (is_archived)',
+  );
+  late final Index agentMemoriesUpdatedAt = Index(
+    'agent_memories_updated_at',
+    'CREATE INDEX agent_memories_updated_at ON agent_memories (updated_at)',
+  );
+  late final Index agentMemoriesNeedsSync = Index(
+    'agent_memories_needs_sync',
+    'CREATE INDEX agent_memories_needs_sync ON agent_memories (updated_at) WHERE dirty = 1',
+  );
   late final Index tombstonesEntityTable = Index(
     'tombstones_entity_table',
     'CREATE INDEX tombstones_entity_table ON tombstones (entity_table)',
@@ -7331,6 +7754,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     transactionTags,
     savedFilters,
     dashboardWidgets,
+    agentMemories,
     syncState,
     tombstones,
     voiceSessions,
@@ -7368,6 +7792,9 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     dashboardWidgetsArchived,
     dashboardWidgetsUpdatedAt,
     dashboardWidgetsNeedsSync,
+    agentMemoriesArchived,
+    agentMemoriesUpdatedAt,
+    agentMemoriesNeedsSync,
     tombstonesEntityTable,
     tombstonesUpdatedAt,
     tombstonesNeedsSync,
@@ -9504,6 +9931,225 @@ typedef $$DashboardWidgetsTableProcessedTableManager =
       DashboardWidget,
       PrefetchHooks Function()
     >;
+typedef $$AgentMemoriesTableCreateCompanionBuilder =
+    AgentMemoriesCompanion Function({
+      required String id,
+      required String content,
+      Value<bool> archived,
+      required BigInt createdAt,
+      required BigInt updatedAt,
+      Value<bool> dirty,
+      Value<int> rowid,
+    });
+typedef $$AgentMemoriesTableUpdateCompanionBuilder =
+    AgentMemoriesCompanion Function({
+      Value<String> id,
+      Value<String> content,
+      Value<bool> archived,
+      Value<BigInt> createdAt,
+      Value<BigInt> updatedAt,
+      Value<bool> dirty,
+      Value<int> rowid,
+    });
+
+class $$AgentMemoriesTableFilterComposer
+    extends Composer<_$AppDatabase, $AgentMemoriesTable> {
+  $$AgentMemoriesTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get content => $composableBuilder(
+    column: $table.content,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get archived => $composableBuilder(
+    column: $table.archived,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<BigInt> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<BigInt> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get dirty => $composableBuilder(
+    column: $table.dirty,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$AgentMemoriesTableOrderingComposer
+    extends Composer<_$AppDatabase, $AgentMemoriesTable> {
+  $$AgentMemoriesTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get content => $composableBuilder(
+    column: $table.content,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get archived => $composableBuilder(
+    column: $table.archived,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<BigInt> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<BigInt> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get dirty => $composableBuilder(
+    column: $table.dirty,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$AgentMemoriesTableAnnotationComposer
+    extends Composer<_$AppDatabase, $AgentMemoriesTable> {
+  $$AgentMemoriesTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get content =>
+      $composableBuilder(column: $table.content, builder: (column) => column);
+
+  GeneratedColumn<bool> get archived =>
+      $composableBuilder(column: $table.archived, builder: (column) => column);
+
+  GeneratedColumn<BigInt> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  GeneratedColumn<BigInt> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+
+  GeneratedColumn<bool> get dirty =>
+      $composableBuilder(column: $table.dirty, builder: (column) => column);
+}
+
+class $$AgentMemoriesTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $AgentMemoriesTable,
+          AgentMemory,
+          $$AgentMemoriesTableFilterComposer,
+          $$AgentMemoriesTableOrderingComposer,
+          $$AgentMemoriesTableAnnotationComposer,
+          $$AgentMemoriesTableCreateCompanionBuilder,
+          $$AgentMemoriesTableUpdateCompanionBuilder,
+          (
+            AgentMemory,
+            BaseReferences<_$AppDatabase, $AgentMemoriesTable, AgentMemory>,
+          ),
+          AgentMemory,
+          PrefetchHooks Function()
+        > {
+  $$AgentMemoriesTableTableManager(_$AppDatabase db, $AgentMemoriesTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$AgentMemoriesTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$AgentMemoriesTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$AgentMemoriesTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String> content = const Value.absent(),
+                Value<bool> archived = const Value.absent(),
+                Value<BigInt> createdAt = const Value.absent(),
+                Value<BigInt> updatedAt = const Value.absent(),
+                Value<bool> dirty = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => AgentMemoriesCompanion(
+                id: id,
+                content: content,
+                archived: archived,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                dirty: dirty,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                required String content,
+                Value<bool> archived = const Value.absent(),
+                required BigInt createdAt,
+                required BigInt updatedAt,
+                Value<bool> dirty = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => AgentMemoriesCompanion.insert(
+                id: id,
+                content: content,
+                archived: archived,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                dirty: dirty,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$AgentMemoriesTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $AgentMemoriesTable,
+      AgentMemory,
+      $$AgentMemoriesTableFilterComposer,
+      $$AgentMemoriesTableOrderingComposer,
+      $$AgentMemoriesTableAnnotationComposer,
+      $$AgentMemoriesTableCreateCompanionBuilder,
+      $$AgentMemoriesTableUpdateCompanionBuilder,
+      (
+        AgentMemory,
+        BaseReferences<_$AppDatabase, $AgentMemoriesTable, AgentMemory>,
+      ),
+      AgentMemory,
+      PrefetchHooks Function()
+    >;
 typedef $$SyncStateTableCreateCompanionBuilder =
     SyncStateCompanion Function({
       Value<String> id,
@@ -10900,6 +11546,8 @@ class $AppDatabaseManager {
       $$SavedFiltersTableTableManager(_db, _db.savedFilters);
   $$DashboardWidgetsTableTableManager get dashboardWidgets =>
       $$DashboardWidgetsTableTableManager(_db, _db.dashboardWidgets);
+  $$AgentMemoriesTableTableManager get agentMemories =>
+      $$AgentMemoriesTableTableManager(_db, _db.agentMemories);
   $$SyncStateTableTableManager get syncState =>
       $$SyncStateTableTableManager(_db, _db.syncState);
   $$TombstonesTableTableManager get tombstones =>

@@ -123,9 +123,10 @@ history and not just React state. The differences follow from the browser having
 no local database:
 
 - **The outbox is in memory.** Events queue and flush about a second after the
-  last write, with the same 50-event batches and the same five-second retry. A
-  tab closed inside that window loses at most the tail; native would still hold
-  it in Drift.
+  last write, with the same 50-event batches and the same five-second retry.
+  The recorder also flushes on `pagehide` and whenever the tab is hidden, so a
+  closed tab loses at most a batch the browser refused to wait for; native
+  would still hold it in Drift.
 - **Only the semantic log is uploaded.** Native additionally persists the raw
   protocol firehose (`server_message`, `client_message`) and one row per PCM
   chunk (`audio_input_chunk`, `audio_output_chunk`) — thousands of rows a minute,
@@ -134,9 +135,12 @@ no local database:
   `usage_metadata` / `go_away` / `session_resumption_update` signals. Audio bytes
   never leave either client, so no audio is lost by this; the input/output byte
   accounting is.
-- **A dropped socket writes status `ended`, not `suspended`.** Native can resume
-  a session from its handle, so a dead socket leaves the session resumable; web
-  cannot yet, so the conversation really is over.
+- **A dropped socket writes status `suspended` and reconnects, like native.**
+  Since the agent overhaul, web auto-reconnects with backoff and re-seeds the
+  model's context from its in-memory event log (`apps/web/src/lib/voice-seed.ts`),
+  so one conversation stays one session row across socket drops; the reconnect
+  marks it `active` again, and only the explicit End (or the account
+  unmounting) writes `ended`.
 - **There is no local export.** `exportSessionJson` and friends are Drift APIs.
   A web user's history lives only in Convex, which is exactly the reduced copy
   described above.
@@ -146,9 +150,9 @@ The recorder belongs to `apps/web/src/components/layout/voice-provider.tsx`,
 which is mounted above the router, so navigating away records
 `screen_detached` and keeps the row open — the same boundary native gets from
 holding the command in its factory. `endedExplicitly` is therefore true only
-when the user actually ended the session; a socket that died writes `ended` with
-it false, and signing out ends the row because the provider unmounts with the
-account. Until 2026-08-21 the recorder was owned by the `/add` route and every
+when the user actually ended the session; a socket that died suspends the row
+and keeps it open for the reconnect, and signing out ends the row because the
+provider unmounts with the account. Until 2026-08-21 the recorder was owned by the `/add` route and every
 navigation closed the row with `endedExplicitly: true`, splitting one
 conversation into a session per visit.
 

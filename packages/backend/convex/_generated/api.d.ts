@@ -8,6 +8,7 @@
  * @module
  */
 
+import type * as agentUsage_queries from "../agentUsage/queries.js";
 import type * as aggregates from "../aggregates.js";
 import type * as auth from "../auth.js";
 import type * as authNative_http from "../authNative/http.js";
@@ -21,6 +22,11 @@ import type * as crons from "../crons.js";
 import type * as emails_helpers from "../emails/helpers.js";
 import type * as emails_internal from "../emails/internal.js";
 import type * as emails_nodeActions from "../emails/nodeActions.js";
+import type * as emails_utils from "../emails/utils.js";
+import type * as exchangeRates_helpers from "../exchangeRates/helpers.js";
+import type * as exchangeRates_http from "../exchangeRates/http.js";
+import type * as exchangeRates_internal from "../exchangeRates/internal.js";
+import type * as exchangeRates_utils from "../exchangeRates/utils.js";
 import type * as featureFlags_helpers from "../featureFlags/helpers.js";
 import type * as featureFlags_internal from "../featureFlags/internal.js";
 import type * as featureFlags_utils from "../featureFlags/utils.js";
@@ -36,12 +42,16 @@ import type * as legal_validators from "../legal/validators.js";
 import type * as live_createToken from "../live/createToken.js";
 import type * as migrations from "../migrations.js";
 import type * as schema_accounts from "../schema/accounts.js";
+import type * as schema_agentMemories from "../schema/agentMemories.js";
+import type * as schema_agentUsage from "../schema/agentUsage.js";
 import type * as schema_categories from "../schema/categories.js";
 import type * as schema_dashboard from "../schema/dashboard.js";
+import type * as schema_exchangeRates from "../schema/exchangeRates.js";
 import type * as schema_featureFlags from "../schema/featureFlags.js";
 import type * as schema_feedback from "../schema/feedback.js";
 import type * as schema_legal from "../schema/legal.js";
 import type * as schema_refreshTokens from "../schema/refreshTokens.js";
+import type * as schema_supportEmails from "../schema/supportEmails.js";
 import type * as schema_sync from "../schema/sync.js";
 import type * as schema_tags from "../schema/tags.js";
 import type * as schema_telemetry from "../schema/telemetry.js";
@@ -50,8 +60,13 @@ import type * as schema_transactions from "../schema/transactions.js";
 import type * as schema_userDeletion from "../schema/userDeletion.js";
 import type * as schema_userSettings from "../schema/userSettings.js";
 import type * as schema_voice from "../schema/voice.js";
+import type * as support_actions from "../support/actions.js";
+import type * as support_http from "../support/http.js";
+import type * as support_internal from "../support/internal.js";
+import type * as support_utils from "../support/utils.js";
 import type * as sync_helpers from "../sync/helpers.js";
 import type * as telemetry_actions from "../telemetry/actions.js";
+import type * as telemetry_agentPricing from "../telemetry/agentPricing.js";
 import type * as telemetry_catalog from "../telemetry/catalog.js";
 import type * as telemetry_http from "../telemetry/http.js";
 import type * as telemetry_metrics from "../telemetry/metrics.js";
@@ -73,12 +88,16 @@ import type * as v1_categories_queries from "../v1/categories/queries.js";
 import type * as v1_dashboard_helpers from "../v1/dashboard/helpers.js";
 import type * as v1_dashboard_mutations from "../v1/dashboard/mutations.js";
 import type * as v1_dashboard_queries from "../v1/dashboard/queries.js";
+import type * as v1_exchangeRates_queries from "../v1/exchangeRates/queries.js";
 import type * as v1_featureFlags_mutations from "../v1/featureFlags/mutations.js";
 import type * as v1_featureFlags_queries from "../v1/featureFlags/queries.js";
 import type * as v1_feedback_mutations from "../v1/feedback/mutations.js";
 import type * as v1_legal_mutations from "../v1/legal/mutations.js";
 import type * as v1_legal_queries from "../v1/legal/queries.js";
 import type * as v1_live_actions from "../v1/live/actions.js";
+import type * as v1_memories_mutations from "../v1/memories/mutations.js";
+import type * as v1_memories_queries from "../v1/memories/queries.js";
+import type * as v1_support_queries from "../v1/support/queries.js";
 import type * as v1_sync_mutations from "../v1/sync/mutations.js";
 import type * as v1_sync_queries from "../v1/sync/queries.js";
 import type * as v1_tags_mutations from "../v1/tags/mutations.js";
@@ -86,8 +105,10 @@ import type * as v1_tags_queries from "../v1/tags/queries.js";
 import type * as v1_transactions_mutations from "../v1/transactions/mutations.js";
 import type * as v1_transactions_queries from "../v1/transactions/queries.js";
 import type * as v1_users_helpers from "../v1/users/helpers.js";
+import type * as v1_users_internal from "../v1/users/internal.js";
 import type * as v1_users_mutations from "../v1/users/mutations.js";
 import type * as v1_users_queries from "../v1/users/queries.js";
+import type * as v1_users_utils from "../v1/users/utils.js";
 import type * as v1_voice_sessions from "../v1/voice/sessions.js";
 
 import type {
@@ -97,6 +118,7 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  "agentUsage/queries": typeof agentUsage_queries;
   aggregates: typeof aggregates;
   auth: typeof auth;
   "authNative/http": typeof authNative_http;
@@ -110,6 +132,11 @@ declare const fullApi: ApiFromModules<{
   "emails/helpers": typeof emails_helpers;
   "emails/internal": typeof emails_internal;
   "emails/nodeActions": typeof emails_nodeActions;
+  "emails/utils": typeof emails_utils;
+  "exchangeRates/helpers": typeof exchangeRates_helpers;
+  "exchangeRates/http": typeof exchangeRates_http;
+  "exchangeRates/internal": typeof exchangeRates_internal;
+  "exchangeRates/utils": typeof exchangeRates_utils;
   "featureFlags/helpers": typeof featureFlags_helpers;
   "featureFlags/internal": typeof featureFlags_internal;
   "featureFlags/utils": typeof featureFlags_utils;
@@ -125,12 +152,16 @@ declare const fullApi: ApiFromModules<{
   "live/createToken": typeof live_createToken;
   migrations: typeof migrations;
   "schema/accounts": typeof schema_accounts;
+  "schema/agentMemories": typeof schema_agentMemories;
+  "schema/agentUsage": typeof schema_agentUsage;
   "schema/categories": typeof schema_categories;
   "schema/dashboard": typeof schema_dashboard;
+  "schema/exchangeRates": typeof schema_exchangeRates;
   "schema/featureFlags": typeof schema_featureFlags;
   "schema/feedback": typeof schema_feedback;
   "schema/legal": typeof schema_legal;
   "schema/refreshTokens": typeof schema_refreshTokens;
+  "schema/supportEmails": typeof schema_supportEmails;
   "schema/sync": typeof schema_sync;
   "schema/tags": typeof schema_tags;
   "schema/telemetry": typeof schema_telemetry;
@@ -139,8 +170,13 @@ declare const fullApi: ApiFromModules<{
   "schema/userDeletion": typeof schema_userDeletion;
   "schema/userSettings": typeof schema_userSettings;
   "schema/voice": typeof schema_voice;
+  "support/actions": typeof support_actions;
+  "support/http": typeof support_http;
+  "support/internal": typeof support_internal;
+  "support/utils": typeof support_utils;
   "sync/helpers": typeof sync_helpers;
   "telemetry/actions": typeof telemetry_actions;
+  "telemetry/agentPricing": typeof telemetry_agentPricing;
   "telemetry/catalog": typeof telemetry_catalog;
   "telemetry/http": typeof telemetry_http;
   "telemetry/metrics": typeof telemetry_metrics;
@@ -162,12 +198,16 @@ declare const fullApi: ApiFromModules<{
   "v1/dashboard/helpers": typeof v1_dashboard_helpers;
   "v1/dashboard/mutations": typeof v1_dashboard_mutations;
   "v1/dashboard/queries": typeof v1_dashboard_queries;
+  "v1/exchangeRates/queries": typeof v1_exchangeRates_queries;
   "v1/featureFlags/mutations": typeof v1_featureFlags_mutations;
   "v1/featureFlags/queries": typeof v1_featureFlags_queries;
   "v1/feedback/mutations": typeof v1_feedback_mutations;
   "v1/legal/mutations": typeof v1_legal_mutations;
   "v1/legal/queries": typeof v1_legal_queries;
   "v1/live/actions": typeof v1_live_actions;
+  "v1/memories/mutations": typeof v1_memories_mutations;
+  "v1/memories/queries": typeof v1_memories_queries;
+  "v1/support/queries": typeof v1_support_queries;
   "v1/sync/mutations": typeof v1_sync_mutations;
   "v1/sync/queries": typeof v1_sync_queries;
   "v1/tags/mutations": typeof v1_tags_mutations;
@@ -175,8 +215,10 @@ declare const fullApi: ApiFromModules<{
   "v1/transactions/mutations": typeof v1_transactions_mutations;
   "v1/transactions/queries": typeof v1_transactions_queries;
   "v1/users/helpers": typeof v1_users_helpers;
+  "v1/users/internal": typeof v1_users_internal;
   "v1/users/mutations": typeof v1_users_mutations;
   "v1/users/queries": typeof v1_users_queries;
+  "v1/users/utils": typeof v1_users_utils;
   "v1/voice/sessions": typeof v1_voice_sessions;
 }>;
 

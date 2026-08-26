@@ -696,6 +696,8 @@ export const es = {
             `Falló la conexión: ${p.error}`,
         systemMicOpenFailed: (p: { error: string }) =>
             `No se pudo abrir el micrófono: ${p.error}`,
+        systemReconnecting: (p: { seconds: number }) =>
+            `Se cortó la conexión. Reintentando en ${p.seconds}s… La conversación continúa donde quedó.`,
     },
 
     actionWidget: {

@@ -19,6 +19,9 @@ export const syncedTable = v.union(
     v.literal('transactionTags'),
     v.literal('savedFilters'),
     v.literal('dashboardWidgets'),
+    // Added in the v3 → v4 native schema bump (agent memory). Wire change:
+    // minSupportedVersion and the Drift schemaVersion moved together.
+    v.literal('agentMemories'),
 )
 
 export const tombstones = defineTable({

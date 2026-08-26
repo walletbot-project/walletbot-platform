@@ -14,13 +14,13 @@ void main() {
     verifier = SchemaVerifier(GeneratedHelper());
   });
 
-  test('fresh database matches the versioned v3 schema snapshot', () async {
+  test('fresh database matches the versioned v4 schema snapshot', () async {
     final db = AppDatabase.forTesting(NativeDatabase.memory());
     addTearDown(db.close);
 
     await verifier.migrateAndValidate(
       db,
-      3,
+      4,
       options: const ValidationOptions(validateDropped: true),
     );
   });
@@ -137,7 +137,59 @@ void main() {
   );
 
   test(
-    'a v1 database upgrades all the way to v3 in one open',
+    'v3 rows survive the upgrade to v4, which only adds agent_memories',
+    () async {
+      final schema = await verifier.schemaAt(3);
+      addTearDown(schema.close);
+
+      schema.rawDatabase.execute(
+        'INSERT INTO transactions '
+        '(id, type, name, status, date, time_status, account_id, category_id, '
+        'amount, currency, created_at, updated_at) '
+        "VALUES ('t3', 'expense', 'Cena', 'cleared', 1000, "
+        "'confirmed', 'a1', 'c1', 900, 'ARS', 10, 20)",
+      );
+      schema.rawDatabase.execute(
+        'INSERT INTO accounts '
+        '(id, name, currency, created_at, updated_at) '
+        "VALUES ('a1', 'Cuenta', 'ARS', 10, 20)",
+      );
+      schema.rawDatabase.execute(
+        'INSERT INTO legal_acceptances '
+        '(id, document, version, accepted_at, age_confirmed, platform, source) '
+        "VALUES ('acc-1', 'terms', '2026-08-06', 1000, 1, 'android', 'local')",
+      );
+
+      final db = AppDatabase.forTesting(schema.newConnection());
+      addTearDown(db.close);
+      await verifier.migrateAndValidate(db, 4);
+
+      final transactions = await db
+          .customSelect(
+            'SELECT id, name, amount, time_status FROM transactions',
+          )
+          .get();
+      expect(transactions, hasLength(1));
+      expect(transactions.single.read<String>('name'), 'Cena');
+      expect(transactions.single.read<int>('amount'), 900);
+      expect(transactions.single.read<String>('time_status'), 'confirmed');
+
+      final accounts = await db
+          .customSelect('SELECT id, name FROM accounts')
+          .get();
+      expect(accounts.single.read<String>('name'), 'Cuenta');
+
+      final acceptances = await db.select(db.legalAcceptances).get();
+      expect(acceptances, hasLength(1));
+
+      // The new table exists and starts empty: an upgrade must never invent
+      // memories the agent never saved.
+      expect(await db.select(db.agentMemories).get(), isEmpty);
+    },
+  );
+
+  test(
+    'a v1 database upgrades all the way to v4 in one open',
     () async {
       final schema = await verifier.schemaAt(1);
       addTearDown(schema.close);
@@ -152,15 +204,16 @@ void main() {
 
       final db = AppDatabase.forTesting(schema.newConnection());
       addTearDown(db.close);
-      await verifier.migrateAndValidate(db, 3);
+      await verifier.migrateAndValidate(db, 4);
 
-      // Both steps ran: the v2 column is there with its default AND the v3
-      // table exists. A step chain that returned after v2 would fail here.
+      // Every step ran: the v2 column is there with its default AND the v3
+      // and v4 tables exist. A step chain that returned early would fail here.
       final rows = await db
           .customSelect('SELECT id, time_status FROM transactions')
           .get();
       expect(rows.single.read<String>('time_status'), 'none');
       expect(await db.select(db.legalAcceptances).get(), isEmpty);
+      expect(await db.select(db.agentMemories).get(), isEmpty);
     },
   );
 
@@ -214,7 +267,7 @@ void main() {
   test('future databases fail instead of being silently downgraded', () async {
     final db = AppDatabase.forTesting(
       NativeDatabase.memory(
-        setup: (database) => database.execute('PRAGMA user_version = 4'),
+        setup: (database) => database.execute('PRAGMA user_version = 5'),
       ),
     );
     addTearDown(db.close);
@@ -225,7 +278,7 @@ void main() {
         isA<UnsupportedError>().having(
           (error) => error.message,
           'message',
-          contains('Unhandled SQLite migration path: v4 -> v3'),
+          contains('Unhandled SQLite migration path: v5 -> v4'),
         ),
       ),
     );

@@ -190,6 +190,47 @@ const issueNativeSession = async (
     })
 }
 
+const recordNativeSignInTelemetry = async (
+    ctx: ActionCtx,
+    args: { userId: string; authMethod: 'email_password' | 'google' },
+): Promise<void> => {
+    try {
+        await ctx.runMutation(
+            internal.telemetry.mutations.recordUserAccountSignedIn,
+            {
+                userId: args.userId,
+                authMethod: args.authMethod,
+                clientPlatform: 'native',
+            },
+        )
+    } catch (error) {
+        console.warn('native sign-in telemetry failed', {
+            userId: args.userId,
+            authMethod: args.authMethod,
+            error: error instanceof Error ? error.message : String(error),
+        })
+    }
+}
+
+/**
+ * better-auth, told what language the native client is in.
+ *
+ * Native reaches better-auth through direct `auth.api.*` calls, so its email
+ * callbacks never see a `Request` and cannot read `Accept-Language` themselves
+ * the way the web flows do. Forwarding the header off the incoming native
+ * request is what lets a brand-new account's verification email come out in the
+ * device's language. Every handler here goes through this instead of calling
+ * `getAuth(createAuth, ctx)` directly.
+ */
+const nativeAuth = (ctx: ActionCtx, req: Request) =>
+    authComponent.getAuth(
+        (authCtx) =>
+            createAuth(authCtx, {
+                acceptLanguage: req.headers.get('accept-language'),
+            }),
+        ctx,
+    )
+
 const googleSignIn = corsHttpAction(async (ctx, req) => {
     const body = await parseJsonBody<GoogleSignInBody>(req)
     if (
@@ -200,7 +241,9 @@ const googleSignIn = corsHttpAction(async (ctx, req) => {
         return jsonError(400, 'bad_request', 'missing idToken')
     }
 
-    const { auth, headers } = await authComponent.getAuth(createAuth, ctx)
+    const { auth, headers } = await nativeAuth(ctx, req)
+    const authHeaders = new Headers(headers)
+    authHeaders.set('x-walletbot-client-platform', 'native')
 
     let result: Awaited<ReturnType<typeof auth.api.signInSocial>>
     try {
@@ -215,7 +258,7 @@ const googleSignIn = corsHttpAction(async (ctx, req) => {
                     ...(body.nonce ? { nonce: body.nonce } : {}),
                 },
             },
-            headers,
+            headers: authHeaders,
         })
     } catch (err) {
         const message = err instanceof Error ? err.message : String(err)
@@ -228,17 +271,31 @@ const googleSignIn = corsHttpAction(async (ctx, req) => {
         return jsonError(500, 'sign_in_failed', 'sign-in did not return a user')
     }
 
+    const response = await issueNativeSession(ctx, req, result.user)
+
     if (isNewSocialUserResult(result)) {
-        await ctx.runMutation(
-            internal.telemetry.mutations.recordUserAccountCreated,
-            {
+        try {
+            await ctx.runMutation(
+                internal.telemetry.mutations.recordUserAccountCreated,
+                {
+                    userId: result.user.id,
+                    authMethod: 'google',
+                },
+            )
+        } catch (error) {
+            console.warn('native account-created telemetry failed', {
                 userId: result.user.id,
                 authMethod: 'google',
-            },
-        )
+                error: error instanceof Error ? error.message : String(error),
+            })
+        }
     }
+    await recordNativeSignInTelemetry(ctx, {
+        userId: result.user.id,
+        authMethod: 'google',
+    })
 
-    return issueNativeSession(ctx, req, result.user)
+    return response
 })
 
 const getEmailAndPassword = (
@@ -263,17 +320,19 @@ const emailSignIn = corsHttpAction(async (ctx, req) => {
     )
     if (parsed instanceof Response) return parsed
 
-    const { auth, headers } = await authComponent.getAuth(createAuth, ctx)
+    const { auth, headers } = await nativeAuth(ctx, req)
+    const authHeaders = new Headers(headers)
+    authHeaders.set('x-walletbot-client-platform', 'native')
 
+    let result: Awaited<ReturnType<typeof auth.api.signInEmail>>
     try {
-        const result = await auth.api.signInEmail({
+        result = await auth.api.signInEmail({
             body: {
                 email: parsed.email,
                 password: parsed.password,
             },
-            headers,
+            headers: authHeaders,
         })
-        return issueNativeSession(ctx, req, result.user)
     } catch (err) {
         // Better-auth already re-sent the verification email on this attempt
         // (sendOnSignIn), so the client only needs to show the pending state.
@@ -290,6 +349,13 @@ const emailSignIn = corsHttpAction(async (ctx, req) => {
         const message = err instanceof Error ? err.message : String(err)
         return jsonError(401, 'sign_in_failed', message)
     }
+
+    const response = await issueNativeSession(ctx, req, result.user)
+    await recordNativeSignInTelemetry(ctx, {
+        userId: result.user.id,
+        authMethod: 'email_password',
+    })
+    return response
 })
 
 const emailSignUp = corsHttpAction(async (ctx, req) => {
@@ -302,7 +368,7 @@ const emailSignUp = corsHttpAction(async (ctx, req) => {
             ? body.name.trim()
             : parsed.email
 
-    const { auth, headers } = await authComponent.getAuth(createAuth, ctx)
+    const { auth, headers } = await nativeAuth(ctx, req)
 
     // better-auth answers a duplicate sign-up with a SYNTHETIC user and
     // `token: null` — deliberately indistinguishable from a real pending
@@ -485,7 +551,7 @@ const forgotPasswordHandler = corsHttpAction(async (ctx, req) => {
     })
     if (!ok) return rateLimitedResponse()
 
-    const { auth, headers } = await authComponent.getAuth(createAuth, ctx)
+    const { auth, headers } = await nativeAuth(ctx, req)
     const { internalAdapter } = await auth.$context
     if (!(await internalAdapter.findUserByEmail(email))) {
         return accountNotFoundResponse()
@@ -508,7 +574,7 @@ const resendVerificationHandler = corsHttpAction(async (ctx, req) => {
     })
     if (!ok) return rateLimitedResponse()
 
-    const { auth, headers } = await authComponent.getAuth(createAuth, ctx)
+    const { auth, headers } = await nativeAuth(ctx, req)
     const { internalAdapter } = await auth.$context
     const existing = await internalAdapter.findUserByEmail(email)
     if (!existing) return accountNotFoundResponse()

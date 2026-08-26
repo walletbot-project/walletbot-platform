@@ -5,35 +5,32 @@ import {
     EmailButton,
     type EmailContent,
     EmailLayout,
+    type EmailProps,
     footnoteText,
-    greeting,
 } from './components'
+import { EMAIL_MESSAGES } from './messages'
 
-type ResetPasswordEmailProps = {
-    name: string | null
-    url: string
+export const ResetPasswordEmail = ({ name, url, locale }: EmailProps) => {
+    const t = EMAIL_MESSAGES[locale]
+    return (
+        <EmailLayout title={t.resetPassword.title} url={url} locale={locale}>
+            <Text style={bodyText}>
+                {t.greeting(name)} {t.resetPassword.body}
+            </Text>
+            <EmailButton label={t.resetPassword.button} url={url} />
+            <Text style={footnoteText}>{t.resetPassword.footnote}</Text>
+        </EmailLayout>
+    )
 }
-
-export const ResetPasswordEmail = ({ name, url }: ResetPasswordEmailProps) => (
-    <EmailLayout title="Restablecé tu contraseña" url={url}>
-        <Text style={bodyText}>
-            {greeting(name)} Recibimos un pedido para restablecer tu contraseña.
-        </Text>
-        <EmailButton label="Restablecer contraseña" url={url} />
-        <Text style={footnoteText}>
-            Si no fuiste vos, ignorá este correo: tu contraseña no va a cambiar.
-            El enlace vence en 1 hora.
-        </Text>
-    </EmailLayout>
-)
 
 export const resetPasswordEmail = async ({
     name,
     url,
-}: ResetPasswordEmailProps): Promise<EmailContent> => {
-    const email = <ResetPasswordEmail name={name} url={url} />
+    locale,
+}: EmailProps): Promise<EmailContent> => {
+    const email = <ResetPasswordEmail name={name} url={url} locale={locale} />
     return {
-        subject: 'Restablecé tu contraseña — Wallet Bot',
+        subject: EMAIL_MESSAGES[locale].resetPassword.subject,
         html: await render(email),
         text: await render(email, { plainText: true }),
     }

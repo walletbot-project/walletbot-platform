@@ -6,9 +6,10 @@ import {
     EmailButton,
     type EmailContent,
     EmailLayout,
+    type EmailProps,
     footnoteText,
-    greeting,
 } from './components'
+import { EMAIL_MESSAGES } from './messages'
 
 const warningText: CSSProperties = {
     ...bodyText,
@@ -16,40 +17,28 @@ const warningText: CSSProperties = {
     fontWeight: 600,
 }
 
-type AccountDeletionEmailProps = {
-    name: string | null
-    url: string
+export const AccountDeletionEmail = ({ name, url, locale }: EmailProps) => {
+    const t = EMAIL_MESSAGES[locale]
+    return (
+        <EmailLayout title={t.accountDeletion.title} url={url} locale={locale}>
+            <Text style={bodyText}>
+                {t.greeting(name)} {t.accountDeletion.body}
+            </Text>
+            <Text style={warningText}>{t.accountDeletion.warning}</Text>
+            <EmailButton label={t.accountDeletion.button} url={url} />
+            <Text style={footnoteText}>{t.accountDeletion.footnote}</Text>
+        </EmailLayout>
+    )
 }
-
-export const AccountDeletionEmail = ({
-    name,
-    url,
-}: AccountDeletionEmailProps) => (
-    <EmailLayout title="Eliminá tu cuenta" url={url}>
-        <Text style={bodyText}>
-            {greeting(name)} Recibimos un pedido para eliminar tu cuenta de
-            Wallet Bot de forma permanente.
-        </Text>
-        <Text style={warningText}>
-            Se van a borrar tu cuenta y todos tus datos: transacciones, cuentas,
-            categorías, etiquetas y configuración. Esta acción no se puede
-            deshacer.
-        </Text>
-        <EmailButton label="Eliminar mi cuenta" url={url} />
-        <Text style={footnoteText}>
-            Si no fuiste vos, ignorá este correo: tu cuenta no se va a
-            modificar. El enlace vence en 24 horas.
-        </Text>
-    </EmailLayout>
-)
 
 export const accountDeletionEmail = async ({
     name,
     url,
-}: AccountDeletionEmailProps): Promise<EmailContent> => {
-    const email = <AccountDeletionEmail name={name} url={url} />
+    locale,
+}: EmailProps): Promise<EmailContent> => {
+    const email = <AccountDeletionEmail name={name} url={url} locale={locale} />
     return {
-        subject: 'Eliminá tu cuenta — Wallet Bot',
+        subject: EMAIL_MESSAGES[locale].accountDeletion.subject,
         html: await render(email),
         text: await render(email, { plainText: true }),
     }

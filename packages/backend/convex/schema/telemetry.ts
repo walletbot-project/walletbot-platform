@@ -8,6 +8,7 @@ export const telemetryEvents = defineTable({
     properties: v.any(),
     installationId: v.optional(v.string()),
     sessionId: v.optional(v.string()),
+    sampleId: v.optional(v.string()),
     userId: v.optional(v.string()),
     appVersion: v.optional(v.string()),
     platform: v.optional(
@@ -50,6 +51,16 @@ export const telemetryMetrics = defineTable({
         v.literal('business.financial_accounts.created_count'),
         v.literal('business.movements.created_count'),
         v.literal('business.transfers.created_count'),
+        v.literal('business.users.registered_total'),
+        v.literal('business.user_accounts.signed_in_count'),
+        v.literal('agent.session.cost_usd'),
+        v.literal('agent.interaction.cost_usd'),
+        v.literal('agent.user.monthly_cost_usd'),
+        v.literal('agent.interactions.completed_count'),
+        // Deprecated: accepted only so deployments can clean up historical rows.
+        // New ingestion rejects this metric in telemetry validators/catalog.
+        v.literal('agent.session.cost_outlier_count'),
+        v.literal('agent.session.cost_bucket_count'),
     ),
     timestamp: v.number(),
     receivedAt: v.number(),
@@ -64,10 +75,13 @@ export const telemetryMetrics = defineTable({
         v.literal('histogram'),
     ),
     value: v.number(),
-    unit: v.optional(v.union(v.literal('count'), v.literal('ms'))),
+    unit: v.optional(
+        v.union(v.literal('count'), v.literal('ms'), v.literal('usd')),
+    ),
     attributes: v.optional(v.any()),
     installationId: v.optional(v.string()),
     sessionId: v.optional(v.string()),
+    sampleId: v.optional(v.string()),
     userId: v.optional(v.string()),
     appVersion: v.optional(v.string()),
     platform: v.optional(

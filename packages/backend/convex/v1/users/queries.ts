@@ -1,12 +1,17 @@
 import { query } from '../../_generated/server'
 import { requireAuth } from '../../users/helpers'
-import { getDefaultCurrency } from './helpers'
+import { getSettingsForUser } from './helpers'
 
+/**
+ * `language` is additive: it is `null` until a client reports one, and builds
+ * that predate the field ignore it. Clients read it back to tell whether their
+ * report landed, never to drive the in-app display language.
+ */
 export const getSettings = query({
     args: {},
     handler: async (ctx) => {
         const userId = await requireAuth(ctx)
-        return { defaultCurrency: await getDefaultCurrency(ctx, userId) }
+        return await getSettingsForUser(ctx, userId)
     },
 })
 

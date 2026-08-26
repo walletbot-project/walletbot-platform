@@ -1,4 +1,9 @@
-import { LEGAL_VERSIONS, type LegalDocument } from '@wallet-bot/shared'
+import {
+    LEGAL_VERSIONS,
+    type LegalDocument,
+    type Locale,
+    resolveLocale,
+} from '@wallet-bot/shared'
 import { internal } from '../_generated/api'
 import type { ActionCtx } from '../_generated/server'
 import type { FlagKey } from '../featureFlags/utils'
@@ -30,8 +35,7 @@ type ConfigBanner = {
     actions: ConfigBannerAction[]
 }
 
-export type ConfigLocale = 'en' | 'es'
-type LocalizedConfigBanner = Record<ConfigLocale, ConfigBanner>
+type LocalizedConfigBanner = Record<Locale, ConfigBanner>
 
 export const PLATFORM_ANDROID = 'android' as const
 export const PLATFORM_IOS = 'ios' as const
@@ -72,19 +76,21 @@ type AccountConfigAccount =
     | { type: 'local'; name: string | null; accountId: string | null }
     | null
 
-// apps/native/pubspec.yaml is currently 0.2.0+2. PackageInfo.version sends the
-// build-name only, so the backend compares against 0.2.0.
+// apps/native/pubspec.yaml is currently 0.3.0+3. PackageInfo.version sends the
+// build-name only, so the backend compares against 0.3.0.
 //
-// Bumped from 0.1.0 alongside native drift schemaVersion v1 -> v2 (adds the
-// synced `time_status` field on transactions). Per the CLAUDE.md client–server
-// contract, a change to the set of synced fields must bump BOTH this
-// `minSupportedVersion` and the drift `schemaVersion` in the same change so
-// pre-v2 clients fail CLOSED on sync (they keep working offline on local data).
-const BASE_MIN_SUPPORTED_VERSION = '0.2.0'
+// Bumped from 0.2.0 alongside native drift schemaVersion v3 -> v4 (adds the
+// synced `agent_memories` table — the agent-overhaul memory subsystem). Per
+// the CLAUDE.md client–server contract, a change to the set of synced tables
+// must bump BOTH this `minSupportedVersion` and the drift `schemaVersion` in
+// the same change so pre-v4 clients fail CLOSED on sync (they keep working
+// offline on local data). Previous bump: 0.1.0 -> 0.2.0 with v1 -> v2
+// (`transactions.time_status`).
+const BASE_MIN_SUPPORTED_VERSION = '0.3.0'
 // Keep in lockstep with the shipped `apps/native/pubspec.yaml` build-name.
 // Setting this ahead of the released build nags every current client with the
 // soft-update banner for a version that isn't out yet.
-const BASE_LATEST_VERSION = '0.2.0'
+const BASE_LATEST_VERSION = '0.3.0'
 
 // A client that cannot determine its own version reports '0.0.0' (and any
 // unparseable string parses to 0.0.0 too — see utils.ts). Treat that as
@@ -233,13 +239,6 @@ export const CLIENT_OUTDATED = 'client_outdated' as const
 const configForPlatform = (platform: string): NativeVersionConfig =>
     isNativePlatform(platform) ? CONFIG_BY_PLATFORM[platform] : DEFAULT_CONFIG
 
-export const resolveConfigLocale = (
-    locale: string | undefined,
-): ConfigLocale =>
-    locale?.trim().toLowerCase().replace('_', '-').startsWith('es')
-        ? 'es'
-        : 'en'
-
 export function resolveConfigVerdict(args: {
     platform: string
     appVersion: string
@@ -247,7 +246,7 @@ export function resolveConfigVerdict(args: {
     locale?: string
 }): ConfigVerdict {
     const config = configForPlatform(args.platform)
-    const locale = resolveConfigLocale(args.locale)
+    const locale = resolveLocale(args.locale)
     const configuredBanners = config.banners.map((banner) => banner[locale])
 
     // Fail open for a client that can't report its version: treat it as

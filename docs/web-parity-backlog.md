@@ -13,33 +13,13 @@ The offline-first local database and sync engine are the known architectural
 difference and are out of scope; this list is what sits on top of them.
 
 Closed entries move to § 5 rather than being deleted, and keep their original
-numbers so the ids stay quotable. Last updated 2026-08-21.
+numbers so the ids stay quotable. Last updated 2026-08-24.
 
 ---
 
 ## 1. Features to implement on web
 
 Ordered by what the user loses.
-
-### 1.5 Voice sessions do not survive a dropped socket on web
-
-Native holds a resumption handle, handles `goAway`, and reconnects with
-exponential backoff
-(`apps/native/lib/voice/gemini_voice_expense_command.dart`). Web's `onclose`
-flips to `disconnected` and the conversation ends
-(`apps/web/src/hooks/use-voice.ts`).
-
-The ephemeral token already negotiates `sessionResumption` and
-`contextWindowCompression`, so the server side is ready.
-
-A session left running while the user is on another screen (1.12) is now web's
-behaviour too, which makes this the only remaining way web loses a conversation
-native would keep.
-
-Closing 1.4 wrote the observation into the history: web records the server's
-`session_resumption_update` and `go_away` signals but does nothing with them, and
-marks a dropped session `ended` where native marks it `suspended`. Both change
-when this lands.
 
 ### 1.7 No telemetry on web
 
@@ -295,6 +275,35 @@ an overlapping same-row swap is refused instead of persisted.
 `crypto.randomUUID()`, the scheme native settled on
 (`apps/native/lib/data/ids.dart`) and the one the backend generates and
 documents. The three inlined definitions are gone.
+
+### 1.5 Voice sessions do not survive a dropped socket on web — closed 2026-08-24
+
+Closed by the agent overhaul (`docs/agent-overhaul-plan.md` §6), porting
+native's proven design into `apps/web/src/hooks/use-voice.ts` plus a new
+`apps/web/src/lib/voice-seed.ts` (TS mirror of `buildConversationSeed`, same
+folding rules, 6000-char front-truncation and pending-text de-duplication,
+locked case-for-case by `voice-seed.test.ts` against
+`conversation_seed_test.dart`):
+
+- an in-memory conversation event log (the `kConversationEventTypes` set)
+  accumulates alongside `messages` as the seed's substrate;
+- auto-reconnect with exponential backoff (2^(n-1) s, cap 30 s), reset on a
+  completed setup; a connection-generation counter guards every callback
+  against superseded sockets; `goAway` rotates the socket pre-emptively before
+  the announced kill; every attempt mints a fresh single-use token;
+- `onclose` keeps the transcript and the typed queue, marks the history
+  session `suspended` (native's status, closing the 1.4 divergence) and
+  schedules the reconnect — one conversation stays one `voiceSessions` row;
+- after setup the seed goes out as `clientContent` with `turnComplete: false`,
+  then the queued texts flush, the same ordering contract as native;
+- the transcript wipes are gone (`startVoiceSession`, the typed-after-drop
+  path, `detach`'s disconnected-wipe): only the explicit End clears;
+- the history outbox flushes on `pagehide`/`visibilitychange`, so closing the
+  tab inside the debounce window no longer loses the tail.
+
+Deliberately out of scope, as agreed: page-reload transcript restore. Resume
+handles stay unused on both platforms — a stale handle silently opens a blank
+session (see `docs/voice-session-lifecycle.md`).
 
 ### 1.12 Leaving the assistant page destroyed the conversation — closed 2026-08-21
 
