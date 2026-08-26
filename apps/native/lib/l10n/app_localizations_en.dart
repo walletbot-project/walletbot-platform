@@ -484,6 +484,47 @@ class AppLocalizationsEn extends AppLocalizations {
       'We could not process the attachments. Remove them and try again.';
 
   @override
+  String get feedbackOffline =>
+      'No connection. Check your internet and try again, or write to us by email.';
+
+  @override
+  String get feedbackEmailInstead => 'Send an email instead';
+
+  @override
+  String get feedbackEmailTitle => 'Write to support';
+
+  @override
+  String get feedbackEmailBody =>
+      'Send us an email and we will get back to you. Whatever you already typed goes into the message.';
+
+  @override
+  String get feedbackSupportEmail => 'support@walletbot.live';
+
+  @override
+  String get feedbackEmailOpen => 'Open email app';
+
+  @override
+  String get feedbackEmailCopy => 'Copy address';
+
+  @override
+  String get feedbackEmailCopied => 'Address copied';
+
+  @override
+  String get feedbackEmailNoApp =>
+      'No email app on this device. Copy the address and write to us from anywhere.';
+
+  @override
+  String get feedbackEmailSubject => 'Wallet Bot feedback';
+
+  @override
+  String feedbackEmailBodyFooter(String client) {
+    return 'Sent from Wallet Bot $client';
+  }
+
+  @override
+  String get feedbackErrorDismiss => 'Dismiss this message';
+
+  @override
   String get addTransaction => 'Add transaction';
 
   @override

@@ -85,6 +85,25 @@ export const es = {
             'No pudimos procesar los adjuntos. Quitalos e intentá de nuevo.',
         uploading: (p: { current: number; total: number }) =>
             `Subiendo archivo ${p.current} de ${p.total}…`,
+        offline:
+            'Sin conexión. Revisá tu internet e intentá de nuevo, o escribinos por email.',
+        errorDismiss: 'Cerrar este mensaje',
+        emailInstead: 'Enviar un email en su lugar',
+        emailTitle: 'Escribir a soporte',
+        emailBody:
+            'Mandanos un email y te respondemos. Lo que ya escribiste va dentro del mensaje.',
+        // Localizada a propósito: el catálogo en inglés muestra support@. Las
+        // dos direcciones llegan a la misma bandeja, así que esto no es una
+        // frase para traducir libremente.
+        supportEmail: 'soporte@walletbot.live',
+        emailOpen: 'Abrir app de email',
+        emailCopy: 'Copiar dirección',
+        emailCopied: 'Dirección copiada',
+        emailCopyFailed:
+            'No se pudo copiar. Seleccioná la dirección y copiala a mano.',
+        emailSubject: 'Comentarios de Wallet Bot',
+        emailBodyFooter: (p: { client: string }) =>
+            `Enviado desde Wallet Bot ${p.client}`,
     },
 
     settings: {

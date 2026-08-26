@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:app/app_config/client_info.dart';
+import 'package:app/components/feedback/support_email_dialog.dart';
 import 'package:app/feedback/feedback_limits.dart';
 import 'package:app/feedback/feedback_submitter.dart';
 import 'package:app/l10n/l10n.dart';
@@ -26,8 +27,9 @@ Future<void> showFeedbackSheet(
   sheetShape: const RoundedRectangleBorder(
     borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
   ),
-  builder: (_) => _FeedbackSheet(
+  builder: (_) => FeedbackSheet(
     submitter: FeedbackSubmitter(clientInfo: clientInfo),
+    clientInfo: clientInfo,
     locale: locale,
   ),
 );
@@ -58,34 +60,67 @@ Future<List<FeedbackAttachment>> _pickFiles() async {
   return attachments;
 }
 
-class _FeedbackSheet extends StatefulWidget {
-  const _FeedbackSheet({required this.submitter, required this.locale});
+/// The sheet's body: the message field, the attachment list, the inline error
+/// surface and the actions.
+///
+/// Public so a test can drive it with a stubbed [FeedbackSubmitter]; app code
+/// goes through [showFeedbackSheet], which supplies the real one.
+class FeedbackSheet extends StatefulWidget {
+  const FeedbackSheet({
+    super.key,
+    required this.submitter,
+    required this.clientInfo,
+    required this.locale,
+  });
 
   final FeedbackSubmitter submitter;
+  final ClientInfo clientInfo;
   final String locale;
 
   @override
-  State<_FeedbackSheet> createState() => _FeedbackSheetState();
+  State<FeedbackSheet> createState() => _FeedbackSheetState();
 }
 
-class _FeedbackSheetState extends State<_FeedbackSheet> {
+class _FeedbackSheetState extends State<FeedbackSheet> {
   final _messageController = TextEditingController();
   final _attachments = <FeedbackAttachment>[];
   var _sending = false;
+  var _canSend = false;
+
+  /// The last failure, shown inside the sheet.
+  ///
+  /// Never a snackbar: `ScaffoldMessenger` posts to the [Scaffold] under this
+  /// route, which the sheet covers, so every rejection used to be invisible and
+  /// a refused send looked like a button that did nothing.
+  String? _error;
 
   /// `(uploaded, total)` while attachments are going up, so a ten-file
   /// submission doesn't look stuck behind one spinner.
   (int, int)? _uploadProgress;
 
   @override
+  void initState() {
+    super.initState();
+    _messageController.addListener(_onMessageChanged);
+  }
+
+  @override
   void dispose() {
+    _messageController.removeListener(_onMessageChanged);
     _messageController.dispose();
     super.dispose();
   }
 
-  void _showMessage(String text) {
+  /// Keeps the send button in step with the field, so "write something first"
+  /// is a disabled button rather than a rejection after the fact.
+  void _onMessageChanged() {
+    final canSend = _messageController.text.trim().isNotEmpty;
+    if (canSend != _canSend) setState(() => _canSend = canSend);
+  }
+
+  void _showError(String text) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
+    setState(() => _error = text);
   }
 
   Future<void> _pick() async {
@@ -95,42 +130,44 @@ class _FeedbackSheetState extends State<_FeedbackSheet> {
       picked = await _pickFiles();
     } catch (error, stackTrace) {
       debugPrint('feedback: picking files failed: $error\n$stackTrace');
-      _showMessage(l10n.feedbackSendFailed);
+      _showError(l10n.feedbackSendFailed);
       return;
     }
     if (!mounted || picked.isEmpty) return;
 
     final accepted = <FeedbackAttachment>[];
+    String? rejection;
     for (final attachment in picked) {
       if (attachment.size > feedbackMaxAttachmentBytes) {
-        _showMessage(
-          l10n.feedbackFileTooLarge(
-            attachment.name,
-            formatFileSize(feedbackMaxAttachmentBytes),
-          ),
+        rejection ??= l10n.feedbackFileTooLarge(
+          attachment.name,
+          formatFileSize(feedbackMaxAttachmentBytes),
         );
         continue;
       }
       if (_attachments.length + accepted.length >= feedbackMaxAttachments) {
-        _showMessage(l10n.feedbackTooManyFiles(feedbackMaxAttachments));
+        rejection ??= l10n.feedbackTooManyFiles(feedbackMaxAttachments);
         break;
       }
       accepted.add(attachment);
     }
-    if (accepted.isEmpty) return;
-    setState(() => _attachments.addAll(accepted));
+    setState(() {
+      _attachments.addAll(accepted);
+      _error = rejection;
+    });
   }
 
   Future<void> _send() async {
     final l10n = context.l10n;
     final message = _messageController.text.trim();
     if (message.isEmpty) {
-      _showMessage(l10n.feedbackMessageRequired);
+      _showError(l10n.feedbackMessageRequired);
       return;
     }
 
     setState(() {
       _sending = true;
+      _error = null;
       _uploadProgress = null;
     });
     // The in-progress state lives on the send button (`_sendLabel`), not in a
@@ -147,21 +184,32 @@ class _FeedbackSheetState extends State<_FeedbackSheet> {
         },
       );
       if (!mounted) return;
-      _showMessage(l10n.feedbackSent);
+      // Popped first, then the snackbar: it belongs to the messenger under this
+      // route, so it is only on screen once the sheet is gone.
+      final messenger = ScaffoldMessenger.of(context);
       Navigator.of(context).pop();
-    } on FeedbackException catch (error) {
+      messenger.showSnackBar(SnackBar(content: Text(l10n.feedbackSent)));
+    } on FeedbackException catch (error, stackTrace) {
+      // Logged even though the sheet has copy for it: this is a site that
+      // flips user-visible state, and `error.cause` is the only record of what
+      // the transport or the server actually did.
+      debugPrint(
+        'feedback: submit refused as ${error.failure.name}: '
+        '${error.cause}\n$stackTrace',
+      );
       // The sheet stays open with the text and the picked files intact, so a
       // rate limit or a dropped upload never costs the user what they wrote.
       if (!mounted) return;
       setState(() {
         _sending = false;
         _uploadProgress = null;
-      });
-      _showMessage(switch (error.failure) {
-        FeedbackFailure.rateLimited => l10n.feedbackRateLimited,
-        FeedbackFailure.attachmentRejected => l10n.feedbackAttachmentRejected,
-        FeedbackFailure.messageInvalid => l10n.feedbackMessageRequired,
-        FeedbackFailure.failed => l10n.feedbackSendFailed,
+        _error = switch (error.failure) {
+          FeedbackFailure.rateLimited => l10n.feedbackRateLimited,
+          FeedbackFailure.attachmentRejected => l10n.feedbackAttachmentRejected,
+          FeedbackFailure.messageInvalid => l10n.feedbackMessageRequired,
+          FeedbackFailure.offline => l10n.feedbackOffline,
+          FeedbackFailure.failed => l10n.feedbackSendFailed,
+        };
       });
     } catch (error, stackTrace) {
       debugPrint('feedback: submit failed: $error\n$stackTrace');
@@ -169,8 +217,8 @@ class _FeedbackSheetState extends State<_FeedbackSheet> {
       setState(() {
         _sending = false;
         _uploadProgress = null;
+        _error = l10n.feedbackSendFailed;
       });
-      _showMessage(l10n.feedbackSendFailed);
     }
   }
 
@@ -190,6 +238,7 @@ class _FeedbackSheetState extends State<_FeedbackSheet> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final l10n = context.l10n;
+    final error = _error;
     // `viewInsets.bottom` keeps the sheet above the keyboard; `SafeArea`
     // (bottom only) keeps the actions clear of the system navigation bar.
     return Padding(
@@ -268,7 +317,28 @@ class _FeedbackSheetState extends State<_FeedbackSheet> {
                   ),
               ],
 
-              const SizedBox(height: 20),
+              if (error != null) ...[
+                const SizedBox(height: 16),
+                _ErrorBanner(
+                  message: error,
+                  onDismiss: () => setState(() => _error = null),
+                ),
+              ],
+
+              const SizedBox(height: 8),
+              TextButton.icon(
+                onPressed: _sending
+                    ? null
+                    : () => showSupportEmailDialog(
+                        context,
+                        clientInfo: widget.clientInfo,
+                        draft: _messageController.text.trim(),
+                      ),
+                icon: const Icon(Icons.mail_outline_rounded, size: 18),
+                label: Text(l10n.feedbackEmailInstead),
+              ),
+
+              const SizedBox(height: 12),
               Row(
                 children: [
                   Expanded(
@@ -282,7 +352,7 @@ class _FeedbackSheetState extends State<_FeedbackSheet> {
                   const SizedBox(width: 12),
                   Expanded(
                     child: FilledButton(
-                      onPressed: _sending ? null : _send,
+                      onPressed: _sending || !_canSend ? null : _send,
                       child: Text(_sendLabel(l10n)),
                     ),
                   ),
@@ -291,6 +361,59 @@ class _FeedbackSheetState extends State<_FeedbackSheet> {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// The sheet's own error surface. Inside the sheet because a snackbar posts to
+/// the [Scaffold] this route covers, where the user never sees it.
+class _ErrorBanner extends StatelessWidget {
+  const _ErrorBanner({required this.message, required this.onDismiss});
+
+  final String message;
+  final VoidCallback onDismiss;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      padding: const EdgeInsets.fromLTRB(12, 10, 4, 10),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.errorContainer,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(
+            Icons.error_outline_rounded,
+            size: 20,
+            color: theme.colorScheme.onErrorContainer,
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.only(top: 2),
+              child: Text(
+                message,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: theme.colorScheme.onErrorContainer,
+                ),
+              ),
+            ),
+          ),
+          IconButton(
+            tooltip: context.l10n.feedbackErrorDismiss,
+            onPressed: onDismiss,
+            visualDensity: VisualDensity.compact,
+            icon: Icon(
+              Icons.close_rounded,
+              size: 18,
+              color: theme.colorScheme.onErrorContainer,
+            ),
+          ),
+        ],
       ),
     );
   }

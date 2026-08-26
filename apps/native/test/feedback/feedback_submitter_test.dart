@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:app/app_config/client_info.dart';
@@ -26,6 +27,22 @@ class _FakeConvex {
     calls.add((name: name, args: args));
     return _responses[_index++];
   }
+}
+
+/// Answers every upload the way the storage endpoint refuses one.
+class _RefusingHttp extends http.BaseClient {
+  @override
+  Future<http.StreamedResponse> send(http.BaseRequest request) async {
+    await request.finalize().toBytes();
+    return http.StreamedResponse(const Stream.empty(), 500, request: request);
+  }
+}
+
+/// Fails every upload the way a dropped connection does.
+class _DisconnectedHttp extends http.BaseClient {
+  @override
+  Future<http.StreamedResponse> send(http.BaseRequest request) async =>
+      throw http.ClientException('connection closed', request.url);
 }
 
 /// Collects the streamed upload bodies, so a test can assert the bytes really
@@ -144,5 +161,61 @@ void main() {
       await failureFor('{"ok":false,"error":"something new"}'),
       FeedbackFailure.failed,
     );
+  });
+
+  test("the client's own operation timeout is offline, not a failure", () async {
+    // `ConvexConfig.operationTimeout` (30 s by default) is what ends a call
+    // that never gets out, and `ConvexClient.mutation` documents the
+    // `TimeoutException` it throws. Nothing here adds a second deadline on top
+    // of it, so this is the exception the submitter has to classify.
+    final submitter = FeedbackSubmitter(
+      clientInfo: _clientInfo,
+      mutation: ({required name, required args}) =>
+          Future.error(TimeoutException('operation timed out')),
+      httpClient: _FakeHttp(),
+    );
+
+    await expectLater(
+      submitter.submit(message: 'hi', attachments: const [], locale: 'en'),
+      throwsA(
+        isA<FeedbackException>()
+            .having(
+              (error) => error.failure,
+              'failure',
+              FeedbackFailure.offline,
+            )
+            .having((error) => error.cause, 'cause', isA<TimeoutException>()),
+      ),
+    );
+  });
+
+  test('a dropped upload is offline; a refused one is a failure', () async {
+    Future<FeedbackFailure> failureFor(http.Client client) async {
+      try {
+        await FeedbackSubmitter(
+          clientInfo: _clientInfo,
+          mutation: _FakeConvex([
+            '{"ok":true,"uploadUrl":"https://example.convex.cloud/upload/1"}',
+          ]).mutation,
+          httpClient: client,
+        ).submit(
+          message: 'hi',
+          attachments: [
+            FeedbackAttachment(
+              name: 'a.png',
+              size: 1,
+              openRead: () => Stream.value(const [1]),
+            ),
+          ],
+          locale: 'en',
+        );
+        fail('expected a FeedbackException');
+      } on FeedbackException catch (error) {
+        return error.failure;
+      }
+    }
+
+    expect(await failureFor(_DisconnectedHttp()), FeedbackFailure.offline);
+    expect(await failureFor(_RefusingHttp()), FeedbackFailure.failed);
   });
 }

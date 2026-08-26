@@ -950,6 +950,78 @@ abstract class AppLocalizations {
   /// **'We could not process the attachments. Remove them and try again.'**
   String get feedbackAttachmentRejected;
 
+  /// No description provided for @feedbackOffline.
+  ///
+  /// In en, this message translates to:
+  /// **'No connection. Check your internet and try again, or write to us by email.'**
+  String get feedbackOffline;
+
+  /// No description provided for @feedbackEmailInstead.
+  ///
+  /// In en, this message translates to:
+  /// **'Send an email instead'**
+  String get feedbackEmailInstead;
+
+  /// No description provided for @feedbackEmailTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Write to support'**
+  String get feedbackEmailTitle;
+
+  /// No description provided for @feedbackEmailBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Send us an email and we will get back to you. Whatever you already typed goes into the message.'**
+  String get feedbackEmailBody;
+
+  /// The support mailbox shown to the user. Localized on purpose: the Spanish build shows soporte@, and both addresses reach the same inbox. Not a phrase to translate freely; only change it if that mailbox changes.
+  ///
+  /// In en, this message translates to:
+  /// **'support@walletbot.live'**
+  String get feedbackSupportEmail;
+
+  /// No description provided for @feedbackEmailOpen.
+  ///
+  /// In en, this message translates to:
+  /// **'Open email app'**
+  String get feedbackEmailOpen;
+
+  /// No description provided for @feedbackEmailCopy.
+  ///
+  /// In en, this message translates to:
+  /// **'Copy address'**
+  String get feedbackEmailCopy;
+
+  /// No description provided for @feedbackEmailCopied.
+  ///
+  /// In en, this message translates to:
+  /// **'Address copied'**
+  String get feedbackEmailCopied;
+
+  /// No description provided for @feedbackEmailNoApp.
+  ///
+  /// In en, this message translates to:
+  /// **'No email app on this device. Copy the address and write to us from anywhere.'**
+  String get feedbackEmailNoApp;
+
+  /// No description provided for @feedbackEmailSubject.
+  ///
+  /// In en, this message translates to:
+  /// **'Wallet Bot feedback'**
+  String get feedbackEmailSubject;
+
+  /// No description provided for @feedbackEmailBodyFooter.
+  ///
+  /// In en, this message translates to:
+  /// **'Sent from Wallet Bot {client}'**
+  String feedbackEmailBodyFooter(String client);
+
+  /// No description provided for @feedbackErrorDismiss.
+  ///
+  /// In en, this message translates to:
+  /// **'Dismiss this message'**
+  String get feedbackErrorDismiss;
+
   /// No description provided for @addTransaction.
   ///
   /// In en, this message translates to:

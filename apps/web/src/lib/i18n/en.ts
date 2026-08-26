@@ -82,6 +82,22 @@ export const en: Messages = {
             'We could not process the attachments. Remove them and try again.',
         uploading: (p: { current: number; total: number }) =>
             `Uploading file ${p.current} of ${p.total}…`,
+        offline:
+            'No connection. Check your internet and try again, or write to us by email.',
+        errorDismiss: 'Dismiss this message',
+        emailInstead: 'Send an email instead',
+        emailTitle: 'Write to support',
+        emailBody:
+            'Send us an email and we will get back to you. Whatever you already typed goes into the message.',
+        supportEmail: 'support@walletbot.live',
+        emailOpen: 'Open email app',
+        emailCopy: 'Copy address',
+        emailCopied: 'Address copied',
+        emailCopyFailed:
+            'Could not copy. Select the address and copy it manually.',
+        emailSubject: 'Wallet Bot feedback',
+        emailBodyFooter: (p: { client: string }) =>
+            `Sent from Wallet Bot ${p.client}`,
     },
 
     settings: {
