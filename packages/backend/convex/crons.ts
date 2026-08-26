@@ -1,5 +1,6 @@
 import { cronJobs } from 'convex/server'
 import { internal } from './_generated/api'
+import { ORPHAN_ATTACHMENT_TTL_MS } from './feedback/utils'
 
 const crons = cronJobs()
 
@@ -125,6 +126,19 @@ crons.interval(
     { hours: 6 },
     internal.exchangeRates.internal.refreshInternationalRates,
     {},
+)
+
+// Feedback attachments go straight from the client to a Convex upload URL, so an
+// abandoned or rejected submission leaves stored bytes with nothing pointing at
+// them.
+crons.interval(
+    'delete orphaned feedback attachments',
+    { hours: 6 },
+    internal.feedback.internal.deleteOrphanAttachments,
+    {
+        olderThanMs: ORPHAN_ATTACHMENT_TTL_MS,
+        limit: 100,
+    },
 )
 
 // A purge batch that throws is never retried by the scheduler, which used to

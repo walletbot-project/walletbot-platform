@@ -421,6 +421,112 @@ class AppLocalizationsEs extends AppLocalizations {
   String get addManually => 'Agregar a mano';
 
   @override
+  String get sendFeedback => 'Enviar comentarios';
+
+  @override
+  String get feedbackTitle => 'Enviar comentarios';
+
+  @override
+  String get feedbackSubtitle =>
+      'Contanos qué salió mal o qué te gustaría ver. Podés adjuntar capturas o archivos.';
+
+  @override
+  String get feedbackMessageLabel => 'Tu comentario';
+
+  @override
+  String get feedbackMessageHint => '¿Qué querés contarnos?';
+
+  @override
+  String get feedbackAttach => 'Adjuntar archivos';
+
+  @override
+  String feedbackAttachmentsCount(int count, int max, String max_size) {
+    return 'Adjuntos: $count/$max · hasta $max_size cada uno';
+  }
+
+  @override
+  String get feedbackRemoveAttachment => 'Quitar adjunto';
+
+  @override
+  String get feedbackSend => 'Enviar';
+
+  @override
+  String get feedbackSending => 'Enviando comentarios…';
+
+  @override
+  String feedbackUploading(int current, int total) {
+    return 'Subiendo archivo $current de $total…';
+  }
+
+  @override
+  String get feedbackSent => '¡Gracias! Recibimos tus comentarios';
+
+  @override
+  String get feedbackSendFailed => 'No se pudieron enviar tus comentarios';
+
+  @override
+  String get feedbackMessageRequired => 'Escribí un comentario antes de enviar';
+
+  @override
+  String feedbackTooManyFiles(int max) {
+    return 'Podés adjuntar hasta $max archivos';
+  }
+
+  @override
+  String feedbackFileTooLarge(String name, String max_size) {
+    return '“$name” supera el máximo de $max_size';
+  }
+
+  @override
+  String get feedbackRateLimited =>
+      'Ya enviaste varios comentarios. Probá de nuevo más tarde.';
+
+  @override
+  String get feedbackAttachmentRejected =>
+      'No pudimos procesar los adjuntos. Quitalos e intentá de nuevo.';
+
+  @override
+  String get feedbackOffline =>
+      'Sin conexión. Revisá tu internet e intentá de nuevo, o escribinos por email.';
+
+  @override
+  String get feedbackEmailInstead => 'Enviar un email en su lugar';
+
+  @override
+  String get feedbackEmailTitle => 'Escribir a soporte';
+
+  @override
+  String get feedbackEmailBody =>
+      'Mandanos un email y te respondemos. Lo que ya escribiste va dentro del mensaje.';
+
+  @override
+  String get feedbackSupportEmail => 'soporte@walletbot.live';
+
+  @override
+  String get feedbackEmailOpen => 'Abrir app de email';
+
+  @override
+  String get feedbackEmailCopy => 'Copiar dirección';
+
+  @override
+  String get feedbackEmailCopied => 'Dirección copiada';
+
+  @override
+  String get feedbackEmailNoApp =>
+      'No hay una app de email en este dispositivo. Copiá la dirección y escribinos desde donde quieras.';
+
+  @override
+  String get feedbackEmailSubject => 'Comentarios de Wallet Bot';
+
+  @override
+  String feedbackEmailBodyFooter(String client) {
+    return 'Enviado desde Wallet Bot $client';
+  }
+
+  @override
+  String get feedbackErrorDismiss => 'Cerrar este mensaje';
+
+  @override
   String get addTransaction => 'Añadir movimiento';
 
   @override

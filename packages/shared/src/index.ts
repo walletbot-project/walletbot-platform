@@ -94,6 +94,11 @@ export {
 } from './dashboard/widgets'
 export { computeExchangeRate } from './exchange-rate'
 export {
+    FEEDBACK_MAX_ATTACHMENT_BYTES,
+    FEEDBACK_MAX_ATTACHMENTS,
+    FEEDBACK_MAX_MESSAGE_LENGTH,
+} from './feedback'
+export {
     isLegalDocument,
     isLegalVersionAtLeast,
     LEGAL_DOCUMENTS,

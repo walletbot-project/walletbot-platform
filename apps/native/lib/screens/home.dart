@@ -1,7 +1,10 @@
 import 'package:app/auth/account.dart';
 import 'package:app/auth/auth_controller.dart';
 import 'package:app/app_config/app_config_banner_list.dart';
+import 'package:app/app_config/app_config_controller.dart';
+import 'package:app/app_config/client_info.dart';
 import 'package:app/components/dashboard/add_widget_sheet.dart';
+import 'package:app/components/feedback/feedback_sheet.dart';
 import 'package:app/components/dashboard/dashboard_section.dart';
 import 'package:app/components/dashboard/default_dashboard.dart';
 import 'package:app/data/data.dart';
@@ -136,6 +139,14 @@ class _HomeScreenState extends State<HomeScreen> {
     await showAddWidgetSheet(context, repos);
   }
 
+  Future<void> _openFeedback() async {
+    await showFeedbackSheet(
+      context,
+      clientInfo: context.read<ClientInfo>(),
+      locale: context.read<AppConfigController>().locale,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -185,13 +196,24 @@ class _HomeScreenState extends State<HomeScreen> {
             style: Theme.of(context).textTheme.titleMedium,
           ),
           const SizedBox(height: 12),
-          Align(
-            alignment: Alignment.centerLeft,
-            child: _HomeActionCard(
-              label: context.l10n.addManually,
-              icon: Icons.add_rounded,
-              onTap: _openManualAdd,
-            ),
+          Wrap(
+            spacing: 12,
+            runSpacing: 12,
+            children: [
+              _HomeActionCard(
+                label: context.l10n.addManually,
+                icon: Icons.add_rounded,
+                onTap: _openManualAdd,
+              ),
+              if (context.watch<AppConfigController>().isFlagEnabled(
+                'feedback',
+              ))
+                _HomeActionCard(
+                  label: context.l10n.sendFeedback,
+                  icon: Icons.feedback_rounded,
+                  onTap: _openFeedback,
+                ),
+            ],
           ),
         ],
       ),

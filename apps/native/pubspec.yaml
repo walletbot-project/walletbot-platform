@@ -60,6 +60,12 @@ dependencies:
   url_launcher: ^6.3.2
   flutter_markdown_plus: ^1.0.11
   math_expressions: ^3.2.0
+  # Feedback attachments. Held at 11.x deliberately: 12.x pulls
+  # `windows_file_picker` -> `win32 ^6`, which cannot co-exist with
+  # `package_info_plus ^8` (win32 <6). package_info_plus feeds `ClientInfo`, and
+  # therefore the client-version gate, so bumping it two majors is not something
+  # to do as a side effect of adding a file picker.
+  file_picker: ^11.0.3
 dev_dependencies:
   flutter_test:
     sdk: flutter

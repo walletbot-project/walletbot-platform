@@ -842,6 +842,186 @@ abstract class AppLocalizations {
   /// **'Add manually'**
   String get addManually;
 
+  /// No description provided for @sendFeedback.
+  ///
+  /// In en, this message translates to:
+  /// **'Send feedback'**
+  String get sendFeedback;
+
+  /// No description provided for @feedbackTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Send feedback'**
+  String get feedbackTitle;
+
+  /// No description provided for @feedbackSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Tell us what went wrong or what you would like to see. You can attach screenshots or files.'**
+  String get feedbackSubtitle;
+
+  /// No description provided for @feedbackMessageLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Your feedback'**
+  String get feedbackMessageLabel;
+
+  /// No description provided for @feedbackMessageHint.
+  ///
+  /// In en, this message translates to:
+  /// **'What would you like to tell us?'**
+  String get feedbackMessageHint;
+
+  /// No description provided for @feedbackAttach.
+  ///
+  /// In en, this message translates to:
+  /// **'Attach files'**
+  String get feedbackAttach;
+
+  /// No description provided for @feedbackAttachmentsCount.
+  ///
+  /// In en, this message translates to:
+  /// **'Attachments: {count}/{max} · up to {max_size} each'**
+  String feedbackAttachmentsCount(int count, int max, String max_size);
+
+  /// No description provided for @feedbackRemoveAttachment.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove attachment'**
+  String get feedbackRemoveAttachment;
+
+  /// No description provided for @feedbackSend.
+  ///
+  /// In en, this message translates to:
+  /// **'Send'**
+  String get feedbackSend;
+
+  /// No description provided for @feedbackSending.
+  ///
+  /// In en, this message translates to:
+  /// **'Sending feedback…'**
+  String get feedbackSending;
+
+  /// No description provided for @feedbackUploading.
+  ///
+  /// In en, this message translates to:
+  /// **'Uploading file {current} of {total}…'**
+  String feedbackUploading(int current, int total);
+
+  /// No description provided for @feedbackSent.
+  ///
+  /// In en, this message translates to:
+  /// **'Thank you! We got your feedback'**
+  String get feedbackSent;
+
+  /// No description provided for @feedbackSendFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not send your feedback'**
+  String get feedbackSendFailed;
+
+  /// No description provided for @feedbackMessageRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Write your feedback before sending'**
+  String get feedbackMessageRequired;
+
+  /// No description provided for @feedbackTooManyFiles.
+  ///
+  /// In en, this message translates to:
+  /// **'You can attach up to {max} files'**
+  String feedbackTooManyFiles(int max);
+
+  /// No description provided for @feedbackFileTooLarge.
+  ///
+  /// In en, this message translates to:
+  /// **'“{name}” is larger than the {max_size} limit'**
+  String feedbackFileTooLarge(String name, String max_size);
+
+  /// No description provided for @feedbackRateLimited.
+  ///
+  /// In en, this message translates to:
+  /// **'You have sent several messages already. Try again later.'**
+  String get feedbackRateLimited;
+
+  /// No description provided for @feedbackAttachmentRejected.
+  ///
+  /// In en, this message translates to:
+  /// **'We could not process the attachments. Remove them and try again.'**
+  String get feedbackAttachmentRejected;
+
+  /// No description provided for @feedbackOffline.
+  ///
+  /// In en, this message translates to:
+  /// **'No connection. Check your internet and try again, or write to us by email.'**
+  String get feedbackOffline;
+
+  /// No description provided for @feedbackEmailInstead.
+  ///
+  /// In en, this message translates to:
+  /// **'Send an email instead'**
+  String get feedbackEmailInstead;
+
+  /// No description provided for @feedbackEmailTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Write to support'**
+  String get feedbackEmailTitle;
+
+  /// No description provided for @feedbackEmailBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Send us an email and we will get back to you. Whatever you already typed goes into the message.'**
+  String get feedbackEmailBody;
+
+  /// The support mailbox shown to the user. Localized on purpose: the Spanish build shows soporte@, and both addresses reach the same inbox. Not a phrase to translate freely; only change it if that mailbox changes.
+  ///
+  /// In en, this message translates to:
+  /// **'support@walletbot.live'**
+  String get feedbackSupportEmail;
+
+  /// No description provided for @feedbackEmailOpen.
+  ///
+  /// In en, this message translates to:
+  /// **'Open email app'**
+  String get feedbackEmailOpen;
+
+  /// No description provided for @feedbackEmailCopy.
+  ///
+  /// In en, this message translates to:
+  /// **'Copy address'**
+  String get feedbackEmailCopy;
+
+  /// No description provided for @feedbackEmailCopied.
+  ///
+  /// In en, this message translates to:
+  /// **'Address copied'**
+  String get feedbackEmailCopied;
+
+  /// No description provided for @feedbackEmailNoApp.
+  ///
+  /// In en, this message translates to:
+  /// **'No email app on this device. Copy the address and write to us from anywhere.'**
+  String get feedbackEmailNoApp;
+
+  /// No description provided for @feedbackEmailSubject.
+  ///
+  /// In en, this message translates to:
+  /// **'Wallet Bot feedback'**
+  String get feedbackEmailSubject;
+
+  /// No description provided for @feedbackEmailBodyFooter.
+  ///
+  /// In en, this message translates to:
+  /// **'Sent from Wallet Bot {client}'**
+  String feedbackEmailBodyFooter(String client);
+
+  /// No description provided for @feedbackErrorDismiss.
+  ///
+  /// In en, this message translates to:
+  /// **'Dismiss this message'**
+  String get feedbackErrorDismiss;
+
   /// No description provided for @addTransaction.
   ///
   /// In en, this message translates to:
