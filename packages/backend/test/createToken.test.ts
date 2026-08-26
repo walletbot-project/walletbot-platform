@@ -135,6 +135,12 @@ describe('buildSystemInstruction', () => {
         )
     })
 
+    it('forbids leaking the machinery and demands a real attempt first', () => {
+        const prompt = buildSystemInstruction({})
+        expect(prompt).toContain('NEVER mention the machinery to the user')
+        expect(prompt).toContain('There is no limit on how many you may make')
+    })
+
     it('closes the suggestion list and names what never to suggest', () => {
         const prompt = buildSystemInstruction({})
         expect(prompt).toContain('exactly THREE things')
