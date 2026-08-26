@@ -129,6 +129,7 @@ class SyncEngine extends ChangeNotifier {
             _db.transactionTags,
             _db.savedFilters,
             _db.dashboardWidgets,
+            _db.agentMemories,
             _db.tombstones,
           ]),
         )
@@ -394,6 +395,14 @@ class SyncEngine extends ChangeNotifier {
     chunk.dashboardWidgets.addAll(dirtyDashboardWidgets);
     if (chunk.size >= pushChunkLimit) return chunk;
 
+    final dirtyAgentMemories =
+        await (_db.select(_db.agentMemories)
+              ..where((m) => m.dirty.equals(true))
+              ..limit(pushChunkLimit - chunk.size))
+            .get();
+    chunk.agentMemories.addAll(dirtyAgentMemories);
+    if (chunk.size >= pushChunkLimit) return chunk;
+
     final dirtyTxns =
         await (_db.select(_db.transactions)
               ..where((t) => t.dirty.equals(true))
@@ -460,6 +469,10 @@ class SyncEngine extends ChangeNotifier {
         if (chunk.dashboardWidgets.isNotEmpty)
           'dashboardWidgets': chunk.dashboardWidgets
               .map(_serializeDashboardWidget)
+              .toList(),
+        if (chunk.agentMemories.isNotEmpty)
+          'agentMemories': chunk.agentMemories
+              .map(_serializeAgentMemory)
               .toList(),
         if (chunk.transactions.isNotEmpty)
           'transactions': chunk.transactions
@@ -552,6 +565,16 @@ class SyncEngine extends ChangeNotifier {
           await (_db.update(_db.dashboardWidgets)
                 ..where((row) => row.id.equals(w.id)))
               .write(const DashboardWidgetsCompanion(dirty: Value(false)));
+        }
+      }
+      for (final m in chunk.agentMemories) {
+        final cur = await (_db.select(
+          _db.agentMemories,
+        )..where((row) => row.id.equals(m.id))).getSingleOrNull();
+        if (cur != null && cur.updatedAt == m.updatedAt) {
+          await (_db.update(_db.agentMemories)
+                ..where((row) => row.id.equals(m.id)))
+              .write(const AgentMemoriesCompanion(dirty: Value(false)));
         }
       }
       for (final t in chunk.transactions) {
@@ -657,6 +680,14 @@ class SyncEngine extends ChangeNotifier {
     'updatedAt': row.updatedAt,
   };
 
+  Map<String, Object?> _serializeAgentMemory(AgentMemory row) => {
+    'id': row.id,
+    'content': row.content,
+    'isArchived': row.archived,
+    'createdAt': row.createdAt,
+    'updatedAt': row.updatedAt,
+  };
+
   Map<String, Object?> _serializeTransaction(Transaction row) => {
     'id': row.id,
     'type': row.type,
@@ -704,6 +735,7 @@ class _Chunk {
   final List<Tag> tags = [];
   final List<SavedFilter> savedFilters = [];
   final List<DashboardWidget> dashboardWidgets = [];
+  final List<AgentMemory> agentMemories = [];
   final List<Transaction> transactions = [];
   final List<TransactionTag> transactionTags = [];
   final List<Tombstone> tombstones = [];
@@ -714,6 +746,7 @@ class _Chunk {
       tags.length +
       savedFilters.length +
       dashboardWidgets.length +
+      agentMemories.length +
       transactions.length +
       transactionTags.length +
       tombstones.length;

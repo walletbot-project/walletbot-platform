@@ -1,8 +1,10 @@
 import { defineSchema } from 'convex/server'
 import { accounts } from './schema/accounts'
+import { agentMemories } from './schema/agentMemories'
 import { agentUsageMonthly, agentUsageSamples } from './schema/agentUsage'
 import { categories } from './schema/categories'
 import { dashboardWidgets, savedFilters } from './schema/dashboard'
+import { exchangeRates } from './schema/exchangeRates'
 import {
     admins,
     featureFlagOverrides,
@@ -28,9 +30,11 @@ export default defineSchema({
     agentUsageMonthly,
     agentUsageSamples,
     admins,
+    agentMemories,
     categories,
     dashboardWidgets,
     deletedUsers,
+    exchangeRates,
     featureFlagOverrides,
     featureFlags,
     legalAcceptances,

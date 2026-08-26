@@ -1,12 +1,17 @@
 import { createClient, type GenericCtx } from '@convex-dev/better-auth'
 import { convex, crossDomain } from '@convex-dev/better-auth/plugins'
 import { requireRunMutationCtx } from '@convex-dev/better-auth/utils'
+import { type Locale, resolveLocale } from '@wallet-bot/shared'
 import { betterAuth } from 'better-auth/minimal'
 import { bearer } from 'better-auth/plugins'
 import { components, internal } from './_generated/api'
 import type { DataModel } from './_generated/dataModel'
 import authConfig from './auth.config'
-import { sendResetPasswordEmail, sendVerificationEmail } from './emails/helpers'
+import {
+    outboundLocaleForUser,
+    sendResetPasswordEmail,
+    sendVerificationEmail,
+} from './emails/helpers'
 
 const siteUrl = process.env.SITE_URL!
 const convexSiteUrl = process.env.CONVEX_SITE_URL
@@ -47,8 +52,7 @@ const authMethodForWebSession = (
 ): 'email_password' | 'google' | null => {
     if (!context) return null
     if (
-        context.request?.headers.get('x-walletbot-client-platform') ===
-        'native'
+        context.request?.headers.get('x-walletbot-client-platform') === 'native'
     ) {
         return null
     }
@@ -57,7 +61,23 @@ const authMethodForWebSession = (
     return null
 }
 
-export const createAuth = (ctx: GenericCtx<DataModel>) => {
+/**
+ * `acceptLanguage` is the calling client's language tag, for the flows where
+ * better-auth cannot tell us itself. Web goes through the mounted HTTP handler,
+ * so the email callbacks below get a real `Request` and read the header off it.
+ * Native calls `auth.api.*` directly through `authNative/http.ts`, where there
+ * is no such request, so that module reads the header off the incoming native
+ * request and passes it here instead.
+ *
+ * Only ever a fallback: a user with a stored `userSettings.language` gets that,
+ * whichever client is asking. See `resolveOutboundLocale`.
+ */
+export const createAuth = (
+    ctx: GenericCtx<DataModel>,
+    options?: { acceptLanguage?: string | null },
+) => {
+    const hintTag = options?.acceptLanguage ?? null
+    const localeHint: Locale | null = hintTag ? resolveLocale(hintTag) : null
     return betterAuth({
         baseURL: convexSiteUrl,
         trustedOrigins: [siteUrl, 'flutter://'],
@@ -65,11 +85,17 @@ export const createAuth = (ctx: GenericCtx<DataModel>) => {
         emailAndPassword: {
             enabled: true,
             requireEmailVerification: true,
-            sendResetPassword: async ({ user, url }) => {
-                await sendResetPasswordEmail(requireRunMutationCtx(ctx), {
+            sendResetPassword: async ({ user, url }, request) => {
+                const runCtx = requireRunMutationCtx(ctx)
+                await sendResetPasswordEmail(runCtx, {
                     to: user.email,
                     name: user.name ?? null,
                     url: withWebCallback(url, '/reset-password'),
+                    locale: await outboundLocaleForUser(runCtx, {
+                        userId: user.id,
+                        hint: localeHint,
+                        request,
+                    }),
                 })
             },
             onPasswordReset: async ({ user }) => {
@@ -97,6 +123,28 @@ export const createAuth = (ctx: GenericCtx<DataModel>) => {
                     // through `/sign-in/social`, and `googleSignIn` in
                     // `authNative/http.ts` already records those.
                     after: async (user, context) => {
+                        // Seeding the language runs for EVERY newly inserted
+                        // user, not just the email path: it is the only way the
+                        // verification email sent later in this same request
+                        // can be in the right language, since the client has no
+                        // session yet to push with. A `device` report, so the
+                        // user's first explicit pick replaces it.
+                        //
+                        // Skipped entirely when neither the request nor the
+                        // caller offers a tag. Seeding a guess would be worse
+                        // than leaving the field unset: unset falls back to
+                        // DEFAULT_LOCALE, which is what these emails already
+                        // were, and it lets the client's first report win.
+                        const acceptLanguage =
+                            context?.request?.headers.get('accept-language') ??
+                            hintTag
+                        if (acceptLanguage !== null) {
+                            await requireRunMutationCtx(ctx).runMutation(
+                                internal.v1.users.internal.seedLanguage,
+                                { userId: user.id, acceptLanguage },
+                            )
+                        }
+
                         if (context?.path !== '/sign-up/email') return
                         await requireRunMutationCtx(ctx).runMutation(
                             internal.telemetry.mutations
@@ -128,11 +176,17 @@ export const createAuth = (ctx: GenericCtx<DataModel>) => {
             },
         },
         emailVerification: {
-            sendVerificationEmail: async ({ user, url }) => {
-                await sendVerificationEmail(requireRunMutationCtx(ctx), {
+            sendVerificationEmail: async ({ user, url }, request) => {
+                const runCtx = requireRunMutationCtx(ctx)
+                await sendVerificationEmail(runCtx, {
                     to: user.email,
                     name: user.name ?? null,
                     url: withWebCallback(url, '/verify-email'),
+                    locale: await outboundLocaleForUser(runCtx, {
+                        userId: user.id,
+                        hint: localeHint,
+                        request,
+                    }),
                 })
             },
             sendOnSignUp: true,

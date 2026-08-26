@@ -15,6 +15,25 @@ export const listActive = query({
     },
 })
 
+export const list = query({
+    args: { includeArchived: v.optional(v.boolean()) },
+    handler: async (ctx, args) => {
+        const userId = await requireAuth(ctx)
+        if (args.includeArchived) {
+            return await ctx.db
+                .query('categories')
+                .withIndex('by_user_seq', (q) => q.eq('userId', userId))
+                .collect()
+        }
+        return await ctx.db
+            .query('categories')
+            .withIndex('by_user_archived', (q) =>
+                q.eq('userId', userId).eq('isArchived', false),
+            )
+            .collect()
+    },
+})
+
 export const listActiveWithCounts = query({
     args: {},
     handler: async (ctx) => {

@@ -30,6 +30,8 @@
  *     bundled FALLBACK; `/v1/config` serves the authoritative values.
  */
 
+import type { Locale } from './locale'
+
 export const LEGAL_DOCUMENTS = ['terms', 'privacy'] as const
 
 export type LegalDocument = (typeof LEGAL_DOCUMENTS)[number]
@@ -74,7 +76,7 @@ export const legalDocumentStatus = (
 }
 
 /** Locales the published documents exist in (`docs/legal/*.{en,es}.md`). */
-export type LegalLocale = 'en' | 'es'
+export type LegalLocale = Locale
 
 const LEGAL_SITE_URL = 'https://www.walletbot.live'
 

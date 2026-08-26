@@ -67,15 +67,17 @@ export type VoiceHistoryRecorder = {
         payload?: Record<string, unknown>,
         modality?: VoiceEventModality,
     ) => void
-    /** Move the session through native's lifecycle: `connecting` → `active`. */
-    markStatus: (status: 'connecting' | 'active') => void
+    /**
+     * Move the session through native's lifecycle: `connecting` → `active`,
+     * and `suspended` while a dropped socket waits for its auto-reconnect
+     * (the reconnect marks it `active` again).
+     */
+    markStatus: (status: 'connecting' | 'active' | 'suspended') => void
     /**
      * Close the session. `explicit` is native's `endedExplicitly`: true when the
-     * user ended it, false when the socket went away underneath us.
-     *
-     * Both cases write status `ended`, where native writes `suspended` for a
-     * socket that died — native can still resume that session from its handle,
-     * and web cannot (backlog 1.5), so on web the conversation really is over.
+     * user ended it, false when the account went away underneath us (provider
+     * unmount). A dropped socket is NOT an end any more — it suspends and
+     * reconnects.
      */
     end: (opts: { explicit: boolean }) => void
     /** Upload everything queued. Never rejects. */
@@ -157,6 +159,23 @@ export function createVoiceHistoryRecorder(
         }
     }
 
+    // The in-memory outbox loses its tail when the tab goes away inside the
+    // debounce window (D9): flush on `pagehide` and whenever the tab is
+    // hidden. Best-effort — the browser may not wait for the mutation, but
+    // an attempt beats a guaranteed loss. Removed again in `end`.
+    const flushOnHide = () => {
+        if (document.visibilityState === 'hidden') void flush()
+    }
+    const flushOnPageHide = () => {
+        void flush()
+    }
+    window.addEventListener('pagehide', flushOnPageHide)
+    document.addEventListener('visibilitychange', flushOnHide)
+    const removeUnloadFlush = () => {
+        window.removeEventListener('pagehide', flushOnPageHide)
+        document.removeEventListener('visibilitychange', flushOnHide)
+    }
+
     const flush = async (): Promise<void> => {
         if (timer !== null) {
             clearTimeout(timer)
@@ -220,6 +239,7 @@ export function createVoiceHistoryRecorder(
         end: ({ explicit }) => {
             if (closed) return
             closed = true
+            removeUnloadFlush()
             status = 'ended'
             endedAt = BigInt(Date.now())
             endedExplicitly = explicit

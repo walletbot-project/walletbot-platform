@@ -7,6 +7,7 @@ import { api } from '@wallet-bot/backend/api'
 import type { ToolName } from '@wallet-bot/shared'
 import { useConvex, useQuery } from 'convex/react'
 import { useCallback, useEffect, useRef, useState } from 'react'
+import type { LiveTokenMintArgs } from '@/lib/agent-context'
 import { executeToolCall } from '@/lib/agent-tools'
 import type { AgentToolContext } from '@/lib/agent-tools/helpers'
 import { useT } from '@/lib/i18n'
@@ -16,6 +17,11 @@ import {
     type VoiceEventModality,
     type VoiceHistoryRecorder,
 } from '@/lib/voice-history'
+import {
+    buildConversationSeed,
+    type ConversationEvent,
+    parseGoogleDuration,
+} from '@/lib/voice-seed'
 
 // Constants
 
@@ -158,6 +164,13 @@ export type ChatMessage =
 
 export type UseVoiceOpts = {
     context: AgentToolContext
+    /**
+     * Builds the mint request for `requestLiveToken`: platform identity, the
+     * user's locale/timezone and the USER_CONTEXT snapshot. Assembled in
+     * `VoiceProvider`, where the auth/i18n contexts are all available.
+     * Best-effort: when it rejects, the session connects with a bare mint.
+     */
+    buildMintArgs?: () => Promise<LiveTokenMintArgs>
 }
 
 export function useVoice(opts: UseVoiceOpts) {
@@ -198,6 +211,24 @@ export function useVoice(opts: UseVoiceOpts) {
     const discardOutputRef = useRef(false)
     const audioStreamOpenRef = useRef(false)
     const pendingTextRef = useRef<string[]>([])
+
+    // Reconnection state, porting native's design
+    // (apps/native/lib/voice/gemini_voice_expense_command.dart):
+    // - `sessionActiveRef` is the logical session: true from the user starting
+    //   a conversation until the explicit End (or the account unmounting).
+    //   A dropped socket does NOT end it — it schedules a reconnect.
+    // - `generationRef` guards against late callbacks from superseded sockets.
+    // - `conversationLogRef` is the in-memory event log the reconnect seed is
+    //   built from (`buildConversationSeed`), web's substrate for what native
+    //   reads back from its durable Drift log.
+    const sessionActiveRef = useRef(false)
+    const sessionModeRef = useRef<SessionMode>('audio')
+    const generationRef = useRef(0)
+    const reconnectAttemptRef = useRef(0)
+    const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+    const goAwayTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+    const conversationLogRef = useRef<ConversationEvent[]>([])
+    const connectAttemptRef = useRef<() => Promise<void>>(async () => {})
 
     // Aggregation state — refs so message handlers can mutate without
     // re-creating the onmessage callback on every render.
@@ -248,6 +279,7 @@ export function useVoice(opts: UseVoiceOpts) {
      */
     const recordSendMessage = useCallback(
         (text: string) => {
+            conversationLogRef.current.push({ type: 'send_message', text })
             recordHistory(
                 'send_message',
                 'client',
@@ -326,6 +358,10 @@ export function useVoice(opts: UseVoiceOpts) {
 
     const appendUser = useCallback(
         (chunk: string) => {
+            conversationLogRef.current.push({
+                type: 'user_transcript_delta',
+                text: chunk,
+            })
             recordHistory(
                 'user_transcript_delta',
                 'server',
@@ -362,6 +398,10 @@ export function useVoice(opts: UseVoiceOpts) {
 
     const appendAgent = useCallback(
         (chunk: string) => {
+            conversationLogRef.current.push({
+                type: 'agent_transcript_delta',
+                text: chunk,
+            })
             recordHistory(
                 'agent_transcript_delta',
                 'server',
@@ -692,11 +732,414 @@ export function useVoice(opts: UseVoiceOpts) {
         }
     }, [])
 
-    // Connect
+    /** Cancels any scheduled reconnect / goAway rotation. */
+    const clearReconnectTimers = useCallback(() => {
+        if (reconnectTimerRef.current !== null) {
+            clearTimeout(reconnectTimerRef.current)
+            reconnectTimerRef.current = null
+        }
+        if (goAwayTimerRef.current !== null) {
+            clearTimeout(goAwayTimerRef.current)
+            goAwayTimerRef.current = null
+        }
+    }, [])
+
+    /**
+     * Exponential backoff (2^(n-1) s, cap 30 s), reset on a completed setup —
+     * native's `_scheduleReconnect`. Only ever runs while the logical session
+     * is active; the explicit End cancels it.
+     */
+    const scheduleReconnect = useCallback(() => {
+        if (!sessionActiveRef.current || reconnectTimerRef.current !== null) {
+            return
+        }
+        reconnectAttemptRef.current += 1
+        const seconds = Math.min(30, 2 ** (reconnectAttemptRef.current - 1))
+        addSystem(catalog.voice.systemReconnecting({ seconds }), 'info')
+        reconnectTimerRef.current = setTimeout(() => {
+            reconnectTimerRef.current = null
+            if (!sessionActiveRef.current) return
+            void connectAttemptRef.current()
+        }, seconds * 1000)
+    }, [addSystem, catalog])
+
+    /**
+     * One connection attempt against a fresh single-use token — the body of
+     * both the initial connect and every reconnect. A failure never ends the
+     * session: it is reported as a transient notice and retried on backoff,
+     * so only the explicit End (or the account unmounting) can close a
+     * conversation. `generation` guards every callback against a superseded
+     * socket.
+     */
+    const connectAttempt = useCallback(async () => {
+        if (!sessionActiveRef.current) return
+        const generation = ++generationRef.current
+        applyStatus('connecting')
+
+        try {
+            // The snapshot is best-effort: a failed builder must never
+            // block the session, it only costs the USER_CONTEXT block.
+            const mintArgs = await optsRef.current
+                .buildMintArgs?.()
+                .catch(() => undefined)
+            const { token, model } = await convex.action(
+                api.v1.live.actions.requestLiveToken,
+                mintArgs ?? {},
+            )
+            if (generation !== generationRef.current) return
+            if (!sessionActiveRef.current) return
+            const tokenNotice = catalog.voice.systemTokenReceived({ model })
+            addSystem(tokenNotice, 'info')
+            // The model is only known now, so this is where the session row
+            // becomes uploadable.
+            historyRef.current?.open(model)
+            recordHistory('system', 'local', { message: tokenNotice })
+
+            const playbackCtx = new AudioContext({
+                sampleRate: OUTPUT_SAMPLE_RATE,
+            })
+            await playbackCtx.audioWorklet.addModule(
+                '/audio-processors/playback.worklet.js',
+            )
+            const playbackNode = new AudioWorkletNode(
+                playbackCtx,
+                'pcm-processor',
+            )
+            playbackNode.connect(playbackCtx.destination)
+            playbackContextRef.current = playbackCtx
+            playbackWorkletRef.current = playbackNode
+
+            const ai = new GoogleGenAI({
+                apiKey: token,
+                httpOptions: { apiVersion: 'v1alpha' },
+            })
+            const session = await ai.live.connect({
+                model: `models/${model}`,
+                callbacks: {
+                    onmessage: async (msg: LiveServerMessage) => {
+                        if (generation !== generationRef.current) return
+                        if (msg.toolCall) {
+                            const functionCalls =
+                                msg.toolCall.functionCalls ?? []
+                            const functionResponses: {
+                                id?: string
+                                name?: string
+                                response: {
+                                    result: Record<string, unknown>
+                                }
+                            }[] = []
+                            for (const fc of functionCalls) {
+                                addToolCall(
+                                    fc.id ?? '',
+                                    fc.name ?? '',
+                                    (fc.args ?? {}) as Record<string, unknown>,
+                                )
+                                conversationLogRef.current.push({
+                                    type: 'tool_call',
+                                })
+                                recordHistory(
+                                    'tool_call',
+                                    'server',
+                                    {
+                                        id: fc.id ?? '',
+                                        name: fc.name ?? '',
+                                        args: fc.args ?? {},
+                                    },
+                                    'tool',
+                                )
+                            }
+                            for (const fc of functionCalls) {
+                                const result = await executeToolCall(
+                                    optsRef.current.context,
+                                    fc.name ?? '',
+                                    (fc.args ?? {}) as Record<string, unknown>,
+                                )
+                                completeToolCall(fc.id ?? '', result)
+                                conversationLogRef.current.push({
+                                    type: 'tool_result',
+                                })
+                                recordHistory(
+                                    'tool_result',
+                                    'client',
+                                    {
+                                        id: fc.id ?? '',
+                                        name: fc.name ?? '',
+                                        result,
+                                    },
+                                    'tool',
+                                )
+                                functionResponses.push({
+                                    id: fc.id,
+                                    name: fc.name,
+                                    response: { result },
+                                })
+                            }
+                            session.sendToolResponse({ functionResponses })
+                            return
+                        }
+
+                        if (msg.toolCallCancellation) {
+                            const ids = (
+                                msg.toolCallCancellation.ids ?? []
+                            ).filter((x): x is string => typeof x === 'string')
+                            cancelToolCalls(ids)
+                            conversationLogRef.current.push({
+                                type: 'tool_cancelled',
+                            })
+                            recordHistory(
+                                'tool_cancelled',
+                                'server',
+                                { ids },
+                                'tool',
+                            )
+                            return
+                        }
+
+                        if (msg.usageMetadata) {
+                            recordHistory('usage_metadata', 'server', {
+                                ...msg.usageMetadata,
+                            })
+                        }
+                        if (msg.goAway) {
+                            recordHistory('go_away', 'server', {
+                                timeLeft: msg.goAway.timeLeft,
+                            })
+                            // Rotate shortly before the announced kill —
+                            // native's `_handleGoAway`. The transcript seed
+                            // restores context on the new connection.
+                            const remaining =
+                                parseGoogleDuration(msg.goAway.timeLeft) ?? 5000
+                            const delay =
+                                remaining > 2000 ? remaining - 2000 : 100
+                            if (goAwayTimerRef.current !== null) {
+                                clearTimeout(goAwayTimerRef.current)
+                            }
+                            goAwayTimerRef.current = setTimeout(() => {
+                                goAwayTimerRef.current = null
+                                if (!sessionActiveRef.current) return
+                                if (generation !== generationRef.current) {
+                                    return
+                                }
+                                // Supersede this socket first so its onclose
+                                // is ignored, then reconnect immediately.
+                                generationRef.current += 1
+                                sessionRef.current = null
+                                stopPlayback()
+                                try {
+                                    session.close()
+                                } catch {
+                                    // Already closing — rotation proceeds.
+                                }
+                                void connectAttemptRef.current()
+                            }, delay)
+                        }
+                        if (msg.sessionResumptionUpdate) {
+                            // Only the two booleans, never the handle —
+                            // native redacts it from the wire as well.
+                            recordHistory(
+                                'session_resumption_update',
+                                'server',
+                                {
+                                    resumable:
+                                        msg.sessionResumptionUpdate.resumable ??
+                                        false,
+                                    hasNewHandle: Boolean(
+                                        msg.sessionResumptionUpdate.newHandle,
+                                    ),
+                                },
+                            )
+                        }
+
+                        const sc = msg.serverContent
+                        if (!sc) return
+
+                        const inputText = sc.inputTranscription?.text
+                        if (inputText) {
+                            // The user spoke: a typed turn silenced
+                            // playback, a spoken one makes the reply
+                            // audible again.
+                            audioPlaybackEnabledRef.current = true
+                            discardOutputRef.current = false
+                            appendUser(inputText)
+                        }
+
+                        const outputText = sc.outputTranscription?.text
+                        if (outputText) appendAgent(outputText)
+
+                        if (sc.interrupted) {
+                            conversationLogRef.current.push({
+                                type: 'agent_interrupted',
+                            })
+                            recordHistory('agent_interrupted', 'server', {
+                                reason: 'server_interrupted',
+                            })
+                            discardOutputRef.current = true
+                            playbackNode.port.postMessage('interrupt')
+                            finalisePendingAgent({ interrupted: true })
+                        }
+
+                        const parts = sc.modelTurn?.parts
+                        if (parts) {
+                            const playable =
+                                audioPlaybackEnabledRef.current &&
+                                !discardOutputRef.current
+                            for (const part of parts) {
+                                if (playable && part.inlineData?.data) {
+                                    playbackNode.port.postMessage(
+                                        base64ToPcmFloat32(
+                                            part.inlineData.data,
+                                        ),
+                                    )
+                                }
+                                if (part.text) {
+                                    appendAgent(part.text)
+                                }
+                            }
+                        }
+
+                        if (sc.turnComplete) {
+                            conversationLogRef.current.push({
+                                type: 'agent_turn_complete',
+                            })
+                            recordHistory('agent_turn_complete', 'server')
+                            discardOutputRef.current = false
+                            finalisePendingAgent()
+                        }
+                    },
+                    onerror: () => {
+                        if (generation !== generationRef.current) return
+                        addSystem(catalog.voice.systemSocketError, 'error')
+                        recordHistory('error', 'local', {
+                            message: catalog.voice.systemSocketError,
+                            isTransient: true,
+                        })
+                        // Recovery belongs to onclose, which follows an
+                        // errored socket; nothing else to do here.
+                    },
+                    onclose: (event: CloseEvent) => {
+                        if (generation !== generationRef.current) return
+                        sessionRef.current = null
+                        audioStreamOpenRef.current = false
+                        stopPlayback()
+                        finalisePendingUser()
+                        finalisePendingAgent()
+                        // The explicit End already cleaned everything up —
+                        // this close is just its acknowledgement.
+                        if (!sessionActiveRef.current) return
+                        addSystem(catalog.voice.systemDisconnected, 'info')
+                        recordHistory('disconnected', 'server', {
+                            code: event.code,
+                            reason: event.reason,
+                        })
+                        // Suspended, not ended (native's contract): the
+                        // conversation continues on the next socket. The
+                        // transcript, the typed queue and the mic capture all
+                        // stay — chunks are simply dropped while the session
+                        // handle is null.
+                        historyRef.current?.markStatus('suspended')
+                        applyStatus('connecting')
+                        scheduleReconnect()
+                    },
+                },
+            })
+
+            if (
+                generation !== generationRef.current ||
+                !sessionActiveRef.current
+            ) {
+                // Superseded (goAway rotation, explicit End) while the
+                // handshake was in flight.
+                try {
+                    session.close()
+                } catch {
+                    // Already closed.
+                }
+                return
+            }
+            sessionRef.current = session
+            reconnectAttemptRef.current = 0
+            applyStatus('connected')
+            historyRef.current?.markStatus('active')
+            recordHistory('connected', 'local')
+            addSystem(
+                sessionModeRef.current === 'audio'
+                    ? catalog.voice.systemConnected
+                    : catalog.voice.systemConnectedTyping,
+                'success',
+            )
+            // Every connect is a fresh server session; restore the
+            // conversation from the event log before anything else is sent,
+            // so queued messages and live audio land after the model regained
+            // its context — the same ordering contract as native.
+            const seed = buildConversationSeed(conversationLogRef.current, {
+                pendingTexts: pendingTextRef.current,
+            })
+            if (seed) {
+                session.sendClientContent({
+                    turns: [{ role: 'user', parts: [{ text: seed }] }],
+                    turnComplete: false,
+                })
+                recordHistory('context_seeded', 'local', {
+                    chars: seed.length,
+                })
+            }
+            flushPendingText()
+        } catch (err) {
+            if (generation !== generationRef.current) return
+            stopPlayback()
+            const message = catalog.voice.systemConnectionFailed({
+                error: err instanceof Error ? err.message : String(err),
+            })
+            addSystem(message, 'error')
+            recordHistory('error', 'local', {
+                message,
+                isTransient: true,
+            })
+            // Keep the transcript and the typed queue; retry on backoff.
+            // Only the explicit End closes the conversation.
+            if (sessionActiveRef.current) {
+                scheduleReconnect()
+            } else {
+                applyStatus('disconnected')
+            }
+        }
+    }, [
+        convex,
+        catalog,
+        applyStatus,
+        stopPlayback,
+        flushPendingText,
+        addSystem,
+        addToolCall,
+        completeToolCall,
+        cancelToolCalls,
+        appendUser,
+        appendAgent,
+        finalisePendingUser,
+        finalisePendingAgent,
+        recordHistory,
+        scheduleReconnect,
+    ])
+
+    // `scheduleReconnect` fires through this ref — the two reference each
+    // other, so the cycle is broken with a ref assignment.
+    useEffect(() => {
+        connectAttemptRef.current = connectAttempt
+    }, [connectAttempt])
+
+    /**
+     * Starts the logical session — the user-facing connect. Reconnects after
+     * drops are internal (`connectAttempt` + `scheduleReconnect`); calling
+     * this while a session is active does nothing.
+     */
     const connect = useCallback(
         async (mode: SessionMode = 'audio') => {
+            if (sessionActiveRef.current) return
             if (statusRef.current !== 'disconnected') return
-            applyStatus('connecting')
+            sessionActiveRef.current = true
+            sessionModeRef.current = mode
+            reconnectAttemptRef.current = 0
+            conversationLogRef.current = []
             pendingUserIdRef.current = null
             pendingAgentIdRef.current = null
             audioStreamOpenRef.current = false
@@ -705,8 +1148,10 @@ export function useVoice(opts: UseVoiceOpts) {
                 mode === 'audio' ? true : RESPOND_TO_TEXT_WITH_AUDIO
             addSystem(catalog.voice.systemConnecting, 'info')
 
-            // One recorder per session, created before the first await so a
-            // turn typed while connecting still lands in the same history.
+            // One recorder per logical session — reconnects reuse it, so one
+            // conversation stays one `voiceSessions` row. Created before the
+            // first await so a turn typed while connecting still lands in the
+            // same history.
             historyRef.current = createVoiceHistoryRecorder(
                 convex,
                 () => ownerIdRef.current,
@@ -715,271 +1160,16 @@ export function useVoice(opts: UseVoiceOpts) {
                 message: catalog.voice.systemConnecting,
             })
 
-            try {
-                const { token, model } = await convex.action(
-                    api.v1.live.actions.requestLiveToken,
-                    {},
-                )
-                const tokenNotice = catalog.voice.systemTokenReceived({ model })
-                addSystem(tokenNotice, 'info')
-                // The model is only known now, so this is where the session row
-                // becomes uploadable.
-                historyRef.current?.open(model)
-                recordHistory('system', 'local', { message: tokenNotice })
-
-                const playbackCtx = new AudioContext({
-                    sampleRate: OUTPUT_SAMPLE_RATE,
-                })
-                await playbackCtx.audioWorklet.addModule(
-                    '/audio-processors/playback.worklet.js',
-                )
-                const playbackNode = new AudioWorkletNode(
-                    playbackCtx,
-                    'pcm-processor',
-                )
-                playbackNode.connect(playbackCtx.destination)
-                playbackContextRef.current = playbackCtx
-                playbackWorkletRef.current = playbackNode
-
-                const ai = new GoogleGenAI({
-                    apiKey: token,
-                    httpOptions: { apiVersion: 'v1alpha' },
-                })
-                const session = await ai.live.connect({
-                    model: `models/${model}`,
-                    callbacks: {
-                        onmessage: async (msg: LiveServerMessage) => {
-                            if (msg.toolCall) {
-                                const functionCalls =
-                                    msg.toolCall.functionCalls ?? []
-                                const functionResponses: {
-                                    id?: string
-                                    name?: string
-                                    response: {
-                                        result: Record<string, unknown>
-                                    }
-                                }[] = []
-                                for (const fc of functionCalls) {
-                                    addToolCall(
-                                        fc.id ?? '',
-                                        fc.name ?? '',
-                                        (fc.args ?? {}) as Record<
-                                            string,
-                                            unknown
-                                        >,
-                                    )
-                                    recordHistory(
-                                        'tool_call',
-                                        'server',
-                                        {
-                                            id: fc.id ?? '',
-                                            name: fc.name ?? '',
-                                            args: fc.args ?? {},
-                                        },
-                                        'tool',
-                                    )
-                                }
-                                for (const fc of functionCalls) {
-                                    const result = await executeToolCall(
-                                        optsRef.current.context,
-                                        fc.name ?? '',
-                                        (fc.args ?? {}) as Record<
-                                            string,
-                                            unknown
-                                        >,
-                                    )
-                                    completeToolCall(fc.id ?? '', result)
-                                    recordHistory(
-                                        'tool_result',
-                                        'client',
-                                        {
-                                            id: fc.id ?? '',
-                                            name: fc.name ?? '',
-                                            result,
-                                        },
-                                        'tool',
-                                    )
-                                    functionResponses.push({
-                                        id: fc.id,
-                                        name: fc.name,
-                                        response: { result },
-                                    })
-                                }
-                                session.sendToolResponse({ functionResponses })
-                                return
-                            }
-
-                            if (msg.toolCallCancellation) {
-                                const ids = (
-                                    msg.toolCallCancellation.ids ?? []
-                                ).filter(
-                                    (x): x is string => typeof x === 'string',
-                                )
-                                cancelToolCalls(ids)
-                                recordHistory(
-                                    'tool_cancelled',
-                                    'server',
-                                    { ids },
-                                    'tool',
-                                )
-                                return
-                            }
-
-                            if (msg.usageMetadata) {
-                                recordHistory('usage_metadata', 'server', {
-                                    ...msg.usageMetadata,
-                                })
-                            }
-                            if (msg.goAway) {
-                                recordHistory('go_away', 'server', {
-                                    timeLeft: msg.goAway.timeLeft,
-                                })
-                            }
-                            if (msg.sessionResumptionUpdate) {
-                                // Only the two booleans, never the handle —
-                                // native redacts it from the wire as well.
-                                recordHistory(
-                                    'session_resumption_update',
-                                    'server',
-                                    {
-                                        resumable:
-                                            msg.sessionResumptionUpdate
-                                                .resumable ?? false,
-                                        hasNewHandle: Boolean(
-                                            msg.sessionResumptionUpdate
-                                                .newHandle,
-                                        ),
-                                    },
-                                )
-                            }
-
-                            const sc = msg.serverContent
-                            if (!sc) return
-
-                            const inputText = sc.inputTranscription?.text
-                            if (inputText) {
-                                // The user spoke: a typed turn silenced
-                                // playback, a spoken one makes the reply
-                                // audible again.
-                                audioPlaybackEnabledRef.current = true
-                                discardOutputRef.current = false
-                                appendUser(inputText)
-                            }
-
-                            const outputText = sc.outputTranscription?.text
-                            if (outputText) appendAgent(outputText)
-
-                            if (sc.interrupted) {
-                                recordHistory('agent_interrupted', 'server', {
-                                    reason: 'server_interrupted',
-                                })
-                                discardOutputRef.current = true
-                                playbackNode.port.postMessage('interrupt')
-                                finalisePendingAgent({ interrupted: true })
-                            }
-
-                            const parts = sc.modelTurn?.parts
-                            if (parts) {
-                                const playable =
-                                    audioPlaybackEnabledRef.current &&
-                                    !discardOutputRef.current
-                                for (const part of parts) {
-                                    if (playable && part.inlineData?.data) {
-                                        playbackNode.port.postMessage(
-                                            base64ToPcmFloat32(
-                                                part.inlineData.data,
-                                            ),
-                                        )
-                                    }
-                                    if (part.text) {
-                                        appendAgent(part.text)
-                                    }
-                                }
-                            }
-
-                            if (sc.turnComplete) {
-                                recordHistory('agent_turn_complete', 'server')
-                                discardOutputRef.current = false
-                                finalisePendingAgent()
-                            }
-                        },
-                        onerror: () => {
-                            addSystem(catalog.voice.systemSocketError, 'error')
-                            recordHistory('error', 'local', {
-                                message: catalog.voice.systemSocketError,
-                                isTransient: true,
-                            })
-                            applyStatus('disconnected')
-                        },
-                        onclose: (event: CloseEvent) => {
-                            addSystem(catalog.voice.systemDisconnected, 'info')
-                            recordHistory('disconnected', 'server', {
-                                code: event.code,
-                                reason: event.reason,
-                            })
-                            applyStatus('disconnected')
-                            audioStreamOpenRef.current = false
-                            pendingTextRef.current = []
-                            sessionRef.current = null
-                            // The socket is gone: release the mic instead of
-                            // capturing into a dead session (the control bar
-                            // would still show a live mic otherwise).
-                            stopMicCapture()
-                            stopPlayback()
-                            finalisePendingUser()
-                            finalisePendingAgent()
-                            // No resumption on web yet (backlog 1.5), so a
-                            // closed socket ends the session for good.
-                            historyRef.current?.end({ explicit: false })
-                        },
-                    },
-                })
-
-                sessionRef.current = session
-                applyStatus('connected')
-                historyRef.current?.markStatus('active')
-                recordHistory('connected', 'local')
-                addSystem(
-                    mode === 'audio'
-                        ? catalog.voice.systemConnected
-                        : catalog.voice.systemConnectedTyping,
-                    'success',
-                )
-                flushPendingText()
-                if (mode === 'audio') await openMic({ turnOn: true })
-            } catch (err) {
-                pendingTextRef.current = []
-                stopPlayback()
-                const message = catalog.voice.systemConnectionFailed({
-                    error: err instanceof Error ? err.message : String(err),
-                })
-                addSystem(message, 'error')
-                recordHistory('error', 'local', {
-                    message,
-                    isTransient: false,
-                })
-                historyRef.current?.end({ explicit: false })
-                applyStatus('disconnected')
+            await connectAttempt()
+            // Only on the session's first successful connect: reconnects keep
+            // whatever capture state the user had. A live session handle is
+            // the "connected" signal (TS keeps the guard's narrowing of
+            // statusRef.current across the await, so the ref can't be read).
+            if (mode === 'audio' && sessionRef.current !== null) {
+                await openMic({ turnOn: true })
             }
         },
-        [
-            convex,
-            catalog,
-            applyStatus,
-            openMic,
-            stopMicCapture,
-            stopPlayback,
-            flushPendingText,
-            addSystem,
-            addToolCall,
-            completeToolCall,
-            cancelToolCalls,
-            appendUser,
-            appendAgent,
-            finalisePendingUser,
-            finalisePendingAgent,
-            recordHistory,
-        ],
+        [convex, catalog, addSystem, recordHistory, connectAttempt, openMic],
     )
 
     /**
@@ -1006,7 +1196,6 @@ export function useVoice(opts: UseVoiceOpts) {
             }
 
             if (status === 'disconnected') {
-                setMessages([])
                 appendTypedUser(text)
                 pendingTextRef.current = [...pendingTextRef.current, text]
                 // `connect` runs synchronously until its first await, so the
@@ -1046,9 +1235,17 @@ export function useVoice(opts: UseVoiceOpts) {
         [endAudioStream, recordMute],
     )
 
-    // Disconnect
+    // Disconnect — the explicit End. The only path that closes a
+    // conversation for good (a dropped socket suspends and reconnects), and
+    // the only one that clears the transcript, like native's factory dropping
+    // the command.
     const disconnect = useCallback(() => {
         recordHistory('end_session', 'client')
+        sessionActiveRef.current = false
+        clearReconnectTimers()
+        // Invalidate the socket's callbacks and any in-flight attempt before
+        // closing, so the close below is not mistaken for a drop.
+        generationRef.current += 1
         endAudioStream()
         stopMicCapture()
         stopPlayback()
@@ -1056,11 +1253,13 @@ export function useVoice(opts: UseVoiceOpts) {
         sessionRef.current = null
         audioStreamOpenRef.current = false
         pendingTextRef.current = []
+        conversationLogRef.current = []
         discardOutputRef.current = false
         audioPlaybackEnabledRef.current = true
         applyStatus('disconnected')
         finalisePendingUser()
         finalisePendingAgent()
+        setMessages([])
         // Ends the row and flushes the tail, native's `endExplicitly` + flush.
         historyRef.current?.end({ explicit: true })
     }, [
@@ -1071,6 +1270,7 @@ export function useVoice(opts: UseVoiceOpts) {
         finalisePendingUser,
         finalisePendingAgent,
         recordHistory,
+        clearReconnectTimers,
     ])
 
     /**
@@ -1097,11 +1297,8 @@ export function useVoice(opts: UseVoiceOpts) {
      */
     const detach = useCallback(() => {
         if (statusRef.current === 'disconnected') {
-            // The conversation is over — the user ended it, or the socket did.
-            // Native's factory drops the command at that point, so reopening
-            // the screen starts from an empty log; leaving the transcript up
-            // would suggest something is still listening.
-            setMessages([])
+            // The conversation is over (only the explicit End gets here, and
+            // it already cleared the transcript). Nothing to detach from.
             return
         }
         recordHistory('screen_detached', 'client', {

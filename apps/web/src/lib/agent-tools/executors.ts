@@ -10,19 +10,31 @@ import type {
     WidgetType,
 } from '@wallet-bot/shared'
 import {
+    AGENT_SKILLS,
+    AGENT_SKILLS_BY_SLUG,
     backgroundToJson,
     collapseEmptyRows,
+    convertAmount,
     DASHBOARD_WIDTHS,
+    DEFAULT_FX_MARKET,
     filterConfigToJson,
     filterFromCanonical,
+    fxAlternatives,
     isFilterEmpty,
+    isFxQuoteStale,
+    isValidCurrencyCode,
     mergeWidgetOptions,
+    normalizeCurrencyCode,
     parseAmountToCents,
     parseFilterConfig,
+    parseNaturalDate,
     parseOptionalDate,
     parseTransactionDate,
     parseWidgetOptions,
+    resolveFxQuote,
     resolvePlacements,
+    runCalculate,
+    runCalculateDate,
     toolSchemas,
     WIDGET_TYPES,
 } from '@wallet-bot/shared'
@@ -117,21 +129,26 @@ export const toolExecutors = {
     ),
 
     // ───── Categories ─────
-    listCategories: defineTool(toolSchemas.listCategories, async (ctx) => {
-        const cats = await ctx.client.query(
-            api.v1.categories.queries.listActive,
-        )
-        return {
-            ok: true,
-            categories: cats.map((c) => ({
-                id: c.id,
-                name: c.name,
-                description: c.description,
-                color: c.color,
-                icon: c.icon,
-            })),
-        }
-    }),
+    listCategories: defineTool(
+        toolSchemas.listCategories,
+        async (ctx, args) => {
+            const cats = await ctx.client.query(
+                api.v1.categories.queries.list,
+                { includeArchived: args.includeArchived ?? false },
+            )
+            return {
+                ok: true,
+                categories: cats.map((c) => ({
+                    id: c.id,
+                    name: c.name,
+                    description: c.description,
+                    color: c.color,
+                    icon: c.icon,
+                    isArchived: c.isArchived,
+                })),
+            }
+        },
+    ),
     getCategory: defineTool(toolSchemas.getCategory, async (ctx, args) => {
         const r = await resolveCategory(ctx, args.idOrName)
         if (!r.ok) return resolutionError('Category', r)
@@ -179,8 +196,10 @@ export const toolExecutors = {
     ),
 
     // ───── Tags ─────
-    listTags: defineTool(toolSchemas.listTags, async (ctx) => {
-        const tags = await ctx.client.query(api.v1.tags.queries.listActive)
+    listTags: defineTool(toolSchemas.listTags, async (ctx, args) => {
+        const tags = await ctx.client.query(api.v1.tags.queries.list, {
+            includeArchived: args.includeArchived ?? false,
+        })
         return {
             ok: true,
             tags: tags.map((t) => ({
@@ -188,6 +207,7 @@ export const toolExecutors = {
                 name: t.name,
                 parentId: t.parentId,
                 color: t.color,
+                isArchived: t.isArchived,
             })),
         }
     }),
@@ -257,11 +277,21 @@ export const toolExecutors = {
                 categoryId = r.entity.id
             }
 
+            // With no filters at all this is the "recent movements" read the
+            // old getRecentTransactions tool used to serve: default to 10.
+            const hasFilters =
+                args.type !== undefined ||
+                args.accountIdOrName !== undefined ||
+                args.categoryIdOrName !== undefined ||
+                args.tagIdOrName !== undefined ||
+                args.status !== undefined ||
+                args.dateFrom !== undefined ||
+                args.dateTo !== undefined
             const page = await ctx.client.query(
                 api.v1.transactions.queries.listPaginated,
                 {
                     paginationOpts: {
-                        numItems: args.limit ?? 50,
+                        numItems: args.limit ?? (hasFilters ? 50 : 10),
                         cursor: null,
                     },
                     type: args.type,
@@ -311,20 +341,6 @@ export const toolExecutors = {
             return { ok: true, transaction: serializeTransaction(txn) }
         },
     ),
-    getRecentTransactions: defineTool(
-        toolSchemas.getRecentTransactions,
-        async (ctx, args) => {
-            const txns = await ctx.client.query(
-                api.v1.transactions.queries.recent,
-                { limit: args.limit ?? 10 },
-            )
-            return {
-                ok: true,
-                items: txns.map(serializeTransaction),
-            }
-        },
-    ),
-
     // ───── Transactions: write ─────
     addExpense: defineTool(toolSchemas.addExpense, async (ctx, args) => {
         const accR = await resolveAccount(ctx, args.accountIdOrName)
@@ -380,11 +396,15 @@ export const toolExecutors = {
         const toR = await resolveAccount(ctx, args.toAccountIdOrName)
         if (!toR.ok) return resolutionError('Destination account', toR)
 
-        if (!args.categoryIdOrName) {
-            return { ok: false, error: 'Category is required' }
+        // Category is optional on transfers (they are excluded from category
+        // breakdowns anyway); when absent, the backend stores the same '' the
+        // native app writes.
+        let categoryId: string | undefined
+        if (args.categoryIdOrName) {
+            const catR = await resolveCategory(ctx, args.categoryIdOrName)
+            if (!catR.ok) return resolutionError('Category', catR)
+            categoryId = catR.entity.id
         }
-        const catR = await resolveCategory(ctx, args.categoryIdOrName)
-        if (!catR.ok) return resolutionError('Category', catR)
 
         const id = newId()
         const date = parseTransactionDate(args.date, args.timeStatus, args.time)
@@ -402,7 +422,7 @@ export const toolExecutors = {
                         ? parseAmountToCents(args.toAmount)
                         : undefined,
                 exchangeRate: args.exchangeRate,
-                categoryId: catR.entity.id,
+                categoryId,
                 date,
                 dateConfirmed: args.date !== undefined,
                 timeStatus: args.timeStatus,
@@ -454,6 +474,25 @@ export const toolExecutors = {
                 if (!r.ok) return resolutionError('Category', r)
                 categoryId = r.entity.id
             }
+            // Tag changes ride the same mutation as the field edits, so
+            // everything commits atomically. Unknown names are skipped and
+            // reported back in `missing` (never created on the fly).
+            const missing: string[] = []
+            let addTagIds: string[] | undefined
+            if (args.addTagIdsOrNames && args.addTagIdsOrNames.length > 0) {
+                const r = await resolveTagIds(ctx, args.addTagIdsOrNames)
+                addTagIds = r.resolved
+                missing.push(...r.missing)
+            }
+            let removeTagIds: string[] | undefined
+            if (
+                args.removeTagIdsOrNames &&
+                args.removeTagIdsOrNames.length > 0
+            ) {
+                const r = await resolveTagIds(ctx, args.removeTagIdsOrNames)
+                removeTagIds = r.resolved
+                missing.push(...r.missing)
+            }
             // Partial temporal edits must preserve whichever of the calendar
             // date / clock the caller omitted, instead of anchoring the
             // missing half to "now". We read the existing transaction and
@@ -497,6 +536,8 @@ export const toolExecutors = {
                         : undefined,
                 categoryId,
                 status: args.status,
+                addTagIds,
+                removeTagIds,
             })
             return {
                 ok: true,
@@ -505,6 +546,7 @@ export const toolExecutors = {
                 ...(args.timeStatus === undefined
                     ? {}
                     : { timeStatus: args.timeStatus }),
+                ...(missing.length === 0 ? {} : { missing }),
             }
         },
     ),
@@ -517,130 +559,46 @@ export const toolExecutors = {
             return { ok: true, id: args.id }
         },
     ),
-    tagTransaction: defineTool(
-        toolSchemas.tagTransaction,
-        async (ctx, args) => {
-            const { resolved, missing } = await resolveTagIds(
-                ctx,
-                args.tagIdsOrNames,
-            )
-            if (resolved.length === 0) {
-                return { ok: false, error: 'No tags resolved', missing }
-            }
-            const result = await ctx.client.mutation(
-                api.v1.transactions.mutations.tag,
-                {
-                    transactionId: args.transactionId,
-                    tagIds: resolved,
-                },
-            )
-            return { ok: true, ...result, missing }
-        },
-    ),
-    untagTransaction: defineTool(
-        toolSchemas.untagTransaction,
-        async (ctx, args) => {
-            const { resolved, missing } = await resolveTagIds(
-                ctx,
-                args.tagIdsOrNames,
-            )
-            const result = await ctx.client.mutation(
-                api.v1.transactions.mutations.untag,
-                {
-                    transactionId: args.transactionId,
-                    tagIds: resolved,
-                },
-            )
-            return { ok: true, ...result, missing }
-        },
-    ),
-
     // ───── Summaries ─────
-    // TODO(aggregates): these currently walk the listPaginated index over the
-    // date range, which is bounded but suboptimal. Replace with the aggregate
-    // component once Phase 2 is wired up.
-    summarizeByCategory: defineTool(
-        toolSchemas.summarizeByCategory,
+    // Computed server-side over the bounded, index-anchored scan in
+    // `v1/transactions/queries:summarize` (native computes the same shapes
+    // locally over Drift — `SummaryRepository.byCategory` / `byAccount`).
+    summarizeTransactions: defineTool(
+        toolSchemas.summarizeTransactions,
         async (ctx, args) => {
-            const dateFrom = parseOptionalDate(args.dateFrom)
-            const dateTo = parseOptionalDate(args.dateTo)
-            const items = await collectAllInRange(ctx, {
-                dateFrom,
-                dateTo,
-                type: args.type,
-            })
-            const totals = new Map<string, bigint>()
-            for (const t of items) {
-                if (args.currency && t.currency !== args.currency) continue
-                if (t.type === 'transfer') continue
-                const key = t.categoryId
-                totals.set(key, (totals.get(key) ?? 0n) + t.amount)
-            }
-            const cats = await ctx.client.query(
-                api.v1.categories.queries.listActive,
-            )
-            const nameById = new Map(cats.map((c) => [c.id, c.name]))
-            return {
-                ok: true,
-                rows: Array.from(totals.entries()).map(
-                    ([categoryId, total]) => ({
-                        categoryId,
-                        name: nameById.get(categoryId) ?? '(unknown)',
-                        total: Number(total) / 100,
-                    }),
-                ),
-            }
-        },
-    ),
-    summarizeByAccount: defineTool(
-        toolSchemas.summarizeByAccount,
-        async (ctx, args) => {
-            const dateFrom = parseOptionalDate(args.dateFrom)
-            const dateTo = parseOptionalDate(args.dateTo)
-            const items = await collectAllInRange(ctx, { dateFrom, dateTo })
-            const rows = new Map<
-                string,
-                { name: string; currency: string; in: bigint; out: bigint }
-            >()
-            const accounts = await ctx.client.query(
-                api.v1.accounts.queries.list,
+            const dateFrom = parseNaturalDate(args.dateFrom)
+            const dateTo = parseNaturalDate(args.dateTo)
+            const result = await ctx.client.query(
+                api.v1.transactions.queries.summarize,
                 {
-                    includeArchived: false,
+                    groupBy: args.groupBy,
+                    dateFrom,
+                    dateTo,
+                    type: args.type,
+                    currency: args.currency,
                 },
             )
-            for (const a of accounts) {
-                rows.set(a.id, {
-                    name: a.name,
-                    currency: a.currency,
-                    in: 0n,
-                    out: 0n,
-                })
-            }
-            for (const t of items) {
-                const row = rows.get(t.accountId)
-                if (row) {
-                    if (t.type === 'expense') row.out += t.amount
-                    else if (t.type === 'income') row.in += t.amount
-                    else if (t.type === 'transfer') row.out += t.amount
-                    else if (t.type === 'balance_adjustment') {
-                        if (t.amount >= 0n) row.in += t.amount
-                        else row.out += -t.amount
-                    }
-                }
-                if (t.type === 'transfer' && t.toAccountId) {
-                    const dest = rows.get(t.toAccountId)
-                    if (dest) dest.in += t.toAmount ?? t.amount
+            if (result.groupBy === 'category') {
+                return {
+                    ok: true,
+                    ...(result.truncated ? { truncated: true } : {}),
+                    rows: result.rows.map((row) => ({
+                        categoryId: row.categoryId,
+                        name: row.name,
+                        total: Number(row.totalCents) / 100,
+                    })),
                 }
             }
             return {
                 ok: true,
-                rows: Array.from(rows.entries()).map(([accountId, r]) => ({
-                    accountId,
-                    name: r.name,
-                    currency: r.currency,
-                    in: Number(r.in) / 100,
-                    out: Number(r.out) / 100,
-                    net: Number(r.in - r.out) / 100,
+                ...(result.truncated ? { truncated: true } : {}),
+                rows: result.rows.map((row) => ({
+                    accountId: row.accountId,
+                    name: row.name,
+                    currency: row.currency,
+                    in: Number(row.inCents) / 100,
+                    out: Number(row.outCents) / 100,
+                    net: Number(row.netCents) / 100,
                 })),
             }
         },
@@ -867,6 +825,190 @@ export const toolExecutors = {
             return { ok: true, id: args.id }
         },
     ),
+
+    // ───── Agent memory ─────
+    // Web writes through the v1 endpoints; native writes the synced Drift
+    // table. Same ids, same envelopes.
+    addMemory: defineTool(toolSchemas.addMemory, async (ctx, args) => {
+        const id = newId()
+        await ctx.client.mutation(api.v1.memories.mutations.create, {
+            id,
+            content: args.content,
+        })
+        return { ok: true, id }
+    }),
+    updateMemory: defineTool(toolSchemas.updateMemory, async (ctx, args) => {
+        await ctx.client.mutation(api.v1.memories.mutations.update, {
+            id: args.id,
+            content: args.content,
+        })
+        return { ok: true, id: args.id }
+    }),
+    forgetMemory: defineTool(toolSchemas.forgetMemory, async (ctx, args) => {
+        await ctx.client.mutation(api.v1.memories.mutations.archive, {
+            id: args.id,
+        })
+        return { ok: true, id: args.id }
+    }),
+
+    // ───── Settings ─────
+    updateSettings: defineTool(
+        toolSchemas.updateSettings,
+        async (ctx, args) => {
+            if (
+                args.language === undefined &&
+                args.theme === undefined &&
+                args.defaultCurrency === undefined
+            ) {
+                return {
+                    ok: false,
+                    error: 'Nothing to change — pass language, theme, or defaultCurrency',
+                }
+            }
+            const changed: string[] = []
+            if (args.language !== undefined || args.theme !== undefined) {
+                if (!ctx.settings) {
+                    return {
+                        ok: false,
+                        error: 'Display settings are not available in this session',
+                    }
+                }
+                if (args.language !== undefined) {
+                    ctx.settings.setLanguage(args.language)
+                    changed.push(`language=${args.language} (this device only)`)
+                }
+                if (args.theme !== undefined) {
+                    ctx.settings.setTheme(args.theme)
+                    changed.push(`theme=${args.theme} (this device only)`)
+                }
+            }
+            if (args.defaultCurrency !== undefined) {
+                await ctx.client.mutation(
+                    api.v1.users.mutations.updateDefaultCurrency,
+                    { currency: args.defaultCurrency.trim().toUpperCase() },
+                )
+                changed.push(
+                    `defaultCurrency=${args.defaultCurrency.trim().toUpperCase()} (account-wide)`,
+                )
+            }
+            return { ok: true, changed }
+        },
+    ),
+
+    // ───── Math & dates ─────
+    calculate: defineTool(toolSchemas.calculate, async (_ctx, args) => {
+        try {
+            const steps = runCalculate(args.steps)
+            return { ok: true, steps, result: steps[steps.length - 1].value }
+        } catch (error) {
+            return {
+                ok: false,
+                error: error instanceof Error ? error.message : String(error),
+            }
+        }
+    }),
+    calculateDate: defineTool(toolSchemas.calculateDate, async (_ctx, args) => {
+        try {
+            return { ok: true, ...runCalculateDate(args) }
+        } catch (error) {
+            return {
+                ok: false,
+                error: error instanceof Error ? error.message : String(error),
+            }
+        }
+    }),
+
+    // ───── Exchange rates ─────
+    getExchangeRate: defineTool(
+        toolSchemas.getExchangeRate,
+        async (ctx, args) => {
+            const from = normalizeCurrencyCode(args.from)
+            const to = normalizeCurrencyCode(args.to)
+            if (!isValidCurrencyCode(from)) {
+                return { ok: false, error: `Unknown currency code: ${from}` }
+            }
+            if (!isValidCurrencyCode(to)) {
+                return { ok: false, error: `Unknown currency code: ${to}` }
+            }
+            if (from === to) {
+                return {
+                    ok: false,
+                    error: 'from and to are the same currency',
+                }
+            }
+            const snapshot = await ctx.client.query(
+                api.v1.exchangeRates.queries.snapshot,
+                {},
+            )
+            if (snapshot.length === 0) {
+                return {
+                    ok: false,
+                    error: 'Exchange rates are unavailable right now',
+                }
+            }
+            const resolution = resolveFxQuote(
+                snapshot,
+                from,
+                to,
+                args.market ?? DEFAULT_FX_MARKET,
+            )
+            if (!resolution) {
+                return {
+                    ok: false,
+                    error: `No exchange rate available for ${from}\u2192${to}`,
+                }
+            }
+            const alternatives = fxAlternatives(snapshot, from, to)
+            return {
+                ok: true,
+                from: resolution.from,
+                to: resolution.to,
+                market: resolution.market,
+                rate: resolution.rate,
+                ...(resolution.buy === undefined
+                    ? {}
+                    : { buy: resolution.buy }),
+                ...(resolution.sell === undefined
+                    ? {}
+                    : { sell: resolution.sell }),
+                source: resolution.source,
+                asOf: resolution.asOf,
+                path: resolution.path,
+                ...(isFxQuoteStale(resolution.asOf, Date.now())
+                    ? { stale: true }
+                    : {}),
+                ...(args.amount === undefined
+                    ? {}
+                    : {
+                          converted: convertAmount(
+                              args.amount,
+                              resolution.rate,
+                          ),
+                      }),
+                ...(Object.keys(alternatives).length > 0
+                    ? { alternatives }
+                    : {}),
+            }
+        },
+    ),
+
+    // ───── Skills ─────
+    readSkill: defineTool(toolSchemas.readSkill, async (_ctx, args) => {
+        const skill = AGENT_SKILLS_BY_SLUG.get(args.slug)
+        if (!skill) {
+            return {
+                ok: false,
+                error: `Unknown skill: ${args.slug}`,
+                availableSlugs: AGENT_SKILLS.map((s) => s.slug),
+            }
+        }
+        return {
+            ok: true,
+            slug: skill.slug,
+            title: skill.title,
+            body: skill.body,
+        }
+    }),
 } satisfies Record<ToolName, ToolExecutor>
 
 // ───── Local helpers ─────
@@ -925,37 +1067,6 @@ async function attachTags(
         transactionId,
         tagIds: resolved,
     })
-}
-
-async function collectAllInRange(
-    ctx: { client: import('convex/react').ConvexReactClient },
-    args: {
-        dateFrom?: bigint
-        dateTo?: bigint
-        type?: 'expense' | 'income' | 'transfer'
-    },
-): Promise<TxnLite[]> {
-    const out: TxnLite[] = []
-    let cursor: string | null = null
-    let isDone = false
-    let safety = 50 // hard cap on pages — each is 200 items
-    while (!isDone && safety > 0) {
-        const page: {
-            page: TxnLite[]
-            isDone: boolean
-            continueCursor: string
-        } = await ctx.client.query(api.v1.transactions.queries.listPaginated, {
-            paginationOpts: { numItems: 200, cursor },
-            type: args.type,
-            dateFrom: args.dateFrom,
-            dateTo: args.dateTo,
-        })
-        out.push(...page.page)
-        cursor = page.continueCursor
-        isDone = page.isDone
-        safety -= 1
-    }
-    return out
 }
 
 // ───── Dashboard helpers ─────

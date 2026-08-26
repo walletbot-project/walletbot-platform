@@ -1,4 +1,4 @@
-export type FlagKey = 'debugToolCalls' | 'recurringExpense'
+export type FlagKey = 'debugToolCalls' | 'exchangeRates' | 'recurringExpense'
 
 export const KNOWN_FLAGS: {
     key: FlagKey
@@ -9,6 +9,12 @@ export const KNOWN_FLAGS: {
         key: 'debugToolCalls',
         description:
             'Show raw function-call debug JSON in the Gasti voice chat (native + web).',
+        enabledByDefault: false,
+    },
+    {
+        key: 'exchangeRates',
+        description:
+            'Declare the getExchangeRate tool to the Gasti agent (native + web) and let native cache the rate snapshot.',
         enabledByDefault: false,
     },
     {
