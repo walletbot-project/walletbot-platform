@@ -1,0 +1,355 @@
+{
+    "$comment": "Cross-language calculator parity fixtures for the calculate and calculateDate tools. Run by packages/shared/test/calc-fixtures.test.ts (vitest, against src/tools/calc.ts + src/tools/date-calc.ts) AND by apps/native/test/voice/calc_fixtures_test.dart (dart test, against lib/voice/tool_calc.dart). Both engines use IEEE 754 doubles, so numeric expectations are exact. Date expectations are local calendar days (timezone-independent). Keep both runners in sync when adding cases.",
+    "now": {
+        "year": 2026,
+        "month": 7,
+        "day": 12,
+        "hour": 14,
+        "minute": 25,
+        "second": 30,
+        "millisecond": 0
+    },
+    "calculate": [
+        {
+            "steps": [
+                { "name": "x", "expression": "1200 * 0.21" },
+                { "expression": "x / 3" }
+            ],
+            "values": [252, 84]
+        },
+        { "steps": [{ "expression": "round(10 / 3, 2)" }], "values": [3.33] },
+        {
+            "steps": [{ "expression": "min(5, 2) + max(1, 3, 2)" }],
+            "values": [5]
+        },
+        {
+            "steps": [{ "expression": "sqrt(2)" }],
+            "values": [1.4142135623730951]
+        },
+        {
+            "steps": [{ "expression": "pow(2, 0.5)" }],
+            "values": [1.4142135623730951]
+        },
+        { "steps": [{ "expression": "2^10" }], "values": [1024] },
+        { "steps": [{ "expression": "abs(-4.2)" }], "values": [4.2] },
+        {
+            "steps": [{ "expression": "ceil(1.1) + floor(1.9)" }],
+            "values": [3]
+        },
+        {
+            "$comment": "round is half away from zero on both engines",
+            "steps": [{ "expression": "round(2.5)" }],
+            "values": [3]
+        },
+        { "steps": [{ "expression": "round(-2.5)" }], "values": [-3] },
+        {
+            "$comment": "double arithmetic must match bit-for-bit",
+            "steps": [{ "expression": "0.1 + 0.2" }],
+            "values": [0.30000000000000004]
+        },
+        { "steps": [{ "expression": "-(2 + 3) * 4" }], "values": [-20] },
+        {
+            "steps": [
+                { "name": "total", "expression": "100 + 50" },
+                { "name": "tip", "expression": "total * 0.1" },
+                { "expression": "total + tip" }
+            ],
+            "values": [150, 15, 165]
+        },
+        {
+            "$comment": "division by zero is not a finite result",
+            "steps": [{ "expression": "10 / 0" }],
+            "throws": true
+        },
+        {
+            "$comment": "unbound name",
+            "steps": [{ "expression": "x + 1" }],
+            "throws": true
+        },
+        {
+            "$comment": "assignments are rejected by the charset guard",
+            "steps": [{ "expression": "a = 5" }],
+            "throws": true
+        },
+        {
+            "$comment": "functions outside CALC_FUNCTIONS are rejected even where an engine knows them",
+            "steps": [{ "expression": "sin(1)" }],
+            "throws": true
+        },
+        {
+            "$comment": "mathjs-only syntax (units) must fail on web too",
+            "steps": [{ "expression": "2 inch to cm" }],
+            "throws": true
+        },
+        { "steps": [{ "expression": "[1, 2]" }], "throws": true },
+        {
+            "$comment": "implicit multiplication is mathjs-only, rejected everywhere",
+            "steps": [{ "expression": "2(3 + 1)" }],
+            "throws": true
+        },
+        {
+            "$comment": "scientific notation is rejected (Dart engine does not parse it)",
+            "steps": [{ "expression": "1e3" }],
+            "throws": true
+        },
+        {
+            "$comment": "'%' is excluded — modulo semantics differ between engines",
+            "steps": [{ "expression": "10 % 3" }],
+            "throws": true
+        },
+        {
+            "$comment": "a step name must not shadow a function",
+            "steps": [{ "name": "round", "expression": "1" }],
+            "throws": true
+        },
+        { "steps": [{ "expression": "" }], "throws": true },
+        { "steps": [], "throws": true }
+    ],
+    "calculateDate": [
+        {
+            "$comment": "month addition clamps to the last day",
+            "args": {
+                "operation": "add",
+                "date": "2026-01-31",
+                "amount": 1,
+                "unit": "month"
+            },
+            "expect": { "date": "2026-02-28", "dayOfWeek": "saturday" }
+        },
+        {
+            "args": {
+                "operation": "subtract",
+                "date": "2026-03-31",
+                "amount": 1,
+                "unit": "month"
+            },
+            "expect": { "date": "2026-02-28", "dayOfWeek": "saturday" }
+        },
+        {
+            "args": {
+                "operation": "add",
+                "date": "today",
+                "amount": 3,
+                "unit": "day"
+            },
+            "expect": { "date": "2026-07-15", "dayOfWeek": "wednesday" }
+        },
+        {
+            "args": {
+                "operation": "add",
+                "date": "2026-07-01",
+                "amount": 2,
+                "unit": "week"
+            },
+            "expect": { "date": "2026-07-15", "dayOfWeek": "wednesday" }
+        },
+        {
+            "$comment": "leap day + 1 year clamps to Feb 28",
+            "args": {
+                "operation": "add",
+                "date": "2024-02-29",
+                "amount": 1,
+                "unit": "year"
+            },
+            "expect": { "date": "2025-02-28", "dayOfWeek": "friday" }
+        },
+        {
+            "$comment": "natural-language base dates resolve like transaction dates",
+            "args": {
+                "operation": "add",
+                "date": "el jueves pasado",
+                "amount": 1,
+                "unit": "week"
+            },
+            "expect": { "date": "2026-07-16", "dayOfWeek": "thursday" }
+        },
+        {
+            "$comment": "crossing a year boundary backward",
+            "args": {
+                "operation": "subtract",
+                "date": "2026-01-01",
+                "amount": 1,
+                "unit": "day"
+            },
+            "expect": { "date": "2025-12-31", "dayOfWeek": "wednesday" }
+        },
+        {
+            "args": {
+                "operation": "diff",
+                "date": "today",
+                "otherDate": "2026-12-25",
+                "unit": "day"
+            },
+            "expect": {
+                "from": "2026-07-12",
+                "to": "2026-12-25",
+                "unit": "day",
+                "value": 166
+            }
+        },
+        {
+            "$comment": "diff is signed: negative when otherDate is before date",
+            "args": {
+                "operation": "diff",
+                "date": "2026-12-25",
+                "otherDate": "today",
+                "unit": "day"
+            },
+            "expect": {
+                "from": "2026-12-25",
+                "to": "2026-07-12",
+                "unit": "day",
+                "value": -166
+            }
+        },
+        {
+            "$comment": "clamp-aware month diff: Jan 31 + 1 clamped month reaches Feb 28",
+            "args": {
+                "operation": "diff",
+                "date": "2026-01-31",
+                "otherDate": "2026-02-28",
+                "unit": "month"
+            },
+            "expect": {
+                "from": "2026-01-31",
+                "to": "2026-02-28",
+                "unit": "month",
+                "value": 1
+            }
+        },
+        {
+            "$comment": "backward Mar 1 → Feb 28 is not a whole month",
+            "args": {
+                "operation": "diff",
+                "date": "2026-03-01",
+                "otherDate": "2026-02-28",
+                "unit": "month"
+            },
+            "expect": {
+                "from": "2026-03-01",
+                "to": "2026-02-28",
+                "unit": "month",
+                "value": 0
+            }
+        },
+        {
+            "args": {
+                "operation": "diff",
+                "date": "2024-02-29",
+                "otherDate": "2025-02-28",
+                "unit": "year"
+            },
+            "expect": {
+                "from": "2024-02-29",
+                "to": "2025-02-28",
+                "unit": "year",
+                "value": 1
+            }
+        },
+        {
+            "args": {
+                "operation": "diff",
+                "date": "2026-07-01",
+                "otherDate": "2026-07-15",
+                "unit": "week"
+            },
+            "expect": {
+                "from": "2026-07-01",
+                "to": "2026-07-15",
+                "unit": "week",
+                "value": 2
+            }
+        },
+        {
+            "$comment": "now is a Sunday; ISO weeks start Monday",
+            "args": { "operation": "startOf", "date": "hoy", "unit": "week" },
+            "expect": { "date": "2026-07-06", "dayOfWeek": "monday" }
+        },
+        {
+            "args": { "operation": "endOf", "date": "hoy", "unit": "week" },
+            "expect": { "date": "2026-07-12", "dayOfWeek": "sunday" }
+        },
+        {
+            "args": {
+                "operation": "startOf",
+                "date": "2026-07-12",
+                "unit": "month"
+            },
+            "expect": { "date": "2026-07-01", "dayOfWeek": "wednesday" }
+        },
+        {
+            "args": {
+                "operation": "endOf",
+                "date": "2026-02-15",
+                "unit": "month"
+            },
+            "expect": { "date": "2026-02-28", "dayOfWeek": "saturday" }
+        },
+        {
+            "args": {
+                "operation": "startOf",
+                "date": "2026-07-12",
+                "unit": "year"
+            },
+            "expect": { "date": "2026-01-01", "dayOfWeek": "thursday" }
+        },
+        {
+            "args": {
+                "operation": "endOf",
+                "date": "2026-07-12",
+                "unit": "year"
+            },
+            "expect": { "date": "2026-12-31", "dayOfWeek": "thursday" }
+        },
+        {
+            "args": { "operation": "dayOfWeek", "date": "2026-12-25" },
+            "expect": { "date": "2026-12-25", "dayOfWeek": "friday" }
+        },
+        {
+            "args": { "operation": "add", "date": "today", "unit": "day" },
+            "throws": true
+        },
+        {
+            "args": { "operation": "add", "date": "today", "amount": 3 },
+            "throws": true
+        },
+        {
+            "$comment": "amount must be a whole number",
+            "args": {
+                "operation": "add",
+                "date": "today",
+                "amount": 1.5,
+                "unit": "day"
+            },
+            "throws": true
+        },
+        {
+            "args": { "operation": "diff", "date": "today", "unit": "day" },
+            "throws": true
+        },
+        {
+            "args": {
+                "operation": "diff",
+                "date": "today",
+                "otherDate": "2026-12-25"
+            },
+            "throws": true
+        },
+        {
+            "$comment": "startOf/endOf need a period unit, not day",
+            "args": { "operation": "startOf", "date": "today", "unit": "day" },
+            "throws": true
+        },
+        {
+            "args": { "operation": "startOf", "date": "today" },
+            "throws": true
+        },
+        {
+            "args": {
+                "operation": "dayOfWeek",
+                "date": "definitely not a date"
+            },
+            "throws": true
+        }
+    ]
+}

@@ -1,16 +1,26 @@
-import { CATEGORY_FALLBACK_ICON, CATEGORY_ICON_MAP } from '@/lib/category-icons'
+import { Icon } from '@/components/m3/icon'
+import { categoryIcon } from '@/lib/category-icons'
 
 /** Renders a category's glyph by its stored name, falling back to the default. */
 export function CategoryIcon({
     name,
-    className,
+    size,
     color,
+    className,
 }: {
     name?: string
-    className?: string
+    size?: number
     color?: string
+    className?: string
 }) {
-    const Glyph =
-        (name ? CATEGORY_ICON_MAP[name] : undefined) ?? CATEGORY_FALLBACK_ICON
-    return <Glyph className={className} style={color ? { color } : undefined} />
+    const option = categoryIcon(name)
+    return (
+        <Icon
+            name={option.symbol}
+            filled={option.filled}
+            size={size}
+            className={className}
+            style={color ? { color } : undefined}
+        />
+    )
 }

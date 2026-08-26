@@ -60,6 +60,18 @@ class DisplaySettingsController extends ChangeNotifier {
     DisplayTheme.dark => ThemeMode.dark,
   };
 
+  /// The BCP 47 tag this device is effectively displaying in: the picked
+  /// language, or the platform's own when following the system.
+  ///
+  /// Everything that reports a locale to the backend goes through this, so the
+  /// `Accept-Language` header on auth requests, the `/v1/config` query and
+  /// `LanguageSyncController` can never disagree about what this device is set
+  /// to. Full tag rather than just the language, so the server keeps the region
+  /// (`es-AR`) for formatting outbound messages.
+  String get localeTag =>
+      (locale ?? WidgetsBinding.instance.platformDispatcher.locale)
+          .toLanguageTag();
+
   Future<void> load() async {
     final values = await Future.wait([
       _store.getString(_languageKey),

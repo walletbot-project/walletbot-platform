@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useLanguageSync } from '@/hooks/use-language-sync'
 import {
     formatLocaleFor,
     type LanguagePreference,
@@ -53,6 +54,13 @@ export function I18nProvider({ children }: { children: React.ReactNode }) {
     useEffect(() => {
         document.documentElement.lang = value.locale
     }, [value.locale])
+
+    // Outbound only: the backend needs a language for email, and takes no part
+    // in choosing the one above.
+    useLanguageSync({
+        preference: value.preference,
+        formatLocale: value.formatLocale,
+    })
 
     return <I18nContext.Provider value={value}>{children}</I18nContext.Provider>
 }

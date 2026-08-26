@@ -190,7 +190,7 @@ void main() {
     expect((date.hour, date.minute), (17, 0));
   });
 
-  test('tag/untag returns added/removed/missing', () async {
+  test('updateTransaction attaches/detaches tags and reports missing', () async {
     await tools.execute('createAccount', {'name': 'Cash', 'currency': 'ARS'});
     await tools.execute('createCategory', {'name': 'Food'});
     await tools.execute('createTag', {'name': 'Work'});
@@ -202,19 +202,21 @@ void main() {
     });
     final txnId = exp['id'] as String;
 
-    final tagged = await tools.execute('tagTransaction', {
-      'transactionId': txnId,
-      'tagIdsOrNames': ['Work', 'Nope'],
+    final tagged = await tools.execute('updateTransaction', {
+      'id': txnId,
+      'addTagIdsOrNames': ['Work', 'Nope'],
     });
     expect(tagged['ok'], isTrue);
-    expect(tagged['added'], 1);
     expect(tagged['missing'], ['Nope']);
+    expect(await repos.transactions.tagIdsOf(txnId), hasLength(1));
 
-    final untagged = await tools.execute('untagTransaction', {
-      'transactionId': txnId,
-      'tagIdsOrNames': ['Work'],
+    final untagged = await tools.execute('updateTransaction', {
+      'id': txnId,
+      'removeTagIdsOrNames': ['Work'],
     });
-    expect(untagged['removed'], 1);
+    expect(untagged['ok'], isTrue);
+    expect(untagged.containsKey('missing'), isFalse);
+    expect(await repos.transactions.tagIdsOf(txnId), isEmpty);
   });
 
   test('transfer validation envelopes', () async {
@@ -241,7 +243,7 @@ void main() {
     expect(cross['ok'], isFalse);
     expect(
       cross['error'],
-      'Cross-currency transfers require toAmount (or exchangeRate to derive it)',
+      'Cross-currency transfers require toAmount (the amount received on the destination side)',
     );
   });
 
@@ -256,7 +258,8 @@ void main() {
       'date': 'today',
     });
 
-    final res = await tools.execute('summarizeByCategory', {
+    final res = await tools.execute('summarizeTransactions', {
+      'groupBy': 'category',
       'dateFrom': 'yesterday',
       'dateTo': 'tomorrow',
     });
@@ -265,6 +268,17 @@ void main() {
     expect(rows, hasLength(1));
     expect((rows.single as Map)['total'], 12.34);
     expect((rows.single as Map)['name'], 'Food');
+
+    final byAccount = await tools.execute('summarizeTransactions', {
+      'groupBy': 'account',
+      'dateFrom': 'yesterday',
+      'dateTo': 'tomorrow',
+    });
+    expect(byAccount['ok'], isTrue);
+    final accountRows = byAccount['rows'] as List;
+    expect(accountRows, hasLength(1));
+    expect((accountRows.single as Map)['out'], 12.34);
+    expect((accountRows.single as Map)['net'], -12.34);
   });
 
   test(
@@ -328,6 +342,75 @@ void main() {
       final filterConfig = widget['filterConfig'] as Map;
       expect(filterConfig['combinator'], 'and');
       expect((filterConfig['children'] as List)[1], isA<Map>());
+    },
+  );
+
+  test(
+    'a balance widget keeps its account scope across a partial edit',
+    () async {
+      final cash = await repos.accounts.create(
+        name: 'Efectivo',
+        currency: 'ARS',
+      );
+
+      final created = await tools.execute('createDashboardWidget', {
+        'type': 'balance',
+        'title': 'Solo caja',
+        'currency': 'ars',
+        'accountIds': [cash],
+      });
+      expect(created['ok'], isTrue);
+      final id = created['id'] as String;
+
+      Future<Map> optionsOf() async {
+        final listed = await tools.execute('listDashboardWidgets', {});
+        final widget =
+            (listed['widgets'] as List).single as Map<String, dynamic>;
+        return widget['options'] as Map;
+      }
+
+      expect(await optionsOf(), containsPair('currency', 'ARS'));
+      expect(await optionsOf(), containsPair('accountIds', [cash]));
+
+      // `accountIds` is a content key, so the merge drops it before writing: a
+      // title-only edit must re-state it rather than silently widening the card
+      // back to every account in the currency.
+      final updated = await tools.execute('updateDashboardWidget', {
+        'id': id,
+        'title': 'Caja',
+      });
+      expect(updated['ok'], isTrue);
+
+      final options = await optionsOf();
+      expect(options['title'], 'Caja');
+      expect(options['accountIds'], [cash]);
+    },
+  );
+
+  test(
+    'a balance widget scope can be cleared back to the whole currency',
+    () async {
+      final cash = await repos.accounts.create(
+        name: 'Efectivo',
+        currency: 'ARS',
+      );
+
+      final created = await tools.execute('createDashboardWidget', {
+        'type': 'balance',
+        'title': 'Solo caja',
+        'currency': 'ARS',
+        'accountIds': [cash],
+      });
+      final id = created['id'] as String;
+
+      await tools.execute('updateDashboardWidget', {
+        'id': id,
+        'accountIds': <String>[],
+      });
+
+      final listed = await tools.execute('listDashboardWidgets', {});
+      final widget = (listed['widgets'] as List).single as Map<String, dynamic>;
+      expect((widget['options'] as Map)['accountIds'], isEmpty);
     },
   );
 

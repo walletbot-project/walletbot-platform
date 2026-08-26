@@ -66,3 +66,12 @@ String formatCentsUnsigned(int absCents, {String? locale}) =>
       locale: locale,
       decimalDigits: 2,
     ).format(absCents / 100);
+
+/// Formats a cross-currency exchange rate (a plain ratio, always >= 1) with
+/// thousands grouping and 2 decimals: `1350.0` → `1,350.00`. Unlike the cents
+/// helpers, the input is not divided by 100 — it is already a ratio.
+String formatExchangeRate(double rate, {String? locale}) =>
+    NumberFormat.decimalPatternDigits(
+      locale: locale,
+      decimalDigits: 2,
+    ).format(rate);

@@ -124,6 +124,12 @@ class _WidgetSheetState extends State<_WidgetSheet> {
   late Color _highBackgroundColor;
   String? _currency;
   List<String> _currencies = const [];
+  List<Account> _accounts = const [];
+
+  /// Balance card scope. Empty = every account in [_currency], the meaning
+  /// every card stored before account scoping existed.
+  late List<String> _accountIds;
+  late DashboardWidth _width;
   var _saving = false;
 
   bool get _isEditing => widget.existing != null;
@@ -154,6 +160,11 @@ class _WidgetSheetState extends State<_WidgetSheet> {
         BreakdownChartKind.pie;
     _filter = widget.initialFilter;
     _currency = options['currency'] as String?;
+    _accountIds = dashboardIdListFromJson(options['accountIds']);
+    _width = _capWidth(
+      DashboardWidth.fromWire(existing?.width ?? '') ??
+          _defaultWidthFor[_type]!,
+    );
     final background = DashboardBackgroundStyle.fromJson(options['background']);
     final valueBackground =
         background.value ?? DashboardValueBackground.defaults;
@@ -173,18 +184,20 @@ class _WidgetSheetState extends State<_WidgetSheet> {
 
     // Rebuild as the title is typed so the confirm button enables/disables.
     _titleController.addListener(_onFieldsChanged);
-    _loadCurrencies();
+    _loadAccounts();
   }
 
   void _onFieldsChanged() {
     if (mounted) setState(() {});
   }
 
-  /// Whether the required fields are filled: a title always, plus a currency
-  /// for the balance card. Drives the confirm button's enabled state.
+  /// Whether the required fields are filled: a title always, a currency for
+  /// the balance card, and a filter for every type that reads transactions.
+  /// Drives the confirm button's enabled state.
   bool get _canSubmit {
     if (_titleController.text.trim().isEmpty) return false;
     if (_type == WidgetType.balance && _currency == null) return false;
+    if (_filterMissing) return false;
     return true;
   }
 
@@ -219,11 +232,43 @@ class _WidgetSheetState extends State<_WidgetSheet> {
   static double _parseNumber(String raw, double fallback) =>
       double.tryParse(raw.trim().replaceAll(',', '.')) ?? fallback;
 
-  Future<void> _loadCurrencies() async {
+  /// A widget added into one of the grid's `+` placeholders can be no wider
+  /// than the free span there, so the too-wide options are taken off the picker
+  /// rather than silently shrunk on save (web's `fits`, `widget-sheet.tsx`).
+  bool _widthFits(DashboardWidth candidate) {
+    final maxUnits = widget.maxUnits;
+    if (widget.at == null || maxUnits == null) return true;
+    return candidate.units <= maxUnits;
+  }
+
+  DashboardWidth _capWidth(DashboardWidth candidate) {
+    if (_widthFits(candidate)) return candidate;
+    return dashboardWidthForUnits(widget.maxUnits ?? 0) ?? candidate;
+  }
+
+  /// The accounts a balance card may sum: those in the chosen currency. One
+  /// card sums one currency, so a scope can never mix denominations.
+  List<Account> get _scopeAccounts =>
+      _accounts.where((a) => a.currency == _currency).toList()
+        ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+
+  /// What actually gets stored: ids are kept only while they still belong to
+  /// the chosen currency, so switching currency (or archiving an account)
+  /// widens the card back to "all accounts" instead of storing a scope that
+  /// sums to zero. Derived rather than reset on change, so the selection
+  /// survives a flip back to the original currency.
+  List<String> get _scopedAccountIds {
+    if (_accounts.isEmpty) return _accountIds;
+    final allowed = _scopeAccounts.map((a) => a.id).toSet();
+    return _accountIds.where(allowed.contains).toList();
+  }
+
+  Future<void> _loadAccounts() async {
     final accounts = await widget.repos.accounts.listActive();
     final currencies = accounts.map((a) => a.currency).toSet().toList()..sort();
     if (!mounted) return;
     setState(() {
+      _accounts = accounts;
       _currencies = currencies;
       // Keep an already-set currency (editing a balance card); otherwise pick
       // the first available, falling back to ARS.
@@ -232,6 +277,22 @@ class _WidgetSheetState extends State<_WidgetSheet> {
   }
 
   bool get _filterConfigured => !_filter.isEmpty;
+
+  /// A tile *already stored* without a filter keeps its exemption, so the
+  /// default seed's filterless `seed-wgt-recientes` (`default_dashboard.dart`)
+  /// stays editable. A balance card converted to a filtered type does not
+  /// inherit it — that is a new filtered tile as far as this rule goes.
+  bool get _filterExempt {
+    final existing = widget.existing;
+    return existing != null &&
+        WidgetType.fromWire(existing.type) != WidgetType.balance &&
+        widget.initialFilter.isEmpty;
+  }
+
+  /// Every type that reads transactions needs a filter: a "no filter" tile
+  /// reads as the whole ledger and was never meant to be creatable.
+  bool get _filterMissing =>
+      _type != WidgetType.balance && !_filterExempt && !_filterConfigured;
 
   Future<void> _configureFilter() async {
     final result = await showFilterSheet(
@@ -262,6 +323,12 @@ class _WidgetSheetState extends State<_WidgetSheet> {
       );
       return;
     }
+    if (_filterMissing) {
+      messenger.showSnackBar(
+        SnackBar(content: Text(context.l10n.configureWidgetFilter)),
+      );
+      return;
+    }
 
     setState(() => _saving = true);
     try {
@@ -272,7 +339,11 @@ class _WidgetSheetState extends State<_WidgetSheet> {
             'title': title,
             'limit': int.tryParse(_limitController.text.trim()) ?? 5,
           },
-          WidgetType.balance => {'title': title, 'currency': _currency},
+          WidgetType.balance => {
+            'title': title,
+            'currency': _currency,
+            'accountIds': _scopedAccountIds,
+          },
           WidgetType.chart => {
             'title': title,
             'groupBy': _groupBy.wire,
@@ -325,15 +396,11 @@ class _WidgetSheetState extends State<_WidgetSheet> {
     final existing = await widget.repos.dashboard.listActive();
     final at = widget.at;
 
-    var width = _defaultWidthFor[_type]!;
+    // The picker already hides anything too wide for a targeted cell; capping
+    // again keeps a stale selection (the type changed after the cap) honest.
+    final width = _capWidth(_width);
     final Map<String, Object?> layout;
     if (at != null) {
-      // Targeted placement: cap the width to the free span at the cell.
-      final maxUnits = widget.maxUnits;
-      if (maxUnits != null) {
-        final fit = dashboardWidthForUnits(maxUnits);
-        if (fit != null && fit.units < width.units) width = fit;
-      }
       layout = {'row': at.row, 'col': at.col};
     } else {
       // Default: drop the new widget on a fresh row below everything else.
@@ -373,8 +440,8 @@ class _WidgetSheetState extends State<_WidgetSheet> {
   ) async {
     // Resolve the filter: balance cards carry none; otherwise update the
     // existing saved filter in place or create one, and clear it when the
-    // filter was emptied. Width and position are owned by the tile controls,
-    // so they're left untouched here.
+    // filter was emptied. Position stays owned by the tile controls; width is
+    // editable here as well as from the tile menu (web does the same).
     String? filterId;
     if (_type != WidgetType.balance && _filterConfigured) {
       final config = jsonEncode(_filter.toCanonicalJson());
@@ -396,6 +463,7 @@ class _WidgetSheetState extends State<_WidgetSheet> {
       existing.id,
       type: Value(_type.wire),
       filterId: Value(filterId),
+      width: Value(_width.wire),
       options: Value(mergeWidgetOptions(existing.options, options)),
     );
   }
@@ -435,7 +503,15 @@ class _WidgetSheetState extends State<_WidgetSheet> {
                     ChoiceChip(
                       label: Text(context.l10n.dashboardWidgetType(type)),
                       selected: _type == type,
-                      onSelected: (_) => setState(() => _type = type),
+                      onSelected: (_) {
+                        // Re-tapping the selected chip must not reset a
+                        // hand-picked width.
+                        if (_type == type) return;
+                        setState(() {
+                          _type = type;
+                          _width = _capWidth(_defaultWidthFor[type]!);
+                        });
+                      },
                     ),
                 ],
               ),
@@ -452,6 +528,8 @@ class _WidgetSheetState extends State<_WidgetSheet> {
               const SizedBox(height: 16),
 
               ..._typeSpecificFields(theme),
+
+              _widthFields(theme),
 
               _backgroundFields(theme),
 
@@ -489,6 +567,32 @@ class _WidgetSheetState extends State<_WidgetSheet> {
           ),
         ),
       ),
+    );
+  }
+
+  /// Width chips, matching web's `Section label={t.dashboard.width}` — the
+  /// same control the tile's floating menu offers, so a widget's width is
+  /// settable at creation rather than only after it lands.
+  Widget _widthFields(ThemeData theme) {
+    final options = DashboardWidth.values.where(_widthFits).toList();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(context.l10n.widgetWidth, style: theme.textTheme.titleSmall),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          children: [
+            for (final option in options)
+              ChoiceChip(
+                label: Text(dashboardWidthLabel(option)),
+                selected: _width == option,
+                onSelected: (_) => setState(() => _width = option),
+              ),
+          ],
+        ),
+        const SizedBox(height: 16),
+      ],
     );
   }
 
@@ -666,6 +770,8 @@ class _WidgetSheetState extends State<_WidgetSheet> {
           _filterButton(),
         ];
       case WidgetType.balance:
+        final scopeAccounts = _scopeAccounts;
+        final selected = _scopedAccountIds;
         return [
           Text(context.l10n.currency, style: theme.textTheme.titleSmall),
           const SizedBox(height: 8),
@@ -688,6 +794,36 @@ class _WidgetSheetState extends State<_WidgetSheet> {
                   ),
               ],
             ),
+          if (scopeAccounts.isNotEmpty) ...[
+            const SizedBox(height: 16),
+            Text(context.l10n.accounts, style: theme.textTheme.titleSmall),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                for (final account in scopeAccounts)
+                  FilterChip(
+                    label: Text(account.name),
+                    selected: selected.contains(account.id),
+                    onSelected: (isSelected) => setState(() {
+                      _accountIds = isSelected
+                          ? [...selected, account.id]
+                          : selected.where((id) => id != account.id).toList();
+                    }),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            Text(
+              selected.isEmpty
+                  ? context.l10n.widgetAccountsAllHint
+                  : context.l10n.widgetAccountsScopedHint,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ],
           const SizedBox(height: 16),
         ];
     }

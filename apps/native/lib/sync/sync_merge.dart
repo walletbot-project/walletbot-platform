@@ -81,6 +81,9 @@ class PullPageMerger {
       case 'dashboardWidgets':
         await _applyDashboardWidget(id, remoteUpdatedAt, r);
         break;
+      case 'agentMemories':
+        await _applyAgentMemory(id, remoteUpdatedAt, r);
+        break;
       default:
         // Unknown table — skip rather than crash. Forward-compat: a future
         // server may sync more tables than this client knows.
@@ -272,6 +275,28 @@ class PullPageMerger {
     await db.into(db.dashboardWidgets).insertOnConflictUpdate(companion);
   }
 
+  Future<void> _applyAgentMemory(
+    String id,
+    BigInt remoteUpdatedAt,
+    Map<String, Object?> r,
+  ) async {
+    final existing = await (db.select(
+      db.agentMemories,
+    )..where((m) => m.id.equals(id))).getSingleOrNull();
+    if (existing != null && existing.dirty) {
+      if (existing.updatedAt >= remoteUpdatedAt) return;
+    }
+    final companion = AgentMemoriesCompanion(
+      id: Value(id),
+      content: Value(r['content'] as String),
+      archived: Value(r['isArchived'] as bool? ?? false),
+      createdAt: Value(_asBigInt(r['createdAt'])),
+      updatedAt: Value(remoteUpdatedAt),
+      dirty: const Value(false),
+    );
+    await db.into(db.agentMemories).insertOnConflictUpdate(companion);
+  }
+
   // ─── Tombstone apply ─────────────────────────────────────────────────────
 
   Future<void> _applyRemoteTombstone(
@@ -383,6 +408,20 @@ class PullPageMerger {
             await (db.delete(
               db.dashboardWidgets,
             )..where((w) => w.id.equals(entityId))).go();
+          }
+        }
+        break;
+      case 'agentMemories':
+        final row = await (db.select(
+          db.agentMemories,
+        )..where((m) => m.id.equals(entityId))).getSingleOrNull();
+        if (row != null) {
+          if (row.dirty && row.updatedAt > deletedAt) {
+            keepLocalRow = true;
+          } else {
+            await (db.delete(
+              db.agentMemories,
+            )..where((m) => m.id.equals(entityId))).go();
           }
         }
         break;

@@ -12,14 +12,24 @@ sesión.
   respuesta en curso queda registrada como interrumpida.
 - `contextWindowCompression.slidingWindow` mantiene la sesión por encima del
   límite normal de contexto.
-- `sessionResumption` conserva el último `newHandle` marcado `resumable` y lo
-  usa en la conexión siguiente.
+- La continuidad del contexto NO usa los resume handles de Gemini: tras un
+  corte abrupto un handle deja de resumir en segundos y el server abre en
+  silencio una sesión EN BLANCO (verificado contra la API en vivo,
+  2026-08-21). Cada (re)conexión abre una sesión nueva y re-siembra el
+  contexto desde el transcript del log local (`buildConversationSeed` en
+  nativo, `apps/web/src/lib/voice-seed.ts` en web), enviado como primer
+  `clientContent` con `turnComplete: false`. Los `sessionResumptionUpdate`
+  siguen llegando y su timestamp alimenta el gate local de frescura de la
+  sesión reanudable en nativo; el handle nunca se presenta al reconectar.
 - Un `GoAway` programa el recambio antes del `timeLeft`; un cierre inesperado
-  usa backoff exponencial (máximo 30 segundos).
-- Los mensajes generados durante un recambio se conservan en una cola acotada.
-- El token efímero dura 19 h 55 min (el máximo de la API es menor a 20 horas)
-  y se renueva con margen. Los handles de resumption se consideran válidos por
-  2 horas después de la interrupción.
+  usa backoff exponencial (máximo 30 segundos). Esto aplica a ambos clientes:
+  la web reconecta igual que el nativo desde el overhaul del agente (antes un
+  socket caído terminaba la conversación web).
+- Los mensajes generados durante un recambio se conservan en una cola acotada
+  y se envían en orden después del seed.
+- El token efímero es de un solo uso (`uses: 1`); cada intento de conexión
+  resuelve un token fresco. Su `expireTime` se fija en 19 h 55 min (el máximo
+  de la API es menor a 20 horas).
 - Si el proceso es suspendido o terminado por el sistema operativo no es
   posible mantener un socket ejecutándose. La sesión queda `suspended` y se
   intenta resumir al volver a abrirla mientras el handle siga vigente.

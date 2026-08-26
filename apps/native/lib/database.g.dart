@@ -4370,6 +4370,416 @@ class DashboardWidgetsCompanion extends UpdateCompanion<DashboardWidget> {
   }
 }
 
+class $AgentMemoriesTable extends AgentMemories
+    with TableInfo<$AgentMemoriesTable, AgentMemory> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $AgentMemoriesTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _contentMeta = const VerificationMeta(
+    'content',
+  );
+  @override
+  late final GeneratedColumn<String> content = GeneratedColumn<String>(
+    'content',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _archivedMeta = const VerificationMeta(
+    'archived',
+  );
+  @override
+  late final GeneratedColumn<bool> archived = GeneratedColumn<bool>(
+    'is_archived',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("is_archived" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<BigInt> createdAt = GeneratedColumn<BigInt>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.bigInt,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
+    'updatedAt',
+  );
+  @override
+  late final GeneratedColumn<BigInt> updatedAt = GeneratedColumn<BigInt>(
+    'updated_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.bigInt,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _dirtyMeta = const VerificationMeta('dirty');
+  @override
+  late final GeneratedColumn<bool> dirty = GeneratedColumn<bool>(
+    'dirty',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("dirty" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    content,
+    archived,
+    createdAt,
+    updatedAt,
+    dirty,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'agent_memories';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<AgentMemory> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('content')) {
+      context.handle(
+        _contentMeta,
+        content.isAcceptableOrUnknown(data['content']!, _contentMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_contentMeta);
+    }
+    if (data.containsKey('is_archived')) {
+      context.handle(
+        _archivedMeta,
+        archived.isAcceptableOrUnknown(data['is_archived']!, _archivedMeta),
+      );
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_createdAtMeta);
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(
+        _updatedAtMeta,
+        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_updatedAtMeta);
+    }
+    if (data.containsKey('dirty')) {
+      context.handle(
+        _dirtyMeta,
+        dirty.isAcceptableOrUnknown(data['dirty']!, _dirtyMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  AgentMemory map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return AgentMemory(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      content: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}content'],
+      )!,
+      archived: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}is_archived'],
+      )!,
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.bigInt,
+        data['${effectivePrefix}created_at'],
+      )!,
+      updatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.bigInt,
+        data['${effectivePrefix}updated_at'],
+      )!,
+      dirty: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}dirty'],
+      )!,
+    );
+  }
+
+  @override
+  $AgentMemoriesTable createAlias(String alias) {
+    return $AgentMemoriesTable(attachedDatabase, alias);
+  }
+}
+
+class AgentMemory extends DataClass implements Insertable<AgentMemory> {
+  final String id;
+  final String content;
+  final bool archived;
+  final BigInt createdAt;
+  final BigInt updatedAt;
+  final bool dirty;
+  const AgentMemory({
+    required this.id,
+    required this.content,
+    required this.archived,
+    required this.createdAt,
+    required this.updatedAt,
+    required this.dirty,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['content'] = Variable<String>(content);
+    map['is_archived'] = Variable<bool>(archived);
+    map['created_at'] = Variable<BigInt>(createdAt);
+    map['updated_at'] = Variable<BigInt>(updatedAt);
+    map['dirty'] = Variable<bool>(dirty);
+    return map;
+  }
+
+  AgentMemoriesCompanion toCompanion(bool nullToAbsent) {
+    return AgentMemoriesCompanion(
+      id: Value(id),
+      content: Value(content),
+      archived: Value(archived),
+      createdAt: Value(createdAt),
+      updatedAt: Value(updatedAt),
+      dirty: Value(dirty),
+    );
+  }
+
+  factory AgentMemory.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return AgentMemory(
+      id: serializer.fromJson<String>(json['id']),
+      content: serializer.fromJson<String>(json['content']),
+      archived: serializer.fromJson<bool>(json['archived']),
+      createdAt: serializer.fromJson<BigInt>(json['createdAt']),
+      updatedAt: serializer.fromJson<BigInt>(json['updatedAt']),
+      dirty: serializer.fromJson<bool>(json['dirty']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'content': serializer.toJson<String>(content),
+      'archived': serializer.toJson<bool>(archived),
+      'createdAt': serializer.toJson<BigInt>(createdAt),
+      'updatedAt': serializer.toJson<BigInt>(updatedAt),
+      'dirty': serializer.toJson<bool>(dirty),
+    };
+  }
+
+  AgentMemory copyWith({
+    String? id,
+    String? content,
+    bool? archived,
+    BigInt? createdAt,
+    BigInt? updatedAt,
+    bool? dirty,
+  }) => AgentMemory(
+    id: id ?? this.id,
+    content: content ?? this.content,
+    archived: archived ?? this.archived,
+    createdAt: createdAt ?? this.createdAt,
+    updatedAt: updatedAt ?? this.updatedAt,
+    dirty: dirty ?? this.dirty,
+  );
+  AgentMemory copyWithCompanion(AgentMemoriesCompanion data) {
+    return AgentMemory(
+      id: data.id.present ? data.id.value : this.id,
+      content: data.content.present ? data.content.value : this.content,
+      archived: data.archived.present ? data.archived.value : this.archived,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+      dirty: data.dirty.present ? data.dirty.value : this.dirty,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('AgentMemory(')
+          ..write('id: $id, ')
+          ..write('content: $content, ')
+          ..write('archived: $archived, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('dirty: $dirty')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode =>
+      Object.hash(id, content, archived, createdAt, updatedAt, dirty);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is AgentMemory &&
+          other.id == this.id &&
+          other.content == this.content &&
+          other.archived == this.archived &&
+          other.createdAt == this.createdAt &&
+          other.updatedAt == this.updatedAt &&
+          other.dirty == this.dirty);
+}
+
+class AgentMemoriesCompanion extends UpdateCompanion<AgentMemory> {
+  final Value<String> id;
+  final Value<String> content;
+  final Value<bool> archived;
+  final Value<BigInt> createdAt;
+  final Value<BigInt> updatedAt;
+  final Value<bool> dirty;
+  final Value<int> rowid;
+  const AgentMemoriesCompanion({
+    this.id = const Value.absent(),
+    this.content = const Value.absent(),
+    this.archived = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.dirty = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  AgentMemoriesCompanion.insert({
+    required String id,
+    required String content,
+    this.archived = const Value.absent(),
+    required BigInt createdAt,
+    required BigInt updatedAt,
+    this.dirty = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       content = Value(content),
+       createdAt = Value(createdAt),
+       updatedAt = Value(updatedAt);
+  static Insertable<AgentMemory> custom({
+    Expression<String>? id,
+    Expression<String>? content,
+    Expression<bool>? archived,
+    Expression<BigInt>? createdAt,
+    Expression<BigInt>? updatedAt,
+    Expression<bool>? dirty,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (content != null) 'content': content,
+      if (archived != null) 'is_archived': archived,
+      if (createdAt != null) 'created_at': createdAt,
+      if (updatedAt != null) 'updated_at': updatedAt,
+      if (dirty != null) 'dirty': dirty,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  AgentMemoriesCompanion copyWith({
+    Value<String>? id,
+    Value<String>? content,
+    Value<bool>? archived,
+    Value<BigInt>? createdAt,
+    Value<BigInt>? updatedAt,
+    Value<bool>? dirty,
+    Value<int>? rowid,
+  }) {
+    return AgentMemoriesCompanion(
+      id: id ?? this.id,
+      content: content ?? this.content,
+      archived: archived ?? this.archived,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      dirty: dirty ?? this.dirty,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (content.present) {
+      map['content'] = Variable<String>(content.value);
+    }
+    if (archived.present) {
+      map['is_archived'] = Variable<bool>(archived.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<BigInt>(createdAt.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<BigInt>(updatedAt.value);
+    }
+    if (dirty.present) {
+      map['dirty'] = Variable<bool>(dirty.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('AgentMemoriesCompanion(')
+          ..write('id: $id, ')
+          ..write('content: $content, ')
+          ..write('archived: $archived, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('dirty: $dirty, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 class $SyncStateTable extends SyncState
     with TableInfo<$SyncStateTable, SyncStateData> {
   @override
@@ -6551,6 +6961,592 @@ class VoiceSessionEventsCompanion extends UpdateCompanion<VoiceSessionEvent> {
   }
 }
 
+class $LegalAcceptancesTable extends LegalAcceptances
+    with TableInfo<$LegalAcceptancesTable, LegalAcceptance> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $LegalAcceptancesTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  @override
+  late final GeneratedColumnWithTypeConverter<LegalDocumentKind, String>
+  document = GeneratedColumn<String>(
+    'document',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  ).withConverter<LegalDocumentKind>($LegalAcceptancesTable.$converterdocument);
+  static const VerificationMeta _versionMeta = const VerificationMeta(
+    'version',
+  );
+  @override
+  late final GeneratedColumn<String> version = GeneratedColumn<String>(
+    'version',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _acceptedAtMeta = const VerificationMeta(
+    'acceptedAt',
+  );
+  @override
+  late final GeneratedColumn<BigInt> acceptedAt = GeneratedColumn<BigInt>(
+    'accepted_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.bigInt,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _ageConfirmedMeta = const VerificationMeta(
+    'ageConfirmed',
+  );
+  @override
+  late final GeneratedColumn<bool> ageConfirmed = GeneratedColumn<bool>(
+    'age_confirmed',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("age_confirmed" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _platformMeta = const VerificationMeta(
+    'platform',
+  );
+  @override
+  late final GeneratedColumn<String> platform = GeneratedColumn<String>(
+    'platform',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _appVersionMeta = const VerificationMeta(
+    'appVersion',
+  );
+  @override
+  late final GeneratedColumn<String> appVersion = GeneratedColumn<String>(
+    'app_version',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _localeMeta = const VerificationMeta('locale');
+  @override
+  late final GeneratedColumn<String> locale = GeneratedColumn<String>(
+    'locale',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  @override
+  late final GeneratedColumnWithTypeConverter<LegalAcceptanceSource, String>
+  source =
+      GeneratedColumn<String>(
+        'source',
+        aliasedName,
+        false,
+        type: DriftSqlType.string,
+        requiredDuringInsert: true,
+      ).withConverter<LegalAcceptanceSource>(
+        $LegalAcceptancesTable.$convertersource,
+      );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    document,
+    version,
+    acceptedAt,
+    ageConfirmed,
+    platform,
+    appVersion,
+    locale,
+    source,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'legal_acceptances';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<LegalAcceptance> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('version')) {
+      context.handle(
+        _versionMeta,
+        version.isAcceptableOrUnknown(data['version']!, _versionMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_versionMeta);
+    }
+    if (data.containsKey('accepted_at')) {
+      context.handle(
+        _acceptedAtMeta,
+        acceptedAt.isAcceptableOrUnknown(data['accepted_at']!, _acceptedAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_acceptedAtMeta);
+    }
+    if (data.containsKey('age_confirmed')) {
+      context.handle(
+        _ageConfirmedMeta,
+        ageConfirmed.isAcceptableOrUnknown(
+          data['age_confirmed']!,
+          _ageConfirmedMeta,
+        ),
+      );
+    }
+    if (data.containsKey('platform')) {
+      context.handle(
+        _platformMeta,
+        platform.isAcceptableOrUnknown(data['platform']!, _platformMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_platformMeta);
+    }
+    if (data.containsKey('app_version')) {
+      context.handle(
+        _appVersionMeta,
+        appVersion.isAcceptableOrUnknown(data['app_version']!, _appVersionMeta),
+      );
+    }
+    if (data.containsKey('locale')) {
+      context.handle(
+        _localeMeta,
+        locale.isAcceptableOrUnknown(data['locale']!, _localeMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  LegalAcceptance map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return LegalAcceptance(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      document: $LegalAcceptancesTable.$converterdocument.fromSql(
+        attachedDatabase.typeMapping.read(
+          DriftSqlType.string,
+          data['${effectivePrefix}document'],
+        )!,
+      ),
+      version: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}version'],
+      )!,
+      acceptedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.bigInt,
+        data['${effectivePrefix}accepted_at'],
+      )!,
+      ageConfirmed: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}age_confirmed'],
+      )!,
+      platform: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}platform'],
+      )!,
+      appVersion: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}app_version'],
+      ),
+      locale: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}locale'],
+      ),
+      source: $LegalAcceptancesTable.$convertersource.fromSql(
+        attachedDatabase.typeMapping.read(
+          DriftSqlType.string,
+          data['${effectivePrefix}source'],
+        )!,
+      ),
+    );
+  }
+
+  @override
+  $LegalAcceptancesTable createAlias(String alias) {
+    return $LegalAcceptancesTable(attachedDatabase, alias);
+  }
+
+  static JsonTypeConverter2<LegalDocumentKind, String, String>
+  $converterdocument = const EnumNameConverter<LegalDocumentKind>(
+    LegalDocumentKind.values,
+  );
+  static JsonTypeConverter2<LegalAcceptanceSource, String, String>
+  $convertersource = const EnumNameConverter<LegalAcceptanceSource>(
+    LegalAcceptanceSource.values,
+  );
+}
+
+class LegalAcceptance extends DataClass implements Insertable<LegalAcceptance> {
+  final String id;
+  final LegalDocumentKind document;
+  final String version;
+  final BigInt acceptedAt;
+  final bool ageConfirmed;
+  final String platform;
+  final String? appVersion;
+  final String? locale;
+  final LegalAcceptanceSource source;
+  const LegalAcceptance({
+    required this.id,
+    required this.document,
+    required this.version,
+    required this.acceptedAt,
+    required this.ageConfirmed,
+    required this.platform,
+    this.appVersion,
+    this.locale,
+    required this.source,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    {
+      map['document'] = Variable<String>(
+        $LegalAcceptancesTable.$converterdocument.toSql(document),
+      );
+    }
+    map['version'] = Variable<String>(version);
+    map['accepted_at'] = Variable<BigInt>(acceptedAt);
+    map['age_confirmed'] = Variable<bool>(ageConfirmed);
+    map['platform'] = Variable<String>(platform);
+    if (!nullToAbsent || appVersion != null) {
+      map['app_version'] = Variable<String>(appVersion);
+    }
+    if (!nullToAbsent || locale != null) {
+      map['locale'] = Variable<String>(locale);
+    }
+    {
+      map['source'] = Variable<String>(
+        $LegalAcceptancesTable.$convertersource.toSql(source),
+      );
+    }
+    return map;
+  }
+
+  LegalAcceptancesCompanion toCompanion(bool nullToAbsent) {
+    return LegalAcceptancesCompanion(
+      id: Value(id),
+      document: Value(document),
+      version: Value(version),
+      acceptedAt: Value(acceptedAt),
+      ageConfirmed: Value(ageConfirmed),
+      platform: Value(platform),
+      appVersion: appVersion == null && nullToAbsent
+          ? const Value.absent()
+          : Value(appVersion),
+      locale: locale == null && nullToAbsent
+          ? const Value.absent()
+          : Value(locale),
+      source: Value(source),
+    );
+  }
+
+  factory LegalAcceptance.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return LegalAcceptance(
+      id: serializer.fromJson<String>(json['id']),
+      document: $LegalAcceptancesTable.$converterdocument.fromJson(
+        serializer.fromJson<String>(json['document']),
+      ),
+      version: serializer.fromJson<String>(json['version']),
+      acceptedAt: serializer.fromJson<BigInt>(json['acceptedAt']),
+      ageConfirmed: serializer.fromJson<bool>(json['ageConfirmed']),
+      platform: serializer.fromJson<String>(json['platform']),
+      appVersion: serializer.fromJson<String?>(json['appVersion']),
+      locale: serializer.fromJson<String?>(json['locale']),
+      source: $LegalAcceptancesTable.$convertersource.fromJson(
+        serializer.fromJson<String>(json['source']),
+      ),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'document': serializer.toJson<String>(
+        $LegalAcceptancesTable.$converterdocument.toJson(document),
+      ),
+      'version': serializer.toJson<String>(version),
+      'acceptedAt': serializer.toJson<BigInt>(acceptedAt),
+      'ageConfirmed': serializer.toJson<bool>(ageConfirmed),
+      'platform': serializer.toJson<String>(platform),
+      'appVersion': serializer.toJson<String?>(appVersion),
+      'locale': serializer.toJson<String?>(locale),
+      'source': serializer.toJson<String>(
+        $LegalAcceptancesTable.$convertersource.toJson(source),
+      ),
+    };
+  }
+
+  LegalAcceptance copyWith({
+    String? id,
+    LegalDocumentKind? document,
+    String? version,
+    BigInt? acceptedAt,
+    bool? ageConfirmed,
+    String? platform,
+    Value<String?> appVersion = const Value.absent(),
+    Value<String?> locale = const Value.absent(),
+    LegalAcceptanceSource? source,
+  }) => LegalAcceptance(
+    id: id ?? this.id,
+    document: document ?? this.document,
+    version: version ?? this.version,
+    acceptedAt: acceptedAt ?? this.acceptedAt,
+    ageConfirmed: ageConfirmed ?? this.ageConfirmed,
+    platform: platform ?? this.platform,
+    appVersion: appVersion.present ? appVersion.value : this.appVersion,
+    locale: locale.present ? locale.value : this.locale,
+    source: source ?? this.source,
+  );
+  LegalAcceptance copyWithCompanion(LegalAcceptancesCompanion data) {
+    return LegalAcceptance(
+      id: data.id.present ? data.id.value : this.id,
+      document: data.document.present ? data.document.value : this.document,
+      version: data.version.present ? data.version.value : this.version,
+      acceptedAt: data.acceptedAt.present
+          ? data.acceptedAt.value
+          : this.acceptedAt,
+      ageConfirmed: data.ageConfirmed.present
+          ? data.ageConfirmed.value
+          : this.ageConfirmed,
+      platform: data.platform.present ? data.platform.value : this.platform,
+      appVersion: data.appVersion.present
+          ? data.appVersion.value
+          : this.appVersion,
+      locale: data.locale.present ? data.locale.value : this.locale,
+      source: data.source.present ? data.source.value : this.source,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('LegalAcceptance(')
+          ..write('id: $id, ')
+          ..write('document: $document, ')
+          ..write('version: $version, ')
+          ..write('acceptedAt: $acceptedAt, ')
+          ..write('ageConfirmed: $ageConfirmed, ')
+          ..write('platform: $platform, ')
+          ..write('appVersion: $appVersion, ')
+          ..write('locale: $locale, ')
+          ..write('source: $source')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    document,
+    version,
+    acceptedAt,
+    ageConfirmed,
+    platform,
+    appVersion,
+    locale,
+    source,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is LegalAcceptance &&
+          other.id == this.id &&
+          other.document == this.document &&
+          other.version == this.version &&
+          other.acceptedAt == this.acceptedAt &&
+          other.ageConfirmed == this.ageConfirmed &&
+          other.platform == this.platform &&
+          other.appVersion == this.appVersion &&
+          other.locale == this.locale &&
+          other.source == this.source);
+}
+
+class LegalAcceptancesCompanion extends UpdateCompanion<LegalAcceptance> {
+  final Value<String> id;
+  final Value<LegalDocumentKind> document;
+  final Value<String> version;
+  final Value<BigInt> acceptedAt;
+  final Value<bool> ageConfirmed;
+  final Value<String> platform;
+  final Value<String?> appVersion;
+  final Value<String?> locale;
+  final Value<LegalAcceptanceSource> source;
+  final Value<int> rowid;
+  const LegalAcceptancesCompanion({
+    this.id = const Value.absent(),
+    this.document = const Value.absent(),
+    this.version = const Value.absent(),
+    this.acceptedAt = const Value.absent(),
+    this.ageConfirmed = const Value.absent(),
+    this.platform = const Value.absent(),
+    this.appVersion = const Value.absent(),
+    this.locale = const Value.absent(),
+    this.source = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  LegalAcceptancesCompanion.insert({
+    required String id,
+    required LegalDocumentKind document,
+    required String version,
+    required BigInt acceptedAt,
+    this.ageConfirmed = const Value.absent(),
+    required String platform,
+    this.appVersion = const Value.absent(),
+    this.locale = const Value.absent(),
+    required LegalAcceptanceSource source,
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       document = Value(document),
+       version = Value(version),
+       acceptedAt = Value(acceptedAt),
+       platform = Value(platform),
+       source = Value(source);
+  static Insertable<LegalAcceptance> custom({
+    Expression<String>? id,
+    Expression<String>? document,
+    Expression<String>? version,
+    Expression<BigInt>? acceptedAt,
+    Expression<bool>? ageConfirmed,
+    Expression<String>? platform,
+    Expression<String>? appVersion,
+    Expression<String>? locale,
+    Expression<String>? source,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (document != null) 'document': document,
+      if (version != null) 'version': version,
+      if (acceptedAt != null) 'accepted_at': acceptedAt,
+      if (ageConfirmed != null) 'age_confirmed': ageConfirmed,
+      if (platform != null) 'platform': platform,
+      if (appVersion != null) 'app_version': appVersion,
+      if (locale != null) 'locale': locale,
+      if (source != null) 'source': source,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  LegalAcceptancesCompanion copyWith({
+    Value<String>? id,
+    Value<LegalDocumentKind>? document,
+    Value<String>? version,
+    Value<BigInt>? acceptedAt,
+    Value<bool>? ageConfirmed,
+    Value<String>? platform,
+    Value<String?>? appVersion,
+    Value<String?>? locale,
+    Value<LegalAcceptanceSource>? source,
+    Value<int>? rowid,
+  }) {
+    return LegalAcceptancesCompanion(
+      id: id ?? this.id,
+      document: document ?? this.document,
+      version: version ?? this.version,
+      acceptedAt: acceptedAt ?? this.acceptedAt,
+      ageConfirmed: ageConfirmed ?? this.ageConfirmed,
+      platform: platform ?? this.platform,
+      appVersion: appVersion ?? this.appVersion,
+      locale: locale ?? this.locale,
+      source: source ?? this.source,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (document.present) {
+      map['document'] = Variable<String>(
+        $LegalAcceptancesTable.$converterdocument.toSql(document.value),
+      );
+    }
+    if (version.present) {
+      map['version'] = Variable<String>(version.value);
+    }
+    if (acceptedAt.present) {
+      map['accepted_at'] = Variable<BigInt>(acceptedAt.value);
+    }
+    if (ageConfirmed.present) {
+      map['age_confirmed'] = Variable<bool>(ageConfirmed.value);
+    }
+    if (platform.present) {
+      map['platform'] = Variable<String>(platform.value);
+    }
+    if (appVersion.present) {
+      map['app_version'] = Variable<String>(appVersion.value);
+    }
+    if (locale.present) {
+      map['locale'] = Variable<String>(locale.value);
+    }
+    if (source.present) {
+      map['source'] = Variable<String>(
+        $LegalAcceptancesTable.$convertersource.toSql(source.value),
+      );
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('LegalAcceptancesCompanion(')
+          ..write('id: $id, ')
+          ..write('document: $document, ')
+          ..write('version: $version, ')
+          ..write('acceptedAt: $acceptedAt, ')
+          ..write('ageConfirmed: $ageConfirmed, ')
+          ..write('platform: $platform, ')
+          ..write('appVersion: $appVersion, ')
+          ..write('locale: $locale, ')
+          ..write('source: $source, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
@@ -6565,11 +7561,15 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $DashboardWidgetsTable dashboardWidgets = $DashboardWidgetsTable(
     this,
   );
+  late final $AgentMemoriesTable agentMemories = $AgentMemoriesTable(this);
   late final $SyncStateTable syncState = $SyncStateTable(this);
   late final $TombstonesTable tombstones = $TombstonesTable(this);
   late final $VoiceSessionsTable voiceSessions = $VoiceSessionsTable(this);
   late final $VoiceSessionEventsTable voiceSessionEvents =
       $VoiceSessionEventsTable(this);
+  late final $LegalAcceptancesTable legalAcceptances = $LegalAcceptancesTable(
+    this,
+  );
   late final Index accountsArchived = Index(
     'accounts_archived',
     'CREATE INDEX accounts_archived ON accounts (is_archived)',
@@ -6698,6 +7698,18 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     'dashboard_widgets_needs_sync',
     'CREATE INDEX dashboard_widgets_needs_sync ON dashboard_widgets (updated_at) WHERE dirty = 1',
   );
+  late final Index agentMemoriesArchived = Index(
+    'agent_memories_archived',
+    'CREATE INDEX agent_memories_archived ON agent_memories (is_archived)',
+  );
+  late final Index agentMemoriesUpdatedAt = Index(
+    'agent_memories_updated_at',
+    'CREATE INDEX agent_memories_updated_at ON agent_memories (updated_at)',
+  );
+  late final Index agentMemoriesNeedsSync = Index(
+    'agent_memories_needs_sync',
+    'CREATE INDEX agent_memories_needs_sync ON agent_memories (updated_at) WHERE dirty = 1',
+  );
   late final Index tombstonesEntityTable = Index(
     'tombstones_entity_table',
     'CREATE INDEX tombstones_entity_table ON tombstones (entity_table)',
@@ -6726,6 +7738,10 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     'voice_events_remote_synced',
     'CREATE INDEX voice_events_remote_synced ON voice_session_events (remote_synced)',
   );
+  late final Index legalAcceptancesDocumentVersion = Index(
+    'legal_acceptances_document_version',
+    'CREATE INDEX legal_acceptances_document_version ON legal_acceptances (document, version)',
+  );
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -6738,10 +7754,12 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     transactionTags,
     savedFilters,
     dashboardWidgets,
+    agentMemories,
     syncState,
     tombstones,
     voiceSessions,
     voiceSessionEvents,
+    legalAcceptances,
     accountsArchived,
     accountsUpdatedAt,
     accountsNeedsSync,
@@ -6774,6 +7792,9 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     dashboardWidgetsArchived,
     dashboardWidgetsUpdatedAt,
     dashboardWidgetsNeedsSync,
+    agentMemoriesArchived,
+    agentMemoriesUpdatedAt,
+    agentMemoriesNeedsSync,
     tombstonesEntityTable,
     tombstonesUpdatedAt,
     tombstonesNeedsSync,
@@ -6781,6 +7802,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     voiceSessionsUpdatedAt,
     voiceEventsSessionId,
     voiceEventsRemoteSynced,
+    legalAcceptancesDocumentVersion,
   ];
 }
 
@@ -8909,6 +9931,225 @@ typedef $$DashboardWidgetsTableProcessedTableManager =
       DashboardWidget,
       PrefetchHooks Function()
     >;
+typedef $$AgentMemoriesTableCreateCompanionBuilder =
+    AgentMemoriesCompanion Function({
+      required String id,
+      required String content,
+      Value<bool> archived,
+      required BigInt createdAt,
+      required BigInt updatedAt,
+      Value<bool> dirty,
+      Value<int> rowid,
+    });
+typedef $$AgentMemoriesTableUpdateCompanionBuilder =
+    AgentMemoriesCompanion Function({
+      Value<String> id,
+      Value<String> content,
+      Value<bool> archived,
+      Value<BigInt> createdAt,
+      Value<BigInt> updatedAt,
+      Value<bool> dirty,
+      Value<int> rowid,
+    });
+
+class $$AgentMemoriesTableFilterComposer
+    extends Composer<_$AppDatabase, $AgentMemoriesTable> {
+  $$AgentMemoriesTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get content => $composableBuilder(
+    column: $table.content,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get archived => $composableBuilder(
+    column: $table.archived,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<BigInt> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<BigInt> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get dirty => $composableBuilder(
+    column: $table.dirty,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$AgentMemoriesTableOrderingComposer
+    extends Composer<_$AppDatabase, $AgentMemoriesTable> {
+  $$AgentMemoriesTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get content => $composableBuilder(
+    column: $table.content,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get archived => $composableBuilder(
+    column: $table.archived,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<BigInt> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<BigInt> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get dirty => $composableBuilder(
+    column: $table.dirty,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$AgentMemoriesTableAnnotationComposer
+    extends Composer<_$AppDatabase, $AgentMemoriesTable> {
+  $$AgentMemoriesTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get content =>
+      $composableBuilder(column: $table.content, builder: (column) => column);
+
+  GeneratedColumn<bool> get archived =>
+      $composableBuilder(column: $table.archived, builder: (column) => column);
+
+  GeneratedColumn<BigInt> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  GeneratedColumn<BigInt> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+
+  GeneratedColumn<bool> get dirty =>
+      $composableBuilder(column: $table.dirty, builder: (column) => column);
+}
+
+class $$AgentMemoriesTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $AgentMemoriesTable,
+          AgentMemory,
+          $$AgentMemoriesTableFilterComposer,
+          $$AgentMemoriesTableOrderingComposer,
+          $$AgentMemoriesTableAnnotationComposer,
+          $$AgentMemoriesTableCreateCompanionBuilder,
+          $$AgentMemoriesTableUpdateCompanionBuilder,
+          (
+            AgentMemory,
+            BaseReferences<_$AppDatabase, $AgentMemoriesTable, AgentMemory>,
+          ),
+          AgentMemory,
+          PrefetchHooks Function()
+        > {
+  $$AgentMemoriesTableTableManager(_$AppDatabase db, $AgentMemoriesTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$AgentMemoriesTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$AgentMemoriesTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$AgentMemoriesTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String> content = const Value.absent(),
+                Value<bool> archived = const Value.absent(),
+                Value<BigInt> createdAt = const Value.absent(),
+                Value<BigInt> updatedAt = const Value.absent(),
+                Value<bool> dirty = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => AgentMemoriesCompanion(
+                id: id,
+                content: content,
+                archived: archived,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                dirty: dirty,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                required String content,
+                Value<bool> archived = const Value.absent(),
+                required BigInt createdAt,
+                required BigInt updatedAt,
+                Value<bool> dirty = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => AgentMemoriesCompanion.insert(
+                id: id,
+                content: content,
+                archived: archived,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                dirty: dirty,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$AgentMemoriesTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $AgentMemoriesTable,
+      AgentMemory,
+      $$AgentMemoriesTableFilterComposer,
+      $$AgentMemoriesTableOrderingComposer,
+      $$AgentMemoriesTableAnnotationComposer,
+      $$AgentMemoriesTableCreateCompanionBuilder,
+      $$AgentMemoriesTableUpdateCompanionBuilder,
+      (
+        AgentMemory,
+        BaseReferences<_$AppDatabase, $AgentMemoriesTable, AgentMemory>,
+      ),
+      AgentMemory,
+      PrefetchHooks Function()
+    >;
 typedef $$SyncStateTableCreateCompanionBuilder =
     SyncStateCompanion Function({
       Value<String> id,
@@ -9994,6 +11235,300 @@ typedef $$VoiceSessionEventsTableProcessedTableManager =
       VoiceSessionEvent,
       PrefetchHooks Function()
     >;
+typedef $$LegalAcceptancesTableCreateCompanionBuilder =
+    LegalAcceptancesCompanion Function({
+      required String id,
+      required LegalDocumentKind document,
+      required String version,
+      required BigInt acceptedAt,
+      Value<bool> ageConfirmed,
+      required String platform,
+      Value<String?> appVersion,
+      Value<String?> locale,
+      required LegalAcceptanceSource source,
+      Value<int> rowid,
+    });
+typedef $$LegalAcceptancesTableUpdateCompanionBuilder =
+    LegalAcceptancesCompanion Function({
+      Value<String> id,
+      Value<LegalDocumentKind> document,
+      Value<String> version,
+      Value<BigInt> acceptedAt,
+      Value<bool> ageConfirmed,
+      Value<String> platform,
+      Value<String?> appVersion,
+      Value<String?> locale,
+      Value<LegalAcceptanceSource> source,
+      Value<int> rowid,
+    });
+
+class $$LegalAcceptancesTableFilterComposer
+    extends Composer<_$AppDatabase, $LegalAcceptancesTable> {
+  $$LegalAcceptancesTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnWithTypeConverterFilters<LegalDocumentKind, LegalDocumentKind, String>
+  get document => $composableBuilder(
+    column: $table.document,
+    builder: (column) => ColumnWithTypeConverterFilters(column),
+  );
+
+  ColumnFilters<String> get version => $composableBuilder(
+    column: $table.version,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<BigInt> get acceptedAt => $composableBuilder(
+    column: $table.acceptedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get ageConfirmed => $composableBuilder(
+    column: $table.ageConfirmed,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get platform => $composableBuilder(
+    column: $table.platform,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get appVersion => $composableBuilder(
+    column: $table.appVersion,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get locale => $composableBuilder(
+    column: $table.locale,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnWithTypeConverterFilters<
+    LegalAcceptanceSource,
+    LegalAcceptanceSource,
+    String
+  >
+  get source => $composableBuilder(
+    column: $table.source,
+    builder: (column) => ColumnWithTypeConverterFilters(column),
+  );
+}
+
+class $$LegalAcceptancesTableOrderingComposer
+    extends Composer<_$AppDatabase, $LegalAcceptancesTable> {
+  $$LegalAcceptancesTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get document => $composableBuilder(
+    column: $table.document,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get version => $composableBuilder(
+    column: $table.version,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<BigInt> get acceptedAt => $composableBuilder(
+    column: $table.acceptedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get ageConfirmed => $composableBuilder(
+    column: $table.ageConfirmed,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get platform => $composableBuilder(
+    column: $table.platform,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get appVersion => $composableBuilder(
+    column: $table.appVersion,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get locale => $composableBuilder(
+    column: $table.locale,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get source => $composableBuilder(
+    column: $table.source,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$LegalAcceptancesTableAnnotationComposer
+    extends Composer<_$AppDatabase, $LegalAcceptancesTable> {
+  $$LegalAcceptancesTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumnWithTypeConverter<LegalDocumentKind, String> get document =>
+      $composableBuilder(column: $table.document, builder: (column) => column);
+
+  GeneratedColumn<String> get version =>
+      $composableBuilder(column: $table.version, builder: (column) => column);
+
+  GeneratedColumn<BigInt> get acceptedAt => $composableBuilder(
+    column: $table.acceptedAt,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<bool> get ageConfirmed => $composableBuilder(
+    column: $table.ageConfirmed,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get platform =>
+      $composableBuilder(column: $table.platform, builder: (column) => column);
+
+  GeneratedColumn<String> get appVersion => $composableBuilder(
+    column: $table.appVersion,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get locale =>
+      $composableBuilder(column: $table.locale, builder: (column) => column);
+
+  GeneratedColumnWithTypeConverter<LegalAcceptanceSource, String> get source =>
+      $composableBuilder(column: $table.source, builder: (column) => column);
+}
+
+class $$LegalAcceptancesTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $LegalAcceptancesTable,
+          LegalAcceptance,
+          $$LegalAcceptancesTableFilterComposer,
+          $$LegalAcceptancesTableOrderingComposer,
+          $$LegalAcceptancesTableAnnotationComposer,
+          $$LegalAcceptancesTableCreateCompanionBuilder,
+          $$LegalAcceptancesTableUpdateCompanionBuilder,
+          (
+            LegalAcceptance,
+            BaseReferences<
+              _$AppDatabase,
+              $LegalAcceptancesTable,
+              LegalAcceptance
+            >,
+          ),
+          LegalAcceptance,
+          PrefetchHooks Function()
+        > {
+  $$LegalAcceptancesTableTableManager(
+    _$AppDatabase db,
+    $LegalAcceptancesTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$LegalAcceptancesTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$LegalAcceptancesTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$LegalAcceptancesTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<LegalDocumentKind> document = const Value.absent(),
+                Value<String> version = const Value.absent(),
+                Value<BigInt> acceptedAt = const Value.absent(),
+                Value<bool> ageConfirmed = const Value.absent(),
+                Value<String> platform = const Value.absent(),
+                Value<String?> appVersion = const Value.absent(),
+                Value<String?> locale = const Value.absent(),
+                Value<LegalAcceptanceSource> source = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => LegalAcceptancesCompanion(
+                id: id,
+                document: document,
+                version: version,
+                acceptedAt: acceptedAt,
+                ageConfirmed: ageConfirmed,
+                platform: platform,
+                appVersion: appVersion,
+                locale: locale,
+                source: source,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                required LegalDocumentKind document,
+                required String version,
+                required BigInt acceptedAt,
+                Value<bool> ageConfirmed = const Value.absent(),
+                required String platform,
+                Value<String?> appVersion = const Value.absent(),
+                Value<String?> locale = const Value.absent(),
+                required LegalAcceptanceSource source,
+                Value<int> rowid = const Value.absent(),
+              }) => LegalAcceptancesCompanion.insert(
+                id: id,
+                document: document,
+                version: version,
+                acceptedAt: acceptedAt,
+                ageConfirmed: ageConfirmed,
+                platform: platform,
+                appVersion: appVersion,
+                locale: locale,
+                source: source,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$LegalAcceptancesTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $LegalAcceptancesTable,
+      LegalAcceptance,
+      $$LegalAcceptancesTableFilterComposer,
+      $$LegalAcceptancesTableOrderingComposer,
+      $$LegalAcceptancesTableAnnotationComposer,
+      $$LegalAcceptancesTableCreateCompanionBuilder,
+      $$LegalAcceptancesTableUpdateCompanionBuilder,
+      (
+        LegalAcceptance,
+        BaseReferences<_$AppDatabase, $LegalAcceptancesTable, LegalAcceptance>,
+      ),
+      LegalAcceptance,
+      PrefetchHooks Function()
+    >;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;
@@ -10011,6 +11546,8 @@ class $AppDatabaseManager {
       $$SavedFiltersTableTableManager(_db, _db.savedFilters);
   $$DashboardWidgetsTableTableManager get dashboardWidgets =>
       $$DashboardWidgetsTableTableManager(_db, _db.dashboardWidgets);
+  $$AgentMemoriesTableTableManager get agentMemories =>
+      $$AgentMemoriesTableTableManager(_db, _db.agentMemories);
   $$SyncStateTableTableManager get syncState =>
       $$SyncStateTableTableManager(_db, _db.syncState);
   $$TombstonesTableTableManager get tombstones =>
@@ -10019,4 +11556,6 @@ class $AppDatabaseManager {
       $$VoiceSessionsTableTableManager(_db, _db.voiceSessions);
   $$VoiceSessionEventsTableTableManager get voiceSessionEvents =>
       $$VoiceSessionEventsTableTableManager(_db, _db.voiceSessionEvents);
+  $$LegalAcceptancesTableTableManager get legalAcceptances =>
+      $$LegalAcceptancesTableTableManager(_db, _db.legalAcceptances);
 }

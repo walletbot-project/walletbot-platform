@@ -5,36 +5,32 @@ import {
     EmailButton,
     type EmailContent,
     EmailLayout,
+    type EmailProps,
     footnoteText,
-    greeting,
 } from './components'
+import { EMAIL_MESSAGES } from './messages'
 
-type VerificationEmailProps = {
-    name: string | null
-    url: string
+export const VerificationEmail = ({ name, url, locale }: EmailProps) => {
+    const t = EMAIL_MESSAGES[locale]
+    return (
+        <EmailLayout title={t.verification.title} url={url} locale={locale}>
+            <Text style={bodyText}>
+                {t.greeting(name)} {t.verification.body}
+            </Text>
+            <EmailButton label={t.verification.button} url={url} />
+            <Text style={footnoteText}>{t.verification.footnote}</Text>
+        </EmailLayout>
+    )
 }
-
-export const VerificationEmail = ({ name, url }: VerificationEmailProps) => (
-    <EmailLayout title="Verificá tu correo" url={url}>
-        <Text style={bodyText}>
-            {greeting(name)} Confirmá tu dirección de correo para empezar a usar
-            Wallet Bot.
-        </Text>
-        <EmailButton label="Verificar correo" url={url} />
-        <Text style={footnoteText}>
-            Si no creaste una cuenta en Wallet Bot, ignorá este correo. El
-            enlace vence en 24 horas.
-        </Text>
-    </EmailLayout>
-)
 
 export const verificationEmail = async ({
     name,
     url,
-}: VerificationEmailProps): Promise<EmailContent> => {
-    const email = <VerificationEmail name={name} url={url} />
+    locale,
+}: EmailProps): Promise<EmailContent> => {
+    const email = <VerificationEmail name={name} url={url} locale={locale} />
     return {
-        subject: 'Verificá tu correo — Wallet Bot',
+        subject: EMAIL_MESSAGES[locale].verification.subject,
         html: await render(email),
         text: await render(email, { plainText: true }),
     }

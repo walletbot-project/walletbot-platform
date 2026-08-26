@@ -1,8 +1,10 @@
 import { isActionCtx, type RunMutationCtx } from '@convex-dev/better-auth/utils'
 import { Resend } from '@convex-dev/resend'
+import type { Locale } from '@wallet-bot/shared'
 import type { FunctionReference } from 'convex/server'
 import { components, internal } from '../_generated/api'
 import type { DataModel } from '../_generated/dataModel'
+import { resolveOutboundLocale } from './utils'
 
 // testMode is hardcoded OFF: every deployment sends real emails to real
 // addresses. (With testMode on, sendEmail throws for any recipient that
@@ -17,9 +19,35 @@ type SendArgs = {
     to: string
     name: string | null
     url: string
+    locale: Locale
 }
 
 type SendEmailAction = FunctionReference<'action', 'internal', SendArgs, null>
+
+/**
+ * The locale an outbound message renders in, reading the recipient's stored
+ * language first. See `resolveOutboundLocale` (utils.ts) for the full order.
+ * `userId` is null for flows that have no user yet.
+ */
+export const outboundLocaleForUser = async (
+    ctx: RunMutationCtx<DataModel>,
+    args: {
+        userId: string | null
+        hint?: Locale | null
+        request?: Request
+    },
+): Promise<Locale> => {
+    const stored = args.userId
+        ? await ctx.runQuery(internal.v1.users.internal.getLanguage, {
+              userId: args.userId,
+          })
+        : null
+    return resolveOutboundLocale({
+        stored,
+        hint: args.hint,
+        acceptLanguage: args.request?.headers.get('accept-language') ?? null,
+    })
+}
 
 // Rendering the React Email templates requires the Node runtime, so sending
 // lives in emails/nodeActions.ts. From an action ctx (every better-auth HTTP
@@ -57,6 +85,17 @@ export const sendResetPasswordEmail = async (
     await runSendEmailAction(
         ctx,
         internal.emails.nodeActions.sendResetPasswordEmail,
+        args,
+    )
+}
+
+export const sendAccountDeletionEmail = async (
+    ctx: RunMutationCtx<DataModel>,
+    args: SendArgs,
+): Promise<void> => {
+    await runSendEmailAction(
+        ctx,
+        internal.emails.nodeActions.sendAccountDeletionEmail,
         args,
     )
 }

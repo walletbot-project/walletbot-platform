@@ -21,7 +21,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get accounts => 'Accounts';
 
   @override
-  String get insights => 'Insights';
+  String get insights => 'Organization';
 
   @override
   String get categories => 'Categories';
@@ -129,6 +129,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get account => 'Account';
 
   @override
+  String get exchangeRate => 'Exchange rate';
+
+  @override
   String get status => 'Status';
 
   @override
@@ -230,6 +233,44 @@ class AppLocalizationsEn extends AppLocalizations {
   String get yourAccounts => 'Your accounts';
 
   @override
+  String get currentAccount => 'Current account';
+
+  @override
+  String get otherAccounts => 'Other accounts';
+
+  @override
+  String get chooseAccountToContinue =>
+      'Choose an account to continue, or add another one.';
+
+  @override
+  String get signOut => 'Sign out';
+
+  @override
+  String get deleteLocalAccount => 'Delete this account';
+
+  @override
+  String signOutConfirmTitle(String name) {
+    return 'Sign out of “$name”?';
+  }
+
+  @override
+  String get signOutConfirmBody =>
+      'This removes the account\'s data from this device. Your data stays in your account — sign in again to bring it back.';
+
+  @override
+  String get signOutUnsyncedWarning =>
+      'Some changes have not synced yet. Signing out now discards them for good.';
+
+  @override
+  String deleteLocalAccountConfirmTitle(String name) {
+    return 'Delete “$name”?';
+  }
+
+  @override
+  String get deleteLocalAccountConfirmBody =>
+      'This account only exists on this device. Deleting it erases its data for good — there is no copy anywhere else.';
+
+  @override
   String get settings => 'Settings';
 
   @override
@@ -262,6 +303,57 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get settingsSaveFailed => 'Could not save the setting. Try again.';
+
+  @override
+  String get deleteUserAccount => 'Delete my account';
+
+  @override
+  String get deleteUserAccountDescription =>
+      'Permanently delete your account and all your data';
+
+  @override
+  String get deleteUserAccountConfirmTitle => 'Delete your account?';
+
+  @override
+  String deleteUserAccountConfirmBody(String email) {
+    return 'We will send a confirmation link to $email. Deleting your account is permanent and cannot be undone.';
+  }
+
+  @override
+  String get deleteUserAccountSend => 'Send link';
+
+  @override
+  String get deleteUserAccountEmailSent =>
+      'Check your email: we sent you a link to confirm the deletion.';
+
+  @override
+  String get deleteUserAccountFailed =>
+      'Could not send the email. Try again in a few minutes.';
+
+  @override
+  String get deleteUserAccountAlreadyDeleted =>
+      'That account was already deleted.';
+
+  @override
+  String get deleteUserAccountRateLimited =>
+      'You already requested several deletion links. Wait an hour and try again.';
+
+  @override
+  String get accountDeletedBanner => 'This account was deleted';
+
+  @override
+  String get accountDeletedRemove => 'Remove';
+
+  @override
+  String get accountDeletedConfirmTitle =>
+      'Remove this account from the device?';
+
+  @override
+  String get accountDeletedConfirmBody =>
+      'The account is already deleted on the server. This erases its data from this device too, which is the last copy.';
+
+  @override
+  String get accountDeletedRemoveConfirm => 'Remove';
 
   @override
   String get updateRequiredTitle => 'Update required';
@@ -325,6 +417,112 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get addManually => 'Add manually';
+
+  @override
+  String get sendFeedback => 'Send feedback';
+
+  @override
+  String get feedbackTitle => 'Send feedback';
+
+  @override
+  String get feedbackSubtitle =>
+      'Tell us what went wrong or what you would like to see. You can attach screenshots or files.';
+
+  @override
+  String get feedbackMessageLabel => 'Your feedback';
+
+  @override
+  String get feedbackMessageHint => 'What would you like to tell us?';
+
+  @override
+  String get feedbackAttach => 'Attach files';
+
+  @override
+  String feedbackAttachmentsCount(int count, int max, String max_size) {
+    return 'Attachments: $count/$max · up to $max_size each';
+  }
+
+  @override
+  String get feedbackRemoveAttachment => 'Remove attachment';
+
+  @override
+  String get feedbackSend => 'Send';
+
+  @override
+  String get feedbackSending => 'Sending feedback…';
+
+  @override
+  String feedbackUploading(int current, int total) {
+    return 'Uploading file $current of $total…';
+  }
+
+  @override
+  String get feedbackSent => 'Thank you! We got your feedback';
+
+  @override
+  String get feedbackSendFailed => 'Could not send your feedback';
+
+  @override
+  String get feedbackMessageRequired => 'Write your feedback before sending';
+
+  @override
+  String feedbackTooManyFiles(int max) {
+    return 'You can attach up to $max files';
+  }
+
+  @override
+  String feedbackFileTooLarge(String name, String max_size) {
+    return '“$name” is larger than the $max_size limit';
+  }
+
+  @override
+  String get feedbackRateLimited =>
+      'You have sent several messages already. Try again later.';
+
+  @override
+  String get feedbackAttachmentRejected =>
+      'We could not process the attachments. Remove them and try again.';
+
+  @override
+  String get feedbackOffline =>
+      'No connection. Check your internet and try again, or write to us by email.';
+
+  @override
+  String get feedbackEmailInstead => 'Send an email instead';
+
+  @override
+  String get feedbackEmailTitle => 'Write to support';
+
+  @override
+  String get feedbackEmailBody =>
+      'Send us an email and we will get back to you. Whatever you already typed goes into the message.';
+
+  @override
+  String get feedbackSupportEmail => 'support@walletbot.live';
+
+  @override
+  String get feedbackEmailOpen => 'Open email app';
+
+  @override
+  String get feedbackEmailCopy => 'Copy address';
+
+  @override
+  String get feedbackEmailCopied => 'Address copied';
+
+  @override
+  String get feedbackEmailNoApp =>
+      'No email app on this device. Copy the address and write to us from anywhere.';
+
+  @override
+  String get feedbackEmailSubject => 'Wallet Bot feedback';
+
+  @override
+  String feedbackEmailBodyFooter(String client) {
+    return 'Sent from Wallet Bot $client';
+  }
+
+  @override
+  String get feedbackErrorDismiss => 'Dismiss this message';
 
   @override
   String get addTransaction => 'Add transaction';
@@ -960,7 +1158,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String resetEmailSent(String email) {
-    return 'If an account exists for $email, we sent it a link to reset the password. The link opens in your browser.';
+    return 'We sent a link to $email to reset your password. The link opens in your browser.';
   }
 
   @override
@@ -1009,6 +1207,23 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get emailStillNotVerified =>
       'That email isn\'t verified yet. We sent you a new link.';
+
+  @override
+  String accountNotFoundForEmail(String email) {
+    return 'There is no account for $email.';
+  }
+
+  @override
+  String get emailAlreadyVerified =>
+      'That email is already verified. Sign in with your account.';
+
+  @override
+  String get tooManyAttempts =>
+      'Too many attempts. Wait a minute and try again.';
+
+  @override
+  String get emailSendFailed =>
+      'Could not send the email. Try again in a few minutes.';
 
   @override
   String localAccountFailed(Object error) {
@@ -1103,6 +1318,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get selectWidgetCurrency => 'Select a currency';
 
   @override
+  String get configureWidgetFilter => 'Configure a filter for this widget';
+
+  @override
   String widgetSaveFailed(Object error) {
     return 'Could not save the widget: $error';
   }
@@ -1145,6 +1363,15 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get noAccountsUseArs => 'There are no accounts yet; ARS will be used.';
+
+  @override
+  String get widgetWidth => 'Width';
+
+  @override
+  String get widgetAccountsAllHint => 'Every account in this currency.';
+
+  @override
+  String get widgetAccountsScopedHint => 'Only the selected accounts.';
 
   @override
   String get noColor => 'No color';
@@ -1237,11 +1464,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get interrupted => '(interrupted)';
 
   @override
-  String voiceRuntimeError(Object error) {
-    return 'Voice error: $error';
-  }
-
-  @override
   String get toolRunning => 'Running';
 
   @override
@@ -1293,9 +1515,8 @@ class AppLocalizationsEn extends AppLocalizations {
       'PCM 16-bit streaming is not supported on this device';
 
   @override
-  String voiceStartFailed(Object error) {
-    return 'Failed to start: $error';
-  }
+  String get voiceStartFailed =>
+      'Couldn\'t start the conversation. Please try again.';
 
   @override
   String microphoneOpenFailed(Object error) {
@@ -1305,11 +1526,6 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String audioStreamFailed(Object error) {
     return 'Audio stream error: $error';
-  }
-
-  @override
-  String voiceStopFailed(Object error) {
-    return 'Failed to stop cleanly: $error';
   }
 
   @override
@@ -1374,6 +1590,62 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get tagSaveFailed => 'Could not save the tag';
+
+  @override
+  String get legalFirstTitle => 'Before you start';
+
+  @override
+  String get legalFirstSubtitle =>
+      'We need your acceptance to create your account and provide the service.';
+
+  @override
+  String get legalUpdatedTermsTitle => 'We updated the Terms';
+
+  @override
+  String get legalUpdatedPrivacyTitle => 'We updated the Privacy Policy';
+
+  @override
+  String get legalUpdatedBothTitle =>
+      'We updated the Terms and the Privacy Policy';
+
+  @override
+  String get legalUpdatedSubtitle =>
+      'Review the changes and accept them to keep using Wallet Bot.';
+
+  @override
+  String get legalUpdatedSubtitleGrace =>
+      'You can keep using the app for now, but we will need your acceptance.';
+
+  @override
+  String get legalAgeConfirm => 'I am 18 or older';
+
+  @override
+  String get legalAcceptTerms => 'I accept the [[terms]]';
+
+  @override
+  String get legalAcceptPrivacy => 'I accept the [[privacy]]';
+
+  @override
+  String get legalAcceptBoth => 'I accept the [[terms]] and the [[privacy]]';
+
+  @override
+  String get legalTermsName => 'Terms and Conditions';
+
+  @override
+  String get legalPrivacyName => 'Privacy Policy';
+
+  @override
+  String get legalAcceptAction => 'Accept and continue';
+
+  @override
+  String get legalLater => 'Later';
+
+  @override
+  String get legalUseAnotherAccount => 'Use another account';
+
+  @override
+  String get legalAcceptFailed =>
+      'We could not record your acceptance. Check your connection and try again.';
 
   @override
   String get actionLoadFailed => 'Could not load the action';
