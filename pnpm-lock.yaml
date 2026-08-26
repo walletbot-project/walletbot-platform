@@ -266,6 +266,9 @@ importers:
       react-dom:
         specifier: ^19.2.5
         version: 19.2.5(react@19.2.5)
+      resend:
+        specifier: ^6.18.1
+        version: 6.18.1(@react-email/render@2.1.0(react-dom@19.2.5(react@19.2.5))(react@19.2.5))
       zod:
         specifier: ^3.25.76
         version: 3.25.76
