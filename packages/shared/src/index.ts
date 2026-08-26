@@ -124,9 +124,11 @@ export {
     AGENT_MODEL,
     AGENT_VOICE_NAME,
     TOOL_DEFINITIONS,
+    TOOL_HINTS,
     TOOL_MAP,
     TOOL_NAMES,
     toolSchemas,
+    withToolHint,
 } from './tools'
 export type { CalcStep, CalcStepResult } from './tools/calc'
 export {

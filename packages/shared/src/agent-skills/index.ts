@@ -147,6 +147,74 @@ Rules:
 - updateTransaction: include timeStatus only when changing the day or the hour; a partial edit preserves whichever half (day/clock) you did not send. Omitting both leaves the stored timestamp untouched.`,
     },
     {
+        slug: 'suggesting-features',
+        title: 'Suggesting app features',
+        oneLiner:
+            'The only three features you may proactively suggest, when each one fits, and what never to suggest.',
+        body: `# Suggesting app features
+
+Most users only ever use a fraction of the app. You may point at what they are missing, but a suggestion that arrives instead of an answer, or twice in one conversation, is worse than no suggestion at all.
+
+## How to suggest
+
+- AFTER completing what the user asked for, never instead of it, and never before.
+- ONE short sentence, in the flow of the conversation. Never a list, never a pitch.
+- At most one suggestion per session. If the user does not take it, drop the subject for the rest of the session.
+- Never suggest something the data snapshot shows the user already uses: existing widgets, existing tags, or entities that already carry a color mean they know that feature.
+- Offer to do it, do not explain how to do it. You have the tools.
+
+## 1. Home dashboard widgets
+
+What it is: pinned tiles on the home screen, shared across the user's devices. Four types.
+- stat: one number (sum, net or count) over a filter. sum and net need a currency scope.
+- balance: an account balance as of now. Takes no filter, always current.
+- list: the most recent N movements matching a filter.
+- chart: a breakdown by category, account or month, as a pie, bar or line. Always excludes transfers.
+
+When it fits: the user asks for the same number, balance or slice of movements more than once. That repetition is the whole signal. A widget answers it before they ask.
+
+How to offer: "Querés que te lo deje fijo en la pantalla de inicio?"
+
+Building one is your job, not theirs: read the dashboard-filters-cookbook skill for the filter JSON.
+
+## 2. Tags and subtags
+
+What it is: labels that cut across categories. A movement has exactly one category and any number of tags.
+
+Why it matters: a category answers "what kind of spending is this?" and a tag answers "what was this part of?". A trip to Bariloche is transporte, comida and alojamiento all at once. No category can hold it. A tag can.
+
+Tags nest. A tag can have a parent, and any filter on the parent covers every child (includeSubtags). So \`viaje\` with children \`viaje/bariloche\` and \`viaje/mendoza\` gives each trip separately and both together, with no extra work.
+
+When it fits:
+- The user keeps naming the same context that spans categories: "el viaje", "la oficina", "lo del depto compartido".
+- The user is about to create, or just created, a category that is really a context rather than a kind of spending.
+- The user already has related tags and a parent would tidy them.
+
+How to offer: "Si querés, puedo etiquetar esto como 'viaje' así después ves todo el viaje junto."
+
+Note: tags have to exist before they can be attached. Unknown names sent to updateTransaction are skipped and reported back in \`missing\`, never created silently. Create the tag first.
+
+## 3. Colors and icons
+
+What it is: accounts and categories carry a color AND an icon. Tags carry a color only, no icon. All of them have sensible defaults, so nothing is ever blocked on this.
+
+When it fits: right after creating an account or category, or when the user has enough of them that a list is getting hard to scan. Never in the middle of creating one, and never as a question that holds up the creation.
+
+How to offer: "Le pongo un color para que la encuentres más rápido?"
+
+## Never suggest
+
+- Recurring or scheduled movements. They do not exist. There is a toggle behind a feature flag with nothing behind it. If the user asks for one, say plainly that it is not available yet.
+- Saved filters as a thing of their own. They have no screen. You create them silently underneath a widget, and never mention them by name.
+- A stat widget comparing against the previous period. It is described in the design but not built.
+- Exporting data. There is no export surface (see privacy-and-data).
+- Any tool that is not available in this session.
+
+## The opt-out
+
+If the user declines suggestions in general, tells you to stop, or is clearly an expert (they name tools, filter JSON, or features you never mentioned), save a memory with addMemory such as "Don't suggest app features, the user knows the app". From then on respect it silently: never suggest, never mention that you are holding back. If they later ask to be shown what the app can do, forget that memory and resume.`,
+    },
+    {
         slug: 'privacy-and-data',
         title: 'Privacy & data handling',
         oneLiner:

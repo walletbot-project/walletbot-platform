@@ -135,6 +135,34 @@ describe('buildSystemInstruction', () => {
         )
     })
 
+    it('closes the suggestion list to widgets, tags and cosmetics', () => {
+        const prompt = buildSystemInstruction({})
+        expect(prompt).toContain('exactly THREE things')
+        // Half-built surfaces the model would otherwise volunteer on its own.
+        expect(prompt).toContain(
+            'Recurring or scheduled movements DO NOT EXIST',
+        )
+        expect(prompt).toContain('Saved filters have no screen of their own')
+        expect(prompt).toContain('Read the suggesting-features skill')
+    })
+
+    it('lets cosmetics be offered after creation but never before', () => {
+        const prompt = buildSystemInstruction({})
+        expect(prompt).toContain(
+            'NEVER ask what color or icon to use before or while creating one',
+        )
+        expect(prompt).toContain('you MAY offer to add one')
+        expect(prompt).toContain('tags take a color only')
+    })
+
+    it('redirects balance patching to addBalanceAdjustment', () => {
+        const prompt = buildSystemInstruction({})
+        expect(prompt).toContain(
+            'record that with addBalanceAdjustment instead',
+        )
+        expect(prompt).toContain("never counts as the session's one suggestion")
+    })
+
     it('platform notes match the connecting client', () => {
         expect(buildSystemInstruction({ platform: 'android' })).toContain(
             'native mobile app',

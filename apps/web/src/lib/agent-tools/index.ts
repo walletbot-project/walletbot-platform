@@ -1,4 +1,4 @@
-import type { ToolName } from '@wallet-bot/shared'
+import { type ToolName, withToolHint } from '@wallet-bot/shared'
 import { toolExecutors } from './executors'
 import type { AgentToolContext } from './helpers'
 
@@ -12,5 +12,9 @@ export async function executeToolCall(
     if (!(name in toolExecutors)) {
         return { error: `Unknown tool: ${name}` }
     }
-    return toolExecutors[name as ToolName].execute(context, args)
+    const result = await toolExecutors[name as ToolName].execute(context, args)
+    // Static suggestion hints ride on the result rather than the system
+    // prompt, so they land in the turn where they matter. Native does the same
+    // in ToolExecutors.execute.
+    return withToolHint(name, result)
 }

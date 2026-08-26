@@ -5,6 +5,7 @@ import { zodToToolSchema } from './helpers'
 
 export { AGENT_MODEL, AGENT_VOICE_NAME } from './constants'
 export { toolSchemas } from './definitions'
+export { TOOL_HINTS, withToolHint } from './hints'
 
 // Tool descriptions. Rules: platform-neutral (every tool behaves identically
 // on the native app and on the web app), state defaults, and state the error

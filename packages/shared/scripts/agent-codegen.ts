@@ -5,14 +5,21 @@
 //   2. kAgentModel / kAgentVoiceName — the Live session constants,
 //   3. kAgentContext*Cap — the mint context payload caps (native builds the
 //      same payload the server validates),
-//   4. kAgentSkills — the bundled skill bodies `readSkill` serves offline.
+//   4. kAgentSkills — the bundled skill bodies `readSkill` serves offline,
+//   5. kAgentToolHints — the static per-tool hints appended to successful
+//      results, so both clients nudge with the same words.
 //
 // Run `pnpm run generate:agent` (in packages/shared) after changing any of
 // the imported sources. `test/agent-codegen.test.ts` fails when the generated
 // file on disk is stale.
 
 import { AGENT_SKILLS } from '../src/agent-skills'
-import { AGENT_MODEL, AGENT_VOICE_NAME, TOOL_NAMES } from '../src/tools'
+import {
+    AGENT_MODEL,
+    AGENT_VOICE_NAME,
+    TOOL_HINTS,
+    TOOL_NAMES,
+} from '../src/tools'
 import { AGENT_CONTEXT_CAPS } from '../src/tools/context'
 
 function dartString(value: string): string {
@@ -102,6 +109,22 @@ export function renderAgentGeneratedDart(): string {
         lines.push('  ),')
     }
     lines.push('];')
+    lines.push('')
+    lines.push(
+        '/// Static hints appended to successful results of the tools listed',
+    )
+    lines.push(
+        '/// here (see packages/shared/src/tools/hints.ts). They ask the model to',
+    )
+    lines.push(
+        '/// check whether a suggestion fits; nothing here counts or tracks calls.',
+    )
+    lines.push('const Map<String, String> kAgentToolHints = {')
+    for (const [name, hint] of Object.entries(TOOL_HINTS)) {
+        lines.push(`  ${dartString(name)}:`)
+        lines.push(`      ${dartString(hint)},`)
+    }
+    lines.push('};')
     lines.push('')
     return lines.join('\n')
 }

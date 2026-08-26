@@ -52,7 +52,25 @@ class ToolExecutors {
   /// instead of crashing.
   final List<FxQuote> Function()? fxQuotes;
 
+  /// Runs a tool and appends its static suggestion hint, if it has one.
+  ///
+  /// The hints ride on the result instead of the system prompt so they land in
+  /// the turn where the decision happens; web does the same in
+  /// `executeToolCall`. Failures are left untouched: a call that did not work
+  /// is never the moment to pitch a feature.
   Future<Map<String, dynamic>> execute(
+    String name,
+    Map<String, dynamic> args,
+  ) async {
+    final result = await _dispatch(name, args);
+    final hint = kAgentToolHints[name];
+    if (hint == null || result['ok'] != true || result.containsKey('hint')) {
+      return result;
+    }
+    return {...result, 'hint': hint};
+  }
+
+  Future<Map<String, dynamic>> _dispatch(
     String name,
     Map<String, dynamic> args,
   ) async {
