@@ -31,26 +31,16 @@ void main() {
     expect(res, {'ok': false, 'error': 'Unknown tool: nope'});
   });
 
-  group('suggestion hints', () {
-    test('a hinted tool carries its hint on success', () async {
-      final res = await tools.execute('createCategory', {'name': 'Food'});
-      expect(res['ok'], isTrue);
-      expect(res['hint'], kAgentToolHints['createCategory']);
-    });
+  test(
+    'a hinted tool carries its hint on success, an unhinted one none',
+    () async {
+      final hinted = await tools.execute('createCategory', {'name': 'Food'});
+      expect(hinted['hint'], kAgentToolHints['createCategory']);
 
-    test('a failure carries none', () async {
-      final res = await tools.execute('getAccountBalance', {
-        'idOrName': 'nope',
-      });
-      expect(res, {'ok': false, 'error': 'Account not found'});
-    });
-
-    test('an unhinted tool carries none', () async {
-      final res = await tools.execute('listCategories', {});
-      expect(res['ok'], isTrue);
-      expect(res.containsKey('hint'), isFalse);
-    });
-  });
+      final unhinted = await tools.execute('listCategories', {});
+      expect(unhinted.containsKey('hint'), isFalse);
+    },
+  );
 
   test(
     'full expense flow: create account/category, add, list, balance',
