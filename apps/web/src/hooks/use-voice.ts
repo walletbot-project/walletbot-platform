@@ -134,6 +134,8 @@ export type ChatMessage =
           text: string
           isFinal: boolean
           wasInterrupted: boolean
+          /** The user reported this response. Set by `markReported`. */
+          reported?: boolean
       }
     | {
           kind: 'tool'
@@ -256,6 +258,8 @@ export function useVoice(opts: UseVoiceOpts) {
     const ownerId = useQuery(api.v1.users.queries.getMyId) ?? null
     const ownerIdRef = useRef(ownerId)
     const historyRef = useRef<VoiceHistoryRecorder | null>(null)
+    /** The model the current token was minted for, once it is known. */
+    const modelRef = useRef<string | null>(null)
 
     useEffect(() => {
         ownerIdRef.current = ownerId
@@ -793,6 +797,7 @@ export function useVoice(opts: UseVoiceOpts) {
             // The model is only known now, so this is where the session row
             // becomes uploadable.
             historyRef.current?.open(model)
+            modelRef.current = model
             recordHistory('system', 'local', { message: tokenNotice })
 
             const playbackCtx = new AudioContext({
@@ -1318,6 +1323,33 @@ export function useVoice(opts: UseVoiceOpts) {
 
     const clearMessages = useCallback(() => setMessages([]), [])
 
+    /**
+     * Flag an agent bubble as reported, so it can say so after the toast is
+     * gone. Purely cosmetic — the report itself is already on the server.
+     */
+    const markReported = useCallback((id: string) => {
+        setMessages((prev) =>
+            prev.map((m) =>
+                m.id === id && m.kind === 'agent'
+                    ? { ...m, reported: true }
+                    : m,
+            ),
+        )
+    }, [])
+
+    /**
+     * Where the conversation lives on the backend, for a report to point at.
+     * Read at report time rather than published as state: both values are set
+     * once per session and re-rendering the chat when they arrive buys nothing.
+     */
+    const getSessionInfo = useCallback(
+        () => ({
+            sessionId: historyRef.current?.sessionId,
+            model: modelRef.current ?? undefined,
+        }),
+        [],
+    )
+
     /*
      * Ends the session when the *account* goes away, which is the only thing
      * that unmounts `VoiceProvider` — it sits inside `AuthProvider`, above the
@@ -1349,6 +1381,8 @@ export function useVoice(opts: UseVoiceOpts) {
         setComposing,
         messages,
         clearMessages,
+        markReported,
+        getSessionInfo,
     }
 }
 

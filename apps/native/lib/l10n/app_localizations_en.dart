@@ -1652,4 +1652,99 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get tapToRetry => 'Tap to try again';
+
+  @override
+  String get reportResponseAction => 'Report this response';
+
+  @override
+  String get reportResponseCopy => 'Copy';
+
+  @override
+  String get reportResponseCopied => 'Response copied';
+
+  @override
+  String get reportResponseMenuItem => 'Report a response';
+
+  @override
+  String get reportResponseBadge => 'Reported';
+
+  @override
+  String get reportResponseTitle => 'Report a response';
+
+  @override
+  String get reportResponseSubtitle =>
+      'Tell us what was wrong with what Gaston said. We review reports to fix the assistant.';
+
+  @override
+  String get reportResponseSessionSubtitle =>
+      'Report this conversation when the response was voice-only or has already scrolled away.';
+
+  @override
+  String get reportResponseReasonLabel => 'Reason';
+
+  @override
+  String get reportReasonOffensive => 'Offensive, abusive or violent';
+
+  @override
+  String get reportReasonSexual => 'Sexual content';
+
+  @override
+  String get reportReasonDangerous => 'Dangerous or illegal';
+
+  @override
+  String get reportReasonMisleading => 'False financial information';
+
+  @override
+  String get reportReasonPrivacy => 'Showed data it should not have';
+
+  @override
+  String get reportReasonOther => 'Something else';
+
+  @override
+  String get reportResponseReasonRequired => 'Pick a reason before sending';
+
+  @override
+  String get reportResponseNoteLabel => 'Details (optional)';
+
+  @override
+  String get reportResponseNoteHint => 'What happened?';
+
+  @override
+  String get reportResponseReportedTextLabel => 'Reported response';
+
+  @override
+  String get reportResponseSessionNotice =>
+      'This sends the conversation from this session, without the audio.';
+
+  @override
+  String get reportResponsePrivacyNotice =>
+      'We send the text above along with the model and your app version. Audio never leaves your device.';
+
+  @override
+  String get reportResponseSend => 'Send report';
+
+  @override
+  String get reportResponseSending => 'Sending report…';
+
+  @override
+  String get reportResponseSent => 'Thank you. We will review this response';
+
+  @override
+  String get reportResponseFailed => 'Could not send your report';
+
+  @override
+  String get reportResponseRateLimited =>
+      'You have sent several reports already. Try again later.';
+
+  @override
+  String get reportResponseOffline =>
+      'No connection. Check your internet and try again.';
+
+  @override
+  String get reportResponseInvalid =>
+      'We could not process this report. Try again.';
+
+  @override
+  String get reportResponseNoResponseYet =>
+      'There is no response to report yet';
 }

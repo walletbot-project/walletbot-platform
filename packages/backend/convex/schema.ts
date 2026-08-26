@@ -1,6 +1,7 @@
 import { defineSchema } from 'convex/server'
 import { accounts } from './schema/accounts'
 import { agentMemories } from './schema/agentMemories'
+import { agentReports } from './schema/agentReports'
 import { agentUsageMonthly, agentUsageSamples } from './schema/agentUsage'
 import { categories } from './schema/categories'
 import { dashboardWidgets, savedFilters } from './schema/dashboard'
@@ -37,6 +38,7 @@ export default defineSchema({
     agentUsageSamples,
     admins,
     agentMemories,
+    agentReports,
     categories,
     dashboardWidgets,
     deletedUsers,

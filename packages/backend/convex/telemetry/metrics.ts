@@ -82,13 +82,19 @@ const recordAgentUsageMonthly = async (
     }
 }
 
+/**
+ * `userId` is optional because not every counter has one: an agent report can
+ * come from a native local-only account, which has no backend user at all.
+ */
+type BackendCounter = {
+    name: MetricName
+    userId?: string
+    attributes: Record<string, MetricAttributeValue>
+}
+
 const recordMetric = async (
     ctx: MutationCtx,
-    metric: {
-        name: MetricName
-        userId: string
-        attributes: Record<string, MetricAttributeValue>
-    },
+    metric: BackendCounter,
 ): Promise<void> => {
     await ctx.db.insert('telemetryMetrics', {
         name: metric.name,
@@ -99,7 +105,7 @@ const recordMetric = async (
         value: 1,
         unit: 'count',
         attributes: metric.attributes,
-        userId: metric.userId,
+        ...(metric.userId ? { userId: metric.userId } : {}),
         exportStatus: 'pending',
         exportAttempts: 0,
     })
@@ -113,11 +119,7 @@ const recordMetric = async (
 
 const recordMetricSafely = async (
     ctx: MutationCtx,
-    metric: {
-        name: MetricName
-        userId: string
-        attributes: Record<string, MetricAttributeValue>
-    },
+    metric: BackendCounter,
 ): Promise<void> => {
     try {
         await recordMetric(ctx, metric)
@@ -188,6 +190,31 @@ export const recordTransferCreated = (
             created_by: args.createdBy,
             ingest_path: args.ingestPath,
             cross_currency: args.crossCurrency,
+        },
+    })
+
+/**
+ * One reported agent response. Deliberately carries no snapshot and no free
+ * text: `telemetryEvents` / `telemetryMetrics` are aggregate analytics and their
+ * ingest contract forbids PII, so the conversation content stays in
+ * `agentReports` where only an admin can read it.
+ */
+export const recordAgentReportSubmitted = (
+    ctx: MutationCtx,
+    args: {
+        userId?: string
+        reason: string
+        scope: string
+        clientPlatform: string
+    },
+): Promise<void> =>
+    recordMetricSafely(ctx, {
+        name: 'agent.reports.submitted_count',
+        ...(args.userId ? { userId: args.userId } : {}),
+        attributes: {
+            reason: args.reason,
+            scope: args.scope,
+            client_platform: args.clientPlatform,
         },
     })
 

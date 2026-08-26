@@ -1,5 +1,6 @@
 import { cronJobs } from 'convex/server'
 import { internal } from './_generated/api'
+import { AGENT_REPORT_RETENTION_MS } from './agentReports/utils'
 import { ORPHAN_ATTACHMENT_TTL_MS } from './feedback/utils'
 
 const crons = cronJobs()
@@ -138,6 +139,18 @@ crons.interval(
     {
         olderThanMs: ORPHAN_ATTACHMENT_TTL_MS,
         limit: 100,
+    },
+)
+
+// Reported agent responses hold conversation excerpts, so they expire on the
+// same twelve-month clock as the voice history they were cut from.
+crons.interval(
+    'delete old agent reports',
+    { hours: 6 },
+    internal.agentReports.internal.deleteOldReports,
+    {
+        olderThanMs: AGENT_REPORT_RETENTION_MS,
+        limit: 200,
     },
 )
 

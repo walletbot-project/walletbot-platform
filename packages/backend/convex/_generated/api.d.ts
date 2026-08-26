@@ -8,6 +8,10 @@
  * @module
  */
 
+import type * as agentReports_helpers from "../agentReports/helpers.js";
+import type * as agentReports_internal from "../agentReports/internal.js";
+import type * as agentReports_rateLimits from "../agentReports/rateLimits.js";
+import type * as agentReports_utils from "../agentReports/utils.js";
 import type * as agentUsage_queries from "../agentUsage/queries.js";
 import type * as aggregates from "../aggregates.js";
 import type * as auth from "../auth.js";
@@ -43,6 +47,7 @@ import type * as live_createToken from "../live/createToken.js";
 import type * as migrations from "../migrations.js";
 import type * as schema_accounts from "../schema/accounts.js";
 import type * as schema_agentMemories from "../schema/agentMemories.js";
+import type * as schema_agentReports from "../schema/agentReports.js";
 import type * as schema_agentUsage from "../schema/agentUsage.js";
 import type * as schema_categories from "../schema/categories.js";
 import type * as schema_dashboard from "../schema/dashboard.js";
@@ -83,6 +88,8 @@ import type * as v1_accounts_helpers from "../v1/accounts/helpers.js";
 import type * as v1_accounts_internal from "../v1/accounts/internal.js";
 import type * as v1_accounts_mutations from "../v1/accounts/mutations.js";
 import type * as v1_accounts_queries from "../v1/accounts/queries.js";
+import type * as v1_agentReports_mutations from "../v1/agentReports/mutations.js";
+import type * as v1_agentReports_queries from "../v1/agentReports/queries.js";
 import type * as v1_categories_mutations from "../v1/categories/mutations.js";
 import type * as v1_categories_queries from "../v1/categories/queries.js";
 import type * as v1_dashboard_helpers from "../v1/dashboard/helpers.js";
@@ -118,6 +125,10 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  "agentReports/helpers": typeof agentReports_helpers;
+  "agentReports/internal": typeof agentReports_internal;
+  "agentReports/rateLimits": typeof agentReports_rateLimits;
+  "agentReports/utils": typeof agentReports_utils;
   "agentUsage/queries": typeof agentUsage_queries;
   aggregates: typeof aggregates;
   auth: typeof auth;
@@ -153,6 +164,7 @@ declare const fullApi: ApiFromModules<{
   migrations: typeof migrations;
   "schema/accounts": typeof schema_accounts;
   "schema/agentMemories": typeof schema_agentMemories;
+  "schema/agentReports": typeof schema_agentReports;
   "schema/agentUsage": typeof schema_agentUsage;
   "schema/categories": typeof schema_categories;
   "schema/dashboard": typeof schema_dashboard;
@@ -193,6 +205,8 @@ declare const fullApi: ApiFromModules<{
   "v1/accounts/internal": typeof v1_accounts_internal;
   "v1/accounts/mutations": typeof v1_accounts_mutations;
   "v1/accounts/queries": typeof v1_accounts_queries;
+  "v1/agentReports/mutations": typeof v1_agentReports_mutations;
+  "v1/agentReports/queries": typeof v1_agentReports_queries;
   "v1/categories/mutations": typeof v1_categories_mutations;
   "v1/categories/queries": typeof v1_categories_queries;
   "v1/dashboard/helpers": typeof v1_dashboard_helpers;

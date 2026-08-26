@@ -1,7 +1,7 @@
 # Wallet Bot — Terms and Conditions
 
 **Effective date:** August 23, 2026
-**Last updated:** August 23, 2026
+**Last updated:** August 26, 2026
 
 > These Terms are published in Spanish and English. For consumers residing in the Argentine Republic, the Spanish version ("Términos y Condiciones") is the legally operative text and prevails in case of any discrepancy. For all other users, this English version prevails and the Spanish version is a convenience translation.
 
@@ -55,6 +55,7 @@ The optional voice/text assistant is powered by third-party artificial-intellige
 - The assistant **can make mistakes**: it may mis-hear or misinterpret amounts, currencies, dates, merchant names or instructions, and may create, modify or delete records incorrectly as a result. **You are responsible for reviewing the records it creates or changes.**
 - Assistant responses are generated automatically and are informational only; Section 6 (Not financial advice) fully applies to them.
 - When you use the assistant, your microphone audio and conversation content are processed by the AI provider (Google or OpenAI) as described in the Privacy Policy (Section 5 there). The feature is optional and the rest of the app works without it.
+- If the assistant produces something offensive, dangerous or otherwise inappropriate, **you can report it from the chat itself**: long-press the response (or use the chat menu) and choose to report it. We review reports and use them to correct the assistant. Reporting is available on every platform, including accounts used without signing in.
 
 ## 8. Acceptable use
 

@@ -104,6 +104,34 @@ irreversible and purges all user data plus the better-auth user
 (`packages/backend/convex/userDeletion/`). Remaining Play Console task:
 declare the deletion URL in the Data safety form.
 
+### 7b. No way to report AI-generated content — resolved (2026-08-26)
+
+Play's **AI-Generated Content** policy applies: Gasti is a text-to-text chatbot
+and the interaction is a central feature. The policy requires that "apps that
+generate content using AI must contain in-app user reporting or flagging
+features that allow users to report or flag offensive content to developers
+without needing to exit the app", and that developers "utilize user reports to
+inform content filtering and moderation". Apple asks for the same through
+guidelines 1.2 and 4.7.1 ("a mechanism to report offensive content and timely
+responses to concerns").
+
+This audit missed it originally. It now exists on both platforms: long-pressing
+an agent bubble offers "Report this response"
+(`apps/native/lib/screens/voice.dart`, `apps/web/src/pages/add.tsx`), and the
+chat app bar carries a session-scoped fallback for a reply that was audio-only
+or has scrolled away. Reports land in `agentReports`
+(`packages/backend/convex/v1/agentReports/`) with a snapshot of the flagged turn
+and the user turn before it, and are triaged at `/admin/agent-reports`. The path
+is deliberately **not** behind a feature flag and works for local-only accounts,
+which identify themselves with `deviceId` like feedback does.
+
+Reports expire after twelve months (`crons.ts`), matching the voice-history
+retention the privacy policy promises, and are purged on account deletion
+(`userDeletion/internal.ts`).
+
+Remaining Play Console task: nothing blocking, but the content rating
+questionnaire should describe the assistant honestly.
+
 ### 8. No terms of service
 
 Also absent. Needed if the listing or onboarding references it.

@@ -178,7 +178,9 @@ const toOtlpMetricAttributes = (
     return attributes
 }
 
-const exportableMetricAttributeKeys = (name: ReservedMetricName): Set<string> => {
+const exportableMetricAttributeKeys = (
+    name: ReservedMetricName,
+): Set<string> => {
     switch (name) {
         case 'business.financial_accounts.created_count':
         case 'business.movements.created_count':
@@ -203,6 +205,8 @@ const exportableMetricAttributeKeys = (name: ReservedMetricName): Set<string> =>
             return new Set(['model', 'mode', 'interaction_type'])
         case 'agent.session.cost_bucket_count':
             return new Set(['model', 'mode', 'cost_bucket'])
+        case 'agent.reports.submitted_count':
+            return new Set(['reason', 'scope', 'client_platform'])
         case 'business.users.registered_total':
         case 'agent.session.cost_outlier_count':
             return new Set()
@@ -375,7 +379,8 @@ export const recordAgentMonthlyUsage = internalAction({
 
 export const recordAgentMonthlyUsageNow = internalAction({
     args: { month: v.optional(v.string()) },
-    handler: async (ctx, args) => recordAgentMonthlyUsageMetric(ctx, args.month),
+    handler: async (ctx, args) =>
+        recordAgentMonthlyUsageMetric(ctx, args.month),
 })
 
 export const deleteDeprecatedAgentCostOutlierMetricsNow = internalAction({

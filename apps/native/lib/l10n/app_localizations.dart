@@ -3031,6 +3031,180 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Tap to try again'**
   String get tapToRetry;
+
+  /// No description provided for @reportResponseAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Report this response'**
+  String get reportResponseAction;
+
+  /// No description provided for @reportResponseCopy.
+  ///
+  /// In en, this message translates to:
+  /// **'Copy'**
+  String get reportResponseCopy;
+
+  /// No description provided for @reportResponseCopied.
+  ///
+  /// In en, this message translates to:
+  /// **'Response copied'**
+  String get reportResponseCopied;
+
+  /// No description provided for @reportResponseMenuItem.
+  ///
+  /// In en, this message translates to:
+  /// **'Report a response'**
+  String get reportResponseMenuItem;
+
+  /// No description provided for @reportResponseBadge.
+  ///
+  /// In en, this message translates to:
+  /// **'Reported'**
+  String get reportResponseBadge;
+
+  /// No description provided for @reportResponseTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Report a response'**
+  String get reportResponseTitle;
+
+  /// No description provided for @reportResponseSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Tell us what was wrong with what Gaston said. We review reports to fix the assistant.'**
+  String get reportResponseSubtitle;
+
+  /// No description provided for @reportResponseSessionSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Report this conversation when the response was voice-only or has already scrolled away.'**
+  String get reportResponseSessionSubtitle;
+
+  /// No description provided for @reportResponseReasonLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Reason'**
+  String get reportResponseReasonLabel;
+
+  /// No description provided for @reportReasonOffensive.
+  ///
+  /// In en, this message translates to:
+  /// **'Offensive, abusive or violent'**
+  String get reportReasonOffensive;
+
+  /// No description provided for @reportReasonSexual.
+  ///
+  /// In en, this message translates to:
+  /// **'Sexual content'**
+  String get reportReasonSexual;
+
+  /// No description provided for @reportReasonDangerous.
+  ///
+  /// In en, this message translates to:
+  /// **'Dangerous or illegal'**
+  String get reportReasonDangerous;
+
+  /// No description provided for @reportReasonMisleading.
+  ///
+  /// In en, this message translates to:
+  /// **'False financial information'**
+  String get reportReasonMisleading;
+
+  /// No description provided for @reportReasonPrivacy.
+  ///
+  /// In en, this message translates to:
+  /// **'Showed data it should not have'**
+  String get reportReasonPrivacy;
+
+  /// No description provided for @reportReasonOther.
+  ///
+  /// In en, this message translates to:
+  /// **'Something else'**
+  String get reportReasonOther;
+
+  /// No description provided for @reportResponseReasonRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Pick a reason before sending'**
+  String get reportResponseReasonRequired;
+
+  /// No description provided for @reportResponseNoteLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Details (optional)'**
+  String get reportResponseNoteLabel;
+
+  /// No description provided for @reportResponseNoteHint.
+  ///
+  /// In en, this message translates to:
+  /// **'What happened?'**
+  String get reportResponseNoteHint;
+
+  /// No description provided for @reportResponseReportedTextLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Reported response'**
+  String get reportResponseReportedTextLabel;
+
+  /// No description provided for @reportResponseSessionNotice.
+  ///
+  /// In en, this message translates to:
+  /// **'This sends the conversation from this session, without the audio.'**
+  String get reportResponseSessionNotice;
+
+  /// No description provided for @reportResponsePrivacyNotice.
+  ///
+  /// In en, this message translates to:
+  /// **'We send the text above along with the model and your app version. Audio never leaves your device.'**
+  String get reportResponsePrivacyNotice;
+
+  /// No description provided for @reportResponseSend.
+  ///
+  /// In en, this message translates to:
+  /// **'Send report'**
+  String get reportResponseSend;
+
+  /// No description provided for @reportResponseSending.
+  ///
+  /// In en, this message translates to:
+  /// **'Sending report…'**
+  String get reportResponseSending;
+
+  /// No description provided for @reportResponseSent.
+  ///
+  /// In en, this message translates to:
+  /// **'Thank you. We will review this response'**
+  String get reportResponseSent;
+
+  /// No description provided for @reportResponseFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not send your report'**
+  String get reportResponseFailed;
+
+  /// No description provided for @reportResponseRateLimited.
+  ///
+  /// In en, this message translates to:
+  /// **'You have sent several reports already. Try again later.'**
+  String get reportResponseRateLimited;
+
+  /// No description provided for @reportResponseOffline.
+  ///
+  /// In en, this message translates to:
+  /// **'No connection. Check your internet and try again.'**
+  String get reportResponseOffline;
+
+  /// No description provided for @reportResponseInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'We could not process this report. Try again.'**
+  String get reportResponseInvalid;
+
+  /// No description provided for @reportResponseNoResponseYet.
+  ///
+  /// In en, this message translates to:
+  /// **'There is no response to report yet'**
+  String get reportResponseNoResponseYet;
 }
 
 class _AppLocalizationsDelegate

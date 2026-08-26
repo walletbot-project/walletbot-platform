@@ -183,6 +183,9 @@ class _ActiveVoiceCommandFactory implements VoiceExpenseCommandFactory {
 
   @override
   Future<void> discardRestorableSession() async {}
+
+  @override
+  Future<String?> restorableSessionId() async => 'test-session';
 }
 
 class _ActiveVoiceCommand implements VoiceExpenseCommand {
@@ -195,6 +198,9 @@ class _ActiveVoiceCommand implements VoiceExpenseCommand {
   final bool connected;
   bool audioStreamEnded = false;
   int ensureConnectedCalls = 0;
+
+  @override
+  String? get sessionId => 'test-session';
 
   @override
   Stream<VoiceEvent> get events => _events.stream;

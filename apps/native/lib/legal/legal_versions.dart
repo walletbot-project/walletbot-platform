@@ -54,8 +54,8 @@ class LegalVersions {
   final LegalDocumentVersions privacy;
 
   static const LegalVersions bundled = LegalVersions(
-    terms: LegalDocumentVersions(current: '2026-08-23', min: '2026-08-23'),
-    privacy: LegalDocumentVersions(current: '2026-08-23', min: '2026-08-23'),
+    terms: LegalDocumentVersions(current: '2026-08-26', min: '2026-08-23'),
+    privacy: LegalDocumentVersions(current: '2026-08-26', min: '2026-08-23'),
   );
 
   LegalDocumentVersions of(LegalDocumentKind document) =>

@@ -38,6 +38,7 @@ export type MetricName =
     | 'agent.user.monthly_cost_usd'
     | 'agent.interactions.completed_count'
     | 'agent.session.cost_bucket_count'
+    | 'agent.reports.submitted_count'
 
 export type MetricSource = 'web' | 'native' | 'backend'
 

@@ -235,6 +235,17 @@ export const purgeUserData = internalMutation({
                         )
                         .take(n),
                 ),
+            // Moderation records, but they carry transcript excerpts, and this
+            // flow promises the voice history is erased. A report filed from a
+            // local-only account is keyed by `deviceId` and is out of reach
+            // here, by construction — there is no user to delete.
+            async (n) =>
+                deleteRows(
+                    await ctx.db
+                        .query('agentReports')
+                        .withIndex('by_userId', (q) => q.eq('userId', userId))
+                        .take(n),
+                ),
             async (n) =>
                 deleteRows(
                     await ctx.db

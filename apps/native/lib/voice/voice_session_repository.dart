@@ -201,14 +201,9 @@ class VoiceSessionRepository {
     );
   });
 
-  /// Conversation events of the session that [openOrCreate] would resume,
-  /// oldest first, restricted to [types] (which excludes audio-chunk rows and
-  /// their BLOBs). Returns an empty list when no session is resumable — the
-  /// same freshness rules as [openOrCreate], so a caller restoring UI state
-  /// from this snapshot always matches the context the model will continue.
-  Future<List<VoiceSessionEvent>> resumableConversationEvents({
-    required Set<String> types,
-  }) async {
+  /// Id of the session that [openOrCreate] would resume, under the same
+  /// freshness rules. Null when the next session would start fresh.
+  Future<String?> resumableSessionId() async {
     final now = DateTime.now();
     final active =
         await (db.select(db.voiceSessions)
@@ -216,7 +211,7 @@ class VoiceSessionRepository {
               ..orderBy([(row) => OrderingTerm.desc(row.updatedAt)])
               ..limit(1))
             .getSingleOrNull();
-    if (active == null) return const [];
+    if (active == null) return null;
 
     final handleAt = active.resumeHandleUpdatedAt?.toInt();
     final handleAge = handleAt == null
@@ -227,12 +222,24 @@ class VoiceSessionRepository {
         handleAge != null &&
         !handleAge.isNegative &&
         handleAge < _resumeHandleLifetime;
-    if (!canResume) return const [];
+    return canResume ? active.id : null;
+  }
+
+  /// Conversation events of the session that [openOrCreate] would resume,
+  /// oldest first, restricted to [types] (which excludes audio-chunk rows and
+  /// their BLOBs). Returns an empty list when no session is resumable — the
+  /// same freshness rules as [openOrCreate], so a caller restoring UI state
+  /// from this snapshot always matches the context the model will continue.
+  Future<List<VoiceSessionEvent>> resumableConversationEvents({
+    required Set<String> types,
+  }) async {
+    final sessionId = await resumableSessionId();
+    if (sessionId == null) return const [];
 
     return (db.select(db.voiceSessionEvents)
           ..where(
             (row) =>
-                row.sessionId.equals(active.id) & row.type.isIn(types.toList()),
+                row.sessionId.equals(sessionId) & row.type.isIn(types.toList()),
           )
           ..orderBy([(row) => OrderingTerm.asc(row.sequence)]))
         .get();

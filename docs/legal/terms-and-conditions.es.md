@@ -1,7 +1,7 @@
 # Wallet Bot — Términos y Condiciones
 
 **Fecha de entrada en vigencia:** 23 de agosto de 2026
-**Última actualización:** 23 de agosto de 2026
+**Última actualización:** 26 de agosto de 2026
 
 > Estos Términos se publican en español y en inglés. Para los consumidores residentes en la República Argentina, la versión en español es el texto jurídicamente operativo y prevalece en caso de discrepancia (Ley N° 24.240, artículo 10). Para los demás usuarios prevalece la versión en inglés, siendo la versión en español una traducción de cortesía.
 
@@ -55,6 +55,7 @@ El asistente opcional de voz/texto funciona sobre modelos de inteligencia artifi
 - El asistente **puede cometer errores**: puede oír o interpretar mal montos, monedas, fechas, nombres de comercios o instrucciones, y en consecuencia crear, modificar o eliminar registros de forma incorrecta. **Usted es responsable de revisar los registros que el asistente crea o modifica.**
 - Las respuestas del asistente se generan automáticamente y son meramente informativas; la Sección 6 (No es asesoramiento financiero) les resulta plenamente aplicable.
 - Cuando usa el asistente, el audio de su micrófono y el contenido de la conversación son procesados por el proveedor de inteligencia artificial (Google u OpenAI) según se describe en la Política de Privacidad (Sección 5 de aquella). La función es opcional y el resto de la aplicación funciona sin ella.
+- Si el asistente produce algo ofensivo, peligroso o inapropiado, **usted puede reportarlo desde el propio chat**: mantenga presionada la respuesta (o use el menú del chat) y elija reportarla. Revisamos los reportes y los usamos para corregir el asistente. El reporte está disponible en todas las plataformas, incluidas las cuentas usadas sin iniciar sesión.
 
 ## 8. Uso aceptable
 

@@ -1,7 +1,7 @@
 # Wallet Bot — Privacy Policy
 
 **Effective date:** August 23, 2026
-**Last updated:** August 23, 2026
+**Last updated:** August 26, 2026
 
 > This Privacy Policy is published in Spanish and English. For consumers residing in the Argentine Republic, the Spanish version ("Política de Privacidad") is the legally operative text and prevails in case of any discrepancy. For all other users, this English version prevails and the Spanish version is a convenience translation.
 
@@ -75,10 +75,11 @@ Wallet Bot's voice assistant is an **optional** feature. It lets you record expe
 - **Microphone access** is requested only when you start a voice session, and you can deny it; the rest of the app works without it.
 - When you start a session, our backend issues a **short-lived, single-use access token**, and your device then connects **directly** to the session's AI provider: Google's Gemini Live API (Google LLC) or OpenAI's API (OpenAI, L.L.C.). Your microphone audio is streamed from your device to that provider; **raw audio never passes through or is stored on our servers**.
 - Audio recordings of a session are kept **only on your device** (native app). They are never uploaded to us; only the type and size of audio segments are recorded server-side.
-- We store the **conversation content**: transcripts of what you said and what the assistant answered, the actions the assistant performed ("tool calls" — e.g. creating a transaction) and their results, and session metadata. For signed-in accounts this history is synchronized to our backend; **web voice sessions are not stored on our servers**; **local-only accounts never upload voice history**.
+- We store the **conversation content**: transcripts of what you said and what the assistant answered, the actions the assistant performed ("tool calls" — e.g. creating a transaction) and their results, and session metadata. For signed-in accounts this history is synchronized to our backend, from the native app and from the web app alike; **local-only accounts never upload voice history**.
 - While a session is active, the assistant can **read and modify the financial data in your account** (accounts, balances, transactions, categories, tags, summaries) in order to carry out your requests. The data it reads or writes becomes part of the conversation processed by the AI provider.
 - The AI provider (Google or OpenAI) processes the audio and conversation content under its own applicable API terms. We configure sessions to use ephemeral, single-use credentials.
 - Voice-session history is retained for a **maximum of 12 months** and is also deleted immediately if you delete your account (Section 9).
+- **Reporting a response.** You can flag any assistant response from the chat itself. A report stores the reported response, the message you sent immediately before it, any note you add, the session identifier, the model, and your platform, app version and language. Our administrators read reports to review and correct the assistant's behaviour, which is the legitimate interest of operating a safe service and a requirement of the app stores we distribute through. Reports are kept for a **maximum of 12 months** and are deleted immediately if you delete your account (Section 9). Reports filed from a local-only account are identified by a device identifier and carry no account data.
 - The assistant can make mistakes (mis-hearing amounts, names or currencies). Review the records it creates; see the Terms and Conditions for the corresponding disclaimer.
 
 ## 6. Purposes of processing
@@ -130,6 +131,7 @@ You may revoke this consent at any time (without retroactive effect) by deleting
 | Account, profile and financial data | While your account exists; hard-deleted when you delete your account |
 | Sessions and sign-in tokens | Until sign-out, revocation or expiry; all revoked on password reset and account deletion |
 | Voice-session history (transcripts, tool calls, metadata) | Maximum **12 months** from creation, then automatically deleted; deleted immediately on account deletion. Audio recordings exist only on your device |
+| Reports of assistant responses (reported response, preceding message, note, session metadata) | Maximum **12 months** from creation, then automatically deleted; deleted immediately on account deletion |
 | Transactional email records (at our email provider) | Automatically pruned: delivered/finalized emails after 7 days; undeliverable/abandoned after 30 days |
 | Account-deletion requests (email + confirmation token hash) | Deleted when the deletion completes; expired requests become invalid and can no longer be used |
 | Record of your acceptance of these documents (which document, its version, the timestamp, your 18+ confirmation, and the platform used) | While your account exists; hard-deleted when you delete your account. For local-only accounts this record exists only on your device |

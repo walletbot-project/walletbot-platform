@@ -61,6 +61,7 @@ export const telemetryMetrics = defineTable({
         // New ingestion rejects this metric in telemetry validators/catalog.
         v.literal('agent.session.cost_outlier_count'),
         v.literal('agent.session.cost_bucket_count'),
+        v.literal('agent.reports.submitted_count'),
     ),
     timestamp: v.number(),
     receivedAt: v.number(),

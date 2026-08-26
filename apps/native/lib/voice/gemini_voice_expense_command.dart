@@ -276,6 +276,10 @@ class GeminiVoiceExpenseCommandFactory implements VoiceExpenseCommandFactory {
     remoteSync?.schedule();
   }
 
+  @override
+  Future<String?> restorableSessionId() =>
+      sessionRepository.resumableSessionId();
+
   Future<void> dispose() async {
     await _active?.dispose();
     _active = null;
@@ -371,6 +375,9 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
 
   @override
   String get label => 'Gemini Live voice expense command';
+
+  @override
+  String? get sessionId => _sessionId;
 
   @override
   Stream<VoiceEvent> get events => _events.stream;

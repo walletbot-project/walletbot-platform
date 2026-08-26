@@ -4,11 +4,15 @@ import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
+import 'package:flutter/services.dart';
 import 'package:app/app_config/app_config_controller.dart';
+import 'package:app/app_config/client_info.dart';
+import 'package:app/components/voice/report_response_sheet.dart';
 import 'package:app/l10n/l10n.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:provider/provider.dart';
 
+import '../voice/agent_generated.dart';
 import '../voice/mic_capture.dart';
 import '../voice/voice_event.dart';
 import '../voice/voice_expense_command.dart';
@@ -151,6 +155,68 @@ class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
       _finalisePending();
     });
     _jumpToBottomAfterBuild();
+  }
+
+  /// Report one agent turn.
+  ///
+  /// The user turn immediately before it travels along: a reply reads very
+  /// differently next to what prompted it, and for a report filed from a
+  /// local-only account (whose history never leaves the device) it is the only
+  /// context a moderator will ever see.
+  Future<void> _reportAgentBubble(_AgentBubbleItem item) async {
+    final index = _items.indexOf(item);
+    final preceding = _items
+        .take(index < 0 ? _items.length : index)
+        .whereType<_UserBubbleItem>()
+        .lastOrNull;
+    final reported = await _openReportSheet(
+      reportedText: item.text,
+      precedingUserText: preceding?.text,
+      occurredAt: item.at,
+    );
+    if (!mounted || !reported) return;
+    setState(() => item.reported = true);
+  }
+
+  /// The fallback entry point, from the app bar: report the conversation rather
+  /// than one turn, for a reply that was audio-only or has scrolled out of
+  /// reach.
+  Future<void> _reportSession() async {
+    final l10n = context.l10n;
+    if (_items.whereType<_AgentBubbleItem>().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(l10n.reportResponseNoResponseYet)),
+      );
+      return;
+    }
+    await _openReportSheet();
+  }
+
+  /// Resolves the session pointers and opens the sheet. The providers are read
+  /// as nullable on purpose: this screen is also built in tests without the
+  /// app-level providers, and a missing one must not crash the chat.
+  Future<bool> _openReportSheet({
+    String? reportedText,
+    String? precedingUserText,
+    DateTime? occurredAt,
+  }) async {
+    final clientInfo = context.read<ClientInfo?>();
+    if (clientInfo == null) return false;
+    final locale = context.read<AppConfigController?>()?.locale ?? 'en';
+    final sessionId =
+        _command?.sessionId ??
+        await widget.commandFactory.restorableSessionId();
+    if (!mounted) return false;
+    return showReportResponseSheet(
+      context,
+      clientInfo: clientInfo,
+      locale: locale,
+      reportedText: reportedText,
+      precedingUserText: precedingUserText,
+      sessionId: sessionId,
+      model: kAgentModel,
+      occurredAt: occurredAt,
+    );
   }
 
   void _jumpToBottomAfterBuild() {
@@ -879,6 +945,18 @@ class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
                 ),
               ),
             ),
+          // The fallback reporting path, always present: a response the user
+          // only heard, or one that has scrolled away, has no bubble to
+          // long-press, and Google Play's policy has no exception for either.
+          PopupMenuButton<String>(
+            onSelected: (_) => unawaited(_reportSession()),
+            itemBuilder: (context) => [
+              PopupMenuItem(
+                value: 'report',
+                child: Text(context.l10n.reportResponseMenuItem),
+              ),
+            ],
+          ),
         ],
       ),
       body: Column(
@@ -899,7 +977,10 @@ class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
                         final item = _items[i];
                         return Padding(
                           padding: const EdgeInsets.symmetric(vertical: 6),
-                          child: _ChatItemView(item: item),
+                          child: _ChatItemView(
+                            item: item,
+                            onReport: _reportAgentBubble,
+                          ),
                         );
                       },
                     ),
@@ -954,6 +1035,11 @@ class _AgentBubbleItem extends _ChatItem {
   String text;
   bool isFinal;
   bool wasInterrupted;
+
+  /// The user reported this response. Purely cosmetic — the report is already
+  /// on the server — but without it the bubble forgets the moment the snackbar
+  /// clears.
+  bool reported = false;
 }
 
 class _ToolItem extends _ChatItem {
@@ -999,15 +1085,16 @@ enum _StatusLevel { disconnected, connecting, connected }
 // =============================================================================
 
 class _ChatItemView extends StatelessWidget {
-  const _ChatItemView({required this.item});
+  const _ChatItemView({required this.item, required this.onReport});
   final _ChatItem item;
+  final ValueChanged<_AgentBubbleItem> onReport;
 
   @override
   Widget build(BuildContext context) {
     final item = this.item;
     return switch (item) {
       _UserBubbleItem() => _UserBubble(item: item),
-      _AgentBubbleItem() => _AgentBubble(item: item),
+      _AgentBubbleItem() => _AgentBubble(item: item, onReport: onReport),
       _ToolItem() => _ToolCard(item: item),
       _SystemItem() => _SystemLine(item: item),
       _ActionResultItem() => VoiceActionWidget(
@@ -1078,8 +1165,52 @@ class _UserBubble extends StatelessWidget {
 }
 
 class _AgentBubble extends StatelessWidget {
-  const _AgentBubble({required this.item});
+  const _AgentBubble({required this.item, required this.onReport});
   final _AgentBubbleItem item;
+  final ValueChanged<_AgentBubbleItem> onReport;
+
+  /// Long-press menu on the bubble. Google Play requires a way to flag
+  /// generated content without leaving the app; long-press is where a message
+  /// action lives on both platforms, so this is the primary entry point and the
+  /// app bar's is only the fallback.
+  Future<void> _showActions(BuildContext context) async {
+    final l10n = context.l10n;
+    final text = item.text.trim();
+    if (text.isEmpty) return;
+    final messenger = ScaffoldMessenger.of(context);
+    await showModalBottomSheet<void>(
+      context: context,
+      useSafeArea: true,
+      builder: (sheetContext) => SafeArea(
+        top: false,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (!item.reported)
+              ListTile(
+                leading: const Icon(Icons.flag_outlined),
+                title: Text(l10n.reportResponseAction),
+                onTap: () {
+                  Navigator.of(sheetContext).pop();
+                  onReport(item);
+                },
+              ),
+            ListTile(
+              leading: const Icon(Icons.copy_rounded),
+              title: Text(l10n.reportResponseCopy),
+              onTap: () async {
+                Navigator.of(sheetContext).pop();
+                await Clipboard.setData(ClipboardData(text: text));
+                messenger.showSnackBar(
+                  SnackBar(content: Text(l10n.reportResponseCopied)),
+                );
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1101,53 +1232,77 @@ class _AgentBubble extends StatelessWidget {
                 children: [
                   _RoleLabel(label: 'Gaston', time: item.at),
                   const SizedBox(height: 4),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 14,
-                      vertical: 10,
-                    ),
-                    decoration: BoxDecoration(
-                      color: theme.colorScheme.surfaceContainerHighest,
-                      borderRadius: const BorderRadius.only(
-                        topLeft: Radius.circular(4),
-                        topRight: Radius.circular(18),
-                        bottomLeft: Radius.circular(18),
-                        bottomRight: Radius.circular(18),
+                  GestureDetector(
+                    onLongPress: () => unawaited(_showActions(context)),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 10,
+                      ),
+                      decoration: BoxDecoration(
+                        color: theme.colorScheme.surfaceContainerHighest,
+                        borderRadius: const BorderRadius.only(
+                          topLeft: Radius.circular(4),
+                          topRight: Radius.circular(18),
+                          bottomLeft: Radius.circular(18),
+                          bottomRight: Radius.circular(18),
+                        ),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          if (text.isNotEmpty)
+                            Text(
+                              text,
+                              style: TextStyle(
+                                color: theme.colorScheme.onSurface,
+                                fontSize: 15,
+                              ),
+                            ),
+                          if (!item.isFinal) ...[
+                            if (text.isNotEmpty) const SizedBox(height: 6),
+                            _SpeakingDots(
+                              color: theme.colorScheme.onSurface.withValues(
+                                alpha: 0.6,
+                              ),
+                            ),
+                          ],
+                          if (item.wasInterrupted) ...[
+                            const SizedBox(height: 6),
+                            Text(
+                              context.l10n.interrupted,
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontStyle: FontStyle.italic,
+                                color: theme.colorScheme.onSurfaceVariant,
+                              ),
+                            ),
+                          ],
+                        ],
                       ),
                     ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                  ),
+                  if (item.reported) ...[
+                    const SizedBox(height: 4),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
                       children: [
-                        if (text.isNotEmpty)
-                          Text(
-                            text,
-                            style: TextStyle(
-                              color: theme.colorScheme.onSurface,
-                              fontSize: 15,
-                            ),
+                        Icon(
+                          Icons.flag_rounded,
+                          size: 12,
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          context.l10n.reportResponseBadge,
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: theme.colorScheme.onSurfaceVariant,
                           ),
-                        if (!item.isFinal) ...[
-                          if (text.isNotEmpty) const SizedBox(height: 6),
-                          _SpeakingDots(
-                            color: theme.colorScheme.onSurface.withValues(
-                              alpha: 0.6,
-                            ),
-                          ),
-                        ],
-                        if (item.wasInterrupted) ...[
-                          const SizedBox(height: 6),
-                          Text(
-                            context.l10n.interrupted,
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontStyle: FontStyle.italic,
-                              color: theme.colorScheme.onSurfaceVariant,
-                            ),
-                          ),
-                        ],
+                        ),
                       ],
                     ),
-                  ),
+                  ],
                 ],
               ),
             ),

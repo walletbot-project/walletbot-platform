@@ -59,6 +59,15 @@ export function FeatureFlags() {
                         <Icon name="arrow_back" />
                     </IconButton>
                 }
+                actions={
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => navigate('/admin/agent-reports')}
+                    >
+                        Reported responses
+                    </Button>
+                }
             />
             <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-4">
                 {flags === undefined ? (
