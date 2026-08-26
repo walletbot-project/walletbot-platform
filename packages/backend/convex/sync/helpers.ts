@@ -30,6 +30,7 @@ export async function writeTombstone(
             | 'transactionTags'
             | 'savedFilters'
             | 'dashboardWidgets'
+            | 'agentMemories'
         entityId: string
         seq: bigint
         // Only meaningful for `tableName: 'accounts'` — see schema/sync.ts.

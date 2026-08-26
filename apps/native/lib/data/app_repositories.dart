@@ -3,6 +3,7 @@ import '../telemetry/business_metrics.dart';
 import '../widgets/currency_picker.dart' show kDefaultCurrency;
 import 'entity_resolver.dart';
 import 'repositories/account_repository.dart';
+import 'repositories/agent_memory_repository.dart';
 import 'repositories/category_repository.dart';
 import 'repositories/dashboard_repository.dart';
 import 'repositories/saved_filter_repository.dart';
@@ -33,6 +34,7 @@ class AppRepositories {
        summaries = SummaryRepository(db),
        savedFilters = SavedFilterRepository(db),
        dashboard = DashboardRepository(db),
+       agentMemories = AgentMemoryRepository(db),
        resolver = EntityResolver(db, defaultCurrency);
 
   final AccountRepository accounts;
@@ -42,6 +44,7 @@ class AppRepositories {
   final SummaryRepository summaries;
   final SavedFilterRepository savedFilters;
   final DashboardRepository dashboard;
+  final AgentMemoryRepository agentMemories;
   final EntityResolver resolver;
 
   /// The user's default currency (device cache, backed by

@@ -8,9 +8,13 @@ import 'package:http/http.dart' as http;
 import 'package:web_socket_channel/web_socket_channel.dart';
 
 import '../data/data.dart';
+import '../fx/fx_rates_controller.dart';
+import '../settings/display_settings.dart';
 import '../sync/wire.dart';
 import '../telemetry/agent_interaction_cost_tracker.dart';
 import '../telemetry/agent_metrics.dart';
+import '../user_settings/default_currency_controller.dart';
+import 'agent_generated.dart';
 import 'pcm_audio_player.dart';
 import 'tool_executors.dart';
 import 'voice_event.dart';
@@ -31,14 +35,28 @@ Future<String> _fetchLiveToken({
   required ConvexClient convexClient,
   required String? sessionToken,
   required String convexSiteUrl,
+  Future<Map<String, Object?>> Function()? buildMintArgs,
   void Function(String phase, Map<String, Object?> extra)? onPhase,
 }) async {
   final fetchStopwatch = Stopwatch()..start();
+  // The mint args (platform identity, locale/timezone, USER_CONTEXT snapshot)
+  // are best-effort: a failed build must never block the token fetch.
+  Map<String, Object?> mintArgs = const {};
+  if (buildMintArgs != null) {
+    try {
+      mintArgs = await buildMintArgs();
+    } catch (e) {
+      onPhase?.call('mint_args_failed', {
+        'elapsedMs': fetchStopwatch.elapsedMilliseconds,
+        'error': e.toString(),
+      });
+    }
+  }
   Map<String, Object?>? body;
   if (useAuthenticatedTokenAction) {
     try {
       final raw = await convexClient
-          .action(name: 'v1/live/actions:requestLiveToken', args: const {})
+          .action(name: 'v1/live/actions:requestLiveToken', args: mintArgs)
           .timeout(const Duration(seconds: 6));
       final decoded = decodeConvexResponse(raw);
       if (decoded is! Map) {
@@ -60,7 +78,11 @@ Future<String> _fetchLiveToken({
     final response = await http
         .post(
           base.replace(path: '/v1/live/token'),
-          headers: {'Authorization': 'Bearer $credential'},
+          headers: {
+            'Authorization': 'Bearer $credential',
+            'Content-Type': 'application/json',
+          },
+          body: jsonEncode(mintArgs),
         )
         .timeout(const Duration(seconds: 15));
     if (response.statusCode < 200 || response.statusCode >= 300) {
@@ -95,6 +117,10 @@ class GeminiVoiceExpenseCommandFactory implements VoiceExpenseCommandFactory {
     this.agentMetrics,
     this.useAuthenticatedTokenAction = false,
     this.sessionToken,
+    this.buildMintArgs,
+    this.displaySettings,
+    this.defaultCurrency,
+    this.fxRates,
     ConvexClient? convexClient,
     this.apiKey = const String.fromEnvironment('GEMINI_API_KEY'),
     this.liveToken = const String.fromEnvironment('GEMINI_LIVE_TOKEN'),
@@ -107,6 +133,20 @@ class GeminiVoiceExpenseCommandFactory implements VoiceExpenseCommandFactory {
   final AgentMetrics? agentMetrics;
   final bool useAuthenticatedTokenAction;
   final String? sessionToken;
+
+  /// Builds the mint request (platform identity, locale/timezone and the
+  /// USER_CONTEXT snapshot from Drift) — see `agent_context.dart`. Null keeps
+  /// the bare mint of older builds.
+  final Future<Map<String, Object?>> Function()? buildMintArgs;
+
+  /// Controllers the `updateSettings` tool writes through, passed by
+  /// reference at factory construction (main.dart): the app-scoped display
+  /// settings and this account's default-currency controller.
+  final DisplaySettingsController? displaySettings;
+  final DefaultCurrencyController? defaultCurrency;
+
+  /// Device-scoped exchange-rate cache the `getExchangeRate` tool reads.
+  final FxRatesController? fxRates;
   final ConvexClient convexClient;
   final String apiKey;
   final String liveToken;
@@ -141,6 +181,7 @@ class GeminiVoiceExpenseCommandFactory implements VoiceExpenseCommandFactory {
       convexClient: convexClient,
       sessionToken: sessionToken,
       convexSiteUrl: convexSiteUrl,
+      buildMintArgs: buildMintArgs,
       onPhase: (phase, extra) =>
           debugPrint('[voice] token prefetch $phase: $extra'),
     );
@@ -193,6 +234,10 @@ class GeminiVoiceExpenseCommandFactory implements VoiceExpenseCommandFactory {
       agentMetrics: agentMetrics,
       useAuthenticatedTokenAction: useAuthenticatedTokenAction,
       sessionToken: sessionToken,
+      buildMintArgs: buildMintArgs,
+      displaySettings: displaySettings,
+      defaultCurrency: defaultCurrency,
+      fxRates: fxRates,
       convexClient: convexClient,
       apiKey: apiKey,
       liveToken: liveToken,
@@ -251,11 +296,24 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
     required this.liveToken,
     required this.convexSiteUrl,
     required this.onEnded,
+    this.buildMintArgs,
     this.takePrefetchedToken,
-  }) : _executors = ToolExecutors(repositories);
+    DisplaySettingsController? displaySettings,
+    DefaultCurrencyController? defaultCurrency,
+    FxRatesController? fxRates,
+  }) : _executors = ToolExecutors(
+         repositories,
+         displaySettings: displaySettings,
+         defaultCurrency: defaultCurrency,
+         fxQuotes: fxRates == null ? null : () => fxRates.quotes,
+       );
 
-  static const _model = 'gemini-3.1-flash-live-preview';
-  static const _voiceName = 'Kore';
+  // Model + voice come from the generated shared constants
+  // (agent_generated.dart ← packages/shared/src/tools/constants.ts), the same
+  // source the backend mint uses — a bump there can no longer desync native's
+  // setup frame from the token's constraints (defect D4).
+  static const _model = kAgentModel;
+  static const _voiceName = kAgentVoiceName;
   static const _maxQueuedMessages = 200;
 
   final AppRepositories repositories;
@@ -269,6 +327,9 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
   final String liveToken;
   final String convexSiteUrl;
   final void Function() onEnded;
+
+  /// See [GeminiVoiceExpenseCommandFactory.buildMintArgs].
+  final Future<Map<String, Object?>> Function()? buildMintArgs;
 
   /// Consumes the factory's screen-open token prefetch, when one is still
   /// inside the token's new-session window. Null result → fetch fresh.
@@ -560,6 +621,7 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
       convexClient: convexClient,
       sessionToken: sessionToken,
       convexSiteUrl: convexSiteUrl,
+      buildMintArgs: buildMintArgs,
       onPhase: (phase, extra) {
         if (phase == 'token_action_failed') {
           _emit(

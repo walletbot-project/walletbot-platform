@@ -14,15 +14,28 @@ import 'package:http/http.dart' as http;
 /// Owns the device's account list and the active Convex auth session.
 /// Auth refresh is delegated to `convex_flutter`'s `setAuthWithRefresh`.
 class AuthController extends ChangeNotifier {
-  AuthController({http.Client? httpClient, FlutterSecureStorage? storage})
-    : _storage = storage ?? const FlutterSecureStorage(),
-      _http = httpClient ?? http.Client();
+  AuthController({
+    http.Client? httpClient,
+    FlutterSecureStorage? storage,
+    String Function()? localeTag,
+  }) : _storage = storage ?? const FlutterSecureStorage(),
+       _http = httpClient ?? http.Client(),
+       _localeTag = localeTag;
 
   static const _accountsKey = 'accounts';
   static const _activeIdKey = 'active_account_id';
 
   final FlutterSecureStorage _storage;
   final http.Client _http;
+
+  /// The device's effective language tag, sent as `Accept-Language` on every
+  /// auth request. The backend needs it for the emails these endpoints trigger
+  /// (verification, password reset): a brand-new account has no stored
+  /// language yet, and native reaches better-auth through direct `auth.api.*`
+  /// calls that carry no request of their own. Null (tests, and any caller
+  /// that doesn't wire it) simply omits the header, and the server falls back
+  /// to its default locale.
+  final String Function()? _localeTag;
 
   List<UserAccount> _accounts = const [];
   String? _activeId;
@@ -393,9 +406,14 @@ class AuthController extends ChangeNotifier {
     String path,
     Map<String, Object?> body,
   ) async {
+    final localeTag = _localeTag?.call();
     final response = await _http.post(
       Uri.parse('${AppConfig.convexSiteUrl}$path'),
-      headers: {'Content-Type': 'application/json'},
+      headers: {
+        'Content-Type': 'application/json',
+        if (localeTag != null && localeTag.isNotEmpty)
+          'Accept-Language': localeTag,
+      },
       body: jsonEncode(body),
     );
     if (response.statusCode < 200 || response.statusCode >= 300) {

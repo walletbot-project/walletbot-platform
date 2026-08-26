@@ -212,6 +212,25 @@ const recordNativeSignInTelemetry = async (
     }
 }
 
+/**
+ * better-auth, told what language the native client is in.
+ *
+ * Native reaches better-auth through direct `auth.api.*` calls, so its email
+ * callbacks never see a `Request` and cannot read `Accept-Language` themselves
+ * the way the web flows do. Forwarding the header off the incoming native
+ * request is what lets a brand-new account's verification email come out in the
+ * device's language. Every handler here goes through this instead of calling
+ * `getAuth(createAuth, ctx)` directly.
+ */
+const nativeAuth = (ctx: ActionCtx, req: Request) =>
+    authComponent.getAuth(
+        (authCtx) =>
+            createAuth(authCtx, {
+                acceptLanguage: req.headers.get('accept-language'),
+            }),
+        ctx,
+    )
+
 const googleSignIn = corsHttpAction(async (ctx, req) => {
     const body = await parseJsonBody<GoogleSignInBody>(req)
     if (
@@ -222,7 +241,7 @@ const googleSignIn = corsHttpAction(async (ctx, req) => {
         return jsonError(400, 'bad_request', 'missing idToken')
     }
 
-    const { auth, headers } = await authComponent.getAuth(createAuth, ctx)
+    const { auth, headers } = await nativeAuth(ctx, req)
     const authHeaders = new Headers(headers)
     authHeaders.set('x-walletbot-client-platform', 'native')
 
@@ -301,7 +320,7 @@ const emailSignIn = corsHttpAction(async (ctx, req) => {
     )
     if (parsed instanceof Response) return parsed
 
-    const { auth, headers } = await authComponent.getAuth(createAuth, ctx)
+    const { auth, headers } = await nativeAuth(ctx, req)
     const authHeaders = new Headers(headers)
     authHeaders.set('x-walletbot-client-platform', 'native')
 
@@ -349,7 +368,7 @@ const emailSignUp = corsHttpAction(async (ctx, req) => {
             ? body.name.trim()
             : parsed.email
 
-    const { auth, headers } = await authComponent.getAuth(createAuth, ctx)
+    const { auth, headers } = await nativeAuth(ctx, req)
 
     // better-auth answers a duplicate sign-up with a SYNTHETIC user and
     // `token: null` — deliberately indistinguishable from a real pending
@@ -532,7 +551,7 @@ const forgotPasswordHandler = corsHttpAction(async (ctx, req) => {
     })
     if (!ok) return rateLimitedResponse()
 
-    const { auth, headers } = await authComponent.getAuth(createAuth, ctx)
+    const { auth, headers } = await nativeAuth(ctx, req)
     const { internalAdapter } = await auth.$context
     if (!(await internalAdapter.findUserByEmail(email))) {
         return accountNotFoundResponse()
@@ -555,7 +574,7 @@ const resendVerificationHandler = corsHttpAction(async (ctx, req) => {
     })
     if (!ok) return rateLimitedResponse()
 
-    const { auth, headers } = await authComponent.getAuth(createAuth, ctx)
+    const { auth, headers } = await nativeAuth(ctx, req)
     const { internalAdapter } = await auth.$context
     const existing = await internalAdapter.findUserByEmail(email)
     if (!existing) return accountNotFoundResponse()

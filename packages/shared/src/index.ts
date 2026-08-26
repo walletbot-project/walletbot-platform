@@ -1,3 +1,5 @@
+export type { AgentSkill } from './agent-skills'
+export { AGENT_SKILLS, AGENT_SKILLS_BY_SLUG } from './agent-skills'
 export {
     CURRENCIES,
     DEFAULT_CURRENCY,
@@ -103,8 +105,64 @@ export {
     legalDocumentStatus,
     legalDocumentUrl,
 } from './legal'
+export {
+    DEFAULT_LOCALE,
+    firstLanguageTag,
+    isLocale,
+    LOCALES,
+    type Locale,
+    MAX_LOCALE_TAG_LENGTH,
+    resolveLocale,
+} from './locale'
 export type { ToolArgs, ToolName } from './tools'
-export { TOOL_DEFINITIONS, TOOL_MAP, toolSchemas } from './tools'
+export {
+    AGENT_MODEL,
+    AGENT_VOICE_NAME,
+    TOOL_DEFINITIONS,
+    TOOL_MAP,
+    TOOL_NAMES,
+    toolSchemas,
+} from './tools'
+export type { CalcStep, CalcStepResult } from './tools/calc'
+export {
+    CALC_FUNCTIONS,
+    CALC_MAX_STEPS,
+    runCalculate,
+    validateCalcExpression,
+} from './tools/calc'
+export type {
+    AgentContextAccount,
+    AgentContextCategory,
+    AgentContextMemory,
+    AgentContextSettings,
+    AgentContextTag,
+    AgentContextTransaction,
+    AgentUserContext,
+} from './tools/context'
+export { AGENT_CONTEXT_CAPS, sanitizeAgentContext } from './tools/context'
+export type {
+    DateCalcArgs,
+    DateCalcOperation,
+    DateCalcResult,
+    DateCalcUnit,
+} from './tools/date-calc'
+export {
+    DATE_CALC_OPERATIONS,
+    DATE_CALC_UNITS,
+    runCalculateDate,
+} from './tools/date-calc'
+export type { FxMarket, FxPath, FxQuote, FxResolution } from './tools/fx'
+export {
+    convertAmount,
+    DEFAULT_FX_MARKET,
+    FX_MARKETS,
+    FX_STALE_AFTER_MS,
+    fxAlternatives,
+    isFxMarket,
+    isFxQuoteStale,
+    normalizeCurrencyCode,
+    resolveFxQuote,
+} from './tools/fx'
 export type { ToolDefinition, ToolSchema } from './tools/helpers'
 export { SchemaType, zodToToolSchema } from './tools/helpers'
 export type { TransactionTimeStatus } from './tools/parsing'

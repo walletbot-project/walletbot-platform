@@ -6,8 +6,8 @@
     "scripts": {
         "dev": "convex dev",
         "setup": "convex dev --until-success",
-        "test:pricing": "node --test tests/agentPricing.test.mjs",
-        "typecheck": "tsc --noEmit -p convex"
+        "typecheck": "tsc --noEmit -p convex",
+        "test": "vitest run"
     },
     "dependencies": {
         "@convex-dev/aggregate": "^0.2.1",
@@ -33,6 +33,7 @@
     "devDependencies": {
         "@types/node": "^24.12.2",
         "@types/react": "^19.2.14",
-        "typescript": "catalog:"
+        "typescript": "catalog:",
+        "vitest": "^3.2.4"
     }
 }

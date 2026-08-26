@@ -657,9 +657,12 @@ export function Add() {
         voice.setComposing(false)
     }
 
-    /** A fresh voice session starts from an empty log, as on native. */
+    /**
+     * Starts a session. No transcript wipe here: only the explicit End clears
+     * the conversation (a dropped socket reconnects and keeps it), and End
+     * already left the log empty.
+     */
     const startVoiceSession = () => {
-        voice.clearMessages()
         void voice.connect('audio')
     }
 

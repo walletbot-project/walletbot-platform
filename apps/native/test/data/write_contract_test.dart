@@ -44,6 +44,9 @@ void main() {
         .update(db.dashboardWidgets)
         .write(const DashboardWidgetsCompanion(dirty: Value(false)));
     await db
+        .update(db.agentMemories)
+        .write(const AgentMemoriesCompanion(dirty: Value(false)));
+    await db
         .update(db.tombstones)
         .write(const TombstonesCompanion(dirty: Value(false)));
   }
@@ -358,6 +361,39 @@ void main() {
       expect(row.archived, isTrue);
       expect(row.dirty, isTrue);
       expect(await tombstoneFor('savedFilters', id), isNotNull);
+    });
+  });
+
+  group('agentMemories', () {
+    test('create/update/archive uphold the contract', () async {
+      final id = await repos.agentMemories.create(
+        content: 'Si no digo la cuenta, usar Galicia.',
+      );
+      var row = (await repos.agentMemories.getById(id))!;
+      expect(row.dirty, isTrue);
+      expect(row.updatedAt, row.createdAt);
+
+      await clearAllDirty();
+      await Future<void>.delayed(const Duration(milliseconds: 5));
+      final updated = await repos.agentMemories.update(
+        id,
+        content: 'Si no digo la cuenta, usar BBVA.',
+      );
+      expect(updated, isTrue);
+      row = (await repos.agentMemories.getById(id))!;
+      expect(row.content, 'Si no digo la cuenta, usar BBVA.');
+      expect(row.dirty, isTrue);
+      expect(row.updatedAt.compareTo(row.createdAt) > 0, isTrue);
+
+      await repos.agentMemories.archive(id);
+      row = (await repos.agentMemories.getById(id))!;
+      expect(row.archived, isTrue);
+      expect(row.dirty, isTrue);
+      expect(await tombstoneFor('agentMemories', id), isNotNull);
+
+      // Archived memories drop out of the active list and out of updates.
+      expect(await repos.agentMemories.listActive(), isEmpty);
+      expect(await repos.agentMemories.update(id, content: 'x'), isFalse);
     });
   });
 

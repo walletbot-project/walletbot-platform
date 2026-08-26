@@ -13,6 +13,16 @@ export const agentToolDeclarations = TOOL_DEFINITIONS.map((d) => ({
 
 export type AgentToolContext = {
     client: ConvexReactClient
+    /**
+     * Device-scoped display settings, exposed by `VoiceProvider` (the i18n
+     * and theme providers sit above it). The `updateSettings` tool writes
+     * through these; `defaultCurrency` goes through Convex instead because it
+     * is account-wide.
+     */
+    settings?: {
+        setLanguage: (value: 'system' | 'es' | 'en') => void
+        setTheme: (value: 'system' | 'light' | 'dark') => void
+    }
 }
 
 // Tool executors

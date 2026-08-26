@@ -8,6 +8,7 @@ import 'package:app/auth/account.dart';
 import 'package:app/auth/pop_on_account_switch.dart';
 import 'package:app/config.dart';
 import 'package:app/data/data.dart';
+import 'package:app/fx/fx_rates_controller.dart';
 import 'package:app/database.dart';
 import 'package:app/l10n/l10n.dart';
 import 'package:app/legal/legal_acceptance_controller.dart';
@@ -27,6 +28,8 @@ import 'package:app/telemetry/agent_metrics.dart';
 import 'package:app/telemetry/business_metrics.dart';
 import 'package:app/telemetry/telemetry_client.dart';
 import 'package:app/user_settings/default_currency_controller.dart';
+import 'package:app/user_settings/language_sync_controller.dart';
+import 'package:app/voice/agent_context.dart';
 import 'package:app/voice/gemini_voice_expense_command.dart';
 import 'package:app/voice/voice_session_remote_sync.dart';
 import 'package:app/voice/voice_session_repository.dart';
@@ -72,9 +75,13 @@ Future<void> main() async {
   // and the sync engine so both gates identify the client the same way.
   final clientInfo = await ClientInfo.resolve(storage: storage);
 
-  final auth = AuthController();
+  // Loaded before the auth controller is built: `_postJson` sends the device's
+  // language as `Accept-Language`, which is the only locale signal a sign-up
+  // request carries and therefore the only way a brand-new account's
+  // verification email comes out in the right language.
   final displaySettings = DisplaySettingsController();
   await displaySettings.load();
+  final auth = AuthController(localeTag: () => displaySettings.localeTag);
   await auth.load();
   final telemetry = TelemetryClient(
     accessTokenProvider: auth.fetchAccessTokenForHttp,
@@ -85,8 +92,14 @@ Future<void> main() async {
   final appConfig = AppConfigController(
     clientInfo: clientInfo,
     storage: storage,
-    locale: _resolvedLocaleTag(displaySettings),
+    locale: displaySettings.localeTag,
   );
+  // Market exchange rates for the agent's getExchangeRate tool. App-scoped and
+  // device-cached (rates are public market data, not account data), and only
+  // fetched once the account config says the feature flag is on.
+  final fxRates = FxRatesController(appConfig: appConfig, storage: storage);
+  unawaited(fxRates.load());
+
   unawaited(appConfig.load());
   auth.addListener(() {
     unawaited(appConfig.loadAccount(auth.activeAccount));
@@ -100,13 +113,10 @@ Future<void> main() async {
       appConfig: appConfig,
       clientInfo: clientInfo,
       telemetry: telemetry,
+      fxRates: fxRates,
     ),
   );
 }
-
-String _resolvedLocaleTag(DisplaySettingsController settings) =>
-    (settings.locale ?? WidgetsBinding.instance.platformDispatcher.locale)
-        .toLanguageTag();
 
 class MyApp extends StatefulWidget {
   const MyApp({
@@ -117,6 +127,7 @@ class MyApp extends StatefulWidget {
     required this.clientInfo,
     this.locale,
     this.telemetry,
+    this.fxRates,
   });
 
   final AuthController auth;
@@ -125,6 +136,11 @@ class MyApp extends StatefulWidget {
   final AppConfigController appConfig;
   final ClientInfo clientInfo;
   final TelemetryClient? telemetry;
+
+  /// Device-scoped exchange-rate cache. Optional: widget tests build MyApp
+  /// without one, and the getExchangeRate tool then reports rates as
+  /// unavailable instead of crashing.
+  final FxRatesController? fxRates;
 
   @override
   State<MyApp> createState() => _MyAppState();
@@ -176,6 +192,10 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
           value: widget.appConfig,
         ),
         Provider<ClientInfo>.value(value: widget.clientInfo),
+        if (widget.fxRates != null)
+          ChangeNotifierProvider<FxRatesController>.value(
+            value: widget.fxRates!,
+          ),
         if (widget.telemetry != null)
           Provider<TelemetryClient>.value(value: widget.telemetry!),
         if (widget.telemetry != null)
@@ -327,6 +347,22 @@ class _AuthGate extends StatelessWidget {
             return controller;
           },
         ),
+        // Tells the backend which language to email this account in. Nothing
+        // reads it back, so it is registered only to be started and disposed
+        // with the account subtree.
+        Provider<LanguageSyncController>(
+          create: (ctx) {
+            final controller = LanguageSyncController(
+              accountId: active.id,
+              isRemote: active.type == AccountType.remote,
+              displaySettings: ctx.read<DisplaySettingsController>(),
+            );
+            unawaited(controller.start());
+            return controller;
+          },
+          dispose: (_, controller) => controller.dispose(),
+          lazy: false,
+        ),
         // Terms/Privacy acceptance for this account. Device-scoped half
         // because it reads and writes the account's own `legal_acceptances`
         // table — the only record there is for a local-only account.
@@ -337,7 +373,7 @@ class _AuthGate extends StatelessWidget {
               accountId: active.id,
               isRemote: active.type == AccountType.remote,
               clientInfo: ctx.read<ClientInfo>(),
-              locale: _resolvedLocaleTag(ctx.read<DisplaySettingsController>()),
+              locale: ctx.read<DisplaySettingsController>().localeTag,
               appConfig: ctx.read<AppConfigController>(),
             );
             unawaited(controller.load());
@@ -384,17 +420,47 @@ class _AuthGate extends StatelessWidget {
               dispose: (_, sync) => unawaited(sync.dispose()),
             ),
           Provider<GeminiVoiceExpenseCommandFactory>(
-            create: (ctx) => GeminiVoiceExpenseCommandFactory(
-              repositories: ctx.read<AppRepositories>(),
-              sessionRepository: ctx.read<VoiceSessionRepository>(),
-              remoteSync: active.type == AccountType.remote
-                  ? ctx.read<VoiceSessionRemoteSync>()
-                  : null,
-              agentMetrics: ctx.read<AgentMetrics?>(),
-              useAuthenticatedTokenAction: active.type == AccountType.remote,
-              sessionToken: active.sessionToken,
-              convexSiteUrl: AppConfig.convexSiteUrl,
-            ),
+            create: (ctx) {
+              // Captured here (not read from ctx inside the closure below):
+              // the mint-args builder outlives this create call, and the
+              // controllers are references whose current values are read at
+              // each (re)connect.
+              final repositories = ctx.read<AppRepositories>();
+              final clientInfo = ctx.read<ClientInfo>();
+              final displaySettings = ctx.read<DisplaySettingsController>();
+              final defaultCurrency = ctx.read<DefaultCurrencyController>();
+              final fxRates = ctx.read<FxRatesController?>();
+              return GeminiVoiceExpenseCommandFactory(
+                repositories: repositories,
+                sessionRepository: ctx.read<VoiceSessionRepository>(),
+                remoteSync: active.type == AccountType.remote
+                    ? ctx.read<VoiceSessionRemoteSync>()
+                    : null,
+                agentMetrics: ctx.read<AgentMetrics?>(),
+                useAuthenticatedTokenAction: active.type == AccountType.remote,
+                sessionToken: active.sessionToken,
+                convexSiteUrl: AppConfig.convexSiteUrl,
+                // The updateSettings tool writes through these controllers.
+                displaySettings: displaySettings,
+                defaultCurrency: defaultCurrency,
+                // The getExchangeRate tool reads this cache.
+                fxRates: fxRates,
+                buildMintArgs: () => buildLiveTokenMintArgs(
+                  repositories: repositories,
+                  clientInfo: clientInfo,
+                  localeTag: displaySettings.localeTag,
+                  userName: active.name,
+                  userEmail: active.email,
+                  defaultCurrency: defaultCurrency.value,
+                  language: switch (displaySettings.language) {
+                    DisplayLanguage.system => 'system',
+                    DisplayLanguage.english => 'en',
+                    DisplayLanguage.spanish => 'es',
+                  },
+                  theme: displaySettings.theme.name,
+                ),
+              );
+            },
             dispose: (_, factory) => unawaited(factory.dispose()),
           ),
           // Drives the bottom-nav tab selection and lets one tab hand a filter

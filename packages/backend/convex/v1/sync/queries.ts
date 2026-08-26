@@ -20,6 +20,7 @@ const SYNCED_TABLES = [
     'transactionTags',
     'savedFilters',
     'dashboardWidgets',
+    'agentMemories',
 ] as const
 type SyncedTable = (typeof SYNCED_TABLES)[number]
 
@@ -111,6 +112,9 @@ function tablePriority(t: SyncedTable): number {
             return 5
         case 'dashboardWidgets':
             return 6
+        // No FKs in either direction — order is only for determinism.
+        case 'agentMemories':
+            return 7
     }
 }
 
@@ -197,6 +201,15 @@ async function fetchTableRows(
         case 'dashboardWidgets':
             docs = await ctx.db
                 .query('dashboardWidgets')
+                .withIndex('by_user_seq', (q) =>
+                    q.eq('userId', userId).gt('seq', since),
+                )
+                .order('asc')
+                .take(take)
+            break
+        case 'agentMemories':
+            docs = await ctx.db
+                .query('agentMemories')
                 .withIndex('by_user_seq', (q) =>
                     q.eq('userId', userId).gt('seq', since),
                 )

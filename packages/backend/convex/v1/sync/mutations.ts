@@ -110,6 +110,14 @@ const dashboardWidgetUpsert = v.object({
     updatedAt: v.int64(),
 })
 
+const agentMemoryUpsert = v.object({
+    id: v.string(),
+    content: v.string(),
+    isArchived: v.boolean(),
+    createdAt: v.int64(),
+    updatedAt: v.int64(),
+})
+
 const tombstoneArg = v.object({
     tableName: syncedTable,
     entityId: v.string(),
@@ -204,6 +212,13 @@ type DashboardWidgetUpsert = {
     createdAt: bigint
     updatedAt: bigint
 }
+type AgentMemoryUpsert = {
+    id: string
+    content: string
+    isArchived: boolean
+    createdAt: bigint
+    updatedAt: bigint
+}
 
 type SyncedTableName =
     | 'accounts'
@@ -213,6 +228,7 @@ type SyncedTableName =
     | 'transactionTags'
     | 'savedFilters'
     | 'dashboardWidgets'
+    | 'agentMemories'
 
 async function clearTombstone(
     ctx: MutationCtx,
@@ -631,6 +647,35 @@ async function applyDashboardWidgetUpsert(
     await clearTombstone(ctx, userId, 'dashboardWidgets', payload.id)
 }
 
+async function applyAgentMemoryUpsert(
+    ctx: MutationCtx,
+    userId: string,
+    seq: bigint,
+    payload: AgentMemoryUpsert,
+): Promise<void> {
+    const existing = await ctx.db
+        .query('agentMemories')
+        .withIndex('by_user_id', (q) =>
+            q.eq('userId', userId).eq('id', payload.id),
+        )
+        .unique()
+    const doc: Omit<Doc<'agentMemories'>, '_id' | '_creationTime'> = {
+        userId,
+        id: payload.id,
+        content: payload.content,
+        isArchived: payload.isArchived,
+        createdAt: payload.createdAt,
+        updatedAt: payload.updatedAt,
+        seq,
+    }
+    if (existing) {
+        await ctx.db.replace(existing._id, doc)
+    } else {
+        await ctx.db.insert('agentMemories', doc)
+    }
+    await clearTombstone(ctx, userId, 'agentMemories', payload.id)
+}
+
 async function applyTombstone(
     ctx: MutationCtx,
     userId: string,
@@ -717,6 +762,16 @@ async function applyTombstone(
             if (row) await ctx.db.delete(row._id)
             break
         }
+        case 'agentMemories': {
+            const row = await ctx.db
+                .query('agentMemories')
+                .withIndex('by_user_id', (q) =>
+                    q.eq('userId', userId).eq('id', args.entityId),
+                )
+                .unique()
+            if (row) await ctx.db.delete(row._id)
+            break
+        }
     }
 
     // Upsert the tombstone with the new seq.
@@ -756,6 +811,7 @@ export const push = mutation({
             transactionTags: v.optional(v.array(transactionTagUpsert)),
             savedFilters: v.optional(v.array(savedFilterUpsert)),
             dashboardWidgets: v.optional(v.array(dashboardWidgetUpsert)),
+            agentMemories: v.optional(v.array(agentMemoryUpsert)),
         }),
         tombstones: v.optional(v.array(tombstoneArg)),
         platform: v.string(),
@@ -841,6 +897,9 @@ export const push = mutation({
         for (const u of args.upserts.dashboardWidgets ?? []) {
             await applyDashboardWidgetUpsert(ctx, userId, newSeq, u)
         }
+        for (const u of args.upserts.agentMemories ?? []) {
+            await applyAgentMemoryUpsert(ctx, userId, newSeq, u)
+        }
 
         // 4) Apply tombstones. transactionTags first so transactions can be
         //    safely deleted without orphaning joins.
@@ -854,6 +913,7 @@ export const push = mutation({
             // Widgets before their saved filters (reverse of upsert order).
             dashboardWidgets: 5,
             savedFilters: 6,
+            agentMemories: 7,
         }
         const sortedTombs = [...tombs].sort(
             (a, b) => order[a.tableName] - order[b.tableName],

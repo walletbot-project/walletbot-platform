@@ -3,7 +3,10 @@ import type { HttpRouter } from 'convex/server'
 import { internal } from '../_generated/api'
 import { httpAction } from '../_generated/server'
 import { authComponent, createAuth } from '../auth'
-import { sendAccountDeletionEmail } from '../emails/helpers'
+import {
+    outboundLocaleForUser,
+    sendAccountDeletionEmail,
+} from '../emails/helpers'
 import { jsonResponse, preflightResponse } from '../httpHelpers'
 import {
     DELETION_TOKEN_TTL_MS,
@@ -91,10 +94,15 @@ const requestHandler = httpAction(async (ctx, req) => {
     }
 
     try {
-        await sendAccountDeletionEmail(requireRunMutationCtx(ctx), {
+        const runCtx = requireRunMutationCtx(ctx)
+        await sendAccountDeletionEmail(runCtx, {
             to: email,
             name: found.user.name ?? null,
             url: `${siteUrl}/delete-account/confirm?token=${token}`,
+            locale: await outboundLocaleForUser(runCtx, {
+                userId: found.user.id,
+                request: req,
+            }),
         })
     } catch (err) {
         // The user exists and the send really failed (Resend config, enqueue,

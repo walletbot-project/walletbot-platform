@@ -190,7 +190,7 @@ void main() {
     expect((date.hour, date.minute), (17, 0));
   });
 
-  test('tag/untag returns added/removed/missing', () async {
+  test('updateTransaction attaches/detaches tags and reports missing', () async {
     await tools.execute('createAccount', {'name': 'Cash', 'currency': 'ARS'});
     await tools.execute('createCategory', {'name': 'Food'});
     await tools.execute('createTag', {'name': 'Work'});
@@ -202,19 +202,21 @@ void main() {
     });
     final txnId = exp['id'] as String;
 
-    final tagged = await tools.execute('tagTransaction', {
-      'transactionId': txnId,
-      'tagIdsOrNames': ['Work', 'Nope'],
+    final tagged = await tools.execute('updateTransaction', {
+      'id': txnId,
+      'addTagIdsOrNames': ['Work', 'Nope'],
     });
     expect(tagged['ok'], isTrue);
-    expect(tagged['added'], 1);
     expect(tagged['missing'], ['Nope']);
+    expect(await repos.transactions.tagIdsOf(txnId), hasLength(1));
 
-    final untagged = await tools.execute('untagTransaction', {
-      'transactionId': txnId,
-      'tagIdsOrNames': ['Work'],
+    final untagged = await tools.execute('updateTransaction', {
+      'id': txnId,
+      'removeTagIdsOrNames': ['Work'],
     });
-    expect(untagged['removed'], 1);
+    expect(untagged['ok'], isTrue);
+    expect(untagged.containsKey('missing'), isFalse);
+    expect(await repos.transactions.tagIdsOf(txnId), isEmpty);
   });
 
   test('transfer validation envelopes', () async {
@@ -241,7 +243,7 @@ void main() {
     expect(cross['ok'], isFalse);
     expect(
       cross['error'],
-      'Cross-currency transfers require toAmount (or exchangeRate to derive it)',
+      'Cross-currency transfers require toAmount (the amount received on the destination side)',
     );
   });
 
@@ -256,7 +258,8 @@ void main() {
       'date': 'today',
     });
 
-    final res = await tools.execute('summarizeByCategory', {
+    final res = await tools.execute('summarizeTransactions', {
+      'groupBy': 'category',
       'dateFrom': 'yesterday',
       'dateTo': 'tomorrow',
     });
@@ -265,6 +268,17 @@ void main() {
     expect(rows, hasLength(1));
     expect((rows.single as Map)['total'], 12.34);
     expect((rows.single as Map)['name'], 'Food');
+
+    final byAccount = await tools.execute('summarizeTransactions', {
+      'groupBy': 'account',
+      'dateFrom': 'yesterday',
+      'dateTo': 'tomorrow',
+    });
+    expect(byAccount['ok'], isTrue);
+    final accountRows = byAccount['rows'] as List;
+    expect(accountRows, hasLength(1));
+    expect((accountRows.single as Map)['out'], 12.34);
+    expect((accountRows.single as Map)['net'], -12.34);
   });
 
   test(
