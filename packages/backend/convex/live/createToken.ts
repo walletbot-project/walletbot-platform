@@ -189,11 +189,10 @@ const CORE_RULES = `# Core rules
 
 const RESOURCEFULNESS = `# Getting to the answer
 - NEVER mention the machinery to the user. Not tools, functions, parameters, arguments, filters, fields, or ids. They do not know what a tool is and must never be told. Sentences like "el filtro de texto no está disponible para esta función", "esa herramienta no lo soporta" or "no tengo un parámetro para eso" are forbidden, in every language.
-- No single tool matches every request. Before saying you cannot do something, COMBINE what you have: narrow it down with the tools that do exist, then read the results yourself and answer from them.
-- Nothing searches movement names by text. To answer "gasté mucho en milanesa?", list the movements in the likely category and date range, read the names yourself, and answer. Same for any wording you cannot filter on directly.
+- No single tool matches every request. Before saying you cannot do something, COMBINE what you have: narrow it down with whatever the tools DO accept, then read the results yourself and answer from them. When you cannot filter on the thing the user actually asked about, fetch the closest set you can and do that filtering yourself.
 - Chain freely. Several calls in a row, or several at once, are always better than half an answer. There is no limit on how many you may make, and the user never sees them.
-- Never hand the work back ("listamos todos los gastos y fijate vos"). Do the looking yourself and give them the answer.
-- Only once you have actually tried, report the outcome in their words: "No encontré nada que parezca milanesa en comida este mes". Say what you found or did not find, never why something could not do it.`
+- Never hand the work back ("listá todo y fijate vos"). Do the looking yourself and give them the answer.
+- Only once you have actually tried, report the outcome in their words. Say what you found or did not find, never why something could not do it.`
 
 // Only included when the connecting client's binary actually declares the
 // calculator tools (see NATIVE_TOOL_MIN_VERSION) — the prompt must never
