@@ -937,7 +937,13 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
               handle: handle,
               at: DateTime.now(),
             )
-            .then((_) => remoteSync?.schedule()),
+            .then((_) {
+              // Gemini sends these several times a second. Waking the drain
+              // on each one is what kept replication running on top of the
+              // audio uplink for the whole session.
+              if (isActive && _connected) return;
+              remoteSync?.schedule();
+            }),
       );
     }
   }
@@ -1244,7 +1250,15 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
             binaryData: binaryData,
             binaryMimeType: binaryMimeType,
           )
-          .then((_) => remoteSync?.schedule()),
+          .then((_) {
+            // Replication shares the radio with the Live audio uplink, which
+            // has no backpressure: a drain that overlaps speech pushes the
+            // user's own voice minutes behind. Hold it until the session is
+            // no longer streaming; stop/dispose flush what accumulated.
+            if (!sessionRepository.replicates(type)) return;
+            if (isActive && _connected) return;
+            remoteSync?.schedule();
+          }),
     );
   }
 

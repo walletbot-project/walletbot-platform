@@ -97,6 +97,38 @@ class VoiceSessionRepository {
     },
   );
 
+  /// Per-chunk protocol traffic. Kept in the local log (export needs it) but
+  /// never replicated: on a real session this is ~92% of all rows, and
+  /// draining it through Convex mid-conversation competes with the Live audio
+  /// uplink on the same radio. Measured on device: a 342-row drain landed
+  /// exactly on top of the user speaking and their audio reached Google 42 s
+  /// late.
+  static const _localOnlyEventTypes = {
+    'audio_input_chunk',
+    'audio_output_chunk',
+    'client_message',
+    'server_message',
+    'session_resumption_update',
+  };
+
+  /// Whether an event of [type] is replicated at all. The command uses this
+  /// to avoid waking the remote sync for traffic that will never be sent.
+  bool replicates(String type) =>
+      remoteEnabled && !_localOnlyEventTypes.contains(type);
+
+  /// Retires the outbox backlog of event types that are no longer replicated.
+  /// Without this a device upgrading into the local-only rule still drains
+  /// every per-chunk row it already recorded (5522 rows, measured) before the
+  /// new rule can take effect.
+  Future<int> retireLocalOnlyBacklog() => _serial(() async {
+    return (db.update(db.voiceSessionEvents)..where(
+          (row) =>
+              row.remoteSynced.equals(false) &
+              row.type.isIn(_localOnlyEventTypes.toList()),
+        ))
+        .write(const VoiceSessionEventsCompanion(remoteSynced: Value(true)));
+  });
+
   Future<void> appendEvent({
     required String sessionId,
     required DateTime occurredAt,
@@ -108,6 +140,7 @@ class VoiceSessionRepository {
     Uint8List? binaryData,
     String? binaryMimeType,
   }) => _serial(() async {
+    final replicate = remoteEnabled && !_localOnlyEventTypes.contains(type);
     final sequence = await _takeSequence(sessionId);
     final updatedAt = await _nextUpdatedAt(sessionId, occurredAt);
     await db
@@ -125,7 +158,7 @@ class VoiceSessionRepository {
             rawJson: Value(raw == null ? null : jsonEncode(raw)),
             binaryData: Value(binaryData),
             binaryMimeType: Value(binaryMimeType),
-            remoteSynced: Value(!remoteEnabled),
+            remoteSynced: Value(!replicate),
           ),
         );
     await (db.update(
@@ -133,7 +166,7 @@ class VoiceSessionRepository {
     )..where((row) => row.id.equals(sessionId))).write(
       VoiceSessionsCompanion(
         updatedAt: Value(updatedAt),
-        remoteSynced: remoteEnabled ? const Value(false) : const Value.absent(),
+        remoteSynced: replicate ? const Value(false) : const Value.absent(),
       ),
     );
   });
