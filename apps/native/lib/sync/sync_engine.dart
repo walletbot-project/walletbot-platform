@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:drift/drift.dart';
 import 'package:flutter/foundation.dart' hide Category;
@@ -39,10 +40,12 @@ class SyncEngine extends ChangeNotifier {
     this.pullPageLimit = 200,
     this.pushChunkLimit = 80,
     Duration writeDebounce = const Duration(milliseconds: 600),
+    Duration retryFloor = const Duration(seconds: 2),
   }) : _db = db,
        _client = client,
        _clientInfo = clientInfo,
-       _writeDebounce = writeDebounce;
+       _writeDebounce = writeDebounce,
+       _retryFloor = retryFloor;
 
   final AppDatabase _db;
 
@@ -60,6 +63,9 @@ class SyncEngine extends ChangeNotifier {
 
   final ClientInfo _clientInfo;
   final Duration _writeDebounce;
+
+  /// Backoff floor for the failed-cycle retry. Injected by the tests.
+  final Duration _retryFloor;
 
   /// Invoked when the backend rejects sync because this client is below the
   /// supported-version floor. Lets the app flip to the hard update prompt even
@@ -87,12 +93,25 @@ class SyncEngine extends ChangeNotifier {
   Object? get lastError => _lastError;
   DateTime? get lastSyncedAt => _lastSyncedAt;
 
+  /// Ceiling for retrying a failed cycle. Before the retry existed a cycle
+  /// that failed offline set `SyncStatus.error` and stopped: the only things
+  /// that could ever schedule another one were a local write, a server counter
+  /// that *advanced*, and tapping the pill. Coming back from airplane mode
+  /// with nothing changed remotely left the app stuck in error.
+  static const _retryCeiling = Duration(minutes: 2);
+  static const _maxRetryExponent = 6;
+
   Timer? _debounce;
+  Timer? _retry;
+  int _consecutiveFailures = 0;
   Future<void>? _inFlight;
   bool _trailingTrigger = false;
   SubscriptionHandle? _counterSub;
   StreamSubscription<Object?>? _writeListener;
+  StreamSubscription<ConnectionSnapshot>? _connectionListener;
+  bool _sawDisconnect = false;
   bool _started = false;
+  bool _disposed = false;
 
   /// Set once the backend rejects this client as outdated. Terminal: the engine
   /// tears down its subscription/timers and refuses to start or schedule again
@@ -125,6 +144,22 @@ class SyncEngine extends ChangeNotifier {
     // Listen for any local mutation to entity tables and trigger a debounced
     // sync. Writes the engine performs itself (merger / push-ack) happen
     // while `_inFlight != null` so we skip those to avoid feedback loops.
+    // A reconnect is the other thing that must trigger a cycle. The counter
+    // subscription only fires when the server counter *advanced*, so an
+    // offline stretch in which nothing changed remotely re-delivers the same
+    // value and schedules nothing.
+    _connectionListener = _requireClient.connectionState.listen((snapshot) {
+      if (snapshot.status != ConnectionStatus.ready) {
+        _sawDisconnect = true;
+        return;
+      }
+      if (!_sawDisconnect || _halted) return;
+      _sawDisconnect = false;
+      _consecutiveFailures = 0;
+      _retry?.cancel();
+      _scheduleNow();
+    });
+
     _writeListener = _db
         .tableUpdates(
           TableUpdateQuery.onAllTables([
@@ -164,18 +199,23 @@ class SyncEngine extends ChangeNotifier {
 
   @override
   void dispose() {
+    _disposed = true;
     _debounce?.cancel();
+    _retry?.cancel();
     _counterSub?.cancel();
     _counterSub = null;
     _writeListener?.cancel();
     _writeListener = null;
+    _connectionListener?.cancel();
+    _connectionListener = null;
     super.dispose();
   }
 
   // ─── Scheduler ───────────────────────────────────────────────────────────
 
   Future<void> _scheduleNow() {
-    if (_halted) return Future.value();
+    if (_halted || _disposed) return Future.value();
+    _retry?.cancel();
     if (_inFlight != null) {
       _trailingTrigger = true;
       return _inFlight!;
@@ -215,6 +255,8 @@ class SyncEngine extends ChangeNotifier {
           ),
         ),
       );
+      _consecutiveFailures = 0;
+      _retry?.cancel();
       _setStatus(SyncStatus.synced, error: null);
     } on _ClientOutdatedException {
       debugPrint('sync: backend rejected client as outdated — halting sync');
@@ -222,7 +264,28 @@ class SyncEngine extends ChangeNotifier {
     } catch (e, st) {
       debugPrint('sync: runOnce failed: $e\n$st');
       _setStatus(SyncStatus.error, error: e);
+      _scheduleRetry();
     }
+  }
+
+  /// Retries a failed cycle on an exponential backoff. Cheap to keep running:
+  /// while the socket is down every attempt fails fast on the client's own
+  /// connect timeout, and a reconnect cancels the timer and syncs at once.
+  void _scheduleRetry() {
+    if (_halted || _disposed) return;
+    _retry?.cancel();
+    _consecutiveFailures += 1;
+    final exponent = math.min(_consecutiveFailures - 1, _maxRetryExponent);
+    final delay = Duration(
+      milliseconds: math.min(
+        _retryCeiling.inMilliseconds,
+        _retryFloor.inMilliseconds * math.pow(2, exponent).toInt(),
+      ),
+    );
+    _retry = Timer(delay, () {
+      if (_halted || _disposed) return;
+      unawaited(_scheduleNow());
+    });
   }
 
   /// Tear down the engine after a `client_outdated` rejection: cancel the
@@ -231,10 +294,13 @@ class SyncEngine extends ChangeNotifier {
   void _haltForOutdatedClient() {
     _halted = true;
     _debounce?.cancel();
+    _retry?.cancel();
     _counterSub?.cancel();
     _counterSub = null;
     _writeListener?.cancel();
     _writeListener = null;
+    _connectionListener?.cancel();
+    _connectionListener = null;
     _setStatus(SyncStatus.error, error: const _ClientOutdatedException());
     onClientOutdated?.call();
   }
@@ -242,6 +308,9 @@ class SyncEngine extends ChangeNotifier {
   void _setStatus(SyncStatus status, {Object? error}) {
     _status = status;
     _lastError = error;
+    // A cycle already running when dispose() lands still reaches here, and
+    // notifying a disposed ChangeNotifier throws.
+    if (_disposed) return;
     notifyListeners();
   }
 

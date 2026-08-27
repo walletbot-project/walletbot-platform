@@ -2,10 +2,11 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
 
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
-import 'package:web_socket_channel/web_socket_channel.dart';
 
+import '../connectivity_hooks.dart';
 import '../convex/convex_client.dart';
 import '../data/data.dart';
 import '../fx/fx_rates_controller.dart';
@@ -14,6 +15,7 @@ import '../telemetry/agent_interaction_cost_tracker.dart';
 import '../telemetry/agent_metrics.dart';
 import '../user_settings/default_currency_controller.dart';
 import 'agent_generated.dart';
+import 'live_socket.dart';
 import 'pcm_audio_player.dart';
 import 'tool_executors.dart';
 import 'voice_event.dart';
@@ -109,6 +111,24 @@ Future<String> _fetchLiveToken({
   return token;
 }
 
+/// Delay before reconnect attempt [attempt] (1-based).
+///
+/// The clamp is on the *exponent*. Clamping the result instead let
+/// `pow(2, 63).toInt()` wrap to a negative int64 and everything past it
+/// saturate to 0, so `min(30, …)` returned 0 and the agent spun in a
+/// zero-delay reconnect loop after ~64 consecutive failures.
+@visibleForTesting
+int reconnectBackoffSeconds(int attempt) {
+  final exponent = math.min(
+    attempt - 1,
+    GeminiVoiceExpenseCommand.maxBackoffExponent,
+  );
+  return math.min(
+    GeminiVoiceExpenseCommand.maxReconnectBackoff.inSeconds,
+    math.pow(2, math.max(0, exponent)).toInt(),
+  );
+}
+
 class GeminiVoiceExpenseCommandFactory implements VoiceExpenseCommandFactory {
   GeminiVoiceExpenseCommandFactory({
     required this.repositories,
@@ -122,10 +142,34 @@ class GeminiVoiceExpenseCommandFactory implements VoiceExpenseCommandFactory {
     this.defaultCurrency,
     this.fxRates,
     this.convexClient,
+    this.socketFactory = connectLiveSocket,
+    Connectivity? connectivity,
+    bool attachPlatformHooks = true,
     this.apiKey = const String.fromEnvironment('GEMINI_API_KEY'),
     this.liveToken = const String.fromEnvironment('GEMINI_LIVE_TOKEN'),
     this.convexSiteUrl = const String.fromEnvironment('CONVEX_SITE_URL'),
-  });
+  }) {
+    if (!attachPlatformHooks) return;
+    _hooks = ConnectivityLifecycleHooks(
+      onNetworkAvailable: onNetworkAvailable,
+      onNetworkChanged: onNetworkChanged,
+      onAppResumed: onAppResumed,
+      connectivity: connectivity,
+    )..attach();
+  }
+
+  /// The Convex client gets these signals through its own hooks; the Live
+  /// session needs its own because it owns a second, independent socket.
+  /// Without them a network change left the agent sitting out a backoff that
+  /// had already grown to 30 s.
+  ConnectivityLifecycleHooks? _hooks;
+
+  /// Skips the pending reconnect backoff on the live session, if any.
+  void onNetworkAvailable() => _active?.onNetworkAvailable();
+
+  void onNetworkChanged() => _active?.onNetworkChanged();
+
+  void onAppResumed() => _active?.onAppResumed();
 
   final AppRepositories repositories;
   final VoiceSessionRepository sessionRepository;
@@ -152,6 +196,9 @@ class GeminiVoiceExpenseCommandFactory implements VoiceExpenseCommandFactory {
   /// local account without the authenticated action); the HTTP endpoint is
   /// the only token source then.
   final ConvexClient? convexClient;
+
+  /// Opens the Gemini Live socket. Overridden by the tests (live_socket.dart).
+  final LiveSocketFactory socketFactory;
   final String apiKey;
   final String liveToken;
   final String convexSiteUrl;
@@ -243,6 +290,7 @@ class GeminiVoiceExpenseCommandFactory implements VoiceExpenseCommandFactory {
       defaultCurrency: defaultCurrency,
       fxRates: fxRates,
       convexClient: convexClient,
+      socketFactory: socketFactory,
       apiKey: apiKey,
       liveToken: liveToken,
       convexSiteUrl: convexSiteUrl,
@@ -281,6 +329,8 @@ class GeminiVoiceExpenseCommandFactory implements VoiceExpenseCommandFactory {
   }
 
   Future<void> dispose() async {
+    _hooks?.detach();
+    _hooks = null;
     await _active?.dispose();
     _active = null;
     await remoteSync?.dispose();
@@ -296,6 +346,7 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
     required this.useAuthenticatedTokenAction,
     required this.sessionToken,
     required this.convexClient,
+    required this.socketFactory,
     required this.apiKey,
     required this.liveToken,
     required this.convexSiteUrl,
@@ -319,6 +370,10 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
   static const _model = kAgentModel;
   static const _voiceName = kAgentVoiceName;
   static const _maxQueuedMessages = 200;
+  static const maxReconnectBackoff = Duration(seconds: 30);
+
+  /// 2^5 = 32 s, already past [maxReconnectBackoff].
+  static const maxBackoffExponent = 5;
 
   final AppRepositories repositories;
   final VoiceSessionRepository sessionRepository;
@@ -327,6 +382,7 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
   final bool useAuthenticatedTokenAction;
   final String? sessionToken;
   final ConvexClient? convexClient;
+  final LiveSocketFactory socketFactory;
   final String apiKey;
   final String liveToken;
   final String convexSiteUrl;
@@ -345,7 +401,7 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
   final List<Map<String, dynamic>> _pendingMessages = [];
   final Set<String> _cancelledToolIds = {};
 
-  WebSocketChannel? _channel;
+  LiveSocket? _channel;
   StreamSubscription? _subscription;
   Timer? _reconnectTimer;
   Timer? _goAwayTimer;
@@ -362,8 +418,10 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
   bool _screenAttached = false;
   bool _discardInterruptedOutput = false;
   bool _audioStreamOpen = false;
+  bool _wakeUpQueued = false;
   int _connectionGeneration = 0;
   int _reconnectAttempt = 0;
+  int _droppedAudioChunks = 0;
   int _inputChunks = 0;
   int _textMessages = 0;
   int _outputAudioChunks = 0;
@@ -434,6 +492,55 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
     await _connect();
   }
 
+  /// A usable network appeared. The backoff can have grown to 30 s during the
+  /// outage and the attempt that is in flight was composed against the dead
+  /// network — reset the counter and retry as soon as it settles.
+  void onNetworkAvailable() => _wakeUp('network_available');
+
+  /// Back to the foreground. The OS kills sockets in the background and the
+  /// reconnect timer was suspended along with the process.
+  void onAppResumed() => _wakeUp('app_resumed');
+
+  /// The interface set changed under a socket we still believe is open. It is
+  /// not: it is bound to a route that no longer exists and every frame
+  /// written to it is dropped silently. Replace it without waiting for the
+  /// keepalive to notice.
+  void onNetworkChanged() {
+    if (!isActive) return;
+    if (_connected) {
+      _reconnectAttempt = 0;
+      unawaited(_reconnectNow('network_changed'));
+      return;
+    }
+    _wakeUp('network_changed');
+  }
+
+  /// Retries now instead of sitting out the backoff. When an attempt is
+  /// already running it is left to settle (its own timeouts bound it) and the
+  /// retry is chained behind it, so a doomed attempt started while offline
+  /// cannot swallow the wake-up.
+  void _wakeUp(String reason) {
+    if (!isActive || _connected) return;
+    _reconnectAttempt = 0;
+    _reconnectTimer?.cancel();
+    final inFlight = _connectFuture;
+    if (inFlight == null) {
+      unawaited(_reconnectNow(reason));
+      return;
+    }
+    if (_wakeUpQueued) return;
+    _wakeUpQueued = true;
+    unawaited(
+      inFlight.whenComplete(() {
+        _wakeUpQueued = false;
+        if (!isActive || _connected) return;
+        _reconnectAttempt = 0;
+        _reconnectTimer?.cancel();
+        unawaited(_reconnectNow(reason));
+      }),
+    );
+  }
+
   /// Runs one connection attempt, deduplicating concurrent callers.
   ///
   /// A failed attempt never propagates: any connect error (network loss,
@@ -482,14 +589,14 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
     final uri = _connectionUri(effectiveToken);
     final setupComplete = Completer<void>();
     _setupComplete = setupComplete;
-    final channel = WebSocketChannel.connect(uri);
+    final channel = socketFactory(uri);
     _channel = channel;
     // Status writes queue behind the session's serialized write chain, which
     // can be deep in buffered audio during a reconnect — keep them off the
     // handshake's critical path. `_serial()` still preserves call order.
     unawaited(sessionRepository.markStatus(_sessionId!, 'connecting'));
 
-    _subscription = channel.stream.listen(
+    _subscription = channel.messages.listen(
       (message) => _handleServerMessage(message, generation),
       onError: (Object error, StackTrace stackTrace) {
         if (generation != _connectionGeneration || !isActive) return;
@@ -565,6 +672,14 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
         'chars': seed.length,
       });
     }
+    if (_droppedAudioChunks > 0) {
+      _emit(
+        VoiceSystemEvent(
+          'Dropped $_droppedAudioChunks stale audio chunks while offline',
+        ),
+      );
+      _droppedAudioChunks = 0;
+    }
     _emit(VoiceConnectedEvent());
     _flushPendingMessages();
   }
@@ -573,8 +688,19 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
   /// [buildConversationSeed] over the durable log of the session being
   /// continued. Null when there is no prior conversation to restore.
   Future<String?> _buildContextSeed() async {
+    final sessionId = _sessionId;
+    if (sessionId == null) return null;
     try {
-      final rows = await sessionRepository.resumableConversationEvents(
+      // Persists are fire-and-forget behind a serialized write tail that runs
+      // seconds deep during audio. Reading before it drains dropped the most
+      // recent turns from the seed — the part of the conversation the model
+      // most needs to carry on. Scoped to the live session rather than
+      // `resumableConversationEvents`, whose resume-handle gate returned
+      // nothing at all when the socket died before Gemini's first
+      // sessionResumptionUpdate, losing the whole conversation.
+      await sessionRepository.flush();
+      final rows = await sessionRepository.conversationEventsForSession(
+        sessionId: sessionId,
         types: kConversationEventTypes,
       );
       if (rows.isEmpty) return null;
@@ -692,6 +818,14 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
   @override
   Future<void> addAudioChunk(Uint8List chunk) async {
     if (!isActive) return;
+    // Realtime audio is worthless once it is stale. Queueing it through an
+    // outage dumped up to 20 s of old speech into the fresh session right
+    // after the context seed, which is what made a recovered session answer
+    // something the user had said before the drop.
+    if (!_connected || _channel == null) {
+      _droppedAudioChunks += 1;
+      return;
+    }
     _inputChunks += 1;
     _audioStreamOpen = true;
     _persistProtocolEvent(
@@ -716,6 +850,9 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
   Future<void> endAudioStream() async {
     if (!isActive || !_audioStreamOpen) return;
     _audioStreamOpen = false;
+    // Nothing to close on a socket that is gone: the next connect opens a
+    // fresh server session with no audio stream in progress.
+    if (!_connected || _channel == null) return;
     _sendOrQueue({
       'realtimeInput': {'audioStreamEnd': true},
     });
@@ -1076,7 +1213,7 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
         raw: _withoutInlineBinary(message),
       );
     }
-    _channel?.sink.add(jsonEncode(message));
+    _channel?.send(jsonEncode(message));
   }
 
   void _flushPendingMessages() {
@@ -1088,7 +1225,7 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
     }
   }
 
-  void _handleSocketDone(WebSocketChannel channel, int generation) {
+  void _handleSocketDone(LiveSocket channel, int generation) {
     if (generation != _connectionGeneration) return;
     _connected = false;
     final completer = _setupComplete;
@@ -1109,7 +1246,7 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
   void _scheduleReconnect() {
     if (!isActive || _reconnectTimer?.isActive == true) return;
     _reconnectAttempt += 1;
-    final seconds = math.min(30, math.pow(2, _reconnectAttempt - 1).toInt());
+    final seconds = reconnectBackoffSeconds(_reconnectAttempt);
     _emit(VoiceConnectingEvent('Reconnecting to Gemini Live in ${seconds}s'));
     _reconnectTimer = Timer(Duration(seconds: seconds), () {
       if (!isActive) return;
@@ -1184,7 +1321,7 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
     _channel = null;
     _connected = false;
     await subscription?.cancel();
-    await channel?.sink.close();
+    await channel?.close();
   }
 
   void _emit(VoiceEvent event) {

@@ -206,6 +206,25 @@ class VoiceSessionRepository {
   /// their BLOBs). Returns an empty list when no session is resumable — the
   /// same freshness rules as [openOrCreate], so a caller restoring UI state
   /// from this snapshot always matches the context the model will continue.
+  /// Conversation events of one specific session, for the transcript seed a
+  /// reconnect sends. Unlike [resumableConversationEvents] this is not gated
+  /// on a resume handle: the session is the one the command is *currently*
+  /// running, so it is resumable by definition. Gating it lost the entire
+  /// conversation whenever the socket dropped before Gemini's first
+  /// `sessionResumptionUpdate` arrived.
+  Future<List<VoiceSessionEvent>> conversationEventsForSession({
+    required String sessionId,
+    required Set<String> types,
+  }) =>
+      (db.select(db.voiceSessionEvents)
+            ..where(
+              (row) =>
+                  row.sessionId.equals(sessionId) &
+                  row.type.isIn(types.toList()),
+            )
+            ..orderBy([(row) => OrderingTerm.asc(row.sequence)]))
+          .get();
+
   Future<List<VoiceSessionEvent>> resumableConversationEvents({
     required Set<String> types,
   }) async {

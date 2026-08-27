@@ -345,6 +345,15 @@ class ConvexClient {
     _socket.wakeUp();
   }
 
+  /// Interface-set-changed hint (WiFi → cellular, VPN up or down). No outage
+  /// is reported for this, but a socket bound to the old route is already
+  /// dead and stays `open`: writes vanish and the 45 s watchdog is the only
+  /// thing that would eventually notice. Replace it now.
+  void onNetworkChanged() {
+    if (_disposed || _fatal != null) return;
+    _socket.reconnectNow();
+  }
+
   /// App-resumed hint: mobile OSes kill sockets in the background. Fast-check
   /// the watchdog and reconnect immediately if needed (§5.1).
   void onAppResumed() {
