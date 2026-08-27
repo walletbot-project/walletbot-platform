@@ -3,8 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:app/app_config/client_info.dart';
-import 'package:app/sync/wire.dart';
-import 'package:convex_flutter/convex_flutter.dart';
+import 'package:app/convex/convex_client.dart';
 import 'package:http/http.dart' as http;
 
 /// Why a submission failed, in the terms the sheet has copy for.
@@ -59,20 +58,18 @@ class FeedbackAttachment {
 }
 
 /// The subset of `ConvexClient` this needs, so tests can stand in for it.
+/// Returns the mutation's already-decoded result.
 typedef ConvexMutation =
-    Future<String> Function({
-      required String name,
-      required Map<String, dynamic> args,
-    });
+    Future<Object?> Function(String name, Map<String, Object?> args);
 
 /// How long a single attachment upload may run. The upload endpoint enforces
 /// two minutes server-side, so the client gives up when the server would.
 ///
-/// The Convex mutations get no deadline from here on purpose: `ConvexConfig`
-/// already applies `operationTimeout` (30 s by default) to every call and
-/// throws [TimeoutException] past it, which [FeedbackFailure.offline] covers.
-/// A second, shorter deadline on top of it only cancels calls that were still
-/// going to succeed.
+/// The Convex mutations get no deadline from here on purpose:
+/// `ConvexClientConfig.defaultOperationTimeout` (30 s by default) already
+/// bounds every call and throws [OperationTimeoutError] past it, which
+/// [FeedbackFailure.offline] covers. A second, shorter deadline on top of it
+/// only cancels calls that were still going to succeed.
 const defaultFeedbackUploadTimeout = Duration(minutes: 2);
 
 /// Sends one feedback submission: a short-lived upload URL per attachment, the
@@ -89,21 +86,22 @@ const defaultFeedbackUploadTimeout = Duration(minutes: 2);
 class FeedbackSubmitter {
   FeedbackSubmitter({
     required this.clientInfo,
+    ConvexClient? client,
     ConvexMutation? mutation,
     http.Client? httpClient,
     this.uploadTimeout = defaultFeedbackUploadTimeout,
-  }) : _mutation = mutation ?? _defaultMutation,
+  }) : assert(
+         client != null || mutation != null,
+         'provide a ConvexClient or a mutation stand-in',
+       ),
+       _mutation =
+           mutation ?? ((name, args) => client!.mutation<Object?>(name, args)),
        _httpClient = httpClient ?? http.Client();
 
   final ClientInfo clientInfo;
   final Duration uploadTimeout;
   final ConvexMutation _mutation;
   final http.Client _httpClient;
-
-  static Future<String> _defaultMutation({
-    required String name,
-    required Map<String, dynamic> args,
-  }) => ConvexClient.instance.mutation(name: name, args: args);
 
   /// Throws [FeedbackException] on every failure path, so the caller has one
   /// place to map to copy.
@@ -186,16 +184,12 @@ class FeedbackSubmitter {
     String name,
     Map<String, Object?> args,
   ) async {
-    final String raw;
+    final Object? decoded;
     try {
-      raw = await _mutation(
-        name: name,
-        args: prepareArgValue(args) as Map<String, dynamic>,
-      );
+      decoded = await _mutation(name, args);
     } catch (error) {
       throw FeedbackException(_transportFailureFor(error), error);
     }
-    final decoded = decodeConvexResponse(raw);
     if (decoded is! Map<String, Object?>) {
       throw FeedbackException(FeedbackFailure.failed);
     }
@@ -213,6 +207,8 @@ class FeedbackSubmitter {
   /// sheet can point at the connection instead of blaming the submission.
   FeedbackFailure _transportFailureFor(Object error) => switch (error) {
     TimeoutException() ||
+    OperationTimeoutError() ||
+    ConnectionLostError() ||
     IOException() ||
     http.ClientException() => FeedbackFailure.offline,
     _ => FeedbackFailure.failed,

@@ -58,11 +58,10 @@ class LegalVersions {
     privacy: LegalDocumentVersions(current: '2026-08-23', min: '2026-08-23'),
   );
 
-  LegalDocumentVersions of(LegalDocumentKind document) =>
-      switch (document) {
-        LegalDocumentKind.terms => terms,
-        LegalDocumentKind.privacy => privacy,
-      };
+  LegalDocumentVersions of(LegalDocumentKind document) => switch (document) {
+    LegalDocumentKind.terms => terms,
+    LegalDocumentKind.privacy => privacy,
+  };
 
   /// Parses the `legal` block of a config verdict. Returns null unless BOTH
   /// documents parse — a half-read block would silently mix a server version

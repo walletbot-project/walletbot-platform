@@ -1,7 +1,8 @@
-import 'dart:async';
+import 'dart:convert';
 
 import 'package:app/app_config/client_info.dart';
 import 'package:app/components/feedback/feedback_sheet.dart';
+import 'package:app/convex/convex_client.dart';
 import 'package:app/feedback/feedback_submitter.dart';
 import 'package:app/l10n/l10n.dart';
 import 'package:flutter/material.dart';
@@ -49,7 +50,7 @@ Future<void> _pumpSheet(
 
 FeedbackSubmitter _submitterAnswering(String response) => FeedbackSubmitter(
   clientInfo: _clientInfo,
-  mutation: ({required name, required args}) async => response,
+  mutation: (name, args) async => jsonDecode(response),
 );
 
 void main() {
@@ -91,8 +92,14 @@ void main() {
         clientInfo: _clientInfo,
         // Airplane mode: the Convex client waits on a socket that never opens,
         // then gives up on its own `operationTimeout` with this exception.
-        mutation: ({required name, required args}) =>
-            Future.error(TimeoutException('operation timed out')),
+        mutation: (name, args) => Future.error(
+          OperationTimeoutError(
+            functionName: name,
+            phase: TimeoutPhase.operation,
+            timeout: const Duration(seconds: 30),
+            connectionStatus: ConnectionStatus.connecting,
+          ),
+        ),
       ),
     );
 

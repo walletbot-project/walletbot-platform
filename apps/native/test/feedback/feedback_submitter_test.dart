@@ -1,7 +1,7 @@
-import 'dart:async';
 import 'dart:convert';
 
 import 'package:app/app_config/client_info.dart';
+import 'package:app/convex/convex_client.dart';
 import 'package:app/feedback/feedback_submitter.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
@@ -12,20 +12,18 @@ const _clientInfo = ClientInfo(
   deviceId: 'device-1',
 );
 
-/// Records every mutation and answers from a queue of canned JSON responses.
+/// Records every mutation and answers from a queue of canned JSON responses,
+/// decoded like the Convex client hands them to callers.
 class _FakeConvex {
   _FakeConvex(this._responses);
 
   final List<String> _responses;
-  final calls = <({String name, Map<String, dynamic> args})>[];
+  final calls = <({String name, Map<String, Object?> args})>[];
   var _index = 0;
 
-  Future<String> mutation({
-    required String name,
-    required Map<String, dynamic> args,
-  }) async {
+  Future<Object?> mutation(String name, Map<String, Object?> args) async {
     calls.add((name: name, args: args));
-    return _responses[_index++];
+    return jsonDecode(_responses[_index++]);
   }
 }
 
@@ -163,31 +161,44 @@ void main() {
     );
   });
 
-  test("the client's own operation timeout is offline, not a failure", () async {
-    // `ConvexConfig.operationTimeout` (30 s by default) is what ends a call
-    // that never gets out, and `ConvexClient.mutation` documents the
-    // `TimeoutException` it throws. Nothing here adds a second deadline on top
-    // of it, so this is the exception the submitter has to classify.
-    final submitter = FeedbackSubmitter(
-      clientInfo: _clientInfo,
-      mutation: ({required name, required args}) =>
-          Future.error(TimeoutException('operation timed out')),
-      httpClient: _FakeHttp(),
-    );
+  test(
+    "the client's own operation timeout is offline, not a failure",
+    () async {
+      // `ConvexClientConfig.defaultOperationTimeout` (30 s by default) is what
+      // ends a call that never gets out, throwing `OperationTimeoutError`.
+      // Nothing here adds a second deadline on top of it, so this is the
+      // exception the submitter has to classify.
+      final submitter = FeedbackSubmitter(
+        clientInfo: _clientInfo,
+        mutation: (name, args) => Future.error(
+          OperationTimeoutError(
+            functionName: name,
+            phase: TimeoutPhase.operation,
+            timeout: const Duration(seconds: 30),
+            connectionStatus: ConnectionStatus.connecting,
+          ),
+        ),
+        httpClient: _FakeHttp(),
+      );
 
-    await expectLater(
-      submitter.submit(message: 'hi', attachments: const [], locale: 'en'),
-      throwsA(
-        isA<FeedbackException>()
-            .having(
-              (error) => error.failure,
-              'failure',
-              FeedbackFailure.offline,
-            )
-            .having((error) => error.cause, 'cause', isA<TimeoutException>()),
-      ),
-    );
-  });
+      await expectLater(
+        submitter.submit(message: 'hi', attachments: const [], locale: 'en'),
+        throwsA(
+          isA<FeedbackException>()
+              .having(
+                (error) => error.failure,
+                'failure',
+                FeedbackFailure.offline,
+              )
+              .having(
+                (error) => error.cause,
+                'cause',
+                isA<OperationTimeoutError>(),
+              ),
+        ),
+      );
+    },
+  );
 
   test('a dropped upload is offline; a refused one is a failure', () async {
     Future<FeedbackFailure> failureFor(http.Client client) async {

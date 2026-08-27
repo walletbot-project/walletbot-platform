@@ -1,11 +1,10 @@
 import 'dart:async';
 import 'dart:convert';
 
-import 'package:convex_flutter/convex_flutter.dart';
 import 'package:flutter/foundation.dart';
 
+import '../convex/convex_client.dart';
 import '../database.dart';
-import '../sync/wire.dart';
 import 'voice_session_repository.dart';
 
 /// Best-effort replication of the durable local voice log.
@@ -16,13 +15,25 @@ class VoiceSessionRemoteSync {
   VoiceSessionRemoteSync({
     required VoiceSessionRepository repository,
     required this.ownerId,
-    ConvexClient? client,
+    required ConvexClient? client,
     this.batchSize = 50,
   }) : _repository = repository,
-       _client = client ?? ConvexClient.instance;
+       _client = client;
 
   final VoiceSessionRepository _repository;
-  final ConvexClient _client;
+
+  /// Null only without a Convex transport (widget tests): the drain then
+  /// fails like any offline flush and the outbox rows stay pending.
+  final ConvexClient? _client;
+
+  ConvexClient get _requireClient {
+    final client = _client;
+    if (client == null) {
+      throw StateError('voice sync: no ConvexClient wired');
+    }
+    return client;
+  }
+
   final String ownerId;
   final int batchSize;
   Timer? _timer;
@@ -70,16 +81,12 @@ class VoiceSessionRemoteSync {
         final sessions = await _repository.unsyncedSessions(limit: batchSize);
         if (sessions.isEmpty) return;
         for (final session in sessions) {
-          await _client.mutation(
-            name: 'v1/voice/sessions:appendEvents',
-            args:
-                (prepareArgValue({
-                      'ownerId': ownerId,
-                      'session': _sessionPayload(session),
-                      'events': <Object?>[],
-                    })
-                    as Map<String, Object?>),
-          );
+          await _requireClient
+              .mutation<Object?>('v1/voice/sessions:appendEvents', {
+                'ownerId': ownerId,
+                'session': _sessionPayload(session),
+                'events': <Object?>[],
+              });
           await _repository.markSessionSyncedIfUnchanged(
             session.id,
             session.updatedAt,
@@ -99,35 +106,29 @@ class VoiceSessionRemoteSync {
         continue;
       }
 
-      await _client.mutation(
-        name: 'v1/voice/sessions:appendEvents',
-        args:
-            (prepareArgValue({
-                  'ownerId': ownerId,
-                  'session': {..._sessionPayload(session)},
-                  'events': events
-                      .map(
-                        (event) => {
-                          'id': event.id,
-                          'sequence': event.sequence,
-                          'occurredAt': event.occurredAt,
-                          'type': event.type,
-                          'direction': event.direction,
-                          if (event.modality != null)
-                            'modality': event.modality,
-                          'payloadJson': event.payloadJson,
-                          if (event.rawJson != null)
-                            'rawJson': _redactRemoteSecrets(event.rawJson!),
-                          if (event.binaryData != null)
-                            'binaryByteLength': event.binaryData!.length,
-                          if (event.binaryMimeType != null)
-                            'binaryMimeType': event.binaryMimeType,
-                        },
-                      )
-                      .toList(growable: false),
-                })
-                as Map<String, Object?>),
-      );
+      await _requireClient.mutation<Object?>('v1/voice/sessions:appendEvents', {
+        'ownerId': ownerId,
+        'session': _sessionPayload(session),
+        'events': events
+            .map(
+              (event) => {
+                'id': event.id,
+                'sequence': event.sequence,
+                'occurredAt': event.occurredAt,
+                'type': event.type,
+                'direction': event.direction,
+                if (event.modality != null) 'modality': event.modality,
+                'payloadJson': event.payloadJson,
+                if (event.rawJson != null)
+                  'rawJson': _redactRemoteSecrets(event.rawJson!),
+                if (event.binaryData != null)
+                  'binaryByteLength': event.binaryData!.length,
+                if (event.binaryMimeType != null)
+                  'binaryMimeType': event.binaryMimeType,
+              },
+            )
+            .toList(growable: false),
+      });
 
       await _repository.markEventsSynced(
         events.map((event) => event.id).toList(growable: false),

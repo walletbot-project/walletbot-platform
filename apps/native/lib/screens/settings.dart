@@ -20,8 +20,7 @@ class SettingsScreen extends StatelessWidget {
     final active = auth.activeAccount;
     // User-account deletion only applies to server accounts with an email —
     // local accounts have no server-side data to delete.
-    final deletableEmail =
-        active != null && active.type == AccountType.remote
+    final deletableEmail = active != null && active.type == AccountType.remote
         ? active.email
         : null;
     final tileCount = deletableEmail != null ? 4 : 3;

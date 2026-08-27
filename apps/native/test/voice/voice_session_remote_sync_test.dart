@@ -1,9 +1,9 @@
 import 'dart:async';
 
+import 'package:app/convex/convex_client.dart';
 import 'package:app/database.dart';
 import 'package:app/voice/voice_session_remote_sync.dart';
 import 'package:app/voice/voice_session_repository.dart';
-import 'package:convex_flutter/convex_flutter.dart';
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -20,7 +20,7 @@ void main() {
       direction: 'local',
     );
 
-    final gate = Completer<String>();
+    final gate = Completer<Object?>();
     final mutationAwaited = Completer<void>();
     final sync = VoiceSessionRemoteSync(
       repository: repository,
@@ -52,14 +52,15 @@ void main() {
 class _StubConvexClient implements ConvexClient {
   _StubConvexClient(this.onMutation);
 
-  final Future<String> Function(String name, Map<String, dynamic> args)
+  final Future<Object?> Function(String name, Map<String, Object?> args)
   onMutation;
 
   @override
-  Future<String> mutation({
-    required String name,
-    required Map<String, dynamic> args,
-  }) => onMutation(name, args);
+  Future<T> mutation<T>(
+    String name,
+    Map<String, Object?> args, {
+    CallOptions? options,
+  }) async => await onMutation(name, args) as T;
 
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);

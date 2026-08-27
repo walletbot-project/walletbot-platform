@@ -1,15 +1,14 @@
 import 'dart:async';
 
-import 'package:convex_flutter/convex_flutter.dart';
 import 'package:drift/drift.dart';
 import 'package:flutter/foundation.dart' hide Category;
 
 import '../app_config/client_info.dart';
+import '../convex/convex_client.dart';
 import '../database.dart';
 import 'sync_merge.dart';
 import 'sync_recompute.dart';
 import 'sync_status.dart';
-import 'wire.dart';
 
 /// The `error` value returned by `sync/*:pull` and `push` when the backend
 /// rejects this client for being below the platform's `minSupportedVersion`.
@@ -34,7 +33,7 @@ class _ClientOutdatedException implements Exception {
 class SyncEngine extends ChangeNotifier {
   SyncEngine({
     required AppDatabase db,
-    required ConvexClient client,
+    required ConvexClient? client,
     required ClientInfo clientInfo,
     this.onClientOutdated,
     this.pullPageLimit = 200,
@@ -46,7 +45,19 @@ class SyncEngine extends ChangeNotifier {
        _writeDebounce = writeDebounce;
 
   final AppDatabase _db;
-  final ConvexClient _client;
+
+  /// Null when the app runs without a Convex transport (widget tests). The
+  /// engine is inert then: [start] refuses to wire anything up.
+  final ConvexClient? _client;
+
+  ConvexClient get _requireClient {
+    final client = _client;
+    if (client == null) {
+      throw StateError('sync: engine started without a ConvexClient');
+    }
+    return client;
+  }
+
   final ClientInfo _clientInfo;
   final Duration _writeDebounce;
 
@@ -91,30 +102,25 @@ class SyncEngine extends ChangeNotifier {
   /// Wire up the counter subscription and kick off the first sync. Safe to
   /// call multiple times; subsequent calls are no-ops.
   Future<void> start() async {
-    if (_started || _halted) return;
+    if (_started || _halted || _client == null) return;
     _started = true;
 
-    // Subscribe to the user's server counter. Any change → pull.
-    try {
-      _counterSub = await _client.subscribe(
-        name: 'v1/sync/queries:getCounter',
-        args: const {},
-        onUpdate: (raw) {
-          final value = decodeConvexResponse(raw);
-          if (value is BigInt) {
-            if (value > _lastKnownRemoteCounter) {
-              _lastKnownRemoteCounter = value;
-              _scheduleNow();
-            }
-          }
-        },
-        onError: (message, _) {
-          debugPrint('sync: counter subscription error: $message');
-        },
-      );
-    } catch (e) {
-      debugPrint('sync: failed to subscribe to counter: $e');
-    }
+    // Subscribe to the user's server counter. Any change → pull. The client
+    // queues the subscription while offline and re-adds it on every
+    // reconnect, so this can never leave the engine trigger-starved.
+    _counterSub = _requireClient.subscribe(
+      'v1/sync/queries:getCounter',
+      const {},
+      onUpdate: (value) {
+        if (value is BigInt && value > _lastKnownRemoteCounter) {
+          _lastKnownRemoteCounter = value;
+          _scheduleNow();
+        }
+      },
+      onError: (error) {
+        debugPrint('sync: counter subscription error: $error');
+      },
+    );
 
     // Listen for any local mutation to entity tables and trigger a debounced
     // sync. Writes the engine performs itself (merger / push-ack) happen
@@ -254,15 +260,15 @@ class SyncEngine extends ChangeNotifier {
         throw StateError('sync: pull loop exceeded 10k iterations');
       }
 
-      final raw = await _client.query('v1/sync/queries:pull', {
-        'since': prepareArgValue(since),
-        'limit': pullPageLimit,
-        'platform': _clientInfo.platform,
-        'appVersion': _clientInfo.appVersion,
-      });
-      final decoded = decodeConvexResponse(raw);
+      final decoded = await _requireClient
+          .query<Object?>('v1/sync/queries:pull', {
+            'since': since,
+            'limit': pullPageLimit,
+            'platform': _clientInfo.platform,
+            'appVersion': _clientInfo.appVersion,
+          });
       if (decoded is! Map) {
-        throw StateError('sync: malformed pull response: $raw');
+        throw StateError('sync: malformed pull response: $decoded');
       }
       if (decoded['error'] == _clientOutdatedError) {
         throw const _ClientOutdatedException();
@@ -454,8 +460,8 @@ class SyncEngine extends ChangeNotifier {
     required _Chunk chunk,
   }) async {
     final args = <String, Object?>{
-      'expectedServerSeq': prepareArgValue(expected),
-      'upserts': prepareArgValue({
+      'expectedServerSeq': expected,
+      'upserts': {
         if (chunk.accounts.isNotEmpty)
           'accounts': chunk.accounts.map(_serializeAccount).toList(),
         if (chunk.categories.isNotEmpty)
@@ -482,22 +488,19 @@ class SyncEngine extends ChangeNotifier {
           'transactionTags': chunk.transactionTags
               .map(_serializeTransactionTag)
               .toList(),
-      }),
+      },
       if (chunk.tombstones.isNotEmpty)
-        'tombstones': prepareArgValue(
-          chunk.tombstones.map(_serializeTombstone).toList(),
-        ),
+        'tombstones': chunk.tombstones.map(_serializeTombstone).toList(),
       'platform': _clientInfo.platform,
       'appVersion': _clientInfo.appVersion,
     };
 
-    final raw = await _client.mutation(
-      name: 'v1/sync/mutations:push',
-      args: args,
+    final decoded = await _requireClient.mutation<Object?>(
+      'v1/sync/mutations:push',
+      args,
     );
-    final decoded = decodeConvexResponse(raw);
     if (decoded is! Map) {
-      throw StateError('sync: malformed push response: $raw');
+      throw StateError('sync: malformed push response: $decoded');
     }
     final ok = decoded['ok'] == true;
     if (!ok) {

@@ -78,8 +78,12 @@ void main() {
       test('date=$date status=${c['timeStatus']} time=$time', () {
         if (c['throws'] == true) {
           expect(
-            () =>
-                parseTransactionDate(date, timeStatus: status, time: time, now: now),
+            () => parseTransactionDate(
+              date,
+              timeStatus: status,
+              time: time,
+              now: now,
+            ),
             throwsA(anything),
           );
           return;

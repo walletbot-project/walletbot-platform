@@ -1,5 +1,5 @@
+import 'package:app/convex/convex_client.dart';
 import 'package:app/settings/display_settings.dart';
-import 'package:convex_flutter/convex_flutter.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
@@ -34,10 +34,15 @@ class LanguageSyncController {
   final String accountId;
   final bool isRemote;
   final DisplaySettingsController _displaySettings;
-  // Resolved lazily, and only ever touched when `isRemote` is true, so local
-  // accounts (and widget tests) never require `ConvexClient.initialize()`.
+  // Only ever touched when `isRemote` is true, so local accounts (and widget
+  // tests) can run without a Convex transport.
   final ConvexClient? _client;
-  ConvexClient get _resolvedClient => _client ?? ConvexClient.instance;
+  ConvexClient get _resolvedClient {
+    final client = _client;
+    if (client == null) throw StateError('languageSync: no ConvexClient');
+    return client;
+  }
+
   final FlutterSecureStorage _storage;
 
   String get _cacheKey => 'language_pushed_$accountId';
@@ -81,9 +86,9 @@ class LanguageSyncController {
     }
 
     try {
-      await _resolvedClient.mutation(
-        name: 'v1/users/mutations:updateLanguage',
-        args: {'tag': tag, 'source': source},
+      await _resolvedClient.mutation<Object?>(
+        'v1/users/mutations:updateLanguage',
+        {'tag': tag, 'source': source},
       );
       await _storage.write(key: _cacheKey, value: key);
     } catch (e) {

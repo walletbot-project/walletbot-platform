@@ -388,6 +388,11 @@ it gets the test budget:
 
 ## 11. Rollout
 
+> **Resolved (2026-08-27):** the team chose a direct swap over the gate —
+> `convex_flutter` was removed in the same change that wired the new client
+> in, with no dual-implementation period. The gate design below is kept for
+> the record.
+
 - Land the client behind a **local compile-time/config gate**: keep
   `convex_flutter` in the tree, select the implementation behind the
   existing client interface at startup. The server-side feature-flag system

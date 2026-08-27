@@ -21,9 +21,8 @@ const _rita = UserAccount(
   sessionToken: 'tok',
 );
 
-/// Stands in for [AuthController] so the switcher can be driven without
-/// `ConvexClient.initialize()`, which widget tests cannot do (the constraint
-/// documented in widget_test.dart). Only the account bookkeeping the switcher
+/// Stands in for [AuthController] so the switcher can be driven without the
+/// real auth attach/detach flows. Only the account bookkeeping the switcher
 /// reads is overridden; the notification behaviour matches the real one.
 class _FakeAuth extends AuthController {
   _FakeAuth(this._accounts, this._activeId);

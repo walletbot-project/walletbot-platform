@@ -410,8 +410,7 @@ enum LegalAcceptanceSource { local, remote }
 )
 class LegalAcceptances extends Table {
   TextColumn get id => text().named('id')();
-  TextColumn get document =>
-      textEnum<LegalDocumentKind>().named('document')();
+  TextColumn get document => textEnum<LegalDocumentKind>().named('document')();
   // Ordered opaque string (e.g. '2026-08-06'), compared lexicographically.
   TextColumn get version => text().named('version')();
   Int64Column get acceptedAt => int64().named('accepted_at')();

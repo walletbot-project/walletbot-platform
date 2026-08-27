@@ -2,19 +2,17 @@ import 'dart:async';
 
 import 'package:app/app_config/app_config_controller.dart';
 import 'package:app/app_config/client_info.dart';
+import 'package:app/convex/convex_client.dart';
 import 'package:app/data/ids.dart';
 import 'package:app/database.dart';
 import 'package:app/legal/legal_versions.dart';
-import 'package:app/sync/wire.dart';
-import 'package:convex_flutter/convex_flutter.dart';
 import 'package:drift/drift.dart';
 import 'package:flutter/foundation.dart';
 
 /// Fetches `v1/legal/queries:acceptanceStatus`, already decoded.
 ///
 /// Injectable so tests can drive the remote path — and its failure modes —
-/// without a live `ConvexClient` (which cannot initialize under `flutter
-/// test`).
+/// without a live `ConvexClient`.
 typedef LegalAcceptanceStatusFetcher = Future<Map<Object?, Object?>> Function();
 
 /// What the acceptance gate should do for the active account.
@@ -89,10 +87,15 @@ class LegalAcceptanceController extends ChangeNotifier {
   final ClientInfo _clientInfo;
   final String _locale;
   final AppConfigController? _appConfig;
-  // Resolved lazily so local accounts and widget tests never require
-  // `ConvexClient.initialize()`.
+  // Only ever touched when `isRemote` is true, so local accounts and widget
+  // tests can run without a Convex transport.
   final ConvexClient? _client;
-  ConvexClient get _resolvedClient => _client ?? ConvexClient.instance;
+  ConvexClient get _resolvedClient {
+    final client = _client;
+    if (client == null) throw StateError('legal: no ConvexClient');
+    return client;
+  }
+
   final LegalAcceptanceStatusFetcher? _fetchStatus;
 
   /// How long the gate may hold the app back waiting for a first remote
@@ -180,7 +183,7 @@ class LegalAcceptanceController extends ChangeNotifier {
   ///
   /// Deliberately does NOT hit the backend. A remote account's status needs an
   /// authenticated Convex connection, and at the moment this runs — the frame
-  /// after sign-in — `setAuthWithRefresh` has usually not authenticated the
+  /// after sign-in — `ConvexClient.setAuth` has usually not authenticated the
   /// socket yet, so the query comes back `Unauthenticated`. Firing it here and
   /// treating the failure as final is exactly how the gate silently never
   /// appeared: the caller drives [refreshRemote] off
@@ -235,16 +238,13 @@ class LegalAcceptanceController extends ChangeNotifier {
     }
 
     if (isRemote) {
-      await _resolvedClient.mutation(
-        name: 'v1/legal/mutations:accept',
-        args: {
-          'documents': documents.map((d) => d.name).toList(),
-          'ageConfirmed': true,
-          'platform': _clientInfo.platform,
-          'appVersion': _clientInfo.appVersion,
-          'locale': _locale,
-        },
-      );
+      await _resolvedClient.mutation<Object?>('v1/legal/mutations:accept', {
+        'documents': documents.map((d) => d.name).toList(),
+        'ageConfirmed': true,
+        'platform': _clientInfo.platform,
+        'appVersion': _clientInfo.appVersion,
+        'locale': _locale,
+      });
     }
 
     final acceptedAt = BigInt.from(DateTime.now().millisecondsSinceEpoch);
@@ -389,11 +389,10 @@ class LegalAcceptanceController extends ChangeNotifier {
   Future<Map<Object?, Object?>> _resolveStatus() async {
     final fetch = _fetchStatus;
     if (fetch != null) return fetch();
-    final raw = await _resolvedClient.query(
+    final decoded = await _resolvedClient.query<Object?>(
       'v1/legal/queries:acceptanceStatus',
-      {},
+      const {},
     );
-    final decoded = decodeConvexResponse(raw);
     if (decoded is! Map) throw StateError('unexpected response: $decoded');
     return decoded;
   }

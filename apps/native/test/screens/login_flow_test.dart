@@ -20,8 +20,8 @@ const _testClientInfo = ClientInfo(
   deviceId: 'test-device',
 );
 
-// Only error/pending paths are exercised — success paths reach
-// ConvexClient, which cannot initialize under `flutter test`.
+// Only error/pending paths are exercised — success paths attach Convex auth,
+// and no ConvexClient is wired in these tests.
 void main() {
   setUpAll(() {
     AppConfig.setRuntimeUrls(
@@ -310,7 +310,10 @@ void main() {
     // The form used to flip to the sent state on any 200, and the endpoint
     // answered 200 for addresses it had never sent anything to.
     expect(find.textContaining('Te enviamos un enlace'), findsNothing);
-    expect(find.text('No existe una cuenta para ghost@test.com.'), findsOneWidget);
+    expect(
+      find.text('No existe una cuenta para ghost@test.com.'),
+      findsOneWidget,
+    );
     // Still on the form, so the address can be corrected and retried.
     expect(find.text('Enviar enlace'), findsOneWidget);
   });
