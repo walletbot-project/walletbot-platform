@@ -8,6 +8,7 @@ import 'package:app/auth/account.dart';
 import 'package:app/auth/pop_on_account_switch.dart';
 import 'package:app/config.dart';
 import 'package:app/convex/client_log.dart';
+import 'package:app/diagnostics/event_loop_probe.dart';
 import 'package:app/convex/connectivity_hooks.dart';
 import 'package:app/convex/convex_client.dart';
 import 'package:app/data/data.dart';
@@ -72,6 +73,10 @@ Future<void> main() async {
   // went wrong with it on device was only visible through its symptoms. Off
   // in release: the trace names UDF paths and runs a line per call.
   if (!kReleaseMode) ConvexClientLog().attach(convex);
+
+  // Diagnostic: reports when the isolate is blocked long enough to delay
+  // frames that already arrived. No-op in release.
+  EventLoopProbe().start();
 
   // On web the client ID comes from the <meta name="google-signin-client_id">
   // tag in web/index.html, and serverClientId is not supported (the plugin
@@ -416,10 +421,24 @@ class _AuthGate extends StatelessWidget {
           ),
         ),
         Provider<VoiceSessionRepository>(
-          create: (ctx) => VoiceSessionRepository(
-            ctx.read<AppDatabase>(),
-            remoteEnabled: active.type == AccountType.remote,
-          ),
+          create: (ctx) {
+            final repository = VoiceSessionRepository(
+              ctx.read<AppDatabase>(),
+              remoteEnabled: active.type == AccountType.remote,
+            );
+            // One-off: drop the pre-existing outbox backlog of per-chunk
+            // rows, which predate the local-only rule and would otherwise
+            // still drain over the Live audio uplink.
+            unawaited(
+              repository.retireLocalOnlyBacklog().then(
+                (n) {
+                  if (n > 0) debugPrint('[voice] retired $n local-only rows');
+                },
+                onError: (Object e) => debugPrint('[voice] retire failed: $e'),
+              ),
+            );
+            return repository;
+          },
         ),
       ],
       child: MultiProvider(
