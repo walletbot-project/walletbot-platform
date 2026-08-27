@@ -7,6 +7,9 @@ import 'package:app/auth/auth_controller.dart';
 import 'package:app/auth/account.dart';
 import 'package:app/auth/pop_on_account_switch.dart';
 import 'package:app/config.dart';
+import 'package:app/convex/client_log.dart';
+import 'package:app/convex/connectivity_hooks.dart';
+import 'package:app/convex/convex_client.dart';
 import 'package:app/data/data.dart';
 import 'package:app/fx/fx_rates_controller.dart';
 import 'package:app/database.dart';
@@ -33,7 +36,6 @@ import 'package:app/voice/agent_context.dart';
 import 'package:app/voice/gemini_voice_expense_command.dart';
 import 'package:app/voice/voice_session_remote_sync.dart';
 import 'package:app/voice/voice_session_repository.dart';
-import 'package:convex_flutter/convex_flutter.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -48,16 +50,28 @@ Future<void> main() async {
 
   const storage = FlutterSecureStorage();
 
-  // L0: resolve the backend URL before the WS client is initialized. Fails
+  // L0: resolve the backend URL before the WS client is constructed. Fails
   // open — keeps the bundled/cached URL on any error.
   await resolveBackendConfig(storage);
 
-  await ConvexClient.initialize(
-    ConvexConfig(
+  // Platform + app version, resolved once and shared by the config controller
+  // and the sync engine so both gates identify the client the same way.
+  final clientInfo = await ClientInfo.resolve(storage: storage);
+
+  // Connects immediately and reconnects on its own; connectivity and
+  // lifecycle signals below only make recovery faster, never gate it.
+  final convex = ConvexClient(
+    ConvexClientConfig(
       deploymentUrl: AppConfig.convexUrl,
-      clientId: 'wallet-bot-flutter',
+      clientId: 'wallet-bot-flutter/${clientInfo.appVersion}',
     ),
   );
+  ConvexConnectivityHooks(convex).attach();
+
+  // The client traces itself in detail and had no listener, so anything that
+  // went wrong with it on device was only visible through its symptoms. Off
+  // in release: the trace names UDF paths and runs a line per call.
+  if (!kReleaseMode) ConvexClientLog().attach(convex);
 
   // On web the client ID comes from the <meta name="google-signin-client_id">
   // tag in web/index.html, and serverClientId is not supported (the plugin
@@ -71,17 +85,16 @@ Future<void> main() async {
     debugPrint('GoogleSignIn.initialize failed: $e\n$st');
   }
 
-  // Platform + app version, resolved once and shared by the config controller
-  // and the sync engine so both gates identify the client the same way.
-  final clientInfo = await ClientInfo.resolve(storage: storage);
-
   // Loaded before the auth controller is built: `_postJson` sends the device's
   // language as `Accept-Language`, which is the only locale signal a sign-up
   // request carries and therefore the only way a brand-new account's
   // verification email comes out in the right language.
   final displaySettings = DisplaySettingsController();
   await displaySettings.load();
-  final auth = AuthController(localeTag: () => displaySettings.localeTag);
+  final auth = AuthController(
+    convex: convex,
+    localeTag: () => displaySettings.localeTag,
+  );
   await auth.load();
   final telemetry = TelemetryClient(
     accessTokenProvider: auth.fetchAccessTokenForHttp,
@@ -112,6 +125,7 @@ Future<void> main() async {
       displaySettings: displaySettings,
       appConfig: appConfig,
       clientInfo: clientInfo,
+      convex: convex,
       telemetry: telemetry,
       fxRates: fxRates,
     ),
@@ -125,6 +139,7 @@ class MyApp extends StatefulWidget {
     required this.displaySettings,
     required this.appConfig,
     required this.clientInfo,
+    this.convex,
     this.locale,
     this.telemetry,
     this.fxRates,
@@ -135,6 +150,11 @@ class MyApp extends StatefulWidget {
   final Locale? locale;
   final AppConfigController appConfig;
   final ClientInfo clientInfo;
+
+  /// The Convex transport. Optional: widget tests build MyApp without one
+  /// (constructing it would open a real socket and leave timers pending),
+  /// and everything network-gated reads it as nullable.
+  final ConvexClient? convex;
   final TelemetryClient? telemetry;
 
   /// Device-scoped exchange-rate cache. Optional: widget tests build MyApp
@@ -192,6 +212,8 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
           value: widget.appConfig,
         ),
         Provider<ClientInfo>.value(value: widget.clientInfo),
+        if (widget.convex != null)
+          Provider<ConvexClient>.value(value: widget.convex!),
         if (widget.fxRates != null)
           ChangeNotifierProvider<FxRatesController>.value(
             value: widget.fxRates!,
@@ -338,10 +360,11 @@ class _AuthGate extends StatelessWidget {
         // Created for local accounts too (kept purely device-local, no
         // backend user exists to own the setting) so it's always available.
         ChangeNotifierProvider<DefaultCurrencyController>(
-          create: (_) {
+          create: (ctx) {
             final controller = DefaultCurrencyController(
               accountId: active.id,
               isRemote: active.type == AccountType.remote,
+              client: ctx.read<ConvexClient?>(),
             );
             unawaited(controller.load());
             return controller;
@@ -356,6 +379,7 @@ class _AuthGate extends StatelessWidget {
               accountId: active.id,
               isRemote: active.type == AccountType.remote,
               displaySettings: ctx.read<DisplaySettingsController>(),
+              client: ctx.read<ConvexClient?>(),
             );
             unawaited(controller.start());
             return controller;
@@ -375,6 +399,7 @@ class _AuthGate extends StatelessWidget {
               clientInfo: ctx.read<ClientInfo>(),
               locale: ctx.read<DisplaySettingsController>().localeTag,
               appConfig: ctx.read<AppConfigController>(),
+              client: ctx.read<ConvexClient?>(),
             );
             unawaited(controller.load());
             return controller;
@@ -413,6 +438,7 @@ class _AuthGate extends StatelessWidget {
                 final sync = VoiceSessionRemoteSync(
                   repository: ctx.read<VoiceSessionRepository>(),
                   ownerId: active.id,
+                  client: ctx.read<ConvexClient?>(),
                 );
                 sync.schedule(delay: Duration.zero);
                 return sync;
@@ -439,6 +465,7 @@ class _AuthGate extends StatelessWidget {
                 agentMetrics: ctx.read<AgentMetrics?>(),
                 useAuthenticatedTokenAction: active.type == AccountType.remote,
                 sessionToken: active.sessionToken,
+                convexClient: ctx.read<ConvexClient?>(),
                 convexSiteUrl: AppConfig.convexSiteUrl,
                 // The updateSettings tool writes through these controllers.
                 displaySettings: displaySettings,
@@ -476,7 +503,7 @@ class _AuthGate extends StatelessWidget {
           ChangeNotifierProvider<SyncEngine>(
             create: (ctx) => SyncEngine(
               db: ctx.read<AppDatabase>(),
-              client: ConvexClient.instance,
+              client: ctx.read<ConvexClient?>(),
               clientInfo: ctx.read<ClientInfo>(),
               // Backstop for the client-side gate: if the server rejects this
               // client as outdated, reflect it so the hard update banner shows

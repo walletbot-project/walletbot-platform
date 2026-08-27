@@ -416,8 +416,6 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 }
 
-
-
 class _HeroHeader extends StatelessWidget {
   const _HeroHeader();
 
@@ -877,8 +875,6 @@ class _LocalLoginPanel extends StatelessWidget {
   }
 }
 
-
-
 class _EmailModeToggleButton extends StatelessWidget {
   const _EmailModeToggleButton({
     required this.mode,
@@ -978,7 +974,6 @@ class _LoginTextField extends StatelessWidget {
     );
   }
 }
-
 
 extension on _EmailAuthMode {
   String primaryButtonLabel(AppLocalizations l10n) {

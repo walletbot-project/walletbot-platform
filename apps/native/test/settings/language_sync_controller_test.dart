@@ -1,6 +1,6 @@
+import 'package:app/convex/convex_client.dart';
 import 'package:app/settings/display_settings.dart';
 import 'package:app/user_settings/language_sync_controller.dart';
-import 'package:convex_flutter/convex_flutter.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -13,7 +13,9 @@ void main() {
     FlutterSecureStorage.setMockInitialValues({});
   });
 
-  Future<DisplaySettingsController> settingsWith(DisplayLanguage language) async {
+  Future<DisplaySettingsController> settingsWith(
+    DisplayLanguage language,
+  ) async {
     final controller = DisplaySettingsController(
       store: MemoryDisplaySettingsStore(),
     );
@@ -160,14 +162,15 @@ void main() {
 class _StubConvexClient implements ConvexClient {
   _StubConvexClient(this.onMutation);
 
-  final Future<String> Function(String name, Map<String, dynamic> args)
+  final Future<Object?> Function(String name, Map<String, Object?> args)
   onMutation;
 
   @override
-  Future<String> mutation({
-    required String name,
-    required Map<String, dynamic> args,
-  }) => onMutation(name, args);
+  Future<T> mutation<T>(
+    String name,
+    Map<String, Object?> args, {
+    CallOptions? options,
+  }) async => await onMutation(name, args) as T;
 
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);

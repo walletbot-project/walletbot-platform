@@ -3,28 +3,40 @@ import 'dart:convert';
 
 import 'package:app/auth/account.dart';
 import 'package:app/config.dart';
+import 'package:app/convex/convex_client.dart';
 import 'package:app/database.dart';
 import 'package:app/legal/legal_acceptance_payload.dart';
-import 'package:convex_flutter/convex_flutter.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:http/http.dart' as http;
 
 /// Owns the device's account list and the active Convex auth session.
-/// Auth refresh is delegated to `convex_flutter`'s `setAuthWithRefresh`.
+/// Token refresh scheduling is delegated to [ConvexClient.setAuth].
 class AuthController extends ChangeNotifier {
   AuthController({
+    ConvexClient? convex,
     http.Client? httpClient,
     FlutterSecureStorage? storage,
     String Function()? localeTag,
-  }) : _storage = storage ?? const FlutterSecureStorage(),
+  }) : _convex = convex,
+       _storage = storage ?? const FlutterSecureStorage(),
        _http = httpClient ?? http.Client(),
-       _localeTag = localeTag;
+       _localeTag = localeTag {
+    _authStateSub = convex?.authState.listen((state) {
+      final authenticated = state == AuthState.authenticated;
+      if (_convexAuthenticated == authenticated) return;
+      _convexAuthenticated = authenticated;
+      notifyListeners();
+    });
+  }
 
   static const _accountsKey = 'accounts';
   static const _activeIdKey = 'active_account_id';
 
+  /// Null only in tests that never exercise the Convex session (production
+  /// always wires one): auth attach/detach become no-ops without it.
+  final ConvexClient? _convex;
   final FlutterSecureStorage _storage;
   final http.Client _http;
 
@@ -39,7 +51,7 @@ class AuthController extends ChangeNotifier {
 
   List<UserAccount> _accounts = const [];
   String? _activeId;
-  AuthHandleWrapper? _authHandle;
+  StreamSubscription<AuthState>? _authStateSub;
   bool _convexAuthenticated = false;
   Future<void> _persistQueue = Future.value();
 
@@ -227,6 +239,7 @@ class AuthController extends ChangeNotifier {
 
   @override
   void dispose() {
+    unawaited(_authStateSub?.cancel());
     unawaited(_detachAuth());
     _http.close();
     super.dispose();
@@ -303,27 +316,29 @@ class AuthController extends ChangeNotifier {
         active.sessionToken == null) {
       return;
     }
-    _authHandle = await ConvexClient.instance.setAuthWithRefresh(
-      fetchToken: _fetchFreshAccessToken,
-      onAuthChange: (isAuthenticated) {
-        if (_convexAuthenticated == isAuthenticated) return;
-        _convexAuthenticated = isAuthenticated;
-        notifyListeners();
-      },
-    );
+    _convex?.setAuth(fetchToken: _fetchTokenForConvex);
   }
 
   Future<void> _detachAuth() async {
-    final handle = _authHandle;
-    _authHandle = null;
-    if (handle != null) {
-      handle.dispose();
-    }
     if (_convexAuthenticated) {
       _convexAuthenticated = false;
       notifyListeners();
     }
-    await ConvexClient.instance.setAuth(token: null);
+    _convex?.clearAuth();
+  }
+
+  /// [TokenFetcher] for the Convex client. Every `/auth/refresh` mints a
+  /// fresh 24 h JWT, so `forceRefresh` needs no special handling. Returning
+  /// null means "signed out, run unauthenticated": a 401 is a dead or deleted
+  /// session that retrying cannot fix (the marked account prompts re-auth),
+  /// while transient failures rethrow so the client retries on its own timer.
+  Future<String?> _fetchTokenForConvex({required bool forceRefresh}) async {
+    try {
+      return await _fetchFreshAccessToken();
+    } on AuthHttpError catch (e) {
+      if (e.statusCode == 401) return null;
+      rethrow;
+    }
   }
 
   Future<String?> _fetchFreshAccessToken() async {

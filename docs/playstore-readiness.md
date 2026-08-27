@@ -72,14 +72,11 @@ Google provider environment variables set.
 ### 5. No AAB has ever been produced; ABI coverage unverified
 
 Only `build/app/outputs/apk/release/app-release.apk` exists. Play requires an
-AAB for a new app. In that artifact, `libconvex_flutter.so`, `libapp.so` and
-`libflutter.so` are present **only for arm64-v8a**, and
-`build/convex_flutter/jniLibs/release/` contains just `arm64-v8a` (the debug
-equivalent has all four ABIs).
+AAB for a new app.
 
-A bundle that ships armeabi-v7a / x86_64 splits without the Rust lib crashes on
-load for those devices. Either confirm cargokit builds every ABI in release, or
-set `abiFilters` explicitly. Also unverified: drift's native-assets
+Update 2026-08-27: `convex_flutter` (and its Rust `libconvex_flutter.so`) was
+removed — the Convex client is now pure Dart (`apps/native/lib/convex/`), so
+the arm64-only Rust-lib risk is gone. Still unverified: drift's native-assets
 `libsqlite3.so` path through an `appbundle` build.
 
 ## Blockers — Play Console / policy
@@ -160,8 +157,9 @@ so the listing should be localized too.
 
 - `targetSdk` / `compileSdk` = 36, `minSdk` = 24 (Flutter 3.44 defaults) — meets
   Play's current API-level requirement.
-- **16 KB page-size compliance**: `libconvex_flutter.so` and `libsqlite3.so` both
-  report LOAD segment alignment `0x4000` (NDK 28.2.13676358). Mandatory for
+- **16 KB page-size compliance**: `libsqlite3.so` reports LOAD segment
+  alignment `0x4000` (NDK 28.2.13676358); `libconvex_flutter.so` no longer
+  ships (the Convex client is pure Dart since 2026-08-27). Mandatory for
   API 35+ targets; it passes.
 - Release keystore and `key.properties` exist locally, with a documented
   backup / restore procedure in `apps/native/README.md`.

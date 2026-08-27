@@ -66,9 +66,8 @@ void main() {
             ChangeNotifierProvider<LegalAcceptanceController>.value(
               value: controller,
             ),
-            // `.value`, so the provider does not dispose it: AuthController's
-            // dispose detaches Convex auth, and ConvexClient is never
-            // initialized under `flutter test`.
+            // `.value`, so the provider does not dispose it, same as the
+            // other AuthController fixtures in these tests.
             ChangeNotifierProvider<AuthController>.value(value: auth),
             Provider<AppDatabase>.value(value: db),
             ChangeNotifierProvider<DefaultCurrencyController>(
@@ -90,17 +89,19 @@ void main() {
     LegalDocumentKind document,
     String version,
   ) async {
-    await db.into(db.legalAcceptances).insert(
-      LegalAcceptancesCompanion.insert(
-        id: 'seed-${document.name}-$version',
-        document: document,
-        version: version,
-        acceptedAt: BigInt.from(1000),
-        ageConfirmed: const Value(true),
-        platform: 'android',
-        source: LegalAcceptanceSource.local,
-      ),
-    );
+    await db
+        .into(db.legalAcceptances)
+        .insert(
+          LegalAcceptancesCompanion.insert(
+            id: 'seed-${document.name}-$version',
+            document: document,
+            version: version,
+            acceptedAt: BigInt.from(1000),
+            ageConfirmed: const Value(true),
+            platform: 'android',
+            source: LegalAcceptanceSource.local,
+          ),
+        );
   }
 
   testWidgets('a first acceptance asks for both documents and blocks', (
@@ -127,10 +128,7 @@ void main() {
     await seedAcceptance(LegalDocumentKind.terms, '2026-08-06');
     await seedAcceptance(LegalDocumentKind.privacy, '2026-08-06');
 
-    await pumpGate(
-      tester,
-      versions: _versions(privacyCurrent: '2026-09-01'),
-    );
+    await pumpGate(tester, versions: _versions(privacyCurrent: '2026-09-01'));
 
     expect(find.text('Actualizamos la Política de Privacidad'), findsOneWidget);
     expect(find.text('Acepto la Política de Privacidad'), findsOneWidget);

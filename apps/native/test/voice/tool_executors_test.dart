@@ -190,34 +190,37 @@ void main() {
     expect((date.hour, date.minute), (17, 0));
   });
 
-  test('updateTransaction attaches/detaches tags and reports missing', () async {
-    await tools.execute('createAccount', {'name': 'Cash', 'currency': 'ARS'});
-    await tools.execute('createCategory', {'name': 'Food'});
-    await tools.execute('createTag', {'name': 'Work'});
-    final exp = await tools.execute('addExpense', {
-      'accountIdOrName': 'Cash',
-      'categoryIdOrName': 'Food',
-      'name': 'Lunch',
-      'amount': 10,
-    });
-    final txnId = exp['id'] as String;
+  test(
+    'updateTransaction attaches/detaches tags and reports missing',
+    () async {
+      await tools.execute('createAccount', {'name': 'Cash', 'currency': 'ARS'});
+      await tools.execute('createCategory', {'name': 'Food'});
+      await tools.execute('createTag', {'name': 'Work'});
+      final exp = await tools.execute('addExpense', {
+        'accountIdOrName': 'Cash',
+        'categoryIdOrName': 'Food',
+        'name': 'Lunch',
+        'amount': 10,
+      });
+      final txnId = exp['id'] as String;
 
-    final tagged = await tools.execute('updateTransaction', {
-      'id': txnId,
-      'addTagIdsOrNames': ['Work', 'Nope'],
-    });
-    expect(tagged['ok'], isTrue);
-    expect(tagged['missing'], ['Nope']);
-    expect(await repos.transactions.tagIdsOf(txnId), hasLength(1));
+      final tagged = await tools.execute('updateTransaction', {
+        'id': txnId,
+        'addTagIdsOrNames': ['Work', 'Nope'],
+      });
+      expect(tagged['ok'], isTrue);
+      expect(tagged['missing'], ['Nope']);
+      expect(await repos.transactions.tagIdsOf(txnId), hasLength(1));
 
-    final untagged = await tools.execute('updateTransaction', {
-      'id': txnId,
-      'removeTagIdsOrNames': ['Work'],
-    });
-    expect(untagged['ok'], isTrue);
-    expect(untagged.containsKey('missing'), isFalse);
-    expect(await repos.transactions.tagIdsOf(txnId), isEmpty);
-  });
+      final untagged = await tools.execute('updateTransaction', {
+        'id': txnId,
+        'removeTagIdsOrNames': ['Work'],
+      });
+      expect(untagged['ok'], isTrue);
+      expect(untagged.containsKey('missing'), isFalse);
+      expect(await repos.transactions.tagIdsOf(txnId), isEmpty);
+    },
+  );
 
   test('transfer validation envelopes', () async {
     await tools.execute('createAccount', {'name': 'Cash', 'currency': 'ARS'});

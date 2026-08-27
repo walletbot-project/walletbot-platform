@@ -2,15 +2,14 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
 
-import 'package:convex_flutter/convex_flutter.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:web_socket_channel/web_socket_channel.dart';
 
+import '../convex/convex_client.dart';
 import '../data/data.dart';
 import '../fx/fx_rates_controller.dart';
 import '../settings/display_settings.dart';
-import '../sync/wire.dart';
 import '../telemetry/agent_interaction_cost_tracker.dart';
 import '../telemetry/agent_metrics.dart';
 import '../user_settings/default_currency_controller.dart';
@@ -25,14 +24,16 @@ import 'voice_session_repository.dart';
 /// One-shot fetch of a constrained Gemini Live token from the backend,
 /// shared by the command's connect path and the factory's prefetch.
 ///
-/// The Convex-action attempt is bounded to 6 s: the action rides the Convex
-/// WebSocket, which can itself be mid-reconnect exactly when a voice
-/// reconnect needs a token (network loss, resume from background) — without
-/// the bound it would sit out the client's full 30 s operation timeout
-/// before falling back. The HTTP endpoint is transport-independent.
+/// Nothing about starting a voice session waits on the Convex socket. The
+/// action rides that socket, which can itself be mid-reconnect exactly when a
+/// voice reconnect needs a token (network loss, resume from background), so
+/// it is bounded to 6 s *and* runs as a one-shot HTTP POST whenever the
+/// socket is not ready, rather than queueing behind the reconnect. The
+/// `/v1/live/token` endpoint below is the last resort and is independent of
+/// the Convex client entirely.
 Future<String> _fetchLiveToken({
   required bool useAuthenticatedTokenAction,
-  required ConvexClient convexClient,
+  required ConvexClient? convexClient,
   required String? sessionToken,
   required String convexSiteUrl,
   Future<Map<String, Object?>> Function()? buildMintArgs,
@@ -53,19 +54,33 @@ Future<String> _fetchLiveToken({
     }
   }
   Map<String, Object?>? body;
-  if (useAuthenticatedTokenAction) {
+  var via = 'http_endpoint';
+  if (useAuthenticatedTokenAction && convexClient != null) {
+    final status = convexClient.currentConnectionState.status;
+    final ready = status == ConnectionStatus.ready;
+    onPhase?.call('token_action_start', {
+      'elapsedMs': fetchStopwatch.elapsedMilliseconds,
+      'connection': status.name,
+      'transport': ready ? 'convex_ws' : 'convex_http',
+    });
     try {
-      final raw = await convexClient
-          .action(name: 'v1/live/actions:requestLiveToken', args: mintArgs)
-          .timeout(const Duration(seconds: 6));
-      final decoded = decodeConvexResponse(raw);
+      final decoded = await convexClient.action<Object?>(
+        'v1/live/actions:requestLiveToken',
+        mintArgs,
+        options: const CallOptions(
+          operationTimeout: Duration(seconds: 6),
+          httpFallback: HttpFallback.whenNotReady,
+        ),
+      );
       if (decoded is! Map) {
         throw StateError('Malformed Convex live token response');
       }
       body = decoded.cast<String, Object?>();
+      via = ready ? 'convex_ws' : 'convex_http';
     } catch (error) {
       onPhase?.call('token_action_failed', {
         'elapsedMs': fetchStopwatch.elapsedMilliseconds,
+        'connection': status.name,
         'error': error.toString(),
       });
     }
@@ -100,6 +115,10 @@ Future<String> _fetchLiveToken({
   }
   onPhase?.call('token_received', {
     'elapsedMs': fetchStopwatch.elapsedMilliseconds,
+    // Which transport actually served it. A session that starts slowly is a
+    // different bug depending on this: `convex_ws` points at the socket,
+    // `http_endpoint` means the Convex action failed outright.
+    'via': via,
     'model': body['model']?.toString(),
     // Server-reported breakdown (google round trip, mint total, cold-start
     // module age, action/http totals): elapsedMs minus the server total is
@@ -121,11 +140,11 @@ class GeminiVoiceExpenseCommandFactory implements VoiceExpenseCommandFactory {
     this.displaySettings,
     this.defaultCurrency,
     this.fxRates,
-    ConvexClient? convexClient,
+    this.convexClient,
     this.apiKey = const String.fromEnvironment('GEMINI_API_KEY'),
     this.liveToken = const String.fromEnvironment('GEMINI_LIVE_TOKEN'),
     this.convexSiteUrl = const String.fromEnvironment('CONVEX_SITE_URL'),
-  }) : convexClient = convexClient ?? ConvexClient.instance;
+  });
 
   final AppRepositories repositories;
   final VoiceSessionRepository sessionRepository;
@@ -147,7 +166,11 @@ class GeminiVoiceExpenseCommandFactory implements VoiceExpenseCommandFactory {
 
   /// Device-scoped exchange-rate cache the `getExchangeRate` tool reads.
   final FxRatesController? fxRates;
-  final ConvexClient convexClient;
+
+  /// Null when the app runs without a Convex transport (widget tests, and a
+  /// local account without the authenticated action); the HTTP endpoint is
+  /// the only token source then.
+  final ConvexClient? convexClient;
   final String apiKey;
   final String liveToken;
   final String convexSiteUrl;
@@ -322,7 +345,7 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
   final AgentMetrics? agentMetrics;
   final bool useAuthenticatedTokenAction;
   final String? sessionToken;
-  final ConvexClient convexClient;
+  final ConvexClient? convexClient;
   final String apiKey;
   final String liveToken;
   final String convexSiteUrl;
