@@ -525,10 +525,20 @@ class ConvexClient {
             argsJson: argsJson,
           );
     final delivered = _socket.sendOrBuffer(message);
-    _emit(isMutation ? 'mutation.request' : 'action.request', {
+    final kind = isMutation ? 'mutation' : 'action';
+    final started = clock.now();
+    _emit('$kind.request', {
       'requestId': requestId,
       'udfPath': udfPath,
+      // False means there was no socket object at all, which is the whole
+      // reconnect-backoff window. A mutation registered then gets no timer
+      // unless the caller passed a connectTimeout, so it waits for the socket
+      // for as long as that takes; that wait is what makes an offline write
+      // survive. True covers both "on the wire" and "buffered on a socket
+      // that is not ready yet", and the latter is bounded by
+      // operationTimeout, not connectTimeout.
       'delivered': delivered,
+      'connection': _socket.status.name,
     });
     final future = _requests.register(
       requestId: requestId,
@@ -544,13 +554,43 @@ class ConvexClient {
         options.operationTimeout,
         config.defaultOperationTimeout,
       ),
+      // A mutation queued while offline must wait for the socket — that is
+      // the exactly-once guarantee. An action or query with an explicit
+      // bound must not.
+      boundBeforeSend: !isMutation && _isExplicit(options.operationTimeout),
     );
     if (!delivered) {
       // §5.1 trigger 4: a queued call caps a pending long backoff.
       _socket.nudge();
     }
+    // Attaching to the future rather than reaching into RequestManager keeps
+    // one exit point for every way a call can end: response, timeout,
+    // ConnectionLostError on restart, or the client being disposed. The
+    // derived future handles its own error, so this adds no unhandled-error
+    // path and the caller still sees the original.
+    unawaited(
+      future.then(
+        (_) => _emit('$kind.completed', {
+          'requestId': requestId,
+          'udfPath': udfPath,
+          'elapsedMs': clock.now().difference(started).inMilliseconds,
+        }),
+        onError: (Object error) => _emit('$kind.failed', {
+          'requestId': requestId,
+          'udfPath': udfPath,
+          'elapsedMs': clock.now().difference(started).inMilliseconds,
+          'error': error.toString(),
+        }),
+      ),
+    );
     return future;
   }
+
+  /// Whether the caller passed a real timeout rather than leaving the
+  /// [CallOptions.useDefault] sentinel in place.
+  static bool _isExplicit(Duration? value) =>
+      !identical(value, CallOptions.useDefault) &&
+      value != CallOptions.useDefault;
 
   static Duration? _resolveTimeout(Duration? value, Duration? configDefault) =>
       identical(value, CallOptions.useDefault) ||
@@ -807,21 +847,27 @@ class ConvexClient {
   ) async {
     final udfPath = normalizeUdfPath(name);
     final argsJson = convexArgsToJson(args);
-    final token = await _auth.validToken();
     final uri = Uri.parse(config.deploymentUrl).replace(path: '/api/$kind');
     _emit('http.fallback', {'kind': kind, 'udfPath': udfPath});
-    Future<HttpPostResponse> post = _httpPoster(
-      uri,
-      {
-        'Content-Type': 'application/json',
-        'Convex-Client': config.clientId,
-        if (token != null) 'Authorization': 'Bearer $token',
-      },
-      jsonEncode({
-        'path': udfPath,
-        'format': 'convex_encoded_json',
-        'args': [argsJson],
-      }),
+    final started = clock.now();
+    // The token lookup is part of the call, not a free preamble: it can miss
+    // the cache and go out to the auth fetcher, which has its own 15 s bound.
+    // Leaving it outside meant a caller's 6 s deadline could take 15 s plus
+    // the post before it ever fired.
+    Future<HttpPostResponse> post = _auth.validToken().then(
+      (token) => _httpPoster(
+        uri,
+        {
+          'Content-Type': 'application/json',
+          'Convex-Client': config.clientId,
+          if (token != null) 'Authorization': 'Bearer $token',
+        },
+        jsonEncode({
+          'path': udfPath,
+          'format': 'convex_encoded_json',
+          'args': [argsJson],
+        }),
+      ),
     );
     if (operationTimeout != null) {
       post = post.timeout(operationTimeout);
@@ -829,7 +875,18 @@ class ConvexClient {
     final HttpPostResponse response;
     try {
       response = await post;
+      _emit('http.completed', {
+        'kind': kind,
+        'udfPath': udfPath,
+        'elapsedMs': clock.now().difference(started).inMilliseconds,
+        'statusCode': response.statusCode,
+      });
     } on TimeoutException {
+      _emit('http.timeout', {
+        'kind': kind,
+        'udfPath': udfPath,
+        'elapsedMs': clock.now().difference(started).inMilliseconds,
+      });
       throw OperationTimeoutError(
         functionName: udfPath,
         phase: TimeoutPhase.operation,
@@ -837,6 +894,12 @@ class ConvexClient {
         connectionStatus: _socket.status,
       );
     } catch (error) {
+      _emit('http.failed', {
+        'kind': kind,
+        'udfPath': udfPath,
+        'elapsedMs': clock.now().difference(started).inMilliseconds,
+        'error': error.toString(),
+      });
       throw ConnectionLostError('http $kind failed: $error');
     }
     final Object? decoded;

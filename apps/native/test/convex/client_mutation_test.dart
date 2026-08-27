@@ -300,4 +300,43 @@ void main() {
       });
     },
   );
+  test('a per-call operationTimeout bounds a request that never got sent', () {
+    // The voice token action rides the Convex socket and is bounded to 6 s
+    // precisely because that socket can be mid-reconnect when a voice
+    // reconnect needs a token. When there is no socket at all the request
+    // was registered with no timer whatsoever — `sent` was false and the
+    // connectTimeout default is null — so the bound never applied and the
+    // call waited for the socket to come back. Observed on device as a
+    // 33.7 s token fetch.
+    fakeAsync((fake) {
+      final server = FakeConvexServer()..refuseNext = 100;
+      final h = makeClient(fake, server: server);
+      expect(
+        h.client.currentConnectionState.status,
+        isNot(ConnectionStatus.ready),
+      );
+
+      Object? error;
+      h.client
+          .action<Object?>(
+            'v1/live/actions:requestLiveToken',
+            const {},
+            options: const CallOptions(operationTimeout: Duration(seconds: 6)),
+          )
+          .catchError((Object e) {
+            error = e;
+            return null;
+          });
+      fake.flushMicrotasks();
+
+      fake.elapse(const Duration(seconds: 10));
+      expect(
+        error,
+        isA<OperationTimeoutError>(),
+        reason: 'the 6 s bound must apply even with no socket to send on',
+      );
+      h.client.dispose();
+      fake.flushMicrotasks();
+    });
+  });
 }

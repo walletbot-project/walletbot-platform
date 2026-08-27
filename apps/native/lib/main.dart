@@ -7,6 +7,7 @@ import 'package:app/auth/auth_controller.dart';
 import 'package:app/auth/account.dart';
 import 'package:app/auth/pop_on_account_switch.dart';
 import 'package:app/config.dart';
+import 'package:app/convex/client_log.dart';
 import 'package:app/convex/connectivity_hooks.dart';
 import 'package:app/convex/convex_client.dart';
 import 'package:app/data/data.dart';
@@ -66,6 +67,11 @@ Future<void> main() async {
     ),
   );
   ConvexConnectivityHooks(convex).attach();
+
+  // The client traces itself in detail and had no listener, so anything that
+  // went wrong with it on device was only visible through its symptoms. Off
+  // in release: the trace names UDF paths and runs a line per call.
+  if (!kReleaseMode) ConvexClientLog().attach(convex);
 
   // On web the client ID comes from the <meta name="google-signin-client_id">
   // tag in web/index.html, and serverClientId is not supported (the plugin

@@ -206,25 +206,6 @@ class VoiceSessionRepository {
   /// their BLOBs). Returns an empty list when no session is resumable — the
   /// same freshness rules as [openOrCreate], so a caller restoring UI state
   /// from this snapshot always matches the context the model will continue.
-  /// Conversation events of one specific session, for the transcript seed a
-  /// reconnect sends. Unlike [resumableConversationEvents] this is not gated
-  /// on a resume handle: the session is the one the command is *currently*
-  /// running, so it is resumable by definition. Gating it lost the entire
-  /// conversation whenever the socket dropped before Gemini's first
-  /// `sessionResumptionUpdate` arrived.
-  Future<List<VoiceSessionEvent>> conversationEventsForSession({
-    required String sessionId,
-    required Set<String> types,
-  }) =>
-      (db.select(db.voiceSessionEvents)
-            ..where(
-              (row) =>
-                  row.sessionId.equals(sessionId) &
-                  row.type.isIn(types.toList()),
-            )
-            ..orderBy([(row) => OrderingTerm.asc(row.sequence)]))
-          .get();
-
   Future<List<VoiceSessionEvent>> resumableConversationEvents({
     required Set<String> types,
   }) async {
@@ -264,6 +245,43 @@ class VoiceSessionRepository {
               (row) => OrderingTerm.asc(row.occurredAt),
               (row) => OrderingTerm.asc(row.sequence),
             ])
+            ..limit(limit))
+          .get();
+
+  /// Session that the oldest pending event belongs to, or null when the
+  /// outbox holds no events. Replication sends one session per mutation, so
+  /// this picks which one goes next.
+  Future<String?> nextUnsyncedEventSessionId() async {
+    final row =
+        await (db.select(db.voiceSessionEvents)
+              ..where((row) => row.remoteSynced.equals(false))
+              ..orderBy([
+                (row) => OrderingTerm.asc(row.occurredAt),
+                (row) => OrderingTerm.asc(row.sequence),
+              ])
+              ..limit(1))
+            .getSingleOrNull();
+    return row?.sessionId;
+  }
+
+  /// Pending events of one session, oldest first.
+  ///
+  /// The drain used to take the globally oldest rows and then discard
+  /// everything not belonging to the first row's session, so with more than
+  /// one session pending it read a full page and sent a fragment of it.
+  /// Scoping the query means a batch is a batch. The `{sessionId, sequence}`
+  /// unique key already indexes this, so it needs no schema change.
+  Future<List<VoiceSessionEvent>> unsyncedEventsForSession({
+    required String sessionId,
+    int limit = 200,
+  }) =>
+      (db.select(db.voiceSessionEvents)
+            ..where(
+              (row) =>
+                  row.sessionId.equals(sessionId) &
+                  row.remoteSynced.equals(false),
+            )
+            ..orderBy([(row) => OrderingTerm.asc(row.sequence)])
             ..limit(limit))
           .get();
 

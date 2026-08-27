@@ -15,6 +15,12 @@ import 'protocol.dart';
 /// On restart (§5.2): every in-flight mutation is resent — the server dedupes
 /// by (sessionId, requestId), making this exactly-once — and every in-flight
 /// action fails with [ConnectionLostError] (actions are not idempotent).
+///
+/// A queued mutation waits for a socket indefinitely on purpose: that is what
+/// makes an offline write survive to the next connection. Queries and actions
+/// carry no such guarantee, so an explicit per-call `operationTimeout` on one
+/// of those is treated as a total deadline that runs from registration
+/// ([register]'s `boundBeforeSend`), not only from the moment it is sent.
 
 enum RequestStatus { notSent, requested, completed }
 
@@ -75,6 +81,7 @@ class RequestManager {
     required bool sent,
     Duration? connectTimeout,
     Duration? operationTimeout,
+    bool boundBeforeSend = false,
   }) {
     final request = _InflightRequest(
       message: message,
@@ -93,6 +100,25 @@ class RequestManager {
             functionName: udfPath,
             phase: TimeoutPhase.connect,
             timeout: connectTimeout,
+            connectionStatus: connectionStatus(),
+          ),
+        );
+      });
+    } else if (boundBeforeSend && operationTimeout != null) {
+      // No socket to send on and no connectTimeout, so nothing above would
+      // have armed a timer at all and the call would wait for the socket to
+      // come back — the caller's explicit bound silently did not apply. The
+      // voice token action hit this on device: a 6 s bound that took 33.7 s
+      // because the Convex socket was itself mid-reconnect, which is exactly
+      // when the bound was meant to fire.
+      request.operationTimerStarted = true;
+      request.operationTimer = Timer(operationTimeout, () {
+        _fail(
+          requestId,
+          OperationTimeoutError(
+            functionName: udfPath,
+            phase: TimeoutPhase.operation,
+            timeout: operationTimeout,
             connectionStatus: connectionStatus(),
           ),
         );
