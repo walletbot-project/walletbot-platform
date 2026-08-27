@@ -1,0 +1,30 @@
+http:
+  routers:
+    livekit-signal:
+      rule: Host(`livekit.walletbot.live`)
+      entryPoints:
+        - websecure
+      service: livekit-signal
+      tls:
+        certResolver: letsencrypt
+  services:
+    livekit-signal:
+      loadBalancer:
+        passHostHeader: true
+        servers:
+          - url: http://__HOST_IP__:7880
+
+tcp:
+  routers:
+    livekit-turn:
+      rule: HostSNI(`turn.walletbot.live`)
+      entryPoints:
+        - websecure
+      service: livekit-turn
+      tls:
+        certResolver: letsencrypt
+  services:
+    livekit-turn:
+      loadBalancer:
+        servers:
+          - address: __HOST_IP__:5349
