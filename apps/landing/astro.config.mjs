@@ -52,11 +52,11 @@ export default defineConfig({
         },
     },
 
-    // `/` has no content of its own and is deliberately absent from the build.
-    // `functions/index.ts` owns it, negotiating `Accept-Language` into a 302.
-    // Neither Astro mechanism can do that: `redirects` here only emits a
-    // meta-refresh page without an adapter, and
-    // `i18n.routing.redirectToDefaultLocale` both demands a root
+    // The unprefixed paths (`/`, `/privacy`, `/terms`) have no content of their
+    // own and are deliberately absent from the build. `functions/` owns them,
+    // negotiating `Accept-Language` into a 302. Neither Astro mechanism can do
+    // that: `redirects` here only emits a meta-refresh page without an adapter,
+    // and `i18n.routing.redirectToDefaultLocale` both demands a root
     // `src/pages/index.astro` and can only ever pick the default locale.
 
     markdown: {

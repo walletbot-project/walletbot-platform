@@ -17,8 +17,8 @@ export const LOCALE_LABELS: Record<Locale, string> = {
 
 /**
  * Whether a raw string is one of the locales this site ships. Exported for
- * `functions/index.ts`, which negotiates `Accept-Language` tags at the edge and
- * needs to narrow them without falling back to the default.
+ * `src/lib/locale-redirect.ts`, which negotiates `Accept-Language` tags at the
+ * edge and needs to narrow them without falling back to the default.
  */
 export const isLocale = (value: string): value is Locale =>
     LOCALES.some((locale) => locale === value)
