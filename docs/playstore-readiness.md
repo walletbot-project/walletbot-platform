@@ -69,7 +69,7 @@ the Play-managed fingerprint.
 Unverified from the repo: whether the production Convex deployment has the
 Google provider environment variables set.
 
-### 5. No AAB has ever been produced; ABI coverage unverified
+### 5. No AAB has ever been produced; ABI coverage unverified (resolved 2026-08-28)
 
 Only `build/app/outputs/apk/release/app-release.apk` exists. Play requires an
 AAB for a new app.
@@ -78,6 +78,19 @@ Update 2026-08-27: `convex_flutter` (and its Rust `libconvex_flutter.so`) was
 removed — the Convex client is now pure Dart (`apps/native/lib/convex/`), so
 the arm64-only Rust-lib risk is gone. Still unverified: drift's native-assets
 `libsqlite3.so` path through an `appbundle` build.
+
+Update 2026-08-28: `flutter build appbundle --release` was run and succeeds,
+producing a 73.0 MB bundle. Drift's `libsqlite3.so` does survive the
+native-assets path and ships for all three ABIs (`arm64-v8a` 1,717,000 B,
+`armeabi-v7a` 1,694,816 B, `x86_64` 1,694,936 B), next to `libflutter.so`,
+`libapp.so`, `libdartjni.so` and `libdatastore_shared_counter.so`. The bundle
+is signed `CN=Wallet Bot` (SHA-256 `14:3D:A9:C2:2E:77:...`), and
+`.github/workflows/prod-deploy.yml` now publishes it to the `production-latest`
+release on every push to `main`, so an AAB exists for the first Play upload.
+
+Worth noting for the store listing: the universal APK is 71.2 MB because it
+carries `libflutter.so` and `libapp.so` three times over, once per ABI. Play
+splits the bundle per device, which cuts the actual download to roughly 25 MB.
 
 ## Blockers — Play Console / policy
 
@@ -177,5 +190,3 @@ so the listing should be localized too.
 
 - Whether the production Convex deployment has its auth and Gemini environment
   variables set.
-- Whether `flutter build appbundle --release` succeeds — no bundle build was
-  run.

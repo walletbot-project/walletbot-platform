@@ -445,6 +445,28 @@ jobs:
       # (instead of Flutter's default of armv7+arm64+x86_64+x86) quarters the
       # convex_flutter Rust cross-compilation, which is what exhausted runner
       # disk space when building all four.
+      # The APK must be signed with the real release key. Gradle now fails the
+      # build outright when key.properties is absent on CI rather than falling
+      # back to the runner's throwaway debug key, which produced APKs that
+      # could not be installed over any other build of the app.
+      - name: Restore release keystore
+        working-directory: apps/native/android
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+        run: |
+          set -euo pipefail
+          mkdir -p keystore
+          printf '%s' "$KEYSTORE_B64" | base64 -d > keystore/release.jks
+          {
+            printf 'storeFile=keystore/release.jks\n'
+            printf 'storePassword=%s\n' "$STORE_PASSWORD"
+            printf 'keyAlias=%s\n' "$KEY_ALIAS"
+            printf 'keyPassword=%s\n' "$KEY_PASSWORD"
+          } > key.properties
+
       - name: Build staging APK
         working-directory: apps/native
         env:
