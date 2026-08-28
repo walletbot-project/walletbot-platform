@@ -986,6 +986,9 @@ class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
                       itemBuilder: (context, i) {
                         final item = _items[i];
                         return Padding(
+                          // The report icon's fade keeps state, so its element
+                          // has to track the item and not the row index.
+                          key: ObjectKey(item),
                           padding: const EdgeInsets.symmetric(vertical: 6),
                           child: _ChatItemView(
                             item: item,
@@ -1324,7 +1327,12 @@ class _AgentBubble extends StatelessWidget {
                         ),
                       ),
                       if (showReportButton && text.isNotEmpty && !item.reported)
-                        _ReportBubbleButton(onPressed: () => onReport(item)),
+                        _DelayedFadeIn(
+                          show: item.isFinal,
+                          child: _ReportBubbleButton(
+                            onPressed: () => onReport(item),
+                          ),
+                        ),
                     ],
                   ),
                   if (item.reported) ...[
@@ -1528,6 +1536,86 @@ class _SystemLine extends StatelessWidget {
       ),
     );
   }
+}
+
+/// How long after a response finishes before its report control appears, and
+/// how long the fade itself takes. The delay keeps the icon from arriving
+/// mid-sentence, when there is not yet a finished answer to report.
+const _reportRevealDelay = Duration(milliseconds: 1000);
+const _reportFadeDuration = Duration(milliseconds: 300);
+
+/// Fades [child] in once [show] turns true, [_reportRevealDelay] later.
+///
+/// Occupies its space from the first build, so the bubble beside it never
+/// reflows when the icon arrives. While invisible it takes no taps and puts
+/// nothing in the semantics tree: an unseen button is worse than no button,
+/// both for a stray tap mid-response and for a screen reader announcing a
+/// control nobody can see.
+///
+/// Driven by a controller rather than a `Timer` so the animation settles under
+/// `pumpAndSettle` and leaves nothing pending when a test ends.
+class _DelayedFadeIn extends StatefulWidget {
+  const _DelayedFadeIn({required this.show, required this.child});
+  final bool show;
+  final Widget child;
+
+  @override
+  State<_DelayedFadeIn> createState() => _DelayedFadeInState();
+}
+
+class _DelayedFadeInState extends State<_DelayedFadeIn>
+    with SingleTickerProviderStateMixin {
+  // Not const: adding two Durations is not a constant expression.
+  static final _total = _reportRevealDelay + _reportFadeDuration;
+
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: _total,
+  );
+  late final Animation<double> _fade = CurvedAnimation(
+    parent: _controller,
+    curve: Interval(
+      _reportRevealDelay.inMilliseconds / _total.inMilliseconds,
+      1,
+      curve: Curves.easeOut,
+    ),
+  );
+
+  @override
+  void initState() {
+    super.initState();
+    // Already finished at the first build means restored history, which would
+    // otherwise fade every bubble in a second after the screen opens.
+    if (widget.show) _controller.value = 1;
+  }
+
+  @override
+  void didUpdateWidget(_DelayedFadeIn oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.show && !oldWidget.show) _controller.forward(from: 0);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => AnimatedBuilder(
+    animation: _fade,
+    child: widget.child,
+    builder: (context, child) {
+      final visible = _fade.value > 0;
+      return IgnorePointer(
+        ignoring: !visible,
+        child: ExcludeSemantics(
+          excluding: !visible,
+          child: Opacity(opacity: _fade.value, child: child),
+        ),
+      );
+    },
+  );
 }
 
 /// The flag icon beside an agent bubble: the discoverable way to report a

@@ -255,6 +255,15 @@ function AgentBubble({
                          * all on a touch screen or to a keyboard user scanning
                          * the page. Centred on the bubble, outside it, so the
                          * hit area never competes with selecting the text.
+                         *
+                         * It holds its space from the first token but stays
+                         * `invisible` until the turn ends, so the bubble never
+                         * reflows and there is no control to hit while there is
+                         * still nothing finished to report. `visibility:hidden`
+                         * also keeps it out of the tab order and off the
+                         * accessibility tree, which `opacity-0` would not.
+                         * `fill-mode-backwards` holds it transparent through
+                         * the delay instead of flashing it first.
                          */}
                         {showReportButton && text && !message.reported && (
                             <button
@@ -262,7 +271,12 @@ function AgentBubble({
                                 aria-label={t.agentReport.action}
                                 title={t.agentReport.action}
                                 onClick={() => onReport(message)}
-                                className="shrink-0 rounded-full p-2 text-muted-foreground opacity-60 transition-opacity hover:opacity-100 focus-visible:opacity-100"
+                                className={cn(
+                                    'shrink-0 rounded-full p-2 text-muted-foreground opacity-60 transition-opacity hover:opacity-100 focus-visible:opacity-100',
+                                    message.isFinal
+                                        ? 'animate-in fade-in delay-1000 duration-300 fill-mode-backwards'
+                                        : 'invisible',
+                                )}
                             >
                                 <Icon name="flag" size={16} />
                             </button>

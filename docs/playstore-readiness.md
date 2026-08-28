@@ -116,7 +116,10 @@ This audit missed it originally. It now exists on both platforms. Every agent
 response carries a flag icon beside its bubble, vertically centred on it
 (`apps/native/lib/screens/voice.dart`, `apps/web/src/pages/add.tsx`) — a visible
 control rather than a hover or a gesture, because a reporting mechanism nobody
-can find is not one the policy accepts. It sits outside the bubble so its hit
+can find is not one the policy accepts. It fades in a second after the turn
+finishes and holds its space before then, so the bubble never reflows and there
+is no control to hit while the answer is still being written. Restored history
+skips the delay: those turns are already finished. It sits outside the bubble so its hit
 area never competes with selecting the text, and native gives it the full 48x48
 tap target. Native also keeps the long-press action sheet, and the chat app bar
 carries a session-scoped fallback for a reply that was audio-only or has

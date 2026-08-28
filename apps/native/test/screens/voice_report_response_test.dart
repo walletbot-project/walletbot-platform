@@ -104,6 +104,43 @@ void main() {
     expect(find.byIcon(Icons.flag_outlined), findsOneWidget);
   });
 
+  testWidgets('the icon waits for the response to finish, then fades in', (
+    tester,
+  ) async {
+    final command = _ActiveVoiceCommand();
+    await tester.pumpWidget(_voiceApp(command));
+
+    // Pumped mid-response, so the bubble actually renders while streaming
+    // instead of arriving already finalised in one drain.
+    command.emit(VoiceAgentTranscriptDelta('here is a bad answer'));
+    await tester.pump();
+    expect(_reportOpacity(tester), 0, reason: 'nothing finished to report yet');
+
+    command.emit(VoiceAgentTurnComplete());
+    await tester.pump();
+    expect(_reportOpacity(tester), 0, reason: 'still inside the delay');
+
+    await tester.pump(const Duration(milliseconds: 1000));
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(_reportOpacity(tester), 1);
+  });
+
+  testWidgets('the icon is there immediately for restored history', (
+    tester,
+  ) async {
+    final command = _ActiveVoiceCommand();
+    await tester.pumpWidget(_voiceApp(command));
+
+    // Both events in one drain: the bubble is final on its first build, the
+    // way a restored transcript is. Delaying those would fade every bubble in
+    // a second after the screen opens.
+    command.emit(VoiceAgentTranscriptDelta('here is a bad answer'));
+    command.emit(VoiceAgentTurnComplete());
+    await tester.pump();
+
+    expect(_reportOpacity(tester), 1);
+  });
+
   testWidgets('tapping the flag icon opens the sheet', (tester) async {
     final command = _ActiveVoiceCommand();
     await tester.pumpWidget(_voiceApp(command));
@@ -195,6 +232,19 @@ void main() {
     expect(find.text('Report this response'), findsNothing);
   });
 }
+
+/// The opacity the report icon is currently drawn at, read off the fade that
+/// wraps it.
+double _reportOpacity(WidgetTester tester) => tester
+    .widget<Opacity>(
+      find
+          .ancestor(
+            of: find.byIcon(Icons.flag_outlined),
+            matching: find.byType(Opacity),
+          )
+          .first,
+    )
+    .opacity;
 
 const _localAccount = UserAccount(
   id: 'local-1',
