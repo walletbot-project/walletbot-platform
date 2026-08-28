@@ -1,17 +1,108 @@
-name: Deploy Preview
+name: Staging Previews
 
+# Every job below is gated behind a PR label so staging environments are
+# opt-in and don't burn Convex/Cloudflare preview quota on every PR:
+#   - create-staging-web      -> backend preview + web Pages preview
+#   - create-staging-landing  -> landing Pages preview
+#   - create-staging-mobile   -> staging APK connected to the PR's backend
+#                                preview (also brings up create-staging-web's
+#                                backend + web preview, since the APK needs a
+#                                backend to talk to)
+# Removing a label tears down what it created. Since create-staging-mobile
+# implies the web job, the backend + web preview are only torn down once
+# BOTH create-staging-web and create-staging-mobile are absent.
+#
+# On a `synchronize` push, `web` and `mobile` redeploy independently based on
+# which paths that specific push touched (see the `changes` job) — a
+# native-only commit doesn't recreate the backend preview (which would wipe
+# its data), and a backend-only commit doesn't rebuild the APK.
 on:
   pull_request:
     branches:
       - main
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - labeled
+      - unlabeled
+
+concurrency:
+  group: staging-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
 
 jobs:
-  deploy:
+  # Backend/web and mobile redeploy independently of each other based on what
+  # a `synchronize` push actually touched, so a native-only commit doesn't
+  # recreate the (data-wiping) backend preview, and a backend-only commit
+  # doesn't rebuild the APK. `labeled`/`opened`/`reopened`/`unlabeled` have no
+  # meaningful single-push diff, so those always mark everything changed —
+  # correct, since those are exactly the events that need to create things.
+  changes:
     runs-on: ubuntu-latest
+    if: |
+      contains(github.event.pull_request.labels.*.name, 'create-staging-web') ||
+      contains(github.event.pull_request.labels.*.name, 'create-staging-mobile')
     permissions:
       contents: read
-      deployments: write
+    outputs:
+      backend: ${{ steps.filter.outputs.backend }}
+      native: ${{ steps.filter.outputs.native }}
+    steps:
+      - name: Detect changed areas
+        id: filter
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          EVENT_ACTION: ${{ github.event.action }}
+        run: |
+          set -uo pipefail
+
+          if [ "$EVENT_ACTION" != "synchronize" ]; then
+            echo "backend=true" >> "$GITHUB_OUTPUT"
+            echo "native=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          files="$(gh api "repos/${{ github.repository }}/compare/${{ github.event.before }}...${{ github.event.after }}" --jq '.files[].filename')"
+          if [ $? -ne 0 ]; then
+            echo "::warning::Could not diff ${{ github.event.before }}...${{ github.event.after }}; treating as changed"
+            echo "backend=true" >> "$GITHUB_OUTPUT"
+            echo "native=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          backend=false
+          native=false
+          while IFS= read -r f; do
+            [ -z "$f" ] && continue
+            case "$f" in
+              packages/backend/*|packages/shared/*|apps/web/*|.github/workflows/preview-deploy.yml|.github/actions/*)
+                backend=true ;;
+            esac
+            case "$f" in
+              apps/native/*|.github/workflows/preview-deploy.yml|.github/actions/*)
+                native=true ;;
+            esac
+          done <<< "$files"
+
+          echo "backend=$backend" >> "$GITHUB_OUTPUT"
+          echo "native=$native" >> "$GITHUB_OUTPUT"
+
+  web:
+    needs: changes
+    runs-on: ubuntu-latest
+    if: |
+      (contains(github.event.pull_request.labels.*.name, 'create-staging-web') ||
+       contains(github.event.pull_request.labels.*.name, 'create-staging-mobile')) &&
+      needs.changes.outputs.backend == 'true'
+    permissions:
+      contents: read
       pull-requests: write
+    outputs:
+      branch_name: ${{ steps.branch.outputs.name }}
+      convex_url: ${{ steps.backend.outputs.convex_url }}
+      convex_site_url: ${{ steps.backend.outputs.convex_site_url }}
+      web_url: ${{ steps.deploy.outputs.pages-deployment-alias-url }}
     steps:
       - uses: actions/checkout@v4
 
@@ -25,19 +116,8 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
-      # github.head_ref is attacker-controlled (anyone can open a PR from a branch
-      # whose name contains shell metacharacters). Sanitize it once to a safe token
-      # — [A-Za-z0-9._-] only — so it can't inject into the shell steps or the
-      # wrangler command below. For normal branch names this is a no-op, so the
-      # Convex preview identifier (and thus its persisted data) is unchanged.
-      - name: Resolve branch name
+      - uses: ./.github/actions/resolve-pr-branch
         id: branch
-        env:
-          HEAD_REF: ${{ github.head_ref }}
-        run: |
-          set -euo pipefail
-          safe="$(printf '%s' "$HEAD_REF" | tr -c 'A-Za-z0-9._-' '-')"
-          echo "name=$safe" >> "$GITHUB_OUTPUT"
 
       # PRs get an isolated, ephemeral backend preview deployment. Creates/updates
       # the preview (named after the branch), captures its .convex.cloud URL, and
@@ -45,6 +125,7 @@ jobs:
       # .convex.cloud). SITE_URL is set LATER, after the web deploy reveals the
       # real preview web origin.
       - name: Deploy backend preview
+        id: backend
         working-directory: packages/backend
         env:
           CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_PREVIEW_DEPLOY_KEY }}
@@ -57,11 +138,20 @@ jobs:
             --cmd 'printf "%s" "$CONVEX_URL_OUT" > "$RUNNER_TEMP/convex_url"'
 
           URL="$(cat "$RUNNER_TEMP/convex_url")"
+          SITE_URL="${URL/.convex.cloud/.convex.site}"
+          NAME="$(printf '%s' "$URL" | sed -E 's#https?://([^.]+)\..*#\1#')"
+
           {
-            echo "CONVEX_PREVIEW_NAME=$(printf '%s' "$URL" | sed -E 's#https?://([^.]+)\..*#\1#')"
+            echo "CONVEX_PREVIEW_NAME=$NAME"
             echo "VITE_CONVEX_URL=$URL"
-            echo "VITE_CONVEX_SITE_URL=${URL/.convex.cloud/.convex.site}"
+            echo "VITE_CONVEX_SITE_URL=$SITE_URL"
           } >> "$GITHUB_ENV"
+
+          {
+            echo "convex_preview_name=$NAME"
+            echo "convex_url=$URL"
+            echo "convex_site_url=$SITE_URL"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Build web app
         working-directory: apps/web
@@ -88,9 +178,117 @@ jobs:
           npx convex env set SITE_URL "${{ steps.deploy.outputs.pages-deployment-alias-url }}" \
             --deployment "$CONVEX_PREVIEW_NAME"
 
+      - uses: ./.github/actions/sticky-pr-comment
+        with:
+          marker: staging-web
+          body: |
+            🚀 **Web staging preview deployed**
+
+            - **App**: ${{ steps.deploy.outputs.pages-deployment-alias-url }}
+
+            _Use this stable branch-alias URL — per-commit `<hash>.pages.dev` URLs are not trusted by the backend and will CORS-fail. Remove the `create-staging-web` label to tear this down (it also comes down automatically if `create-staging-mobile` is removed and no longer present)._
+
+  destroy-web:
+    runs-on: ubuntu-latest
+    if: |
+      github.event.action == 'unlabeled' &&
+      (github.event.label.name == 'create-staging-web' || github.event.label.name == 'create-staging-mobile') &&
+      !contains(github.event.pull_request.labels.*.name, 'create-staging-web') &&
+      !contains(github.event.pull_request.labels.*.name, 'create-staging-mobile')
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ./.github/actions/resolve-pr-branch
+        id: branch
+
+      # There is no CLI flag for this — Convex's Management API is the only
+      # documented way to delete a preview deployment programmatically
+      # (docs.convex.dev/management-api/delete-deployment). It requires a Team
+      # Access Token (Convex dashboard -> team settings), not the preview
+      # deploy key used above.
+      - name: Delete Convex preview deployment
+        env:
+          CONVEX_TEAM_ACCESS_TOKEN: ${{ secrets.CONVEX_TEAM_ACCESS_TOKEN }}
+          CONVEX_TEAM_SLUG: ${{ vars.CONVEX_TEAM_SLUG }}
+          CONVEX_PROJECT_SLUG: ${{ vars.CONVEX_PROJECT_SLUG }}
+          BRANCH_NAME: ${{ steps.branch.outputs.name }}
+        run: |
+          set -euo pipefail
+
+          project_id="$(curl -sf \
+            -H "Authorization: Bearer $CONVEX_TEAM_ACCESS_TOKEN" \
+            "https://api.convex.dev/v1/teams/$CONVEX_TEAM_SLUG/projects/$CONVEX_PROJECT_SLUG/deployment?defaultProd=true" \
+            | jq -r '.projectId')"
+
+          names="$(curl -sf \
+            -H "Authorization: Bearer $CONVEX_TEAM_ACCESS_TOKEN" \
+            "https://api.convex.dev/v1/projects/$project_id/list_deployments?deploymentType=preview" \
+            | jq -r --arg branch "$BRANCH_NAME" '.[] | select(.previewIdentifier == $branch) | .name')"
+
+          if [ -z "$names" ]; then
+            echo "No Convex preview deployment found for branch $BRANCH_NAME"
+          fi
+
+          for name in $names; do
+            echo "Deleting Convex preview deployment $name"
+            curl -sf -X POST \
+              -H "Authorization: Bearer $CONVEX_TEAM_ACCESS_TOKEN" \
+              "https://api.convex.dev/v1/deployments/$name/delete"
+          done
+
+      - name: Delete Cloudflare Pages preview deployments (web)
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          BRANCH_NAME: ${{ steps.branch.outputs.name }}
+        run: |
+          set -euo pipefail
+          ids="$(npx --yes wrangler@4 pages deployment list --project-name=walletbot-platform --environment=preview --json \
+            | jq -r --arg branch "$BRANCH_NAME" '.[] | select(.deployment_trigger.metadata.branch == $branch) | .id')"
+
+          if [ -z "$ids" ]; then
+            echo "No Cloudflare Pages preview deployments found for branch $BRANCH_NAME"
+          fi
+
+          for id in $ids; do
+            echo "Deleting Cloudflare Pages deployment $id"
+            npx --yes wrangler@4 pages deployment delete "$id" --project-name=walletbot-platform -f
+          done
+
+      - uses: ./.github/actions/sticky-pr-comment
+        with:
+          marker: staging-web
+          body: |
+            🗑️ **Web staging preview removed**
+
+  landing:
+    runs-on: ubuntu-latest
+    if: contains(github.event.pull_request.labels.*.name, 'create-staging-landing')
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "pnpm"
+          cache-dependency-path: pnpm-lock.yaml
+
+      - run: pnpm install --frozen-lockfile
+
+      - uses: ./.github/actions/resolve-pr-branch
+        id: branch
+
       # The landing has no backend preview to pair with — it is fully static
       # apart from the Accept-Language redirect on `/` — so it deploys
-      # independently of everything above.
+      # independently of the web/backend job above.
       - name: Build landing
         working-directory: apps/landing
         run: pnpm run build
@@ -100,7 +298,7 @@ jobs:
       # repo root would silently ship the site without `functions/index.ts` — and
       # `/` would 404 instead of redirecting.
       - name: Deploy landing preview
-        id: deploy-landing
+        id: deploy
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -108,19 +306,226 @@ jobs:
           workingDirectory: apps/landing
           command: pages deploy dist --project-name=walletbot-landing --branch=${{ steps.branch.outputs.name }}
 
-      - name: Comment preview URLs on PR
-        uses: actions/github-script@v7
+      - uses: ./.github/actions/sticky-pr-comment
         with:
-          script: |
-            await github.rest.issues.createComment({
-              issue_number: context.issue.number,
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              body: `🚀 Preview deployed\n\n- **App**: ${process.env.DEPLOYMENT_URL}\n- **Landing**: ${process.env.LANDING_URL}\n\n_Use these stable branch-alias URLs — per-commit \`<hash>.pages.dev\` URLs are not trusted by the backend and will CORS-fail._`
-            })
+          marker: staging-landing
+          body: |
+            🚀 **Landing staging preview deployed**
+
+            - **Landing**: ${{ steps.deploy.outputs.pages-deployment-alias-url }}
+
+  destroy-landing:
+    runs-on: ubuntu-latest
+    if: github.event.action == 'unlabeled' && github.event.label.name == 'create-staging-landing'
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ./.github/actions/resolve-pr-branch
+        id: branch
+
+      - name: Delete Cloudflare Pages preview deployments (landing)
         env:
-          # The stable branch-alias URL the web host issued (matches the backend
-          # SITE_URL set above). NOT the per-commit deployment-url, and NOT the
-          # unconfigured *.prev.walletbot.live domain.
-          DEPLOYMENT_URL: ${{ steps.deploy.outputs.pages-deployment-alias-url }}
-          LANDING_URL: ${{ steps.deploy-landing.outputs.pages-deployment-alias-url }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          BRANCH_NAME: ${{ steps.branch.outputs.name }}
+        run: |
+          set -euo pipefail
+          ids="$(npx --yes wrangler@4 pages deployment list --project-name=walletbot-landing --environment=preview --json \
+            | jq -r --arg branch "$BRANCH_NAME" '.[] | select(.deployment_trigger.metadata.branch == $branch) | .id')"
+
+          if [ -z "$ids" ]; then
+            echo "No Cloudflare Pages preview deployments found for branch $BRANCH_NAME"
+          fi
+
+          for id in $ids; do
+            echo "Deleting Cloudflare Pages deployment $id"
+            npx --yes wrangler@4 pages deployment delete "$id" --project-name=walletbot-landing -f
+          done
+
+      - uses: ./.github/actions/sticky-pr-comment
+        with:
+          marker: staging-landing
+          body: |
+            🗑️ **Landing staging preview removed**
+
+  mobile:
+    needs: [web, changes]
+    runs-on: ubuntu-latest
+    if: |
+      contains(github.event.pull_request.labels.*.name, 'create-staging-mobile') &&
+      needs.changes.outputs.native == 'true' &&
+      (needs.web.result == 'success' || needs.web.result == 'skipped')
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ./.github/actions/resolve-pr-branch
+        id: branch
+
+      # `web` only redeploys the backend when this push touched backend/web
+      # paths (see the `changes` job) — most pushes to a native-only PR won't.
+      # When it was skipped, look up the already-running preview's URL instead
+      # of redeploying it (redeploying would wipe the preview's data on every
+      # unrelated native commit).
+      - name: Resolve existing backend preview URL
+        id: existing-backend
+        if: needs.web.result == 'skipped'
+        env:
+          CONVEX_TEAM_ACCESS_TOKEN: ${{ secrets.CONVEX_TEAM_ACCESS_TOKEN }}
+          CONVEX_TEAM_SLUG: ${{ vars.CONVEX_TEAM_SLUG }}
+          CONVEX_PROJECT_SLUG: ${{ vars.CONVEX_PROJECT_SLUG }}
+          BRANCH_NAME: ${{ steps.branch.outputs.name }}
+        run: |
+          set -euo pipefail
+
+          project_id="$(curl -sf \
+            -H "Authorization: Bearer $CONVEX_TEAM_ACCESS_TOKEN" \
+            "https://api.convex.dev/v1/teams/$CONVEX_TEAM_SLUG/projects/$CONVEX_PROJECT_SLUG/deployment?defaultProd=true" \
+            | jq -r '.projectId')"
+
+          url="$(curl -sf \
+            -H "Authorization: Bearer $CONVEX_TEAM_ACCESS_TOKEN" \
+            "https://api.convex.dev/v1/projects/$project_id/list_deployments?deploymentType=preview" \
+            | jq -r --arg branch "$BRANCH_NAME" '[.[] | select(.previewIdentifier == $branch)][0].deploymentUrl // empty')"
+
+          if [ -z "$url" ]; then
+            echo "::error::No existing Convex preview deployment found for branch $BRANCH_NAME — add the create-staging-web label (or push a backend change) at least once before mobile-only pushes can resolve its URL."
+            exit 1
+          fi
+
+          {
+            echo "convex_url=$url"
+            echo "convex_site_url=${url/.convex.cloud/.convex.site}"
+          } >> "$GITHUB_OUTPUT"
+
+      # convex_flutter cross-compiles a Rust binary per target ABI, which is
+      # heavy on disk. GitHub-hosted runners ship with a lot of preinstalled
+      # toolchains (dotnet, ghc, extra Docker images) that this job never uses
+      # — free that up before installing Flutter, so it can't touch anything
+      # the build actually needs (e.g. $AGENT_TOOLSDIRECTORY, which is where
+      # flutter-action's cache below puts the SDK).
+      - name: Free up runner disk space
+        run: |
+          set -uo pipefail
+          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/share/boost
+          docker image prune -a -f || true
+          df -h /
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: 3.41.6
+          cache: true
+
+      # .env is gitignored but declared as a Flutter asset — the build needs it
+      # to exist, and non-empty: flutter_dotenv throws EmptyEnvFileError on a
+      # zero-byte file, crashing the app before runApp() ever runs. The actual
+      # backend URLs come from --dart-define below, which wins over these
+      # placeholder .env values — see apps/native/lib/config.dart.
+      - run: cp .env.example .env
+        working-directory: apps/native
+
+      - run: flutter pub get
+        working-directory: apps/native
+
+      # --debug, not --release: apps/native/lib/app_config/bootstrap.dart only
+      # skips the L0 bootstrap fetch (which always wins in release builds and
+      # would silently redirect this APK to production once it succeeds) when
+      # `!kReleaseMode && AppConfig.hasConfiguredBackendUrls` — i.e. a debug
+      # build with these --dart-define values honors them instead of
+      # overriding them from https://app.walletbot.live/_native/bootstrap.json.
+      #
+      # --target-platform android-arm64: this APK is only for testers on real
+      # devices/emulators, virtually all arm64 today. Building just one ABI
+      # (instead of Flutter's default of armv7+arm64+x86_64+x86) quarters the
+      # convex_flutter Rust cross-compilation, which is what exhausted runner
+      # disk space when building all four.
+      # The APK must be signed with the real release key. Gradle now fails the
+      # build outright when key.properties is absent on CI rather than falling
+      # back to the runner's throwaway debug key, which produced APKs that
+      # could not be installed over any other build of the app.
+      - name: Restore release keystore
+        working-directory: apps/native/android
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+        run: |
+          set -euo pipefail
+          mkdir -p keystore
+          printf '%s' "$KEYSTORE_B64" | base64 -d > keystore/release.jks
+          {
+            printf 'storeFile=keystore/release.jks\n'
+            printf 'storePassword=%s\n' "$STORE_PASSWORD"
+            printf 'keyAlias=%s\n' "$KEY_ALIAS"
+            printf 'keyPassword=%s\n' "$KEY_PASSWORD"
+          } > key.properties
+
+      - name: Build staging APK
+        working-directory: apps/native
+        env:
+          CONVEX_URL: ${{ needs.web.outputs.convex_url || steps.existing-backend.outputs.convex_url }}
+          CONVEX_SITE_URL: ${{ needs.web.outputs.convex_site_url || steps.existing-backend.outputs.convex_site_url }}
+          GOOGLE_SERVER_CLIENT_ID: ${{ secrets.GOOGLE_SERVER_CLIENT_ID }}
+        run: |
+          flutter build apk --debug \
+            --target-platform android-arm64 \
+            --dart-define=CONVEX_URL="$CONVEX_URL" \
+            --dart-define=CONVEX_SITE_URL="$CONVEX_SITE_URL" \
+            --dart-define=GOOGLE_SERVER_CLIENT_ID="$GOOGLE_SERVER_CLIENT_ID"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: staging-apk-pr-${{ github.event.pull_request.number }}
+          path: apps/native/build/app/outputs/flutter-apk/app-debug.apk
+          retention-days: 14
+
+      - uses: ./.github/actions/sticky-pr-comment
+        with:
+          marker: staging-mobile
+          body: |
+            🚀 **Mobile staging APK built**
+
+            Connected to this PR's staging backend: ${{ needs.web.outputs.convex_url || steps.existing-backend.outputs.convex_url }}
+
+            Download it from the [workflow run artifacts](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) (requires a GitHub login). Remove the `create-staging-mobile` label to remove this build.
+
+  destroy-mobile:
+    runs-on: ubuntu-latest
+    if: github.event.action == 'unlabeled' && github.event.label.name == 'create-staging-mobile'
+    permissions:
+      contents: read
+      pull-requests: write
+      actions: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Delete staging APK artifact
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ARTIFACT_NAME: staging-apk-pr-${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          ids="$(gh api "repos/${{ github.repository }}/actions/artifacts?per_page=100" \
+            | jq -r --arg name "$ARTIFACT_NAME" '.artifacts[] | select(.name == $name) | .id')"
+
+          if [ -z "$ids" ]; then
+            echo "No artifact named $ARTIFACT_NAME found"
+          fi
+
+          for id in $ids; do
+            echo "Deleting artifact $id"
+            gh api -X DELETE "repos/${{ github.repository }}/actions/artifacts/$id"
+          done
+
+      - uses: ./.github/actions/sticky-pr-comment
+        with:
+          marker: staging-mobile
+          body: |
+            🗑️ **Mobile staging APK removed**

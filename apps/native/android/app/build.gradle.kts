@@ -15,6 +15,22 @@ val keystoreProperties = Properties().apply {
     }
 }
 
+val hasReleaseKeystore = !keystoreProperties.isEmpty
+
+// A debug-signed APK cannot be installed over a release-signed one (and every
+// CI runner generates its own throwaway debug key), so a silent fallback here
+// produces artifacts that fail with INSTALL_FAILED_UPDATE_INCOMPATIBLE on any
+// device that already has another build. Fail the CI build instead: the
+// workflow is expected to write key.properties from repository secrets.
+if (!hasReleaseKeystore && System.getenv("CI") != null) {
+    throw GradleException(
+        "android/key.properties is missing. CI must write it (and the keystore " +
+            "it points at) from repository secrets before building, otherwise the " +
+            "APK is signed with the runner's throwaway debug key and will not " +
+            "install over any other build."
+    )
+}
+
 android {
     namespace = "live.walletbot.app"
     compileSdk = flutter.compileSdkVersion
@@ -49,13 +65,14 @@ android {
         }
     }
 
-    buildTypes {
-        release {
-            signingConfig = if (keystoreProperties.isEmpty) {
-                signingConfigs.getByName("debug")
-            } else {
-                signingConfigs.getByName("release")
-            }
+    // Every build type shares one signing identity, so a device can move
+    // between local, staging and production builds without an uninstall.
+    // `configureEach` also covers the `profile` type the Flutter plugin adds.
+    buildTypes.configureEach {
+        signingConfig = if (hasReleaseKeystore) {
+            signingConfigs.getByName("release")
+        } else {
+            signingConfigs.getByName("debug")
         }
     }
 }
