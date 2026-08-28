@@ -2,12 +2,14 @@ import 'dart:io';
 
 import 'package:app/app_config/client_info.dart';
 import 'package:app/components/feedback/support_email_dialog.dart';
+import 'package:app/convex/convex_client.dart';
 import 'package:app/feedback/feedback_limits.dart';
 import 'package:app/feedback/feedback_submitter.dart';
 import 'package:app/l10n/l10n.dart';
 import 'package:app/shared/adaptive_modal.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 /// Opens the "send feedback" sheet: a message plus up to
 /// [feedbackMaxAttachments] files of [feedbackMaxAttachmentBytes] each.
@@ -28,7 +30,10 @@ Future<void> showFeedbackSheet(
     borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
   ),
   builder: (_) => FeedbackSheet(
-    submitter: FeedbackSubmitter(clientInfo: clientInfo),
+    submitter: FeedbackSubmitter(
+      clientInfo: clientInfo,
+      client: context.read<ConvexClient>(),
+    ),
     clientInfo: clientInfo,
     locale: locale,
   ),

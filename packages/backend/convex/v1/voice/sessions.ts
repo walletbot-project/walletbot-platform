@@ -1,6 +1,7 @@
 import { v } from 'convex/values'
 import { mutation } from '../../_generated/server'
 import { requireAuth } from '../../users/helpers'
+import { sessionFieldsChanged } from './utils'
 
 const sessionArg = v.object({
     id: v.string(),
@@ -58,7 +59,9 @@ export const appendEvents = mutation({
             endedExplicitly: args.session.endedExplicitly,
         }
         if (existingSession) {
-            await ctx.db.patch(existingSession._id, sessionFields)
+            if (sessionFieldsChanged(existingSession, sessionFields)) {
+                await ctx.db.patch(existingSession._id, sessionFields)
+            }
         } else {
             await ctx.db.insert('voiceSessions', sessionFields)
         }

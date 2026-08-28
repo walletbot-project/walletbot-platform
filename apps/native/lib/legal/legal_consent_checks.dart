@@ -43,9 +43,9 @@ class LegalConsentChecks extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
-    final style = Theme.of(context).textTheme.bodyMedium?.copyWith(
-      fontWeight: FontWeight.w600,
-    );
+    final style = Theme.of(
+      context,
+    ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -57,10 +57,7 @@ class LegalConsentChecks extends StatelessWidget {
         ),
         _ConsentCheck(
           value: accepted,
-          label: _ConsentLabel(
-            template: _acceptTemplate(l10n),
-            style: style,
-          ),
+          label: _ConsentLabel(template: _acceptTemplate(l10n), style: style),
           onChanged: enabled ? onAcceptedChanged : null,
         ),
       ],

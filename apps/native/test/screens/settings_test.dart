@@ -163,9 +163,8 @@ void _expectVerticalOrder(WidgetTester tester, List<String> labels) {
 }
 
 /// SettingsScreen only reads `activeAccount`, so the fake overrides just
-/// that — a real AuthController would need ConvexClient, which can't
-/// initialize under `flutter test`. Never disposed, same as the controllers
-/// in auth_controller_email_flows_test.dart.
+/// that. Never disposed, same as the controllers in
+/// auth_controller_email_flows_test.dart.
 class _FakeAuthController extends AuthController {
   _FakeAuthController({UserAccount? active}) : _active = active;
 

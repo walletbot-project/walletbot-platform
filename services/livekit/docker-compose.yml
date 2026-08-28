@@ -1,0 +1,33 @@
+services:
+  livekit:
+    image: livekit/livekit-server:v1.9.1
+    restart: unless-stopped
+    network_mode: host
+    environment:
+      LIVEKIT_KEYS: ${LIVEKIT_KEYS}
+    command:
+      - --config-body
+      - |
+        port: ${LIVEKIT_SIGNAL_PORT}
+        bind_addresses:
+          - 0.0.0.0
+        logging:
+          level: ${LIVEKIT_LOG_LEVEL}
+          json: true
+        rtc:
+          tcp_port: 7881
+          udp_port: 7882-7892
+          use_external_ip: true
+          allow_tcp_fallback: true
+        turn:
+          enabled: true
+          domain: ${LIVEKIT_TURN_DOMAIN}
+          udp_port: 3478
+          tls_port: 5349
+          external_tls: true
+          relay_range_start: 30000
+          relay_range_end: 30100
+        room:
+          auto_create: true
+          empty_timeout: 300
+          departure_timeout: 20

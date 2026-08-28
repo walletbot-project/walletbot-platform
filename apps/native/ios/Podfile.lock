@@ -1,25 +1,19 @@
 PODS:
-  - convex_flutter (0.0.1):
-    - Flutter
   - Flutter (1.0.0)
   - permission_handler_apple (9.3.0):
     - Flutter
 
 DEPENDENCIES:
-  - convex_flutter (from `.symlinks/plugins/convex_flutter/ios`)
   - Flutter (from `Flutter`)
   - permission_handler_apple (from `.symlinks/plugins/permission_handler_apple/ios`)
 
 EXTERNAL SOURCES:
-  convex_flutter:
-    :path: ".symlinks/plugins/convex_flutter/ios"
   Flutter:
     :path: Flutter
   permission_handler_apple:
     :path: ".symlinks/plugins/permission_handler_apple/ios"
 
 SPEC CHECKSUMS:
-  convex_flutter: 8581c72fdb31ffdbfef9908f23f21668035a032a
   Flutter: cabc95a1d2626b1b06e7179b784ebcf0c0cde467
   permission_handler_apple: 4ed2196e43d0651e8ff7ca3483a069d469701f2d
 

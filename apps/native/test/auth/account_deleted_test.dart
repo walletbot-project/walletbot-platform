@@ -2,10 +2,8 @@ import 'package:app/auth/account.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 // Only the persisted flag is covered here. The banner that reads it lives in
-// `_AuthGate`'s subtree, and building that subtree constructs
-// VoiceSessionRemoteSync -> ConvexClient.instance, which cannot initialize
-// under `flutter test` (same constraint documented in widget_test.dart). The
-// banner branch is manual QA.
+// `_AuthGate`'s subtree, which needs the full provider stack (database, voice
+// sync, Convex transport) to build. The banner branch is manual QA.
 void main() {
   group('UserAccount.serverDeleted', () {
     test('survives a storage round-trip', () {

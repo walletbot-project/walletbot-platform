@@ -121,9 +121,10 @@ void main() {
         ),
       ]);
 
-      expect(layout.enabledDirections('right'), contains(
-        DashboardMoveDirection.down,
-      ));
+      expect(
+        layout.enabledDirections('right'),
+        contains(DashboardMoveDirection.down),
+      );
 
       final moved = layout.nudge('right', DashboardMoveDirection.down);
       expect(moved, isNotNull);
@@ -143,12 +144,7 @@ void main() {
       // It would vacate its row, the collapse would renumber the new row back
       // to the old index, and nothing would have moved.
       final layout = DashboardGridLayout.fromPlacements(const [
-        WidgetPlacement(
-          id: 'top',
-          row: 0,
-          col: 0,
-          width: DashboardWidth.full,
-        ),
+        WidgetPlacement(id: 'top', row: 0, col: 0, width: DashboardWidth.full),
         WidgetPlacement(
           id: 'alone',
           row: 1,

@@ -188,81 +188,81 @@ void main() {
     },
   );
 
+  test('a v1 database upgrades all the way to v4 in one open', () async {
+    final schema = await verifier.schemaAt(1);
+    addTearDown(schema.close);
+
+    schema.rawDatabase.execute(
+      'INSERT INTO transactions '
+      '(id, type, name, status, date, account_id, category_id, amount, '
+      'currency, created_at, updated_at) '
+      "VALUES ('t1', 'income', 'Sueldo', 'cleared', 900, 'a1', 'c1', 1200, "
+      "'ARS', 10, 20)",
+    );
+
+    final db = AppDatabase.forTesting(schema.newConnection());
+    addTearDown(db.close);
+    await verifier.migrateAndValidate(db, 4);
+
+    // Every step ran: the v2 column is there with its default AND the v3
+    // and v4 tables exist. A step chain that returned early would fail here.
+    final rows = await db
+        .customSelect('SELECT id, time_status FROM transactions')
+        .get();
+    expect(rows.single.read<String>('time_status'), 'none');
+    expect(await db.select(db.legalAcceptances).get(), isEmpty);
+    expect(await db.select(db.agentMemories).get(), isEmpty);
+  });
+
   test(
-    'a v1 database upgrades all the way to v4 in one open',
+    'legal acceptances round-trip their enums and stay append-only',
     () async {
-      final schema = await verifier.schemaAt(1);
-      addTearDown(schema.close);
-
-      schema.rawDatabase.execute(
-        'INSERT INTO transactions '
-        '(id, type, name, status, date, account_id, category_id, amount, '
-        'currency, created_at, updated_at) '
-        "VALUES ('t1', 'income', 'Sueldo', 'cleared', 900, 'a1', 'c1', 1200, "
-        "'ARS', 10, 20)",
-      );
-
-      final db = AppDatabase.forTesting(schema.newConnection());
+      final db = AppDatabase.forTesting(NativeDatabase.memory());
       addTearDown(db.close);
-      await verifier.migrateAndValidate(db, 4);
 
-      // Every step ran: the v2 column is there with its default AND the v3
-      // and v4 tables exist. A step chain that returned early would fail here.
-      final rows = await db
-          .customSelect('SELECT id, time_status FROM transactions')
-          .get();
-      expect(rows.single.read<String>('time_status'), 'none');
-      expect(await db.select(db.legalAcceptances).get(), isEmpty);
-      expect(await db.select(db.agentMemories).get(), isEmpty);
+      await db
+          .into(db.legalAcceptances)
+          .insert(
+            LegalAcceptancesCompanion.insert(
+              id: 'acc-1',
+              document: LegalDocumentKind.terms,
+              version: '2026-08-06',
+              acceptedAt: BigInt.from(1000),
+              ageConfirmed: const Value(true),
+              platform: 'android',
+              source: LegalAcceptanceSource.local,
+            ),
+          );
+      await db
+          .into(db.legalAcceptances)
+          .insert(
+            LegalAcceptancesCompanion.insert(
+              id: 'acc-2',
+              document: LegalDocumentKind.privacy,
+              version: '2026-08-06',
+              acceptedAt: BigInt.from(2000),
+              ageConfirmed: const Value(true),
+              platform: 'android',
+              source: LegalAcceptanceSource.remote,
+            ),
+          );
+
+      final rows = await db.select(db.legalAcceptances).get();
+      expect(rows, hasLength(2));
+      expect(
+        rows.map((row) => row.document),
+        containsAll(<LegalDocumentKind>[
+          LegalDocumentKind.terms,
+          LegalDocumentKind.privacy,
+        ]),
+      );
+      expect(rows.every((row) => row.ageConfirmed), isTrue);
+      expect(
+        rows.singleWhere((row) => row.id == 'acc-2').source,
+        LegalAcceptanceSource.remote,
+      );
     },
   );
-
-  test('legal acceptances round-trip their enums and stay append-only', () async {
-    final db = AppDatabase.forTesting(NativeDatabase.memory());
-    addTearDown(db.close);
-
-    await db
-        .into(db.legalAcceptances)
-        .insert(
-          LegalAcceptancesCompanion.insert(
-            id: 'acc-1',
-            document: LegalDocumentKind.terms,
-            version: '2026-08-06',
-            acceptedAt: BigInt.from(1000),
-            ageConfirmed: const Value(true),
-            platform: 'android',
-            source: LegalAcceptanceSource.local,
-          ),
-        );
-    await db
-        .into(db.legalAcceptances)
-        .insert(
-          LegalAcceptancesCompanion.insert(
-            id: 'acc-2',
-            document: LegalDocumentKind.privacy,
-            version: '2026-08-06',
-            acceptedAt: BigInt.from(2000),
-            ageConfirmed: const Value(true),
-            platform: 'android',
-            source: LegalAcceptanceSource.remote,
-          ),
-        );
-
-    final rows = await db.select(db.legalAcceptances).get();
-    expect(rows, hasLength(2));
-    expect(
-      rows.map((row) => row.document),
-      containsAll(<LegalDocumentKind>[
-        LegalDocumentKind.terms,
-        LegalDocumentKind.privacy,
-      ]),
-    );
-    expect(rows.every((row) => row.ageConfirmed), isTrue);
-    expect(
-      rows.singleWhere((row) => row.id == 'acc-2').source,
-      LegalAcceptanceSource.remote,
-    );
-  });
 
   test('future databases fail instead of being silently downgraded', () async {
     final db = AppDatabase.forTesting(

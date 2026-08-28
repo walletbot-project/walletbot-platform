@@ -1,7 +1,6 @@
 import 'package:drift/drift.dart';
 
 import '../database.dart';
-import 'wire.dart';
 
 /// Applies a single page of `pull` output to the local Drift database in one
 /// transaction. Implements the LWW conflict-resolution rules from
@@ -491,9 +490,6 @@ BigInt _asBigInt(Object? v) {
   if (v is int) return BigInt.from(v);
   if (v is double) return BigInt.from(v.toInt());
   if (v is String) return BigInt.parse(v);
-  // Wire envelope shouldn't reach here — the engine pre-decodes int64s. But
-  // be defensive in case the engine forgets a recursion.
-  if (v is Map) return parseInt64Wire(v);
   throw FormatException('expected int-like, got: $v');
 }
 
