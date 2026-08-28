@@ -625,7 +625,7 @@ export const en: Messages = {
     },
 
     voice: {
-        title: 'Live Voice',
+        title: 'Talk to Gaston',
         statusIdle: 'idle',
         statusConnecting: 'connecting',
         statusConnected: 'connected',

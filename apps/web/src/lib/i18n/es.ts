@@ -662,7 +662,7 @@ export const es = {
     },
 
     voice: {
-        title: 'Voz en vivo',
+        title: 'Habla con Gaston',
         statusIdle: 'inactivo',
         statusConnecting: 'conectando',
         statusConnected: 'conectado',

@@ -1454,7 +1454,7 @@ class AppLocalizationsEs extends AppLocalizations {
   String get defaultRecentMovements => 'Movimientos recientes';
 
   @override
-  String get liveVoice => 'Voz en vivo';
+  String get liveVoice => 'Habla con Gaston';
 
   @override
   String get endSession => 'Finalizar sesión';

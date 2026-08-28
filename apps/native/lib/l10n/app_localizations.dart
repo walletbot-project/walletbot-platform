@@ -2675,7 +2675,7 @@ abstract class AppLocalizations {
   /// No description provided for @liveVoice.
   ///
   /// In en, this message translates to:
-  /// **'Live Voice'**
+  /// **'Talk to Gaston'**
   String get liveVoice;
 
   /// No description provided for @endSession.
