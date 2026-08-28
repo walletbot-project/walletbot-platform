@@ -65,7 +65,7 @@ jobs:
           workingDirectory: apps/landing
           command: pages deploy dist --project-name=walletbot-landing --branch=main
 
-  build-apk:
+  build-android:
     needs: deploy
     runs-on: ubuntu-latest
     permissions:
@@ -103,6 +103,28 @@ jobs:
       - run: flutter pub get
         working-directory: apps/native
 
+      # Both artifacts must be signed with the real release key. Gradle now
+      # fails the build outright when key.properties is absent on CI rather
+      # than falling back to the runner's throwaway debug key, which produced
+      # APKs that could not be installed over any other build of the app.
+      - name: Restore release keystore
+        working-directory: apps/native/android
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+        run: |
+          set -euo pipefail
+          mkdir -p keystore
+          printf '%s' "$KEYSTORE_B64" | base64 -d > keystore/release.jks
+          {
+            printf 'storeFile=keystore/release.jks\n'
+            printf 'storePassword=%s\n' "$STORE_PASSWORD"
+            printf 'keyAlias=%s\n' "$KEY_ALIAS"
+            printf 'keyPassword=%s\n' "$KEY_PASSWORD"
+          } > key.properties
+
       - name: Build production APK
         working-directory: apps/native
         env:
@@ -115,22 +137,39 @@ jobs:
             --dart-define=CONVEX_SITE_URL="$CONVEX_SITE_URL" \
             --dart-define=GOOGLE_SERVER_CLIENT_ID="$GOOGLE_SERVER_CLIENT_ID"
 
+      # Play only accepts an AAB for upload, while testers need an APK they can
+      # sideload directly, so main publishes both. `appbundle` recompiles the
+      # Dart AOT snapshot from scratch, which roughly doubles this job's build
+      # time.
+      - name: Build production app bundle
+        working-directory: apps/native
+        env:
+          CONVEX_URL: ${{ vars.VITE_CONVEX_URL }}
+          CONVEX_SITE_URL: ${{ vars.VITE_CONVEX_SITE_URL }}
+          GOOGLE_SERVER_CLIENT_ID: ${{ secrets.GOOGLE_SERVER_CLIENT_ID }}
+        run: |
+          flutter build appbundle --release \
+            --dart-define=CONVEX_URL="$CONVEX_URL" \
+            --dart-define=CONVEX_SITE_URL="$CONVEX_SITE_URL" \
+            --dart-define=GOOGLE_SERVER_CLIENT_ID="$GOOGLE_SERVER_CLIENT_ID"
+
       # A single rolling release/tag (`production-latest`) rather than one
       # release per push, so there's always exactly one obvious "current
-      # production APK" download link.
-      - name: Publish production APK release
+      # production build" download link.
+      - name: Publish production release
         working-directory: apps/native
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
           apk=build/app/outputs/flutter-apk/app-release.apk
+          aab=build/app/outputs/bundle/release/app-release.aab
           notes="Automatically built from main @ ${GITHUB_SHA}. Connected to the production backend."
           if gh release view production-latest >/dev/null 2>&1; then
-            gh release upload production-latest "$apk" --clobber
+            gh release upload production-latest "$apk" "$aab" --clobber
             gh release edit production-latest --notes "$notes"
           else
-            gh release create production-latest "$apk" \
-              --title "Production APK (latest)" \
+            gh release create production-latest "$apk" "$aab" \
+              --title "Production build (latest)" \
               --notes "$notes"
           fi
