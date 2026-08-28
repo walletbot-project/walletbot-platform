@@ -113,12 +113,12 @@ guidelines 1.2 and 4.7.1 ("a mechanism to report offensive content and timely
 responses to concerns").
 
 This audit missed it originally. It now exists on both platforms. Every agent
-response carries a "report" link in its header, after the name and timestamp
+response carries a flag icon beside its bubble, vertically centred on it
 (`apps/native/lib/screens/voice.dart`, `apps/web/src/pages/add.tsx`) — a visible
 control rather than a hover or a gesture, because a reporting mechanism nobody
-can find is not one the policy accepts. It is a word and not a flag glyph, since
-a lone icon is guessable at best and this is the one control a store reviewer is
-looking for. Native also keeps the long-press action sheet, and the chat app bar
+can find is not one the policy accepts. It sits outside the bubble so its hit
+area never competes with selecting the text, and native gives it the full 48x48
+tap target. Native also keeps the long-press action sheet, and the chat app bar
 carries a session-scoped fallback for a reply that was audio-only or has
 scrolled away. Reports land in `agentReports`
 (`packages/backend/convex/v1/agentReports/`) with a snapshot of the flagged turn
@@ -126,7 +126,7 @@ and the user turn before it, and are triaged at `/admin/agent-reports`. Reportin
 works for local-only accounts, which identify themselves with `deviceId` like
 feedback does.
 
-The **link** is behind the `agentReportButton` flag, which exists as a kill
+The **icon** is behind the `agentReportButton` flag, which exists as a kill
 switch for the bubble layout, not as a rollout gate. It is the one entry in
 `KNOWN_FLAGS` that is `enabledByDefault: true`, and both clients treat an absent
 or unfetched flag as on (`isFlagEnabled(..., orElse: true)` on native,

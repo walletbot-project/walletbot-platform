@@ -218,28 +218,6 @@ function AgentBubble({
                     <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                         <span className="font-medium">{t.voice.agent}</span>
                         <span>{formatTime(message.at, formatLocale)}</span>
-                        {/*
-                         * Always rendered, only dimmed. Google Play requires a
-                         * way to flag generated content without leaving the app,
-                         * and a control that appears on hover is not there at
-                         * all on a touch screen or to a keyboard user scanning
-                         * the page. A word rather than an icon: a lone flag
-                         * glyph is guessable at best.
-                         */}
-                        {showReportButton && text && !message.reported && (
-                            <>
-                                <span aria-hidden="true">·</span>
-                                <button
-                                    type="button"
-                                    aria-label={t.agentReport.action}
-                                    title={t.agentReport.action}
-                                    onClick={() => onReport(message)}
-                                    className="rounded px-1 py-0.5 underline decoration-current/40 underline-offset-2 opacity-60 transition-opacity hover:opacity-100 focus-visible:opacity-100"
-                                >
-                                    {t.agentReport.inlineAction}
-                                </button>
-                            </>
-                        )}
                         {message.reported && (
                             <span className="flex items-center gap-1">
                                 <Icon name="flag" filled size={14} />
@@ -247,26 +225,47 @@ function AgentBubble({
                             </span>
                         )}
                     </div>
-                    <div className="rounded-2xl rounded-tl-sm bg-surface-container-highest px-4 py-2.5 text-on-surface">
-                        {text && (
-                            <p className="whitespace-pre-wrap text-sm leading-snug">
-                                {text}
-                            </p>
-                        )}
-                        {!message.isFinal && (
-                            <div
-                                className={cn(
-                                    'text-muted-foreground',
-                                    text && 'mt-1.5',
-                                )}
+                    <div className="flex items-center gap-1">
+                        <div className="rounded-2xl rounded-tl-sm bg-surface-container-highest px-4 py-2.5 text-on-surface">
+                            {text && (
+                                <p className="whitespace-pre-wrap text-sm leading-snug">
+                                    {text}
+                                </p>
+                            )}
+                            {!message.isFinal && (
+                                <div
+                                    className={cn(
+                                        'text-muted-foreground',
+                                        text && 'mt-1.5',
+                                    )}
+                                >
+                                    <SpeakingDots />
+                                </div>
+                            )}
+                            {message.wasInterrupted && (
+                                <p className="mt-1.5 text-xs italic text-muted-foreground">
+                                    {t.voice.interrupted}
+                                </p>
+                            )}
+                        </div>
+                        {/*
+                         * Always rendered, only dimmed. Google Play requires a
+                         * way to flag generated content without leaving the app,
+                         * and a control that appears on hover is not there at
+                         * all on a touch screen or to a keyboard user scanning
+                         * the page. Centred on the bubble, outside it, so the
+                         * hit area never competes with selecting the text.
+                         */}
+                        {showReportButton && text && !message.reported && (
+                            <button
+                                type="button"
+                                aria-label={t.agentReport.action}
+                                title={t.agentReport.action}
+                                onClick={() => onReport(message)}
+                                className="shrink-0 rounded-full p-2 text-muted-foreground opacity-60 transition-opacity hover:opacity-100 focus-visible:opacity-100"
                             >
-                                <SpeakingDots />
-                            </div>
-                        )}
-                        {message.wasInterrupted && (
-                            <p className="mt-1.5 text-xs italic text-muted-foreground">
-                                {t.voice.interrupted}
-                            </p>
+                                <Icon name="flag" size={16} />
+                            </button>
                         )}
                     </div>
                 </div>

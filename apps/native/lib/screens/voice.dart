@@ -1259,69 +1259,73 @@ class _AgentBubble extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _RoleLabel(
-                    label: 'Gaston',
-                    time: item.at,
-                    // Always drawn once the flag is on, never on hover and
-                    // never behind a gesture: Google Play's AI-Generated
-                    // Content policy wants flagging reachable without leaving
-                    // the app, and a long-press is not something a user can
-                    // see.
-                    trailing:
-                        showReportButton && text.isNotEmpty && !item.reported
-                        ? _ReportInlineAction(onPressed: () => onReport(item))
-                        : null,
-                  ),
+                  _RoleLabel(label: 'Gaston', time: item.at),
                   const SizedBox(height: 4),
-                  GestureDetector(
-                    onLongPress: () => unawaited(_showActions(context)),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 14,
-                        vertical: 10,
-                      ),
-                      decoration: BoxDecoration(
-                        color: theme.colorScheme.surfaceContainerHighest,
-                        borderRadius: const BorderRadius.only(
-                          topLeft: Radius.circular(4),
-                          topRight: Radius.circular(18),
-                          bottomLeft: Radius.circular(18),
-                          bottomRight: Radius.circular(18),
+                  // Always drawn once the flag is on, never on hover and never
+                  // behind a gesture: Google Play's AI-Generated Content policy
+                  // wants flagging reachable without leaving the app, and a
+                  // long-press is not something a user can see. Centred on the
+                  // bubble rather than on the whole column, so it does not
+                  // drift upward once the header sits above it.
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      Flexible(
+                        child: GestureDetector(
+                          onLongPress: () => unawaited(_showActions(context)),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 14,
+                              vertical: 10,
+                            ),
+                            decoration: BoxDecoration(
+                              color: theme.colorScheme.surfaceContainerHighest,
+                              borderRadius: const BorderRadius.only(
+                                topLeft: Radius.circular(4),
+                                topRight: Radius.circular(18),
+                                bottomLeft: Radius.circular(18),
+                                bottomRight: Radius.circular(18),
+                              ),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                if (text.isNotEmpty)
+                                  Text(
+                                    text,
+                                    style: TextStyle(
+                                      color: theme.colorScheme.onSurface,
+                                      fontSize: 15,
+                                    ),
+                                  ),
+                                if (!item.isFinal) ...[
+                                  if (text.isNotEmpty)
+                                    const SizedBox(height: 6),
+                                  _SpeakingDots(
+                                    color: theme.colorScheme.onSurface
+                                        .withValues(alpha: 0.6),
+                                  ),
+                                ],
+                                if (item.wasInterrupted) ...[
+                                  const SizedBox(height: 6),
+                                  Text(
+                                    context.l10n.interrupted,
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      fontStyle: FontStyle.italic,
+                                      color: theme.colorScheme.onSurfaceVariant,
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ),
                         ),
                       ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          if (text.isNotEmpty)
-                            Text(
-                              text,
-                              style: TextStyle(
-                                color: theme.colorScheme.onSurface,
-                                fontSize: 15,
-                              ),
-                            ),
-                          if (!item.isFinal) ...[
-                            if (text.isNotEmpty) const SizedBox(height: 6),
-                            _SpeakingDots(
-                              color: theme.colorScheme.onSurface.withValues(
-                                alpha: 0.6,
-                              ),
-                            ),
-                          ],
-                          if (item.wasInterrupted) ...[
-                            const SizedBox(height: 6),
-                            Text(
-                              context.l10n.interrupted,
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontStyle: FontStyle.italic,
-                                color: theme.colorScheme.onSurfaceVariant,
-                              ),
-                            ),
-                          ],
-                        ],
-                      ),
-                    ),
+                      if (showReportButton && text.isNotEmpty && !item.reported)
+                        _ReportBubbleButton(onPressed: () => onReport(item)),
+                    ],
                   ),
                   if (item.reported) ...[
                     const SizedBox(height: 4),
@@ -1526,43 +1530,33 @@ class _SystemLine extends StatelessWidget {
   }
 }
 
-/// The "Report" link in an agent bubble's header: the discoverable way to
-/// report a response, sitting in the message header rather than as a separate
-/// control beside the bubble.
+/// The flag icon beside an agent bubble: the discoverable way to report a
+/// response.
 ///
-/// Deliberately quiet — same size as the role label, regular weight — so it
-/// reads as metadata and not as an action the chat wants you to take. The
-/// padding is what makes it tappable; the header grows by a few pixels, which
-/// is the price of the label being visible at all.
-class _ReportInlineAction extends StatelessWidget {
-  const _ReportInlineAction({required this.onPressed});
+/// Sized to the 48x48 minimum tap target even though the glyph itself is small,
+/// so it is reachable and not merely visible. Sits outside the bubble so the
+/// tap target never overlaps the text a long-press is meant to select.
+class _ReportBubbleButton extends StatelessWidget {
+  const _ReportBubbleButton({required this.onPressed});
   final VoidCallback onPressed;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final l10n = context.l10n;
+    final label = context.l10n.reportResponseAction;
     return Semantics(
       button: true,
-      // The bubble's header only has room for the short form; screen readers
-      // get the sentence that says what is being reported.
-      label: l10n.reportResponseAction,
-      child: InkWell(
-        onTap: onPressed,
-        borderRadius: BorderRadius.circular(6),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 3),
-          child: Text(
-            l10n.reportResponseInline,
-            style: theme.textTheme.labelSmall?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
-              fontWeight: FontWeight.w400,
-              decoration: TextDecoration.underline,
-              decorationColor: theme.colorScheme.onSurfaceVariant.withValues(
-                alpha: 0.4,
-              ),
-            ),
-          ),
+      label: label,
+      child: IconButton(
+        onPressed: onPressed,
+        tooltip: label,
+        iconSize: 16,
+        padding: EdgeInsets.zero,
+        visualDensity: VisualDensity.compact,
+        constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+        icon: Icon(
+          Icons.flag_outlined,
+          color: theme.colorScheme.onSurfaceVariant,
         ),
       ),
     );
@@ -1574,15 +1568,10 @@ class _RoleLabel extends StatelessWidget {
     required this.label,
     required this.time,
     this.alignEnd = false,
-    this.trailing,
   });
   final String label;
   final DateTime time;
   final bool alignEnd;
-
-  /// Rendered after the name and time. Only the agent bubble uses it, for its
-  /// report link; the user bubble passes nothing.
-  final Widget? trailing;
 
   @override
   Widget build(BuildContext context) {
@@ -1598,29 +1587,17 @@ class _RoleLabel extends StatelessWidget {
     );
     return Row(
       mainAxisSize: MainAxisSize.min,
-      // Baselines, not boxes. The report link carries padding to be tappable,
-      // so centring it would sit its text a few pixels off the name it follows.
-      crossAxisAlignment: CrossAxisAlignment.baseline,
-      textBaseline: TextBaseline.alphabetic,
-      children: [
-        ...alignEnd
-            ? [
-                Text('$hh:$mm', style: timeStyle),
-                const SizedBox(width: 6),
-                Text(label, style: labelStyle),
-              ]
-            : [
-                Text(label, style: labelStyle),
-                const SizedBox(width: 6),
-                Text('$hh:$mm', style: timeStyle),
-              ],
-        if (trailing != null) ...[
-          const SizedBox(width: 6),
-          Text('·', style: timeStyle),
-          const SizedBox(width: 2),
-          trailing!,
-        ],
-      ],
+      children: alignEnd
+          ? [
+              Text('$hh:$mm', style: timeStyle),
+              const SizedBox(width: 6),
+              Text(label, style: labelStyle),
+            ]
+          : [
+              Text(label, style: labelStyle),
+              const SizedBox(width: 6),
+              Text('$hh:$mm', style: timeStyle),
+            ],
     );
   }
 }

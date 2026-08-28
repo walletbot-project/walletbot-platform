@@ -663,7 +663,6 @@ export const en: Messages = {
     agentReport: {
         moreOptions: 'More options',
         action: 'Report this response',
-        inlineAction: 'report',
         menuItem: 'Report a response',
         badge: 'Reported',
         title: 'Report a response',

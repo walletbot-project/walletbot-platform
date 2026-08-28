@@ -1673,9 +1673,6 @@ class AppLocalizationsEs extends AppLocalizations {
   String get reportResponseMenuItem => 'Reportar una respuesta';
 
   @override
-  String get reportResponseInline => 'reportar';
-
-  @override
   String get reportResponseBadge => 'Reportada';
 
   @override

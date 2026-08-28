@@ -75,7 +75,7 @@ void main() {
     expect(find.text('There is no response to report yet'), findsOneWidget);
   });
 
-  testWidgets('the report link sits in the agent header, in plain sight', (
+  testWidgets('the flag icon sits beside the agent bubble, in plain sight', (
     tester,
   ) async {
     final command = _ActiveVoiceCommand();
@@ -87,10 +87,10 @@ void main() {
 
     // Not behind a hover, a long-press or an overflow menu: the policy asks for
     // a way to flag generated content that a user can actually find.
-    expect(find.text('report'), findsOneWidget);
+    expect(find.byIcon(Icons.flag_outlined), findsOneWidget);
   });
 
-  testWidgets('a user turn gets no report link — only the agent generates', (
+  testWidgets('a user turn gets no flag icon — only the agent generates', (
     tester,
   ) async {
     final command = _ActiveVoiceCommand();
@@ -101,10 +101,10 @@ void main() {
     command.emit(VoiceAgentTurnComplete());
     await tester.pump();
 
-    expect(find.text('report'), findsOneWidget);
+    expect(find.byIcon(Icons.flag_outlined), findsOneWidget);
   });
 
-  testWidgets('tapping the report link opens the sheet', (tester) async {
+  testWidgets('tapping the flag icon opens the sheet', (tester) async {
     final command = _ActiveVoiceCommand();
     await tester.pumpWidget(_voiceApp(command));
 
@@ -112,7 +112,7 @@ void main() {
     command.emit(VoiceAgentTurnComplete());
     await tester.pump();
 
-    await tester.tap(find.text('report'));
+    await tester.tap(find.byIcon(Icons.flag_outlined));
     await tester.pumpAndSettle();
 
     // No ClientInfo provider in this harness, so the sheet declines to open
@@ -120,7 +120,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('a config that never landed still shows the link', (
+  testWidgets('a config that never landed still shows the icon', (
     tester,
   ) async {
     // The flag defaults on server-side, and native must fail open to match: an
@@ -138,10 +138,10 @@ void main() {
     command.emit(VoiceAgentTurnComplete());
     await tester.pump();
 
-    expect(find.text('report'), findsOneWidget);
+    expect(find.byIcon(Icons.flag_outlined), findsOneWidget);
   });
 
-  testWidgets('agentReportButton off hides the link, keeps the long-press', (
+  testWidgets('agentReportButton off hides the icon, keeps the long-press', (
     tester,
   ) async {
     final controller = AppConfigController(
@@ -168,7 +168,7 @@ void main() {
     command.emit(VoiceAgentTurnComplete());
     await tester.pump();
 
-    expect(find.text('report'), findsNothing);
+    expect(find.byIcon(Icons.flag_outlined), findsNothing);
 
     // The flag narrows how reporting is found, never whether it works.
     await tester.longPress(find.text('here is a bad answer'));
