@@ -112,15 +112,27 @@ inform content filtering and moderation". Apple asks for the same through
 guidelines 1.2 and 4.7.1 ("a mechanism to report offensive content and timely
 responses to concerns").
 
-This audit missed it originally. It now exists on both platforms: long-pressing
-an agent bubble offers "Report this response"
-(`apps/native/lib/screens/voice.dart`, `apps/web/src/pages/add.tsx`), and the
-chat app bar carries a session-scoped fallback for a reply that was audio-only
-or has scrolled away. Reports land in `agentReports`
+This audit missed it originally. It now exists on both platforms. Every agent
+response carries a flag icon beside the bubble
+(`apps/native/lib/screens/voice.dart`, `apps/web/src/pages/add.tsx`) — a visible
+control rather than a hover or a gesture, because a reporting mechanism nobody
+can find is not one the policy accepts. Native also keeps the long-press action
+sheet, and the chat app bar carries a session-scoped fallback for a reply that
+was audio-only or has scrolled away. Reports land in `agentReports`
 (`packages/backend/convex/v1/agentReports/`) with a snapshot of the flagged turn
-and the user turn before it, and are triaged at `/admin/agent-reports`. The path
-is deliberately **not** behind a feature flag and works for local-only accounts,
-which identify themselves with `deviceId` like feedback does.
+and the user turn before it, and are triaged at `/admin/agent-reports`. Reporting
+works for local-only accounts, which identify themselves with `deviceId` like
+feedback does.
+
+The **icon** is behind the `agentReportButton` flag, which exists as a kill
+switch for the bubble layout, not as a rollout gate. It is the one entry in
+`KNOWN_FLAGS` that is `enabledByDefault: true`, and both clients treat an absent
+or unfetched flag as on (`isFlagEnabled(..., orElse: true)` on native,
+`?? true` on web) — an offline first run or a failed config call must never be a
+build with no visible way to report. Turning it off narrows how reporting is
+*found*; it never removes reporting itself, which stays reachable through the
+long-press sheet and the app-bar fallback. **Do not ship a release with this flag
+disabled.**
 
 Reports expire after twelve months (`crons.ts`), matching the voice-history
 retention the privacy policy promises, and are purged on account deletion

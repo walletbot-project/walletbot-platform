@@ -1,8 +1,10 @@
 import 'package:app/app_config/client_info.dart';
+import 'package:app/convex/convex_client.dart';
 import 'package:app/l10n/l10n.dart';
 import 'package:app/shared/adaptive_modal.dart';
 import 'package:app/voice/agent_report_submitter.dart';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 /// Longest note a reporter can add, mirroring `AGENT_REPORT_MAX_NOTE_LENGTH`
 /// in `packages/shared/src/agent-reports.ts`. The server enforces it by
@@ -52,7 +54,10 @@ Future<bool> showReportResponseSheet(
       borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
     ),
     builder: (_) => ReportResponseSheet(
-      submitter: AgentReportSubmitter(clientInfo: clientInfo),
+      submitter: AgentReportSubmitter(
+        clientInfo: clientInfo,
+        client: context.read<ConvexClient>(),
+      ),
       locale: locale,
       reportedText: reportedText,
       precedingUserText: precedingUserText,

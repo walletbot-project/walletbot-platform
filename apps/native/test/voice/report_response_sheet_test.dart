@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:app/app_config/client_info.dart';
 import 'package:app/components/voice/report_response_sheet.dart';
 import 'package:app/l10n/l10n.dart';
@@ -60,7 +62,7 @@ Future<void> _tapSend(WidgetTester tester) async {
 AgentReportSubmitter _submitterAnswering(String response) =>
     AgentReportSubmitter(
       clientInfo: _clientInfo,
-      mutation: ({required name, required args}) async => response,
+      mutation: (name, args) async => jsonDecode(response),
     );
 
 void main() {
@@ -118,7 +120,10 @@ void main() {
     await _tapSend(tester);
 
     expect(find.text('Send report'), findsNothing);
-    expect(find.text('Thank you. We will review this response'), findsOneWidget);
+    expect(
+      find.text('Thank you. We will review this response'),
+      findsOneWidget,
+    );
   });
 
   testWidgets('with no flagged text it reports the session instead', (

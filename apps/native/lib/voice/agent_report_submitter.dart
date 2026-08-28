@@ -2,8 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:app/app_config/client_info.dart';
-import 'package:app/sync/wire.dart';
-import 'package:convex_flutter/convex_flutter.dart';
+import 'package:app/convex/convex_client.dart';
 
 /// Why a report failed, in the terms the sheet has copy for.
 enum AgentReportFailure {
@@ -45,11 +44,9 @@ class AgentReportException implements Exception {
 enum AgentReportScope { response, session }
 
 /// The subset of `ConvexClient` this needs, so tests can stand in for it.
+/// Returns the mutation's already-decoded result.
 typedef ConvexMutation =
-    Future<String> Function({
-      required String name,
-      required Map<String, dynamic> args,
-    });
+    Future<Object?> Function(String name, Map<String, Object?> args);
 
 /// Sends one report of an agent response.
 ///
@@ -59,16 +56,19 @@ typedef ConvexMutation =
 /// here more than it does for feedback — Google Play requires the reporting path
 /// to work for every user of the app, and a local account is still a user.
 class AgentReportSubmitter {
-  AgentReportSubmitter({required this.clientInfo, ConvexMutation? mutation})
-    : _mutation = mutation ?? _defaultMutation;
+  AgentReportSubmitter({
+    required this.clientInfo,
+    ConvexClient? client,
+    ConvexMutation? mutation,
+  }) : assert(
+         client != null || mutation != null,
+         'provide a ConvexClient or a mutation stand-in',
+       ),
+       _mutation =
+           mutation ?? ((name, args) => client!.mutation<Object?>(name, args));
 
   final ClientInfo clientInfo;
   final ConvexMutation _mutation;
-
-  static Future<String> _defaultMutation({
-    required String name,
-    required Map<String, dynamic> args,
-  }) => ConvexClient.instance.mutation(name: name, args: args);
 
   /// Throws [AgentReportException] on every failure path, so the caller has one
   /// place to map to copy.
@@ -109,16 +109,12 @@ class AgentReportSubmitter {
     String name,
     Map<String, Object?> args,
   ) async {
-    final String raw;
+    final Object? decoded;
     try {
-      raw = await _mutation(
-        name: name,
-        args: prepareArgValue(args) as Map<String, dynamic>,
-      );
+      decoded = await _mutation(name, args);
     } catch (error) {
       throw AgentReportException(_transportFailureFor(error), error);
     }
-    final decoded = decodeConvexResponse(raw);
     if (decoded is! Map<String, Object?>) {
       throw AgentReportException(AgentReportFailure.failed);
     }
@@ -136,7 +132,10 @@ class AgentReportSubmitter {
   /// Tells "the request never got out" apart from "the server said no", so the
   /// sheet can point at the connection instead of blaming the report.
   AgentReportFailure _transportFailureFor(Object error) => switch (error) {
-    TimeoutException() || IOException() => AgentReportFailure.offline,
+    TimeoutException() ||
+    OperationTimeoutError() ||
+    ConnectionLostError() ||
+    IOException() => AgentReportFailure.offline,
     _ => AgentReportFailure.failed,
   };
 }

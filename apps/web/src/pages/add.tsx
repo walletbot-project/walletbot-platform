@@ -202,9 +202,11 @@ function UserBubble({
 function AgentBubble({
     message,
     onReport,
+    showReportButton,
 }: {
     message: Extract<ChatMessage, { kind: 'agent' }>
     onReport: (message: Extract<ChatMessage, { kind: 'agent' }>) => void
+    showReportButton: boolean
 }) {
     const t = useT()
     const formatLocale = useFormatLocale()
@@ -223,7 +225,7 @@ function AgentBubble({
                          * all on a touch screen or to a keyboard user scanning
                          * the page.
                          */}
-                        {text && !message.reported && (
+                        {showReportButton && text && !message.reported && (
                             <button
                                 type="button"
                                 aria-label={t.agentReport.action}
@@ -384,16 +386,24 @@ function MessageView({
     message,
     debugEnabled,
     onReport,
+    showReportButton,
 }: {
     message: ChatMessage
     debugEnabled: boolean
     onReport: (message: Extract<ChatMessage, { kind: 'agent' }>) => void
+    showReportButton: boolean
 }) {
     switch (message.kind) {
         case 'user':
             return <UserBubble message={message} />
         case 'agent':
-            return <AgentBubble message={message} onReport={onReport} />
+            return (
+                <AgentBubble
+                    message={message}
+                    onReport={onReport}
+                    showReportButton={showReportButton}
+                />
+            )
         case 'tool':
             return <ToolCard message={message} debugEnabled={debugEnabled} />
         case 'system':
@@ -642,6 +652,12 @@ export function Add() {
     const voice = useVoiceSession()
     const flags = useQuery(api.v1.featureFlags.queries.getMyFlags)
     const debugEnabled = flags?.debugToolCalls ?? false
+    /*
+     * Defaults to shown while the query is in flight. This is the control
+     * Google Play expects to find on a generated response, so a loading round
+     * trip must not be a window where the chat has no visible way to report.
+     */
+    const showReportButton = flags?.agentReportButton ?? true
     const [reportTarget, setReportTarget] = useState<ReportTarget | null>(null)
     const [reportSession, setReportSession] = useState<{
         sessionId?: string
@@ -858,6 +874,7 @@ export function Add() {
                             message={m}
                             debugEnabled={debugEnabled}
                             onReport={reportResponse}
+                            showReportButton={showReportButton}
                         />
                     ))
                 )}

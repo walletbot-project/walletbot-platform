@@ -1,4 +1,5 @@
 export type FlagKey =
+    | 'agentReportButton'
     | 'debugToolCalls'
     | 'exchangeRates'
     | 'feedback'
@@ -9,6 +10,12 @@ export const KNOWN_FLAGS: {
     description: string
     enabledByDefault: boolean
 }[] = [
+    {
+        key: 'agentReportButton',
+        description:
+            'Show the flag icon on every agent response, the discoverable way to report it (native + web). Off leaves only the long-press action and the overflow menu.',
+        enabledByDefault: true,
+    },
     {
         key: 'debugToolCalls',
         description:

@@ -184,9 +184,9 @@ class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
   Future<void> _reportSession() async {
     final l10n = context.l10n;
     if (_items.whereType<_AgentBubbleItem>().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(l10n.reportResponseNoResponseYet)),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(l10n.reportResponseNoResponseYet)));
       return;
     }
     await _openReportSheet();
@@ -918,6 +918,16 @@ class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
         ? _StatusLevel.connecting
         : _StatusLevel.disconnected;
 
+    // Defaults to shown, both when the controller is absent (tests build this
+    // screen bare) and when its config fetch never landed: this is the control
+    // Google Play expects to find, so a missing config must not remove it.
+    final showReportButton =
+        context.watch<AppConfigController?>()?.isFlagEnabled(
+          'agentReportButton',
+          orElse: true,
+        ) ??
+        true;
+
     // Anything to end? A live/reconnecting session, or a restored
     // transcript whose logged session is still resumable.
     final showEndButton = _command != null || _items.isNotEmpty;
@@ -980,6 +990,7 @@ class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
                           child: _ChatItemView(
                             item: item,
                             onReport: _reportAgentBubble,
+                            showReportButton: showReportButton,
                           ),
                         );
                       },
@@ -1085,16 +1096,25 @@ enum _StatusLevel { disconnected, connecting, connected }
 // =============================================================================
 
 class _ChatItemView extends StatelessWidget {
-  const _ChatItemView({required this.item, required this.onReport});
+  const _ChatItemView({
+    required this.item,
+    required this.onReport,
+    required this.showReportButton,
+  });
   final _ChatItem item;
   final ValueChanged<_AgentBubbleItem> onReport;
+  final bool showReportButton;
 
   @override
   Widget build(BuildContext context) {
     final item = this.item;
     return switch (item) {
       _UserBubbleItem() => _UserBubble(item: item),
-      _AgentBubbleItem() => _AgentBubble(item: item, onReport: onReport),
+      _AgentBubbleItem() => _AgentBubble(
+        item: item,
+        onReport: onReport,
+        showReportButton: showReportButton,
+      ),
       _ToolItem() => _ToolCard(item: item),
       _SystemItem() => _SystemLine(item: item),
       _ActionResultItem() => VoiceActionWidget(
@@ -1165,9 +1185,18 @@ class _UserBubble extends StatelessWidget {
 }
 
 class _AgentBubble extends StatelessWidget {
-  const _AgentBubble({required this.item, required this.onReport});
+  const _AgentBubble({
+    required this.item,
+    required this.onReport,
+    required this.showReportButton,
+  });
   final _AgentBubbleItem item;
   final ValueChanged<_AgentBubbleItem> onReport;
+
+  /// Whether the `agentReportButton` flag put the visible flag icon on the
+  /// bubble. The long-press menu below stays either way, so turning the flag
+  /// off narrows how reporting is *found*, never whether it works.
+  final bool showReportButton;
 
   /// Long-press menu on the bubble. Google Play requires a way to flag
   /// generated content without leaving the app; long-press is where a message
@@ -1306,6 +1335,13 @@ class _AgentBubble extends StatelessWidget {
                 ],
               ),
             ),
+            // Always drawn once the flag is on, never on hover and never behind
+            // a gesture: Google Play's AI-Generated Content policy wants
+            // flagging reachable without leaving the app, and a long-press is
+            // not something a user can see. Sits beside the bubble rather than
+            // in the header so its tap target doesn't push every message down.
+            if (showReportButton && text.isNotEmpty && !item.reported)
+              _ReportBubbleButton(onPressed: () => onReport(item)),
           ],
         ),
       ),
@@ -1479,6 +1515,39 @@ class _SystemLine extends StatelessWidget {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+/// The flag icon on an agent bubble: the discoverable way to report a
+/// response, next to the role label so it reads as part of the message header
+/// rather than as chat furniture.
+///
+/// Sized to the 48x48 minimum tap target even though the glyph is small, so it
+/// is reachable rather than merely visible.
+class _ReportBubbleButton extends StatelessWidget {
+  const _ReportBubbleButton({required this.onPressed});
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final label = context.l10n.reportResponseAction;
+    return Semantics(
+      button: true,
+      label: label,
+      child: IconButton(
+        onPressed: onPressed,
+        tooltip: label,
+        iconSize: 14,
+        padding: EdgeInsets.zero,
+        visualDensity: VisualDensity.compact,
+        constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+        icon: Icon(
+          Icons.flag_outlined,
+          color: theme.colorScheme.onSurfaceVariant,
         ),
       ),
     );
