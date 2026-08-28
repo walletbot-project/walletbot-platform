@@ -101,6 +101,9 @@ class _RecordingFactory implements VoiceExpenseCommandFactory {
   Future<void> discardRestorableSession() async {
     discardCalls += 1;
   }
+
+  @override
+  Future<String?> restorableSessionId() async => 'test-session';
 }
 
 class _RecordingCommand implements VoiceExpenseCommand {
@@ -113,6 +116,9 @@ class _RecordingCommand implements VoiceExpenseCommand {
   bool _active;
 
   void emit(VoiceEvent event) => _events.add(event);
+
+  @override
+  String? get sessionId => 'test-session';
 
   @override
   Stream<VoiceEvent> get events => _events.stream;

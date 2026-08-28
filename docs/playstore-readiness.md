@@ -114,6 +114,51 @@ irreversible and purges all user data plus the better-auth user
 (`packages/backend/convex/userDeletion/`). Remaining Play Console task:
 declare the deletion URL in the Data safety form.
 
+### 7b. No way to report AI-generated content — resolved (2026-08-26)
+
+Play's **AI-Generated Content** policy applies: Gasti is a text-to-text chatbot
+and the interaction is a central feature. The policy requires that "apps that
+generate content using AI must contain in-app user reporting or flagging
+features that allow users to report or flag offensive content to developers
+without needing to exit the app", and that developers "utilize user reports to
+inform content filtering and moderation". Apple asks for the same through
+guidelines 1.2 and 4.7.1 ("a mechanism to report offensive content and timely
+responses to concerns").
+
+This audit missed it originally. It now exists on both platforms. Every agent
+response carries a flag icon beside its bubble, vertically centred on it
+(`apps/native/lib/screens/voice.dart`, `apps/web/src/pages/add.tsx`) — a visible
+control rather than a hover or a gesture, because a reporting mechanism nobody
+can find is not one the policy accepts. It fades in a second after the turn
+finishes and holds its space before then, so the bubble never reflows and there
+is no control to hit while the answer is still being written. Restored history
+skips the delay: those turns are already finished. It sits outside the bubble so its hit
+area never competes with selecting the text, and native gives it the full 48x48
+tap target. Native also keeps the long-press action sheet, and the chat app bar
+carries a session-scoped fallback for a reply that was audio-only or has
+scrolled away. Reports land in `agentReports`
+(`packages/backend/convex/v1/agentReports/`) with a snapshot of the flagged turn
+and the user turn before it, and are triaged at `/admin/agent-reports`. Reporting
+works for local-only accounts, which identify themselves with `deviceId` like
+feedback does.
+
+The **icon** is behind the `agentReportButton` flag, which exists as a kill
+switch for the bubble layout, not as a rollout gate. It is the one entry in
+`KNOWN_FLAGS` that is `enabledByDefault: true`, and both clients treat an absent
+or unfetched flag as on (`isFlagEnabled(..., orElse: true)` on native,
+`?? true` on web) — an offline first run or a failed config call must never be a
+build with no visible way to report. Turning it off narrows how reporting is
+*found*; it never removes reporting itself, which stays reachable through the
+long-press sheet and the app-bar fallback. **Do not ship a release with this flag
+disabled.**
+
+Reports expire after twelve months (`crons.ts`), matching the voice-history
+retention the privacy policy promises, and are purged on account deletion
+(`userDeletion/internal.ts`).
+
+Remaining Play Console task: nothing blocking, but the content rating
+questionnaire should describe the assistant honestly.
+
 ### 8. No terms of service
 
 Also absent. Needed if the listing or onboarding references it.

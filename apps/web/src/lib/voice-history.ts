@@ -54,6 +54,12 @@ const RETRY_DELAY_MS = 5000
 
 export type VoiceHistoryRecorder = {
     /**
+     * The id this session's rows carry in `voiceSessions` /
+     * `voiceSessionEvents`. Read by the report sheet so a flagged response can
+     * be traced back to the conversation it came from.
+     */
+    sessionId: string
+    /**
      * Bind the session to the model the token was minted for. Events recorded
      * before this point keep their sequence and upload with the first batch —
      * web only learns the model from `requestLiveToken`, while native knows it
@@ -203,6 +209,7 @@ export function createVoiceHistoryRecorder(
     }
 
     return {
+        sessionId,
         open: (nextModel: string) => {
             model = nextModel
             sessionDirty = true

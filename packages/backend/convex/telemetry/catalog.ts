@@ -1,3 +1,4 @@
+import { agentPricingAttributeSpec } from './agentPricing'
 import type {
     MetricAttributeValue,
     MetricName,
@@ -5,7 +6,6 @@ import type {
     MetricType,
     MetricUnit,
 } from './types'
-import { agentPricingAttributeSpec } from './agentPricing'
 
 export const metricNames = new Set<MetricName>([
     'business.user_accounts.created_count',
@@ -19,6 +19,7 @@ export const metricNames = new Set<MetricName>([
     'agent.user.monthly_cost_usd',
     'agent.interactions.completed_count',
     'agent.session.cost_bucket_count',
+    'agent.reports.submitted_count',
 ])
 
 export const metricSources = new Set<MetricSource>(['web', 'native', 'backend'])
@@ -144,6 +145,26 @@ export const metricCatalog: Record<
                 '0.50-1.00',
                 '1.00+',
             ]),
+        },
+    },
+    // Reported agent responses. `reason` is the shared AGENT_REPORT_REASONS set;
+    // a spike in one of them is the signal that the prompt or the safety
+    // settings need attention, which is the half of Play's "use reports to
+    // inform moderation" that the admin queue alone doesn't cover.
+    'agent.reports.submitted_count': {
+        type: 'counter',
+        unit: 'count',
+        attributes: {
+            reason: new Set([
+                'offensive',
+                'sexual',
+                'dangerous',
+                'misleading',
+                'privacy',
+                'other',
+            ]),
+            scope: new Set(['response', 'session']),
+            client_platform: 'string',
         },
     },
 }

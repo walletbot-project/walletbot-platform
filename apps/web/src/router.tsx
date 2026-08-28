@@ -266,6 +266,15 @@ export const router = createBrowserRouter([
                                             })),
                                     },
                                     {
+                                        path: '/admin/agent-reports',
+                                        lazy: () =>
+                                            import(
+                                                '@/pages/admin/agent-reports'
+                                            ).then((m) => ({
+                                                Component: m.AgentReports,
+                                            })),
+                                    },
+                                    {
                                         path: '*',
                                         lazy: () =>
                                             import('@/pages/not-found').then(

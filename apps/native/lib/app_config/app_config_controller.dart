@@ -185,12 +185,19 @@ class AppConfigController extends ChangeNotifier {
     accountBanners: _accountBanners,
   );
 
-  /// Feature flags are only ever delivered through the authenticated
-  /// account-config call, so local-only accounts (and any state before the
-  /// first successful fetch) simply get every flag defaulted to off via
-  /// [isFlagEnabled].
+  /// Feature flags arrive with the account-config call. A local-only account
+  /// makes that call too and gets each flag's global default, since it has no
+  /// backend user to carry a per-user override. Empty before the first
+  /// successful fetch and after a failed one, which is what [isFlagEnabled]'s
+  /// `orElse` answers for.
   Map<String, bool> get flags => _accountFlags;
-  bool isFlagEnabled(String key) => _accountFlags[key] ?? false;
+
+  /// [orElse] is what the flag reads as before the first successful fetch, or
+  /// after a failed one. It stays false for everything that only *adds* a
+  /// capability; pass true for a control the app is required to show, so a
+  /// config call that never landed cannot take it away.
+  bool isFlagEnabled(String key, {bool orElse = false}) =>
+      _accountFlags[key] ?? orElse;
 
   /// Current/minimum version of each legal document, as served by
   /// `/v1/config`. Locale-neutral, so a language switch keeps it.

@@ -26,10 +26,20 @@ abstract interface class VoiceExpenseCommandFactory {
   /// later screen open neither rehydrates its transcript nor resumes its
   /// model context. No-op when nothing is resumable.
   Future<void> discardRestorableSession();
+
+  /// Id of the session [restorableHistory] would restore, so a report filed
+  /// against a rehydrated transcript still names the conversation it came
+  /// from. Null when nothing is resumable.
+  Future<String?> restorableSessionId();
 }
 
 abstract interface class VoiceExpenseCommand {
   String get label;
+
+  /// Id of the logged session this command is recording into, once one exists.
+  /// Read when reporting a response, so the report points at the conversation
+  /// the moderator can pull from `voiceSessionEvents`.
+  String? get sessionId;
 
   /// Live events only, from subscription time onward. A re-attaching screen
   /// rebuilds prior conversation state from [history] in one pass instead of
@@ -104,6 +114,9 @@ class DebugVoiceExpenseCommandFactory implements VoiceExpenseCommandFactory {
 
   @override
   Future<void> discardRestorableSession() async {}
+
+  @override
+  Future<String?> restorableSessionId() async => null;
 }
 
 class DebugVoiceExpenseCommand implements VoiceExpenseCommand {
@@ -114,6 +127,9 @@ class DebugVoiceExpenseCommand implements VoiceExpenseCommand {
 
   @override
   String get label => 'Debug voice expense command';
+
+  @override
+  String? get sessionId => null;
 
   @override
   Stream<VoiceEvent> get events => _events.stream;

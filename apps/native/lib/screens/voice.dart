@@ -4,11 +4,15 @@ import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
+import 'package:flutter/services.dart';
 import 'package:app/app_config/app_config_controller.dart';
+import 'package:app/app_config/client_info.dart';
+import 'package:app/components/voice/report_response_sheet.dart';
 import 'package:app/l10n/l10n.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:provider/provider.dart';
 
+import '../voice/agent_generated.dart';
 import '../voice/mic_capture.dart';
 import '../voice/voice_event.dart';
 import '../voice/voice_expense_command.dart';
@@ -151,6 +155,68 @@ class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
       _finalisePending();
     });
     _jumpToBottomAfterBuild();
+  }
+
+  /// Report one agent turn.
+  ///
+  /// The user turn immediately before it travels along: a reply reads very
+  /// differently next to what prompted it, and for a report filed from a
+  /// local-only account (whose history never leaves the device) it is the only
+  /// context a moderator will ever see.
+  Future<void> _reportAgentBubble(_AgentBubbleItem item) async {
+    final index = _items.indexOf(item);
+    final preceding = _items
+        .take(index < 0 ? _items.length : index)
+        .whereType<_UserBubbleItem>()
+        .lastOrNull;
+    final reported = await _openReportSheet(
+      reportedText: item.text,
+      precedingUserText: preceding?.text,
+      occurredAt: item.at,
+    );
+    if (!mounted || !reported) return;
+    setState(() => item.reported = true);
+  }
+
+  /// The fallback entry point, from the app bar: report the conversation rather
+  /// than one turn, for a reply that was audio-only or has scrolled out of
+  /// reach.
+  Future<void> _reportSession() async {
+    final l10n = context.l10n;
+    if (_items.whereType<_AgentBubbleItem>().isEmpty) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(l10n.reportResponseNoResponseYet)));
+      return;
+    }
+    await _openReportSheet();
+  }
+
+  /// Resolves the session pointers and opens the sheet. The providers are read
+  /// as nullable on purpose: this screen is also built in tests without the
+  /// app-level providers, and a missing one must not crash the chat.
+  Future<bool> _openReportSheet({
+    String? reportedText,
+    String? precedingUserText,
+    DateTime? occurredAt,
+  }) async {
+    final clientInfo = context.read<ClientInfo?>();
+    if (clientInfo == null) return false;
+    final locale = context.read<AppConfigController?>()?.locale ?? 'en';
+    final sessionId =
+        _command?.sessionId ??
+        await widget.commandFactory.restorableSessionId();
+    if (!mounted) return false;
+    return showReportResponseSheet(
+      context,
+      clientInfo: clientInfo,
+      locale: locale,
+      reportedText: reportedText,
+      precedingUserText: precedingUserText,
+      sessionId: sessionId,
+      model: kAgentModel,
+      occurredAt: occurredAt,
+    );
   }
 
   void _jumpToBottomAfterBuild() {
@@ -852,6 +918,16 @@ class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
         ? _StatusLevel.connecting
         : _StatusLevel.disconnected;
 
+    // Defaults to shown, both when the controller is absent (tests build this
+    // screen bare) and when its config fetch never landed: this is the control
+    // Google Play expects to find, so a missing config must not remove it.
+    final showReportButton =
+        context.watch<AppConfigController?>()?.isFlagEnabled(
+          'agentReportButton',
+          orElse: true,
+        ) ??
+        true;
+
     // Anything to end? A live/reconnecting session, or a restored
     // transcript whose logged session is still resumable.
     final showEndButton = _command != null || _items.isNotEmpty;
@@ -879,6 +955,18 @@ class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
                 ),
               ),
             ),
+          // The fallback reporting path, always present: a response the user
+          // only heard, or one that has scrolled away, has no bubble to
+          // long-press, and Google Play's policy has no exception for either.
+          PopupMenuButton<String>(
+            onSelected: (_) => unawaited(_reportSession()),
+            itemBuilder: (context) => [
+              PopupMenuItem(
+                value: 'report',
+                child: Text(context.l10n.reportResponseMenuItem),
+              ),
+            ],
+          ),
         ],
       ),
       body: Column(
@@ -898,8 +986,15 @@ class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
                       itemBuilder: (context, i) {
                         final item = _items[i];
                         return Padding(
+                          // The report icon's fade keeps state, so its element
+                          // has to track the item and not the row index.
+                          key: ObjectKey(item),
                           padding: const EdgeInsets.symmetric(vertical: 6),
-                          child: _ChatItemView(item: item),
+                          child: _ChatItemView(
+                            item: item,
+                            onReport: _reportAgentBubble,
+                            showReportButton: showReportButton,
+                          ),
                         );
                       },
                     ),
@@ -954,6 +1049,11 @@ class _AgentBubbleItem extends _ChatItem {
   String text;
   bool isFinal;
   bool wasInterrupted;
+
+  /// The user reported this response. Purely cosmetic — the report is already
+  /// on the server — but without it the bubble forgets the moment the snackbar
+  /// clears.
+  bool reported = false;
 }
 
 class _ToolItem extends _ChatItem {
@@ -999,15 +1099,25 @@ enum _StatusLevel { disconnected, connecting, connected }
 // =============================================================================
 
 class _ChatItemView extends StatelessWidget {
-  const _ChatItemView({required this.item});
+  const _ChatItemView({
+    required this.item,
+    required this.onReport,
+    required this.showReportButton,
+  });
   final _ChatItem item;
+  final ValueChanged<_AgentBubbleItem> onReport;
+  final bool showReportButton;
 
   @override
   Widget build(BuildContext context) {
     final item = this.item;
     return switch (item) {
       _UserBubbleItem() => _UserBubble(item: item),
-      _AgentBubbleItem() => _AgentBubble(item: item),
+      _AgentBubbleItem() => _AgentBubble(
+        item: item,
+        onReport: onReport,
+        showReportButton: showReportButton,
+      ),
       _ToolItem() => _ToolCard(item: item),
       _SystemItem() => _SystemLine(item: item),
       _ActionResultItem() => VoiceActionWidget(
@@ -1078,8 +1188,61 @@ class _UserBubble extends StatelessWidget {
 }
 
 class _AgentBubble extends StatelessWidget {
-  const _AgentBubble({required this.item});
+  const _AgentBubble({
+    required this.item,
+    required this.onReport,
+    required this.showReportButton,
+  });
   final _AgentBubbleItem item;
+  final ValueChanged<_AgentBubbleItem> onReport;
+
+  /// Whether the `agentReportButton` flag put the visible flag icon on the
+  /// bubble. The long-press menu below stays either way, so turning the flag
+  /// off narrows how reporting is *found*, never whether it works.
+  final bool showReportButton;
+
+  /// Long-press menu on the bubble. Google Play requires a way to flag
+  /// generated content without leaving the app; long-press is where a message
+  /// action lives on both platforms, so this is the primary entry point and the
+  /// app bar's is only the fallback.
+  Future<void> _showActions(BuildContext context) async {
+    final l10n = context.l10n;
+    final text = item.text.trim();
+    if (text.isEmpty) return;
+    final messenger = ScaffoldMessenger.of(context);
+    await showModalBottomSheet<void>(
+      context: context,
+      useSafeArea: true,
+      builder: (sheetContext) => SafeArea(
+        top: false,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (!item.reported)
+              ListTile(
+                leading: const Icon(Icons.flag_outlined),
+                title: Text(l10n.reportResponseAction),
+                onTap: () {
+                  Navigator.of(sheetContext).pop();
+                  onReport(item);
+                },
+              ),
+            ListTile(
+              leading: const Icon(Icons.copy_rounded),
+              title: Text(l10n.reportResponseCopy),
+              onTap: () async {
+                Navigator.of(sheetContext).pop();
+                await Clipboard.setData(ClipboardData(text: text));
+                messenger.showSnackBar(
+                  SnackBar(content: Text(l10n.reportResponseCopied)),
+                );
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1101,53 +1264,98 @@ class _AgentBubble extends StatelessWidget {
                 children: [
                   _RoleLabel(label: 'Gaston', time: item.at),
                   const SizedBox(height: 4),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 14,
-                      vertical: 10,
-                    ),
-                    decoration: BoxDecoration(
-                      color: theme.colorScheme.surfaceContainerHighest,
-                      borderRadius: const BorderRadius.only(
-                        topLeft: Radius.circular(4),
-                        topRight: Radius.circular(18),
-                        bottomLeft: Radius.circular(18),
-                        bottomRight: Radius.circular(18),
+                  // Always drawn once the flag is on, never on hover and never
+                  // behind a gesture: Google Play's AI-Generated Content policy
+                  // wants flagging reachable without leaving the app, and a
+                  // long-press is not something a user can see. Centred on the
+                  // bubble rather than on the whole column, so it does not
+                  // drift upward once the header sits above it.
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      Flexible(
+                        child: GestureDetector(
+                          onLongPress: () => unawaited(_showActions(context)),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 14,
+                              vertical: 10,
+                            ),
+                            decoration: BoxDecoration(
+                              color: theme.colorScheme.surfaceContainerHighest,
+                              borderRadius: const BorderRadius.only(
+                                topLeft: Radius.circular(4),
+                                topRight: Radius.circular(18),
+                                bottomLeft: Radius.circular(18),
+                                bottomRight: Radius.circular(18),
+                              ),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                if (text.isNotEmpty)
+                                  Text(
+                                    text,
+                                    style: TextStyle(
+                                      color: theme.colorScheme.onSurface,
+                                      fontSize: 15,
+                                    ),
+                                  ),
+                                if (!item.isFinal) ...[
+                                  if (text.isNotEmpty)
+                                    const SizedBox(height: 6),
+                                  _SpeakingDots(
+                                    color: theme.colorScheme.onSurface
+                                        .withValues(alpha: 0.6),
+                                  ),
+                                ],
+                                if (item.wasInterrupted) ...[
+                                  const SizedBox(height: 6),
+                                  Text(
+                                    context.l10n.interrupted,
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      fontStyle: FontStyle.italic,
+                                      color: theme.colorScheme.onSurfaceVariant,
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ),
+                        ),
                       ),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                      if (showReportButton && text.isNotEmpty && !item.reported)
+                        _DelayedFadeIn(
+                          show: item.isFinal,
+                          child: _ReportBubbleButton(
+                            onPressed: () => onReport(item),
+                          ),
+                        ),
+                    ],
+                  ),
+                  if (item.reported) ...[
+                    const SizedBox(height: 4),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
                       children: [
-                        if (text.isNotEmpty)
-                          Text(
-                            text,
-                            style: TextStyle(
-                              color: theme.colorScheme.onSurface,
-                              fontSize: 15,
-                            ),
+                        Icon(
+                          Icons.flag_rounded,
+                          size: 12,
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          context.l10n.reportResponseBadge,
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: theme.colorScheme.onSurfaceVariant,
                           ),
-                        if (!item.isFinal) ...[
-                          if (text.isNotEmpty) const SizedBox(height: 6),
-                          _SpeakingDots(
-                            color: theme.colorScheme.onSurface.withValues(
-                              alpha: 0.6,
-                            ),
-                          ),
-                        ],
-                        if (item.wasInterrupted) ...[
-                          const SizedBox(height: 6),
-                          Text(
-                            context.l10n.interrupted,
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontStyle: FontStyle.italic,
-                              color: theme.colorScheme.onSurfaceVariant,
-                            ),
-                          ),
-                        ],
+                        ),
                       ],
                     ),
-                  ),
+                  ],
                 ],
               ),
             ),
@@ -1324,6 +1532,119 @@ class _SystemLine extends StatelessWidget {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+/// How long after a response finishes before its report control appears, and
+/// how long the fade itself takes. The delay keeps the icon from arriving
+/// mid-sentence, when there is not yet a finished answer to report.
+const _reportRevealDelay = Duration(milliseconds: 1000);
+const _reportFadeDuration = Duration(milliseconds: 300);
+
+/// Fades [child] in once [show] turns true, [_reportRevealDelay] later.
+///
+/// Occupies its space from the first build, so the bubble beside it never
+/// reflows when the icon arrives. While invisible it takes no taps and puts
+/// nothing in the semantics tree: an unseen button is worse than no button,
+/// both for a stray tap mid-response and for a screen reader announcing a
+/// control nobody can see.
+///
+/// Driven by a controller rather than a `Timer` so the animation settles under
+/// `pumpAndSettle` and leaves nothing pending when a test ends.
+class _DelayedFadeIn extends StatefulWidget {
+  const _DelayedFadeIn({required this.show, required this.child});
+  final bool show;
+  final Widget child;
+
+  @override
+  State<_DelayedFadeIn> createState() => _DelayedFadeInState();
+}
+
+class _DelayedFadeInState extends State<_DelayedFadeIn>
+    with SingleTickerProviderStateMixin {
+  // Not const: adding two Durations is not a constant expression.
+  static final _total = _reportRevealDelay + _reportFadeDuration;
+
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: _total,
+  );
+  late final Animation<double> _fade = CurvedAnimation(
+    parent: _controller,
+    curve: Interval(
+      _reportRevealDelay.inMilliseconds / _total.inMilliseconds,
+      1,
+      curve: Curves.easeOut,
+    ),
+  );
+
+  @override
+  void initState() {
+    super.initState();
+    // Already finished at the first build means restored history, which would
+    // otherwise fade every bubble in a second after the screen opens.
+    if (widget.show) _controller.value = 1;
+  }
+
+  @override
+  void didUpdateWidget(_DelayedFadeIn oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.show && !oldWidget.show) _controller.forward(from: 0);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => AnimatedBuilder(
+    animation: _fade,
+    child: widget.child,
+    builder: (context, child) {
+      final visible = _fade.value > 0;
+      return IgnorePointer(
+        ignoring: !visible,
+        child: ExcludeSemantics(
+          excluding: !visible,
+          child: Opacity(opacity: _fade.value, child: child),
+        ),
+      );
+    },
+  );
+}
+
+/// The flag icon beside an agent bubble: the discoverable way to report a
+/// response.
+///
+/// Sized to the 48x48 minimum tap target even though the glyph itself is small,
+/// so it is reachable and not merely visible. Sits outside the bubble so the
+/// tap target never overlaps the text a long-press is meant to select.
+class _ReportBubbleButton extends StatelessWidget {
+  const _ReportBubbleButton({required this.onPressed});
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final label = context.l10n.reportResponseAction;
+    return Semantics(
+      button: true,
+      label: label,
+      child: IconButton(
+        onPressed: onPressed,
+        tooltip: label,
+        iconSize: 16,
+        padding: EdgeInsets.zero,
+        visualDensity: VisualDensity.compact,
+        constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+        icon: Icon(
+          Icons.flag_outlined,
+          color: theme.colorScheme.onSurfaceVariant,
         ),
       ),
     );

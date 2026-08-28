@@ -1,7 +1,7 @@
 # Wallet Bot — Política de Privacidad
 
 **Fecha de entrada en vigencia:** 23 de agosto de 2026
-**Última actualización:** 23 de agosto de 2026
+**Última actualización:** 26 de agosto de 2026
 
 > Esta Política de Privacidad se publica en español y en inglés. Para los consumidores residentes en la República Argentina, la versión en español es el texto jurídicamente operativo y prevalece en caso de discrepancia. Para los demás usuarios prevalece la versión en inglés, siendo la versión en español una traducción de cortesía.
 
@@ -75,10 +75,11 @@ El asistente de voz de Wallet Bot es una función **opcional**. Le permite regis
 - El **acceso al micrófono** se solicita únicamente cuando usted inicia una sesión de voz, y puede denegarlo; el resto de la aplicación funciona sin él.
 - Al iniciar una sesión, nuestro backend emite un **token de acceso de corta duración y de un solo uso**, y su dispositivo se conecta **directamente** al proveedor de inteligencia artificial de la sesión: la API Gemini Live de Google (Google LLC) o la API de OpenAI (OpenAI, L.L.C.). El audio de su micrófono se transmite desde su dispositivo hacia ese proveedor; **el audio en crudo nunca pasa por nuestros servidores ni se almacena en ellos**.
 - Las grabaciones de audio de una sesión se conservan **únicamente en su dispositivo** (app nativa). Nunca se suben a nuestros servidores; del audio solo se registra en el servidor el tipo y el tamaño de los segmentos.
-- Almacenamos el **contenido de la conversación**: transcripciones de lo que usted dijo y de lo que respondió el asistente, las acciones que el asistente ejecutó ("tool calls" — por ejemplo, crear una transacción) con sus resultados, y metadatos de la sesión. Para cuentas con sesión iniciada este historial se sincroniza con nuestro backend; **las sesiones de voz de la aplicación web no se almacenan en nuestros servidores**; **las cuentas en modo local nunca suben su historial de voz**.
+- Almacenamos el **contenido de la conversación**: transcripciones de lo que usted dijo y de lo que respondió el asistente, las acciones que el asistente ejecutó ("tool calls" — por ejemplo, crear una transacción) con sus resultados, y metadatos de la sesión. Para cuentas con sesión iniciada este historial se sincroniza con nuestro backend, tanto desde la aplicación nativa como desde la web; **las cuentas en modo local nunca suben su historial de voz**.
 - Mientras una sesión está activa, el asistente puede **leer y modificar los datos financieros de su cuenta** (cuentas, saldos, transacciones, categorías, etiquetas, resúmenes) para ejecutar sus pedidos. Los datos que lee o escribe pasan a formar parte de la conversación procesada por el proveedor de inteligencia artificial.
 - El proveedor de inteligencia artificial (Google u OpenAI) procesa el audio y el contenido de la conversación bajo sus propios términos de API aplicables. Configuramos las sesiones para usar credenciales efímeras de un solo uso.
 - El historial de sesiones de voz se conserva por un **máximo de 12 meses** y también se elimina de inmediato si usted elimina su cuenta (Sección 9).
+- **Reporte de una respuesta.** Usted puede reportar cualquier respuesta del asistente desde el propio chat. El reporte guarda la respuesta reportada, el mensaje que usted envió inmediatamente antes, la nota que agregue, el identificador de la sesión, el modelo, y su plataforma, versión de la aplicación e idioma. Nuestros administradores leen los reportes para revisar y corregir el comportamiento del asistente, lo que constituye el interés legítimo de operar un servicio seguro y es además un requisito de las tiendas de aplicaciones por las que distribuimos. Los reportes se conservan por un **máximo de 12 meses** y se eliminan de inmediato si usted elimina su cuenta (Sección 9). Los reportes enviados desde una cuenta en modo local se identifican con un identificador de dispositivo y no llevan datos de cuenta.
 - El asistente puede cometer errores (interpretar mal montos, nombres o monedas). Revise los registros que crea; ver el descargo correspondiente en los Términos y Condiciones.
 
 ## 6. Finalidades del tratamiento
@@ -130,6 +131,7 @@ Usted puede revocar este consentimiento en cualquier momento (sin efectos retroa
 | Datos de cuenta, perfil y financieros | Mientras exista su cuenta; se eliminan de forma definitiva al eliminar la cuenta |
 | Sesiones y tokens de inicio de sesión | Hasta el cierre de sesión, revocación o expiración; se revocan todos al restablecer la contraseña y al eliminar la cuenta |
 | Historial de sesiones de voz (transcripciones, acciones, metadatos) | Máximo **12 meses** desde su creación, luego se eliminan automáticamente; se eliminan de inmediato al eliminar la cuenta. Las grabaciones de audio existen solo en su dispositivo |
+| Reportes de respuestas del asistente (respuesta reportada, mensaje previo, nota, metadatos de sesión) | Máximo **12 meses** desde su creación, luego se eliminan automáticamente; se eliminan de inmediato al eliminar la cuenta |
 | Registros de correos transaccionales (en nuestro proveedor de correo) | Depuración automática: correos entregados/finalizados a los 7 días; no entregables/abandonados a los 30 días |
 | Registro de su aceptación de estos documentos (qué documento, su versión, la fecha y hora, su confirmación de ser mayor de 18 años y la plataforma utilizada) | Mientras exista su cuenta; se elimina de forma definitiva al eliminar la cuenta. En las cuentas en modo local, este registro existe únicamente en su dispositivo |
 | Solicitudes de eliminación de cuenta (correo + hash del token de confirmación) | Se eliminan al completarse la eliminación; las solicitudes vencidas quedan sin validez y no pueden volver a usarse |

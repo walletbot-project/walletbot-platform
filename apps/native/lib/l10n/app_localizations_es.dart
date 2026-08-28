@@ -1659,4 +1659,99 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get tapToRetry => 'Tocá para volver a intentar';
+
+  @override
+  String get reportResponseAction => 'Reportar esta respuesta';
+
+  @override
+  String get reportResponseCopy => 'Copiar';
+
+  @override
+  String get reportResponseCopied => 'Respuesta copiada';
+
+  @override
+  String get reportResponseMenuItem => 'Reportar una respuesta';
+
+  @override
+  String get reportResponseBadge => 'Reportada';
+
+  @override
+  String get reportResponseTitle => 'Reportar una respuesta';
+
+  @override
+  String get reportResponseSubtitle =>
+      'Contanos qué estuvo mal con lo que respondió Gaston. Lo revisamos para corregir el asistente.';
+
+  @override
+  String get reportResponseSessionSubtitle =>
+      'Reportá esta conversación cuando la respuesta fue solo por voz o ya quedó demasiado arriba.';
+
+  @override
+  String get reportResponseReasonLabel => 'Motivo';
+
+  @override
+  String get reportReasonOffensive => 'Ofensiva, agresiva o violenta';
+
+  @override
+  String get reportReasonSexual => 'Contenido sexual';
+
+  @override
+  String get reportReasonDangerous => 'Peligrosa o ilegal';
+
+  @override
+  String get reportReasonMisleading => 'Información financiera falsa';
+
+  @override
+  String get reportReasonPrivacy => 'Mostró datos que no correspondían';
+
+  @override
+  String get reportReasonOther => 'Otro';
+
+  @override
+  String get reportResponseReasonRequired => 'Elegí un motivo antes de enviar';
+
+  @override
+  String get reportResponseNoteLabel => 'Detalle (opcional)';
+
+  @override
+  String get reportResponseNoteHint => '¿Qué pasó?';
+
+  @override
+  String get reportResponseReportedTextLabel => 'Respuesta reportada';
+
+  @override
+  String get reportResponseSessionNotice =>
+      'Se envía la conversación de esta sesión, sin el audio.';
+
+  @override
+  String get reportResponsePrivacyNotice =>
+      'Enviamos el texto de arriba junto con el modelo y la versión de la app. El audio nunca sale de tu dispositivo.';
+
+  @override
+  String get reportResponseSend => 'Enviar reporte';
+
+  @override
+  String get reportResponseSending => 'Enviando reporte…';
+
+  @override
+  String get reportResponseSent => 'Gracias. Vamos a revisar esta respuesta';
+
+  @override
+  String get reportResponseFailed => 'No pudimos enviar el reporte';
+
+  @override
+  String get reportResponseRateLimited =>
+      'Ya enviaste varios reportes. Probá de nuevo más tarde.';
+
+  @override
+  String get reportResponseOffline =>
+      'Sin conexión. Revisá tu internet y probá de nuevo.';
+
+  @override
+  String get reportResponseInvalid =>
+      'No pudimos procesar este reporte. Probá de nuevo.';
+
+  @override
+  String get reportResponseNoResponseYet =>
+      'Todavía no hay ninguna respuesta para reportar';
 }

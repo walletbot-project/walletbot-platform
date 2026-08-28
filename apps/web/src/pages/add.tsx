@@ -22,6 +22,10 @@ import type { ChatMessage } from '@/hooks/use-voice'
 import { useVoiceSession } from '@/hooks/use-voice-session'
 import { useFormatLocale, useT } from '@/lib/i18n'
 import { cn } from '@/lib/utils'
+import {
+    ReportResponseSheet,
+    type ReportTarget,
+} from '@/pages/add/report-response-sheet'
 import { ActionWidget } from '@/pages/add-action-widget'
 
 // Constants
@@ -197,8 +201,12 @@ function UserBubble({
 
 function AgentBubble({
     message,
+    onReport,
+    showReportButton,
 }: {
     message: Extract<ChatMessage, { kind: 'agent' }>
+    onReport: (message: Extract<ChatMessage, { kind: 'agent' }>) => void
+    showReportButton: boolean
 }) {
     const t = useT()
     const formatLocale = useFormatLocale()
@@ -210,27 +218,68 @@ function AgentBubble({
                     <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                         <span className="font-medium">{t.voice.agent}</span>
                         <span>{formatTime(message.at, formatLocale)}</span>
-                    </div>
-                    <div className="rounded-2xl rounded-tl-sm bg-surface-container-highest px-4 py-2.5 text-on-surface">
-                        {text && (
-                            <p className="whitespace-pre-wrap text-sm leading-snug">
-                                {text}
-                            </p>
+                        {message.reported && (
+                            <span className="flex items-center gap-1">
+                                <Icon name="flag" filled size={14} />
+                                {t.agentReport.badge}
+                            </span>
                         )}
-                        {!message.isFinal && (
-                            <div
+                    </div>
+                    <div className="flex items-center gap-1">
+                        <div className="rounded-2xl rounded-tl-sm bg-surface-container-highest px-4 py-2.5 text-on-surface">
+                            {text && (
+                                <p className="whitespace-pre-wrap text-sm leading-snug">
+                                    {text}
+                                </p>
+                            )}
+                            {!message.isFinal && (
+                                <div
+                                    className={cn(
+                                        'text-muted-foreground',
+                                        text && 'mt-1.5',
+                                    )}
+                                >
+                                    <SpeakingDots />
+                                </div>
+                            )}
+                            {message.wasInterrupted && (
+                                <p className="mt-1.5 text-xs italic text-muted-foreground">
+                                    {t.voice.interrupted}
+                                </p>
+                            )}
+                        </div>
+                        {/*
+                         * Always rendered, only dimmed. Google Play requires a
+                         * way to flag generated content without leaving the app,
+                         * and a control that appears on hover is not there at
+                         * all on a touch screen or to a keyboard user scanning
+                         * the page. Centred on the bubble, outside it, so the
+                         * hit area never competes with selecting the text.
+                         *
+                         * It holds its space from the first token but stays
+                         * `invisible` until the turn ends, so the bubble never
+                         * reflows and there is no control to hit while there is
+                         * still nothing finished to report. `visibility:hidden`
+                         * also keeps it out of the tab order and off the
+                         * accessibility tree, which `opacity-0` would not.
+                         * `fill-mode-backwards` holds it transparent through
+                         * the delay instead of flashing it first.
+                         */}
+                        {showReportButton && text && !message.reported && (
+                            <button
+                                type="button"
+                                aria-label={t.agentReport.action}
+                                title={t.agentReport.action}
+                                onClick={() => onReport(message)}
                                 className={cn(
-                                    'text-muted-foreground',
-                                    text && 'mt-1.5',
+                                    'shrink-0 rounded-full p-2 text-muted-foreground opacity-60 transition-opacity hover:opacity-100 focus-visible:opacity-100',
+                                    message.isFinal
+                                        ? 'animate-in fade-in delay-1000 duration-300 fill-mode-backwards'
+                                        : 'invisible',
                                 )}
                             >
-                                <SpeakingDots />
-                            </div>
-                        )}
-                        {message.wasInterrupted && (
-                            <p className="mt-1.5 text-xs italic text-muted-foreground">
-                                {t.voice.interrupted}
-                            </p>
+                                <Icon name="flag" size={16} />
+                            </button>
                         )}
                     </div>
                 </div>
@@ -353,15 +402,25 @@ function SystemLine({
 function MessageView({
     message,
     debugEnabled,
+    onReport,
+    showReportButton,
 }: {
     message: ChatMessage
     debugEnabled: boolean
+    onReport: (message: Extract<ChatMessage, { kind: 'agent' }>) => void
+    showReportButton: boolean
 }) {
     switch (message.kind) {
         case 'user':
             return <UserBubble message={message} />
         case 'agent':
-            return <AgentBubble message={message} />
+            return (
+                <AgentBubble
+                    message={message}
+                    onReport={onReport}
+                    showReportButton={showReportButton}
+                />
+            )
         case 'tool':
             return <ToolCard message={message} debugEnabled={debugEnabled} />
         case 'system':
@@ -610,6 +669,17 @@ export function Add() {
     const voice = useVoiceSession()
     const flags = useQuery(api.v1.featureFlags.queries.getMyFlags)
     const debugEnabled = flags?.debugToolCalls ?? false
+    /*
+     * Defaults to shown while the query is in flight. This is the control
+     * Google Play expects to find on a generated response, so a loading round
+     * trip must not be a window where the chat has no visible way to report.
+     */
+    const showReportButton = flags?.agentReportButton ?? true
+    const [reportTarget, setReportTarget] = useState<ReportTarget | null>(null)
+    const [reportSession, setReportSession] = useState<{
+        sessionId?: string
+        model?: string
+    }>({})
 
     const [text, setText] = useState('')
     const isComposing = text.trim().length > 0
@@ -664,6 +734,42 @@ export function Add() {
      */
     const startVoiceSession = () => {
         void voice.connect('audio')
+    }
+
+    /**
+     * Open the report sheet for one agent turn. The user turn immediately
+     * before it travels along: a reply reads very differently next to what
+     * prompted it, and a moderator has no other way to see that for a report
+     * filed from a local-only account.
+     */
+    const reportResponse = (
+        message: Extract<ChatMessage, { kind: 'agent' }>,
+    ) => {
+        const index = voice.messages.findIndex((m) => m.id === message.id)
+        const preceding = voice.messages
+            .slice(0, index === -1 ? undefined : index)
+            .findLast((m) => m.kind === 'user')
+        setReportSession(voice.getSessionInfo())
+        setReportTarget({
+            scope: 'response',
+            messageId: message.id,
+            reportedText: message.text.trim(),
+            precedingUserText:
+                preceding?.kind === 'user'
+                    ? preceding.text.trim() || undefined
+                    : undefined,
+            occurredAt: message.at,
+        })
+    }
+
+    /**
+     * The fallback entry point, for a reply that was voice-only or has already
+     * scrolled out of reach: report the session and let a moderator read it
+     * from the replicated history.
+     */
+    const reportSessionScope = () => {
+        setReportSession(voice.getSessionInfo())
+        setReportTarget({ scope: 'session' })
     }
 
     const handleTap = () => {
@@ -741,8 +847,38 @@ export function Add() {
                                 <StatusPill status={status} />
                             </div>
                         )}
+                        <MenuButton
+                            label={
+                                <IconButton
+                                    aria-label={t.agentReport.moreOptions}
+                                    className="text-on-surface-variant"
+                                >
+                                    <Icon name="more_vert" />
+                                </IconButton>
+                            }
+                            popoverProps={{ placement: 'bottom end' }}
+                        >
+                            <MenuItem
+                                id="report-session"
+                                textValue={t.agentReport.menuItem}
+                                onAction={reportSessionScope}
+                            >
+                                {t.agentReport.menuItem}
+                            </MenuItem>
+                        </MenuButton>
                     </>
                 }
+            />
+
+            <ReportResponseSheet
+                open={reportTarget !== null}
+                onOpenChange={(next) => {
+                    if (!next) setReportTarget(null)
+                }}
+                target={reportTarget}
+                sessionId={reportSession.sessionId}
+                model={reportSession.model}
+                onReported={voice.markReported}
             />
 
             <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-4 py-6">
@@ -754,6 +890,8 @@ export function Add() {
                             key={m.id}
                             message={m}
                             debugEnabled={debugEnabled}
+                            onReport={reportResponse}
+                            showReportButton={showReportButton}
                         />
                     ))
                 )}

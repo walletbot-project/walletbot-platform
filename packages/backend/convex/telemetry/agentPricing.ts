@@ -1,6 +1,8 @@
 import type { MetricAttributeValue, MetricInput } from './types'
 
-type AgentCostMetricName = 'agent.session.cost_usd' | 'agent.interaction.cost_usd'
+type AgentCostMetricName =
+    | 'agent.session.cost_usd'
+    | 'agent.interaction.cost_usd'
 
 type AgentPrice = {
     model: string
@@ -92,13 +94,9 @@ const priceFor = (model: string, timestamp: number): AgentPrice | undefined => {
 const hasTokenAttributes = (
     attributes: Record<string, MetricAttributeValue> | undefined,
 ): boolean =>
-    tokenAttributeKeys.some(
-        (key) => numberAttribute(attributes, key) > 0,
-    )
+    tokenAttributeKeys.some((key) => numberAttribute(attributes, key) > 0)
 
-export const isAgentCostMetric = (
-    name: string,
-): name is AgentCostMetricName =>
+export const isAgentCostMetric = (name: string): name is AgentCostMetricName =>
     name === 'agent.session.cost_usd' || name === 'agent.interaction.cost_usd'
 
 export const costBucket = (costUsd: number): string => {
@@ -121,10 +119,7 @@ export const normalizeAgentCostMetric = (
     const price = priceFor(model, metric.timestamp)
     if (!price) return null
 
-    const cachedInput = numberAttribute(
-        metric.attributes,
-        'token_cached_input',
-    )
+    const cachedInput = numberAttribute(metric.attributes, 'token_cached_input')
     const inputText = Math.max(
         0,
         numberAttribute(metric.attributes, 'token_input_text') - cachedInput,

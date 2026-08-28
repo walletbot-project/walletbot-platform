@@ -42,8 +42,8 @@ export type LegalDocumentVersions = {
 }
 
 export const LEGAL_VERSIONS: Record<LegalDocument, LegalDocumentVersions> = {
-    terms: { current: '2026-08-23', min: '2026-08-23' },
-    privacy: { current: '2026-08-23', min: '2026-08-23' },
+    terms: { current: '2026-08-26', min: '2026-08-23' },
+    privacy: { current: '2026-08-26', min: '2026-08-23' },
 }
 
 /**
