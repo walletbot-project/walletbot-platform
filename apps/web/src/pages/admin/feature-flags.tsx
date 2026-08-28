@@ -72,8 +72,8 @@ export function FeatureFlags() {
             <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-4">
                 {flags === undefined ? (
                     <>
-                        <Skeleton className="h-24 w-full" />
-                        <Skeleton className="h-24 w-full" />
+                        <Skeleton className="h-24 w-full shrink-0" />
+                        <Skeleton className="h-24 w-full shrink-0" />
                     </>
                 ) : (
                     flags.map((flag) => <FlagCard key={flag.key} flag={flag} />)
@@ -155,7 +155,10 @@ function FlagCard({ flag }: { flag: FlagRow }) {
     }
 
     return (
-        <Card>
+        // shrink-0: a flex child defaults to shrinking, so without this the
+        // cards compress to fit the viewport and clip their own contents
+        // instead of overflowing the scroll container above.
+        <Card className="shrink-0">
             <CardHeader>
                 <CardTitle className="flex items-center justify-between gap-2">
                     <span>{flag.key}</span>

@@ -116,8 +116,8 @@ export function AgentReports() {
 
                 {pageStatus === 'LoadingFirstPage' ? (
                     <>
-                        <Skeleton className="h-40 w-full" />
-                        <Skeleton className="h-40 w-full" />
+                        <Skeleton className="h-40 w-full shrink-0" />
+                        <Skeleton className="h-40 w-full shrink-0" />
                     </>
                 ) : reports.length === 0 ? (
                     <p className="py-8 text-center text-sm text-muted-foreground">
@@ -170,7 +170,10 @@ function ReportCard({ report }: { report: ReportRow }) {
     }
 
     return (
-        <Card>
+        // shrink-0: a flex child defaults to shrinking, so without this the
+        // cards compress to fit the viewport and clip their own contents
+        // instead of overflowing the scroll container above.
+        <Card className="shrink-0">
             <CardHeader>
                 <CardTitle className="flex flex-wrap items-center gap-2">
                     <Icon name="flag" filled size={18} />
