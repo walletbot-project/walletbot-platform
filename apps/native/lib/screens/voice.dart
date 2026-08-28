@@ -1598,6 +1598,10 @@ class _RoleLabel extends StatelessWidget {
     );
     return Row(
       mainAxisSize: MainAxisSize.min,
+      // Baselines, not boxes. The report link carries padding to be tappable,
+      // so centring it would sit its text a few pixels off the name it follows.
+      crossAxisAlignment: CrossAxisAlignment.baseline,
+      textBaseline: TextBaseline.alphabetic,
       children: [
         ...alignEnd
             ? [
