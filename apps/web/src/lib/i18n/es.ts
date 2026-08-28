@@ -703,6 +703,7 @@ export const es = {
     agentReport: {
         moreOptions: 'Más opciones',
         action: 'Reportar esta respuesta',
+        inlineAction: 'reportar',
         menuItem: 'Reportar una respuesta',
         badge: 'Reportada',
         title: 'Reportar una respuesta',

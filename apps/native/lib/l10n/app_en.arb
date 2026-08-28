@@ -546,6 +546,7 @@
   "reportResponseCopy": "Copy",
   "reportResponseCopied": "Response copied",
   "reportResponseMenuItem": "Report a response",
+  "reportResponseInline": "report",
   "reportResponseBadge": "Reported",
   "reportResponseTitle": "Report a response",
   "reportResponseSubtitle": "Tell us what was wrong with what Gaston said. We review reports to fix the assistant.",

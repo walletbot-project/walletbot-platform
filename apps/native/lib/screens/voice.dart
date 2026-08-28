@@ -1259,7 +1259,19 @@ class _AgentBubble extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _RoleLabel(label: 'Gaston', time: item.at),
+                  _RoleLabel(
+                    label: 'Gaston',
+                    time: item.at,
+                    // Always drawn once the flag is on, never on hover and
+                    // never behind a gesture: Google Play's AI-Generated
+                    // Content policy wants flagging reachable without leaving
+                    // the app, and a long-press is not something a user can
+                    // see.
+                    trailing:
+                        showReportButton && text.isNotEmpty && !item.reported
+                        ? _ReportInlineAction(onPressed: () => onReport(item))
+                        : null,
+                  ),
                   const SizedBox(height: 4),
                   GestureDetector(
                     onLongPress: () => unawaited(_showActions(context)),
@@ -1335,13 +1347,6 @@ class _AgentBubble extends StatelessWidget {
                 ],
               ),
             ),
-            // Always drawn once the flag is on, never on hover and never behind
-            // a gesture: Google Play's AI-Generated Content policy wants
-            // flagging reachable without leaving the app, and a long-press is
-            // not something a user can see. Sits beside the bubble rather than
-            // in the header so its tap target doesn't push every message down.
-            if (showReportButton && text.isNotEmpty && !item.reported)
-              _ReportBubbleButton(onPressed: () => onReport(item)),
           ],
         ),
       ),
@@ -1521,33 +1526,43 @@ class _SystemLine extends StatelessWidget {
   }
 }
 
-/// The flag icon on an agent bubble: the discoverable way to report a
-/// response, next to the role label so it reads as part of the message header
-/// rather than as chat furniture.
+/// The "Report" link in an agent bubble's header: the discoverable way to
+/// report a response, sitting in the message header rather than as a separate
+/// control beside the bubble.
 ///
-/// Sized to the 48x48 minimum tap target even though the glyph is small, so it
-/// is reachable rather than merely visible.
-class _ReportBubbleButton extends StatelessWidget {
-  const _ReportBubbleButton({required this.onPressed});
+/// Deliberately quiet — same size as the role label, regular weight — so it
+/// reads as metadata and not as an action the chat wants you to take. The
+/// padding is what makes it tappable; the header grows by a few pixels, which
+/// is the price of the label being visible at all.
+class _ReportInlineAction extends StatelessWidget {
+  const _ReportInlineAction({required this.onPressed});
   final VoidCallback onPressed;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final label = context.l10n.reportResponseAction;
+    final l10n = context.l10n;
     return Semantics(
       button: true,
-      label: label,
-      child: IconButton(
-        onPressed: onPressed,
-        tooltip: label,
-        iconSize: 14,
-        padding: EdgeInsets.zero,
-        visualDensity: VisualDensity.compact,
-        constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
-        icon: Icon(
-          Icons.flag_outlined,
-          color: theme.colorScheme.onSurfaceVariant,
+      // The bubble's header only has room for the short form; screen readers
+      // get the sentence that says what is being reported.
+      label: l10n.reportResponseAction,
+      child: InkWell(
+        onTap: onPressed,
+        borderRadius: BorderRadius.circular(6),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 3),
+          child: Text(
+            l10n.reportResponseInline,
+            style: theme.textTheme.labelSmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+              fontWeight: FontWeight.w400,
+              decoration: TextDecoration.underline,
+              decorationColor: theme.colorScheme.onSurfaceVariant.withValues(
+                alpha: 0.4,
+              ),
+            ),
+          ),
         ),
       ),
     );
@@ -1559,10 +1574,15 @@ class _RoleLabel extends StatelessWidget {
     required this.label,
     required this.time,
     this.alignEnd = false,
+    this.trailing,
   });
   final String label;
   final DateTime time;
   final bool alignEnd;
+
+  /// Rendered after the name and time. Only the agent bubble uses it, for its
+  /// report link; the user bubble passes nothing.
+  final Widget? trailing;
 
   @override
   Widget build(BuildContext context) {
@@ -1578,17 +1598,25 @@ class _RoleLabel extends StatelessWidget {
     );
     return Row(
       mainAxisSize: MainAxisSize.min,
-      children: alignEnd
-          ? [
-              Text('$hh:$mm', style: timeStyle),
-              const SizedBox(width: 6),
-              Text(label, style: labelStyle),
-            ]
-          : [
-              Text(label, style: labelStyle),
-              const SizedBox(width: 6),
-              Text('$hh:$mm', style: timeStyle),
-            ],
+      children: [
+        ...alignEnd
+            ? [
+                Text('$hh:$mm', style: timeStyle),
+                const SizedBox(width: 6),
+                Text(label, style: labelStyle),
+              ]
+            : [
+                Text(label, style: labelStyle),
+                const SizedBox(width: 6),
+                Text('$hh:$mm', style: timeStyle),
+              ],
+        if (trailing != null) ...[
+          const SizedBox(width: 6),
+          Text('·', style: timeStyle),
+          const SizedBox(width: 2),
+          trailing!,
+        ],
+      ],
     );
   }
 }

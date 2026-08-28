@@ -3056,6 +3056,12 @@ abstract class AppLocalizations {
   /// **'Report a response'**
   String get reportResponseMenuItem;
 
+  /// No description provided for @reportResponseInline.
+  ///
+  /// In en, this message translates to:
+  /// **'report'**
+  String get reportResponseInline;
+
   /// No description provided for @reportResponseBadge.
   ///
   /// In en, this message translates to:

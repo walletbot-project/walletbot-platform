@@ -223,18 +223,22 @@ function AgentBubble({
                          * way to flag generated content without leaving the app,
                          * and a control that appears on hover is not there at
                          * all on a touch screen or to a keyboard user scanning
-                         * the page.
+                         * the page. A word rather than an icon: a lone flag
+                         * glyph is guessable at best.
                          */}
                         {showReportButton && text && !message.reported && (
-                            <button
-                                type="button"
-                                aria-label={t.agentReport.action}
-                                title={t.agentReport.action}
-                                onClick={() => onReport(message)}
-                                className="rounded-full p-0.5 opacity-60 transition-opacity hover:opacity-100 focus-visible:opacity-100"
-                            >
-                                <Icon name="flag" size={14} />
-                            </button>
+                            <>
+                                <span aria-hidden="true">·</span>
+                                <button
+                                    type="button"
+                                    aria-label={t.agentReport.action}
+                                    title={t.agentReport.action}
+                                    onClick={() => onReport(message)}
+                                    className="rounded px-1 py-0.5 underline decoration-current/40 underline-offset-2 opacity-60 transition-opacity hover:opacity-100 focus-visible:opacity-100"
+                                >
+                                    {t.agentReport.inlineAction}
+                                </button>
+                            </>
                         )}
                         {message.reported && (
                             <span className="flex items-center gap-1">
