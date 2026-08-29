@@ -76,7 +76,7 @@ type AccountConfigAccount =
     | { type: 'local'; name: string | null; accountId: string | null }
     | null
 
-// apps/native/pubspec.yaml is currently 0.3.0+5. PackageInfo.version sends the
+// apps/native/pubspec.yaml is currently 0.3.0+6. PackageInfo.version sends the
 // build-name only, so the backend compares against 0.3.0.
 //
 // Bumped from 0.2.0 alongside native drift schemaVersion v3 -> v4 (adds the
