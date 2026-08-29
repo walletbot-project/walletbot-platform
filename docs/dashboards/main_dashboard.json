@@ -50,7 +50,7 @@
                                             "spec": {
                                                 "alias": "Visits",
                                                 "editorMode": "builder",
-                                                "expr": "business_users_registered_total_count",
+                                                "expr": "business_users_registered_total_count{deployment_environment=\"$Scope\"}",
                                                 "instant": false,
                                                 "legendFormat": "__auto",
                                                 "max": 28000,
@@ -157,7 +157,7 @@
                                             "kind": "DataQuery",
                                             "spec": {
                                                 "editorMode": "builder",
-                                                "expr": "max by(__name__) (agent_user_monthly_cost_usd)",
+                                                "expr": "max by(__name__) (agent_user_monthly_cost_usd{deployment_environment=\"$Scope\"})",
                                                 "legendFormat": "__auto",
                                                 "range": true
                                             },
@@ -240,7 +240,7 @@
                                             "spec": {
                                                 "alias": "Visits",
                                                 "editorMode": "builder",
-                                                "expr": "sum by(auth_method) (business_user_accounts_created_count_total)",
+                                                "expr": "sum by(auth_method) (business_user_accounts_created_count_total{deployment_environment=\"$Scope\"})",
                                                 "instant": false,
                                                 "legendFormat": "__auto",
                                                 "max": 28000,
@@ -335,7 +335,7 @@
                                             "spec": {
                                                 "editorMode": "code",
                                                 "exemplar": false,
-                                                "expr": "label_replace(sum(count_over_time((agent_session_cost_usd < 0.01)[$__range:])), \"bucket\", \"0-0.01\", \"\", \"\") or label_replace(sum(count_over_time((agent_session_cost_usd >= 0.01 and agent_session_cost_usd < 0.05)[$__range:])), \"bucket\", \"0.01-0.05\", \"\", \"\") or label_replace(sum(count_over_time((agent_session_cost_usd >= 0.05 and agent_session_cost_usd < 0.10)[$__range:])), \"bucket\", \"0.05-0.10\", \"\", \"\") or label_replace(sum(count_over_time((agent_session_cost_usd >= 0.10 and agent_session_cost_usd < 0.50)[$__range:])), \"bucket\", \"0.10-0.50\", \"\", \"\") or label_replace(sum(count_over_time((agent_session_cost_usd >= 0.50 and agent_session_cost_usd < 1.00)[$__range:])), \"bucket\", \"0.50-1.00\", \"\", \"\") or label_replace(sum(count_over_time((agent_session_cost_usd >= 1.00)[$__range:])), \"bucket\", \"1.00+\", \"\", \"\")",
+                                                "expr": "label_replace(sum(count_over_time((agent_session_cost_usd{deployment_environment=\"$Scope\"} < 0.01)[$__range:])), \"bucket\", \"0-0.01\", \"\", \"\") or label_replace(sum(count_over_time((agent_session_cost_usd{deployment_environment=\"$Scope\"} >= 0.01 and agent_session_cost_usd{deployment_environment=\"$Scope\"} < 0.05)[$__range:])), \"bucket\", \"0.01-0.05\", \"\", \"\") or label_replace(sum(count_over_time((agent_session_cost_usd{deployment_environment=\"$Scope\"} >= 0.05 and agent_session_cost_usd{deployment_environment=\"$Scope\"} < 0.10)[$__range:])), \"bucket\", \"0.05-0.10\", \"\", \"\") or label_replace(sum(count_over_time((agent_session_cost_usd{deployment_environment=\"$Scope\"} >= 0.10 and agent_session_cost_usd{deployment_environment=\"$Scope\"} < 0.50)[$__range:])), \"bucket\", \"0.10-0.50\", \"\", \"\") or label_replace(sum(count_over_time((agent_session_cost_usd{deployment_environment=\"$Scope\"} >= 0.50 and agent_session_cost_usd{deployment_environment=\"$Scope\"} < 1.00)[$__range:])), \"bucket\", \"0.50-1.00\", \"\", \"\") or label_replace(sum(count_over_time((agent_session_cost_usd{deployment_environment=\"$Scope\"} >= 1.00)[$__range:])), \"bucket\", \"1.00+\", \"\", \"\")",
                                                 "format": "table",
                                                 "instant": true,
                                                 "legendFormat": "{{bucket}}",
@@ -444,7 +444,7 @@
                                             "kind": "DataQuery",
                                             "spec": {
                                                 "editorMode": "builder",
-                                                "expr": "sum by(created_by, movement_type) (last_over_time(business_movements_created_count_total[$__range]))",
+                                                "expr": "sum by(created_by, movement_type) (last_over_time(business_movements_created_count_total{deployment_environment=\"$Scope\"}[$__range]))",
                                                 "instant": true,
                                                 "legendFormat": "{{created_by}}",
                                                 "range": false
@@ -556,7 +556,7 @@
                                             "spec": {
                                                 "editorMode": "builder",
                                                 "exemplar": false,
-                                                "expr": "max by(mode) (agent_session_cost_usd)",
+                                                "expr": "max by(mode) (agent_session_cost_usd{deployment_environment=\"$Scope\"})",
                                                 "legendFormat": "{{mode}}",
                                                 "range": true
                                             },
@@ -671,7 +671,7 @@
                                             "spec": {
                                                 "editorMode": "builder",
                                                 "exemplar": false,
-                                                "expr": "max(agent_session_cost_usd)",
+                                                "expr": "max(agent_session_cost_usd{deployment_environment=\"$Scope\"})",
                                                 "legendFormat": "Costo",
                                                 "range": true
                                             },
@@ -754,7 +754,7 @@
                                             "spec": {
                                                 "editorMode": "code",
                                                 "exemplar": false,
-                                                "expr": "sum by (mode) (increase(agent_session_cost_bucket_count[$__range]))",
+                                                "expr": "sum by (mode) (increase(agent_session_cost_bucket_count{deployment_environment=\"$Scope\"}[$__range]))",
                                                 "instant": true,
                                                 "legendFormat": "{{mode}}",
                                                 "range": true
@@ -834,7 +834,7 @@
                                             "spec": {
                                                 "alias": "Visits",
                                                 "editorMode": "builder",
-                                                "expr": "sum by(auth_method) (business_user_accounts_created_count_total)",
+                                                "expr": "sum by(auth_method) (business_user_accounts_created_count_total{deployment_environment=\"$Scope\"})",
                                                 "instant": false,
                                                 "legendFormat": "__auto",
                                                 "max": 28000,
@@ -928,7 +928,7 @@
                                             "kind": "DataQuery",
                                             "spec": {
                                                 "editorMode": "builder",
-                                                "expr": "max by(__name__) (agent_user_monthly_cost_usd)",
+                                                "expr": "max by(__name__) (agent_user_monthly_cost_usd{deployment_environment=\"$Scope\"})",
                                                 "legendFormat": "__auto",
                                                 "range": true
                                             },
@@ -1010,7 +1010,7 @@
                                             "kind": "DataQuery",
                                             "spec": {
                                                 "editorMode": "code",
-                                                "expr": "sum by (user_hash) (last_over_time(agent_user_monthly_cost_usd[$__range]))",
+                                                "expr": "sum by (user_hash) (last_over_time(agent_user_monthly_cost_usd{deployment_environment=\"$Scope\"}[$__range]))",
                                                 "format": "table",
                                                 "instant": true,
                                                 "legendFormat": "__auto",
@@ -1313,17 +1313,37 @@
         "title": "User accounts created by auth method",
         "variables": [
             {
-                "kind": "TextVariable",
+                "kind": "QueryVariable",
                 "spec": {
                     "current": {
-                        "text": "",
-                        "value": ""
+                        "text": "production",
+                        "value": "production"
                     },
-                    "description": "Nombre del scope de convex utilizado",
+                    "description": "Entorno de despliegue (deployment_environment) del que vienen las metricas",
                     "hide": "dontHide",
                     "label": "Scope",
                     "name": "Scope",
-                    "query": "",
+                    "query": {
+                        "kind": "DataQuery",
+                        "group": "prometheus",
+                        "version": "v0",
+                        "datasource": {
+                            "name": "grafanacloud-prom"
+                        },
+                        "spec": {
+                            "qryType": 1,
+                            "query": "label_values(deployment_environment)",
+                            "refId": "PrometheusVariableQueryEditor-VariableQuery"
+                        }
+                    },
+                    "definition": "label_values(deployment_environment)",
+                    "regex": "",
+                    "sort": "alphabeticalAsc",
+                    "refresh": "onDashboardLoad",
+                    "options": [],
+                    "multi": false,
+                    "includeAll": false,
+                    "allowCustomValue": true,
                     "skipUrlSync": false
                 }
             }
