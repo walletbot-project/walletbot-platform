@@ -1,4 +1,5 @@
 export type FlagKey =
+    | 'agentLocalAccounts'
     | 'agentReportButton'
     | 'debugToolCalls'
     | 'exchangeRates'
@@ -10,6 +11,12 @@ export const KNOWN_FLAGS: {
     description: string
     enabledByDefault: boolean
 }[] = [
+    {
+        key: 'agentLocalAccounts',
+        description:
+            'Let native LOCAL accounts (no sign-in) mint a Gasti live token, so the agent works without an account. Off makes the agent sign-in only and local accounts are told to sign in.',
+        enabledByDefault: true,
+    },
     {
         key: 'agentReportButton',
         description:

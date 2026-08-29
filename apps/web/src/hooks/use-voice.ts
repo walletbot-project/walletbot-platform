@@ -786,12 +786,27 @@ export function useVoice(opts: UseVoiceOpts) {
             const mintArgs = await optsRef.current
                 .buildMintArgs?.()
                 .catch(() => undefined)
-            const { token, model } = await convex.action(
+            const minted = await convex.action(
                 api.v1.live.actions.requestLiveToken,
                 mintArgs ?? {},
             )
             if (generation !== generationRef.current) return
             if (!sessionActiveRef.current) return
+            // A refused mint (rate limit) fails identically on every attempt,
+            // so the session ends here instead of looping on the reconnect
+            // backoff. The transcript stays: only the explicit End clears it.
+            if ('error' in minted) {
+                addSystem(catalog.voice.systemUnavailable, 'error')
+                recordHistory('error', 'local', {
+                    message: `Live token refused: ${minted.error}`,
+                    isTransient: false,
+                })
+                sessionActiveRef.current = false
+                clearReconnectTimers()
+                applyStatus('disconnected')
+                return
+            }
+            const { token, model } = minted
             const tokenNotice = catalog.voice.systemTokenReceived({ model })
             addSystem(tokenNotice, 'info')
             // The model is only known now, so this is where the session row
@@ -1112,6 +1127,7 @@ export function useVoice(opts: UseVoiceOpts) {
         convex,
         catalog,
         applyStatus,
+        clearReconnectTimers,
         stopPlayback,
         flushPendingText,
         addSystem,

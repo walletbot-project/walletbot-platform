@@ -465,6 +465,10 @@ class _AuthGate extends StatelessWidget {
                 agentMetrics: ctx.read<AgentMetrics?>(),
                 useAuthenticatedTokenAction: active.type == AccountType.remote,
                 sessionToken: active.sessionToken,
+                // A local account has no session, so the device id is its only
+                // identity at the mint. Sent for remote accounts too; the
+                // server lets the validated session win.
+                deviceId: clientInfo.deviceId,
                 convexClient: ctx.read<ConvexClient?>(),
                 convexSiteUrl: AppConfig.convexSiteUrl,
                 // The updateSettings tool writes through these controllers.

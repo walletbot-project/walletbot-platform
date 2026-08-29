@@ -694,6 +694,8 @@ export const es = {
         systemConnectedTyping: 'Conectado. Enviando tu mensaje…',
         systemConnectionFailed: (p: { error: string }) =>
             `Falló la conexión: ${p.error}`,
+        systemUnavailable:
+            'Gastón no está disponible en este momento. Probá de nuevo en unos minutos.',
         systemMicOpenFailed: (p: { error: string }) =>
             `No se pudo abrir el micrófono: ${p.error}`,
         systemReconnecting: (p: { seconds: number }) =>

@@ -2,20 +2,15 @@ import {
     FEEDBACK_MAX_ATTACHMENT_BYTES,
     FEEDBACK_MAX_ATTACHMENTS,
     FEEDBACK_MAX_MESSAGE_LENGTH,
+    MAX_DEVICE_ID_LENGTH,
 } from '@wallet-bot/shared'
 
 export {
     FEEDBACK_MAX_ATTACHMENT_BYTES,
     FEEDBACK_MAX_ATTACHMENTS,
     FEEDBACK_MAX_MESSAGE_LENGTH,
+    MAX_DEVICE_ID_LENGTH,
 }
-
-/**
- * Cap on the client-supplied device id used to key the anonymous rate limit.
- * `ClientInfo.deviceId` is a uuid; anything longer is a client bug or an attempt
- * to bloat the rate-limiter's key space.
- */
-export const MAX_DEVICE_ID_LENGTH = 128
 
 /** Cap on a stored attachment file name. */
 export const MAX_ATTACHMENT_NAME_LENGTH = 256

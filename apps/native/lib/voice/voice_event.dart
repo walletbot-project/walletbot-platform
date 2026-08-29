@@ -28,13 +28,19 @@ class VoiceDisconnectedEvent extends VoiceEvent {
 }
 
 class VoiceErrorEvent extends VoiceEvent {
-  VoiceErrorEvent(this.message, {this.isTransient = false, super.at});
+  VoiceErrorEvent(this.message, {this.isTransient = false, this.code, super.at});
   final String message;
 
   /// Whether the operation can recover without user action. Transient errors
   /// remain available to persistence/export consumers, while the UI may
   /// collapse repeated retries into one connection-state notice.
   final bool isTransient;
+
+  /// Machine-readable cause for the cases the UI must word differently, so the
+  /// screen never has to match on [message]. Currently the mint refusals from
+  /// `live/helpers.ts:LiveTokenError` plus `missing_credentials`. Null for
+  /// everything else.
+  final String? code;
 }
 
 // -- Generic system notice (informational) -----------------------------------

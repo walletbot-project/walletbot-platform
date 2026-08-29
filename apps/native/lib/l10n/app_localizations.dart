@@ -2804,6 +2804,18 @@ abstract class AppLocalizations {
   /// **'Couldn\'t start the conversation. Please try again.'**
   String get voiceStartFailed;
 
+  /// No description provided for @voiceUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Gastón isn\'t available right now. Please try again in a few minutes.'**
+  String get voiceUnavailable;
+
+  /// No description provided for @voiceRequiresAccount.
+  ///
+  /// In en, this message translates to:
+  /// **'Gastón needs an account. Sign in to start a conversation.'**
+  String get voiceRequiresAccount;
+
   /// No description provided for @microphoneOpenFailed.
   ///
   /// In en, this message translates to:

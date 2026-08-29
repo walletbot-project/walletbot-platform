@@ -629,15 +629,29 @@ class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
           } else {
             _clearConnectionNotice();
           }
-        case VoiceErrorEvent(:final message, :final isTransient):
+        case VoiceErrorEvent(:final message, :final isTransient, :final code):
           // Raw error text never reaches the chat; details are persisted in
-          // the session log. The session keeps running (and reconnecting)
-          // through errors — the End button is the explicit way out.
+          // the session log. Most errors leave the session running (and
+          // reconnecting) — the End button is the explicit way out. Only a
+          // coded error is terminal: the command has already stopped itself,
+          // so this branch owns the last word the user sees.
           debugPrint('[voice] error (transient: $isTransient): $message');
           if (isTransient) {
             conversationChanged = true;
             _isReconnecting = true;
             _showConnectionNotice();
+          } else if (code != null) {
+            // Replace the "reconnecting" notice rather than leaving it up
+            // forever next to a session that has already ended.
+            conversationChanged = true;
+            _isReconnecting = false;
+            _clearConnectionNotice();
+            _addSystem(
+              code == 'local_accounts_disabled'
+                  ? context.l10n.voiceRequiresAccount
+                  : context.l10n.voiceUnavailable,
+              kind: _SystemKind.error,
+            );
           }
         case VoiceSystemEvent():
         case VoiceClientActionEvent():

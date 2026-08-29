@@ -15,6 +15,7 @@ export {
 } from './agent-reports'
 export type { AgentSkill } from './agent-skills'
 export { AGENT_SKILLS, AGENT_SKILLS_BY_SLUG } from './agent-skills'
+export { MAX_DEVICE_ID_LENGTH } from './client'
 export {
     CURRENCIES,
     DEFAULT_CURRENCY,

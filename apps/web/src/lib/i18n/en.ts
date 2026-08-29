@@ -655,6 +655,8 @@ export const en: Messages = {
         systemConnected: 'Connected. Start speaking.',
         systemConnectedTyping: 'Connected. Sending your message…',
         systemConnectionFailed: (p) => `Connection failed: ${p.error}`,
+        systemUnavailable:
+            'Gastón is not available right now. Please try again in a few minutes.',
         systemMicOpenFailed: (p) => `Failed to open the microphone: ${p.error}`,
         systemReconnecting: (p) =>
             `Connection dropped. Retrying in ${p.seconds}s… The conversation continues where it left off.`,

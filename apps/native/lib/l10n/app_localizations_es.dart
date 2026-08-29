@@ -1525,6 +1525,14 @@ class AppLocalizationsEs extends AppLocalizations {
       'No se pudo iniciar la conversación. Intentá de nuevo.';
 
   @override
+  String get voiceUnavailable =>
+      'Gastón no está disponible en este momento. Probá de nuevo en unos minutos.';
+
+  @override
+  String get voiceRequiresAccount =>
+      'Gastón necesita una cuenta. Iniciá sesión para conversar.';
+
+  @override
   String microphoneOpenFailed(Object error) {
     return 'No se pudo abrir el micrófono: $error';
   }

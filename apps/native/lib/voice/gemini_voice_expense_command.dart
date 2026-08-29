@@ -31,10 +31,70 @@ import 'voice_session_repository.dart';
 /// socket is not ready, rather than queueing behind the reconnect. The
 /// `/v1/live/token` endpoint below is the last resort and is independent of
 /// the Convex client entirely.
+/// The backend refused to mint (`live/helpers.ts:LiveTokenError`). Permanent
+/// for this session: the reconnect backoff cannot turn a rate limit or an
+/// unusable identity into a token, it only burns more of the caller's budget.
+class LiveTokenRefusedException implements Exception {
+  const LiveTokenRefusedException(this.reason, {this.retryAfter});
+
+  /// Server-side reason: `rate_limited` or `unidentified_client`.
+  final String reason;
+  final Duration? retryAfter;
+
+  @override
+  String toString() =>
+      'Live token refused: $reason'
+      '${retryAfter == null ? '' : ' (retry after ${retryAfter!.inSeconds}s)'}';
+}
+
+/// Nothing to authenticate the mint with: no bundled token or key, and no
+/// identity the backend would accept. Also permanent for this session.
+class MissingLiveCredentialsException implements Exception {
+  const MissingLiveCredentialsException();
+
+  @override
+  String toString() =>
+      'Missing Gemini credentials. Configure a Convex account or device id, '
+      'GEMINI_LIVE_TOKEN, or GEMINI_API_KEY.';
+}
+
+/// Reads a structured refusal out of a mint response. `retryAfter` is the
+/// rate limiter's millisecond hint.
+LiveTokenRefusedException? _refusalFrom(Map<String, Object?> body) {
+  final error = body['error'];
+  if (error is! String || error.isEmpty) return null;
+  final retryAfter = body['retryAfter'];
+  return LiveTokenRefusedException(
+    error,
+    retryAfter: retryAfter is num
+        ? Duration(milliseconds: retryAfter.round())
+        : null,
+  );
+}
+
+/// Turns a non-2xx mint response into the most specific error available: a
+/// structured refusal when the body carries one, the raw status otherwise.
+Object _httpFailure(int statusCode, String rawBody) {
+  try {
+    final decoded = jsonDecode(rawBody);
+    if (decoded is Map) {
+      final refusal = _refusalFrom(decoded.cast<String, Object?>());
+      if (refusal != null) return refusal;
+    }
+  } on FormatException {
+    // Not JSON (a proxy error page, an empty body): fall through to the raw
+    // status, which is more useful than hiding it behind a parse failure.
+  }
+  return StateError(
+    'Convex live token request failed: $statusCode $rawBody',
+  );
+}
+
 Future<String> _fetchLiveToken({
   required bool useAuthenticatedTokenAction,
   required ConvexClient? convexClient,
   required String? sessionToken,
+  required String? deviceId,
   required String convexSiteUrl,
   Future<Map<String, Object?>> Function()? buildMintArgs,
   void Function(String phase, Map<String, Object?> extra)? onPhase,
@@ -86,28 +146,51 @@ Future<String> _fetchLiveToken({
     }
   }
   if (body == null) {
-    if (convexSiteUrl.isEmpty) return '';
+    if (convexSiteUrl.isEmpty) {
+      onPhase?.call('token_unavailable', {
+        'elapsedMs': fetchStopwatch.elapsedMilliseconds,
+        'reason': 'no_site_url',
+      });
+      return '';
+    }
+    // The endpoint takes either identity. A local account has no session and
+    // mints against its device id instead, which is the whole reason the agent
+    // works without an account; a signed-in caller sends both and the server
+    // lets the session win.
     final credential = sessionToken;
-    if (credential == null || credential.isEmpty) return '';
+    final device = deviceId?.trim() ?? '';
+    if ((credential == null || credential.isEmpty) && device.isEmpty) {
+      onPhase?.call('token_unavailable', {
+        'elapsedMs': fetchStopwatch.elapsedMilliseconds,
+        'reason': 'unidentified_client',
+      });
+      return '';
+    }
     final base = Uri.parse(convexSiteUrl);
     final response = await http
         .post(
           base.replace(path: '/v1/live/token'),
           headers: {
-            'Authorization': 'Bearer $credential',
+            if (credential != null && credential.isNotEmpty)
+              'Authorization': 'Bearer $credential',
             'Content-Type': 'application/json',
           },
-          body: jsonEncode(mintArgs),
+          body: jsonEncode({
+            ...mintArgs,
+            if (device.isNotEmpty) 'deviceId': device,
+          }),
         )
         .timeout(const Duration(seconds: 15));
     if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw StateError(
-        'Convex live token request failed: '
-        '${response.statusCode} ${response.body}',
-      );
+      throw _httpFailure(response.statusCode, response.body);
     }
     body = (jsonDecode(response.body) as Map).cast<String, Object?>();
   }
+
+  // A refusal can arrive with a 200 from the Convex action or a 4xx from the
+  // endpoint; both land here as a permanent error rather than a retry.
+  final refusal = _refusalFrom(body);
+  if (refusal != null) throw refusal;
 
   final token = body['token'];
   if (token is! String || token.isEmpty) {
@@ -136,6 +219,7 @@ class GeminiVoiceExpenseCommandFactory implements VoiceExpenseCommandFactory {
     this.agentMetrics,
     this.useAuthenticatedTokenAction = false,
     this.sessionToken,
+    this.deviceId,
     this.buildMintArgs,
     this.displaySettings,
     this.defaultCurrency,
@@ -152,6 +236,11 @@ class GeminiVoiceExpenseCommandFactory implements VoiceExpenseCommandFactory {
   final AgentMetrics? agentMetrics;
   final bool useAuthenticatedTokenAction;
   final String? sessionToken;
+
+  /// Device identity for the unauthenticated mint (`ClientInfo.deviceId`).
+  /// This is what lets a local account run the agent at all; a remote account
+  /// sends it too, and the server's session wins.
+  final String? deviceId;
 
   /// Builds the mint request (platform identity, locale/timezone and the
   /// USER_CONTEXT snapshot from Drift) — see `agent_context.dart`. Null keeps
@@ -203,6 +292,7 @@ class GeminiVoiceExpenseCommandFactory implements VoiceExpenseCommandFactory {
       useAuthenticatedTokenAction: useAuthenticatedTokenAction,
       convexClient: convexClient,
       sessionToken: sessionToken,
+      deviceId: deviceId,
       convexSiteUrl: convexSiteUrl,
       buildMintArgs: buildMintArgs,
       onPhase: (phase, extra) =>
@@ -257,6 +347,7 @@ class GeminiVoiceExpenseCommandFactory implements VoiceExpenseCommandFactory {
       agentMetrics: agentMetrics,
       useAuthenticatedTokenAction: useAuthenticatedTokenAction,
       sessionToken: sessionToken,
+      deviceId: deviceId,
       buildMintArgs: buildMintArgs,
       displaySettings: displaySettings,
       defaultCurrency: defaultCurrency,
@@ -318,6 +409,7 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
     required this.agentMetrics,
     required this.useAuthenticatedTokenAction,
     required this.sessionToken,
+    required this.deviceId,
     required this.convexClient,
     required this.apiKey,
     required this.liveToken,
@@ -349,6 +441,7 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
   final AgentMetrics? agentMetrics;
   final bool useAuthenticatedTokenAction;
   final String? sessionToken;
+  final String? deviceId;
   final ConvexClient? convexClient;
   final String apiKey;
   final String liveToken;
@@ -474,6 +567,21 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
       (_) {},
       onError: (Object error) {
         if (!isActive) return;
+        // Credential failures are the exception to the retry-everything rule
+        // above: a refused mint or a caller the backend cannot identify will
+        // fail identically on every attempt, so the session ends with a final
+        // error instead of spinning on the backoff behind a "reconnecting"
+        // notice.
+        if (error is LiveTokenRefusedException) {
+          _emit(VoiceErrorEvent('$error', code: error.reason));
+          unawaited(stop());
+          return;
+        }
+        if (error is MissingLiveCredentialsException) {
+          _emit(VoiceErrorEvent('$error', code: 'missing_credentials'));
+          unawaited(stop());
+          return;
+        }
         _emit(
           VoiceErrorEvent('Connect attempt failed: $error', isTransient: true),
         );
@@ -495,10 +603,7 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
         ? await prefetched
         : await _resolveLiveToken();
     if (apiKey.isEmpty && effectiveToken.isEmpty) {
-      throw StateError(
-        'Missing Gemini credentials. Configure an authenticated Convex '
-        'account, GEMINI_LIVE_TOKEN, or GEMINI_API_KEY.',
-      );
+      throw const MissingLiveCredentialsException();
     }
     _logConnectionPhase('token_resolved', connectStopwatch, {
       'prefetched': prefetched != null,
@@ -650,6 +755,7 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
       useAuthenticatedTokenAction: useAuthenticatedTokenAction,
       convexClient: convexClient,
       sessionToken: sessionToken,
+      deviceId: deviceId,
       convexSiteUrl: convexSiteUrl,
       buildMintArgs: buildMintArgs,
       onPhase: (phase, extra) {
@@ -1267,10 +1373,11 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
       'server',
       {'code': ?code, 'reason': ?reason},
     ),
-    VoiceErrorEvent(:final message, :final isTransient) => _VoiceEventRecord(
+    VoiceErrorEvent(:final message, :final isTransient, :final code) =>
+        _VoiceEventRecord(
       'error',
       'local',
-      {'message': message, 'isTransient': isTransient},
+      {'message': message, 'isTransient': isTransient, 'code': ?code},
     ),
     VoiceSystemEvent(:final message) => _VoiceEventRecord('system', 'local', {
       'message': message,

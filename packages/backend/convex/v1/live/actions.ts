@@ -2,6 +2,7 @@ import { v } from 'convex/values'
 import { internal } from '../../_generated/api'
 import { action } from '../../_generated/server'
 import { createLiveToken } from '../../live/createToken'
+import type { LiveMintGate, LiveTokenResponse } from '../../live/helpers'
 import { requireAuth } from '../../users/helpers'
 
 // Wire validators for the client-built context payload (§ USER_CONTEXT in
@@ -73,11 +74,23 @@ export const requestLiveToken = action({
         timezoneOffsetMinutes: v.optional(v.number()),
         context: v.optional(contextValidator),
     },
-    handler: async (ctx, args) => {
+    handler: async (ctx, args): Promise<LiveTokenResponse> => {
         const startedAt = Date.now()
         // Flag-gated tools are resolved server-side, never taken from the
         // client: the mint decides what the session may call.
         const userId = await requireAuth(ctx)
+        // Authenticated callers are still bounded: every mint is real Gemini
+        // spend, and this path shares the deployment-wide ceiling with the
+        // unauthenticated HTTP route.
+        const gate: LiveMintGate = await ctx.runMutation(
+            internal.live.internal.consumeMintLimit,
+            { userId },
+        )
+        if (!gate.ok) {
+            return gate.retryAfter === undefined
+                ? { error: gate.error }
+                : { error: gate.error, retryAfter: gate.retryAfter }
+        }
         const flags = await ctx.runQuery(
             internal.featureFlags.internal.resolveFlagsForUserInternal,
             { userId },

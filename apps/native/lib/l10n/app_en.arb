@@ -498,6 +498,8 @@
   "recorderPermissionFailed": "Could not check microphone permission",
   "pcmUnsupported": "PCM 16-bit streaming is not supported on this device",
   "voiceStartFailed": "Couldn't start the conversation. Please try again.",
+  "voiceUnavailable": "Gastón isn't available right now. Please try again in a few minutes.",
+  "voiceRequiresAccount": "Gastón needs an account. Sign in to start a conversation.",
   "microphoneOpenFailed": "Failed to open the microphone: {error}",
   "@microphoneOpenFailed": {"placeholders": {"error": {"type": "Object"}}},
   "audioStreamFailed": "Audio stream error: {error}",
