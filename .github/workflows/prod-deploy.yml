@@ -71,7 +71,48 @@ jobs:
     permissions:
       contents: write # required to publish/update the GitHub Release below
     steps:
+      # Full history: the version check below reads pubspec.yaml at
+      # `github.event.before`, which a shallow clone does not contain.
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # A push that leaves apps/native/pubspec.yaml's `version:` untouched cuts
+      # no release. It only uploads an APK as a workflow artifact. The base is
+      # `github.event.before` rather than HEAD^ so a push carrying several
+      # commits is compared as a whole. A force-push or an unreadable base
+      # fails closed (no release), because a wrong "bumped" verdict publishes a
+      # release under a version users already have.
+      - name: Detect app version bump
+        id: version
+        env:
+          BEFORE: ${{ github.event.before }}
+        run: |
+          set -euo pipefail
+          current=$(sed -n 's/^version:[[:space:]]*//p' apps/native/pubspec.yaml | head -n1 | tr -d '\r')
+          if [ -z "$current" ]; then
+            echo "::error::apps/native/pubspec.yaml has no version: line"
+            exit 1
+          fi
+
+          previous=""
+          if git cat-file -e "${BEFORE}^{commit}" 2>/dev/null; then
+            previous=$(git show "${BEFORE}:apps/native/pubspec.yaml" 2>/dev/null \
+              | sed -n 's/^version:[[:space:]]*//p' | head -n1 | tr -d '\r') || true
+          fi
+
+          if [ -n "$previous" ] && [ "$current" != "$previous" ]; then
+            bumped=true
+            echo "Version $previous -> $current: publishing release v${current}"
+          else
+            bumped=false
+            echo "Version unchanged at ${current:-?} (base: ${previous:-unavailable}): APK artifact only"
+          fi
+
+          {
+            printf 'version=%s\n' "$current"
+            printf 'bumped=%s\n' "$bumped"
+          } >> "$GITHUB_OUTPUT"
 
       # convex_flutter cross-compiles a Rust binary per target ABI, which is
       # heavy on disk. GitHub-hosted runners ship with a lot of preinstalled
@@ -138,10 +179,11 @@ jobs:
             --dart-define=GOOGLE_SERVER_CLIENT_ID="$GOOGLE_SERVER_CLIENT_ID"
 
       # Play only accepts an AAB for upload, while testers need an APK they can
-      # sideload directly, so main publishes both. `appbundle` recompiles the
+      # sideload directly, so a release carries both. `appbundle` recompiles the
       # Dart AOT snapshot from scratch, which roughly doubles this job's build
-      # time.
+      # time, so it is skipped entirely on pushes that publish no release.
       - name: Build production app bundle
+        if: steps.version.outputs.bumped == 'true'
         working-directory: apps/native
         env:
           CONVEX_URL: ${{ vars.VITE_CONVEX_URL }}
@@ -153,23 +195,38 @@ jobs:
             --dart-define=CONVEX_SITE_URL="$CONVEX_SITE_URL" \
             --dart-define=GOOGLE_SERVER_CLIENT_ID="$GOOGLE_SERVER_CLIENT_ID"
 
-      # A single rolling release/tag (`production-latest`) rather than one
-      # release per push, so there's always exactly one obvious "current
-      # production build" download link.
+      # One release per version, tagged exactly as pubspec.yaml spells it
+      # (`v0.3.0+5`), so shipped builds keep a history. Re-running this job for
+      # the same version updates that release in place instead of failing on
+      # the existing tag.
       - name: Publish production release
+        if: steps.version.outputs.bumped == 'true'
         working-directory: apps/native
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: v${{ steps.version.outputs.version }}
         run: |
           set -euo pipefail
           apk=build/app/outputs/flutter-apk/app-release.apk
           aab=build/app/outputs/bundle/release/app-release.aab
           notes="Automatically built from main @ ${GITHUB_SHA}. Connected to the production backend."
-          if gh release view production-latest >/dev/null 2>&1; then
-            gh release upload production-latest "$apk" "$aab" --clobber
-            gh release edit production-latest --notes "$notes"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" "$apk" "$aab" --clobber
+            gh release edit "$TAG" --notes "$notes"
           else
-            gh release create production-latest "$apk" "$aab" \
-              --title "Production build (latest)" \
+            gh release create "$TAG" "$apk" "$aab" \
+              --target "$GITHUB_SHA" \
+              --title "$TAG" \
               --notes "$notes"
           fi
+
+      # No version bump, so the build is still worth keeping as a signed APK
+      # anyone can grab from the run page, without it looking like a release.
+      - name: Upload APK artifact
+        if: steps.version.outputs.bumped != 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-release-${{ steps.version.outputs.version }}-${{ github.sha }}
+          path: apps/native/build/app/outputs/flutter-apk/app-release.apk
+          if-no-files-found: error
+          retention-days: 14
