@@ -198,6 +198,8 @@ class TelemetryMetric {
     required this.value,
     this.unit,
     this.attributes = const {},
+    this.sessionId,
+    this.sampleId,
   });
 
   final String name;
@@ -207,6 +209,8 @@ class TelemetryMetric {
   final double value;
   final String? unit;
   final Map<String, Object?> attributes;
+  final String? sessionId;
+  final String? sampleId;
 
   Map<String, Object?> toJson({
     required String installationId,
@@ -222,7 +226,8 @@ class TelemetryMetric {
     if (unit != null) 'unit': unit,
     'attributes': attributes,
     'installationId': installationId,
-    'sessionId': sessionId,
+    'sessionId': this.sessionId ?? sessionId,
+    if (sampleId != null) 'sampleId': sampleId,
     'appVersion': appVersion,
     'platform': platform,
   };

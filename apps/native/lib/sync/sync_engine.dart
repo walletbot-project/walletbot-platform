@@ -1,15 +1,15 @@
 import 'dart:async';
+import 'dart:math' as math;
 
-import 'package:convex_flutter/convex_flutter.dart';
 import 'package:drift/drift.dart';
 import 'package:flutter/foundation.dart' hide Category;
 
 import '../app_config/client_info.dart';
+import '../convex/convex_client.dart';
 import '../database.dart';
 import 'sync_merge.dart';
 import 'sync_recompute.dart';
 import 'sync_status.dart';
-import 'wire.dart';
 
 /// The `error` value returned by `sync/*:pull` and `push` when the backend
 /// rejects this client for being below the platform's `minSupportedVersion`.
@@ -34,21 +34,38 @@ class _ClientOutdatedException implements Exception {
 class SyncEngine extends ChangeNotifier {
   SyncEngine({
     required AppDatabase db,
-    required ConvexClient client,
+    required ConvexClient? client,
     required ClientInfo clientInfo,
     this.onClientOutdated,
     this.pullPageLimit = 200,
     this.pushChunkLimit = 80,
     Duration writeDebounce = const Duration(milliseconds: 600),
+    Duration retryFloor = const Duration(seconds: 2),
   }) : _db = db,
        _client = client,
        _clientInfo = clientInfo,
-       _writeDebounce = writeDebounce;
+       _writeDebounce = writeDebounce,
+       _retryFloor = retryFloor;
 
   final AppDatabase _db;
-  final ConvexClient _client;
+
+  /// Null when the app runs without a Convex transport (widget tests). The
+  /// engine is inert then: [start] refuses to wire anything up.
+  final ConvexClient? _client;
+
+  ConvexClient get _requireClient {
+    final client = _client;
+    if (client == null) {
+      throw StateError('sync: engine started without a ConvexClient');
+    }
+    return client;
+  }
+
   final ClientInfo _clientInfo;
   final Duration _writeDebounce;
+
+  /// Backoff floor for the failed-cycle retry. Injected by the tests.
+  final Duration _retryFloor;
 
   /// Invoked when the backend rejects sync because this client is below the
   /// supported-version floor. Lets the app flip to the hard update prompt even
@@ -76,12 +93,25 @@ class SyncEngine extends ChangeNotifier {
   Object? get lastError => _lastError;
   DateTime? get lastSyncedAt => _lastSyncedAt;
 
+  /// Ceiling for retrying a failed cycle. Before the retry existed a cycle
+  /// that failed offline set `SyncStatus.error` and stopped: the only things
+  /// that could ever schedule another one were a local write, a server counter
+  /// that *advanced*, and tapping the pill. Coming back from airplane mode
+  /// with nothing changed remotely left the app stuck in error.
+  static const _retryCeiling = Duration(minutes: 2);
+  static const _maxRetryExponent = 6;
+
   Timer? _debounce;
+  Timer? _retry;
+  int _consecutiveFailures = 0;
   Future<void>? _inFlight;
   bool _trailingTrigger = false;
   SubscriptionHandle? _counterSub;
   StreamSubscription<Object?>? _writeListener;
+  StreamSubscription<ConnectionSnapshot>? _connectionListener;
+  bool _sawDisconnect = false;
   bool _started = false;
+  bool _disposed = false;
 
   /// Set once the backend rejects this client as outdated. Terminal: the engine
   /// tears down its subscription/timers and refuses to start or schedule again
@@ -91,34 +121,45 @@ class SyncEngine extends ChangeNotifier {
   /// Wire up the counter subscription and kick off the first sync. Safe to
   /// call multiple times; subsequent calls are no-ops.
   Future<void> start() async {
-    if (_started || _halted) return;
+    if (_started || _halted || _client == null) return;
     _started = true;
 
-    // Subscribe to the user's server counter. Any change → pull.
-    try {
-      _counterSub = await _client.subscribe(
-        name: 'v1/sync/queries:getCounter',
-        args: const {},
-        onUpdate: (raw) {
-          final value = decodeConvexResponse(raw);
-          if (value is BigInt) {
-            if (value > _lastKnownRemoteCounter) {
-              _lastKnownRemoteCounter = value;
-              _scheduleNow();
-            }
-          }
-        },
-        onError: (message, _) {
-          debugPrint('sync: counter subscription error: $message');
-        },
-      );
-    } catch (e) {
-      debugPrint('sync: failed to subscribe to counter: $e');
-    }
+    // Subscribe to the user's server counter. Any change → pull. The client
+    // queues the subscription while offline and re-adds it on every
+    // reconnect, so this can never leave the engine trigger-starved.
+    _counterSub = _requireClient.subscribe(
+      'v1/sync/queries:getCounter',
+      const {},
+      onUpdate: (value) {
+        if (value is BigInt && value > _lastKnownRemoteCounter) {
+          _lastKnownRemoteCounter = value;
+          _scheduleNow();
+        }
+      },
+      onError: (error) {
+        debugPrint('sync: counter subscription error: $error');
+      },
+    );
 
     // Listen for any local mutation to entity tables and trigger a debounced
     // sync. Writes the engine performs itself (merger / push-ack) happen
     // while `_inFlight != null` so we skip those to avoid feedback loops.
+    // A reconnect is the other thing that must trigger a cycle. The counter
+    // subscription only fires when the server counter *advanced*, so an
+    // offline stretch in which nothing changed remotely re-delivers the same
+    // value and schedules nothing.
+    _connectionListener = _requireClient.connectionState.listen((snapshot) {
+      if (snapshot.status != ConnectionStatus.ready) {
+        _sawDisconnect = true;
+        return;
+      }
+      if (!_sawDisconnect || _halted) return;
+      _sawDisconnect = false;
+      _consecutiveFailures = 0;
+      _retry?.cancel();
+      _scheduleNow();
+    });
+
     _writeListener = _db
         .tableUpdates(
           TableUpdateQuery.onAllTables([
@@ -129,6 +170,7 @@ class SyncEngine extends ChangeNotifier {
             _db.transactionTags,
             _db.savedFilters,
             _db.dashboardWidgets,
+            _db.agentMemories,
             _db.tombstones,
           ]),
         )
@@ -157,18 +199,23 @@ class SyncEngine extends ChangeNotifier {
 
   @override
   void dispose() {
+    _disposed = true;
     _debounce?.cancel();
+    _retry?.cancel();
     _counterSub?.cancel();
     _counterSub = null;
     _writeListener?.cancel();
     _writeListener = null;
+    _connectionListener?.cancel();
+    _connectionListener = null;
     super.dispose();
   }
 
   // ─── Scheduler ───────────────────────────────────────────────────────────
 
   Future<void> _scheduleNow() {
-    if (_halted) return Future.value();
+    if (_halted || _disposed) return Future.value();
+    _retry?.cancel();
     if (_inFlight != null) {
       _trailingTrigger = true;
       return _inFlight!;
@@ -208,6 +255,8 @@ class SyncEngine extends ChangeNotifier {
           ),
         ),
       );
+      _consecutiveFailures = 0;
+      _retry?.cancel();
       _setStatus(SyncStatus.synced, error: null);
     } on _ClientOutdatedException {
       debugPrint('sync: backend rejected client as outdated — halting sync');
@@ -215,7 +264,28 @@ class SyncEngine extends ChangeNotifier {
     } catch (e, st) {
       debugPrint('sync: runOnce failed: $e\n$st');
       _setStatus(SyncStatus.error, error: e);
+      _scheduleRetry();
     }
+  }
+
+  /// Retries a failed cycle on an exponential backoff. Cheap to keep running:
+  /// while the socket is down every attempt fails fast on the client's own
+  /// connect timeout, and a reconnect cancels the timer and syncs at once.
+  void _scheduleRetry() {
+    if (_halted || _disposed) return;
+    _retry?.cancel();
+    _consecutiveFailures += 1;
+    final exponent = math.min(_consecutiveFailures - 1, _maxRetryExponent);
+    final delay = Duration(
+      milliseconds: math.min(
+        _retryCeiling.inMilliseconds,
+        _retryFloor.inMilliseconds * math.pow(2, exponent).toInt(),
+      ),
+    );
+    _retry = Timer(delay, () {
+      if (_halted || _disposed) return;
+      unawaited(_scheduleNow());
+    });
   }
 
   /// Tear down the engine after a `client_outdated` rejection: cancel the
@@ -224,10 +294,13 @@ class SyncEngine extends ChangeNotifier {
   void _haltForOutdatedClient() {
     _halted = true;
     _debounce?.cancel();
+    _retry?.cancel();
     _counterSub?.cancel();
     _counterSub = null;
     _writeListener?.cancel();
     _writeListener = null;
+    _connectionListener?.cancel();
+    _connectionListener = null;
     _setStatus(SyncStatus.error, error: const _ClientOutdatedException());
     onClientOutdated?.call();
   }
@@ -235,6 +308,9 @@ class SyncEngine extends ChangeNotifier {
   void _setStatus(SyncStatus status, {Object? error}) {
     _status = status;
     _lastError = error;
+    // A cycle already running when dispose() lands still reaches here, and
+    // notifying a disposed ChangeNotifier throws.
+    if (_disposed) return;
     notifyListeners();
   }
 
@@ -253,15 +329,15 @@ class SyncEngine extends ChangeNotifier {
         throw StateError('sync: pull loop exceeded 10k iterations');
       }
 
-      final raw = await _client.query('v1/sync/queries:pull', {
-        'since': prepareArgValue(since),
-        'limit': pullPageLimit,
-        'platform': _clientInfo.platform,
-        'appVersion': _clientInfo.appVersion,
-      });
-      final decoded = decodeConvexResponse(raw);
+      final decoded = await _requireClient
+          .query<Object?>('v1/sync/queries:pull', {
+            'since': since,
+            'limit': pullPageLimit,
+            'platform': _clientInfo.platform,
+            'appVersion': _clientInfo.appVersion,
+          });
       if (decoded is! Map) {
-        throw StateError('sync: malformed pull response: $raw');
+        throw StateError('sync: malformed pull response: $decoded');
       }
       if (decoded['error'] == _clientOutdatedError) {
         throw const _ClientOutdatedException();
@@ -394,6 +470,14 @@ class SyncEngine extends ChangeNotifier {
     chunk.dashboardWidgets.addAll(dirtyDashboardWidgets);
     if (chunk.size >= pushChunkLimit) return chunk;
 
+    final dirtyAgentMemories =
+        await (_db.select(_db.agentMemories)
+              ..where((m) => m.dirty.equals(true))
+              ..limit(pushChunkLimit - chunk.size))
+            .get();
+    chunk.agentMemories.addAll(dirtyAgentMemories);
+    if (chunk.size >= pushChunkLimit) return chunk;
+
     final dirtyTxns =
         await (_db.select(_db.transactions)
               ..where((t) => t.dirty.equals(true))
@@ -445,8 +529,8 @@ class SyncEngine extends ChangeNotifier {
     required _Chunk chunk,
   }) async {
     final args = <String, Object?>{
-      'expectedServerSeq': prepareArgValue(expected),
-      'upserts': prepareArgValue({
+      'expectedServerSeq': expected,
+      'upserts': {
         if (chunk.accounts.isNotEmpty)
           'accounts': chunk.accounts.map(_serializeAccount).toList(),
         if (chunk.categories.isNotEmpty)
@@ -461,6 +545,10 @@ class SyncEngine extends ChangeNotifier {
           'dashboardWidgets': chunk.dashboardWidgets
               .map(_serializeDashboardWidget)
               .toList(),
+        if (chunk.agentMemories.isNotEmpty)
+          'agentMemories': chunk.agentMemories
+              .map(_serializeAgentMemory)
+              .toList(),
         if (chunk.transactions.isNotEmpty)
           'transactions': chunk.transactions
               .map(_serializeTransaction)
@@ -469,22 +557,19 @@ class SyncEngine extends ChangeNotifier {
           'transactionTags': chunk.transactionTags
               .map(_serializeTransactionTag)
               .toList(),
-      }),
+      },
       if (chunk.tombstones.isNotEmpty)
-        'tombstones': prepareArgValue(
-          chunk.tombstones.map(_serializeTombstone).toList(),
-        ),
+        'tombstones': chunk.tombstones.map(_serializeTombstone).toList(),
       'platform': _clientInfo.platform,
       'appVersion': _clientInfo.appVersion,
     };
 
-    final raw = await _client.mutation(
-      name: 'v1/sync/mutations:push',
-      args: args,
+    final decoded = await _requireClient.mutation<Object?>(
+      'v1/sync/mutations:push',
+      args,
     );
-    final decoded = decodeConvexResponse(raw);
     if (decoded is! Map) {
-      throw StateError('sync: malformed push response: $raw');
+      throw StateError('sync: malformed push response: $decoded');
     }
     final ok = decoded['ok'] == true;
     if (!ok) {
@@ -552,6 +637,16 @@ class SyncEngine extends ChangeNotifier {
           await (_db.update(_db.dashboardWidgets)
                 ..where((row) => row.id.equals(w.id)))
               .write(const DashboardWidgetsCompanion(dirty: Value(false)));
+        }
+      }
+      for (final m in chunk.agentMemories) {
+        final cur = await (_db.select(
+          _db.agentMemories,
+        )..where((row) => row.id.equals(m.id))).getSingleOrNull();
+        if (cur != null && cur.updatedAt == m.updatedAt) {
+          await (_db.update(_db.agentMemories)
+                ..where((row) => row.id.equals(m.id)))
+              .write(const AgentMemoriesCompanion(dirty: Value(false)));
         }
       }
       for (final t in chunk.transactions) {
@@ -657,6 +752,14 @@ class SyncEngine extends ChangeNotifier {
     'updatedAt': row.updatedAt,
   };
 
+  Map<String, Object?> _serializeAgentMemory(AgentMemory row) => {
+    'id': row.id,
+    'content': row.content,
+    'isArchived': row.archived,
+    'createdAt': row.createdAt,
+    'updatedAt': row.updatedAt,
+  };
+
   Map<String, Object?> _serializeTransaction(Transaction row) => {
     'id': row.id,
     'type': row.type,
@@ -704,6 +807,7 @@ class _Chunk {
   final List<Tag> tags = [];
   final List<SavedFilter> savedFilters = [];
   final List<DashboardWidget> dashboardWidgets = [];
+  final List<AgentMemory> agentMemories = [];
   final List<Transaction> transactions = [];
   final List<TransactionTag> transactionTags = [];
   final List<Tombstone> tombstones = [];
@@ -714,6 +818,7 @@ class _Chunk {
       tags.length +
       savedFilters.length +
       dashboardWidgets.length +
+      agentMemories.length +
       transactions.length +
       transactionTags.length +
       tombstones.length;

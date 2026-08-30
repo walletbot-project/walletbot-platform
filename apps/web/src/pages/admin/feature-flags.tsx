@@ -1,7 +1,11 @@
 import { api } from '@wallet-bot/backend/api'
+import { IconButton } from 'actify'
 import { useMutation, usePaginatedQuery, useQuery } from 'convex/react'
 import { type FormEvent, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
+import { AppBar } from '@/components/m3/app-bar'
+import { Icon } from '@/components/m3/icon'
 import { Button } from '@/components/ui/button'
 import {
     Card,
@@ -15,6 +19,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Switch } from '@/components/ui/switch'
 
 export function FeatureFlags() {
+    const navigate = useNavigate()
     const isAdmin = useQuery(api.v1.featureFlags.queries.getMyAdminStatus)
     const flags = useQuery(
         api.v1.featureFlags.queries.listFlags,
@@ -42,16 +47,39 @@ export function FeatureFlags() {
     }
 
     return (
-        <div className="flex flex-1 flex-col gap-4 p-4">
-            {flags === undefined ? (
-                <>
-                    <Skeleton className="h-24 w-full" />
-                    <Skeleton className="h-24 w-full" />
-                </>
-            ) : (
-                flags.map((flag) => <FlagCard key={flag.key} flag={flag} />)
-            )}
-        </div>
+        <>
+            <AppBar
+                title="Feature flags"
+                leading={
+                    <IconButton
+                        aria-label="Go back"
+                        onPress={() => navigate(-1)}
+                        className="text-on-surface-variant"
+                    >
+                        <Icon name="arrow_back" />
+                    </IconButton>
+                }
+                actions={
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => navigate('/admin/agent-reports')}
+                    >
+                        Reported responses
+                    </Button>
+                }
+            />
+            <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-4">
+                {flags === undefined ? (
+                    <>
+                        <Skeleton className="h-24 w-full shrink-0" />
+                        <Skeleton className="h-24 w-full shrink-0" />
+                    </>
+                ) : (
+                    flags.map((flag) => <FlagCard key={flag.key} flag={flag} />)
+                )}
+            </div>
+        </>
     )
 }
 
@@ -127,7 +155,10 @@ function FlagCard({ flag }: { flag: FlagRow }) {
     }
 
     return (
-        <Card>
+        // shrink-0: a flex child defaults to shrinking, so without this the
+        // cards compress to fit the viewport and clip their own contents
+        // instead of overflowing the scroll container above.
+        <Card className="shrink-0">
             <CardHeader>
                 <CardTitle className="flex items-center justify-between gap-2">
                     <span>{flag.key}</span>

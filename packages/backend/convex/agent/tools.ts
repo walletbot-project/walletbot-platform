@@ -22,7 +22,19 @@
 // session. Nothing here reads a client-supplied identity.
 
 import {
+    AGENT_CONTEXT_CAPS,
+    AGENT_SKILLS,
+    AGENT_SKILLS_BY_SLUG,
+    convertAmount,
+    DEFAULT_FX_MARKET,
+    fxAlternatives,
+    isFxQuoteStale,
+    isValidCurrencyCode,
+    normalizeCurrencyCode,
     parseAmountToCents,
+    resolveFxQuote,
+    runCalculate,
+    runCalculateDate,
     type ToolArgs,
     toolSchemas,
 } from '@wallet-bot/shared'
@@ -31,6 +43,8 @@ import type { Doc, Id } from '../_generated/dataModel'
 import type { MutationCtx } from '../_generated/server'
 import { internalMutation } from '../_generated/server'
 import { inflowsByAccount, outflowsByAccount } from '../aggregates'
+import { readSnapshot } from '../exchangeRates/helpers'
+import { resolveFlagsForUser } from '../featureFlags/helpers'
 import { nextSeq, writeTombstone } from '../sync/helpers'
 import {
     recordFinancialAccountCreated,
@@ -55,11 +69,12 @@ import type { Resolution } from './resolve'
 import { resolveAccount, resolveCategory, resolveTag } from './resolve'
 import {
     formatLocalDateTime,
+    hostDateAtLocalWallClock,
     parseAgentDate,
     parseAgentDateEndOfDay,
     parseAgentTransactionDate,
 } from './time'
-import { isAgentToolName } from './toolset'
+import { flagForTool, isAgentToolName } from './toolset'
 
 // Every read below is narrowed to one user through an index, but a user with a
 // long history could still ask for a year of transactions. These caps keep a
@@ -69,6 +84,10 @@ import { isAgentToolName } from './toolset'
 const MAX_LIST_LIMIT = 50
 const MAX_TAG_JOIN_SCAN = 500
 const MAX_SUMMARY_ROWS = 2000
+
+// Same ceiling `v1/memories/mutations.ts` enforces: memories are one-liners,
+// not documents.
+const MAX_MEMORY_CHARS = 500
 
 type ToolResult = Record<string, unknown>
 
@@ -636,7 +655,21 @@ const listTransactionsTool = async (
     args: ToolArgs<'listTransactions'>,
     clock: Clock,
 ): Promise<ToolResult> => {
-    const limit = Math.min(Math.max(args.limit ?? 50, 1), MAX_LIST_LIMIT)
+    // With no filters this is the "what did I spend lately" shortcut that used
+    // to be its own `getRecentTransactions` tool, so it defaults to a chat-sized
+    // ten rows; a filtered query is a deliberate search and defaults wider.
+    const filtered =
+        args.type !== undefined ||
+        args.status !== undefined ||
+        args.accountIdOrName !== undefined ||
+        args.categoryIdOrName !== undefined ||
+        args.tagIdOrName !== undefined ||
+        args.dateFrom !== undefined ||
+        args.dateTo !== undefined
+    const limit = Math.min(
+        Math.max(args.limit ?? (filtered ? 50 : 10), 1),
+        MAX_LIST_LIMIT,
+    )
 
     let accountId: string | undefined
     if (args.accountIdOrName !== undefined) {
@@ -787,22 +820,6 @@ const getTransactionTool = async (
             tagIds: joins.map((j) => j.tagId),
         },
     })
-}
-
-const getRecentTransactionsTool = async (
-    ctx: Ctx,
-    userId: string,
-    args: ToolArgs<'getRecentTransactions'>,
-    clock: Clock,
-): Promise<ToolResult> => {
-    const limit = Math.min(Math.max(args.limit ?? 10, 1), MAX_LIST_LIMIT)
-    const rows = await ctx.db
-        .query('transactions')
-        .withIndex('by_user_date', (q) => q.eq('userId', userId))
-        .order('desc')
-        .filter((q) => q.eq(q.field('isArchived'), false))
-        .take(limit)
-    return ok({ items: rows.map((t) => serializeTransaction(t, clock)) })
 }
 
 // ───── Transaction writes ─────
@@ -1147,10 +1164,29 @@ const updateTransactionTool = async (
     })
     await aggregateReplace(ctx, row, row._id)
 
+    // Tags ride along with the rest of the edit, in the same transaction, so a
+    // half-applied update is not a state this can end in.
+    const missing: string[] = []
+    let added = 0
+    let removed = 0
+    if (args.addTagIdsOrNames !== undefined) {
+        const tags = await resolveTagIds(ctx, userId, args.addTagIdsOrNames)
+        missing.push(...tags.missing)
+        added = await attachTags(ctx, userId, row.id, tags.ids)
+    }
+    if (args.removeTagIdsOrNames !== undefined) {
+        const tags = await resolveTagIds(ctx, userId, args.removeTagIdsOrNames)
+        missing.push(...tags.missing)
+        removed = await detachTags(ctx, userId, row.id, tags.ids)
+    }
+
     const updated = await ctx.db.get(row._id)
     return ok({
         id: row.id,
         transaction: updated ? serializeTransaction(updated, clock) : null,
+        ...(added > 0 ? { added } : {}),
+        ...(removed > 0 ? { removed } : {}),
+        ...(missing.length > 0 ? { missing } : {}),
     })
 }
 
@@ -1199,26 +1235,6 @@ const deleteTransactionTool = async (
     return ok({ id: args.id })
 }
 
-const tagTransactionTool = async (
-    ctx: Ctx,
-    userId: string,
-    args: ToolArgs<'tagTransaction'>,
-    attach: boolean,
-): Promise<ToolResult> => {
-    const row = await getTransactionRow(ctx, userId, args.transactionId)
-    if (!row) return fail('Transaction not found')
-
-    const tags = await resolveTagIds(ctx, userId, args.tagIdsOrNames)
-    const changed = attach
-        ? await attachTags(ctx, userId, args.transactionId, tags.ids)
-        : await detachTags(ctx, userId, args.transactionId, tags.ids)
-    return ok(
-        attach
-            ? { added: changed, missing: tags.missing }
-            : { removed: changed, missing: tags.missing },
-    )
-}
-
 // ───── Summaries ─────
 
 const summaryWindow = (
@@ -1232,10 +1248,10 @@ const summaryWindow = (
     ),
 })
 
-const summarizeByCategoryTool = async (
+const summarizeTransactionsTool = async (
     ctx: Ctx,
     userId: string,
-    args: ToolArgs<'summarizeByCategory'>,
+    args: ToolArgs<'summarizeTransactions'>,
     clock: Clock,
 ): Promise<ToolResult> => {
     const { from, to } = summaryWindow(args.dateFrom, args.dateTo, clock)
@@ -1245,52 +1261,44 @@ const summarizeByCategoryTool = async (
             q.eq('userId', userId).gte('date', from).lte('date', to),
         )
         .take(MAX_SUMMARY_ROWS)
+    const truncated = rows.length === MAX_SUMMARY_ROWS
 
-    const totals = new Map<string, bigint>()
-    for (const t of rows) {
-        if (t.isArchived) continue
-        // Transfers move money between the user's own accounts; counting them
-        // as spend would double the totals.
-        if (t.type === 'transfer') continue
-        if (args.type !== undefined && t.type !== args.type) continue
-        if (args.currency !== undefined && t.currency !== args.currency)
-            continue
-        totals.set(t.categoryId, (totals.get(t.categoryId) ?? 0n) + t.amount)
+    if (args.groupBy === 'category') {
+        const totals = new Map<string, bigint>()
+        for (const t of rows) {
+            if (t.isArchived) continue
+            // Transfers move money between the user's own accounts; counting
+            // them as spend would double the totals.
+            if (t.type === 'transfer') continue
+            if (args.type !== undefined && t.type !== args.type) continue
+            if (args.currency !== undefined && t.currency !== args.currency)
+                continue
+            totals.set(
+                t.categoryId,
+                (totals.get(t.categoryId) ?? 0n) + t.amount,
+            )
+        }
+
+        const categories = await ctx.db
+            .query('categories')
+            .withIndex('by_user_archived', (q) =>
+                q.eq('userId', userId).eq('isArchived', false),
+            )
+            .collect()
+        const nameById = new Map(categories.map((c) => [c.id, c.name]))
+
+        return ok({
+            groupBy: 'category',
+            rows: [...totals.entries()]
+                .map(([categoryId, cents]) => ({
+                    categoryId,
+                    name: nameById.get(categoryId) ?? '(unknown)',
+                    total: centsToDecimal(cents),
+                }))
+                .sort((a, b) => Math.abs(b.total) - Math.abs(a.total)),
+            truncated,
+        })
     }
-
-    const categories = await ctx.db
-        .query('categories')
-        .withIndex('by_user_archived', (q) =>
-            q.eq('userId', userId).eq('isArchived', false),
-        )
-        .collect()
-    const nameById = new Map(categories.map((c) => [c.id, c.name]))
-
-    return ok({
-        rows: [...totals.entries()]
-            .map(([categoryId, cents]) => ({
-                categoryId,
-                name: nameById.get(categoryId) ?? '(unknown)',
-                total: centsToDecimal(cents),
-            }))
-            .sort((a, b) => Math.abs(b.total) - Math.abs(a.total)),
-        truncated: rows.length === MAX_SUMMARY_ROWS,
-    })
-}
-
-const summarizeByAccountTool = async (
-    ctx: Ctx,
-    userId: string,
-    args: ToolArgs<'summarizeByAccount'>,
-    clock: Clock,
-): Promise<ToolResult> => {
-    const { from, to } = summaryWindow(args.dateFrom, args.dateTo, clock)
-    const rows = await ctx.db
-        .query('transactions')
-        .withIndex('by_user_date', (q) =>
-            q.eq('userId', userId).gte('date', from).lte('date', to),
-        )
-        .take(MAX_SUMMARY_ROWS)
 
     const accounts = await ctx.db
         .query('accounts')
@@ -1331,6 +1339,7 @@ const summarizeByAccountTool = async (
     }
 
     return ok({
+        groupBy: 'account',
         rows: [...flows.entries()].map(([accountId, flow]) => ({
             accountId,
             name: flow.name,
@@ -1339,8 +1348,210 @@ const summarizeByAccountTool = async (
             out: centsToDecimal(flow.outCents),
             net: centsToDecimal(flow.inCents - flow.outCents),
         })),
-        truncated: rows.length === MAX_SUMMARY_ROWS,
+        truncated,
     })
+}
+
+// ───── Memory ─────
+//
+// The same `agentMemories` rows the voice agent reads and writes through
+// `v1/memories/*`, and the same rules: capped set, soft delete plus tombstone
+// so every device learns the memory is gone. A memory saved over WhatsApp
+// shows up in the next voice session, which is the whole point of storing it
+// on the server rather than per channel.
+
+const listMemories = async (ctx: Ctx, userId: string) =>
+    await ctx.db
+        .query('agentMemories')
+        .withIndex('by_user_archived', (q) =>
+            q.eq('userId', userId).eq('isArchived', false),
+        )
+        .take(AGENT_CONTEXT_CAPS.memories)
+
+const memoryContent = (raw: string): string | null => {
+    const content = raw.trim()
+    if (!content) return null
+    return content.length > MAX_MEMORY_CHARS
+        ? content.slice(0, MAX_MEMORY_CHARS)
+        : content
+}
+
+const getMemoryRow = async (ctx: Ctx, userId: string, id: string) =>
+    await ctx.db
+        .query('agentMemories')
+        .withIndex('by_user_id', (q) => q.eq('userId', userId).eq('id', id))
+        .unique()
+
+const addMemoryTool = async (
+    ctx: Ctx,
+    userId: string,
+    args: ToolArgs<'addMemory'>,
+    writeKey: WriteKey,
+): Promise<ToolResult> => {
+    const content = memoryContent(args.content)
+    if (content === null) return fail('Memory content cannot be empty')
+
+    const id = await newEntityId(writeKey)
+    const existing = await getMemoryRow(ctx, userId, id)
+    // A replayed turn rebuilds the same id, so the memory is already there.
+    if (existing) return ok({ id, duplicate: true })
+
+    const active = await listMemories(ctx, userId)
+    if (active.length >= AGENT_CONTEXT_CAPS.memories) {
+        return fail(
+            'Memory limit reached — consolidate first: merge or rewrite existing memories (updateMemory) and delete obsolete ones (forgetMemory) before adding new ones',
+        )
+    }
+
+    const seq = await nextSeq(ctx, userId)
+    const now = BigInt(Date.now())
+    await ctx.db.insert('agentMemories', {
+        userId,
+        id,
+        content,
+        isArchived: false,
+        createdAt: now,
+        updatedAt: now,
+        seq,
+    })
+    return ok({ id, content })
+}
+
+const updateMemoryTool = async (
+    ctx: Ctx,
+    userId: string,
+    args: ToolArgs<'updateMemory'>,
+): Promise<ToolResult> => {
+    const content = memoryContent(args.content)
+    if (content === null) return fail('Memory content cannot be empty')
+
+    const row = await getMemoryRow(ctx, userId, args.id)
+    if (!row || row.isArchived) return fail('Memory not found')
+
+    const seq = await nextSeq(ctx, userId)
+    await ctx.db.patch(row._id, {
+        content,
+        updatedAt: BigInt(Date.now()),
+        seq,
+    })
+    return ok({ id: args.id, content })
+}
+
+const forgetMemoryTool = async (
+    ctx: Ctx,
+    userId: string,
+    args: ToolArgs<'forgetMemory'>,
+): Promise<ToolResult> => {
+    const row = await getMemoryRow(ctx, userId, args.id)
+    // Idempotent: forgetting something already gone is what the user wanted.
+    if (!row || row.isArchived) return ok({ id: args.id })
+
+    const seq = await nextSeq(ctx, userId)
+    await ctx.db.patch(row._id, {
+        isArchived: true,
+        updatedAt: BigInt(Date.now()),
+        seq,
+    })
+    await writeTombstone(ctx, {
+        userId,
+        tableName: 'agentMemories',
+        entityId: args.id,
+        seq,
+    })
+    return ok({ id: args.id })
+}
+
+// ───── Exchange rates ─────
+
+const getExchangeRateTool = async (
+    ctx: Ctx,
+    args: ToolArgs<'getExchangeRate'>,
+    clock: Clock,
+): Promise<ToolResult> => {
+    const from = normalizeCurrencyCode(args.from)
+    const to = normalizeCurrencyCode(args.to)
+    if (!isValidCurrencyCode(from))
+        return fail(`Unknown currency code: ${from}`)
+    if (!isValidCurrencyCode(to)) return fail(`Unknown currency code: ${to}`)
+    if (from === to) return fail('from and to are the same currency')
+
+    const snapshot = await readSnapshot(ctx)
+    if (snapshot.length === 0) {
+        return fail('Exchange rates are unavailable right now')
+    }
+    const resolution = resolveFxQuote(
+        snapshot,
+        from,
+        to,
+        args.market ?? DEFAULT_FX_MARKET,
+    )
+    if (!resolution) return fail(`No exchange rate available for ${from}→${to}`)
+
+    const alternatives = fxAlternatives(snapshot, from, to)
+    return ok({
+        from: resolution.from,
+        to: resolution.to,
+        market: resolution.market,
+        rate: resolution.rate,
+        ...(resolution.buy === undefined ? {} : { buy: resolution.buy }),
+        ...(resolution.sell === undefined ? {} : { sell: resolution.sell }),
+        source: resolution.source,
+        asOf: resolution.asOf,
+        path: resolution.path,
+        ...(isFxQuoteStale(resolution.asOf, clock.nowMs)
+            ? { stale: true }
+            : {}),
+        ...(args.amount === undefined
+            ? {}
+            : { converted: convertAmount(args.amount, resolution.rate) }),
+        ...(Object.keys(alternatives).length > 0 ? { alternatives } : {}),
+    })
+}
+
+// ───── Math, dates and skills ─────
+//
+// Pure: no database, no user data, identical answers to the ones the native
+// and web executors give for the same arguments. They are here so the model
+// stops doing mental arithmetic in a channel where a wrong total reads exactly
+// like a right one.
+
+const calculateTool = (args: ToolArgs<'calculate'>): ToolResult => {
+    try {
+        const steps = runCalculate(args.steps)
+        return ok({ steps, result: steps[steps.length - 1].value })
+    } catch (error) {
+        return fail(error instanceof Error ? error.message : String(error))
+    }
+}
+
+const calculateDateTool = (
+    args: ToolArgs<'calculateDate'>,
+    clock: Clock,
+): ToolResult => {
+    try {
+        // `runCalculateDate` reads the calendar off a Date's LOCAL fields,
+        // which on the clients is the user's own zone and here is the server's.
+        // Hand it an instant whose local fields spell out the user's wall
+        // clock, so "hoy" means their today and not the deployment's.
+        return ok({
+            ...runCalculateDate(
+                args,
+                hostDateAtLocalWallClock(clock.nowMs, clock.offsetMinutes),
+            ),
+        })
+    } catch (error) {
+        return fail(error instanceof Error ? error.message : String(error))
+    }
+}
+
+const readSkillTool = (args: ToolArgs<'readSkill'>): ToolResult => {
+    const skill = AGENT_SKILLS_BY_SLUG.get(args.slug)
+    if (!skill) {
+        return fail(`Unknown skill: ${args.slug}`, {
+            availableSlugs: AGENT_SKILLS.map((s) => s.slug),
+        })
+    }
+    return ok({ slug: skill.slug, title: skill.title, body: skill.body })
 }
 
 // ───── Dispatch ─────
@@ -1504,14 +1715,6 @@ const dispatch = async (
                 toolSchemas.getTransaction.parse(raw),
                 clock,
             )
-        case 'getRecentTransactions':
-            return await getRecentTransactionsTool(
-                ctx,
-                userId,
-                toolSchemas.getRecentTransactions.parse(raw),
-                clock,
-            )
-
         case 'addExpense':
             return await createMovement(
                 ctx,
@@ -1559,33 +1762,48 @@ const dispatch = async (
                 userId,
                 toolSchemas.deleteTransaction.parse(raw),
             )
-        case 'tagTransaction':
-            return await tagTransactionTool(
+        case 'summarizeTransactions':
+            return await summarizeTransactionsTool(
                 ctx,
                 userId,
-                toolSchemas.tagTransaction.parse(raw),
-                true,
-            )
-        case 'untagTransaction':
-            return await tagTransactionTool(
-                ctx,
-                userId,
-                toolSchemas.untagTransaction.parse(raw),
-                false,
-            )
-
-        case 'summarizeByCategory':
-            return await summarizeByCategoryTool(
-                ctx,
-                userId,
-                toolSchemas.summarizeByCategory.parse(raw),
+                toolSchemas.summarizeTransactions.parse(raw),
                 clock,
             )
-        case 'summarizeByAccount':
-            return await summarizeByAccountTool(
+
+        case 'addMemory':
+            return await addMemoryTool(
                 ctx,
                 userId,
-                toolSchemas.summarizeByAccount.parse(raw),
+                toolSchemas.addMemory.parse(raw),
+                writeKey,
+            )
+        case 'updateMemory':
+            return await updateMemoryTool(
+                ctx,
+                userId,
+                toolSchemas.updateMemory.parse(raw),
+            )
+        case 'forgetMemory':
+            return await forgetMemoryTool(
+                ctx,
+                userId,
+                toolSchemas.forgetMemory.parse(raw),
+            )
+
+        case 'calculate':
+            return calculateTool(toolSchemas.calculate.parse(raw))
+        case 'calculateDate':
+            return calculateDateTool(
+                toolSchemas.calculateDate.parse(raw),
+                clock,
+            )
+        case 'readSkill':
+            return readSkillTool(toolSchemas.readSkill.parse(raw))
+
+        case 'getExchangeRate':
+            return await getExchangeRateTool(
+                ctx,
+                toolSchemas.getExchangeRate.parse(raw),
                 clock,
             )
 
@@ -1624,6 +1842,17 @@ export const execute = internalMutation({
     handler: async (ctx, args): Promise<string> => {
         if (!isAgentToolName(args.name)) {
             return JSON.stringify(fail(`Unknown tool: ${args.name}`))
+        }
+        // A flag-gated tool is already filtered out of the declarations the
+        // model is given (`agent/runner.ts`), so this is not a duplicate check
+        // but the authoritative one: the executor never takes the model's word
+        // for which tools the rollout has reached.
+        const flag = flagForTool(args.name)
+        if (flag !== undefined) {
+            const flags = await resolveFlagsForUser(ctx, args.userId)
+            if (!flags[flag]) {
+                return JSON.stringify(fail(`Unknown tool: ${args.name}`))
+            }
         }
         const raw: unknown = JSON.parse(args.argsJson)
         const result = await dispatch(

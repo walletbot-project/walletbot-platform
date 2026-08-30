@@ -3,29 +3,55 @@ import 'dart:convert';
 
 import 'package:app/auth/account.dart';
 import 'package:app/config.dart';
+import 'package:app/convex/convex_client.dart';
 import 'package:app/database.dart';
-import 'package:convex_flutter/convex_flutter.dart';
+import 'package:app/legal/legal_acceptance_payload.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:http/http.dart' as http;
 
 /// Owns the device's account list and the active Convex auth session.
-/// Auth refresh is delegated to `convex_flutter`'s `setAuthWithRefresh`.
+/// Token refresh scheduling is delegated to [ConvexClient.setAuth].
 class AuthController extends ChangeNotifier {
-  AuthController({http.Client? httpClient, FlutterSecureStorage? storage})
-    : _storage = storage ?? const FlutterSecureStorage(),
-      _http = httpClient ?? http.Client();
+  AuthController({
+    ConvexClient? convex,
+    http.Client? httpClient,
+    FlutterSecureStorage? storage,
+    String Function()? localeTag,
+  }) : _convex = convex,
+       _storage = storage ?? const FlutterSecureStorage(),
+       _http = httpClient ?? http.Client(),
+       _localeTag = localeTag {
+    _authStateSub = convex?.authState.listen((state) {
+      final authenticated = state == AuthState.authenticated;
+      if (_convexAuthenticated == authenticated) return;
+      _convexAuthenticated = authenticated;
+      notifyListeners();
+    });
+  }
 
   static const _accountsKey = 'accounts';
   static const _activeIdKey = 'active_account_id';
 
+  /// Null only in tests that never exercise the Convex session (production
+  /// always wires one): auth attach/detach become no-ops without it.
+  final ConvexClient? _convex;
   final FlutterSecureStorage _storage;
   final http.Client _http;
 
+  /// The device's effective language tag, sent as `Accept-Language` on every
+  /// auth request. The backend needs it for the emails these endpoints trigger
+  /// (verification, password reset): a brand-new account has no stored
+  /// language yet, and native reaches better-auth through direct `auth.api.*`
+  /// calls that carry no request of their own. Null (tests, and any caller
+  /// that doesn't wire it) simply omits the header, and the server falls back
+  /// to its default locale.
+  final String Function()? _localeTag;
+
   List<UserAccount> _accounts = const [];
   String? _activeId;
-  AuthHandleWrapper? _authHandle;
+  StreamSubscription<AuthState>? _authStateSub;
   bool _convexAuthenticated = false;
   Future<void> _persistQueue = Future.value();
 
@@ -86,16 +112,23 @@ class AuthController extends ChangeNotifier {
   /// [EmailNotVerifiedException] on successful account creation (the backend
   /// sends the verification email and returns no session). The caller must
   /// route to the verification-pending state.
+  ///
+  /// [acceptance] carries the sign-up form's Terms/Privacy consent. It is
+  /// recorded against the created user by the endpoint, which is the only
+  /// moment those checkboxes can be tied to an account: this call issues no
+  /// session, so nothing afterwards could authenticate the write.
   Future<UserAccount> signUpWithEmail({
     required String name,
     required String email,
     required String password,
+    LegalAcceptancePayload? acceptance,
     bool rejectExisting = false,
   }) async {
     final body = await _postJson('/auth/email/sign-up', {
       'name': name,
       'email': email,
       'password': password,
+      if (acceptance != null) 'acceptance': acceptance.toJson(),
     });
     return _saveRemoteAccountFromAuthResponse(
       body,
@@ -103,17 +136,28 @@ class AuthController extends ChangeNotifier {
     );
   }
 
-  /// Requests a password-reset email. Enumeration-safe: unknown emails still
-  /// return 200. Throws [AuthHttpError] when the server failed to send the
-  /// email (`email_send_failed`), or on network failure.
+  /// Requests a password-reset email. Returning normally means an email was
+  /// really handed to Resend — every other outcome throws [AuthHttpError] with
+  /// a `code` the caller renders: `account_not_found` (no account for that
+  /// address), `rate_limited`, `email_send_failed`. These used to answer 200
+  /// as well, to keep the endpoint enumeration-safe, which meant the UI
+  /// promised mail that never went out.
   Future<void> requestPasswordReset({required String email}) async {
     await _postJson('/auth/password/forgot', {'email': email});
   }
 
-  /// Re-sends the verification email. Enumeration-safe like
-  /// [requestPasswordReset], and throws on the same failures.
+  /// Re-sends the verification email. Same contract as
+  /// [requestPasswordReset], plus `email_already_verified` — there is nothing
+  /// to re-send for an address that is verified (every Google-registered one).
   Future<void> resendVerificationEmail({required String email}) async {
     await _postJson('/auth/email/resend-verification', {'email': email});
+  }
+
+  /// Requests an account-deletion email. The emailed link opens the web app,
+  /// where the user confirms the irreversible deletion. Same contract as
+  /// [requestPasswordReset], plus `account_already_deleted`.
+  Future<void> requestAccountDeletion({required String email}) async {
+    await _postJson('/v1/account-deletion/request', {'email': email});
   }
 
   Future<UserAccount> addLocal({required String name}) async {
@@ -195,6 +239,7 @@ class AuthController extends ChangeNotifier {
 
   @override
   void dispose() {
+    unawaited(_authStateSub?.cancel());
     unawaited(_detachAuth());
     _http.close();
     super.dispose();
@@ -231,9 +276,29 @@ class AuthController extends ChangeNotifier {
       throw AccountAlreadyAddedError(account.email);
     }
 
+    // Deleting an account server-side and signing up again with the same
+    // address mints a *new* user id, so matching on id alone would leave the
+    // dead entry behind and append a second one — two accounts, same email.
+    // Drop any server-deleted entry for this address (its local database goes
+    // with it) so re-signing in replaces the corpse instead of sitting next to
+    // it. Live accounts are matched by id exactly as before.
+    final email = account.email;
+    final supersededIds = [
+      for (final a in _accounts)
+        if (a.id != account.id &&
+            a.serverDeleted &&
+            a.type == AccountType.remote &&
+            email != null &&
+            a.email == email)
+          a.id,
+    ];
+    for (final id in supersededIds) {
+      await AppDatabase.deleteForUser(id);
+    }
+
     _accounts = [
       for (final a in _accounts)
-        if (a.id != account.id) a,
+        if (a.id != account.id && !supersededIds.contains(a.id)) a,
       account,
     ];
     _activeId = account.id;
@@ -251,27 +316,29 @@ class AuthController extends ChangeNotifier {
         active.sessionToken == null) {
       return;
     }
-    _authHandle = await ConvexClient.instance.setAuthWithRefresh(
-      fetchToken: _fetchFreshAccessToken,
-      onAuthChange: (isAuthenticated) {
-        if (_convexAuthenticated == isAuthenticated) return;
-        _convexAuthenticated = isAuthenticated;
-        notifyListeners();
-      },
-    );
+    _convex?.setAuth(fetchToken: _fetchTokenForConvex);
   }
 
   Future<void> _detachAuth() async {
-    final handle = _authHandle;
-    _authHandle = null;
-    if (handle != null) {
-      handle.dispose();
-    }
     if (_convexAuthenticated) {
       _convexAuthenticated = false;
       notifyListeners();
     }
-    await ConvexClient.instance.setAuth(token: null);
+    _convex?.clearAuth();
+  }
+
+  /// [TokenFetcher] for the Convex client. Every `/auth/refresh` mints a
+  /// fresh 24 h JWT, so `forceRefresh` needs no special handling. Returning
+  /// null means "signed out, run unauthenticated": a 401 is a dead or deleted
+  /// session that retrying cannot fix (the marked account prompts re-auth),
+  /// while transient failures rethrow so the client retries on its own timer.
+  Future<String?> _fetchTokenForConvex({required bool forceRefresh}) async {
+    try {
+      return await _fetchFreshAccessToken();
+    } on AuthHttpError catch (e) {
+      if (e.statusCode == 401) return null;
+      rethrow;
+    }
   }
 
   Future<String?> _fetchFreshAccessToken() async {
@@ -281,12 +348,24 @@ class AuthController extends ChangeNotifier {
     if (active == null || session == null) return null;
     try {
       debugPrint('auth: refreshing access token');
-      final body = await _postJson('/auth/refresh', {'refreshToken': session});
+      // `userId` lets the server distinguish a deleted account from an
+      // ordinary dead session: the purge deletes refreshTokens first, so by
+      // now the token row is gone and the id is all it can look up.
+      final body = await _postJson('/auth/refresh', {
+        'refreshToken': session,
+        'userId': active.id,
+      });
       return body['accessToken'] as String;
     } catch (e) {
       debugPrint('auth: token refresh failed: $e');
       if (e is AuthHttpError && e.statusCode == 401) {
-        await _markRequiresReauth(active.id);
+        // Only the explicit code means "deleted". A bare 401 is an expired or
+        // revoked session, which stays recoverable by signing in again.
+        if (e.code == 'account_deleted') {
+          await _markServerDeleted(active.id);
+        } else {
+          await _markRequiresReauth(active.id);
+        }
       }
       rethrow;
     }
@@ -304,13 +383,52 @@ class AuthController extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// The account was deleted server-side. Also sets [requiresReauth] so sync
+  /// stops, but the local database is left untouched: the user keeps offline
+  /// access to their data until they choose to remove it from the device.
+  Future<void> _markServerDeleted(String accountId) async {
+    final idx = _accounts.indexWhere((a) => a.id == accountId);
+    if (idx == -1 || _accounts[idx].serverDeleted) return;
+    final updated = [..._accounts];
+    updated[idx] = updated[idx].copyWith(
+      requiresReauth: true,
+      serverDeleted: true,
+    );
+    _accounts = updated;
+    await _persist();
+    notifyListeners();
+  }
+
+  /// Drops a server-deleted account and its local database from this device.
+  /// Deliberately narrow: it refuses any account the server has not confirmed
+  /// deleted, so a transient auth failure can never take local data with it.
+  Future<void> removeDeletedAccount(String id) async {
+    final account = _accounts.firstWhere((a) => a.id == id);
+    if (!account.serverDeleted) {
+      throw StateError('removeDeletedAccount called on a live account: $id');
+    }
+    await AppDatabase.deleteForUser(id);
+    _accounts = _accounts.where((a) => a.id != id).toList();
+    if (_activeId == id) {
+      _activeId = null;
+      await _detachAuth();
+    }
+    await _persist();
+    notifyListeners();
+  }
+
   Future<Map<String, Object?>> _postJson(
     String path,
     Map<String, Object?> body,
   ) async {
+    final localeTag = _localeTag?.call();
     final response = await _http.post(
       Uri.parse('${AppConfig.convexSiteUrl}$path'),
-      headers: {'Content-Type': 'application/json'},
+      headers: {
+        'Content-Type': 'application/json',
+        if (localeTag != null && localeTag.isNotEmpty)
+          'Accept-Language': localeTag,
+      },
       body: jsonEncode(body),
     );
     if (response.statusCode < 200 || response.statusCode >= 300) {

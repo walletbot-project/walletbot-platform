@@ -1,7 +1,9 @@
-// Shared building blocks for the transactional email templates. Spanish-only
-// (es-AR), matching the web app's copy. Rendered with React Email — user
-// -provided values (name) are escaped by React itself, never interpolated
-// into raw HTML.
+// Shared building blocks for the transactional email templates. Copy lives in
+// `messages.ts` (one catalog per shipped locale); the caller resolves which
+// locale from the recipient's `userSettings.language`. Rendered with React
+// Email — user-provided values (name) are escaped by React itself, never
+// interpolated into raw HTML.
+
 import {
     Body,
     Button,
@@ -12,7 +14,9 @@ import {
     Link,
     Text,
 } from '@react-email/components'
+import type { Locale } from '@wallet-bot/shared'
 import type { CSSProperties, ReactNode } from 'react'
+import { EMAIL_MESSAGES } from './messages'
 
 export type EmailContent = {
     subject: string
@@ -20,8 +24,12 @@ export type EmailContent = {
     text: string
 }
 
-export const greeting = (name: string | null): string =>
-    name ? `¡Hola, ${name}!` : '¡Hola!'
+/** Every template takes exactly this. */
+export type EmailProps = {
+    name: string | null
+    url: string
+    locale: Locale
+}
 
 const body: CSSProperties = {
     margin: 0,
@@ -82,11 +90,17 @@ const button: CSSProperties = {
 type EmailLayoutProps = {
     title: string
     url: string
+    locale: Locale
     children: ReactNode
 }
 
-export const EmailLayout = ({ title, url, children }: EmailLayoutProps) => (
-    <Html lang="es">
+export const EmailLayout = ({
+    title,
+    url,
+    locale,
+    children,
+}: EmailLayoutProps) => (
+    <Html lang={locale}>
         <Head />
         <Body style={body}>
             <Container style={container}>
@@ -95,8 +109,7 @@ export const EmailLayout = ({ title, url, children }: EmailLayoutProps) => (
                 </Heading>
                 {children}
                 <Text style={fallbackText}>
-                    Si el botón no funciona, copiá y pegá este enlace en tu
-                    navegador:
+                    {EMAIL_MESSAGES[locale].linkFallback}
                     <br />
                     <Link href={url} style={fallbackLink}>
                         {url}

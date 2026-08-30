@@ -1,3 +1,4 @@
+import { isLegalDocument, type LegalDocument } from '@wallet-bot/shared'
 import { APIError } from 'better-auth/api'
 import type { HttpRouter } from 'convex/server'
 import { internal } from '../_generated/api'
@@ -23,11 +24,20 @@ const jsonError = (status: number, code: string, message: string): Response =>
 
 // Browser CORS for the /auth/* surface. Native mobile clients never send an
 // Origin header and are unaffected. Flutter web dev servers pick a random
-// port, so any localhost origin is allowed; when a web build gets a real
-// domain it goes in ALLOWED_WEB_ORIGINS. These endpoints authenticate via
+// port, so any localhost origin is allowed; the deployed web app lives at
+// SITE_URL, so its origin is allowed too (web sign-up, forgot-password and
+// resend-verification all post here). These endpoints authenticate via
 // explicit tokens in the body or Authorization header (never cookies), so
 // reflecting the origin adds no CSRF surface.
-const ALLOWED_WEB_ORIGINS: readonly string[] = []
+const ALLOWED_WEB_ORIGINS: readonly string[] = (() => {
+    const siteUrl = process.env.SITE_URL
+    if (!siteUrl) return []
+    try {
+        return [new URL(siteUrl).origin]
+    } catch {
+        return []
+    }
+})()
 
 const LOCALHOST_ORIGIN_PATTERN = /^https?:\/\/localhost(:\d+)?$/
 
@@ -80,6 +90,53 @@ type EmailSignInBody = {
 
 type EmailSignUpBody = EmailSignInBody & {
     name?: string
+    acceptance?: unknown
+}
+
+type AcceptanceInput = {
+    documents: LegalDocument[]
+    ageConfirmed: boolean
+    platform: string
+    appVersion?: string
+    locale?: string
+}
+
+/**
+ * The Terms/Privacy acceptance a sign-up form collected, off an untrusted body.
+ *
+ * Optional on purpose: already-released native builds don't send it, and a
+ * missing acceptance must not break sign-up — the in-app gate catches those
+ * users on their first sign-in. Anything malformed, or an unchecked age box,
+ * parses to `null` and is simply not recorded: showing the documents is never
+ * acceptance (docs/legal/README.md), and neither is a half-filled form.
+ *
+ * No version is read from the body; `recordAcceptances` stamps the server's
+ * own `current`.
+ */
+const parseAcceptanceInput = (raw: unknown): AcceptanceInput | null => {
+    if (typeof raw !== 'object' || raw === null) return null
+    const record = raw as Record<string, unknown>
+    if (record.ageConfirmed !== true) return null
+    if (!Array.isArray(record.documents)) return null
+
+    const documents = record.documents.filter(
+        (document): document is LegalDocument =>
+            typeof document === 'string' && isLegalDocument(document),
+    )
+    if (documents.length === 0) return null
+
+    return {
+        documents,
+        ageConfirmed: true,
+        platform:
+            typeof record.platform === 'string' && record.platform.length > 0
+                ? record.platform
+                : 'unknown',
+        ...(typeof record.appVersion === 'string'
+            ? { appVersion: record.appVersion }
+            : {}),
+        ...(typeof record.locale === 'string' ? { locale: record.locale } : {}),
+    }
 }
 
 type NativeAuthUser = {
@@ -133,6 +190,47 @@ const issueNativeSession = async (
     })
 }
 
+const recordNativeSignInTelemetry = async (
+    ctx: ActionCtx,
+    args: { userId: string; authMethod: 'email_password' | 'google' },
+): Promise<void> => {
+    try {
+        await ctx.runMutation(
+            internal.telemetry.mutations.recordUserAccountSignedIn,
+            {
+                userId: args.userId,
+                authMethod: args.authMethod,
+                clientPlatform: 'native',
+            },
+        )
+    } catch (error) {
+        console.warn('native sign-in telemetry failed', {
+            userId: args.userId,
+            authMethod: args.authMethod,
+            error: error instanceof Error ? error.message : String(error),
+        })
+    }
+}
+
+/**
+ * better-auth, told what language the native client is in.
+ *
+ * Native reaches better-auth through direct `auth.api.*` calls, so its email
+ * callbacks never see a `Request` and cannot read `Accept-Language` themselves
+ * the way the web flows do. Forwarding the header off the incoming native
+ * request is what lets a brand-new account's verification email come out in the
+ * device's language. Every handler here goes through this instead of calling
+ * `getAuth(createAuth, ctx)` directly.
+ */
+const nativeAuth = (ctx: ActionCtx, req: Request) =>
+    authComponent.getAuth(
+        (authCtx) =>
+            createAuth(authCtx, {
+                acceptLanguage: req.headers.get('accept-language'),
+            }),
+        ctx,
+    )
+
 const googleSignIn = corsHttpAction(async (ctx, req) => {
     const body = await parseJsonBody<GoogleSignInBody>(req)
     if (
@@ -143,7 +241,9 @@ const googleSignIn = corsHttpAction(async (ctx, req) => {
         return jsonError(400, 'bad_request', 'missing idToken')
     }
 
-    const { auth, headers } = await authComponent.getAuth(createAuth, ctx)
+    const { auth, headers } = await nativeAuth(ctx, req)
+    const authHeaders = new Headers(headers)
+    authHeaders.set('x-walletbot-client-platform', 'native')
 
     let result: Awaited<ReturnType<typeof auth.api.signInSocial>>
     try {
@@ -158,7 +258,7 @@ const googleSignIn = corsHttpAction(async (ctx, req) => {
                     ...(body.nonce ? { nonce: body.nonce } : {}),
                 },
             },
-            headers,
+            headers: authHeaders,
         })
     } catch (err) {
         const message = err instanceof Error ? err.message : String(err)
@@ -171,17 +271,31 @@ const googleSignIn = corsHttpAction(async (ctx, req) => {
         return jsonError(500, 'sign_in_failed', 'sign-in did not return a user')
     }
 
+    const response = await issueNativeSession(ctx, req, result.user)
+
     if (isNewSocialUserResult(result)) {
-        await ctx.runMutation(
-            internal.telemetry.mutations.recordUserAccountCreated,
-            {
+        try {
+            await ctx.runMutation(
+                internal.telemetry.mutations.recordUserAccountCreated,
+                {
+                    userId: result.user.id,
+                    authMethod: 'google',
+                },
+            )
+        } catch (error) {
+            console.warn('native account-created telemetry failed', {
                 userId: result.user.id,
                 authMethod: 'google',
-            },
-        )
+                error: error instanceof Error ? error.message : String(error),
+            })
+        }
     }
+    await recordNativeSignInTelemetry(ctx, {
+        userId: result.user.id,
+        authMethod: 'google',
+    })
 
-    return issueNativeSession(ctx, req, result.user)
+    return response
 })
 
 const getEmailAndPassword = (
@@ -206,17 +320,19 @@ const emailSignIn = corsHttpAction(async (ctx, req) => {
     )
     if (parsed instanceof Response) return parsed
 
-    const { auth, headers } = await authComponent.getAuth(createAuth, ctx)
+    const { auth, headers } = await nativeAuth(ctx, req)
+    const authHeaders = new Headers(headers)
+    authHeaders.set('x-walletbot-client-platform', 'native')
 
+    let result: Awaited<ReturnType<typeof auth.api.signInEmail>>
     try {
-        const result = await auth.api.signInEmail({
+        result = await auth.api.signInEmail({
             body: {
                 email: parsed.email,
                 password: parsed.password,
             },
-            headers,
+            headers: authHeaders,
         })
-        return issueNativeSession(ctx, req, result.user)
     } catch (err) {
         // Better-auth already re-sent the verification email on this attempt
         // (sendOnSignIn), so the client only needs to show the pending state.
@@ -233,6 +349,13 @@ const emailSignIn = corsHttpAction(async (ctx, req) => {
         const message = err instanceof Error ? err.message : String(err)
         return jsonError(401, 'sign_in_failed', message)
     }
+
+    const response = await issueNativeSession(ctx, req, result.user)
+    await recordNativeSignInTelemetry(ctx, {
+        userId: result.user.id,
+        authMethod: 'email_password',
+    })
+    return response
 })
 
 const emailSignUp = corsHttpAction(async (ctx, req) => {
@@ -245,7 +368,7 @@ const emailSignUp = corsHttpAction(async (ctx, req) => {
             ? body.name.trim()
             : parsed.email
 
-    const { auth, headers } = await authComponent.getAuth(createAuth, ctx)
+    const { auth, headers } = await nativeAuth(ctx, req)
 
     // better-auth answers a duplicate sign-up with a SYNTHETIC user and
     // `token: null` — deliberately indistinguishable from a real pending
@@ -319,6 +442,35 @@ const emailSignUp = corsHttpAction(async (ctx, req) => {
         // Account-creation telemetry can't live here for the same reason: this
         // branch is taken for BOTH cases. It hangs off the real row insert in
         // `databaseHooks.user.create.after` (see `auth.ts`) instead.
+        //
+        // Acceptance is recorded here, before either return: the account row
+        // exists in both branches (verification pending or session issued),
+        // and this is the only moment a sign-up form's checkboxes can be tied
+        // to a user id — email sign-up mints no session, so there is no
+        // authenticated caller to run `v1/legal/mutations:accept`.
+        const acceptance = parseAcceptanceInput(body?.acceptance)
+        if (acceptance) {
+            // Re-resolve rather than trusting `result.user.id`: that id is
+            // synthetic for a duplicate sign-up, and a legal record must never
+            // hang off a fake user. Failure here is logged, not fatal — the
+            // account exists, and the in-app gate is the backstop.
+            const created = await internalAdapter.findUserByEmail(parsed.email)
+            if (created) {
+                try {
+                    await ctx.runMutation(
+                        internal.legal.internal.recordAcceptancesForUser,
+                        { userId: created.user.id, acceptance },
+                    )
+                } catch (err) {
+                    console.error(
+                        'authNative: recording sign-up acceptance failed',
+                        err instanceof Error
+                            ? (err.stack ?? err.message)
+                            : String(err),
+                    )
+                }
+            }
+        }
         if (!result.token) {
             return jsonError(
                 403,
@@ -348,12 +500,12 @@ const getEmail = (body: EmailOnlyBody | null): string | Response => {
     return body.email.trim().toLowerCase()
 }
 
-// Enumeration safety comes from better-auth itself: an unknown (or already
-// verified) email resolves successfully WITHOUT invoking the send hook, so a
-// throw here never means "user not found" — it is a real failure (Resend
-// config, enqueue, template). Masking those as success left users waiting
-// for emails that never went out; surface them as 500 instead. The client
-// still can't learn whether an email exists.
+// better-auth resolves an unknown (or already verified) email successfully
+// WITHOUT invoking the send hook, so a throw here never means "user not
+// found" — those cases are caught by the explicit lookups below. A throw is
+// a real failure (Resend config, enqueue, template). Masking those as
+// success left users waiting for emails that never went out; surface them as
+// 500 instead.
 const emailSendFailedResponse = (op: string, err: unknown): Response => {
     // This log is the only server-side forensic trail — keep the stack.
     console.error(
@@ -380,16 +532,31 @@ const rateLimitedResponse = (): Response =>
         'Demasiados intentos. Esperá un minuto y probá de nuevo.',
     )
 
+// An address with no account behind it. better-auth answers these with a
+// success that sends nothing, so both handlers below look the address up
+// first: `{ ok: true }` from either route now means an email really was
+// handed to Resend, and nothing else. This discloses whether an address is
+// registered, the same trade `/auth/email/sign-up` already makes
+// (docs/riesgos.md R-002).
+const accountNotFoundResponse = (): Response =>
+    jsonError(404, 'account_not_found', 'No existe una cuenta con ese correo.')
+
 const forgotPasswordHandler = corsHttpAction(async (ctx, req) => {
     const email = getEmail(await parseJsonBody<EmailOnlyBody>(req))
     if (email instanceof Response) return email
 
+    // Before the lookup, so probing an address still costs a rate-limit slot.
     const { ok } = await authRateLimiter.limit(ctx, 'passwordResetEmail', {
         key: email,
     })
     if (!ok) return rateLimitedResponse()
 
-    const { auth, headers } = await authComponent.getAuth(createAuth, ctx)
+    const { auth, headers } = await nativeAuth(ctx, req)
+    const { internalAdapter } = await auth.$context
+    if (!(await internalAdapter.findUserByEmail(email))) {
+        return accountNotFoundResponse()
+    }
+
     try {
         await auth.api.requestPasswordReset({ body: { email }, headers })
     } catch (err) {
@@ -407,7 +574,22 @@ const resendVerificationHandler = corsHttpAction(async (ctx, req) => {
     })
     if (!ok) return rateLimitedResponse()
 
-    const { auth, headers } = await authComponent.getAuth(createAuth, ctx)
+    const { auth, headers } = await nativeAuth(ctx, req)
+    const { internalAdapter } = await auth.$context
+    const existing = await internalAdapter.findUserByEmail(email)
+    if (!existing) return accountNotFoundResponse()
+
+    // Nothing to re-send. Reached by tapping "resend" after verifying in the
+    // browser, and by Google-registered addresses (already verified), which
+    // used to be told the link was on its way forever.
+    if (existing.user.emailVerified) {
+        return jsonError(
+            409,
+            'email_already_verified',
+            'Ese correo ya está verificado. Iniciá sesión.',
+        )
+    }
+
     try {
         await auth.api.sendVerificationEmail({ body: { email }, headers })
     } catch (err) {
@@ -418,7 +600,19 @@ const resendVerificationHandler = corsHttpAction(async (ctx, req) => {
 
 type RefreshBody = {
     refreshToken?: string
+    /**
+     * The account's better-auth user id, sent so a refresh that fails because
+     * the account was deleted can be told apart from an ordinary expired or
+     * revoked session. `purgeUserData` deletes `refreshTokens` first, so by the
+     * time the client notices, the token row is gone and the id is the only
+     * thing left to look up. Optional: older clients omit it and keep the
+     * generic `invalid_refresh_token`.
+     */
+    userId?: string
 }
+
+const isDeletedUser = (ctx: ActionCtx, userId: string): Promise<boolean> =>
+    ctx.runQuery(internal.userDeletion.internal.isUserDeleted, { userId })
 
 const refreshHandler = corsHttpAction(async (ctx, req) => {
     const body = await parseJsonBody<RefreshBody>(req)
@@ -431,13 +625,30 @@ const refreshHandler = corsHttpAction(async (ctx, req) => {
     }
 
     const tokenHash = await hashSessionSecret(body.refreshToken)
-    const validation = await ctx.runMutation(
+    const validation = await ctx.runQuery(
         internal.authNative.mutations.validateSessionToken,
         { tokenHash },
     )
 
     if (!validation.ok) {
+        // The token is gone or dead. If the caller named an account we know is
+        // deleted, say so: re-authenticating would mint a *new* user for the
+        // same address, which is exactly the duplicate-account trap.
+        if (
+            typeof body.userId === 'string' &&
+            body.userId.length > 0 &&
+            (await isDeletedUser(ctx, body.userId))
+        ) {
+            return jsonError(401, 'account_deleted', 'account was deleted')
+        }
         return jsonError(401, 'invalid_refresh_token', validation.reason)
+    }
+
+    // The token outlived the denylist entry — the purge is batched, so it may
+    // not have reached `refreshTokens` yet. Minting here would hand out an
+    // access token that every `requireAuth` call rejects anyway.
+    if (await isDeletedUser(ctx, validation.userId)) {
+        return jsonError(401, 'account_deleted', 'account was deleted')
     }
 
     const access = await mintAccessToken(validation.userId)

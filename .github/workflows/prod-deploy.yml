@@ -64,3 +64,169 @@ jobs:
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           workingDirectory: apps/landing
           command: pages deploy dist --project-name=walletbot-landing --branch=main
+
+  build-android:
+    needs: deploy
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # required to publish/update the GitHub Release below
+    steps:
+      # Full history: the version check below reads pubspec.yaml at
+      # `github.event.before`, which a shallow clone does not contain.
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # A push that leaves apps/native/pubspec.yaml's `version:` untouched cuts
+      # no release. It only uploads an APK as a workflow artifact. The base is
+      # `github.event.before` rather than HEAD^ so a push carrying several
+      # commits is compared as a whole. A force-push or an unreadable base
+      # fails closed (no release), because a wrong "bumped" verdict publishes a
+      # release under a version users already have.
+      - name: Detect app version bump
+        id: version
+        env:
+          BEFORE: ${{ github.event.before }}
+        run: |
+          set -euo pipefail
+          current=$(sed -n 's/^version:[[:space:]]*//p' apps/native/pubspec.yaml | head -n1 | tr -d '\r')
+          if [ -z "$current" ]; then
+            echo "::error::apps/native/pubspec.yaml has no version: line"
+            exit 1
+          fi
+
+          previous=""
+          if git cat-file -e "${BEFORE}^{commit}" 2>/dev/null; then
+            previous=$(git show "${BEFORE}:apps/native/pubspec.yaml" 2>/dev/null \
+              | sed -n 's/^version:[[:space:]]*//p' | head -n1 | tr -d '\r') || true
+          fi
+
+          if [ -n "$previous" ] && [ "$current" != "$previous" ]; then
+            bumped=true
+            echo "Version $previous -> $current: publishing release v${current}"
+          else
+            bumped=false
+            echo "Version unchanged at ${current:-?} (base: ${previous:-unavailable}): APK artifact only"
+          fi
+
+          {
+            printf 'version=%s\n' "$current"
+            printf 'bumped=%s\n' "$bumped"
+          } >> "$GITHUB_OUTPUT"
+
+      # convex_flutter cross-compiles a Rust binary per target ABI, which is
+      # heavy on disk. GitHub-hosted runners ship with a lot of preinstalled
+      # toolchains (dotnet, ghc, extra Docker images) that this job never uses
+      # — free that up before installing Flutter, so it can't touch anything
+      # the build actually needs (e.g. $AGENT_TOOLSDIRECTORY, which is where
+      # flutter-action's cache below puts the SDK).
+      - name: Free up runner disk space
+        run: |
+          set -uo pipefail
+          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/share/boost
+          docker image prune -a -f || true
+          df -h /
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: 3.41.6
+          cache: true
+
+      # .env is gitignored but declared as a Flutter asset — the build needs it
+      # to exist, and non-empty: flutter_dotenv throws EmptyEnvFileError on a
+      # zero-byte file, crashing the app before runApp() ever runs. The actual
+      # backend URLs come from --dart-define below, which wins over these
+      # placeholder .env values — see apps/native/lib/config.dart.
+      - run: cp .env.example .env
+        working-directory: apps/native
+
+      - run: flutter pub get
+        working-directory: apps/native
+
+      # Both artifacts must be signed with the real release key. Gradle now
+      # fails the build outright when key.properties is absent on CI rather
+      # than falling back to the runner's throwaway debug key, which produced
+      # APKs that could not be installed over any other build of the app.
+      - name: Restore release keystore
+        working-directory: apps/native/android
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+        run: |
+          set -euo pipefail
+          mkdir -p keystore
+          printf '%s' "$KEYSTORE_B64" | base64 -d > keystore/release.jks
+          {
+            printf 'storeFile=keystore/release.jks\n'
+            printf 'storePassword=%s\n' "$STORE_PASSWORD"
+            printf 'keyAlias=%s\n' "$KEY_ALIAS"
+            printf 'keyPassword=%s\n' "$KEY_PASSWORD"
+          } > key.properties
+
+      - name: Build production APK
+        working-directory: apps/native
+        env:
+          CONVEX_URL: ${{ vars.VITE_CONVEX_URL }}
+          CONVEX_SITE_URL: ${{ vars.VITE_CONVEX_SITE_URL }}
+          GOOGLE_SERVER_CLIENT_ID: ${{ secrets.GOOGLE_SERVER_CLIENT_ID }}
+        run: |
+          flutter build apk --release \
+            --dart-define=CONVEX_URL="$CONVEX_URL" \
+            --dart-define=CONVEX_SITE_URL="$CONVEX_SITE_URL" \
+            --dart-define=GOOGLE_SERVER_CLIENT_ID="$GOOGLE_SERVER_CLIENT_ID"
+
+      # Play only accepts an AAB for upload, while testers need an APK they can
+      # sideload directly, so a release carries both. `appbundle` recompiles the
+      # Dart AOT snapshot from scratch, which roughly doubles this job's build
+      # time, so it is skipped entirely on pushes that publish no release.
+      - name: Build production app bundle
+        if: steps.version.outputs.bumped == 'true'
+        working-directory: apps/native
+        env:
+          CONVEX_URL: ${{ vars.VITE_CONVEX_URL }}
+          CONVEX_SITE_URL: ${{ vars.VITE_CONVEX_SITE_URL }}
+          GOOGLE_SERVER_CLIENT_ID: ${{ secrets.GOOGLE_SERVER_CLIENT_ID }}
+        run: |
+          flutter build appbundle --release \
+            --dart-define=CONVEX_URL="$CONVEX_URL" \
+            --dart-define=CONVEX_SITE_URL="$CONVEX_SITE_URL" \
+            --dart-define=GOOGLE_SERVER_CLIENT_ID="$GOOGLE_SERVER_CLIENT_ID"
+
+      # One release per version, tagged exactly as pubspec.yaml spells it
+      # (`v0.3.0+5`), so shipped builds keep a history. Re-running this job for
+      # the same version updates that release in place instead of failing on
+      # the existing tag.
+      - name: Publish production release
+        if: steps.version.outputs.bumped == 'true'
+        working-directory: apps/native
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: v${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          apk=build/app/outputs/flutter-apk/app-release.apk
+          aab=build/app/outputs/bundle/release/app-release.aab
+          notes="Automatically built from main @ ${GITHUB_SHA}. Connected to the production backend."
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" "$apk" "$aab" --clobber
+            gh release edit "$TAG" --notes "$notes"
+          else
+            gh release create "$TAG" "$apk" "$aab" \
+              --target "$GITHUB_SHA" \
+              --title "$TAG" \
+              --notes "$notes"
+          fi
+
+      # No version bump, so the build is still worth keeping as a signed APK
+      # anyone can grab from the run page, without it looking like a release.
+      - name: Upload APK artifact
+        if: steps.version.outputs.bumped != 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-release-${{ steps.version.outputs.version }}-${{ github.sha }}
+          path: apps/native/build/app/outputs/flutter-apk/app-release.apk
+          if-no-files-found: error
+          retention-days: 14

@@ -1,4 +1,5 @@
 import 'package:app/components/grouped_card.dart';
+import 'package:app/convex/convex_client.dart';
 import 'package:app/l10n/l10n.dart';
 import 'package:app/whatsapp/whatsapp_link_controller.dart';
 import 'package:flutter/material.dart';
@@ -13,21 +14,22 @@ import 'package:url_launcher/url_launcher.dart';
 /// between visits, and creating it here means the screen always opens against
 /// fresh backend state.
 class WhatsappLinkScreen extends StatelessWidget {
-  const WhatsappLinkScreen({required this.isRemote, this.api, super.key});
+  const WhatsappLinkScreen({required this.isRemote, this.client, super.key});
 
   /// False for local-only accounts, which have no backend user to link to.
   final bool isRemote;
 
-  /// Injected by tests. Production leaves it null and the controller resolves
-  /// the real Convex client lazily, the same way `DefaultCurrencyController`
-  /// takes an optional client.
-  final WhatsappLinkApi? api;
+  /// The account's Convex connection, handed over by value because this route
+  /// is pushed from the account switcher, which sits above the account-scoped
+  /// providers. Null for a local account (and in widget tests), where nothing
+  /// here touches the network.
+  final ConvexClient? client;
 
   @override
   Widget build(BuildContext context) {
     return ChangeNotifierProvider<WhatsappLinkController>(
       create: (_) =>
-          WhatsappLinkController(isRemote: isRemote, api: api)..load(),
+          WhatsappLinkController(isRemote: isRemote, client: client)..load(),
       child: const _WhatsappLinkView(),
     );
   }

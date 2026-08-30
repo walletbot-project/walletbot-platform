@@ -1,15 +1,17 @@
 import 'dart:async';
-import 'dart:convert';
 
+import 'package:app/convex/convex_client.dart';
 import 'package:app/l10n/l10n.dart';
 import 'package:app/screens/whatsapp_link.dart';
-import 'package:app/whatsapp/whatsapp_link_controller.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-class _StubApi implements WhatsappLinkApi {
-  _StubApi({this.status, this.code, this.queryError});
+/// `ConvexClient` is a concrete class with a live transport, so tests stub the
+/// two calls this screen makes and let `noSuchMethod` swallow the rest — the
+/// same shape as `test/settings/language_sync_controller_test.dart`.
+class _StubClient implements ConvexClient {
+  _StubClient({this.status, this.code, this.queryError});
 
   final Map<String, Object?>? status;
   final Map<String, Object?>? code;
@@ -19,36 +21,51 @@ class _StubApi implements WhatsappLinkApi {
   int queryCalls = 0;
 
   @override
-  Future<String> query(String name, Map<String, dynamic> args) async {
+  Future<T> query<T>(
+    String name,
+    Map<String, Object?> args, {
+    CallOptions? options,
+  }) async {
     queryCalls += 1;
     if (queryError != null) throw queryError!;
-    return jsonEncode(status ?? const {});
+    return (status ?? const <String, Object?>{}) as T;
   }
 
   @override
-  Future<String> mutation({
-    required String name,
-    required Map<String, dynamic> args,
+  Future<T> mutation<T>(
+    String name,
+    Map<String, Object?> args, {
+    CallOptions? options,
   }) async {
     mutationCalls += 1;
-    return jsonEncode(code ?? const {});
+    return (code ?? const <String, Object?>{}) as T;
   }
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
 /// Never completes, so the loading state stays observable.
-class _HangingApi implements WhatsappLinkApi {
+class _HangingClient implements ConvexClient {
   @override
-  Future<String> query(String name, Map<String, dynamic> args) =>
-      Completer<String>().future;
+  Future<T> query<T>(
+    String name,
+    Map<String, Object?> args, {
+    CallOptions? options,
+  }) => Completer<T>().future;
 
   @override
-  Future<String> mutation({
-    required String name,
-    required Map<String, dynamic> args,
-  }) => Completer<String>().future;
+  Future<T> mutation<T>(
+    String name,
+    Map<String, Object?> args, {
+    CallOptions? options,
+  }) => Completer<T>().future;
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
-Widget _app({required bool isRemote, WhatsappLinkApi? api}) => MaterialApp(
+Widget _app({required bool isRemote, ConvexClient? client}) => MaterialApp(
   locale: const Locale('en'),
   localizationsDelegates: const [
     AppLocalizations.delegate,
@@ -57,7 +74,7 @@ Widget _app({required bool isRemote, WhatsappLinkApi? api}) => MaterialApp(
     GlobalCupertinoLocalizations.delegate,
   ],
   supportedLocales: AppLocalizations.supportedLocales,
-  home: WhatsappLinkScreen(isRemote: isRemote, api: api),
+  home: WhatsappLinkScreen(isRemote: isRemote, client: client),
 );
 
 Map<String, Object?> _status({
@@ -71,43 +88,43 @@ Map<String, Object?> _status({
 
 void main() {
   testWidgets('a local account is told why it cannot link', (tester) async {
-    final api = _StubApi(status: _status());
-    await tester.pumpWidget(_app(isRemote: false, api: api));
+    final client = _StubClient(status: _status());
+    await tester.pumpWidget(_app(isRemote: false, client: client));
     await tester.pumpAndSettle();
 
     expect(find.text('Not available for local accounts'), findsOne);
     expect(find.text('Connect WhatsApp'), findsNothing);
     // The gate is real, not just visual: no backend call was made.
-    expect(api.queryCalls, 0);
+    expect(client.queryCalls, 0);
   });
 
   testWidgets('shows a spinner while loading', (tester) async {
-    await tester.pumpWidget(_app(isRemote: true, api: _HangingApi()));
+    await tester.pumpWidget(_app(isRemote: true, client: _HangingClient()));
     await tester.pump();
 
     expect(find.byType(CircularProgressIndicator), findsOne);
   });
 
   testWidgets('a failed load offers a retry that reloads', (tester) async {
-    final api = _StubApi(queryError: StateError('offline'));
-    await tester.pumpWidget(_app(isRemote: true, api: api));
+    final client = _StubClient(queryError: StateError('offline'));
+    await tester.pumpWidget(_app(isRemote: true, client: client));
     await tester.pumpAndSettle();
 
     expect(find.text('Could not load your WhatsApp status'), findsOne);
     expect(find.text('Tap to try again'), findsOne);
-    expect(api.queryCalls, 1);
+    expect(client.queryCalls, 1);
 
     await tester.tap(find.text('Tap to try again'));
     await tester.pumpAndSettle();
 
-    expect(api.queryCalls, 2);
+    expect(client.queryCalls, 2);
   });
 
   testWidgets('an unlinked account is offered the connect button', (
     tester,
   ) async {
     await tester.pumpWidget(
-      _app(isRemote: true, api: _StubApi(status: _status())),
+      _app(isRemote: true, client: _StubClient(status: _status())),
     );
     await tester.pumpAndSettle();
 
@@ -119,7 +136,7 @@ void main() {
   testWidgets('tapping connect shows the code and the WhatsApp button', (
     tester,
   ) async {
-    final api = _StubApi(
+    final client = _StubClient(
       status: _status(),
       code: {
         'code': 'A1B2-C3D4',
@@ -129,13 +146,13 @@ void main() {
         'deepLink': 'https://wa.me/5491123991858?text=Wallet%20Bot',
       },
     );
-    await tester.pumpWidget(_app(isRemote: true, api: api));
+    await tester.pumpWidget(_app(isRemote: true, client: client));
     await tester.pumpAndSettle();
 
     await tester.tap(find.text('Connect WhatsApp'));
     await tester.pumpAndSettle();
 
-    expect(api.mutationCalls, 1);
+    expect(client.mutationCalls, 1);
     expect(find.text('A1B2-C3D4'), findsOne);
     expect(find.text('Your linking code'), findsOne);
     // The user taps this; Wallet Bot never messages first.
@@ -144,7 +161,7 @@ void main() {
   });
 
   testWidgets('a code with no deep link still offers copy', (tester) async {
-    final api = _StubApi(
+    final client = _StubClient(
       status: _status(),
       code: {
         'code': 'A1B2-C3D4',
@@ -154,7 +171,7 @@ void main() {
         'deepLink': null,
       },
     );
-    await tester.pumpWidget(_app(isRemote: true, api: api));
+    await tester.pumpWidget(_app(isRemote: true, client: client));
     await tester.pumpAndSettle();
 
     await tester.tap(find.text('Connect WhatsApp'));
@@ -170,8 +187,8 @@ void main() {
   ) async {
     // `code: null` makes the mutation return `{}`, which the controller
     // rejects as unusable.
-    final api = _StubApi(status: _status());
-    await tester.pumpWidget(_app(isRemote: true, api: api));
+    final client = _StubClient(status: _status());
+    await tester.pumpWidget(_app(isRemote: true, client: client));
     await tester.pumpAndSettle();
 
     await tester.tap(find.text('Connect WhatsApp'));
@@ -185,7 +202,7 @@ void main() {
   testWidgets('a linked number is listed with a disconnect action', (
     tester,
   ) async {
-    final api = _StubApi(
+    final client = _StubClient(
       status: _status(
         numbers: [
           {
@@ -195,7 +212,7 @@ void main() {
         ],
       ),
     );
-    await tester.pumpWidget(_app(isRemote: true, api: api));
+    await tester.pumpWidget(_app(isRemote: true, client: client));
     await tester.pumpAndSettle();
 
     expect(find.text('Connected'), findsOne);
@@ -205,14 +222,14 @@ void main() {
   });
 
   testWidgets('disconnecting asks for confirmation first', (tester) async {
-    final api = _StubApi(
+    final client = _StubClient(
       status: _status(
         numbers: [
           {'waId': '5491123991858'},
         ],
       ),
     );
-    await tester.pumpWidget(_app(isRemote: true, api: api));
+    await tester.pumpWidget(_app(isRemote: true, client: client));
     await tester.pumpAndSettle();
 
     await tester.tap(find.text('Disconnect'));
@@ -223,19 +240,19 @@ void main() {
     await tester.tap(find.text('Cancel'));
     await tester.pumpAndSettle();
 
-    expect(api.mutationCalls, 0);
+    expect(client.mutationCalls, 0);
     expect(find.text('+5491123991858'), findsOne);
   });
 
   testWidgets('confirming the disconnect calls the backend', (tester) async {
-    final api = _StubApi(
+    final client = _StubClient(
       status: _status(
         numbers: [
           {'waId': '5491123991858'},
         ],
       ),
     );
-    await tester.pumpWidget(_app(isRemote: true, api: api));
+    await tester.pumpWidget(_app(isRemote: true, client: client));
     await tester.pumpAndSettle();
 
     await tester.tap(find.text('Disconnect'));
@@ -250,12 +267,12 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(api.mutationCalls, 1);
+    expect(client.mutationCalls, 1);
   });
 
   testWidgets('a deployment with no business number says so', (tester) async {
-    final api = _StubApi(status: _status(available: false));
-    await tester.pumpWidget(_app(isRemote: true, api: api));
+    final client = _StubClient(status: _status(available: false));
+    await tester.pumpWidget(_app(isRemote: true, client: client));
     await tester.pumpAndSettle();
 
     expect(find.text('Not available yet'), findsOne);
@@ -275,7 +292,7 @@ void main() {
         supportedLocales: AppLocalizations.supportedLocales,
         home: WhatsappLinkScreen(
           isRemote: true,
-          api: _StubApi(status: _status()),
+          client: _StubClient(status: _status()),
         ),
       ),
     );

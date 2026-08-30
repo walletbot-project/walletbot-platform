@@ -39,14 +39,18 @@ Wallet Bot — app for keeping track of personal expenses
 - To use VFS, always use helpers from storage feature, never access VFS tables directly.
 - NEVER EVER EVER write shadcn's component (never write inside /components/ui). ALWAYS use CLI to add components.
 - NEVER ASSUME ANYTHING!!! NEVER!!! ASSUMPTIONS ALREADY KILLED John and Timmy on this project.
+- NEVER hardcode user-facing text. All strings must go through the existing
+  localization systems: on native use the ARB files (`apps/native/lib/l10n/app_en.arb`,
+  `app_es.arb`) accessed via `AppLocalizations`; on web use `useT`/`@/lib/i18n`. Add a new
+  translation key (in every locale) instead of inlining a literal.
 - Avoid reading dependencies source, always try to use skills and documentation.
 - Do not remove imports unless you are 100% sure they are not used, also `pnpm format` already removes unused imports, you don't need to do it manually.
 - PLEASE consider Convex workflows for complex long running or multi steps processes
 - After implementing a feature, review `docs/riesgos.md` and decide whether
   the feature mitigates an existing risk, changes its probability or impact, or
   introduces a new risk that should be added.
-- The current native SQLite schema is `v1`, established as the baseline for
-  coordinated native DB migrations. Every future schema change must be agreed
+- The current native SQLite schema is `v3` (`v1` is the baseline for
+  coordinated native DB migrations). Every future schema change must be agreed
   with the team, increment `schemaVersion`, implement an explicit
   data-preserving `onUpgrade` path, run Drift migration artifact generation, and
   add schema plus data-integrity migration tests. Follow
@@ -58,6 +62,16 @@ Wallet Bot — app for keeping track of personal expenses
 ### Feature Parity between mobile and web
 
 - If the user or a linear ticket asks you to implement a feature in mobile or web, asks the user if he also wants to implement that feature in the other platform to maintain feature parity and suggest possible implementations for this.
+
+### Feature flags
+
+- A feature flag system already exists (`packages/backend/convex/schema/featureFlags.ts`,
+  `featureFlags/helpers.ts`, `featureFlags/utils.ts` for the `KNOWN_FLAGS` registry, and
+  `v1/featureFlags/queries.ts`/`mutations.ts`). Use it to gate partially developed features or
+  features we want to experiment with, instead of shipping them fully exposed.
+- When starting work on a new feature, proactively ask the developer whether it should be gated
+  behind a feature flag (e.g. because it's partial/WIP, experimental, or needs staged rollout).
+  Don't assume — ask.
 
 ## Dev workflow
 

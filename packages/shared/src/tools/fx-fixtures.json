@@ -1,0 +1,334 @@
+{
+    "nowMs": 1787659200000,
+    "snapshot": [
+        {
+            "base": "USD",
+            "quote": "ARS",
+            "market": "official",
+            "rate": 1505.0,
+            "source": "dolarapi",
+            "asOf": "2026-08-24T18:00:00.000Z",
+            "buy": 1480,
+            "sell": 1530
+        },
+        {
+            "base": "USD",
+            "quote": "ARS",
+            "market": "blue",
+            "rate": 1555.0,
+            "source": "dolarapi",
+            "asOf": "2026-08-24T21:00:00.000Z",
+            "buy": 1545,
+            "sell": 1565
+        },
+        {
+            "base": "USD",
+            "quote": "ARS",
+            "market": "mep",
+            "rate": 1539.0500000000002,
+            "source": "dolarapi",
+            "asOf": "2026-08-24T21:00:00.000Z",
+            "buy": 1534.7,
+            "sell": 1543.4
+        },
+        {
+            "base": "USD",
+            "quote": "ARS",
+            "market": "card",
+            "rate": 1956.5,
+            "source": "dolarapi",
+            "asOf": "2026-08-24T18:00:00.000Z",
+            "buy": 1924,
+            "sell": 1989
+        },
+        {
+            "base": "EUR",
+            "quote": "ARS",
+            "market": "official",
+            "rate": 1755.94555,
+            "source": "dolarapi",
+            "asOf": "2026-08-24T16:58:00.000Z",
+            "buy": 1748.8151,
+            "sell": 1763.076
+        },
+        {
+            "base": "USD",
+            "quote": "EUR",
+            "market": "official",
+            "rate": 0.857,
+            "source": "frankfurter",
+            "asOf": "2026-08-25T00:00:00.000Z"
+        },
+        {
+            "base": "USD",
+            "quote": "BRL",
+            "market": "official",
+            "rate": 5.1515,
+            "source": "frankfurter",
+            "asOf": "2026-08-25T00:00:00.000Z"
+        },
+        {
+            "base": "USD",
+            "quote": "JPY",
+            "market": "official",
+            "rate": 146.2,
+            "source": "frankfurter",
+            "asOf": "2026-08-10T00:00:00.000Z"
+        }
+    ],
+    "resolve": [
+        {
+            "from": "USD",
+            "to": "ARS",
+            "expected": {
+                "from": "USD",
+                "to": "ARS",
+                "market": "official",
+                "rate": 1505.0,
+                "source": "dolarapi",
+                "asOf": "2026-08-24T18:00:00.000Z",
+                "path": "direct",
+                "buy": 1480,
+                "sell": 1530
+            }
+        },
+        {
+            "from": "usd",
+            "to": " ars ",
+            "expected": {
+                "from": "USD",
+                "to": "ARS",
+                "market": "official",
+                "rate": 1505.0,
+                "source": "dolarapi",
+                "asOf": "2026-08-24T18:00:00.000Z",
+                "path": "direct",
+                "buy": 1480,
+                "sell": 1530
+            }
+        },
+        {
+            "from": "USD",
+            "to": "ARS",
+            "market": "blue",
+            "expected": {
+                "from": "USD",
+                "to": "ARS",
+                "market": "blue",
+                "rate": 1555.0,
+                "source": "dolarapi",
+                "asOf": "2026-08-24T21:00:00.000Z",
+                "path": "direct",
+                "buy": 1545,
+                "sell": 1565
+            }
+        },
+        {
+            "from": "USD",
+            "to": "ARS",
+            "market": "crypto",
+            "expected": {
+                "from": "USD",
+                "to": "ARS",
+                "market": "official",
+                "rate": 1505.0,
+                "source": "dolarapi",
+                "asOf": "2026-08-24T18:00:00.000Z",
+                "path": "direct",
+                "buy": 1480,
+                "sell": 1530
+            }
+        },
+        {
+            "from": "ARS",
+            "to": "USD",
+            "expected": {
+                "from": "ARS",
+                "to": "USD",
+                "market": "official",
+                "rate": 0.000664451827242525,
+                "source": "dolarapi",
+                "asOf": "2026-08-24T18:00:00.000Z",
+                "path": "inverse"
+            }
+        },
+        {
+            "from": "ARS",
+            "to": "USD",
+            "market": "card",
+            "expected": {
+                "from": "ARS",
+                "to": "USD",
+                "market": "card",
+                "rate": 0.0005111167901865576,
+                "source": "dolarapi",
+                "asOf": "2026-08-24T18:00:00.000Z",
+                "path": "inverse"
+            }
+        },
+        {
+            "from": "EUR",
+            "to": "ARS",
+            "expected": {
+                "from": "EUR",
+                "to": "ARS",
+                "market": "official",
+                "rate": 1755.94555,
+                "source": "dolarapi",
+                "asOf": "2026-08-24T16:58:00.000Z",
+                "path": "direct",
+                "buy": 1748.8151,
+                "sell": 1763.076
+            }
+        },
+        {
+            "from": "EUR",
+            "to": "BRL",
+            "expected": {
+                "from": "EUR",
+                "to": "BRL",
+                "market": "official",
+                "rate": 6.0110851808634775,
+                "source": "frankfurter",
+                "asOf": "2026-08-25T00:00:00.000Z",
+                "path": "triangulated"
+            }
+        },
+        {
+            "from": "ARS",
+            "to": "BRL",
+            "expected": {
+                "from": "ARS",
+                "to": "BRL",
+                "market": "official",
+                "rate": 0.0034229235880398673,
+                "source": "dolarapi+frankfurter",
+                "asOf": "2026-08-24T18:00:00.000Z",
+                "path": "triangulated"
+            }
+        },
+        {
+            "from": "ARS",
+            "to": "BRL",
+            "market": "blue",
+            "expected": {
+                "from": "ARS",
+                "to": "BRL",
+                "market": "blue",
+                "rate": 0.0033128617363344056,
+                "source": "dolarapi+frankfurter",
+                "asOf": "2026-08-24T21:00:00.000Z",
+                "path": "triangulated"
+            }
+        },
+        {
+            "from": "BRL",
+            "to": "ARS",
+            "expected": {
+                "from": "BRL",
+                "to": "ARS",
+                "market": "official",
+                "rate": 292.14791808211197,
+                "source": "frankfurter+dolarapi",
+                "asOf": "2026-08-24T18:00:00.000Z",
+                "path": "triangulated"
+            }
+        },
+        {
+            "from": "USD",
+            "to": "VND",
+            "expected": null
+        },
+        {
+            "from": "VND",
+            "to": "PYG",
+            "expected": null
+        }
+    ],
+    "alternatives": [
+        {
+            "from": "USD",
+            "to": "ARS",
+            "expected": {
+                "official": 1505.0,
+                "blue": 1555.0,
+                "mep": 1539.0500000000002,
+                "card": 1956.5
+            }
+        },
+        {
+            "from": "ARS",
+            "to": "USD",
+            "expected": {
+                "official": 0.000664451827242525,
+                "blue": 0.0006430868167202572,
+                "mep": 0.000649751470062701,
+                "card": 0.0005111167901865576
+            }
+        },
+        {
+            "from": "USD",
+            "to": "BRL",
+            "expected": {}
+        },
+        {
+            "from": "USD",
+            "to": "VND",
+            "expected": {}
+        }
+    ],
+    "convert": [
+        {
+            "amount": 100,
+            "rate": 1505.0,
+            "value": 150500.0
+        },
+        {
+            "amount": 12.345,
+            "rate": 2,
+            "value": 24.69
+        },
+        {
+            "amount": 1,
+            "rate": 0.857,
+            "value": 0.86
+        },
+        {
+            "amount": 2.675,
+            "rate": 1,
+            "value": 2.68
+        },
+        {
+            "amount": -1.005,
+            "rate": 1,
+            "value": -1.0
+        },
+        {
+            "amount": 0,
+            "rate": 1555.0,
+            "value": 0.0
+        }
+    ],
+    "stale": [
+        {
+            "asOf": "2026-08-24T18:00:00.000Z",
+            "expected": false
+        },
+        {
+            "asOf": "2026-08-25T00:00:00.000Z",
+            "expected": false
+        },
+        {
+            "asOf": "2026-08-10T00:00:00.000Z",
+            "expected": true
+        },
+        {
+            "asOf": "2026-08-21T11:00:00.000Z",
+            "expected": true
+        },
+        {
+            "asOf": "not a date",
+            "expected": true
+        }
+    ]
+}

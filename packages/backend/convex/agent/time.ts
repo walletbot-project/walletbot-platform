@@ -320,3 +320,21 @@ export const describeToday = (nowMs: number, offsetMinutes: number): string => {
     const mm = String(shifted.getUTCMinutes()).padStart(2, '0')
     return `${weekday}, ${date}, ${hh}:${mm} local time`
 }
+
+// An instant whose *local* fields (getFullYear, getHours, …) read as the
+// user's wall clock, whatever zone the server happens to run in.
+//
+// Everything else in this file avoids local getters precisely so the result
+// cannot depend on the host. The exception is shared code that has to keep
+// working on the clients, where local time IS the user's time: `runCalculateDate`
+// (packages/shared/src/tools/date-calc.ts) walks the calendar with local
+// getters. Rather than fork it, hand it an instant it will read correctly —
+// the host's own offset at that moment is measured, not assumed to be zero.
+export const hostDateAtLocalWallClock = (
+    nowMs: number,
+    offsetMinutes: number,
+): Date => {
+    const wall = nowMs + offsetMinutes * MINUTE_MS
+    const hostOffset = new Date(wall).getTimezoneOffset()
+    return new Date(wall + hostOffset * MINUTE_MS)
+}

@@ -188,7 +188,7 @@ Set on **both** `dev:proficient-finch-671` and prod:
 | `WHATSAPP_APP_ID` | `2576911202751949` | Our own code |
 | `WHATSAPP_VERIFY_TOKEN` | 32-byte random hex | Webhook handshake |
 | `WHATSAPP_GRAPH_VERSION` | `v23.0` | Our own code |
-| `WHATSAPP_APP_SECRET` | 32-char app secret | Webhook signature verification (R-020) |
+| `WHATSAPP_APP_SECRET` | 32-char app secret | Webhook signature verification (R-040) |
 | `WHATSAPP_BUSINESS_NUMBER` | `5491123991858` | `wa.me` deep link in the account-linking flow |
 
 All nine are set on both `dev:proficient-finch-671` and prod.
@@ -202,7 +202,7 @@ the other (Part 6). It is the only optional variable here: with it unset,
 
 `WHATSAPP_ACCESS_TOKEN` and `WHATSAPP_TOKEN` deliberately hold the same value:
 Chat SDK auto-detects the former (see Part 9), our own helpers read the former.
-If you rotate the token, **rotate both, on both deployments** — see R-023.
+If you rotate the token, **rotate both, on both deployments** — see R-043.
 
 `WHATSAPP_APP_SECRET` comes from App Dashboard → Settings → Basic → App Secret →
 "Mostrar", which requires re-entering your Facebook password and is therefore the
@@ -791,7 +791,7 @@ Coalescing verified against the real database. See Part 12 for the test recipes.
 was received, HMAC-verified against **Meta's own signature**, enqueued, claimed,
 processed, and the conversation released to `idle`. The reply then failed with
 `131037` and was recorded in `whatsappOutboundMessages` with its error code —
-visibly, rather than vanishing, which is precisely what R-021's mitigation
+visibly, rather than vanishing, which is precisely what R-041's mitigation
 exists for.
 
 **Working end to end** (2026-08-17). On `+54 9 11 2399-1858`: a real message from
@@ -813,7 +813,7 @@ the user's finances through `convex/agent/`. Verified against the dev database:
   → 4 rounds, 3 tool calls (listAccounts, createCategory, addExpense)
   → row written: amount 123450n cents, ARS, timeStatus "approximation",
     dateConfirmed true, seq 58, date = 2026-08-16 16:00 Buenos Aires
-  → balance moved to -1234.50; summarizeByCategory for that single day
+  → balance moved to -1234.50; the category summary for that single day
     returned it, proving the inclusive end-of-day range
 ```
 
@@ -832,7 +832,7 @@ exercise settled that reading the SDK could not:
    going silent — but **a paid key is a prerequisite for real use**, not a
    nice-to-have.
 
-**Replayed turns no longer double-write** (2026-08-17). R-019 made an
+**Replayed turns no longer double-write** (2026-08-17). R-039 made an
 idempotency guard a precondition for giving the agent write tools. Two calls
 with the same `writeKey` return the same id with `duplicate: true`, and the
 account balance moves once. See Part 13.
@@ -897,21 +897,22 @@ Meta allows only one per app.
 
 ### Tracked in the risk register
 
-Eight entries in `docs/riesgos.md` came out of this work. They are the durable
+Nine entries in `docs/riesgos.md` came out of this work. They are the durable
 version of the warnings above:
 
 | ID | Risk | Prob. | Impact |
 | --- | --- | --- | --- |
-| **R-019** | At-least-once turns duplicate **side effects** once the agent can write — **mitigated 2026-08-17** | Media | Alto |
-| **R-020** | The webhook is a public, unauthenticated ingress into the agent | Baja | Crítico |
-| **R-021** | The 24h window drops outbound silently | Alta | Medio |
-| **R-022** | `wa_id` is not "E.164 without the `+`" | Media | Medio |
-| **R-023** | Never-expiring token shared across dev and prod | Baja | Alto |
-| **R-024** | The link code is a bearer credential | Baja | Alto |
-| **R-025** | The agent writes finances **without prior confirmation** | Media | Medio |
-| **R-026** | The user's timezone is inferred from their country code | Media | Bajo |
+| **R-039** | At-least-once turns duplicate **side effects** once the agent can write — **mitigated 2026-08-17** | Media | Alto |
+| **R-040** | The webhook is a public, unauthenticated ingress into the agent | Baja | Crítico |
+| **R-041** | The 24h window drops outbound silently | Alta | Medio |
+| **R-042** | `wa_id` is not "E.164 without the `+`" | Media | Medio |
+| **R-043** | Never-expiring token shared across dev and prod | Baja | Alto |
+| **R-044** | The link code is a bearer credential | Baja | Alto |
+| **R-045** | The agent writes finances **without prior confirmation** | Media | Medio |
+| **R-046** | The user's timezone is inferred from their country code | Media | Bajo |
+| **R-047** | Memories written from a chat change the agent on every other channel | Media | Medio |
 
-**R-019 had a hard precondition, and it was met.** The turn claims a batch,
+**R-039 had a hard precondition, and it was met.** The turn claims a batch,
 replies, *then* marks it processed; if the action dies in between, the reaper
 requeues and the batch runs twice. While the agent only emitted text that cost a
 duplicate message — but the moment it got a tool that writes to `transactions`,
@@ -920,7 +921,7 @@ required an idempotency key before any write tool shipped, and
 `agent/idempotency.ts` is it: deterministic entity ids derived from the claimed
 row ids, so a retry is a no-op. See Part 13 § Replay safety.
 
-**R-025 is the one to watch now.** Voice shows the user the detected movement
+**R-045 is the one to watch now.** Voice shows the user the detected movement
 before saving; WhatsApp does not. The agent interprets a text message and writes
 in the same turn, so a misread amount is already in the database — and the
 confirmation the user reads is the model's sentence, not the database's. The
@@ -931,16 +932,16 @@ of their arguments, so the confirmation is at least built from real data.
 
 1. ~~Decide how a `wa_id` maps to a Wallet Bot `userId`~~ — **done
    (2026-08-17)**: a short-lived link code minted from an authenticated session
-   and sent by the user over WhatsApp, with the native UI in the user/accounts
-   menu. See Part 12 § Identity. Web parity is still open.
+   and sent by the user over WhatsApp, with the native UI in the account
+   switcher. See Part 12 § Identity. Web parity is still open.
 2. ~~Replace the stub `generateReply` with the real agent~~ — **done
-   (2026-08-17)**. `convex/agent/` holds a server-side executor for 29 of the 38
+   (2026-08-17)**. `convex/agent/` holds a server-side executor for 32 of the 42
    tools, and `runAgent` drives the Gemini tool-calling loop. Writes go through
    `nextSeq`, so they sync to the phone. The nine dashboard/saved-filter tools
    are deliberately out of scope — see Part 13 § Tool surface. **Add a paid
    Gemini key before real use**: the free tier allows 5 requests/min and one
    turn costs two to four.
-3. ~~Implement the R-019 idempotency key **before** the agent gets write
+3. ~~Implement the R-039 idempotency key **before** the agent gets write
    tools~~ — **done (2026-08-17)**, in the same change. `agent/idempotency.ts`
    derives each created entity's id from the claimed row ids by SHA-256, so a
    replay reuses the id and the create returns `{ok: true, duplicate: true}`
@@ -964,7 +965,7 @@ of their arguments, so the confirmation is at least built from real data.
    during the `131037` incident. We currently subscribe to `messages` only.
 10. **Store the user's timezone in `userSettings`** and have the native app
    write it. The agent currently infers it from the sender's country code
-   (R-026), which is wrong for travellers and for DST countries. The app
+   (R-046), which is wrong for travellers and for DST countries. The app
    already knows the real zone.
 11. Handle inbound **media**. Audio, images and documents are recognised but
    not downloaded: the agent is told "the user sent a `<type>` message, which I
@@ -972,7 +973,7 @@ of their arguments, so the confirmation is at least built from real data.
    the obvious next channel — the transcription path already exists for the
    live agent.
 12. Consider a "this is what I saved" turn summary built from the ids the
-   executor actually wrote, rather than from the model's own sentence (R-025).
+   executor actually wrote, rather than from the model's own sentence (R-045).
 
 ---
 
@@ -995,10 +996,11 @@ What actually exists in the backend, and how to test it.
 | `convex/agent/tools.ts` | `execute` — the server-side tool executor, one internal mutation per call |
 | `convex/agent/resolve.ts` | `idOrName` → entity, mirroring the native resolver |
 | `convex/agent/time.ts` | Offset-aware date parsing, so "hoy" means the user's today |
-| `convex/agent/idempotency.ts` | Deterministic entity ids, so a replayed turn writes nothing twice (R-019) |
+| `convex/agent/idempotency.ts` | Deterministic entity ids, so a replayed turn writes nothing twice (R-039) |
 | `convex/agent/prompt.ts` | The text-channel system instruction |
-| `convex/agent/toolset.ts` | Which tools the text agent may call |
-| `convex/agent/schema.ts` | Shared tool-schema → Google `FunctionDeclaration` adapter (also used by voice) |
+| `convex/agent/toolset.ts` | Which tools the text agent may call, and which of them a feature flag gates |
+| `convex/agent/internal.ts` | `turnContext` — memories, default currency, language and flags, in one read |
+| `convex/agent/schema.ts` | Shared tool-schema → Google `FunctionDeclaration` adapter (voice writes the same wire JSON without the SDK) |
 | `convex/v1/whatsapp/mutations.ts` | `createLinkCode`, `unlink` — the authenticated half of linking |
 | `convex/v1/whatsapp/queries.ts` | `linkStatus` — which numbers are connected |
 
@@ -1104,13 +1106,16 @@ to copy a code between apps. Note it takes the **dialable** number
   **Brazil gets English** (Latin America, but the dividing line is Spanish, not
   geography), and **the Dominican Republic and Puerto Rico get English**
   because their numbers are +1 and cannot be told apart from any other NANP
-  number without an area-code table. Once linked, the agent follows the user's
-  own words instead and the table stops mattering.
+  number without an area-code table. Once linked, the table stops mattering
+  twice over: the account's own `userSettings.language` — reported by the app
+  since 2026-08-25 — wins over the guess (`agent/internal.ts:turnContext`), and
+  the agent follows the user's own words from there.
 - `unlink` revokes pending codes. Otherwise a code minted just before
   unlinking stays live and could silently re-link the number.
 
-**Native UI (2026-08-17).** Reachable from the user/accounts menu
-(`screens/home.dart`), which pushes `screens/whatsapp_link.dart`. State lives in
+**Native UI (2026-08-17).** Reachable from the account switcher
+(`screens/account_switcher.dart`, in the current-account group beside
+Settings), which pushes `screens/whatsapp_link.dart`. State lives in
 `whatsapp/whatsapp_link_controller.dart`.
 
 Two things about it are worth knowing before changing it:
@@ -1125,15 +1130,17 @@ Two things about it are worth knowing before changing it:
   test asserts no query is issued at all, so the gate cannot rot into a purely
   visual one.
 
-The controller depends on a two-method `WhatsappLinkApi` rather than
-`ConvexClient` directly. `ConvexClient` has a private constructor and an
-`instance` getter that throws under `flutter test`, so it cannot be faked;
-narrowing the dependency is what makes the parsing and state machine testable.
-`ConvexLinkApi` is the one production implementation.
+The controller takes a `ConvexClient?` by constructor, like
+`DefaultCurrencyController` and `LanguageSyncController`. It used to hide
+behind a two-method `WhatsappLinkApi` because `convex_flutter`'s client had a
+private constructor and an `instance` getter that threw under `flutter test`;
+the pure-Dart client that replaced it (2026-08-27, R-034) is an ordinary class
+a test can implement, so the indirection went away and the calls are typed
+values rather than JSON strings.
 
 **Still missing:** the web UI — nothing in `apps/web` calls these functions, so
 linking is native-only for now. There is also no notification to the user when
-their account gets linked to a new number (R-024).
+their account gets linked to a new number (R-044).
 
 ### Testing without Meta
 
@@ -1245,19 +1252,36 @@ runAgentTurn  (whatsapp/nodeActions.ts)
        └─ push functionResponse parts, loop (max 8 rounds / 24 calls)
 ```
 
-### Tool surface: 29 of 38
+### Tool surface: 32 of 42
 
 Everything about money is there: accounts, categories, tags, transaction reads
-and writes, and the two summaries.
+and writes, and `summarizeTransactions`. So are the four tools that are not
+about money but change what the agent is: `addMemory`/`updateMemory`/
+`forgetMemory` write the same `agentMemories` rows the voice agent uses, so a
+preference stated over WhatsApp holds in the app and the other way round;
+`readSkill` serves the shared reference documents; `calculate` and
+`calculateDate` do the arithmetic the model would otherwise do in its head.
+`getExchangeRate` is there too, behind the same `exchangeRates` feature flag
+the voice channel gates it with — resolved for the conversation's user before
+the declarations are built, and re-checked in the executor, which never takes
+the model's word for which tools the rollout has reached.
 
 **The nine dashboard and saved-filter tools are deliberately not exposed.**
 `createDashboardWidget` has to place a tile on a grid, and that packing lives
 in Dart (`components/dashboard/dashboard_layout.dart`) with no server-side
 equivalent; a WhatsApp user also cannot see the result. Porting the packer for
 a surface nobody can look at is work with no payoff, so the prompt tells the
-agent to send the user to the app instead. `agent/toolset.ts` is the single
-list, shared by the model's declarations and the executor's dispatch, so the
-model can never call something the executor cannot handle.
+agent to send the user to the app instead.
+
+**`updateSettings` is out for a different reason.** Two of its three fields —
+language and theme — are display preferences scoped to the device the agent
+runs on, and a WhatsApp turn has no device. Honouring only `defaultCurrency`
+would leave one tool meaning two different things depending on the channel, so
+the prompt points at the app instead.
+
+`agent/toolset.ts` is the single list, shared by the model's declarations and
+the executor's dispatch, so the model can never call something the executor
+cannot handle.
 
 ### "Hoy" has to mean the user's today
 
@@ -1271,7 +1295,7 @@ timezone — the result is identical wherever the action runs. The offset comes
 from the sender's country code (`utcOffsetMinutesFor`), the same hard-coded
 table shape as the reply language, because a WhatsApp conversation carries no
 locale and the account stores no timezone. That inference is wrong for
-travellers and for DST countries; it is tracked as R-026, whose real fix is
+travellers and for DST countries; it is tracked as R-046, whose real fix is
 storing the timezone in `userSettings` from the native app.
 
 One trap worth naming: `Date.parse('2026-08-17T14:30')` resolves a **zoneless**
@@ -1281,7 +1305,7 @@ double-applies. The parser handles that form field by field instead. Two of the
 
 ### Replay safety
 
-A WhatsApp turn is at-least-once (R-019): if the action dies between sending
+A WhatsApp turn is at-least-once (R-039): if the action dies between sending
 and `finishBatch`, the reaper re-queues the batch and the agent runs again on
 the same input. With read-only tools that cost a repeated reply; with write
 tools it would cost a second expense.

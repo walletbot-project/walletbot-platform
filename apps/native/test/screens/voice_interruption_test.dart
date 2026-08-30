@@ -174,6 +174,18 @@ class _ActiveVoiceCommandFactory implements VoiceExpenseCommandFactory {
 
   @override
   VoiceExpenseCommand create() => command;
+
+  @override
+  void prefetchToken() {}
+
+  @override
+  Future<List<VoiceEvent>> restorableHistory() async => const [];
+
+  @override
+  Future<void> discardRestorableSession() async {}
+
+  @override
+  Future<String?> restorableSessionId() async => 'test-session';
 }
 
 class _ActiveVoiceCommand implements VoiceExpenseCommand {
@@ -185,9 +197,16 @@ class _ActiveVoiceCommand implements VoiceExpenseCommand {
   final List<bool> audioPlaybackStates = [];
   final bool connected;
   bool audioStreamEnded = false;
+  int ensureConnectedCalls = 0;
+
+  @override
+  String? get sessionId => 'test-session';
 
   @override
   Stream<VoiceEvent> get events => _events.stream;
+
+  @override
+  List<VoiceEvent> get history => const [];
 
   void emit(VoiceEvent event) => _events.add(event);
 
@@ -196,6 +215,11 @@ class _ActiveVoiceCommand implements VoiceExpenseCommand {
 
   @override
   bool get isConnected => connected;
+
+  @override
+  Future<void> ensureConnected() async {
+    ensureConnectedCalls += 1;
+  }
 
   @override
   String get label => 'test';

@@ -19,6 +19,7 @@ Configure Convex:
 
 ```sh
 OTEL_SERVICE_NAME=walletbot-backend
+WALLETBOT_ENV=production
 OTEL_RESOURCE_ATTRIBUTES=deployment.environment=production,service.namespace=walletbot,service.version=1.0.0
 OTEL_EXPORTER_OTLP_ENDPOINT=https://otlp-gateway-<REGION>.grafana.net/otlp
 OTEL_EXPORTER_OTLP_HEADERS=Authorization=Basic <TOKEN>
@@ -34,6 +35,10 @@ Notes:
   `OTEL_EXPORTER_OTLP_PROTOCOL` is not required.
 - If Grafana gives the header as `Authorization=Basic%20<TOKEN>`, it is valid:
   the backend normalizes `%20` to a space before sending.
+- `deployment.environment` is attached to all exported OTLP logs and metrics as
+  a resource attribute. Prefer setting it explicitly in
+  `OTEL_RESOURCE_ATTRIBUTES`; otherwise the exporter falls back to
+  `WALLETBOT_ENV`, `APP_ENV`, `NODE_ENV`, or `CONVEX_DEPLOYMENT`.
 - A full signal-specific endpoint is also supported:
 
 ```sh
@@ -49,14 +54,29 @@ dots may appear as underscores.
 - `business_user_accounts_created_count`
 - `business_movements_created_count`
 - `business_transfers_created_count`
+- `business_users_registered_total`
+- `business_user_accounts_signed_in_count`
+- `agent_session_cost_usd`
+- `agent_interaction_cost_usd`
+- `agent_user_monthly_cost_usd`
+- `agent_interactions_completed_count`
+- `agent_session_cost_bucket_count`
 
 Useful labels:
 
 - `created_by`
 - `ingest_path`
 - `auth_method`
+- `client_platform`
 - `movement_type`
 - `cross_currency`
+- `model`
+- `mode`
+- `cost_source`
+- `user_hash`
+- `month`
+- `interaction_type`
+- `cost_bucket`
 - `deployment_environment`
 - `service_namespace`
 - `service_name`
@@ -97,6 +117,77 @@ Writes by ingestion path:
 
 ```promql
 sum by (ingest_path) (increase(business_movements_created_count[1d]))
+```
+
+Registered users total:
+
+```promql
+last_over_time(business_users_registered_total[24h])
+```
+
+Sign-ins by auth method and client:
+
+```promql
+sum by (auth_method, client_platform) (increase(business_user_accounts_signed_in_count[1d]))
+```
+
+Agent session cost p95:
+
+```promql
+quantile_over_time(0.95, agent_session_cost_usd[1d])
+```
+
+Monthly AI cost by user:
+
+```promql
+sum by (user_hash, month) (last_over_time(agent_user_monthly_cost_usd[7h]))
+```
+
+Agent interactions by type:
+
+```promql
+sum by (interaction_type, mode) (increase(agent_interactions_completed_count[1d]))
+```
+
+Agent sessions by cost bucket:
+
+```promql
+sum by (cost_bucket) (increase(agent_session_cost_bucket_count[1d]))
+```
+
+## Scheduled Business Gauges
+
+`business.users.registered_total` is emitted every 6 hours by the Convex cron
+`record registered users total`. It counts Better Auth users and exports a
+gauge with the latest total registered accounts.
+
+`agent.user.monthly_cost_usd` is emitted every 6 hours by the Convex cron
+`record agent monthly usage`. It reads the current `agentUsageMonthly` rollup
+and exports one gauge for each of the top 20 `user_hash + month + model + mode`
+rows by monthly estimated cost.
+
+To force a refresh while testing, run the internal action from the Convex CLI:
+
+```sh
+pnpm -C packages/backend exec convex run telemetry/actions:recordRegisteredUsersTotalNow
+```
+
+To force the monthly AI cost snapshot:
+
+```sh
+pnpm -C packages/backend exec convex run telemetry/actions:recordAgentMonthlyUsageNow
+```
+
+To force a specific UTC month:
+
+```sh
+pnpm -C packages/backend exec convex run telemetry/actions:recordAgentMonthlyUsageNow '{"month":"2026-08"}'
+```
+
+Use `--prod` when forcing the production deployment:
+
+```sh
+pnpm -C packages/backend exec convex run --prod telemetry/actions:recordRegisteredUsersTotalNow
 ```
 
 ## Outbox Policy

@@ -15,10 +15,10 @@ const _bootstrapCacheKey = 'bootstrap_backend_config';
 /// Cache-first: when a last-good value exists it is applied immediately and the
 /// network fetch only refreshes the cache in the background, so a slow or hung
 /// network never blocks startup. On the first launch (no cache) the fetch is
-/// awaited before `ConvexClient.initialize` so the WebSocket connects to the
-/// resolved URL. Fails open: on any error it falls back to the last-good cache,
-/// then to the bundled `.env`/`--dart-define` value. MUST be awaited before
-/// `ConvexClient.initialize`.
+/// awaited before the `ConvexClient` is constructed so the WebSocket connects
+/// to the resolved URL. Fails open: on any error it falls back to the last-good
+/// cache, then to the bundled `.env`/`--dart-define` value. MUST be awaited
+/// before constructing the `ConvexClient`.
 Future<void> resolveBackendConfig(
   FlutterSecureStorage storage, {
   http.Client? client,

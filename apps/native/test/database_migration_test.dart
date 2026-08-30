@@ -1,5 +1,6 @@
 import 'package:app/data/app_repositories.dart';
 import 'package:app/database.dart';
+import 'package:drift/drift.dart' show Value;
 import 'package:drift/native.dart';
 import 'package:drift_dev/api/migrations_native.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -13,13 +14,13 @@ void main() {
     verifier = SchemaVerifier(GeneratedHelper());
   });
 
-  test('fresh database matches the versioned v2 schema snapshot', () async {
+  test('fresh database matches the versioned v4 schema snapshot', () async {
     final db = AppDatabase.forTesting(NativeDatabase.memory());
     addTearDown(db.close);
 
     await verifier.migrateAndValidate(
       db,
-      2,
+      4,
       options: const ValidationOptions(validateDropped: true),
     );
   });
@@ -88,10 +89,185 @@ void main() {
     },
   );
 
+  test(
+    'v2 rows survive the upgrade to v3, which only adds legal_acceptances',
+    () async {
+      final schema = await verifier.schemaAt(2);
+      addTearDown(schema.close);
+
+      schema.rawDatabase.execute(
+        'INSERT INTO transactions '
+        '(id, type, name, status, date, time_status, account_id, category_id, '
+        'amount, currency, created_at, updated_at) '
+        "VALUES ('t2', 'expense', 'Almuerzo', 'cleared', 1000, "
+        "'approximation', 'a1', 'c1', 750, 'ARS', 10, 20)",
+      );
+      schema.rawDatabase.execute(
+        'INSERT INTO accounts '
+        '(id, name, currency, created_at, updated_at) '
+        "VALUES ('a1', 'Cuenta', 'ARS', 10, 20)",
+      );
+
+      final db = AppDatabase.forTesting(schema.newConnection());
+      addTearDown(db.close);
+      await verifier.migrateAndValidate(db, 3);
+
+      final transactions = await db
+          .customSelect(
+            'SELECT id, name, amount, time_status FROM transactions',
+          )
+          .get();
+      expect(transactions, hasLength(1));
+      expect(transactions.single.read<String>('name'), 'Almuerzo');
+      expect(transactions.single.read<int>('amount'), 750);
+      // Untouched by the v3 step.
+      expect(transactions.single.read<String>('time_status'), 'approximation');
+
+      final accounts = await db
+          .customSelect('SELECT id, name FROM accounts')
+          .get();
+      expect(accounts, hasLength(1));
+      expect(accounts.single.read<String>('name'), 'Cuenta');
+
+      // The new table exists and starts empty: an upgrade must never invent an
+      // acceptance for a user who was never asked.
+      final acceptances = await db.select(db.legalAcceptances).get();
+      expect(acceptances, isEmpty);
+    },
+  );
+
+  test(
+    'v3 rows survive the upgrade to v4, which only adds agent_memories',
+    () async {
+      final schema = await verifier.schemaAt(3);
+      addTearDown(schema.close);
+
+      schema.rawDatabase.execute(
+        'INSERT INTO transactions '
+        '(id, type, name, status, date, time_status, account_id, category_id, '
+        'amount, currency, created_at, updated_at) '
+        "VALUES ('t3', 'expense', 'Cena', 'cleared', 1000, "
+        "'confirmed', 'a1', 'c1', 900, 'ARS', 10, 20)",
+      );
+      schema.rawDatabase.execute(
+        'INSERT INTO accounts '
+        '(id, name, currency, created_at, updated_at) '
+        "VALUES ('a1', 'Cuenta', 'ARS', 10, 20)",
+      );
+      schema.rawDatabase.execute(
+        'INSERT INTO legal_acceptances '
+        '(id, document, version, accepted_at, age_confirmed, platform, source) '
+        "VALUES ('acc-1', 'terms', '2026-08-06', 1000, 1, 'android', 'local')",
+      );
+
+      final db = AppDatabase.forTesting(schema.newConnection());
+      addTearDown(db.close);
+      await verifier.migrateAndValidate(db, 4);
+
+      final transactions = await db
+          .customSelect(
+            'SELECT id, name, amount, time_status FROM transactions',
+          )
+          .get();
+      expect(transactions, hasLength(1));
+      expect(transactions.single.read<String>('name'), 'Cena');
+      expect(transactions.single.read<int>('amount'), 900);
+      expect(transactions.single.read<String>('time_status'), 'confirmed');
+
+      final accounts = await db
+          .customSelect('SELECT id, name FROM accounts')
+          .get();
+      expect(accounts.single.read<String>('name'), 'Cuenta');
+
+      final acceptances = await db.select(db.legalAcceptances).get();
+      expect(acceptances, hasLength(1));
+
+      // The new table exists and starts empty: an upgrade must never invent
+      // memories the agent never saved.
+      expect(await db.select(db.agentMemories).get(), isEmpty);
+    },
+  );
+
+  test('a v1 database upgrades all the way to v4 in one open', () async {
+    final schema = await verifier.schemaAt(1);
+    addTearDown(schema.close);
+
+    schema.rawDatabase.execute(
+      'INSERT INTO transactions '
+      '(id, type, name, status, date, account_id, category_id, amount, '
+      'currency, created_at, updated_at) '
+      "VALUES ('t1', 'income', 'Sueldo', 'cleared', 900, 'a1', 'c1', 1200, "
+      "'ARS', 10, 20)",
+    );
+
+    final db = AppDatabase.forTesting(schema.newConnection());
+    addTearDown(db.close);
+    await verifier.migrateAndValidate(db, 4);
+
+    // Every step ran: the v2 column is there with its default AND the v3
+    // and v4 tables exist. A step chain that returned early would fail here.
+    final rows = await db
+        .customSelect('SELECT id, time_status FROM transactions')
+        .get();
+    expect(rows.single.read<String>('time_status'), 'none');
+    expect(await db.select(db.legalAcceptances).get(), isEmpty);
+    expect(await db.select(db.agentMemories).get(), isEmpty);
+  });
+
+  test(
+    'legal acceptances round-trip their enums and stay append-only',
+    () async {
+      final db = AppDatabase.forTesting(NativeDatabase.memory());
+      addTearDown(db.close);
+
+      await db
+          .into(db.legalAcceptances)
+          .insert(
+            LegalAcceptancesCompanion.insert(
+              id: 'acc-1',
+              document: LegalDocumentKind.terms,
+              version: '2026-08-06',
+              acceptedAt: BigInt.from(1000),
+              ageConfirmed: const Value(true),
+              platform: 'android',
+              source: LegalAcceptanceSource.local,
+            ),
+          );
+      await db
+          .into(db.legalAcceptances)
+          .insert(
+            LegalAcceptancesCompanion.insert(
+              id: 'acc-2',
+              document: LegalDocumentKind.privacy,
+              version: '2026-08-06',
+              acceptedAt: BigInt.from(2000),
+              ageConfirmed: const Value(true),
+              platform: 'android',
+              source: LegalAcceptanceSource.remote,
+            ),
+          );
+
+      final rows = await db.select(db.legalAcceptances).get();
+      expect(rows, hasLength(2));
+      expect(
+        rows.map((row) => row.document),
+        containsAll(<LegalDocumentKind>[
+          LegalDocumentKind.terms,
+          LegalDocumentKind.privacy,
+        ]),
+      );
+      expect(rows.every((row) => row.ageConfirmed), isTrue);
+      expect(
+        rows.singleWhere((row) => row.id == 'acc-2').source,
+        LegalAcceptanceSource.remote,
+      );
+    },
+  );
+
   test('future databases fail instead of being silently downgraded', () async {
     final db = AppDatabase.forTesting(
       NativeDatabase.memory(
-        setup: (database) => database.execute('PRAGMA user_version = 3'),
+        setup: (database) => database.execute('PRAGMA user_version = 5'),
       ),
     );
     addTearDown(db.close);
@@ -102,7 +278,7 @@ void main() {
         isA<UnsupportedError>().having(
           (error) => error.message,
           'message',
-          contains('Unhandled SQLite migration path: v3 -> v2'),
+          contains('Unhandled SQLite migration path: v5 -> v4'),
         ),
       ),
     );

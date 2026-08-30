@@ -7,8 +7,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 
-// These tests only exercise error paths and the new email endpoints — none
-// of them reach ConvexClient (which can't initialize under `flutter test`).
+// These tests only exercise error paths and the new email endpoints — no
+// ConvexClient is wired, so auth attach/detach are no-ops.
 void main() {
   setUpAll(() {
     AppConfig.setRuntimeUrls(
@@ -21,9 +21,8 @@ void main() {
     FlutterSecureStorage.setMockInitialValues({});
   });
 
-  // Deliberately never disposed: AuthController.dispose() detaches auth via
-  // ConvexClient.instance, which cannot initialize under `flutter test`
-  // (same reason widget_test.dart leaves its controller undisposed).
+  // Never disposed, matching widget_test.dart; without a ConvexClient the
+  // detach on dispose is a no-op anyway.
   AuthController controllerWith(MockClient client) {
     return AuthController(httpClient: client);
   }
@@ -81,44 +80,71 @@ void main() {
     );
   });
 
-  test('requestPasswordReset posts the email to /auth/password/forgot',
-      () async {
-    final requests = <http.Request>[];
-    final auth = controllerWith(
-      MockClient((request) async {
-        requests.add(request);
-        return http.Response(jsonEncode({'ok': true}), 200);
-      }),
-    );
+  test(
+    'requestPasswordReset posts the email to /auth/password/forgot',
+    () async {
+      final requests = <http.Request>[];
+      final auth = controllerWith(
+        MockClient((request) async {
+          requests.add(request);
+          return http.Response(jsonEncode({'ok': true}), 200);
+        }),
+      );
 
-    await auth.requestPasswordReset(email: 'a@b.c');
+      await auth.requestPasswordReset(email: 'a@b.c');
 
-    final request = requests.single;
-    expect(request.method, 'POST');
-    expect(request.url.toString(), 'https://site.test/auth/password/forgot');
-    expect(jsonDecode(request.body), {'email': 'a@b.c'});
-  });
+      final request = requests.single;
+      expect(request.method, 'POST');
+      expect(request.url.toString(), 'https://site.test/auth/password/forgot');
+      expect(jsonDecode(request.body), {'email': 'a@b.c'});
+    },
+  );
 
-  test('resendVerificationEmail posts to /auth/email/resend-verification',
-      () async {
-    final requests = <http.Request>[];
-    final auth = controllerWith(
-      MockClient((request) async {
-        requests.add(request);
-        return http.Response(jsonEncode({'ok': true}), 200);
-      }),
-    );
+  test(
+    'resendVerificationEmail posts to /auth/email/resend-verification',
+    () async {
+      final requests = <http.Request>[];
+      final auth = controllerWith(
+        MockClient((request) async {
+          requests.add(request);
+          return http.Response(jsonEncode({'ok': true}), 200);
+        }),
+      );
 
-    await auth.resendVerificationEmail(email: 'a@b.c');
+      await auth.resendVerificationEmail(email: 'a@b.c');
 
-    final request = requests.single;
-    expect(request.method, 'POST');
-    expect(
-      request.url.toString(),
-      'https://site.test/auth/email/resend-verification',
-    );
-    expect(jsonDecode(request.body), {'email': 'a@b.c'});
-  });
+      final request = requests.single;
+      expect(request.method, 'POST');
+      expect(
+        request.url.toString(),
+        'https://site.test/auth/email/resend-verification',
+      );
+      expect(jsonDecode(request.body), {'email': 'a@b.c'});
+    },
+  );
+
+  test(
+    'requestAccountDeletion posts to /v1/account-deletion/request',
+    () async {
+      final requests = <http.Request>[];
+      final auth = controllerWith(
+        MockClient((request) async {
+          requests.add(request);
+          return http.Response(jsonEncode({'ok': true}), 200);
+        }),
+      );
+
+      await auth.requestAccountDeletion(email: 'a@b.c');
+
+      final request = requests.single;
+      expect(request.method, 'POST');
+      expect(
+        request.url.toString(),
+        'https://site.test/v1/account-deletion/request',
+      );
+      expect(jsonDecode(request.body), {'email': 'a@b.c'});
+    },
+  );
 
   test('requestPasswordReset propagates non-2xx as AuthHttpError', () async {
     final auth = controllerWith(

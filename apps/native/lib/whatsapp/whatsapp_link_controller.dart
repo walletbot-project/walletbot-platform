@@ -1,45 +1,7 @@
 import 'dart:async';
 
-import 'package:app/sync/wire.dart';
-import 'package:convex_flutter/convex_flutter.dart';
+import 'package:app/convex/convex_client.dart';
 import 'package:flutter/foundation.dart';
-
-/// The two backend calls the link controller makes.
-///
-/// Exists because `ConvexClient` has a private constructor and a singleton
-/// `instance` getter that throws under `flutter test`, so it cannot be faked or
-/// subclassed. Narrowing the dependency to these two methods is what makes the
-/// parsing and state transitions below testable at all — [ConvexLinkApi] is the
-/// only part that then needs a real client.
-abstract interface class WhatsappLinkApi {
-  Future<String> query(String name, Map<String, dynamic> args);
-
-  Future<String> mutation({
-    required String name,
-    required Map<String, dynamic> args,
-  });
-}
-
-/// Production [WhatsappLinkApi], backed by the real Convex client.
-///
-/// Resolves `ConvexClient.instance` lazily, per call, so constructing this for
-/// a local-only account never requires `ConvexClient.initialize()`.
-class ConvexLinkApi implements WhatsappLinkApi {
-  const ConvexLinkApi({ConvexClient? client}) : _client = client;
-
-  final ConvexClient? _client;
-  ConvexClient get _resolved => _client ?? ConvexClient.instance;
-
-  @override
-  Future<String> query(String name, Map<String, dynamic> args) =>
-      _resolved.query(name, args);
-
-  @override
-  Future<String> mutation({
-    required String name,
-    required Map<String, dynamic> args,
-  }) => _resolved.mutation(name: name, args: args);
-}
 
 enum WhatsappLinkState {
   /// Never loaded, or reloading after a failure.
@@ -99,11 +61,20 @@ class WhatsappLinkCode {
 /// [isRemote] gates every call: a local-only account has no backend user, so
 /// there is nothing to link it to.
 class WhatsappLinkController extends ChangeNotifier {
-  WhatsappLinkController({required this.isRemote, WhatsappLinkApi? api})
-    : _api = api ?? const ConvexLinkApi();
+  WhatsappLinkController({required this.isRemote, ConvexClient? client})
+    : _client = client;
 
   final bool isRemote;
-  final WhatsappLinkApi _api;
+
+  // Only ever touched when [isRemote] is true, so a local account — and a
+  // widget test — runs without a Convex transport. Same shape as
+  // `DefaultCurrencyController`.
+  final ConvexClient? _client;
+  ConvexClient get _resolvedClient {
+    final client = _client;
+    if (client == null) throw StateError('whatsappLink: no ConvexClient');
+    return client;
+  }
 
   WhatsappLinkState _state = WhatsappLinkState.loading;
   WhatsappLinkState get state => _state;
@@ -161,8 +132,10 @@ class WhatsappLinkController extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final raw = await _api.query('v1/whatsapp/queries:linkStatus', {});
-      final decoded = decodeConvexResponse(raw);
+      final decoded = await _resolvedClient.query<Object?>(
+        'v1/whatsapp/queries:linkStatus',
+        const {},
+      );
       if (decoded is! Map) {
         throw const FormatException('linkStatus did not return an object');
       }
@@ -185,11 +158,10 @@ class WhatsappLinkController extends ChangeNotifier {
     _busy = true;
     notifyListeners();
     try {
-      final raw = await _api.mutation(
-        name: 'v1/whatsapp/mutations:createLinkCode',
-        args: const {},
+      final decoded = await _resolvedClient.mutation<Object?>(
+        'v1/whatsapp/mutations:createLinkCode',
+        const {},
       );
-      final decoded = decodeConvexResponse(raw);
       if (decoded is! Map) {
         throw const FormatException('createLinkCode did not return an object');
       }
@@ -220,10 +192,9 @@ class WhatsappLinkController extends ChangeNotifier {
     _busy = true;
     notifyListeners();
     try {
-      await _api.mutation(
-        name: 'v1/whatsapp/mutations:unlink',
-        args: {'waId': ?waId},
-      );
+      await _resolvedClient.mutation<Object?>('v1/whatsapp/mutations:unlink', {
+        'waId': ?waId,
+      });
       // Unlinking revokes pending codes server-side, so drop ours too rather
       // than leaving a code on screen that can no longer link anything.
       _clearCode();

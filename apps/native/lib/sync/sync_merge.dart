@@ -1,7 +1,6 @@
 import 'package:drift/drift.dart';
 
 import '../database.dart';
-import 'wire.dart';
 
 /// Applies a single page of `pull` output to the local Drift database in one
 /// transaction. Implements the LWW conflict-resolution rules from
@@ -80,6 +79,9 @@ class PullPageMerger {
         break;
       case 'dashboardWidgets':
         await _applyDashboardWidget(id, remoteUpdatedAt, r);
+        break;
+      case 'agentMemories':
+        await _applyAgentMemory(id, remoteUpdatedAt, r);
         break;
       default:
         // Unknown table — skip rather than crash. Forward-compat: a future
@@ -272,6 +274,28 @@ class PullPageMerger {
     await db.into(db.dashboardWidgets).insertOnConflictUpdate(companion);
   }
 
+  Future<void> _applyAgentMemory(
+    String id,
+    BigInt remoteUpdatedAt,
+    Map<String, Object?> r,
+  ) async {
+    final existing = await (db.select(
+      db.agentMemories,
+    )..where((m) => m.id.equals(id))).getSingleOrNull();
+    if (existing != null && existing.dirty) {
+      if (existing.updatedAt >= remoteUpdatedAt) return;
+    }
+    final companion = AgentMemoriesCompanion(
+      id: Value(id),
+      content: Value(r['content'] as String),
+      archived: Value(r['isArchived'] as bool? ?? false),
+      createdAt: Value(_asBigInt(r['createdAt'])),
+      updatedAt: Value(remoteUpdatedAt),
+      dirty: const Value(false),
+    );
+    await db.into(db.agentMemories).insertOnConflictUpdate(companion);
+  }
+
   // ─── Tombstone apply ─────────────────────────────────────────────────────
 
   Future<void> _applyRemoteTombstone(
@@ -386,6 +410,20 @@ class PullPageMerger {
           }
         }
         break;
+      case 'agentMemories':
+        final row = await (db.select(
+          db.agentMemories,
+        )..where((m) => m.id.equals(entityId))).getSingleOrNull();
+        if (row != null) {
+          if (row.dirty && row.updatedAt > deletedAt) {
+            keepLocalRow = true;
+          } else {
+            await (db.delete(
+              db.agentMemories,
+            )..where((m) => m.id.equals(entityId))).go();
+          }
+        }
+        break;
     }
 
     if (keepLocalRow) {
@@ -452,9 +490,6 @@ BigInt _asBigInt(Object? v) {
   if (v is int) return BigInt.from(v);
   if (v is double) return BigInt.from(v.toInt());
   if (v is String) return BigInt.parse(v);
-  // Wire envelope shouldn't reach here — the engine pre-decodes int64s. But
-  // be defensive in case the engine forgets a recursion.
-  if (v is Map) return parseInt64Wire(v);
   throw FormatException('expected int-like, got: $v');
 }
 

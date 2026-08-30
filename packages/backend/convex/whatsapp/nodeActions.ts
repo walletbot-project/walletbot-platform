@@ -165,11 +165,13 @@ const generateReply = async (
         // The claimed rows' ids. If this turn dies before `finishBatch` and
         // the reaper re-queues them, the replay claims those same rows and
         // therefore rebuilds the same key — which is what stops the retry from
-        // recording the user's expense a second time (R-019).
+        // recording the user's expense a second time (R-039).
         turnKey: turnKeyFor(args.messageIds),
         nowMs: Date.now(),
-        // Both inferred from the sender's country code: a WhatsApp
-        // conversation carries no locale and the account stores none.
+        // Both inferred from the sender's country code, because a WhatsApp
+        // conversation carries no locale of its own. The language is only the
+        // fallback — `runAgent` prefers the language the account reported from
+        // the app (R-046 still stands for the offset, which nothing reports).
         utcOffsetMinutes: utcOffsetMinutesFor(args.waId),
         preferredLanguage: replyLanguageFor(args.waId),
     })

@@ -20,8 +20,8 @@ const _testClientInfo = ClientInfo(
   deviceId: 'test-device',
 );
 
-// Only error/pending paths are exercised — success paths reach
-// ConvexClient, which cannot initialize under `flutter test`.
+// Only error/pending paths are exercised — success paths attach Convex auth,
+// and no ConvexClient is wired in these tests.
 void main() {
   setUpAll(() {
     AppConfig.setRuntimeUrls(
@@ -53,6 +53,23 @@ void main() {
     await tester.pump(const Duration(seconds: 31));
   }
 
+  // Sign-up cannot be submitted until both consent boxes are ticked, so every
+  // sign-up path has to do this first (the labels are asserted here on
+  // purpose: the copy is what the user is agreeing to).
+  Future<void> acceptLegalChecks(WidgetTester tester) async {
+    await tester.tap(find.text('Tengo 18 años o más'));
+    await tester.pump();
+    // The accept label carries the document links inline, and tapping one of
+    // those opens the document instead of ticking the box. Aim at the start of
+    // the sentence ("Acepto los "), which is always plain text.
+    final label = find.text(
+      'Acepto los Términos y Condiciones y la Política de Privacidad',
+    );
+    final topLeft = tester.getTopLeft(label);
+    await tester.tapAt(Offset(topLeft.dx + 20, topLeft.dy + 8));
+    await tester.pump();
+  }
+
   testWidgets('sign-up blocked by verification shows the pending panel', (
     tester,
   ) async {
@@ -74,6 +91,11 @@ void main() {
     await tester.enterText(find.byType(TextFormField).at(0), 'Ana');
     await tester.enterText(find.byType(TextFormField).at(1), 'ana@test.com');
     await tester.enterText(find.byType(TextFormField).at(2), 'password123');
+    await acceptLegalChecks(tester);
+    // The consent block pushes the submit button below the fold on a short
+    // window; the panel is a scroll view, so bring it into view first.
+    await tester.ensureVisible(find.text('Registrarme'));
+    await tester.pump();
     await tester.tap(find.text('Registrarme'));
     await tester.pumpAndSettle();
 
@@ -86,6 +108,63 @@ void main() {
 
     await drainResendCooldown(tester);
     expect(find.text('Reenviar correo'), findsOneWidget);
+  });
+
+  testWidgets('sign-up is blocked until both consent boxes are ticked', (
+    tester,
+  ) async {
+    final requests = <http.Request>[];
+    final auth = AuthController(
+      httpClient: MockClient((request) async {
+        requests.add(request);
+        return http.Response(
+          jsonEncode({'code': 'email_not_verified', 'message': 'verify'}),
+          403,
+        );
+      }),
+    );
+    await pumpLogin(tester, auth);
+
+    await tester.tap(find.text('¿Necesitás una cuenta? Registrate'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextFormField).at(0), 'Ana');
+    await tester.enterText(find.byType(TextFormField).at(1), 'ana@test.com');
+    await tester.enterText(find.byType(TextFormField).at(2), 'password123');
+
+    // Age alone is not acceptance: the button must stay dead, and nothing may
+    // reach the network.
+    await tester.tap(find.text('Tengo 18 años o más'));
+    await tester.pump();
+    await tester.ensureVisible(find.text('Registrarme'));
+    await tester.pump();
+    await tester.tap(find.text('Registrarme'));
+    await tester.pumpAndSettle();
+    expect(requests, isEmpty);
+
+    await tester.ensureVisible(
+      find.text(
+        'Acepto los Términos y Condiciones y la Política de Privacidad',
+      ),
+    );
+    await tester.pump();
+    await tester.tap(
+      find.text(
+        'Acepto los Términos y Condiciones y la Política de Privacidad',
+      ),
+    );
+    await tester.pump();
+    await tester.ensureVisible(find.text('Registrarme'));
+    await tester.pump();
+    await tester.tap(find.text('Registrarme'));
+    await tester.pumpAndSettle();
+
+    expect(requests.single.url.path, '/auth/email/sign-up');
+    final body = jsonDecode(requests.single.body) as Map<String, Object?>;
+    final acceptance = body['acceptance'] as Map<String, Object?>;
+    expect(acceptance['documents'], ['terms', 'privacy']);
+    expect(acceptance['ageConfirmed'], isTrue);
+    // The server stamps the version; the client never names one.
+    expect(acceptance.containsKey('version'), isFalse);
   });
 
   testWidgets('sign-up on a registered email says so instead of pending', (
@@ -107,6 +186,11 @@ void main() {
     await tester.enterText(find.byType(TextFormField).at(0), 'Ana');
     await tester.enterText(find.byType(TextFormField).at(1), 'ana@test.com');
     await tester.enterText(find.byType(TextFormField).at(2), 'password123');
+    await acceptLegalChecks(tester);
+    // The consent block pushes the submit button below the fold on a short
+    // window; the panel is a scroll view, so bring it into view first.
+    await tester.ensureVisible(find.text('Registrarme'));
+    await tester.pump();
     await tester.tap(find.text('Registrarme'));
     await tester.pumpAndSettle();
 
@@ -190,8 +274,10 @@ void main() {
     final request = requests.single;
     expect(request.url.path, '/auth/password/forgot');
     expect(jsonDecode(request.body), {'email': 'ana@test.com'});
+    // A 200 from this endpoint now means the email really went out, so the
+    // copy names the address instead of hedging with "if an account exists".
     expect(
-      find.textContaining('le enviamos un enlace para restablecer'),
+      find.textContaining('Te enviamos un enlace a ana@test.com'),
       findsOneWidget,
     );
 
@@ -200,5 +286,81 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('ana@test.com'), findsOneWidget);
     expect(find.text('¿Olvidaste tu contraseña?'), findsOneWidget);
+  });
+
+  testWidgets('forgot password on an unknown address does not claim a send', (
+    tester,
+  ) async {
+    final auth = AuthController(
+      httpClient: MockClient(
+        (request) async => http.Response(
+          jsonEncode({'code': 'account_not_found', 'message': 'no account'}),
+          404,
+        ),
+      ),
+    );
+    await pumpLogin(tester, auth);
+
+    await tester.enterText(find.byType(TextFormField).at(0), 'ghost@test.com');
+    await tester.tap(find.text('¿Olvidaste tu contraseña?'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Enviar enlace'));
+    await tester.pumpAndSettle();
+
+    // The form used to flip to the sent state on any 200, and the endpoint
+    // answered 200 for addresses it had never sent anything to.
+    expect(find.textContaining('Te enviamos un enlace'), findsNothing);
+    expect(
+      find.text('No existe una cuenta para ghost@test.com.'),
+      findsOneWidget,
+    );
+    // Still on the form, so the address can be corrected and retried.
+    expect(find.text('Enviar enlace'), findsOneWidget);
+  });
+
+  testWidgets('resending to an already verified address says so', (
+    tester,
+  ) async {
+    var call = 0;
+    final auth = AuthController(
+      httpClient: MockClient((request) async {
+        call += 1;
+        // First call is the blocked sign-in that opens the pending panel; the
+        // second is the resend.
+        return call == 1
+            ? http.Response(
+                jsonEncode({'code': 'email_not_verified', 'message': 'verify'}),
+                403,
+              )
+            : http.Response(
+                jsonEncode({
+                  'code': 'email_already_verified',
+                  'message': 'verified',
+                }),
+                409,
+              );
+      }),
+    );
+    await pumpLogin(tester, auth);
+
+    await tester.enterText(find.byType(TextFormField).at(0), 'ana@test.com');
+    await tester.enterText(find.byType(TextFormField).at(1), 'password123');
+    await tester.tap(find.text('Iniciar sesión').last);
+    await tester.pumpAndSettle();
+    expect(find.text('Verificá tu correo'), findsOneWidget);
+
+    await drainResendCooldown(tester);
+    await tester.tap(find.text('Reenviar correo'));
+    await tester.pumpAndSettle();
+
+    // There was nothing to re-send — every Google-registered address lands
+    // here, and used to be told the link was on its way.
+    expect(find.text('Te reenviamos el correo de verificación.'), findsNothing);
+    expect(
+      find.text('Ese correo ya está verificado. Iniciá sesión con tu cuenta.'),
+      findsOneWidget,
+    );
+    // And no cooldown, so the reason stays reachable instead of a dead button.
+    expect(find.text('Reenviar correo'), findsOneWidget);
   });
 }

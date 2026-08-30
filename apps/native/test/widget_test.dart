@@ -21,12 +21,10 @@ void main() {
   ) async {
     FlutterSecureStorage.setMockInitialValues({});
 
+    // No ConvexClient is wired: a freshly constructed (empty) controller is
+    // equivalent to load() with empty storage, and auth attach/detach are
+    // no-ops without a client.
     final auth = AuthController();
-    // Note: production startup runs ConvexClient.initialize() before
-    // auth.load(), and load() touches ConvexClient unconditionally
-    // (_detachAuth -> setAuth). The native client can't be initialized in
-    // widget tests, so we render with a freshly constructed (empty)
-    // controller, which is equivalent to load() with empty storage.
 
     // AppConfigController is constructed but never loaded here (no network);
     // banner state stays empty.

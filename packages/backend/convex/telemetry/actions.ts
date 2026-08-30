@@ -1,6 +1,10 @@
+import { v } from 'convex/values'
 import { internal } from '../_generated/api'
 import type { Doc } from '../_generated/dataModel'
+import type { ActionCtx } from '../_generated/server'
 import { internalAction } from '../_generated/server'
+import { authComponent } from '../auth'
+import type { MetricInput } from './types'
 
 const defaultServiceName = 'walletbot-backend'
 const exportBatchSize = 50
@@ -10,6 +14,7 @@ type ReservedMetricExport = Doc<'telemetryMetrics'> & {
     cumulativeValue: number
     cumulativeStartTime: number
 }
+type ReservedMetricName = ReservedMetricExport['name']
 
 const parseKeyValueList = (raw: string | undefined): Record<string, string> => {
     if (!raw) return {}
@@ -35,6 +40,17 @@ const resourceAttributes = (): Array<{
         attributes['service.name'] ??
         process.env.OTEL_SERVICE_NAME?.trim() ??
         defaultServiceName
+    attributes['service.namespace'] =
+        attributes['service.namespace'] ?? 'walletbot'
+    const deploymentEnvironment =
+        process.env.WALLETBOT_ENV?.trim() ||
+        process.env.APP_ENV?.trim() ||
+        process.env.NODE_ENV?.trim() ||
+        process.env.CONVEX_DEPLOYMENT?.trim()
+    if (deploymentEnvironment) {
+        attributes['deployment.environment'] =
+            attributes['deployment.environment'] ?? deploymentEnvironment
+    }
 
     return Object.entries(attributes)
         .filter(([key, value]) => key.trim().length > 0 && value.length > 0)
@@ -128,6 +144,7 @@ const toOtlpMetricAttributes = (
         }
     }> = [{ key: 'metric.source', value: { stringValue: metric.source } }]
 
+    const exportableKeys = exportableMetricAttributeKeys(metric.name)
     const metricAttributes = metric.attributes
     if (
         typeof metricAttributes === 'object' &&
@@ -135,6 +152,7 @@ const toOtlpMetricAttributes = (
         !Array.isArray(metricAttributes)
     ) {
         for (const [key, value] of Object.entries(metricAttributes)) {
+            if (!exportableKeys.has(key)) continue
             if (typeof value === 'string') {
                 attributes.push({ key, value: { stringValue: value } })
             } else if (typeof value === 'number' && Number.isFinite(value)) {
@@ -158,6 +176,41 @@ const toOtlpMetricAttributes = (
         })
     }
     return attributes
+}
+
+const exportableMetricAttributeKeys = (
+    name: ReservedMetricName,
+): Set<string> => {
+    switch (name) {
+        case 'business.financial_accounts.created_count':
+        case 'business.movements.created_count':
+            return new Set(['created_by', 'ingest_path'])
+        case 'business.transfers.created_count':
+            return new Set(['created_by', 'ingest_path', 'cross_currency'])
+        case 'business.user_accounts.created_count':
+            return new Set(['auth_method'])
+        case 'business.user_accounts.signed_in_count':
+            return new Set(['auth_method', 'client_platform'])
+        case 'agent.session.cost_usd':
+        case 'agent.interaction.cost_usd':
+            return new Set([
+                'model',
+                'mode',
+                'cost_source',
+                'pricing_effective_from',
+            ])
+        case 'agent.user.monthly_cost_usd':
+            return new Set(['user_hash', 'rank', 'month', 'model', 'mode'])
+        case 'agent.interactions.completed_count':
+            return new Set(['model', 'mode', 'interaction_type'])
+        case 'agent.session.cost_bucket_count':
+            return new Set(['model', 'mode', 'cost_bucket'])
+        case 'agent.reports.submitted_count':
+            return new Set(['reason', 'scope', 'client_platform'])
+        case 'business.users.registered_total':
+        case 'agent.session.cost_outlier_count':
+            return new Set()
+    }
 }
 
 const toOtlpMetricsPayload = (metrics: Array<ReservedMetricExport>) => {
@@ -200,6 +253,146 @@ const toOtlpMetricsPayload = (metrics: Array<ReservedMetricExport>) => {
         ],
     }
 }
+
+const countRegisteredUsers = async (ctx: ActionCtx): Promise<number> => {
+    const adapter = authComponent.adapter(ctx)({})
+    return await adapter.count({ model: 'user' })
+}
+
+const recordRegisteredUsersTotalMetric = async (
+    ctx: ActionCtx,
+): Promise<{ count: number; accepted: number }> => {
+    const count = await countRegisteredUsers(ctx)
+    const result: { accepted: number } = await ctx.runMutation(
+        internal.telemetry.mutations.insertMetricBatchMutation,
+        {
+            receivedAt: Date.now(),
+            metrics: [
+                {
+                    name: 'business.users.registered_total',
+                    timestamp: Date.now(),
+                    source: 'backend',
+                    type: 'gauge',
+                    value: count,
+                    unit: 'count',
+                    attributes: {},
+                },
+            ],
+        },
+    )
+    return { count, accepted: result.accepted }
+}
+
+const currentMonth = (): string => {
+    const date = new Date()
+    const month = `${date.getUTCMonth() + 1}`.padStart(2, '0')
+    return `${date.getUTCFullYear()}-${month}`
+}
+
+const normalizeAgentMode = (mode: string): 'voice' | 'text' | 'mixed' => {
+    if (mode === 'voice' || mode === 'text' || mode === 'mixed') return mode
+    return 'mixed'
+}
+
+const userHash = async (userId: string): Promise<string> => {
+    const input = new TextEncoder().encode(userId)
+    const digest = await crypto.subtle.digest('SHA-256', input)
+    return Array.from(new Uint8Array(digest))
+        .slice(0, 12)
+        .map((byte) => byte.toString(16).padStart(2, '0'))
+        .join('')
+}
+
+const recordAgentMonthlyUsageMetric = async (
+    ctx: ActionCtx,
+    month = currentMonth(),
+): Promise<{ rows: number; exportedRows: number; accepted: number }> => {
+    const rows: Array<{
+        userId: string
+        month: string
+        model: string
+        mode: string
+        estimatedCostUsd: number
+    }> = await ctx.runQuery(
+        internal.agentUsage.queries.listMonthlyUsageForTelemetry,
+        { month },
+    )
+
+    if (rows.length === 0) return { rows: 0, exportedRows: 0, accepted: 0 }
+
+    const now = Date.now()
+    const topRows = rows
+        .filter((row) => row.estimatedCostUsd > 0)
+        .sort((a, b) => b.estimatedCostUsd - a.estimatedCostUsd)
+        .slice(0, 20)
+    const metrics: MetricInput[] = []
+    for (const [index, row] of topRows.entries()) {
+        const mode = normalizeAgentMode(row.mode)
+        metrics.push({
+            name: 'agent.user.monthly_cost_usd',
+            timestamp: now,
+            source: 'backend',
+            type: 'gauge',
+            value: row.estimatedCostUsd,
+            unit: 'usd',
+            userId: row.userId,
+            attributes: {
+                user_hash: await userHash(row.userId),
+                rank: `${index + 1}`,
+                month: row.month,
+                model: row.model,
+                mode,
+            },
+        })
+    }
+    if (metrics.length === 0) {
+        return { rows: rows.length, exportedRows: 0, accepted: 0 }
+    }
+    const result: { accepted: number } = await ctx.runMutation(
+        internal.telemetry.mutations.insertMetricBatchMutation,
+        {
+            receivedAt: now,
+            metrics,
+        },
+    )
+    return {
+        rows: rows.length,
+        exportedRows: metrics.length,
+        accepted: result.accepted,
+    }
+}
+
+export const recordRegisteredUsersTotal = internalAction({
+    args: {},
+    handler: async (ctx) => recordRegisteredUsersTotalMetric(ctx),
+})
+
+export const recordRegisteredUsersTotalNow = internalAction({
+    args: {},
+    handler: async (ctx) => recordRegisteredUsersTotalMetric(ctx),
+})
+
+export const recordAgentMonthlyUsage = internalAction({
+    args: {},
+    handler: async (ctx) => recordAgentMonthlyUsageMetric(ctx),
+})
+
+export const recordAgentMonthlyUsageNow = internalAction({
+    args: { month: v.optional(v.string()) },
+    handler: async (ctx, args) =>
+        recordAgentMonthlyUsageMetric(ctx, args.month),
+})
+
+export const deleteDeprecatedAgentCostOutlierMetricsNow = internalAction({
+    args: { limit: v.optional(v.number()) },
+    handler: async (ctx, args): Promise<{ deleted: number }> => {
+        return await ctx.runMutation(
+            internal.telemetry.mutations
+                .deleteDeprecatedAgentCostOutlierMetrics,
+            { limit: args.limit ?? 100 },
+        )
+    },
+})
 
 const otlpSignalEndpoint = (
     signal: 'logs' | 'metrics',

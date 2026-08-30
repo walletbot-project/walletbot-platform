@@ -1,6 +1,5 @@
-import 'package:app/sync/wire.dart';
+import 'package:app/convex/convex_client.dart';
 import 'package:app/widgets/currency_picker.dart' show kDefaultCurrency;
-import 'package:convex_flutter/convex_flutter.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
@@ -31,10 +30,15 @@ class DefaultCurrencyController extends ChangeNotifier {
 
   final String accountId;
   final bool isRemote;
-  // Resolved lazily — only ever touched when `isRemote` is true — so local
-  // accounts (and widget tests) never require `ConvexClient.initialize()`.
+  // Only ever touched when `isRemote` is true, so local accounts (and widget
+  // tests) can run without a Convex transport.
   final ConvexClient? _client;
-  ConvexClient get _resolvedClient => _client ?? ConvexClient.instance;
+  ConvexClient get _resolvedClient {
+    final client = _client;
+    if (client == null) throw StateError('defaultCurrency: no ConvexClient');
+    return client;
+  }
+
   final FlutterSecureStorage _storage;
 
   String _value = kDefaultCurrency;
@@ -66,12 +70,11 @@ class DefaultCurrencyController extends ChangeNotifier {
   Future<void> _refresh() async {
     try {
       if (_setValueInProgress) return;
-      final raw = await _resolvedClient.query(
+      final decoded = await _resolvedClient.query<Object?>(
         'v1/users/queries:getSettings',
-        {},
+        const {},
       );
       if (_setValueInProgress) return;
-      final decoded = decodeConvexResponse(raw);
       if (decoded is Map && decoded['defaultCurrency'] is String) {
         final next = decoded['defaultCurrency'] as String;
         if (_setValueInProgress) return;
@@ -98,9 +101,9 @@ class DefaultCurrencyController extends ChangeNotifier {
     try {
       await _storage.write(key: _cacheKey, value: currency);
       if (isRemote) {
-        await _resolvedClient.mutation(
-          name: 'v1/users/mutations:updateDefaultCurrency',
-          args: {'currency': currency},
+        await _resolvedClient.mutation<Object?>(
+          'v1/users/mutations:updateDefaultCurrency',
+          {'currency': currency},
         );
       }
     } catch (e) {

@@ -9,6 +9,7 @@ export const en: Messages = {
     common: {
         appName: 'Wallet Bot',
         save: 'Save',
+        saved: 'Saved',
         saving: 'Saving…',
         cancel: 'Cancel',
         create: 'Create',
@@ -18,6 +19,10 @@ export const en: Messages = {
         apply: 'Apply',
         clear: 'Clear',
         close: 'Close',
+        notFoundTitle: 'This no longer exists',
+        notFoundDescription:
+            'It may have been deleted from another device. Go back to the list to continue.',
+        backToList: 'Back to the list',
         name: 'Name',
         description: 'Description',
         color: 'Color',
@@ -32,43 +37,399 @@ export const en: Messages = {
         colorSwatch: (p) => `Color ${p.color}`,
         nameCannotBeEmpty: 'Name cannot be empty',
         saveFailed: 'Could not save',
+        hour: 'Hour',
+        minute: 'Minute',
         noResults: 'No results',
     },
 
     nav: {
-        tagline: 'Personal finance',
-        navigation: 'Navigation',
         actions: 'Actions',
         home: 'Home',
         activity: 'Activity',
         accounts: 'Accounts',
-        insights: 'Insights',
+        insights: 'Organization',
         addWithGasti: 'Add with Gasti',
         addManually: 'Add manually',
-        connectToAccount: 'Connect to account',
-        deleteData: 'Delete data',
+        sendFeedback: 'Send feedback',
         signOut: 'Sign out',
         language: 'Language',
-        languageSystem: 'System',
-        languageSpanish: 'Español',
-        languageEnglish: 'English',
+    },
+
+    feedback: {
+        title: 'Send feedback',
+        subtitle:
+            'Tell us what went wrong or what you would like to see. You can attach screenshots or files.',
+        messageLabel: 'Your feedback',
+        messagePlaceholder: 'What would you like to tell us?',
+        attach: 'Attach files',
+        attachmentsCount: (p: {
+            count: number
+            max: number
+            maxSize: string
+        }) => `Attachments: ${p.count}/${p.max} · up to ${p.maxSize} each`,
+        removeAttachment: 'Remove attachment',
+        send: 'Send',
+        sending: 'Sending feedback…',
+        sent: 'Thank you! We got your feedback',
+        sendFailed: 'Could not send your feedback',
+        messageRequired: 'Write your feedback before sending',
+        tooManyFiles: (p: { max: number }) =>
+            `You can attach up to ${p.max} files`,
+        fileTooLarge: (p: { name: string; max: string }) =>
+            `"${p.name}" is larger than the ${p.max} limit`,
+        rateLimited: 'You have sent several messages already. Try again later.',
+        attachmentRejected:
+            'We could not process the attachments. Remove them and try again.',
+        uploading: (p: { current: number; total: number }) =>
+            `Uploading file ${p.current} of ${p.total}…`,
+        offline:
+            'No connection. Check your internet and try again, or write to us by email.',
+        errorDismiss: 'Dismiss this message',
+        emailInstead: 'Send an email instead',
+        emailTitle: 'Write to support',
+        emailBody:
+            'Send us an email and we will get back to you. Whatever you already typed goes into the message.',
+        supportEmail: 'support@walletbot.live',
+        emailOpen: 'Open email app',
+        emailCopy: 'Copy address',
+        emailCopied: 'Address copied',
+        emailCopyFailed:
+            'Could not copy. Select the address and copy it manually.',
+        emailSubject: 'Wallet Bot feedback',
+        emailBodyFooter: (p: { client: string }) =>
+            `Sent from Wallet Bot ${p.client}`,
+    },
+
+    settings: {
+        title: 'Settings',
+        account: 'Account',
+        language: 'Language',
+        languageDescription: 'Choose the language used throughout the app.',
+        theme: 'Theme',
+        themeDescription: 'Choose how the app looks on this device.',
+        systemDefault: 'System default',
+        lightTheme: 'Light',
+        darkTheme: 'Dark',
+        english: 'English',
+        spanish: 'Spanish',
+        featureFlags: 'Feature flags',
+    },
+
+    deleteAccount: {
+        tile: 'Delete my account',
+        tileDescription: 'Permanently delete your account and all your data',
+
+        title: 'Delete your account',
+        subtitle:
+            'Enter your email and we will send you a link to confirm the deletion.',
+        warning:
+            'Your account and all your data will be permanently deleted. This cannot be undone.',
+        emailLabel: 'Email',
+        submit: 'Send deletion link',
+        sendFailed: 'Could not send the email. Try again in a few minutes.',
+
+        // Only ever shown for a send the server confirmed, so the copy is
+        // definite. Every other outcome is an error below.
+        sentTitle: 'Check your email',
+        sentDefinite: (p: { email: string }) =>
+            `We sent a link to ${p.email} to delete your account.`,
+        sentHint: 'The link expires in 24 hours.',
+        backHome: 'Back to home',
+
+        accountNotFound: (p: { email: string }) =>
+            `There is no account for ${p.email}, so there is nothing to delete.`,
+        alreadyDeleted: 'That account was already deleted.',
+        rateLimited:
+            'You already requested several deletion links. Wait an hour and try again.',
+
+        confirmWord: 'DELETE',
+        confirmTitle: 'Delete your account for good?',
+        confirmSubtitle: 'This action is permanent and cannot be undone.',
+        willDeleteTitle: 'This will be deleted forever:',
+        willDeleteTransactions: 'All your transactions',
+        willDeleteAccounts: 'Your accounts and balances',
+        willDeleteCategories: 'Categories, tags and settings',
+        willDeleteUser: 'Your user and access to Wallet Bot',
+        confirmPrompt: 'To confirm, type',
+        confirmSubmit: 'Permanently delete my account',
+        deleteFailed: 'Could not delete the account',
+
+        doneTitle: 'Your account was deleted',
+        doneBody:
+            'We are permanently erasing all your data. Thanks for using Wallet Bot.',
+
+        invalidTitle: 'Invalid link',
+        invalidBody:
+            'This link is invalid, has expired, or was already used. If you still want to delete your account, request a new link.',
+        requestNewLink: 'Request a new link',
     },
 
     auth: {
         signInToContinue: 'Sign in to continue',
+        withAccount: 'With account',
+        withAccountDescription: 'Use email or Google to sync your expenses.',
         signIn: 'Sign in',
         signUp: 'Create account',
+        name: 'Name',
         namePlaceholder: 'Your name',
         email: 'Email',
         password: 'Password',
-        passwordPlaceholder: 'Your password',
-        newPasswordPlaceholder: 'At least 8 characters',
         or: 'or',
         continueWithGoogle: 'Continue with Google',
         signingIn: 'Signing in...',
         authFailed: 'Could not sign you in',
+
+        invalidCredentials: 'Incorrect email or password',
+        invalidEmail: 'That email is not valid',
+        signUpFailed:
+            'Could not create your account. Check your details and try again.',
+        connectionFailed:
+            'Could not reach the server. Check your connection and try again.',
+
         googleHint: (p) =>
             `${p.message}. If you signed up with Google, use "Continue with Google".`,
+        forgotPassword: 'Forgot your password?',
+        needAccountSignUp: 'Need an account? Sign up',
+        haveAccountSignIn: 'Already have an account? Sign in',
+        verifyEmailTitle: 'Verify your email',
+        verifyEmailSent: (p) => `We sent a verification link to ${p.email}.`,
+        verifyEmailInstructions:
+            'Open the link to verify your account, then come back here and sign in.',
+        verifyEmailDone: 'I verified my email',
+        resendVerificationEmail: 'Resend email',
+        resendVerificationCooldown: (p) => `Resend in ${p.seconds}s`,
+        resendingVerificationEmail: 'Sending…',
+        verificationEmailResent: 'Verification email sent again.',
+        resendVerificationFailed: 'Could not resend the email.',
+        backToSignIn: 'Back to sign in',
+
+        // Sign-up and resend outcomes the server now reports by name, so no
+        // screen claims an email that was never sent.
+        accountExists:
+            'An account with that email already exists. Sign in with your password or with Google.',
+        accountNotFound: (p) => `There is no account for ${p.email}.`,
+        emailAlreadyVerified:
+            'That email is already verified. Sign in with your account.',
+        rateLimited: 'Too many attempts. Wait a minute and try again.',
+        emailSendFailed:
+            'Could not send the email. Try again in a few minutes.',
+
+        resetPasswordTitle: 'Reset your password',
+        resetPasswordSubtitle:
+            "Enter your email and we'll send you a reset link.",
+        sendResetLink: 'Send reset link',
+        sendResetLinkFailed: 'Could not send the email',
+        resetEmailSent: (p) =>
+            `We sent a link to ${p.email} to reset your password.`,
+        resetEmailSentReturnHint:
+            'After resetting it, come back here and sign in with your new password.',
+
+        newPasswordTitle: 'New password',
+        newPasswordSubtitle: 'Choose a new password for your account.',
+        newPassword: 'New password',
+        repeatPassword: 'Repeat password',
+        passwordsDoNotMatch: 'The passwords do not match',
+        resetPasswordAction: 'Reset password',
+        resetPasswordFailed: 'Could not reset the password',
+        passwordUpdated: 'Password updated. Sign in with your new password.',
+
+        invalidLinkTitle: 'Invalid link',
+        invalidLinkDescription:
+            'The link is invalid or has expired. Request a new one to reset your password.',
+        requestNewLink: 'Request a new link',
+
+        emailVerifiedTitle: 'Done! Your email is verified',
+        emailVerifiedDescription: 'You can now sign in with your account.',
+        linkExpiredTitle: 'The link expired',
+        linkExpiredDescription:
+            'Sign in and we will send you a new link automatically.',
+        verifyFailedTitle: 'We could not verify your email',
+        verifyFailedDescription:
+            'The link is not valid. Sign in again to receive a new one.',
+    },
+
+    legal: {
+        firstTitle: 'Before you start',
+        firstSubtitle:
+            'We need your acceptance to create your account and provide the service.',
+        updatedTermsTitle: 'We updated the Terms',
+        updatedPrivacyTitle: 'We updated the Privacy Policy',
+        updatedBothTitle: 'We updated the Terms and the Privacy Policy',
+        updatedSubtitle:
+            'Review the changes and accept them to keep using Wallet Bot.',
+        updatedSubtitleGrace:
+            'You can keep using the app for now, but we will need your acceptance.',
+
+        ageConfirm: 'I am 18 or older',
+
+        acceptTerms: 'I accept the [[terms]]',
+        acceptPrivacy: 'I accept the [[privacy]]',
+        acceptBoth: 'I accept the [[terms]] and the [[privacy]]',
+        termsName: 'Terms and Conditions',
+        privacyName: 'Privacy Policy',
+
+        acceptAction: 'Accept and continue',
+        later: 'Later',
+        acceptFailed:
+            'We could not record your acceptance. Check your connection and try again.',
+        acceptRequired: 'Tick both boxes to continue.',
+    },
+
+    dashboard: {
+        widget: 'Widget',
+        editDashboard: 'Edit dashboard',
+        addWidget: 'Add widget',
+        addWidgetHere: 'Add a widget here',
+        editWidget: 'Edit widget',
+        removeWidget: 'Remove widget',
+        removeWidgetConfirmation: (p) =>
+            `Remove “${p.title}” from the dashboard?`,
+        emptyTitle: 'Your dashboard is empty',
+        emptyDescription: 'Add a widget to get started.',
+        saveFailed: 'Could not save the widget',
+        deleteFailed: 'Could not remove the widget',
+        layoutSaveFailed: 'Could not update the dashboard',
+        noMovementsYet: 'No movements yet',
+        partialResult: 'Partial result',
+
+        widgetType: 'Type',
+        widgetTitle: 'Title',
+        typeStat: 'Value',
+        typeList: 'Transactions',
+        typeBalance: 'Balance',
+        typeChart: 'Chart',
+
+        aggregation: 'Aggregation',
+        aggregationSum: 'Sum',
+        aggregationNet: 'Net',
+        aggregationCount: 'Count',
+        rowLimit: 'Row limit',
+
+        accounts: 'Accounts',
+        accountsAllHint: 'Every account in this currency.',
+        accountsScopedHint: 'Only the selected accounts.',
+
+        groupBy: 'Group by',
+        groupByCategory: 'Category',
+        groupByAccount: 'Account',
+        groupByMonth: 'Month',
+        chartKind: 'Chart type',
+        chartPie: 'Pie',
+        chartBar: 'Bar',
+        chartLine: 'Line',
+
+        filter: 'Filter',
+        filterConfigured: 'Filter configured',
+        noFilter: 'No filter',
+        filterRequired: 'Choose a filter for this widget',
+        titleRequired: 'Enter a title for this widget',
+
+        width: 'Width',
+        widthThird: '1/3',
+        widthHalf: '1/2',
+        widthTwoThirds: '2/3',
+        widthFull: '1/1',
+        moveUp: 'Move up',
+        moveDown: 'Move down',
+        moveLeft: 'Move left',
+        moveRight: 'Move right',
+
+        background: 'Background',
+        backgroundNone: 'None',
+        backgroundFixed: 'Fixed',
+        backgroundValue: 'By value',
+        thresholdLow: 'Low threshold',
+        thresholdHigh: 'High threshold',
+        belowLow: 'Below the low threshold',
+        betweenThresholds: 'Between thresholds',
+        aboveHigh: 'Above the high threshold',
+
+        defaultExpensesMonth: 'Monthly expenses',
+        defaultIncomeMonth: 'Monthly income',
+        defaultMovementsMonth: 'Monthly transactions',
+        defaultMovements: 'Transactions',
+        defaultRecentMovements: 'Recent transactions',
+        defaultTotalBalance: (p) => `Total balance (${p.currency})`,
+    },
+
+    filters: {
+        title: 'Filters',
+        simple: 'Simple',
+        advanced: 'Advanced',
+        reset: 'Clear filters',
+        close: 'Close',
+
+        type: 'Type',
+        status: 'Status',
+        date: 'Date',
+        currency: 'Currency',
+        amount: 'Amount',
+        text: 'Text',
+        subtags: 'Subtags',
+
+        any: 'Any',
+        statusPending: 'Pending',
+        statusCleared: 'Cleared',
+
+        presetToday: 'Today',
+        presetThisWeek: 'This week',
+        presetThisMonth: 'This month',
+        presetLastMonth: 'Last month',
+        presetThisYear: 'This year',
+        customRange: 'Custom range',
+        rangeStart: 'From',
+        rangeEnd: 'Until',
+        chooseRange: 'Choose range',
+
+        transferDirection: 'Direction (for transfers)',
+        direction: 'Direction',
+        directionSource: 'Source',
+        directionDestination: 'Destination',
+        directionEither: 'Either',
+
+        match: 'Match',
+        matchAny: 'Any',
+        matchAll: 'All',
+        includeSubtags: 'Include subtags',
+
+        minimum: 'Min',
+        maximum: 'Max',
+        selectCurrencyForAmount: 'Select a currency to filter by amount.',
+        searchHint: 'Search by name or description…',
+
+        noAccountsYet: 'No accounts yet.',
+        noCategoriesYet: 'No categories yet.',
+        noTagsYet: 'No tags yet.',
+        noCurrenciesYet: 'No currencies yet.',
+        showLess: 'Show less',
+        showMore: (p) => `Show ${p.count} more`,
+
+        advancedNotice: 'This filter uses advanced rules.',
+        advancedWarning:
+            "The simple view cannot edit OR, NOT, or nested groups without changing the filter's meaning.",
+        editAdvanced: 'Edit advanced',
+        createSimpleFilter: 'Create simple filter',
+        addConditionToStart: 'Add a condition to get started.',
+        condition: 'Condition',
+        group: 'Group',
+        deleteGroup: 'Delete group',
+        deleteCondition: 'Delete condition',
+        field: 'Field',
+        operator: 'Operator',
+        chooseField: 'Choose a field',
+        chooseOperator: 'Choose an operator',
+        combinatorAnd: 'AND',
+        combinatorOr: 'OR',
+        negate: 'NOT',
+        operatorIncludes: 'includes',
+        operatorExcludes: 'excludes',
+        operatorRelative: 'relative',
+        operatorBetween: 'between',
+        operatorGreaterEqual: 'greater than or equal to',
+        operatorLessEqual: 'less than or equal to',
+        operatorContains: 'contains',
+        operatorNotContains: 'does not contain',
+        unsupportedField: 'Unsupported field.',
     },
 
     errors: {
@@ -80,15 +441,23 @@ export const en: Messages = {
             'An unexpected error occurred. Try refreshing the page or heading back.',
         refreshPage: 'Refresh page',
         viewErrorDetails: 'View error details',
+        sessionEndedTitle: 'Your session ended',
+        sessionEndedDescription:
+            'This session is no longer valid. Taking you back to sign in.',
     },
 
     accounts: {
+        accountDetails: 'Account details',
         newAccount: 'New account',
         createAccount: 'Create account',
         emptyTitle: "You don't have any accounts yet",
         emptyDescription:
             'Create your first account to start tracking your spending.',
         namePlaceholder: 'e.g. Cash, Checking…',
+        suggestions: 'Suggestions',
+        suggestionCash: 'Cash',
+        suggestionBank: 'Bank',
+        suggestionCard: 'Card',
         chooseCurrency: 'Choose a currency',
         searchCurrency: 'Search currency…',
         initialBalance: 'Starting balance (optional)',
@@ -113,6 +482,7 @@ export const en: Messages = {
         deleteTitle: 'Delete account',
         deleteConfirm: (p) =>
             `Delete "${p.name}"? It will no longer appear in your accounts.`,
+        selectDetail: 'Select an account to see its details',
         lastTransactions: 'Latest transactions',
         viewAll: 'View all',
     },
@@ -120,15 +490,9 @@ export const en: Messages = {
     activity: {
         search: 'Search',
         filters: 'Filters',
-        dateRange: 'Date range',
-        selectRange: 'Select a range',
-        clearRange: 'Clear range',
         accounts: 'Accounts',
         categories: 'Categories',
         tags: 'Tags',
-        noAccounts: 'No accounts',
-        noCategories: 'No categories',
-        noTags: 'No tags',
         rangeFrom: (p) => `From ${p.date}`,
         rangeTo: (p) => `Until ${p.date}`,
         removeFilter: (p) => `Remove ${p.label} filter`,
@@ -141,6 +505,8 @@ export const en: Messages = {
         typeTransfer: 'Transfers',
         typeBalanceAdjustment: 'Adjustments',
         noTransactions: 'No transactions',
+        addTransaction: 'Add transaction',
+        selectDetail: 'Select a transaction to see its details',
         today: 'Today',
         yesterday: 'Yesterday',
         estimatedDay: (p) => `${p.weekday} (estimated)`,
@@ -156,6 +522,9 @@ export const en: Messages = {
     },
 
     transaction: {
+        balanceAdjustment: 'Balance adjustment',
+        initialBalance: 'Initial balance',
+
         gone: 'This activity no longer exists',
         detail: 'Details',
         editActivity: 'Edit activity',
@@ -168,12 +537,12 @@ export const en: Messages = {
         account: 'Account',
         sourceAccount: 'Source account',
         destinationAccount: 'Destination account',
+        exchangeRate: 'Exchange rate',
         deletedAccount: 'Deleted account',
         category: 'Category',
         tags: 'Tags',
         noTags: 'No tags',
         balanceUnavailable: 'Balance unavailable',
-        saveChanges: 'Save changes',
         chooseAccount: 'Choose an account',
         sameAccounts: 'Source and destination accounts must differ',
         amountGreaterThanZero: 'Enter an amount greater than zero',
@@ -188,13 +557,22 @@ export const en: Messages = {
     insights: {
         categories: 'Categories',
         tags: 'Tags',
-        new: 'New',
         spentThisMonth: 'Spent this month',
         noSpendThisMonth: 'No spending this month',
         otherCurrencies: (p) =>
             p.count === 1
                 ? '+ 1 other currency'
                 : `+ ${p.count} other currencies`,
+        movementCount: (p) =>
+            p.count === 0
+                ? 'No movements'
+                : p.count === 1
+                  ? '1 movement'
+                  : `${p.count} movements`,
+        selectCategoryDetail: 'Select a category to see its details',
+        selectTagDetail: 'Select a tag to see its details',
+        categoryDetails: 'Category details',
+        tagDetails: 'Tag details',
         lastMovements: 'Latest transactions',
         viewAll: 'View all',
 
@@ -247,30 +625,106 @@ export const en: Messages = {
     },
 
     voice: {
-        title: 'Live Voice',
+        title: 'Talk to Gaston',
         statusIdle: 'idle',
         statusConnecting: 'connecting',
         statusConnected: 'connected',
         speaking: 'Speaking',
         you: 'You',
-        agent: 'WalletBot',
+        agent: 'Gaston',
         interrupted: '(interrupted)',
         tool: 'Tool',
         toolRunning: 'Running',
         toolDone: 'Done',
         toolCancelled: 'Cancelled',
         connectingEllipsis: 'Connecting…',
-        tapToStart: 'Tap the phone to start a conversation',
+        tapToStart: 'Tap the mic or type a message to start',
+        microphone: 'Microphone',
         mute: 'Mute',
         unmute: 'Unmute',
         connect: 'Connect',
         disconnect: 'Disconnect',
+        startConversation: 'Start a conversation',
+        endSession: 'End session',
+        typeMessage: 'Type a message…',
+        send: 'Send',
         systemConnecting: 'Connecting…',
         systemTokenReceived: (p) => `Token received for ${p.model}`,
         systemSocketError: 'WebSocket error',
         systemDisconnected: 'Disconnected',
         systemConnected: 'Connected. Start speaking.',
+        systemConnectedTyping: 'Connected. Sending your message…',
         systemConnectionFailed: (p) => `Connection failed: ${p.error}`,
+        systemUnavailable:
+            'Gastón is not available right now. Please try again in a few minutes.',
+        systemMicOpenFailed: (p) => `Failed to open the microphone: ${p.error}`,
+        systemReconnecting: (p) =>
+            `Connection dropped. Retrying in ${p.seconds}s… The conversation continues where it left off.`,
+    },
+
+    agentReport: {
+        moreOptions: 'More options',
+        action: 'Report this response',
+        menuItem: 'Report a response',
+        badge: 'Reported',
+        title: 'Report a response',
+        subtitle:
+            'Tell us what was wrong with what Gaston said. We review reports to fix the assistant.',
+        sessionSubtitle:
+            'Report this conversation when the response was voice-only or has already scrolled away.',
+        reasonLabel: 'Reason',
+        reasonOffensive: 'Offensive, abusive or violent',
+        reasonSexual: 'Sexual content',
+        reasonDangerous: 'Dangerous or illegal',
+        reasonMisleading: 'False financial information',
+        reasonPrivacy: 'Showed data it should not have',
+        reasonOther: 'Something else',
+        reasonRequired: 'Pick a reason before sending',
+        noteLabel: 'Details (optional)',
+        notePlaceholder: 'What happened?',
+        reportedTextLabel: 'Reported response',
+        sessionNotice:
+            'This sends the conversation from this session, without the audio.',
+        privacyNotice:
+            'We send the text above along with the model and your app version. Audio never leaves your device.',
+        send: 'Send report',
+        sending: 'Sending report…',
+        sent: 'Thank you. We will review this response',
+        failed: 'Could not send your report',
+        rateLimited: 'You have sent several reports already. Try again later.',
+        offline: 'No connection. Check your internet and try again.',
+        errorDismiss: 'Dismiss this message',
+        noResponseYet: 'There is no response to report yet',
+    },
+
+    adminReports: {
+        title: 'Reported responses',
+        subtitle:
+            "Reports of assistant responses filed from the app. Required by Google Play's AI-Generated Content policy.",
+        empty: 'No reports with this status',
+        notAdmin: 'You do not have permission to view this page',
+        back: 'Back',
+        statusPending: 'Pending',
+        statusReviewed: 'Reviewed',
+        statusActioned: 'Actioned',
+        statusDismissed: 'Dismissed',
+        loadMore: 'Load more',
+        reportedText: 'Reported response',
+        precedingUserText: 'What the person said before',
+        note: 'Details',
+        reviewNote: 'Review note',
+        reviewNotePlaceholder: 'What we did about this report',
+        session: 'Session',
+        model: 'Model',
+        reporterAccount: 'Account',
+        reporterDevice: 'Device',
+        scopeResponse: 'One response',
+        scopeSession: 'Whole conversation',
+        save: 'Save',
+        saved: 'Report updated',
+        saveFailed: 'Could not update the report',
+        flagsLink: 'Feature flags',
+        reportsLink: 'Reported responses',
     },
 
     actionWidget: {
@@ -309,26 +763,26 @@ export const en: Messages = {
         incoming: 'In',
         swapSides: 'Swap source and destination',
         account: 'Account',
+        recurringExpense: 'Recurring expense',
+        newTransaction: 'Add transaction',
+        select: 'Select',
         newAccount: 'New account',
         date: 'Date',
         timeOptional: 'Time (optional)',
+        noTime: 'No time',
         removeTime: 'Remove time',
         title: 'Title',
         transferTitleFallback: 'Transfer',
-        titlePlaceholderTransfer: 'Transfer to savings',
         titlePlaceholderIncome: 'Salary, refund, interest',
         titlePlaceholderExpense: 'Groceries, taxi, rent',
         description: 'Description',
         descriptionPlaceholder: 'Optional detail',
         category: 'Category',
         newCategory: 'New category',
-        unselected: 'Not selected',
         tags: 'Tags',
         addTag: 'Add tag',
         tagColorTitle: (p) => `Color for "${p.name}"`,
-        chooseColor: (p) => `Choose ${p.color}`,
         submit: 'Record',
-        savedNote: 'Transaction saved.',
         saved: 'Transaction recorded',
         saveFailed: 'Could not record the transaction',
         selectAccount: 'Select an account',

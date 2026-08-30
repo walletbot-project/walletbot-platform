@@ -1,3 +1,4 @@
+import { computeExchangeRate } from '@wallet-bot/shared'
 import { v } from 'convex/values'
 import type { Doc, Id } from '../../_generated/dataModel'
 import type { MutationCtx } from '../../_generated/server'
@@ -234,7 +235,11 @@ export const createTransfer = mutation({
         toAccountId: v.string(),
         toAmount: v.optional(v.int64()),
         exchangeRate: v.optional(v.number()),
-        categoryId: v.string(),
+        // Optional: transfers move money between the user's own accounts and
+        // are excluded from category breakdowns, so a category is decoration.
+        // Stored as '' when absent — the same representation the native app
+        // and the sync wire already use for a category-less transfer.
+        categoryId: v.optional(v.string()),
         date: v.optional(v.int64()),
         dateConfirmed: v.boolean(),
         timeStatus: v.optional(transactionTimeStatus),
@@ -253,15 +258,17 @@ export const createTransfer = mutation({
         if (!fromAcc) throw new Error('Source account not found')
         const toAcc = await getAccount(ctx, userId, args.toAccountId)
         if (!toAcc) throw new Error('Destination account not found')
-        const category = await getCategory(ctx, userId, args.categoryId)
-        if (!category) throw new Error('Category not found')
+        if (args.categoryId) {
+            const category = await getCategory(ctx, userId, args.categoryId)
+            if (!category) throw new Error('Category not found')
+        }
 
         const sameCurrency = fromAcc.currency === toAcc.currency
         const toAmount =
             args.toAmount ?? (sameCurrency ? args.amount : undefined)
         if (toAmount === undefined) {
             throw new Error(
-                'Cross-currency transfers require toAmount (or exchangeRate to derive it)',
+                'Cross-currency transfers require toAmount (the amount received on the destination side)',
             )
         }
         assertPositiveAmount(toAmount, 'Destination amount')
@@ -281,7 +288,7 @@ export const createTransfer = mutation({
             dateConfirmed: args.dateConfirmed,
             timeStatus,
             accountId: args.accountId,
-            categoryId: args.categoryId,
+            categoryId: args.categoryId ?? '',
             amount: args.amount,
             currency: fromAcc.currency,
             toAccountId: args.toAccountId,
@@ -498,7 +505,10 @@ export const update = mutation({
                 patch.toAmount = nextToAmount
                 patch.exchangeRate = sameCurrency
                     ? undefined
-                    : Number(nextToAmount) / Number(nextAmount)
+                    : computeExchangeRate(
+                          Number(nextAmount),
+                          Number(nextToAmount),
+                      )
             }
         } else if (args.amount !== undefined) {
             patch.amount = args.amount

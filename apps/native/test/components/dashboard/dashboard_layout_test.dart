@@ -102,6 +102,66 @@ void main() {
       );
     });
 
+    test('a tile on the bottom row can be nudged onto a fresh row', () {
+      // The trap this fixes: two thirds side by side on the last row. Neither
+      // can slide sideways and neither can go up, so without a row below,
+      // neither can be moved out of the way and neither can grow.
+      final layout = DashboardGridLayout.fromPlacements(const [
+        WidgetPlacement(
+          id: 'left',
+          row: 0,
+          col: 0,
+          width: DashboardWidth.third,
+        ),
+        WidgetPlacement(
+          id: 'right',
+          row: 0,
+          col: 2,
+          width: DashboardWidth.third,
+        ),
+      ]);
+
+      expect(
+        layout.enabledDirections('right'),
+        contains(DashboardMoveDirection.down),
+      );
+
+      final moved = layout.nudge('right', DashboardMoveDirection.down);
+      expect(moved, isNotNull);
+      expect(moved!.rowCount, 2);
+      expect(moved.byId('right')!.row, 1);
+      expect(moved.byId('right')!.col, 2);
+      expect(moved.byId('left')!.row, 0);
+      _expectValidGrid(moved.placements);
+
+      // And now `left` has room to grow, which was the point.
+      final grown = moved.resize('left', DashboardWidth.full);
+      expect(grown, isNotNull);
+      expect(grown!.byId('left')!.width, DashboardWidth.full);
+    });
+
+    test('a tile alone on the bottom row cannot be nudged down', () {
+      // It would vacate its row, the collapse would renumber the new row back
+      // to the old index, and nothing would have moved.
+      final layout = DashboardGridLayout.fromPlacements(const [
+        WidgetPlacement(id: 'top', row: 0, col: 0, width: DashboardWidth.full),
+        WidgetPlacement(
+          id: 'alone',
+          row: 1,
+          col: 0,
+          width: DashboardWidth.third,
+        ),
+      ]);
+
+      expect(layout.nudge('alone', DashboardMoveDirection.down), isNull);
+      expect(
+        layout.enabledDirections('alone'),
+        isNot(contains(DashboardMoveDirection.down)),
+      );
+      // Moving down onto an existing row is unaffected.
+      expect(layout.nudge('top', DashboardMoveDirection.down), isNull);
+    });
+
     test('content option replacement preserves layout and clears stale keys', () {
       final updated = mergeWidgetOptions(
         '{"title":"Old","aggregation":"sum","background":{"mode":"fixed"},"layout":{"row":2,"col":4},"futureKey":true}',

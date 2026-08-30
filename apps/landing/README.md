@@ -51,9 +51,9 @@ Run from this directory:
 
 `pnpm dev` and `pnpm typecheck` at the repo root include this package.
 
-`pnpm dev` does **not** run the Pages Function, so `/` 404s there — go straight
-to `/en/` or `/es/`. To exercise the redirect, build and serve the output through
-Wrangler instead:
+`pnpm dev` does **not** run the Pages Functions, so `/`, `/privacy` and `/terms`
+404 there — go straight to `/en/…` or `/es/…`. To exercise the redirects, build
+and serve the output through Wrangler instead:
 
 ```sh
 pnpm build && npx wrangler pages dev dist
@@ -71,10 +71,11 @@ Astro's built-in i18n routing owns the URLs; `src/i18n/` owns the copy.
 - `i18n.routing.prefixDefaultLocale: true` — every URL carries its language, so
   pages live under `src/pages/en/` and `src/pages/es/`. There is no unprefixed
   content.
-- `/` has no page in the build. `functions/index.ts` owns it and 302s to the
-  language the browser asked for — see § Deploying. Neither Astro mechanism can
-  do this: `redirects` in `astro.config.mjs` only emits a meta-refresh page
-  without an adapter, and `i18n.routing.redirectToDefaultLocale` demands a root
+- The unprefixed paths `/`, `/privacy` and `/terms` have no page in the build.
+  A Pages Function owns each one and 302s to the same page under the language
+  the browser asked for — see § Deploying. Neither Astro mechanism can do this:
+  `redirects` in `astro.config.mjs` only emits a meta-refresh page without an
+  adapter, and `i18n.routing.redirectToDefaultLocale` demands a root
   `src/pages/index.astro` (which it then shadows, warning about the conflict on
   every build) and can only ever pick the default locale.
 - `Astro.currentLocale` is typed `string | undefined`. Narrow it through
@@ -143,14 +144,22 @@ on demand, and only one route here is dynamic at all.
 `site` in `astro.config.mjs` feeds canonical and `hreflang` URLs — it must match
 the production domain (`www.walletbot.live`).
 
-### The one piece of server code
+### The only server code
 
-`functions/index.ts` is a Pages Function serving `/`, and exists solely because
+Three Pages Functions, one per unprefixed path, and they exist solely because
 picking a language from the `Accept-Language` header has to happen per request —
-a static redirect rule has no access to request headers. It parses the header's
+a static redirect rule has no access to request headers. All three are one-liners
+over `localeRedirect` in `src/lib/locale-redirect.ts`, which parses the header's
 weighted language ranges (honouring `q=` ordering and `q=0` rejections, matching
 on the primary subtag so `es-419` and `es-AR` both resolve to `es`), then 302s to
-`/<locale>/`, carrying the query string over so campaign parameters survive.
+the same page under that locale, carrying the query string over so campaign
+parameters survive.
+
+`/privacy` and `/terms` are covered because the legal URLs get handed out
+without a locale prefix — Google Play and Apple each want one public
+privacy-policy link (`docs/legal/README.md`), and whoever pastes it cannot know
+the reader's language. Trailing slashes are optional in Pages' routing, so
+`/privacy/` hits the same function.
 
 The response sets `Vary: Accept-Language` and `Cache-Control: no-store`: the
 destination is derived from a request header, so without them a shared cache
@@ -160,16 +169,16 @@ Three conventions keep this cheap:
 
 | File | Role |
 |---|---|
-| `functions/index.ts` | Pages' file-based routing maps this to exactly `/` |
-| `public/_routes.json` | `include: ["/"]` — pins invocation to that one path, so the six prerendered pages and every asset stay free static requests and never start a Worker |
+| `functions/{index,privacy,terms}.ts` | Pages' file-based routing maps these to exactly `/`, `/privacy` and `/terms` |
+| `public/_routes.json` | `include` lists those three paths (plus the trailing-slash spellings) — everything else, the six prerendered pages and every asset, stays a free static request and never starts a Worker |
 | `public/_headers` | Immutable caching for `/_astro/*`, which Astro fingerprints; replaces what the Vercel adapter used to emit |
 
 `_routes.json` and `_headers` live in `public/` because Astro copies that
 directory verbatim into `dist/`, which is where Cloudflare expects them.
 
-The handler imports `LOCALES` from `src/i18n/locales.ts` rather than restating
-the list, so it cannot drift from the catalogs. It types the request context
-locally instead of pulling in `@cloudflare/workers-types`, whose global
+`locale-redirect.ts` imports `LOCALES` from `src/i18n/locales.ts` rather than
+restating the list, so it cannot drift from the catalogs. It types the request
+context locally instead of pulling in `@cloudflare/workers-types`, whose global
 `Request`/`Response` declarations collide with the DOM types the rest of the
 package builds against.
 

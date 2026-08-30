@@ -34,10 +34,7 @@ void main() {
     test('allows the same name with a different currency', () async {
       await repos.accounts.create(name: 'Efectivo', currency: 'ARS');
 
-      final id = await repos.accounts.create(
-        name: 'Efectivo',
-        currency: 'USD',
-      );
+      final id = await repos.accounts.create(name: 'Efectivo', currency: 'USD');
 
       expect(id, isNotEmpty);
     });
@@ -49,28 +46,28 @@ void main() {
       );
       await repos.accounts.archive(original);
 
-      final id = await repos.accounts.create(
-        name: 'Efectivo',
-        currency: 'ARS',
-      );
+      final id = await repos.accounts.create(name: 'Efectivo', currency: 'ARS');
 
       expect(id, isNotEmpty);
     });
   });
 
   group('update', () {
-    test('rejects renaming into another active account\'s name+currency', () async {
-      await repos.accounts.create(name: 'Efectivo', currency: 'ARS');
-      final target = await repos.accounts.create(
-        name: 'Banco',
-        currency: 'ARS',
-      );
+    test(
+      'rejects renaming into another active account\'s name+currency',
+      () async {
+        await repos.accounts.create(name: 'Efectivo', currency: 'ARS');
+        final target = await repos.accounts.create(
+          name: 'Banco',
+          currency: 'ARS',
+        );
 
-      expect(
-        () => repos.accounts.update(target, name: const Value('efectivo')),
-        throwsA(isA<DuplicateAccountException>()),
-      );
-    });
+        expect(
+          () => repos.accounts.update(target, name: const Value('efectivo')),
+          throwsA(isA<DuplicateAccountException>()),
+        );
+      },
+    );
 
     test('allows renaming an account to its own current name', () async {
       final id = await repos.accounts.create(name: 'Efectivo', currency: 'ARS');

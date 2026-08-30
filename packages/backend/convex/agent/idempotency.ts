@@ -1,6 +1,6 @@
 // Deterministic entity ids, so a replayed agent turn writes nothing twice.
 //
-// R-019: a WhatsApp turn is at-least-once. `runAgentTurn` claims a batch,
+// R-039: a WhatsApp turn is at-least-once. `runAgentTurn` claims a batch,
 // generates, sends, and only then calls `finishBatch`; if the action dies in
 // between, the reaper returns those messages to `pending` and the agent runs
 // again on the same input. With read-only tools that cost a repeated reply.
@@ -16,7 +16,7 @@
 //
 // What this does *not* fix — deliberately — is the duplicate reply. The user
 // may see the same confirmation twice after a crash; that was already the
-// accepted cost in R-019, and it is visible and harmless, unlike a duplicate
+// accepted cost in R-039, and it is visible and harmless, unlike a duplicate
 // movement.
 
 // Stable across a replay because the rows are the same rows: the reaper flips

@@ -1,30 +1,83 @@
-import { LoaderCircle, Lock, Mail, MailCheck, UserRound } from 'lucide-react'
-import { type FormEvent, useState } from 'react'
-import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { toast } from 'sonner'
+import { LEGAL_DOCUMENTS } from '@wallet-bot/shared'
+import { Button } from 'actify'
+import { type FormEvent, useEffect, useRef, useState } from 'react'
+import { useLocation, useNavigate } from 'react-router-dom'
 
 import googleIcon from '@/assets/google.svg'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Separator } from '@/components/ui/separator'
+import {
+    AuthErrorNote,
+    AuthFrame,
+    AuthOrDivider,
+    AuthPanel,
+    AuthPanelTitle,
+    AuthPrimaryButton,
+    AuthTextField,
+} from '@/components/auth/auth-scaffold'
+import { LegalConsentChecks } from '@/components/auth/legal-consent'
 import { authClient } from '@/lib/auth-client'
-import { useT } from '@/lib/i18n'
+import { signUpWithEmail } from '@/lib/auth-signup'
+import { type Messages, useI18n, useT } from '@/lib/i18n'
+import { ForgotPasswordPanel } from '@/pages/auth/forgot-password-panel'
+import { VerifyPendingPanel } from '@/pages/auth/verify-pending-panel'
 
 type AuthMode = 'sign-in' | 'sign-up'
+
+/**
+ * Which panel the screen shows. `credentials` is the sign-in/sign-up form;
+ * the other two replace it entirely until the user navigates back — the same
+ * `_RemoteFlow` the native login screen switches on.
+ */
+type RemoteFlow = 'credentials' | 'forgot-password' | 'verify-pending'
+
+/**
+ * Sign-in failures, rendered from better-auth's `error.code`.
+ *
+ * Never from `error.message`: the auth server answers in English and knows
+ * nothing about the client's locale, so folding that message into a localized
+ * sentence produced half-English copy ("Invalid email or password. Si te
+ * registraste con Google, usá…"). The codes are better-auth's `BASE_ERROR_CODES`.
+ * `EMAIL_NOT_VERIFIED` never arrives here — the caller turns it into a flow
+ * change instead.
+ */
+const signInErrorMessage = (code: string | undefined, t: Messages): string => {
+    switch (code) {
+        // A malformed address; signing up with Google is not a plausible
+        // explanation, so this one skips the hint.
+        case 'INVALID_EMAIL':
+            return t.auth.invalidEmail
+        // Wrong password, unknown address, and an address with no password
+        // account all collapse into this single code — which is exactly what
+        // makes the generic hint safe, since it discloses neither whether the
+        // email exists nor which provider it uses.
+        case 'INVALID_EMAIL_OR_PASSWORD':
+            return t.auth.googleHint({ message: t.auth.invalidCredentials })
+        // Anything unnamed (session creation, misconfiguration, a transport
+        // failure with no code): still worth the hint, since a Google-only
+        // account remains a plausible cause.
+        default:
+            return t.auth.googleHint({ message: t.auth.authFailed })
+    }
+}
 
 export function Login({ mode }: { mode: AuthMode }) {
     const location = useLocation()
     const navigate = useNavigate()
     const t = useT()
+    const { locale } = useI18n()
     const from = location.state?.from?.pathname || '/'
 
     const [loading, setLoading] = useState<'email' | 'google' | null>(null)
     const [error, setError] = useState<string | null>(null)
-    // Set after a signup, or a sign-in blocked by verification: the account
-    // exists but its email isn't verified yet, so we show the
-    // check-your-inbox panel instead of the form.
-    const [pendingEmail, setPendingEmail] = useState<string | null>(null)
+    const [flow, setFlow] = useState<RemoteFlow>('credentials')
+    /** Email echoed in the copy of the verify-pending panel. */
+    const [pendingEmail, setPendingEmail] = useState('')
+    /**
+     * Sign-up consent. Lifted out of the panel because the submit handler has
+     * to send it and the primary button stays dead until both are ticked —
+     * affirmative acceptance, never a pre-checked box (docs/legal/README.md).
+     */
+    const [ageConfirmed, setAgeConfirmed] = useState(false)
+    const [acceptedLegal, setAcceptedLegal] = useState(false)
 
     // Sign-in and create are separate routes; clear any stale error as the user
     // moves between them.
@@ -37,13 +90,25 @@ export function Login({ mode }: { mode: AuthMode }) {
         })
     }
 
-    const handleGoogleSignIn = () => {
+    const handleGoogleSignIn = async () => {
         setError(null)
         setLoading('google')
-        authClient.signIn.social({
-            provider: 'google',
-            callbackURL: window.location.origin + from,
-        })
+        try {
+            const result = await authClient.signIn.social({
+                provider: 'google',
+                callbackURL: window.location.origin + from,
+            })
+            if (result.error) {
+                throw new Error(result.error.message ?? t.auth.authFailed)
+            }
+            // Success hands the tab to the provider redirect — keep the button
+            // in its loading state until the navigation lands.
+        } catch (err) {
+            // Without this, a failed start left every control disabled on
+            // "Signing in…" with no message, forever.
+            setError(err instanceof Error ? err.message : String(err))
+            setLoading(null)
+        }
     }
 
     const handleEmailSubmit = async (event: FormEvent<HTMLFormElement>) => {
@@ -69,253 +134,271 @@ export function Login({ mode }: { mode: AuthMode }) {
                     // this attempt (sendOnSignIn).
                     if (result.error.code === 'EMAIL_NOT_VERIFIED') {
                         setPendingEmail(email)
+                        setFlow('verify-pending')
                         return
                     }
-                    throw new Error(
-                        result.error.message ?? 'No se pudo autenticar',
-                    )
+                    setError(signInErrorMessage(result.error.code, t))
+                    return
                 }
 
                 navigate(from, { replace: true })
                 return
             }
 
-            // No callbackURL: the verification link's landing page is
-            // canonicalized server-side to /verify-email.
-            const result = await authClient.signUp.email({
+            // Posts to the backend's own sign-up endpoint (not
+            // authClient.signUp.email) so a re-sign-up of an unverified
+            // address re-sends the link instead of stranding the user on the
+            // verify screen waiting for mail better-auth never sent — see
+            // lib/auth-signup.ts. No callbackURL: the verification link's
+            // landing page is canonicalized server-side to /verify-email.
+            const outcome = await signUpWithEmail({
                 name: name || email,
                 email,
                 password,
+                // Both documents, always: a new account accepts the whole
+                // agreement. The button cannot be pressed unless both boxes
+                // are ticked, so these are the values the user actually gave.
+                acceptance: {
+                    documents: LEGAL_DOCUMENTS,
+                    ageConfirmed,
+                    platform: 'web',
+                    locale,
+                },
             })
 
-            if (result.error) {
-                throw new Error(result.error.message ?? t.auth.authFailed)
+            switch (outcome.status) {
+                case 'verify-pending':
+                    // No session yet (verification required) — for a new
+                    // account and an unverified re-send alike. Either way an
+                    // email really went out.
+                    setPendingEmail(email)
+                    setFlow('verify-pending')
+                    return
+                case 'account-exists':
+                    setError(t.auth.accountExists)
+                    return
+                case 'rate-limited':
+                    setError(t.auth.rateLimited)
+                    return
+                case 'email-send-failed':
+                    setError(t.auth.emailSendFailed)
+                    return
+                case 'error':
+                    // Everything the endpoint does not name by code
+                    // (`bad_request`, `sign_up_failed`, a transport failure):
+                    // its `message` carries better-auth's English text or raw
+                    // server copy, so it goes to the console, not the screen.
+                    console.error('sign-up failed', outcome.message)
+                    setError(t.auth.signUpFailed)
+                    return
             }
-
-            // With email verification required there is no session yet — for
-            // new and already-registered emails alike (anti-enumeration).
-            setPendingEmail(email)
         } catch (err) {
-            const message = err instanceof Error ? err.message : String(err)
-            // Generic, account-independent hint so users who actually signed up
-            // with Google are nudged toward it — without disclosing whether the
-            // email exists or which provider it uses.
-            setError(
-                mode === 'sign-in' ? t.auth.googleHint({ message }) : message,
-            )
+            // Only genuine exceptions land here — both branches above report
+            // their own failures. There is no server code to name, so keep it
+            // generic rather than surfacing an untranslated `err.message`.
+            console.error('auth request threw', err)
+            setError(t.auth.connectionFailed)
         } finally {
             setLoading(null)
         }
     }
 
-    const handleResendVerification = () => {
-        if (!pendingEmail) return
-        // No callbackURL: canonicalized server-side to /verify-email.
-        const promise = authClient
-            .sendVerificationEmail({ email: pendingEmail })
-            .then((result) => {
-                if (result.error) {
-                    throw new Error(
-                        result.error.message ?? 'No se pudo reenviar el correo',
-                    )
-                }
-            })
-        toast.promise(promise, {
-            loading: 'Enviando…',
-            success: 'Correo reenviado. Revisá tu bandeja.',
-            error: 'No se pudo reenviar el correo.',
-        })
-    }
-
-    if (pendingEmail) {
-        return (
-            <div className="flex min-h-screen items-center justify-center bg-background">
-                <div className="flex w-full max-w-sm flex-col items-center gap-6 px-4 text-center">
-                    <div className="rounded-full bg-muted p-4">
-                        <MailCheck className="size-6 text-muted-foreground" />
-                    </div>
-                    <div className="flex flex-col gap-2">
-                        <h1 className="text-2xl font-semibold tracking-tight">
-                            Verificá tu correo
-                        </h1>
-                        <p className="text-sm text-muted-foreground">
-                            Te enviamos un correo a {pendingEmail}. Abrí el
-                            enlace para verificar tu cuenta y después iniciá
-                            sesión.
-                        </p>
-                    </div>
-                    <div className="flex w-full flex-col gap-2">
-                        <Button
-                            className="w-full"
-                            onClick={handleResendVerification}
-                        >
-                            Reenviar correo
-                        </Button>
-                        <Button
-                            variant="ghost"
-                            className="w-full"
-                            onClick={() => setPendingEmail(null)}
-                        >
-                            Volver
-                        </Button>
-                    </div>
-                </div>
-            </div>
-        )
+    const returnToSignIn = () => {
+        setFlow('credentials')
+        setError(null)
+        if (mode !== 'sign-in') {
+            navigate('/login', { state: location.state, replace: true })
+        }
     }
 
     return (
-        <div className="flex min-h-screen items-center justify-center bg-background">
-            <div className="flex w-full max-w-sm flex-col items-center gap-6 px-4">
-                <div className="flex flex-col items-center gap-2">
-                    <h1 className="text-2xl font-semibold tracking-tight">
-                        {t.common.appName}
-                    </h1>
-                    <p className="text-sm text-muted-foreground">
-                        {t.auth.signInToContinue}
-                    </p>
-                </div>
-
-                <div className="grid w-full grid-cols-2 rounded-lg border border-border bg-muted/40 p-1">
-                    <Button
-                        type="button"
-                        variant={mode === 'sign-in' ? 'secondary' : 'ghost'}
-                        size="sm"
-                        aria-pressed={mode === 'sign-in'}
-                        onClick={() => goToMode('sign-in')}
-                    >
-                        {t.auth.signIn}
-                    </Button>
-                    <Button
-                        type="button"
-                        variant={mode === 'sign-up' ? 'secondary' : 'ghost'}
-                        size="sm"
-                        aria-pressed={mode === 'sign-up'}
-                        onClick={() => goToMode('sign-up')}
-                    >
-                        {t.auth.signUp}
-                    </Button>
-                </div>
-
-                <form
-                    className="flex w-full flex-col gap-4"
+        <AuthFrame>
+            {flow === 'forgot-password' ? (
+                <ForgotPasswordPanel onBack={returnToSignIn} />
+            ) : flow === 'verify-pending' ? (
+                <VerifyPendingPanel
+                    email={pendingEmail}
+                    onSignIn={returnToSignIn}
+                />
+            ) : (
+                <CredentialsPanel
+                    mode={mode}
+                    loading={loading}
+                    error={error}
+                    ageConfirmed={ageConfirmed}
+                    acceptedLegal={acceptedLegal}
+                    onAgeConfirmedChange={setAgeConfirmed}
+                    onAcceptedLegalChange={setAcceptedLegal}
                     onSubmit={handleEmailSubmit}
-                >
-                    {mode === 'sign-up' ? (
-                        <div className="grid gap-2">
-                            <Label htmlFor="name">{t.common.name}</Label>
-                            <div className="relative">
-                                <UserRound className="-translate-y-1/2 pointer-events-none absolute top-1/2 left-2.5 size-4 text-muted-foreground" />
-                                <Input
-                                    id="name"
-                                    name="name"
-                                    autoComplete="name"
-                                    placeholder={t.auth.namePlaceholder}
-                                    className="pl-8"
-                                    disabled={loading !== null}
-                                />
-                            </div>
-                        </div>
-                    ) : null}
+                    onGoogle={() => void handleGoogleSignIn()}
+                    onModeChange={goToMode}
+                    onForgotPassword={() => {
+                        setError(null)
+                        setFlow('forgot-password')
+                    }}
+                />
+            )}
+        </AuthFrame>
+    )
+}
 
-                    <div className="grid gap-2">
-                        <Label htmlFor="email">{t.auth.email}</Label>
-                        <div className="relative">
-                            <Mail className="-translate-y-1/2 pointer-events-none absolute top-1/2 left-2.5 size-4 text-muted-foreground" />
-                            <Input
-                                id="email"
-                                name="email"
-                                type="email"
-                                autoComplete="email"
-                                placeholder="you@example.com"
-                                className="pl-8"
-                                required
-                                disabled={loading !== null}
-                            />
-                        </div>
-                    </div>
+/** The email form plus the Google action, porting `_RemoteLoginPanel`. */
+function CredentialsPanel({
+    mode,
+    loading,
+    error,
+    ageConfirmed,
+    acceptedLegal,
+    onAgeConfirmedChange,
+    onAcceptedLegalChange,
+    onSubmit,
+    onGoogle,
+    onModeChange,
+    onForgotPassword,
+}: {
+    mode: AuthMode
+    loading: 'email' | 'google' | null
+    error: string | null
+    ageConfirmed: boolean
+    acceptedLegal: boolean
+    onAgeConfirmedChange: (value: boolean) => void
+    onAcceptedLegalChange: (value: boolean) => void
+    onSubmit: (event: FormEvent<HTMLFormElement>) => void
+    onGoogle: () => void
+    onModeChange: (mode: AuthMode) => void
+    onForgotPassword: () => void
+}) {
+    const t = useT()
+    const submitting = loading !== null
+    const nameRef = useRef<HTMLDivElement>(null)
 
-                    <div className="grid gap-2">
-                        <Label htmlFor="password">{t.auth.password}</Label>
-                        <div className="relative">
-                            <Lock className="-translate-y-1/2 pointer-events-none absolute top-1/2 left-2.5 size-4 text-muted-foreground" />
-                            <Input
-                                id="password"
-                                name="password"
-                                type="password"
-                                autoComplete={
-                                    mode === 'sign-in'
-                                        ? 'current-password'
-                                        : 'new-password'
-                                }
-                                placeholder={
-                                    mode === 'sign-in'
-                                        ? t.auth.passwordPlaceholder
-                                        : t.auth.newPasswordPlaceholder
-                                }
-                                className="pl-8"
-                                minLength={8}
-                                required
-                                disabled={loading !== null}
-                            />
-                        </div>
-                    </div>
+    // The name field only exists in sign-up; focus it when it appears so the
+    // mode switch lands the caret where typing continues.
+    useEffect(() => {
+        if (mode !== 'sign-up') return
+        nameRef.current?.querySelector('input')?.focus()
+    }, [mode])
 
-                    {mode === 'sign-in' ? (
-                        <Link
-                            to="/forgot-password"
-                            className="-mt-2 self-end text-xs text-muted-foreground underline-offset-4 hover:underline"
-                        >
-                            ¿Olvidaste tu contraseña?
-                        </Link>
-                    ) : null}
+    return (
+        <AuthPanel>
+            <AuthPanelTitle
+                icon="sync"
+                title={t.auth.withAccount}
+                subtitle={t.auth.withAccountDescription}
+            />
 
-                    {error ? (
-                        <p className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-                            {error}
-                        </p>
-                    ) : null}
-
-                    <Button
-                        type="submit"
-                        className="w-full"
-                        disabled={loading !== null}
-                    >
-                        {loading === 'email' ? (
-                            <LoaderCircle className="animate-spin" />
-                        ) : null}
-                        {mode === 'sign-in' ? t.auth.signIn : t.auth.signUp}
-                    </Button>
-                </form>
-
-                <div className="flex w-full items-center gap-3">
-                    <Separator className="flex-1" />
-                    <span className="text-xs text-muted-foreground">
-                        {t.auth.or}
-                    </span>
-                    <Separator className="flex-1" />
-                </div>
-
-                <Button
-                    variant="outline"
-                    className="w-full"
-                    onClick={handleGoogleSignIn}
-                    disabled={loading !== null}
-                >
-                    {loading === 'google' ? (
-                        <LoaderCircle className="animate-spin" />
-                    ) : (
-                        <img
-                            src={googleIcon}
-                            alt="Google"
-                            className="h-5 w-5"
+            <form className="mt-4.5 flex flex-col gap-3" onSubmit={onSubmit}>
+                {mode === 'sign-up' ? (
+                    <div ref={nameRef}>
+                        <AuthTextField
+                            icon="badge"
+                            name="name"
+                            label={t.auth.name}
+                            autoComplete="name"
+                            isDisabled={submitting}
                         />
-                    )}
-                    {loading === 'google'
-                        ? t.auth.signingIn
-                        : t.auth.continueWithGoogle}
-                </Button>
+                    </div>
+                ) : null}
+
+                <AuthTextField
+                    icon="alternate_email"
+                    name="email"
+                    type="email"
+                    label={t.auth.email}
+                    autoComplete="email"
+                    isRequired
+                    isDisabled={submitting}
+                />
+
+                <AuthTextField
+                    icon="lock"
+                    name="password"
+                    type="password"
+                    label={t.auth.password}
+                    autoComplete={
+                        mode === 'sign-in' ? 'current-password' : 'new-password'
+                    }
+                    minLength={8}
+                    isRequired
+                    isDisabled={submitting}
+                />
+
+                {mode === 'sign-in' ? (
+                    <div className="-mt-1 flex justify-end">
+                        <Button
+                            type="button"
+                            variant="text"
+                            isDisabled={submitting}
+                            onPress={onForgotPassword}
+                        >
+                            {t.auth.forgotPassword}
+                        </Button>
+                    </div>
+                ) : (
+                    <div className="h-1" />
+                )}
+
+                {mode === 'sign-up' ? (
+                    <LegalConsentChecks
+                        documents={LEGAL_DOCUMENTS}
+                        ageConfirmed={ageConfirmed}
+                        accepted={acceptedLegal}
+                        onAgeConfirmedChange={onAgeConfirmedChange}
+                        onAcceptedChange={onAcceptedLegalChange}
+                        disabled={submitting}
+                    />
+                ) : null}
+
+                {error ? <AuthErrorNote message={error} /> : null}
+
+                <AuthPrimaryButton
+                    type="submit"
+                    submitting={loading === 'email'}
+                    disabled={
+                        mode === 'sign-up' && (!ageConfirmed || !acceptedLegal)
+                    }
+                    label={mode === 'sign-in' ? t.auth.signIn : t.auth.signUp}
+                />
+
+                <div className="flex justify-center">
+                    <Button
+                        type="button"
+                        variant="text"
+                        isDisabled={submitting}
+                        onPress={() =>
+                            onModeChange(
+                                mode === 'sign-in' ? 'sign-up' : 'sign-in',
+                            )
+                        }
+                    >
+                        {mode === 'sign-in'
+                            ? t.auth.needAccountSignUp
+                            : t.auth.haveAccountSignIn}
+                    </Button>
+                </div>
+            </form>
+
+            <div className="my-4.5">
+                <AuthOrDivider label={t.auth.or} />
             </div>
-        </div>
+
+            <Button
+                variant="outlined"
+                className="w-full bg-surface"
+                style={{
+                    height: 54,
+                    '--md-outlined-button-container-shape': '16px',
+                    '--md-outlined-button-outline-color':
+                        'var(--md-sys-color-outline-variant)',
+                }}
+                onPress={onGoogle}
+                isDisabled={submitting}
+            >
+                <img src={googleIcon} alt="" className="size-5" />
+                {loading === 'google'
+                    ? t.auth.signingIn
+                    : t.auth.continueWithGoogle}
+            </Button>
+        </AuthPanel>
     )
 }

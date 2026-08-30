@@ -1,7 +1,7 @@
 # Wallet Bot — Política de Privacidad
 
-**Fecha de entrada en vigencia:** 6 de agosto de 2026
-**Última actualización:** 6 de agosto de 2026
+**Fecha de entrada en vigencia:** 23 de agosto de 2026
+**Última actualización:** 26 de agosto de 2026
 
 > Esta Política de Privacidad se publica en español y en inglés. Para los consumidores residentes en la República Argentina, la versión en español es el texto jurídicamente operativo y prevalece en caso de discrepancia. Para los demás usuarios prevalece la versión en inglés, siendo la versión en español una traducción de cortesía.
 
@@ -11,8 +11,8 @@ Wallet Bot ("**Wallet Bot**", el "**Servicio**", "**nosotros**") es una aplicaci
 
 El responsable de la base de datos en los términos de la Ley N° 25.326 de Protección de los Datos Personales es:
 
-- **Responsable:** [NOMBRE LEGAL DEL RESPONSABLE]
-- **Domicilio:** [DOMICILIO DEL RESPONSABLE, ARGENTINA]
+- **Responsable:** Tomás Cichero, CUIT 20-43920814-8
+- **Domicilio:** Estanislao del Campo 1260, B1604ADH Florida Oeste, Provincia de Buenos Aires, Argentina
 - **Contacto para asuntos de privacidad:** support@walletbot.live
 
 ## 2. Alcance
@@ -29,6 +29,7 @@ Al crear una cuenta, usted declara haber leído esta Política y presta su conse
 - Si se registra con correo y contraseña: su contraseña, almacenada únicamente como hash criptográfico. Nunca almacenamos ni podemos leer su contraseña en texto plano.
 - Si inicia sesión con Google, Apple u otro proveedor de identidad soportado: su nombre, correo electrónico, URL de foto de perfil, el identificador de cuenta del proveedor y los tokens de autenticación emitidos por el proveedor.
 - Estado de verificación del correo y tokens de verificación / restablecimiento de contraseña (de corta duración).
+- Un registro de su aceptación de estos documentos: qué documento, su versión, la fecha y hora, su confirmación de ser mayor de 18 años y la plataforma utilizada. En modo local, ese registro permanece en su dispositivo.
 
 ### 3.2 Datos financieros que usted ingresa
 
@@ -74,10 +75,11 @@ El asistente de voz de Wallet Bot es una función **opcional**. Le permite regis
 - El **acceso al micrófono** se solicita únicamente cuando usted inicia una sesión de voz, y puede denegarlo; el resto de la aplicación funciona sin él.
 - Al iniciar una sesión, nuestro backend emite un **token de acceso de corta duración y de un solo uso**, y su dispositivo se conecta **directamente** al proveedor de inteligencia artificial de la sesión: la API Gemini Live de Google (Google LLC) o la API de OpenAI (OpenAI, L.L.C.). El audio de su micrófono se transmite desde su dispositivo hacia ese proveedor; **el audio en crudo nunca pasa por nuestros servidores ni se almacena en ellos**.
 - Las grabaciones de audio de una sesión se conservan **únicamente en su dispositivo** (app nativa). Nunca se suben a nuestros servidores; del audio solo se registra en el servidor el tipo y el tamaño de los segmentos.
-- Almacenamos el **contenido de la conversación**: transcripciones de lo que usted dijo y de lo que respondió el asistente, las acciones que el asistente ejecutó ("tool calls" — por ejemplo, crear una transacción) con sus resultados, y metadatos de la sesión. Para cuentas con sesión iniciada este historial se sincroniza con nuestro backend; **las sesiones de voz de la aplicación web no se almacenan en nuestros servidores**; **las cuentas en modo local nunca suben su historial de voz**.
+- Almacenamos el **contenido de la conversación**: transcripciones de lo que usted dijo y de lo que respondió el asistente, las acciones que el asistente ejecutó ("tool calls" — por ejemplo, crear una transacción) con sus resultados, y metadatos de la sesión. Para cuentas con sesión iniciada este historial se sincroniza con nuestro backend, tanto desde la aplicación nativa como desde la web; **las cuentas en modo local nunca suben su historial de voz**.
 - Mientras una sesión está activa, el asistente puede **leer y modificar los datos financieros de su cuenta** (cuentas, saldos, transacciones, categorías, etiquetas, resúmenes) para ejecutar sus pedidos. Los datos que lee o escribe pasan a formar parte de la conversación procesada por el proveedor de inteligencia artificial.
 - El proveedor de inteligencia artificial (Google u OpenAI) procesa el audio y el contenido de la conversación bajo sus propios términos de API aplicables. Configuramos las sesiones para usar credenciales efímeras de un solo uso.
 - El historial de sesiones de voz se conserva por un **máximo de 12 meses** y también se elimina de inmediato si usted elimina su cuenta (Sección 9).
+- **Reporte de una respuesta.** Usted puede reportar cualquier respuesta del asistente desde el propio chat. El reporte guarda la respuesta reportada, el mensaje que usted envió inmediatamente antes, la nota que agregue, el identificador de la sesión, el modelo, y su plataforma, versión de la aplicación e idioma. Nuestros administradores leen los reportes para revisar y corregir el comportamiento del asistente, lo que constituye el interés legítimo de operar un servicio seguro y es además un requisito de las tiendas de aplicaciones por las que distribuimos. Los reportes se conservan por un **máximo de 12 meses** y se eliminan de inmediato si usted elimina su cuenta (Sección 9). Los reportes enviados desde una cuenta en modo local se identifican con un identificador de dispositivo y no llevan datos de cuenta.
 - El asistente puede cometer errores (interpretar mal montos, nombres o monedas). Revise los registros que crea; ver el descargo correspondiente en los Términos y Condiciones.
 
 ## 6. Finalidades del tratamiento
@@ -107,7 +109,7 @@ Compartimos datos personales únicamente con los encargados de tratamiento neces
 | Resend, Inc. (EE. UU.) | Envío de correos transaccionales | Dirección de correo del destinatario, nombre para mostrar, contenido del mensaje |
 | Cloudflare, Inc. (EE. UU.) | Alojamiento / CDN de la aplicación web | Registros estándar de solicitudes web (dirección IP, user-agent) |
 | Grafana Labs (EE. UU.) | Plataforma de observabilidad — almacenamiento de métricas de uso y eventos de diagnóstico | Eventos y métricas de uso/diagnóstico, incluidos identificadores aleatorios de instalación y de sesión, un identificador interno de usuario, versión de la aplicación y plataforma |
-| [PROVEEDOR DE ANALÍTICA / REPORTES DE FALLOS] | Analítica de uso y reportes de fallos | Eventos de uso, información del dispositivo y de la aplicación, reportes de fallos/diagnóstico |
+| Google LLC — Firebase (EE. UU.) | Reportes de fallos (Firebase Crashlytics) y analítica de uso (Google Analytics for Firebase) | Reportes de fallos y diagnóstico, incluidas trazas de error, eventos de uso, información del dispositivo y de la aplicación, y un identificador aleatorio por instalación |
 
 También podremos divulgar datos personales si así lo exige la ley, una orden judicial o una autoridad competente, o para proteger los derechos, la seguridad y la integridad de Wallet Bot, de nuestros usuarios o de terceros. Si el Servicio se transfiriera en el marco de una fusión, adquisición o venta de activos, sus datos podrán transferirse con él; le notificaremos antes de que sus datos queden sujetos a una política de privacidad distinta.
 
@@ -129,11 +131,13 @@ Usted puede revocar este consentimiento en cualquier momento (sin efectos retroa
 | Datos de cuenta, perfil y financieros | Mientras exista su cuenta; se eliminan de forma definitiva al eliminar la cuenta |
 | Sesiones y tokens de inicio de sesión | Hasta el cierre de sesión, revocación o expiración; se revocan todos al restablecer la contraseña y al eliminar la cuenta |
 | Historial de sesiones de voz (transcripciones, acciones, metadatos) | Máximo **12 meses** desde su creación, luego se eliminan automáticamente; se eliminan de inmediato al eliminar la cuenta. Las grabaciones de audio existen solo en su dispositivo |
+| Reportes de respuestas del asistente (respuesta reportada, mensaje previo, nota, metadatos de sesión) | Máximo **12 meses** desde su creación, luego se eliminan automáticamente; se eliminan de inmediato al eliminar la cuenta |
 | Registros de correos transaccionales (en nuestro proveedor de correo) | Depuración automática: correos entregados/finalizados a los 7 días; no entregables/abandonados a los 30 días |
+| Registro de su aceptación de estos documentos (qué documento, su versión, la fecha y hora, su confirmación de ser mayor de 18 años y la plataforma utilizada) | Mientras exista su cuenta; se elimina de forma definitiva al eliminar la cuenta. En las cuentas en modo local, este registro existe únicamente en su dispositivo |
 | Solicitudes de eliminación de cuenta (correo + hash del token de confirmación) | Se eliminan al completarse la eliminación; las solicitudes vencidas quedan sin validez y no pueden volver a usarse |
 | Registro de seguridad posterior a la eliminación | Tras completarse la eliminación conservamos únicamente un identificador interno aleatorio de la cuenta y la fecha de eliminación, para que las credenciales emitidas a la cuenta eliminada no puedan volver a usarse jamás. Este registro no contiene nombre, correo ni datos financieros |
 | Registros de seguridad y errores | Retención breve y rotativa en nuestra plataforma de backend |
-| Datos de analítica de uso y de fallos/diagnóstico | [PLAZO DE CONSERVACIÓN DE ANALÍTICA — a definir con el proveedor de analítica] |
+| Datos de analítica de uso y de fallos/diagnóstico | Máximo **12 meses** desde su recolección, luego se eliminan; los eventos asociados a su cuenta se eliminan de inmediato al eliminar la cuenta |
 
 ## 10. Eliminación de cuenta
 
@@ -205,5 +209,5 @@ Podremos actualizar esta Política a medida que el Servicio evolucione. Ante cam
 ## 18. Contacto
 
 - **Solicitudes de privacidad y protección de datos:** support@walletbot.live
-- **Responsable:** [NOMBRE LEGAL DEL RESPONSABLE], [DOMICILIO DEL RESPONSABLE, ARGENTINA]
+- **Responsable:** Tomás Cichero, CUIT 20-43920814-8, Estanislao del Campo 1260, B1604ADH Florida Oeste, Provincia de Buenos Aires, Argentina
 - **Autoridad de control (Argentina):** Agencia de Acceso a la Información Pública — `https://www.argentina.gob.ar/aaip`

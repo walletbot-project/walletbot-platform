@@ -3,82 +3,120 @@ import { toolSchemas } from './definitions'
 import type { ToolDefinition } from './helpers'
 import { zodToToolSchema } from './helpers'
 
+export { AGENT_MODEL, AGENT_VOICE_NAME } from './constants'
 export { toolSchemas } from './definitions'
+
+// Tool descriptions. Rules: platform-neutral (every tool behaves identically
+// on the native app and on the web app), state defaults, and state the error
+// contract where it is not the plain `{ ok: false, error }` envelope.
 
 const toolDescriptions = {
     // Accounts
     listAccounts:
-        'List user accounts. Returns id, name, currency, color, icon, isArchived.',
-    getAccount: 'Get a single account by UUID or name (case-insensitive).',
-    getAccountBalance: 'Get the current balance of an account in its currency.',
+        'List the user accounts. Returns id, name, currency, color, icon, isArchived. Excludes archived accounts unless includeArchived is true.',
+    getAccount:
+        'Get a single account by UUID or name (case-insensitive). Use it when the context snapshot may be stale or a name is ambiguous — on ambiguity it returns candidates to choose from.',
+    getAccountBalance:
+        'Get the current balance of an account in its own currency. Fails with "Account not found" when the id or name resolves to nothing.',
     createAccount:
-        'Create a new account. Currency is immutable once set. Returns the new account id.',
+        'Create a new account. Currency is immutable once set and defaults to the user default currency when omitted. Returns the new account id.',
     updateAccount:
-        'Update an account. Currency cannot be changed; create a new account instead.',
-    archiveAccount: 'Archive an account (soft delete). Transactions remain.',
+        'Update an account name, description, color or icon. Currency cannot be changed; create a new account instead.',
+    archiveAccount:
+        'Archive an account (soft delete; there is no in-app restore yet). Its transactions remain.',
 
     // Categories
-    listCategories: 'List user categories.',
-    getCategory: 'Get a category by UUID or name.',
+    listCategories:
+        'List the user categories (id, name, description, color, icon). Excludes archived categories unless includeArchived is true.',
+    getCategory:
+        'Get a category by UUID or name (case-insensitive). Use it when the context snapshot may be stale or a name is ambiguous — on ambiguity it returns candidates.',
     createCategory:
-        'Create a category. Categories are type-agnostic — they classify both expenses and income. Optional color (hex) and icon name.',
+        'Create a category. Categories are type-agnostic — they classify both expenses and income. Returns the new category id.',
     updateCategory: 'Update a category name, description, color or icon.',
-    archiveCategory: 'Archive a category (soft delete).',
+    archiveCategory:
+        'Archive a category (soft delete; there is no in-app restore yet). Its transactions remain.',
 
     // Tags
-    listTags: 'List user tags. Tags can form a hierarchy via parent.',
-    getTag: 'Get a tag by UUID or name.',
-    createTag: 'Create a reusable tag. Optionally nest under a parent tag.',
-    updateTag: 'Update a tag.',
-    archiveTag: 'Archive a tag (soft delete).',
+    listTags:
+        'List the user tags (id, name, parentId, color). Tags can form a hierarchy via parent. Excludes archived tags unless includeArchived is true.',
+    getTag: 'Get a tag by UUID or name (case-insensitive). Use it when the context snapshot may be stale or a name is ambiguous.',
+    createTag:
+        'Create a reusable tag, optionally nested under a parent tag. Returns the new tag id.',
+    updateTag: 'Update a tag name, description, parent or color.',
+    archiveTag:
+        'Archive a tag (soft delete). Child tags are re-parented to the archived tag parent.',
 
     // Transactions: read
     listTransactions:
-        'List transactions with optional filters: type, account, category, tag, status, date range.',
-    getTransaction: 'Get a single transaction by id including its tags.',
-    getRecentTransactions: 'Shortcut: list the N most recent transactions.',
+        'List transactions, newest first, with optional filters: type, account, category, tag, status, date range. With no filters it returns the 10 most recent movements; with filters the default limit is 50.',
+    getTransaction:
+        'Get a single transaction by id, including its tagIds. Fails with "Transaction not found" for unknown ids.',
 
     // Transactions: write
     addExpense:
-        'Record an expense (money out). Subtracts from the account balance. Requires account + category.',
+        'Record an expense (money out). Subtracts from the account balance. Requires account + category; the currency comes from the account.',
     addIncome:
-        'Record an income (money in). Adds to the account balance. Requires account + category.',
+        'Record an income (money in). Adds to the account balance. Requires account + category; the currency comes from the account.',
     addTransfer:
-        'Record a transfer between two accounts. For cross-currency transfers, provide toAmount (and optionally exchangeRate).',
+        'Record a transfer between two of the user accounts. Category is optional. For cross-currency transfers, provide toAmount (and optionally exchangeRate) — same-currency transfers derive toAmount automatically.',
     addBalanceAdjustment:
         'Record that the actual balance of an account is balanceAfter. The system computes the difference. Use when the user counted cash or reconciles a statement.',
     updateTransaction:
-        "Update a transaction's name, description, date, amount, category, or status.",
-    deleteTransaction: 'Delete a transaction. Updates balances accordingly.',
-    tagTransaction: 'Attach one or more tags to a transaction.',
-    untagTransaction: 'Detach one or more tags from a transaction.',
+        'Update a transaction: name, description, date/time, amount, category, status, and tags (addTagIdsOrNames / removeTagIdsOrNames apply atomically with the rest of the edit). Unknown tag names are skipped and reported in `missing`.',
+    deleteTransaction:
+        'Delete a transaction. It is archived (soft delete; there is no in-app restore yet) and balances update accordingly. Idempotent: deleting an unknown id still reports ok.',
 
     // Summaries
-    summarizeByCategory:
-        'Totals per category over a date range. Optionally filter by transaction type.',
-    summarizeByAccount:
-        'Per-account balance, money-in and money-out over a date range.',
+    summarizeTransactions:
+        'Aggregate transactions over a date range. groupBy category returns totals per category (transfers excluded; pass currency to keep the totals in one currency). groupBy account returns per-account money-in, money-out and net, each in the account currency.',
 
     // Dashboard saved filters
     listSavedFilters:
-        'List saved transaction filters used by native home dashboard widgets. Returns each canonical filter JSON.',
+        'List the saved transaction filters used by home dashboard widgets (shared across the user devices). Returns each canonical filter JSON.',
     createSavedFilter:
-        'Create a reusable saved transaction filter from canonical filter JSON. Native dashboard feature.',
+        'Create a reusable saved transaction filter from canonical filter JSON. Filter amount values are stored in cents.',
     updateSavedFilter:
-        'Update a saved transaction filter name and/or canonical filter JSON. Native dashboard feature.',
+        'Update a saved transaction filter name and/or canonical filter JSON. Fails with "Saved filter not found" for unknown or archived ids.',
     archiveSavedFilter:
-        'Archive a saved transaction filter. Widgets that referenced it will fall back to all transactions.',
+        'Archive a saved transaction filter. Widgets that referenced it fall back to all transactions.',
 
     // Home dashboard widgets
     listDashboardWidgets:
-        'List native home dashboard widgets in display order, including type, width, options, and resolved filter JSON.',
+        'List the home dashboard widgets in display order, including type, width, options, and resolved filter JSON. The same dashboard is shared across the user devices. Always call this before editing the layout — never invent widget ids.',
     createDashboardWidget:
-        'Create a native home dashboard widget. Supports stat, list, balance, chart, width, canonical filter JSON, and background options.',
+        'Create a home dashboard widget. Types: stat (aggregation sum/net/count over a filter), list (recent matching movements, `limit` rows), balance (as-of-now balance for `currency`, optionally scoped to accountIds — never date-bounded and it takes no filter), chart (breakdown by category/account/month; transfers are excluded from breakdowns). Width maps to a 6-unit grid: full=6, two_thirds=4, half=3, third=2. New widgets land on a fresh row below everything placed.',
     updateDashboardWidget:
-        'Edit a native home dashboard widget. Can change type, title, width, filter JSON, display options, and background.',
+        'Edit a home dashboard widget: type, title, width, filter JSON, display options, background. Options not mentioned keep their current value, except balance accountIds which must be re-stated on every edit. Fails with "Dashboard widget not found" for unknown or archived ids.',
     reorderDashboardWidgets:
-        'Reorder native home dashboard widgets by passing all widget ids in display order.',
-    archiveDashboardWidget: 'Archive/remove a native home dashboard widget.',
+        'Reorder the home dashboard by passing ALL live widget ids in display order (get them from listDashboardWidgets). Ids that name no live widget are skipped without shifting the rest.',
+    archiveDashboardWidget:
+        'Archive (remove) a home dashboard widget. Its saved filter is kept.',
+
+    // Agent memory
+    addMemory:
+        'Save one durable user preference or fact to your long-term memory (shared across the user devices and injected into future sessions). Rejected with "consolidate first" when the memory set is full — merge or rewrite existing entries instead.',
+    updateMemory:
+        'Rewrite an existing memory. Also the consolidation primitive: merging two memories is one updateMemory plus one forgetMemory. Fails with "Memory not found" for unknown ids.',
+    forgetMemory:
+        'Delete a memory (on user request, or because it is obsolete or duplicated). Idempotent: forgetting an unknown id still reports ok.',
+
+    // Settings
+    updateSettings:
+        'Change user settings: language (this device), theme (this device), defaultCurrency (account-wide). Apply the change immediately, then tell the user what changed and that language/theme only affect this device. The result restates exactly that.',
+
+    // Math & dates
+    calculate:
+        'Evaluate arithmetic exactly instead of doing mental math — totals, percentages, splits, projections, conversions with a user-provided rate. Runs the steps in order; a step may bind its result to a name for later steps. Returns every step value (the last one is the final result). Purely numeric: no dates, currencies, units, or equation solving. Fails with a clear error on unsupported syntax, unknown names, or a non-finite result such as division by zero.',
+    calculateDate:
+        'Calendar date math. add/subtract N day/week/month/year (month and year steps clamp to the last day: Jan 31 + 1 month = Feb 28). diff counts whole units between date and otherDate, signed. startOf/endOf week/month/year (weeks run Monday–Sunday). dayOfWeek names the weekday. Dates accept the same ISO or natural-language forms as transaction dates. Returns ISO dates plus the English weekday name — translate it when speaking to the user.',
+
+    // Exchange rates
+    getExchangeRate:
+        'Look up a market exchange rate between two currencies, and optionally convert an amount at it. Quotes come from the app backend, refreshed periodically; this NEVER converts stored money — balances, summaries and movements always stay in their own account currency. Defaults to the official market; ARS pairs also return `alternatives` with the other Argentine quotes so you can name them without asking again. Always carries `asOf` (and `stale: true` past three days) — mention the date when a quote is stale. Errors: "Unknown currency code: X", "from and to are the same currency", "No exchange rate available for X→Y", and "Exchange rates are unavailable right now" when the device has no snapshot cached. A market quote is never the user\'s own transaction rate: for a real cross-currency transfer, ask what actually arrived.',
+
+    // Skills
+    readSkill:
+        'Read one of your reference skills by slug (the index is in your instructions). Call it BEFORE answering questions about sync/offline behavior, currencies, filter JSON recipes, date semantics, or privacy/data handling. Unknown slug → { ok: false, availableSlugs }.',
 } as const satisfies Record<keyof typeof toolSchemas, string>
 
 // Derived types
@@ -104,3 +142,6 @@ export const TOOL_MAP = TOOL_DEFINITIONS.reduce<ToolsMap>((acc, tool) => {
     acc[tool.name as ToolName] = tool
     return acc
 }, {} as ToolsMap)
+
+/** Every tool name, in declaration order — the cross-platform manifest. */
+export const TOOL_NAMES = Object.keys(toolSchemas) as ToolName[]

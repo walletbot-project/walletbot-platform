@@ -67,10 +67,13 @@ class AccountRepository extends RepositoryBase {
   Stream<BigInt> watchBalanceCents(String accountId) =>
       watchAccountBalance(db, accountId);
 
-  /// Live total balance across all active accounts in [currency], for the
-  /// dashboard Balance card.
-  Stream<BigInt> watchBalanceForCurrency(String currency) =>
-      watchTotalBalanceForCurrency(db, currency);
+  /// Live total balance across the active accounts in [currency], for the
+  /// dashboard Balance card. [accountIds] narrows it to those accounts; empty
+  /// (the default) is every account in the currency.
+  Stream<BigInt> watchBalanceForCurrency(
+    String currency, {
+    List<String> accountIds = const [],
+  }) => watchTotalBalanceForCurrency(db, currency, accountIds: accountIds);
 
   /// Throws [DuplicateAccountException] when an active account with the
   /// same [currency] and a name equal to [name] (trim + case-insensitive)
@@ -81,13 +84,13 @@ class AccountRepository extends RepositoryBase {
     String? excludeId,
   }) async {
     final normalized = _normalizeAccountName(name);
-    final sameCurrency = await (db.select(db.accounts)..where(
-          (a) => a.archived.equals(false) & a.currency.equals(currency),
-        ))
-        .get();
+    final sameCurrency =
+        await (db.select(db.accounts)..where(
+              (a) => a.archived.equals(false) & a.currency.equals(currency),
+            ))
+            .get();
     final hasDuplicate = sameCurrency.any(
-      (a) =>
-          a.id != excludeId && _normalizeAccountName(a.name) == normalized,
+      (a) => a.id != excludeId && _normalizeAccountName(a.name) == normalized,
     );
     if (hasDuplicate) throw const DuplicateAccountException();
   }

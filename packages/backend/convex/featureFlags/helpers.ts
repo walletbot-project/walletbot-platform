@@ -1,6 +1,25 @@
 import type { MutationCtx, QueryCtx } from '../_generated/server'
 import { type FlagKey, KNOWN_FLAGS } from './utils'
 
+/**
+ * A flag's value with no user applied, for callers that have no identity to
+ * override against (an unauthenticated native local account). Same precedence
+ * as [resolveFlagsForUser] minus the override step.
+ */
+export async function isFlagEnabledGlobally(
+    ctx: QueryCtx | MutationCtx,
+    key: FlagKey,
+): Promise<boolean> {
+    const row = await ctx.db
+        .query('featureFlags')
+        .withIndex('by_key', (q) => q.eq('key', key))
+        .unique()
+    if (row) return row.enabledByDefault
+    return (
+        KNOWN_FLAGS.find((flag) => flag.key === key)?.enabledByDefault ?? false
+    )
+}
+
 export async function requireAdmin(
     ctx: QueryCtx | MutationCtx,
     userId: string,

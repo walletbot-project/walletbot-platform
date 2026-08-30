@@ -69,18 +69,28 @@ the Play-managed fingerprint.
 Unverified from the repo: whether the production Convex deployment has the
 Google provider environment variables set.
 
-### 5. No AAB has ever been produced; ABI coverage unverified
+### 5. No AAB has ever been produced; ABI coverage unverified (resolved 2026-08-28)
 
 Only `build/app/outputs/apk/release/app-release.apk` exists. Play requires an
-AAB for a new app. In that artifact, `libconvex_flutter.so`, `libapp.so` and
-`libflutter.so` are present **only for arm64-v8a**, and
-`build/convex_flutter/jniLibs/release/` contains just `arm64-v8a` (the debug
-equivalent has all four ABIs).
+AAB for a new app.
 
-A bundle that ships armeabi-v7a / x86_64 splits without the Rust lib crashes on
-load for those devices. Either confirm cargokit builds every ABI in release, or
-set `abiFilters` explicitly. Also unverified: drift's native-assets
+Update 2026-08-27: `convex_flutter` (and its Rust `libconvex_flutter.so`) was
+removed — the Convex client is now pure Dart (`apps/native/lib/convex/`), so
+the arm64-only Rust-lib risk is gone. Still unverified: drift's native-assets
 `libsqlite3.so` path through an `appbundle` build.
+
+Update 2026-08-28: `flutter build appbundle --release` was run and succeeds,
+producing a 73.0 MB bundle. Drift's `libsqlite3.so` does survive the
+native-assets path and ships for all three ABIs (`arm64-v8a` 1,717,000 B,
+`armeabi-v7a` 1,694,816 B, `x86_64` 1,694,936 B), next to `libflutter.so`,
+`libapp.so`, `libdartjni.so` and `libdatastore_shared_counter.so`. The bundle
+is signed `CN=Wallet Bot` (SHA-256 `14:3D:A9:C2:2E:77:...`), and
+`.github/workflows/prod-deploy.yml` now publishes it to the `production-latest`
+release on every push to `main`, so an AAB exists for the first Play upload.
+
+Worth noting for the store listing: the universal APK is 71.2 MB because it
+carries `libflutter.so` and `libapp.so` three times over, once per ABI. Play
+splits the bundle per device, which cuts the actual download to roughly 25 MB.
 
 ## Blockers — Play Console / policy
 
@@ -92,14 +102,62 @@ financial data, audio, and device identifiers, and streams audio to a
 third-party model (`packages/backend/convex/v1/live/actions.ts`) — all of which
 must be declared, including third-party sharing.
 
-### 7. No user-account deletion
+### 7. No user-account deletion — resolved (2026-08-06)
 
 Play's data-deletion policy requires an in-app deletion path plus a
-web-accessible deletion URL for apps with account creation.
-`packages/backend/convex/users/` only exposes `requireAuth`;
-`packages/backend/convex/authNative/mutations.ts` exposes only session
-insert / validate / revoke. The `deleteAccount` strings in `lib/l10n/*.arb`
-refer to *financial* accounts, not the user account.
+web-accessible deletion URL for apps with account creation. Both now exist:
+native Settings → "Delete my account" requests a confirmation email
+(`POST /v1/account-deletion/request`), and the web app serves the public
+deletion URL at `${SITE_URL}/delete-account` (works logged out). The emailed
+link lands on `/delete-account/confirm`, which warns the action is
+irreversible and purges all user data plus the better-auth user
+(`packages/backend/convex/userDeletion/`). Remaining Play Console task:
+declare the deletion URL in the Data safety form.
+
+### 7b. No way to report AI-generated content — resolved (2026-08-26)
+
+Play's **AI-Generated Content** policy applies: Gasti is a text-to-text chatbot
+and the interaction is a central feature. The policy requires that "apps that
+generate content using AI must contain in-app user reporting or flagging
+features that allow users to report or flag offensive content to developers
+without needing to exit the app", and that developers "utilize user reports to
+inform content filtering and moderation". Apple asks for the same through
+guidelines 1.2 and 4.7.1 ("a mechanism to report offensive content and timely
+responses to concerns").
+
+This audit missed it originally. It now exists on both platforms. Every agent
+response carries a flag icon beside its bubble, vertically centred on it
+(`apps/native/lib/screens/voice.dart`, `apps/web/src/pages/add.tsx`) — a visible
+control rather than a hover or a gesture, because a reporting mechanism nobody
+can find is not one the policy accepts. It fades in a second after the turn
+finishes and holds its space before then, so the bubble never reflows and there
+is no control to hit while the answer is still being written. Restored history
+skips the delay: those turns are already finished. It sits outside the bubble so its hit
+area never competes with selecting the text, and native gives it the full 48x48
+tap target. Native also keeps the long-press action sheet, and the chat app bar
+carries a session-scoped fallback for a reply that was audio-only or has
+scrolled away. Reports land in `agentReports`
+(`packages/backend/convex/v1/agentReports/`) with a snapshot of the flagged turn
+and the user turn before it, and are triaged at `/admin/agent-reports`. Reporting
+works for local-only accounts, which identify themselves with `deviceId` like
+feedback does.
+
+The **icon** is behind the `agentReportButton` flag, which exists as a kill
+switch for the bubble layout, not as a rollout gate. It is the one entry in
+`KNOWN_FLAGS` that is `enabledByDefault: true`, and both clients treat an absent
+or unfetched flag as on (`isFlagEnabled(..., orElse: true)` on native,
+`?? true` on web) — an offline first run or a failed config call must never be a
+build with no visible way to report. Turning it off narrows how reporting is
+*found*; it never removes reporting itself, which stays reachable through the
+long-press sheet and the app-bar fallback. **Do not ship a release with this flag
+disabled.**
+
+Reports expire after twelve months (`crons.ts`), matching the voice-history
+retention the privacy policy promises, and are purged on account deletion
+(`userDeletion/internal.ts`).
+
+Remaining Play Console task: nothing blocking, but the content rating
+questionnaire should describe the assistant honestly.
 
 ### 8. No terms of service
 
@@ -157,8 +215,9 @@ so the listing should be localized too.
 
 - `targetSdk` / `compileSdk` = 36, `minSdk` = 24 (Flutter 3.44 defaults) — meets
   Play's current API-level requirement.
-- **16 KB page-size compliance**: `libconvex_flutter.so` and `libsqlite3.so` both
-  report LOAD segment alignment `0x4000` (NDK 28.2.13676358). Mandatory for
+- **16 KB page-size compliance**: `libsqlite3.so` reports LOAD segment
+  alignment `0x4000` (NDK 28.2.13676358); `libconvex_flutter.so` no longer
+  ships (the Convex client is pure Dart since 2026-08-27). Mandatory for
   API 35+ targets; it passes.
 - Release keystore and `key.properties` exist locally, with a documented
   backup / restore procedure in `apps/native/README.md`.
@@ -176,5 +235,3 @@ so the listing should be localized too.
 
 - Whether the production Convex deployment has its auth and Gemini environment
   variables set.
-- Whether `flutter build appbundle --release` succeeds — no bundle build was
-  run.

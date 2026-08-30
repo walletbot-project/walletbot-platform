@@ -265,6 +265,33 @@ class DashboardWidgets extends Table {
   Set<Column<Object>> get primaryKey => {id};
 }
 
+// The agent's long-term memory: one row per durable user preference or fact,
+// written by the voice agent's memory tools and injected into its prompt.
+// Synced like every other entity (v4 of the coordinated schema; the backend
+// counterpart is `packages/backend/convex/schema/agentMemories.ts`).
+@TableIndex(name: 'agent_memories_archived', columns: {#archived})
+@TableIndex(name: 'agent_memories_updated_at', columns: {#updatedAt})
+@TableIndex.sql('''
+  CREATE INDEX agent_memories_needs_sync ON agent_memories (updated_at)
+    WHERE dirty = 1;
+''')
+class AgentMemories extends Table {
+  TextColumn get id => text().named('id')();
+  TextColumn get content => text().named('content')();
+
+  BoolColumn get archived =>
+      boolean().named('is_archived').withDefault(const Constant(false))();
+  Int64Column get createdAt => int64().named('created_at')();
+  Int64Column get updatedAt => int64().named('updated_at')();
+
+  // Sync
+  BoolColumn get dirty =>
+      boolean().named('dirty').withDefault(const Constant(false))();
+
+  @override
+  Set<Column<Object>> get primaryKey => {id};
+}
+
 // Singleton — tracks the highest server-side seq the client has pulled.
 class SyncState extends Table {
   TextColumn get id =>
@@ -358,6 +385,47 @@ class VoiceSessionEvents extends Table {
   ];
 }
 
+/// Which legal document an acceptance row refers to. Mirrors
+/// `LEGAL_DOCUMENTS` in `packages/shared/src/legal.ts`.
+enum LegalDocumentKind { terms, privacy }
+
+/// Where an acceptance row came from.
+///
+/// [local] is the user ticking the boxes on this device — the only record that
+/// exists for a local-only account. [remote] is the backend's row mirrored
+/// down for a remote account, so the gate can answer offline; the backend
+/// stays authoritative for those.
+enum LegalAcceptanceSource { local, remote }
+
+/// Append-only record of Terms & Conditions / Privacy Policy acceptances.
+///
+/// Deliberately NOT synced: it is absent from the sync engine's table list and
+/// from the backend's `SYNCED_TABLES`, so the wire format is unchanged (no
+/// `minSupportedVersion` bump). Remote acceptances travel through
+/// `v1/legal/mutations:accept` instead; this table is the local-account record
+/// of truth and, for remote accounts, an offline mirror.
+@TableIndex(
+  name: 'legal_acceptances_document_version',
+  columns: {#document, #version},
+)
+class LegalAcceptances extends Table {
+  TextColumn get id => text().named('id')();
+  TextColumn get document => textEnum<LegalDocumentKind>().named('document')();
+  // Ordered opaque string (e.g. '2026-08-06'), compared lexicographically.
+  TextColumn get version => text().named('version')();
+  Int64Column get acceptedAt => int64().named('accepted_at')();
+  // The 18+ representation made alongside this acceptance.
+  BoolColumn get ageConfirmed =>
+      boolean().named('age_confirmed').withDefault(const Constant(false))();
+  TextColumn get platform => text().named('platform')();
+  TextColumn get appVersion => text().named('app_version').nullable()();
+  TextColumn get locale => text().named('locale').nullable()();
+  TextColumn get source => textEnum<LegalAcceptanceSource>().named('source')();
+
+  @override
+  Set<Column<Object>> get primaryKey => {id};
+}
+
 @DriftDatabase(
   tables: [
     Accounts,
@@ -367,10 +435,12 @@ class VoiceSessionEvents extends Table {
     TransactionTags,
     SavedFilters,
     DashboardWidgets,
+    AgentMemories,
     SyncState,
     Tombstones,
     VoiceSessions,
     VoiceSessionEvents,
+    LegalAcceptances,
   ],
 )
 class AppDatabase extends _$AppDatabase {
@@ -384,21 +454,47 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.executor);
 
   @override
-  int get schemaVersion => 2;
+  int get schemaVersion => 4;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
     onCreate: (m) async => m.createAll(),
     onUpgrade: (m, from, to) async {
+      // Anything below the v1 baseline, a downgrade, or a version this build
+      // has never heard of must fail loudly rather than be guessed at.
+      if (from < 1 || from > to || to > 4) {
+        throw UnsupportedError(
+          'Unhandled SQLite migration path: v$from -> v$to. '
+          'Define an explicit upgrade path in AppDatabase.migration.',
+        );
+      }
+      // Steps are cumulative and must stay that way: a v1 database upgrading
+      // straight to v4 runs all three. (The previous single-step form returned
+      // early after v2, which would have skipped everything after it.)
+      //
       // v2: approximate/confirmed timing metadata on transactions.
       if (from < 2) {
         await m.addColumn(transactions, transactions.timeStatus);
-        return;
       }
-      throw UnsupportedError(
-        'Unhandled SQLite migration path: v$from -> v$to. '
-        'Define an explicit upgrade path in AppDatabase.migration.',
-      );
+      // v3: local record of Terms/Privacy acceptances. A new table only —
+      // existing rows are untouched. `createTable` does not carry the
+      // `@TableIndex` declarations with it, so the index is created
+      // explicitly; without it the upgraded schema diverges from a fresh
+      // install (the snapshot test catches exactly that).
+      if (from < 3) {
+        await m.createTable(legalAcceptances);
+        await m.create(legalAcceptancesDocumentVersion);
+      }
+      // v4: the agent's synced long-term memory (agent overhaul). A new
+      // table only — existing rows are untouched. Coordinated with the
+      // backend: `minSupportedVersion` moved to 0.3.0 in the same change, so
+      // pre-v4 clients fail closed on sync while keeping offline use.
+      if (from < 4) {
+        await m.createTable(agentMemories);
+        await m.create(agentMemoriesArchived);
+        await m.create(agentMemoriesUpdatedAt);
+        await m.create(agentMemoriesNeedsSync);
+      }
     },
     beforeOpen: (details) async {
       final userVersion = await customSelect('PRAGMA user_version').getSingle();

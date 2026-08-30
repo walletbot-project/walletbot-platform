@@ -4,6 +4,7 @@ import 'package:app/data/data.dart';
 import 'package:app/database.dart';
 import 'package:app/l10n/l10n.dart';
 import 'package:drift/native.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
@@ -187,6 +188,239 @@ void main() {
     handle.dispose();
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pump(const Duration(milliseconds: 1));
+  });
+
+  // Edit mode is driven by drag-and-drop, and the tiles used to be
+  // `LongPressDraggable`s: with a mouse you had to press and hold half a second
+  // on every tile before it would move, which reads as "dragging is broken" on
+  // desktop. Mouse pointers now start dragging on movement instead. The three
+  // tests below pin the whole trade-off — mouse drags immediately, touch still
+  // waits (or the enclosing home `ListView` would stop scrolling), and a click
+  // with a little hand jitter is still a click.
+  group('drag start', () {
+    late String? swapped;
+    late String? tapped;
+
+    Future<void> pumpTwoTiles(WidgetTester tester) async {
+      swapped = null;
+      tapped = null;
+      final items = [
+        for (final (index, col) in const [0, 2].indexed)
+          DashboardViewItem(
+            row: _row('stat-$index', index, 'third', 1, col),
+            spec: StatWidgetSpec(
+              title: 'stat-$index',
+              filter: const TransactionFilter(),
+              aggregation: StatAggregation.count,
+              width: DashboardWidth.third,
+            ),
+          ),
+      ];
+      await tester.pumpWidget(
+        Provider<AppRepositories>.value(
+          value: repos,
+          child: MaterialApp(
+            locale: const Locale('en'),
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            home: Scaffold(
+              body: Align(
+                alignment: Alignment.topCenter,
+                child: SizedBox(
+                  width: 416,
+                  child: DashboardView(
+                    items: items,
+                    editing: true,
+                    onTapItem: (item) => tapped = item.row.id,
+                    onSwap: (draggedId, targetId) => swapped = targetId,
+                    onPlaceInCell: (_, _, _, _) {},
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+    }
+
+    Future<void> disposeStreams(WidgetTester tester) async {
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump(const Duration(milliseconds: 1));
+    }
+
+    testWidgets('a mouse drags a tile without holding it down first', (
+      tester,
+    ) async {
+      await pumpTwoTiles(tester);
+
+      final gesture = await tester.startGesture(
+        tester.getCenter(find.text('stat-0')),
+        kind: PointerDeviceKind.mouse,
+      );
+      // Deliberately no `pump(kLongPressTimeout)`: the drag has to be live off
+      // the movement alone, which is the whole point of the change.
+      await gesture.moveTo(tester.getCenter(find.text('stat-1')));
+      await tester.pump();
+      await gesture.up();
+      await tester.pumpAndSettle();
+
+      expect(swapped, 'stat-1');
+
+      await disposeStreams(tester);
+    });
+
+    testWidgets('touch still waits for the long press before dragging', (
+      tester,
+    ) async {
+      await pumpTwoTiles(tester);
+
+      final gesture = await tester.startGesture(
+        tester.getCenter(find.text('stat-0')),
+        kind: PointerDeviceKind.touch,
+      );
+      await gesture.moveTo(tester.getCenter(find.text('stat-1')));
+      await tester.pump();
+      await gesture.up();
+      await tester.pumpAndSettle();
+
+      // A finger that moves straight away is scrolling the home list, not
+      // rearranging the dashboard.
+      expect(swapped, isNull);
+
+      await disposeStreams(tester);
+    });
+
+    testWidgets('a click carrying a few pixels of jitter still selects', (
+      tester,
+    ) async {
+      await pumpTwoTiles(tester);
+
+      final gesture = await tester.startGesture(
+        tester.getCenter(find.text('stat-0')),
+        kind: PointerDeviceKind.mouse,
+      );
+      await gesture.moveBy(const Offset(2, 1));
+      await gesture.up();
+      await tester.pumpAndSettle();
+
+      expect(tapped, 'stat-0');
+      expect(swapped, isNull);
+
+      await disposeStreams(tester);
+    });
+  });
+
+  // Two thirds side by side on the last row can neither slide sideways nor go
+  // up, so without a row underneath neither can be moved out of the way and
+  // neither can grow. Edit mode therefore always keeps one spare row below the
+  // board, and a tile dropped into it lands on the row past the last one.
+  group('spare row', () {
+    ({int row, int col, DashboardWidth width})? placed;
+    ({int row, int col, int maxUnits})? added;
+
+    Future<void> pumpBoard(WidgetTester tester, {required bool editing}) async {
+      placed = null;
+      added = null;
+      final items = [
+        for (final (index, col) in const [0, 2].indexed)
+          DashboardViewItem(
+            row: _row('stat-$index', index, 'third', 0, col),
+            spec: StatWidgetSpec(
+              title: 'stat-$index',
+              filter: const TransactionFilter(),
+              aggregation: StatAggregation.count,
+              width: DashboardWidth.third,
+            ),
+          ),
+      ];
+      await tester.pumpWidget(
+        Provider<AppRepositories>.value(
+          value: repos,
+          child: MaterialApp(
+            locale: const Locale('en'),
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            home: Scaffold(
+              body: Align(
+                alignment: Alignment.topCenter,
+                child: SizedBox(
+                  width: 416,
+                  child: DashboardView(
+                    items: items,
+                    editing: editing,
+                    onPlaceInCell: (_, row, col, width) =>
+                        placed = (row: row, col: col, width: width),
+                    onAddWidget: (row, col, maxUnits) =>
+                        added = (row: row, col: col, maxUnits: maxUnits),
+                    onSwap: (_, _) {},
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+    }
+
+    Future<void> disposeStreams(WidgetTester tester) async {
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump(const Duration(milliseconds: 1));
+    }
+
+    testWidgets('is there while editing and gone in view mode', (tester) async {
+      await pumpBoard(tester, editing: true);
+      final editingHeight = tester.getSize(find.byType(DashboardView)).height;
+      expect(tester.takeException(), isNull);
+      await disposeStreams(tester);
+
+      await pumpBoard(tester, editing: false);
+      final viewHeight = tester.getSize(find.byType(DashboardView)).height;
+      expect(tester.takeException(), isNull);
+
+      // Exactly one spare row taller, gap included.
+      expect(editingHeight - viewHeight, 88.0 + 4.0);
+
+      await disposeStreams(tester);
+    });
+
+    testWidgets('accepts a tile dropped past the last row', (tester) async {
+      await pumpBoard(tester, editing: true);
+
+      // The spare row's own band: below the single real row of tiles.
+      final board = tester.getRect(find.byType(DashboardView));
+      final target = Offset(board.left + 40, board.bottom - 40);
+      final gesture = await tester.startGesture(
+        tester.getCenter(find.text('stat-1')),
+        kind: PointerDeviceKind.mouse,
+      );
+      await gesture.moveTo(target);
+      await tester.pump();
+      await gesture.up();
+      await tester.pumpAndSettle();
+
+      expect(placed, isNotNull);
+      expect(placed!.row, 1, reason: 'the row past the last real one');
+      expect(placed!.col, 0);
+
+      await disposeStreams(tester);
+    });
+
+    testWidgets('its + adds a widget on the row past the last', (tester) async {
+      await pumpBoard(tester, editing: true);
+
+      final board = tester.getRect(find.byType(DashboardView));
+      await tester.tapAt(Offset(board.center.dx, board.bottom - 40));
+      await tester.pumpAndSettle();
+
+      expect(added, isNotNull);
+      expect(added!.row, 1);
+      expect(added!.col, 0);
+      expect(added!.maxUnits, dashboardGridUnits);
+
+      await disposeStreams(tester);
+    });
   });
 }
 

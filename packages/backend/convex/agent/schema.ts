@@ -3,13 +3,14 @@
 // Adapter from the shared tool definitions to Google GenAI's
 // `FunctionDeclaration` shape.
 //
-// `'use node'` because `Type` is a runtime value from `@google/genai`. Both
-// callers (`live/createToken.ts` and `agent/runner.ts`) are Node actions, so
-// the import-chain rule in CLAUDE.md is satisfied.
+// `'use node'` because `Type` is a runtime value from `@google/genai`. Its only
+// caller, `agent/runner.ts`, is a Node action, so the import-chain rule in
+// CLAUDE.md is satisfied.
 //
-// Extracted from `live/createToken.ts` so the voice and text channels convert
-// the same way — a schema quirk fixed for one channel should not need fixing
-// twice.
+// The voice channel converts the same shared definitions without the SDK
+// (`live/createToken.ts` writes Google's REST JSON by hand) so that minting a
+// token never pulls a Node cold start. Same wire bytes, two encoders: if a
+// schema quirk shows up in one, check the other.
 
 import type { FunctionDeclaration, Schema } from '@google/genai'
 import { Type } from '@google/genai'

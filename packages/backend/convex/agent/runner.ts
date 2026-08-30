@@ -15,6 +15,7 @@
 import type {
     Content,
     FunctionCall,
+    FunctionDeclaration,
     GenerateContentResponse,
     Part,
 } from '@google/genai'
@@ -24,10 +25,11 @@ import { v } from 'convex/values'
 import { internal } from '../_generated/api'
 import type { ActionCtx } from '../_generated/server'
 import { internalAction } from '../_generated/server'
+import type { FlagKey } from '../featureFlags/utils'
 import { writeKeyFor } from './idempotency'
 import { buildTextSystemInstruction } from './prompt'
 import { toFunctionDeclarations } from './schema'
-import { AGENT_TOOL_NAMES } from './toolset'
+import { AGENT_TOOL_NAMES, flagForTool } from './toolset'
 
 // Overridable so a model can be rolled forward without a code change, which
 // matters when a preview model is retired at Google's pace rather than ours.
@@ -43,9 +45,19 @@ const MAX_TOOL_ROUNDS = 8
 // emit several calls per round.
 const MAX_TOOL_CALLS = 24
 
-const TOOL_DECLARATIONS = toFunctionDeclarations(
-    AGENT_TOOL_NAMES.map((name) => TOOL_MAP[name]),
-)
+// Declared per turn rather than once at module load: a flag-gated tool is only
+// offered to users the rollout has reached. Same gate the voice channel applies
+// when it mints a token (`live/createToken.ts`), and `agent/tools.ts` re-checks
+// it on execution rather than trusting this list.
+const declarationsFor = (
+    flags: Partial<Record<FlagKey, boolean>>,
+): FunctionDeclaration[] =>
+    toFunctionDeclarations(
+        AGENT_TOOL_NAMES.filter((name) => {
+            const flag = flagForTool(name)
+            return flag === undefined || flags[flag] === true
+        }).map((name) => TOOL_MAP[name]),
+    )
 
 export type AgentMessage = {
     role: 'user' | 'model'
@@ -104,9 +116,10 @@ export const runAgent = async (
         messages: AgentMessage[]
         nowMs: number
         utcOffsetMinutes: number
+        /** Fallback only: the account's own language wins when it has one. */
         preferredLanguage: 'es' | 'en'
         // Identifies this turn's input. Supplying it makes the turn's writes
-        // idempotent under replay (R-019); omitting it keeps random ids, which
+        // idempotent under replay (R-039); omitting it keeps random ids, which
         // is right for callers that are never retried. See
         // `agent/idempotency.ts`.
         turnKey?: string
@@ -124,13 +137,29 @@ export const runAgent = async (
         parts: [{ text: message.text }],
     }))
 
+    // One read for everything about the user the model needs up front: the
+    // memories it is expected to apply, the currency it should assume, and
+    // which gated tools this account may call.
+    const turn = await ctx.runQuery(internal.agent.internal.turnContext, {
+        userId: args.userId,
+    })
+
+    // The account's own language wins over the caller's guess: WhatsApp has to
+    // infer one from the sender's country code (`whatsapp/linking.ts`), which
+    // is wrong for anyone living outside the country that issued their number.
+    // A language the user actually picked in the app is a fact, not a guess.
+    const language = turn.language ?? args.preferredLanguage
+
     const config = {
         systemInstruction: buildTextSystemInstruction({
             nowMs: args.nowMs,
             utcOffsetMinutes: args.utcOffsetMinutes,
-            preferredLanguage: args.preferredLanguage,
+            preferredLanguage: language,
+            defaultCurrency: turn.defaultCurrency,
+            memories: turn.memories,
+            exchangeRatesEnabled: turn.flags.exchangeRates,
         }),
-        tools: [{ functionDeclarations: TOOL_DECLARATIONS }],
+        tools: [{ functionDeclarations: declarationsFor(turn.flags) }],
         // Gemini 3 defaults to HIGH. "Anotá $5.000 de café" does not need deep
         // reasoning, and on WhatsApp the user is staring at two grey ticks
         // while it happens — latency is part of whether this feels like a bot
@@ -163,10 +192,7 @@ export const runAgent = async (
                     `agent turn for ${args.userId} hit a transient model error: ${String(error)}`,
                 )
                 return {
-                    text:
-                        lastText.length > 0
-                            ? lastText
-                            : BUSY_REPLY[args.preferredLanguage],
+                    text: lastText.length > 0 ? lastText : BUSY_REPLY[language],
                     toolCalls,
                     rounds: round,
                 }
@@ -193,10 +219,7 @@ export const runAgent = async (
         )
         if (callParts.length === 0) {
             return {
-                text:
-                    text.length > 0
-                        ? text
-                        : FALLBACK_REPLY[args.preferredLanguage],
+                text: text.length > 0 ? text : FALLBACK_REPLY[language],
                 toolCalls,
                 rounds: round + 1,
             }
@@ -278,10 +301,7 @@ export const runAgent = async (
         `agent turn for ${args.userId} hit the ${MAX_TOOL_ROUNDS}-round limit`,
     )
     return {
-        text:
-            lastText.length > 0
-                ? lastText
-                : FALLBACK_REPLY[args.preferredLanguage],
+        text: lastText.length > 0 ? lastText : FALLBACK_REPLY[language],
         toolCalls,
         rounds: MAX_TOOL_ROUNDS,
     }

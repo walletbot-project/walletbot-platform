@@ -4,11 +4,15 @@ import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
+import 'package:flutter/services.dart';
 import 'package:app/app_config/app_config_controller.dart';
+import 'package:app/app_config/client_info.dart';
+import 'package:app/components/voice/report_response_sheet.dart';
 import 'package:app/l10n/l10n.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:provider/provider.dart';
 
+import '../voice/agent_generated.dart';
 import '../voice/mic_capture.dart';
 import '../voice/voice_event.dart';
 import '../voice/voice_expense_command.dart';
@@ -33,7 +37,7 @@ class VoiceScreen extends StatefulWidget {
   State<VoiceScreen> createState() => _VoiceScreenState();
 }
 
-class _VoiceScreenState extends State<VoiceScreen> {
+class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
   static const _liveEdgeTolerance = 1.0;
 
   final MicCapture _mic = MicCapture.forPlatform();
@@ -52,13 +56,14 @@ class _VoiceScreenState extends State<VoiceScreen> {
   _AgentBubbleItem? _pendingAgent;
   _SystemItem? _connectionNotice;
 
-  String? _pendingTextSend;
+  final List<String> _pendingTexts = [];
   bool _isStarting = false;
   bool _isConnected = false;
   bool _isReconnecting = false;
   bool _micActive = false;
   bool _userMicOn = false;
   bool _isBrowsingHistory = false;
+  bool _conversationRestored = false;
   double _level = 0;
 
   bool get _isTextComposing => _textController.text.trim().isNotEmpty;
@@ -68,6 +73,7 @@ class _VoiceScreenState extends State<VoiceScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _textController.addListener(_onTextChanged);
     final active = widget.commandFactory.activeCommand;
     if (active != null && active.isActive) {
@@ -76,17 +82,155 @@ class _VoiceScreenState extends State<VoiceScreen> {
       _isConnected = active.isConnected;
       _isReconnecting = !active.isConnected;
       active.recordClientEvent('screen_attached');
+      // Don't sit out a pending backoff delay while the user is looking at
+      // the screen — reconnect immediately.
+      if (!active.isConnected) unawaited(active.ensureConnected());
+    } else {
+      // No session yet: start minting the live token now so it's already
+      // resolved by the time the user taps the mic or sends a message —
+      // the mint round trip is roughly half of a cold connect.
+      widget.commandFactory.prefetchToken();
     }
   }
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
+    // Restored here rather than initState because rebuilding items may need
+    // localized strings. `events` is live-only and no async gap exists
+    // between the initState subscription and this snapshot, so the history
+    // batch and the live stream can neither overlap nor miss events.
+    if (!_conversationRestored) {
+      _conversationRestored = true;
+      final active = _command;
+      if (active != null) {
+        _restoreConversation(active.history);
+      } else {
+        unawaited(_rehydrateFromLog());
+      }
+    }
     if (_isReconnecting) _showConnectionNotice();
   }
 
   @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state != AppLifecycleState.resumed) return;
+    final command = _command;
+    // The OS may have killed the socket and suspended the reconnect timer
+    // while backgrounded — reconnect immediately on return.
+    if (command != null && command.isActive && !command.isConnected) {
+      unawaited(command.ensureConnected());
+    }
+  }
+
+  /// Rebuilds the visible conversation from already-emitted session events in
+  /// one pass — no per-event setState, no per-event scroll animation.
+  void _restoreConversation(List<VoiceEvent> events) {
+    for (final event in events) {
+      _applyConversationEvent(event, replay: true);
+    }
+    if (_items.isNotEmpty) _jumpToBottomAfterBuild();
+  }
+
+  /// When no session is live, restores the conversation of the session the
+  /// next start would resume, from the durable local log.
+  Future<void> _rehydrateFromLog() async {
+    final List<VoiceEvent> events;
+    try {
+      events = await widget.commandFactory.restorableHistory();
+    } catch (error) {
+      debugPrint('[voice] failed to rehydrate session log: $error');
+      return;
+    }
+    if (!mounted || events.isEmpty) return;
+    // A session may have started while the log was loading — don't clobber
+    // the live conversation.
+    if (_command != null || _items.isNotEmpty) return;
+    setState(() {
+      for (final event in events) {
+        _applyConversationEvent(event, replay: true);
+      }
+      // Unlike a live re-attach, nothing will stream in to complete a
+      // half-open bubble — close them out.
+      _finalisePending();
+    });
+    _jumpToBottomAfterBuild();
+  }
+
+  /// Report one agent turn.
+  ///
+  /// The user turn immediately before it travels along: a reply reads very
+  /// differently next to what prompted it, and for a report filed from a
+  /// local-only account (whose history never leaves the device) it is the only
+  /// context a moderator will ever see.
+  Future<void> _reportAgentBubble(_AgentBubbleItem item) async {
+    final index = _items.indexOf(item);
+    final preceding = _items
+        .take(index < 0 ? _items.length : index)
+        .whereType<_UserBubbleItem>()
+        .lastOrNull;
+    final reported = await _openReportSheet(
+      reportedText: item.text,
+      precedingUserText: preceding?.text,
+      occurredAt: item.at,
+    );
+    if (!mounted || !reported) return;
+    setState(() => item.reported = true);
+  }
+
+  /// The fallback entry point, from the app bar: report the conversation rather
+  /// than one turn, for a reply that was audio-only or has scrolled out of
+  /// reach.
+  Future<void> _reportSession() async {
+    final l10n = context.l10n;
+    if (_items.whereType<_AgentBubbleItem>().isEmpty) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(l10n.reportResponseNoResponseYet)));
+      return;
+    }
+    await _openReportSheet();
+  }
+
+  /// Resolves the session pointers and opens the sheet. The providers are read
+  /// as nullable on purpose: this screen is also built in tests without the
+  /// app-level providers, and a missing one must not crash the chat.
+  Future<bool> _openReportSheet({
+    String? reportedText,
+    String? precedingUserText,
+    DateTime? occurredAt,
+  }) async {
+    final clientInfo = context.read<ClientInfo?>();
+    if (clientInfo == null) return false;
+    final locale = context.read<AppConfigController?>()?.locale ?? 'en';
+    final sessionId =
+        _command?.sessionId ??
+        await widget.commandFactory.restorableSessionId();
+    if (!mounted) return false;
+    return showReportResponseSheet(
+      context,
+      clientInfo: clientInfo,
+      locale: locale,
+      reportedText: reportedText,
+      precedingUserText: precedingUserText,
+      sessionId: sessionId,
+      model: kAgentModel,
+      occurredAt: occurredAt,
+    );
+  }
+
+  void _jumpToBottomAfterBuild() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _isBrowsingHistory || !_scrollController.hasClients) {
+        return;
+      }
+      _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
+    });
+  }
+
+  @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _command?.recordClientEvent('screen_detached', {
       'micMuted': true,
       'sessionKeptActive': identical(
@@ -133,7 +277,6 @@ class _VoiceScreenState extends State<VoiceScreen> {
   void _handleVoiceTap() {
     if (_isStarting || _isTextComposing) return;
     if (!_isConnected) {
-      setState(_resetChatLog);
       unawaited(_startSession(mode: _SessionMode.audio));
       return;
     }
@@ -157,7 +300,6 @@ class _VoiceScreenState extends State<VoiceScreen> {
   void _handleVoiceLongPressStart() {
     if (_isStarting || _isTextComposing) return;
     if (!_isConnected) {
-      setState(_resetChatLog);
       unawaited(_startSession(mode: _SessionMode.audio));
       return;
     }
@@ -169,15 +311,6 @@ class _VoiceScreenState extends State<VoiceScreen> {
       _userMicOn = true;
     });
     _recordMuteEvent('long_press_start');
-  }
-
-  void _resetChatLog() {
-    _items.clear();
-    _toolsById.clear();
-    _pendingUser = null;
-    _pendingAgent = null;
-    _connectionNotice = null;
-    _isBrowsingHistory = false;
   }
 
   void _handleVoiceLongPressEnd() {
@@ -203,16 +336,12 @@ class _VoiceScreenState extends State<VoiceScreen> {
     final wasConnected = _isConnected;
 
     setState(() {
-      if (startingFresh) {
-        _resetChatLog();
-      } else {
-        _finalisePending();
-      }
+      _finalisePending();
       _items.add(
         _UserBubbleItem(at: DateTime.now(), text: text, isFinal: true),
       );
       if (!wasConnected) {
-        _pendingTextSend = text;
+        _pendingTexts.add(text);
       }
     });
 
@@ -229,11 +358,15 @@ class _VoiceScreenState extends State<VoiceScreen> {
     _scrollToBottom(force: true);
   }
 
-  void _flushPendingText() {
-    final pending = _pendingTextSend;
-    if (pending == null) return;
-    _pendingTextSend = null;
-    unawaited(_command?.sendText(pending));
+  void _flushPendingTexts() {
+    if (_pendingTexts.isEmpty) return;
+    final pending = List<String>.of(_pendingTexts);
+    _pendingTexts.clear();
+    // Same semantics as a live typed send: expect a silent text-only reply.
+    _command?.setAudioPlaybackEnabled(false);
+    for (final text in pending) {
+      unawaited(_command?.sendText(text));
+    }
   }
 
   // -- Session lifecycle ----------------------------------------------------
@@ -263,8 +396,27 @@ class _VoiceScreenState extends State<VoiceScreen> {
       await _command?.start(respondWithAudio: respondWithAudio);
       _command?.recordClientEvent('screen_attached', {'startMode': mode.name});
     } catch (error) {
-      _addSystemSetState(l10n.voiceStartFailed(error), kind: _SystemKind.error);
-      await _stop();
+      // Unexpected startup failure (connect errors retry inside the command
+      // and never surface here). Release the command without ending the
+      // logged session: the conversation stays restorable/resumable and any
+      // queued text is kept for the next attempt. Raw errors never reach the
+      // chat — details go to the debug console and the session log.
+      debugPrint('[voice] start failed: $error');
+      final failedSubscription = _commandEventsSubscription;
+      final failedCommand = _command;
+      _commandEventsSubscription = null;
+      _command = null;
+      if (mounted) {
+        setState(() {
+          _isStarting = false;
+          _isReconnecting = false;
+          _clearConnectionNotice();
+          _addSystem(l10n.voiceStartFailed, kind: _SystemKind.error);
+        });
+        _scrollToBottom();
+      }
+      await failedSubscription?.cancel();
+      await failedCommand?.dispose();
       return;
     }
 
@@ -376,14 +528,35 @@ class _VoiceScreenState extends State<VoiceScreen> {
     });
   }
 
+  /// The End button's action: stops any live session, ends the logged
+  /// session so it neither rehydrates nor resumes on the next open, and
+  /// clears the visible conversation. This is the one deliberate wipe —
+  /// mere disconnection never clears the chat.
+  Future<void> _endConversation() async {
+    await _stop();
+    // Also covers the no-live-command case (rehydrated transcript) and a
+    // stop() that failed midway: a no-op when stop() already ended it.
+    await widget.commandFactory.discardRestorableSession();
+    if (!mounted) return;
+    setState(() {
+      _items.clear();
+      _toolsById.clear();
+      _pendingUser = null;
+      _pendingAgent = null;
+      _connectionNotice = null;
+      _isBrowsingHistory = false;
+    });
+  }
+
   Future<void> _stop() async {
-    final l10n = context.l10n;
     await _stopMicCapture();
 
     try {
       await _command?.stop();
     } catch (error) {
-      _addSystemSetState(l10n.voiceStopFailed(error), kind: _SystemKind.error);
+      // Never surface raw errors in the chat. _endConversation's discard
+      // still ends the logged session even when stop() failed midway.
+      debugPrint('[voice] stop failed: $error');
     } finally {
       await _commandEventsSubscription?.cancel();
       _commandEventsSubscription = null;
@@ -396,7 +569,7 @@ class _VoiceScreenState extends State<VoiceScreen> {
       _isConnected = false;
       _isStarting = false;
       _isReconnecting = false;
-      _pendingTextSend = null;
+      _pendingTexts.clear();
       _clearConnectionNotice();
       _finalisePending();
     });
@@ -442,64 +615,112 @@ class _VoiceScreenState extends State<VoiceScreen> {
           _isReconnecting = false;
           conversationChanged = _connectionNotice != null;
           _clearConnectionNotice();
-          _flushPendingText();
+          _flushPendingTexts();
         case VoiceDisconnectedEvent():
           conversationChanged = true;
           _isConnected = false;
           _isReconnecting = _command?.isActive ?? false;
-          _pendingTextSend = null;
+          // Queued text is never dropped here: it flushes on the next
+          // VoiceConnectedEvent, and even across a session teardown the next
+          // start resumes the same logged conversation.
           _finalisePending();
           if (_isReconnecting) {
             _showConnectionNotice();
           } else {
             _clearConnectionNotice();
           }
-        case VoiceErrorEvent(:final message, :final isTransient):
-          conversationChanged = true;
-          _pendingTextSend = null;
+        case VoiceErrorEvent(:final message, :final isTransient, :final code):
+          // Raw error text never reaches the chat; details are persisted in
+          // the session log. Most errors leave the session running (and
+          // reconnecting) — the End button is the explicit way out. Only a
+          // coded error is terminal: the command has already stopped itself,
+          // so this branch owns the last word the user sees.
+          debugPrint('[voice] error (transient: $isTransient): $message');
           if (isTransient) {
+            conversationChanged = true;
             _isReconnecting = true;
             _showConnectionNotice();
-          } else {
+          } else if (code != null) {
+            // Replace the "reconnecting" notice rather than leaving it up
+            // forever next to a session that has already ended.
+            conversationChanged = true;
+            _isReconnecting = false;
+            _clearConnectionNotice();
             _addSystem(
-              context.l10n.voiceRuntimeError(message),
+              code == 'local_accounts_disabled'
+                  ? context.l10n.voiceRequiresAccount
+                  : context.l10n.voiceUnavailable,
               kind: _SystemKind.error,
             );
           }
         case VoiceSystemEvent():
-          break;
         case VoiceClientActionEvent():
         case VoiceSessionResumptionEvent():
         case VoiceGoAwayEvent():
         case VoiceUsageMetadataEvent():
           break;
-        case VoiceUserTranscriptDelta(:final text):
-          conversationChanged = true;
+        case VoiceUserTranscriptDelta():
           // A typed turn disables playback for its reply. Voice input starts a
           // new audio turn, so subsequent agent audio must be audible again.
           _command?.setAudioPlaybackEnabled(true);
-          _appendUser(text);
-        case VoiceAgentTranscriptDelta(:final text):
-          conversationChanged = true;
-          _appendAgent(text);
+          conversationChanged = _applyConversationEvent(event, replay: false);
+        case VoiceAgentTranscriptDelta():
         case VoiceAgentTurnComplete():
-          conversationChanged = true;
-          _finalisePendingAgent();
         case VoiceAgentInterruptedEvent():
-          conversationChanged = true;
-          _markAgentInterrupted();
-        case VoiceToolCallEvent(:final id, :final name, :final args):
-          conversationChanged = true;
-          _addToolCall(id: id, name: name, args: args);
-        case VoiceToolResultEvent(:final id, :final result):
-          conversationChanged = true;
-          _completeToolCall(id: id, result: result);
-        case VoiceToolCancelledEvent(:final ids):
-          conversationChanged = true;
-          _cancelToolCalls(ids);
+        case VoiceToolCallEvent():
+        case VoiceToolResultEvent():
+        case VoiceToolCancelledEvent():
+          conversationChanged = _applyConversationEvent(event, replay: false);
       }
     });
     if (conversationChanged) _scrollToBottom();
+  }
+
+  /// Applies one conversation-content event to the chat items. Shared by the
+  /// live stream and both restore paths (in-memory session history, durable
+  /// log). Replay skips side effects that only make sense live: unmatched
+  /// system notices, and typed-message bubbles that the send handler already
+  /// added. Returns whether the visible conversation changed.
+  bool _applyConversationEvent(VoiceEvent event, {required bool replay}) {
+    switch (event) {
+      case VoiceUserTranscriptDelta(:final text):
+        _appendUser(text, at: event.at);
+        return true;
+      case VoiceAgentTranscriptDelta(:final text):
+        _appendAgent(text, at: event.at);
+        return true;
+      case VoiceAgentTurnComplete():
+        _finalisePendingAgent();
+        return true;
+      case VoiceAgentInterruptedEvent():
+        _markAgentInterrupted(replay: replay);
+        return true;
+      case VoiceToolCallEvent(:final id, :final name, :final args):
+        _addToolCall(id: id, name: name, args: args, at: event.at);
+        return true;
+      case VoiceToolResultEvent(:final id, :final result):
+        _completeToolCall(id: id, result: result, at: event.at, replay: replay);
+        return true;
+      case VoiceToolCancelledEvent(:final ids):
+        _cancelToolCalls(ids, replay: replay);
+        return true;
+      case VoiceClientActionEvent(:final action, :final details):
+        // Typed messages only reach a restored transcript through the audit
+        // trail; live sends add their bubble directly in _handleSendText.
+        if (replay && action == 'send_message') {
+          final text = details['text'];
+          if (text is String && text.isNotEmpty) {
+            _finalisePending();
+            _items.add(
+              _UserBubbleItem(at: event.at, text: text, isFinal: true),
+            );
+            return true;
+          }
+        }
+        return false;
+      default:
+        return false;
+    }
   }
 
   // -- Chat item management -------------------------------------------------
@@ -537,15 +758,11 @@ class _VoiceScreenState extends State<VoiceScreen> {
     _scrollToBottom();
   }
 
-  void _appendUser(String chunk) {
+  void _appendUser(String chunk, {required DateTime at}) {
     _finalisePendingAgent();
     final existing = _pendingUser;
     if (existing == null) {
-      final item = _UserBubbleItem(
-        at: DateTime.now(),
-        text: chunk,
-        isFinal: false,
-      );
+      final item = _UserBubbleItem(at: at, text: chunk, isFinal: false);
       _items.add(item);
       _pendingUser = item;
     } else {
@@ -553,12 +770,12 @@ class _VoiceScreenState extends State<VoiceScreen> {
     }
   }
 
-  void _appendAgent(String chunk) {
+  void _appendAgent(String chunk, {required DateTime at}) {
     _finalisePendingUser();
     final existing = _pendingAgent;
     if (existing == null) {
       final item = _AgentBubbleItem(
-        at: DateTime.now(),
+        at: at,
         text: chunk,
         isFinal: false,
         wasInterrupted: false,
@@ -589,13 +806,13 @@ class _VoiceScreenState extends State<VoiceScreen> {
     _pendingAgent = null;
   }
 
-  void _markAgentInterrupted() {
+  void _markAgentInterrupted({required bool replay}) {
     final p = _pendingAgent;
     if (p != null) {
       p.wasInterrupted = true;
       p.isFinal = true;
       _pendingAgent = null;
-    } else {
+    } else if (!replay) {
       _addSystem(context.l10n.agentInterrupted, kind: _SystemKind.info);
     }
   }
@@ -604,9 +821,10 @@ class _VoiceScreenState extends State<VoiceScreen> {
     required String id,
     required String name,
     required Map<String, dynamic> args,
+    required DateTime at,
   }) {
     _finalisePending();
-    final item = _ToolItem(at: DateTime.now(), id: id, name: name, args: args);
+    final item = _ToolItem(at: at, id: id, name: name, args: args);
     _items.add(item);
     if (id.isNotEmpty) {
       _toolsById[id] = item;
@@ -616,6 +834,8 @@ class _VoiceScreenState extends State<VoiceScreen> {
   void _completeToolCall({
     required String id,
     required Map<String, dynamic> result,
+    required DateTime at,
+    required bool replay,
   }) {
     final tool = id.isNotEmpty ? _toolsById[id] : null;
     if (tool != null) {
@@ -628,13 +848,13 @@ class _VoiceScreenState extends State<VoiceScreen> {
           result['id'] is String) {
         _items.add(
           _ActionResultItem(
-            at: DateTime.now(),
+            at: at,
             toolName: tool.name,
             entityId: result['id'] as String,
           ),
         );
       }
-    } else {
+    } else if (!replay) {
       _addSystem(
         context.l10n.toolResponseUnmatched(result),
         kind: _SystemKind.info,
@@ -642,17 +862,19 @@ class _VoiceScreenState extends State<VoiceScreen> {
     }
   }
 
-  void _cancelToolCalls(List<String> ids) {
+  void _cancelToolCalls(List<String> ids, {required bool replay}) {
     for (final id in ids) {
       final tool = _toolsById[id];
       if (tool != null) {
         tool.status = _ToolStatus.cancelled;
       }
     }
-    _addSystem(
-      context.l10n.toolCallsCancelled(ids.join(', ')),
-      kind: _SystemKind.info,
-    );
+    if (!replay) {
+      _addSystem(
+        context.l10n.toolCallsCancelled(ids.join(', ')),
+        kind: _SystemKind.info,
+      );
+    }
   }
 
   bool _handleUserScroll(UserScrollNotification notification) {
@@ -710,24 +932,54 @@ class _VoiceScreenState extends State<VoiceScreen> {
         ? _StatusLevel.connecting
         : _StatusLevel.disconnected;
 
+    // Defaults to shown, both when the controller is absent (tests build this
+    // screen bare) and when its config fetch never landed: this is the control
+    // Google Play expects to find, so a missing config must not remove it.
+    final showReportButton =
+        context.watch<AppConfigController?>()?.isFlagEnabled(
+          'agentReportButton',
+          orElse: true,
+        ) ??
+        true;
+
+    // Anything to end? A live/reconnecting session, or a restored
+    // transcript whose logged session is still resumable.
+    final showEndButton = _command != null || _items.isNotEmpty;
+
     return Scaffold(
       appBar: AppBar(
         title: Text(context.l10n.liveVoice),
         actions: [
-          Padding(
-            padding: EdgeInsets.only(right: _isConnected ? 4 : 12),
-            child: Center(
-              child: _isConnected
-                  ? IconButton(
-                      icon: Icon(
-                        Icons.call_end_rounded,
-                        color: theme.colorScheme.error,
-                      ),
-                      tooltip: context.l10n.endSession,
-                      onPressed: () => unawaited(_stop()),
-                    )
-                  : _StatusChip(level: status),
+          if (!_isConnected)
+            Padding(
+              padding: EdgeInsets.only(right: showEndButton ? 0 : 12),
+              child: Center(child: _StatusChip(level: status)),
             ),
+          if (showEndButton)
+            Padding(
+              padding: const EdgeInsets.only(right: 4),
+              child: Center(
+                child: IconButton(
+                  icon: Icon(
+                    Icons.call_end_rounded,
+                    color: theme.colorScheme.error,
+                  ),
+                  tooltip: context.l10n.endSession,
+                  onPressed: () => unawaited(_endConversation()),
+                ),
+              ),
+            ),
+          // The fallback reporting path, always present: a response the user
+          // only heard, or one that has scrolled away, has no bubble to
+          // long-press, and Google Play's policy has no exception for either.
+          PopupMenuButton<String>(
+            onSelected: (_) => unawaited(_reportSession()),
+            itemBuilder: (context) => [
+              PopupMenuItem(
+                value: 'report',
+                child: Text(context.l10n.reportResponseMenuItem),
+              ),
+            ],
           ),
         ],
       ),
@@ -748,8 +1000,15 @@ class _VoiceScreenState extends State<VoiceScreen> {
                       itemBuilder: (context, i) {
                         final item = _items[i];
                         return Padding(
+                          // The report icon's fade keeps state, so its element
+                          // has to track the item and not the row index.
+                          key: ObjectKey(item),
                           padding: const EdgeInsets.symmetric(vertical: 6),
-                          child: _ChatItemView(item: item),
+                          child: _ChatItemView(
+                            item: item,
+                            onReport: _reportAgentBubble,
+                            showReportButton: showReportButton,
+                          ),
                         );
                       },
                     ),
@@ -804,6 +1063,11 @@ class _AgentBubbleItem extends _ChatItem {
   String text;
   bool isFinal;
   bool wasInterrupted;
+
+  /// The user reported this response. Purely cosmetic — the report is already
+  /// on the server — but without it the bubble forgets the moment the snackbar
+  /// clears.
+  bool reported = false;
 }
 
 class _ToolItem extends _ChatItem {
@@ -849,15 +1113,25 @@ enum _StatusLevel { disconnected, connecting, connected }
 // =============================================================================
 
 class _ChatItemView extends StatelessWidget {
-  const _ChatItemView({required this.item});
+  const _ChatItemView({
+    required this.item,
+    required this.onReport,
+    required this.showReportButton,
+  });
   final _ChatItem item;
+  final ValueChanged<_AgentBubbleItem> onReport;
+  final bool showReportButton;
 
   @override
   Widget build(BuildContext context) {
     final item = this.item;
     return switch (item) {
       _UserBubbleItem() => _UserBubble(item: item),
-      _AgentBubbleItem() => _AgentBubble(item: item),
+      _AgentBubbleItem() => _AgentBubble(
+        item: item,
+        onReport: onReport,
+        showReportButton: showReportButton,
+      ),
       _ToolItem() => _ToolCard(item: item),
       _SystemItem() => _SystemLine(item: item),
       _ActionResultItem() => VoiceActionWidget(
@@ -928,8 +1202,61 @@ class _UserBubble extends StatelessWidget {
 }
 
 class _AgentBubble extends StatelessWidget {
-  const _AgentBubble({required this.item});
+  const _AgentBubble({
+    required this.item,
+    required this.onReport,
+    required this.showReportButton,
+  });
   final _AgentBubbleItem item;
+  final ValueChanged<_AgentBubbleItem> onReport;
+
+  /// Whether the `agentReportButton` flag put the visible flag icon on the
+  /// bubble. The long-press menu below stays either way, so turning the flag
+  /// off narrows how reporting is *found*, never whether it works.
+  final bool showReportButton;
+
+  /// Long-press menu on the bubble. Google Play requires a way to flag
+  /// generated content without leaving the app; long-press is where a message
+  /// action lives on both platforms, so this is the primary entry point and the
+  /// app bar's is only the fallback.
+  Future<void> _showActions(BuildContext context) async {
+    final l10n = context.l10n;
+    final text = item.text.trim();
+    if (text.isEmpty) return;
+    final messenger = ScaffoldMessenger.of(context);
+    await showModalBottomSheet<void>(
+      context: context,
+      useSafeArea: true,
+      builder: (sheetContext) => SafeArea(
+        top: false,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (!item.reported)
+              ListTile(
+                leading: const Icon(Icons.flag_outlined),
+                title: Text(l10n.reportResponseAction),
+                onTap: () {
+                  Navigator.of(sheetContext).pop();
+                  onReport(item);
+                },
+              ),
+            ListTile(
+              leading: const Icon(Icons.copy_rounded),
+              title: Text(l10n.reportResponseCopy),
+              onTap: () async {
+                Navigator.of(sheetContext).pop();
+                await Clipboard.setData(ClipboardData(text: text));
+                messenger.showSnackBar(
+                  SnackBar(content: Text(l10n.reportResponseCopied)),
+                );
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -945,69 +1272,104 @@ class _AgentBubble extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            CircleAvatar(
-              radius: 14,
-              backgroundColor: theme.colorScheme.secondaryContainer,
-              child: Icon(
-                Icons.auto_awesome_rounded,
-                size: 16,
-                color: theme.colorScheme.onSecondaryContainer,
-              ),
-            ),
-            const SizedBox(width: 8),
             Flexible(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _RoleLabel(label: 'WalletBot', time: item.at),
+                  _RoleLabel(label: 'Gaston', time: item.at),
                   const SizedBox(height: 4),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 14,
-                      vertical: 10,
-                    ),
-                    decoration: BoxDecoration(
-                      color: theme.colorScheme.surfaceContainerHighest,
-                      borderRadius: const BorderRadius.only(
-                        topLeft: Radius.circular(4),
-                        topRight: Radius.circular(18),
-                        bottomLeft: Radius.circular(18),
-                        bottomRight: Radius.circular(18),
+                  // Always drawn once the flag is on, never on hover and never
+                  // behind a gesture: Google Play's AI-Generated Content policy
+                  // wants flagging reachable without leaving the app, and a
+                  // long-press is not something a user can see. Centred on the
+                  // bubble rather than on the whole column, so it does not
+                  // drift upward once the header sits above it.
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      Flexible(
+                        child: GestureDetector(
+                          onLongPress: () => unawaited(_showActions(context)),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 14,
+                              vertical: 10,
+                            ),
+                            decoration: BoxDecoration(
+                              color: theme.colorScheme.surfaceContainerHighest,
+                              borderRadius: const BorderRadius.only(
+                                topLeft: Radius.circular(4),
+                                topRight: Radius.circular(18),
+                                bottomLeft: Radius.circular(18),
+                                bottomRight: Radius.circular(18),
+                              ),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                if (text.isNotEmpty)
+                                  Text(
+                                    text,
+                                    style: TextStyle(
+                                      color: theme.colorScheme.onSurface,
+                                      fontSize: 15,
+                                    ),
+                                  ),
+                                if (!item.isFinal) ...[
+                                  if (text.isNotEmpty)
+                                    const SizedBox(height: 6),
+                                  _SpeakingDots(
+                                    color: theme.colorScheme.onSurface
+                                        .withValues(alpha: 0.6),
+                                  ),
+                                ],
+                                if (item.wasInterrupted) ...[
+                                  const SizedBox(height: 6),
+                                  Text(
+                                    context.l10n.interrupted,
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      fontStyle: FontStyle.italic,
+                                      color: theme.colorScheme.onSurfaceVariant,
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ),
+                        ),
                       ),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                      if (showReportButton && text.isNotEmpty && !item.reported)
+                        _DelayedFadeIn(
+                          show: item.isFinal,
+                          child: _ReportBubbleButton(
+                            onPressed: () => onReport(item),
+                          ),
+                        ),
+                    ],
+                  ),
+                  if (item.reported) ...[
+                    const SizedBox(height: 4),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
                       children: [
-                        if (text.isNotEmpty)
-                          Text(
-                            text,
-                            style: TextStyle(
-                              color: theme.colorScheme.onSurface,
-                              fontSize: 15,
-                            ),
+                        Icon(
+                          Icons.flag_rounded,
+                          size: 12,
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          context.l10n.reportResponseBadge,
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: theme.colorScheme.onSurfaceVariant,
                           ),
-                        if (!item.isFinal) ...[
-                          if (text.isNotEmpty) const SizedBox(height: 6),
-                          _SpeakingDots(
-                            color: theme.colorScheme.onSurface.withValues(
-                              alpha: 0.6,
-                            ),
-                          ),
-                        ],
-                        if (item.wasInterrupted) ...[
-                          const SizedBox(height: 6),
-                          Text(
-                            context.l10n.interrupted,
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontStyle: FontStyle.italic,
-                              color: theme.colorScheme.onSurfaceVariant,
-                            ),
-                          ),
-                        ],
+                        ),
                       ],
                     ),
-                  ),
+                  ],
                 ],
               ),
             ),
@@ -1184,6 +1546,119 @@ class _SystemLine extends StatelessWidget {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+/// How long after a response finishes before its report control appears, and
+/// how long the fade itself takes. The delay keeps the icon from arriving
+/// mid-sentence, when there is not yet a finished answer to report.
+const _reportRevealDelay = Duration(milliseconds: 1000);
+const _reportFadeDuration = Duration(milliseconds: 300);
+
+/// Fades [child] in once [show] turns true, [_reportRevealDelay] later.
+///
+/// Occupies its space from the first build, so the bubble beside it never
+/// reflows when the icon arrives. While invisible it takes no taps and puts
+/// nothing in the semantics tree: an unseen button is worse than no button,
+/// both for a stray tap mid-response and for a screen reader announcing a
+/// control nobody can see.
+///
+/// Driven by a controller rather than a `Timer` so the animation settles under
+/// `pumpAndSettle` and leaves nothing pending when a test ends.
+class _DelayedFadeIn extends StatefulWidget {
+  const _DelayedFadeIn({required this.show, required this.child});
+  final bool show;
+  final Widget child;
+
+  @override
+  State<_DelayedFadeIn> createState() => _DelayedFadeInState();
+}
+
+class _DelayedFadeInState extends State<_DelayedFadeIn>
+    with SingleTickerProviderStateMixin {
+  // Not const: adding two Durations is not a constant expression.
+  static final _total = _reportRevealDelay + _reportFadeDuration;
+
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: _total,
+  );
+  late final Animation<double> _fade = CurvedAnimation(
+    parent: _controller,
+    curve: Interval(
+      _reportRevealDelay.inMilliseconds / _total.inMilliseconds,
+      1,
+      curve: Curves.easeOut,
+    ),
+  );
+
+  @override
+  void initState() {
+    super.initState();
+    // Already finished at the first build means restored history, which would
+    // otherwise fade every bubble in a second after the screen opens.
+    if (widget.show) _controller.value = 1;
+  }
+
+  @override
+  void didUpdateWidget(_DelayedFadeIn oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.show && !oldWidget.show) _controller.forward(from: 0);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => AnimatedBuilder(
+    animation: _fade,
+    child: widget.child,
+    builder: (context, child) {
+      final visible = _fade.value > 0;
+      return IgnorePointer(
+        ignoring: !visible,
+        child: ExcludeSemantics(
+          excluding: !visible,
+          child: Opacity(opacity: _fade.value, child: child),
+        ),
+      );
+    },
+  );
+}
+
+/// The flag icon beside an agent bubble: the discoverable way to report a
+/// response.
+///
+/// Sized to the 48x48 minimum tap target even though the glyph itself is small,
+/// so it is reachable and not merely visible. Sits outside the bubble so the
+/// tap target never overlaps the text a long-press is meant to select.
+class _ReportBubbleButton extends StatelessWidget {
+  const _ReportBubbleButton({required this.onPressed});
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final label = context.l10n.reportResponseAction;
+    return Semantics(
+      button: true,
+      label: label,
+      child: IconButton(
+        onPressed: onPressed,
+        tooltip: label,
+        iconSize: 16,
+        padding: EdgeInsets.zero,
+        visualDensity: VisualDensity.compact,
+        constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+        icon: Icon(
+          Icons.flag_outlined,
+          color: theme.colorScheme.onSurfaceVariant,
         ),
       ),
     );
