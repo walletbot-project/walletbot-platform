@@ -6,6 +6,7 @@ import {
     internalQuery,
     type MutationCtx,
 } from '../_generated/server'
+import { resolveFlagsForUser } from '../featureFlags/helpers'
 import type { ParsedInboundMessage } from './utils'
 
 const WINDOW_MS = 24 * 60 * 60 * 1000
@@ -430,6 +431,17 @@ const HISTORY_MAX_CHARS = 1500
 // Only messages already dealt with are included: the batch the current turn is
 // holding is `claimed`, and the caller appends those itself as the live user
 // turn. Including them here would duplicate them.
+// Whether this account is in the WhatsApp rollout. Read per turn rather than
+// cached on the conversation: a flag flipped in the admin UI has to take
+// effect on the next message, not on the next link.
+export const isEnabledForUser = internalQuery({
+    args: { userId: v.string() },
+    handler: async (ctx, args): Promise<boolean> => {
+        const flags = await resolveFlagsForUser(ctx, args.userId)
+        return flags.whatsapp
+    },
+})
+
 export const recentHistory = internalQuery({
     args: { conversationId: v.id('whatsappConversations') },
     handler: async (ctx, { conversationId }) => {

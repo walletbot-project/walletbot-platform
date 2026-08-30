@@ -5,6 +5,7 @@ export type FlagKey =
     | 'exchangeRates'
     | 'feedback'
     | 'recurringExpense'
+    | 'whatsapp'
 
 export const KNOWN_FLAGS: {
     key: FlagKey
@@ -45,6 +46,12 @@ export const KNOWN_FLAGS: {
         key: 'recurringExpense',
         description:
             'Show the "is this recurring?" toggle when logging a manual expense (feature not built yet).',
+        enabledByDefault: false,
+    },
+    {
+        key: 'whatsapp',
+        description:
+            'Let this account link a WhatsApp number and talk to Gasti there (native + web). Off hides the entry point, refuses new link codes, and answers a linked number with a short "not available" line instead of running the agent. Disconnecting an already-linked number always works, flag or no flag.',
         enabledByDefault: false,
     },
 ]

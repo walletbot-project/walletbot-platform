@@ -3,6 +3,11 @@ import 'dart:async';
 import 'package:app/convex/convex_client.dart';
 import 'package:flutter/foundation.dart';
 
+/// `KNOWN_FLAGS` key for the WhatsApp rollout
+/// (`packages/backend/convex/featureFlags/utils.ts`). Off by default, and the
+/// entry point stays hidden until an account is in the rollout.
+const String kWhatsappFlag = 'whatsapp';
+
 enum WhatsappLinkState {
   /// Never loaded, or reloading after a failure.
   loading,

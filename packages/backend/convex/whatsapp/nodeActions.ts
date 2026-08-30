@@ -9,6 +9,7 @@ import { turnKeyFor } from '../agent/idempotency'
 import { runAgent } from '../agent/runner'
 import { chunkBody, sendText, windowIsOpen } from './helpers'
 import {
+    disabledReplyText,
     extractLinkCodeCandidates,
     linkReplyText,
     replyLanguageFor,
@@ -245,6 +246,28 @@ export const runAgentTurn = internalAction({
                             body: link.reply,
                         })
                     }
+                    await ctx.runMutation(
+                        internal.whatsapp.internal.finishBatch,
+                        { messageIds, status: 'processed' },
+                    )
+                    continue
+                }
+
+                // Rollout gate, checked after identity and before the model.
+                // A number linked while the flag was on keeps its link — and
+                // its way to disconnect, in the app — but hears one fixed line
+                // instead of an agent it is no longer entitled to.
+                const enabled = await ctx.runQuery(
+                    internal.whatsapp.internal.isEnabledForUser,
+                    { userId: claim.userId },
+                )
+                if (!enabled) {
+                    await sendReply(ctx, {
+                        conversationId,
+                        phoneNumberId: claim.phoneNumberId,
+                        waId: claim.waId,
+                        body: disabledReplyText(replyLanguageFor(claim.waId)),
+                    })
                     await ctx.runMutation(
                         internal.whatsapp.internal.finishBatch,
                         { messageIds, status: 'processed' },

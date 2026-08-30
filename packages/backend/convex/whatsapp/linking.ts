@@ -220,6 +220,17 @@ export const utcOffsetMinutesFor = (waId: string): number => {
     return DEFAULT_UTC_OFFSET_MINUTES
 }
 
+// What a linked number hears while its account sits outside the WhatsApp
+// rollout (the `whatsapp` feature flag, off by default).
+//
+// Silence would be the cheaper option and the wrong one: the number is linked,
+// so the user has every reason to expect an answer, and an unanswered message
+// is indistinguishable from a broken bot. One line, no model, no tools.
+export const disabledReplyText = (language: ReplyLanguage): string =>
+    language === 'es'
+        ? 'Por ahora no estoy disponible por WhatsApp para tu cuenta. Seguí usando la app y te aviso cuando se active.'
+        : "I'm not available on WhatsApp for your account yet. Keep using the app and you'll hear from me when it turns on."
+
 // Copy for the only messages Wallet Bot sends to a number it cannot identify.
 //
 // One language, never both. At this point there is no account and therefore no

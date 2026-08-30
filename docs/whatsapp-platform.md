@@ -932,8 +932,9 @@ of their arguments, so the confirmation is at least built from real data.
 
 1. ~~Decide how a `wa_id` maps to a Wallet Bot `userId`~~ — **done
    (2026-08-17)**: a short-lived link code minted from an authenticated session
-   and sent by the user over WhatsApp, with the native UI in the account
-   switcher. See Part 12 § Identity. Web parity is still open.
+   and sent by the user over WhatsApp, with the UI in the native account
+   switcher and, since 2026-08-30, the web account menu — both behind the
+   `whatsapp` rollout flag. See Part 12 § Identity. Web parity is still open.
 2. ~~Replace the stub `generateReply` with the real agent~~ — **done
    (2026-08-17)**. `convex/agent/` holds a server-side executor for 32 of the 42
    tools, and `runAgent` drives the Gemini tool-calling loop. Writes go through
@@ -1114,8 +1115,9 @@ to copy a code between apps. Note it takes the **dialable** number
   unlinking stays live and could silently re-link the number.
 
 **Native UI (2026-08-17).** Reachable from the account switcher
-(`screens/account_switcher.dart`, in the current-account group beside
-Settings), which pushes `screens/whatsapp_link.dart`. State lives in
+(`screens/account_switcher.dart`, in the current-account group beside Settings,
+and only for accounts in the `whatsapp` rollout), which pushes
+`screens/whatsapp_link.dart`. State lives in
 `whatsapp/whatsapp_link_controller.dart`.
 
 Two things about it are worth knowing before changing it:
@@ -1138,9 +1140,39 @@ the pure-Dart client that replaced it (2026-08-27, R-034) is an ordinary class
 a test can implement, so the indirection went away and the calls are typed
 values rather than JSON strings.
 
-**Still missing:** the web UI — nothing in `apps/web` calls these functions, so
-linking is native-only for now. There is also no notification to the user when
-their account gets linked to a new number (R-044).
+**Web UI (2026-08-30).** `apps/web/src/pages/whatsapp.tsx` at `/whatsapp`,
+reached from the account menu on the home screen. Same backend calls, same
+states, same copy as native, and the same rule about caching: nothing is kept,
+because a cached code is a stale credential. Two differences are the platform's
+and not choices: the clipboard can be refused outside a secure context, and a
+popup blocker can eat the `wa.me` link, so both paths say so instead of failing
+quietly. The code stays selectable on screen either way.
+
+**Still missing:** there is no notification to the user when their account gets
+linked to a new number (R-044).
+
+### The rollout flag
+
+The whole feature sits behind `whatsapp` in `KNOWN_FLAGS`
+(`convex/featureFlags/utils.ts`), **off by default**. A number linked to an
+account is a standing grant of access to that account's money, so nobody gets
+it by landing in the wrong percentile of a default-on rollout.
+
+It is enforced in four places, and only one of them is a UI:
+
+| Where | Off means |
+| --- | --- |
+| Account switcher / account menu | The WhatsApp row is not rendered (native reads the flag from `/v1/account-config`, web from `getMyFlags`) |
+| `v1/whatsapp/queries:linkStatus` | `available: false`, so a client that gets there anyway shows "not available yet" — but `numbers` is still returned |
+| `v1/whatsapp/mutations:createLinkCode` | Throws. This is the authoritative gate: the client is never trusted about which rollout it is in |
+| `whatsapp/nodeActions.ts:runAgentTurn` | A linked number gets one fixed line (`disabledReplyText`) instead of the agent — no model call, no tools |
+
+`unlink` is deliberately **not** gated, and the `/whatsapp` route stays open on
+web. Taking a capability away must not take away the undo for it: someone whose
+flag is switched off while linked has to still be able to see the number on
+their account and disconnect it. On native that means re-enabling the flag or
+using the web page, since the switcher row is gone — the one gap in this, and a
+deliberate one.
 
 ### Testing without Meta
 

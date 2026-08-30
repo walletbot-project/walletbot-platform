@@ -1,5 +1,7 @@
 import 'dart:async';
+import 'dart:convert';
 
+import 'package:app/app_config/app_config_controller.dart';
 import 'package:app/auth/account.dart';
 import 'package:app/auth/auth_controller.dart';
 import 'package:app/l10n/app_localizations.dart';
@@ -8,7 +10,10 @@ import 'package:app/database.dart';
 import 'package:app/user_settings/default_currency_controller.dart';
 import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
 import 'package:provider/provider.dart';
 
 const _ana = UserAccount(id: 'a', type: AccountType.local, name: 'Ana');
@@ -84,26 +89,45 @@ class _FakeAuth extends AuthController {
 /// account, so switching unmounts everything below it while any route pushed
 /// on the root navigator stays up. [child] is what the gate renders when an
 /// account is active.
-Widget _gate(AuthController auth, Widget child) {
-  return ChangeNotifierProvider<AuthController>.value(
-    value: auth,
-    child: MaterialApp(
-      locale: const Locale('en'),
-      localizationsDelegates: AppLocalizations.localizationsDelegates,
-      supportedLocales: AppLocalizations.supportedLocales,
-      home: Consumer<AuthController>(
-        builder: (context, a, _) {
-          final active = a.activeAccount;
-          if (active == null) {
-            return a.accounts.isEmpty
-                ? const Scaffold(body: Text('login'))
-                : const AccountChooserScreen();
-          }
-          return KeyedSubtree(key: ObjectKey(active), child: child);
-        },
-      ),
+Widget _gate(AuthController auth, Widget child, {AppConfigController? config}) {
+  final app = MaterialApp(
+    locale: const Locale('en'),
+    localizationsDelegates: AppLocalizations.localizationsDelegates,
+    supportedLocales: AppLocalizations.supportedLocales,
+    home: Consumer<AuthController>(
+      builder: (context, a, _) {
+        final active = a.activeAccount;
+        if (active == null) {
+          return a.accounts.isEmpty
+              ? const Scaffold(body: Text('login'))
+              : const AccountChooserScreen();
+        }
+        return KeyedSubtree(key: ObjectKey(active), child: child);
+      },
     ),
   );
+  return ChangeNotifierProvider<AuthController>.value(
+    value: auth,
+    // Optional, because the switcher must also build before the first config
+    // call lands — the state a cold start is in.
+    child: config == null
+        ? app
+        : ChangeNotifierProvider<AppConfigController>.value(
+            value: config,
+            child: app,
+          ),
+  );
+}
+
+/// An [AppConfigController] whose account-config fetch returns [flags].
+Future<AppConfigController> _config(Map<String, bool> flags) async {
+  final controller = AppConfigController(
+    httpClient: MockClient(
+      (_) async => http.Response(jsonEncode({'flags': flags}), 200),
+    ),
+  );
+  await controller.loadAccount(_rita);
+  return controller;
 }
 
 class _Host extends StatefulWidget {
@@ -195,6 +219,16 @@ class _LegacyHostState extends State<_LegacyHost> {
 }
 
 void main() {
+  // `loadAccount` resolves the config URL through `AppConfig`, which reads the
+  // bundled .env. The value is irrelevant here — every request is mocked.
+  setUpAll(
+    () => dotenv.testLoad(
+      fileInput:
+          'CONVEX_URL=https://example.test\n'
+          'CONVEX_SITE_URL=https://example.test',
+    ),
+  );
+
   testWidgets('groups the current account above the other ones', (
     tester,
   ) async {
@@ -219,8 +253,10 @@ void main() {
   testWidgets('WhatsApp sits in the current-account group and opens', (
     tester,
   ) async {
+    final config = await _config({'whatsapp': true});
+    addTearDown(config.dispose);
     await tester.pumpWidget(
-      _gate(_FakeAuth([_ana, _bruno], 'a'), const _Host()),
+      _gate(_FakeAuth([_ana, _bruno], 'a'), const _Host(), config: config),
     );
     await tester.tap(find.text('open'));
     await tester.pumpAndSettle();
@@ -234,6 +270,35 @@ void main() {
     // rather than showing a button that would fail. No Convex client is wired
     // in this tree, and nothing here should be asking for one.
     expect(find.text('Not available for local accounts'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('the WhatsApp row is absent outside the rollout', (tester) async {
+    final config = await _config({'whatsapp': false});
+    addTearDown(config.dispose);
+    await tester.pumpWidget(
+      _gate(_FakeAuth([_ana, _bruno], 'a'), const _Host(), config: config),
+    );
+    await tester.tap(find.text('open'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('WhatsApp'), findsNothing);
+    // The rest of the group is untouched, so the flag hid a row rather than
+    // breaking the layout it sat in.
+    expect(find.text('Settings'), findsOneWidget);
+    expect(find.text('Delete this account'), findsOneWidget);
+  });
+
+  testWidgets('a config that never landed hides the row too', (tester) async {
+    // No AppConfigController at all: a cold start before the first fetch, and
+    // the state every other switcher test is in.
+    await tester.pumpWidget(
+      _gate(_FakeAuth([_ana, _bruno], 'a'), const _Host()),
+    );
+    await tester.tap(find.text('open'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('WhatsApp'), findsNothing);
     expect(tester.takeException(), isNull);
   });
 

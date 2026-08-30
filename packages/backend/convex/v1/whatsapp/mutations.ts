@@ -1,5 +1,6 @@
 import { v } from 'convex/values'
 import { mutation } from '../../_generated/server'
+import { resolveFlagsForUser } from '../../featureFlags/helpers'
 import { requireAuth } from '../../users/helpers'
 import {
     buildLinkDeepLink,
@@ -30,6 +31,14 @@ export const createLinkCode = mutation({
     args: {},
     handler: async (ctx) => {
         const userId = await requireAuth(ctx)
+        // The rollout gate, enforced where it matters: a code is the thing
+        // that grants a phone number access to this account, so an account
+        // outside the rollout must not be able to mint one even if a client
+        // asks anyway.
+        const flags = await resolveFlagsForUser(ctx, userId)
+        if (!flags.whatsapp) {
+            throw new Error('WhatsApp is not available for this account')
+        }
         const now = Date.now()
 
         const existing = await ctx.db
@@ -94,6 +103,11 @@ export const createLinkCode = mutation({
 })
 
 // Disconnects one linked number, or every one when `waId` is omitted.
+//
+// Deliberately NOT gated by the `whatsapp` flag. Turning a rollout off must
+// never leave someone with a number linked to their account and no way to
+// remove it; taking the capability away is not the same as taking away the
+// undo for it.
 //
 // Ownership is resolved from the session, never from the argument: a `waId` is
 // a public phone identifier, so accepting one as authorization would let any
