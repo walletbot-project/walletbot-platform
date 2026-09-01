@@ -16,6 +16,10 @@ import 'package:provider/provider.dart';
 
 enum TransactionFormType { income, expense, transfer }
 
+enum RecurrenceFrequency { daily, weekly, monthly, yearly, customDays }
+
+const _defaultRecurrenceDayInterval = 15;
+
 enum _TransferAmountField { source, destination }
 
 class TransactionFormScreen extends StatefulWidget {
@@ -50,7 +54,10 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
   final List<_FormTag> _tags = [];
   bool _isLoading = true;
   bool _isSaving = false;
-  bool _isRecurringExpense = false;
+  bool _isRecurring = false;
+  RecurrenceFrequency _recurrenceFrequency = RecurrenceFrequency.monthly;
+  int _recurrenceDayInterval = _defaultRecurrenceDayInterval;
+  DateTime? _recurrenceEndDate;
   bool _updatingTransferAmounts = false;
   bool _sourceAmountTouched = false;
   bool _destinationAmountTouched = false;
@@ -189,6 +196,21 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
     );
     if (picked == null || !mounted) return;
     setState(() => _selectedDate = picked);
+  }
+
+  Future<void> _pickRecurrenceEndDate() async {
+    await _commitInlineEditing();
+    if (!mounted) return;
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _recurrenceEndDate ?? _selectedDate,
+      firstDate: _selectedDate,
+      lastDate: DateTime(2100),
+      cancelText: context.l10n.cancel,
+      confirmText: context.l10n.accept,
+    );
+    if (picked == null || !mounted) return;
+    setState(() => _recurrenceEndDate = picked);
   }
 
   Future<void> _pickTime() async {
@@ -703,21 +725,47 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
                         ],
                       ),
                     ),
-                    if (_type == TransactionFormType.expense &&
+                    if (_type != TransactionFormType.transfer &&
                         context.watch<AppConfigController>().isFlagEnabled(
                           'recurringExpense',
                         )) ...[
                       const SizedBox(width: 16),
-                      _RecurringExpenseControl(
-                        value: _isRecurringExpense,
+                      _RecurringControl(
+                        label: _type == TransactionFormType.income
+                            ? context.l10n.recurringIncome
+                            : context.l10n.recurringExpense,
+                        value: _isRecurring,
                         onChanged: _isSaving
                             ? null
-                            : (value) =>
-                                  setState(() => _isRecurringExpense = value),
+                            : (value) => setState(() => _isRecurring = value),
                       ),
                     ],
                   ],
                 ),
+              if (_isRecurring &&
+                  _type != TransactionFormType.transfer &&
+                  context.watch<AppConfigController>().isFlagEnabled(
+                    'recurringExpense',
+                  )) ...[
+                const SizedBox(height: 20),
+                _RecurrencePanel(
+                  frequency: _recurrenceFrequency,
+                  dayInterval: _recurrenceDayInterval,
+                  endDate: _recurrenceEndDate,
+                  endDateLabel: _recurrenceEndDate == null
+                      ? context.l10n.recurrenceNoEndDate
+                      : _formatDate(context, _recurrenceEndDate!),
+                  enabled: !_isSaving,
+                  onFrequencyChanged: (value) =>
+                      setState(() => _recurrenceFrequency = value),
+                  onDayIntervalChanged: (value) =>
+                      setState(() => _recurrenceDayInterval = value),
+                  onPickEndDate: _pickRecurrenceEndDate,
+                  onClearEndDate: _recurrenceEndDate == null
+                      ? null
+                      : () => setState(() => _recurrenceEndDate = null),
+                ),
+              ],
               const SizedBox(height: 24),
               _ReadonlyField(
                 label: context.l10n.date,
@@ -884,7 +932,10 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
         type: type,
       );
       _tags.clear();
-      _isRecurringExpense = false;
+      _isRecurring = false;
+      _recurrenceFrequency = RecurrenceFrequency.monthly;
+      _recurrenceDayInterval = _defaultRecurrenceDayInterval;
+      _recurrenceEndDate = null;
       _sourceAmountTouched = false;
       _destinationAmountTouched = false;
       _transferAccountError = null;
@@ -1175,12 +1226,14 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
 
 const _mockCurrencyOptions = ['ARS', 'USD', 'EUR', 'BRL'];
 
-class _RecurringExpenseControl extends StatelessWidget {
-  const _RecurringExpenseControl({
+class _RecurringControl extends StatelessWidget {
+  const _RecurringControl({
+    required this.label,
     required this.value,
     required this.onChanged,
   });
 
+  final String label;
   final bool value;
   final ValueChanged<bool>? onChanged;
 
@@ -1193,7 +1246,7 @@ class _RecurringExpenseControl extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           Text(
-            context.l10n.recurringExpense,
+            label,
             textAlign: TextAlign.center,
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
               color: Theme.of(context).colorScheme.onSurface,
@@ -1208,6 +1261,174 @@ class _RecurringExpenseControl extends StatelessWidget {
               height: 35,
               child: Switch(value: value, onChanged: onChanged),
             ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+String _recurrenceFrequencyLabel(
+  BuildContext context,
+  RecurrenceFrequency frequency,
+) {
+  switch (frequency) {
+    case RecurrenceFrequency.daily:
+      return context.l10n.recurrenceDaily;
+    case RecurrenceFrequency.weekly:
+      return context.l10n.recurrenceWeekly;
+    case RecurrenceFrequency.monthly:
+      return context.l10n.recurrenceMonthly;
+    case RecurrenceFrequency.yearly:
+      return context.l10n.recurrenceYearly;
+    case RecurrenceFrequency.customDays:
+      return context.l10n.recurrenceCustomDays;
+  }
+}
+
+class _RecurrencePanel extends StatefulWidget {
+  const _RecurrencePanel({
+    required this.frequency,
+    required this.dayInterval,
+    required this.endDate,
+    required this.endDateLabel,
+    required this.enabled,
+    required this.onFrequencyChanged,
+    required this.onDayIntervalChanged,
+    required this.onPickEndDate,
+    required this.onClearEndDate,
+  });
+
+  final RecurrenceFrequency frequency;
+  final int dayInterval;
+  final DateTime? endDate;
+  final String endDateLabel;
+  final bool enabled;
+  final ValueChanged<RecurrenceFrequency> onFrequencyChanged;
+  final ValueChanged<int> onDayIntervalChanged;
+  final VoidCallback onPickEndDate;
+  final VoidCallback? onClearEndDate;
+
+  @override
+  State<_RecurrencePanel> createState() => _RecurrencePanelState();
+}
+
+class _RecurrencePanelState extends State<_RecurrencePanel> {
+  late final TextEditingController _dayIntervalController;
+
+  @override
+  void initState() {
+    super.initState();
+    _dayIntervalController = TextEditingController(
+      text: widget.dayInterval.toString(),
+    );
+  }
+
+  @override
+  void dispose() {
+    _dayIntervalController.dispose();
+    super.dispose();
+  }
+
+  void _handleDayIntervalChanged(String raw) {
+    final parsed = int.tryParse(raw);
+    if (parsed == null || parsed < 1) return;
+    widget.onDayIntervalChanged(parsed);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF3FBFA),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFF21C4B6)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _SectionLabel(context.l10n.frequency),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: RecurrenceFrequency.values
+                .map(
+                  (value) => ChoiceChip(
+                    label: Text(_recurrenceFrequencyLabel(context, value)),
+                    selected: widget.frequency == value,
+                    onSelected: widget.enabled
+                        ? (_) => widget.onFrequencyChanged(value)
+                        : null,
+                    selectedColor: const Color(0xFF21C4B6),
+                    labelStyle: TextStyle(
+                      color: widget.frequency == value
+                          ? Colors.white
+                          : Colors.black,
+                      fontWeight: FontWeight.w600,
+                    ),
+                    backgroundColor: Colors.white,
+                    shape: StadiumBorder(
+                      side: BorderSide(
+                        color: widget.frequency == value
+                            ? const Color(0xFF21C4B6)
+                            : const Color(0xFFD9D0D6),
+                      ),
+                    ),
+                    showCheckmark: false,
+                  ),
+                )
+                .toList(),
+          ),
+          if (widget.frequency == RecurrenceFrequency.customDays) ...[
+            const SizedBox(height: 16),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Text(
+                  context.l10n.recurrenceRepeatEvery,
+                  style: Theme.of(
+                    context,
+                  ).textTheme.titleMedium?.copyWith(color: Colors.black),
+                ),
+                const SizedBox(width: 12),
+                SizedBox(
+                  width: 72,
+                  child: TextField(
+                    controller: _dayIntervalController,
+                    enabled: widget.enabled,
+                    keyboardType: TextInputType.number,
+                    textAlign: TextAlign.center,
+                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                    decoration: const InputDecoration(
+                      border: OutlineInputBorder(),
+                      isDense: true,
+                      contentPadding: EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 12,
+                      ),
+                    ),
+                    onChanged: _handleDayIntervalChanged,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Text(
+                  context.l10n.recurrenceDaysUnit,
+                  style: Theme.of(
+                    context,
+                  ).textTheme.titleMedium?.copyWith(color: Colors.black),
+                ),
+              ],
+            ),
+          ],
+          const SizedBox(height: 16),
+          _ReadonlyField(
+            label: context.l10n.recurrenceEndDateOptional,
+            value: widget.endDateLabel,
+            icon: Icons.event_repeat_rounded,
+            onTap: widget.enabled ? widget.onPickEndDate : null,
+            onClear: widget.enabled ? widget.onClearEndDate : null,
           ),
         ],
       ),

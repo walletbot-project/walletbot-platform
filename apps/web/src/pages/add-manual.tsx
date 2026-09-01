@@ -43,6 +43,26 @@ import { TAG_COLOR_OPTIONS } from '@/lib/tag-colors'
 
 type MovementType = 'income' | 'expense' | 'transfer'
 
+type RecurrenceFrequency =
+    | 'daily'
+    | 'weekly'
+    | 'monthly'
+    | 'yearly'
+    | 'customDays'
+
+const DEFAULT_RECURRENCE_DAY_INTERVAL = 15
+
+const RECURRENCE_FREQUENCY_OPTIONS: {
+    value: RecurrenceFrequency
+    label: string
+}[] = [
+    { value: 'daily', label: 'Diario' },
+    { value: 'weekly', label: 'Semanal' },
+    { value: 'monthly', label: 'Mensual' },
+    { value: 'yearly', label: 'Anual' },
+    { value: 'customDays', label: 'Cada X días' },
+]
+
 type AccountOption = {
     id: string
     name: string
@@ -268,6 +288,13 @@ export function TransactionForm({
     // (`_isRecurringExpense` in apps/native/lib/screens/transaction_form.dart).
     const [isRecurringExpense, setIsRecurringExpense] = useState(false)
     const [isSaving, setIsSaving] = useState(false)
+    const [isRecurring, setIsRecurring] = useState(false)
+    const [recurrenceFrequency, setRecurrenceFrequency] =
+        useState<RecurrenceFrequency>('monthly')
+    const [recurrenceDayInterval, setRecurrenceDayInterval] = useState(
+        DEFAULT_RECURRENCE_DAY_INTERVAL,
+    )
+    const [recurrenceEndDate, setRecurrenceEndDate] = useState('')
 
     useEffect(() => {
         setAccountId((current) => {

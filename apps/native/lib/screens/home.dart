@@ -11,6 +11,7 @@ import 'package:app/data/data.dart';
 import 'package:app/database.dart';
 import 'package:app/l10n/l10n.dart';
 import 'package:app/screens/account_switcher.dart';
+import 'package:app/screens/future_movements.dart';
 import 'package:app/screens/transaction_form.dart';
 import 'package:app/shared/app_navigation.dart';
 import 'package:app/sync/sync_engine.dart';
@@ -132,6 +133,12 @@ class _HomeScreenState extends State<HomeScreen> {
     context.read<AppNavigation>().index = AppNavigation.activityTab;
   }
 
+  void _openFutureMovements() {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(builder: (_) => const FutureMovementsScreen()),
+    );
+  }
+
   bool _editing = false;
 
   Future<void> _openAddWidget() async {
@@ -212,6 +219,14 @@ class _HomeScreenState extends State<HomeScreen> {
                   label: context.l10n.sendFeedback,
                   icon: Icons.feedback_rounded,
                   onTap: _openFeedback,
+                ),
+              if (context.watch<AppConfigController>().isFlagEnabled(
+                'recurringExpense',
+              ))
+                _HomeActionCard(
+                  label: context.l10n.futureMovements,
+                  icon: Icons.event_repeat_rounded,
+                  onTap: _openFutureMovements,
                 ),
             ],
           ),

@@ -1048,6 +1048,49 @@ class AppLocalizationsEs extends AppLocalizations {
   String get recurringExpense => 'Gasto recurrente';
 
   @override
+  String get recurringIncome => 'Ingreso recurrente';
+
+  @override
+  String get frequency => 'Frecuencia';
+
+  @override
+  String get recurrenceDaily => 'Diario';
+
+  @override
+  String get recurrenceWeekly => 'Semanal';
+
+  @override
+  String get recurrenceMonthly => 'Mensual';
+
+  @override
+  String get recurrenceYearly => 'Anual';
+
+  @override
+  String get recurrenceEndDateOptional => 'Fecha de fin (opcional)';
+
+  @override
+  String get recurrenceNoEndDate => 'Sin fecha de fin';
+
+  @override
+  String get recurrenceCustomDays => 'Cada X días';
+
+  @override
+  String get recurrenceRepeatEvery => 'Repetir cada';
+
+  @override
+  String get recurrenceDaysUnit => 'días';
+
+  @override
+  String get futureMovements => 'Movimientos futuros';
+
+  @override
+  String get futureMovementsInfo =>
+      'Estos son tus movimientos recurrentes que todavía no ocurrieron. No aparecen en Actividad hasta que suceden.';
+
+  @override
+  String get noFutureMovements => 'No tenés movimientos futuros programados';
+
+  @override
   String get leaves => 'Sale';
 
   @override
