@@ -217,3 +217,99 @@ nativo** (ver `CLAUDE.md` § Client–server contract y `docs/schema/README.md`)
 - Frecuencia anual sobre el 29 de febrero.
 - Fecha de fin que cae justo en/entre ocurrencias.
 - Zona horaria y DST (no debe correr el día de calendario).
+
+---
+
+## 5. Implementación
+
+Bitácora de las decisiones tomadas al construir la feature, paso por paso.
+Cada sección corresponde a un commit.
+
+### 5.1. Paso 1 — el corte de ocurrencia
+
+**El problema.** Una regla recurrente materializa sus ocurrencias como
+transacciones comunes con fecha futura. Eso es deliberado (§2.5: "los
+movimientos que se crean son iguales a los de Actividad"), pero implica que
+*toda* lectura que describa "qué pasó" tiene que detenerse antes de ellas: la
+lista de Actividad, el saldo de una cuenta, el gasto de una categoría, el
+contador de un tag, cada tile del dashboard. Si una sola se olvida, un gasto
+programado para diciembre baja el saldo hoy.
+
+#### Dónde cae el corte: fin del día local, no el instante
+
+`date <= ahora` es la lectura literal, pero rompe algo que ya funcionaba: un
+gasto cargado hoy a las 10:00 con hora confirmada 20:00 desaparecería de
+Actividad y del saldo hasta las 20:00. El corte es entonces **el comienzo del
+día siguiente en hora local**: todo lo fechado hoy ya ocurrió, sin importar la
+hora.
+
+- TS: `pastCutoffMs()` en `packages/shared/src/occurrence.ts`.
+- Dart: `pastCutoffMs()` en `apps/native/lib/data/occurrence.dart`.
+
+#### El corte viaja como argumento, no se lee del reloj del servidor
+
+En el backend, `asOfMs` es un argumento **requerido** de toda query afectada.
+Nunca `Date.now()` adentro del handler. Dos razones, ninguna estética:
+
+1. El servidor no sabe qué día es *para este usuario*. "Fin de hoy" es una
+   noción de hora local, y la medianoche UTC parte el día en el lugar
+   equivocado para casi todo el mundo.
+2. Una query de Convex se cachea contra sus argumentos y sus dependencias de
+   datos — y el paso del tiempo no es ninguna de las dos. Una query que leyera
+   el reloj le seguiría sirviendo una respuesta vieja a una suscripción
+   abierta mucho después de que la fecha del movimiento pasara. Como
+   argumento, el cliente decide cuándo la respuesta puede cambiar.
+
+Hacerlo **requerido** fue a propósito: el compilador enumeró los 20 llamadores
+en vez de dejar que alguno quedara silenciosamente sin acotar.
+
+En web el valor sale de `useOccurrenceCutoff()`
+(`apps/web/src/hooks/use-occurrence-cutoff.ts`), que además se re-arma para el
+siguiente límite: una pestaña abierta cruzando la medianoche mueve sus
+suscripciones sola. En nativo no viaja nada — el dispositivo es dueño del reloj
+y de la base.
+
+#### Cómo se aplica en cada capa
+
+| Capa | Mecanismo |
+|---|---|
+| Saldo (backend) | Cota superior sobre los agregados, que ya ordenan por `date`. Sigue siendo O(log n) y no lee filas. |
+| Listas y sumas por índice | El corte se pliega sobre el `dateTo` que la query ya tenía, así que viaja en el mismo rango de índice y no cuesta nada. |
+| Filtros del dashboard | `occurredWindow()` sobre el `DateWindow`, dentro de `EvaluationContext`. Como `collectMatching` es la única puerta de las lecturas del dashboard, no se puede llamar sin corte. |
+| `by_user_status` | Único índice sin `date`: es la sola rama que filtra en vez de acotar. |
+| Contador de tags | El join no tiene fecha, así que hay que leer la transacción detrás de cada uno. Es la única lectura que se volvió más cara. |
+| Nativo | `TxnOccurrence` en `buildTransactionQuery`, con default `occurred`. El default es la decisión: todo llamador existente pregunta por lo que pasó, así que el lado seguro es el que se obtiene sin pensarlo, y querer lo programado hay que pedirlo. |
+
+#### Lo que deliberadamente NO se acotó
+
+- **`balanceAroundTransaction`** (web y nativo) ya está anclado a la
+  transacción objetivo, no a "ahora": suma sólo lo anterior a su fecha, así
+  que las filas futuras nunca entran. No necesita corte.
+- **El replay de `balance_adjustment`** (`sync_recompute.dart`) recorre en
+  orden de fecha; las filas futuras quedan en la cola y ningún ajuste queda
+  después de ellas salvo que el ajuste mismo sea futuro. Se deja como está.
+- **El motor de sync** mueve filas enteras sin importar de qué lado del corte
+  caen — para eso existe `TxnOccurrence.all`.
+
+#### `createBalanceAdjustment` también toma el corte
+
+Un ajuste de saldo dice "mi cuenta tiene X ahora mismo" y el backend deriva
+`amount = balanceAfter − saldoActual`. Ese saldo tiene que ser el que el
+usuario ve, así que se detiene en el corte: un movimiento programado para el
+mes que viene no puede cambiar qué significa "ahora mismo".
+
+#### Estado de la pantalla de movimientos futuros
+
+Pasa a leer transacciones reales con fecha futura (`listUpcoming` en web,
+`watchUpcoming` en nativo) en vez de los datos mock de la demo. Efecto
+inmediato y deseable: un movimiento manual con fecha futura, que hoy ensuciaba
+Actividad y el saldo, ahora aparece acá.
+
+El detalle queda **de solo lectura en este paso**. Editar o eliminar una
+ocurrencia tiene que decir si aplica a esta o a esta y las siguientes (§2.6), y
+"las siguientes" necesita la regla de recurrencia que las generó, que todavía
+no existe. Cablear los botones a algo que tocara una fila suelta sería peor
+respuesta que no ofrecerlos; vuelven en el paso 4.
+
+Por la misma razón la fila pierde la frecuencia en su descripción: sin regla no
+hay frecuencia que mostrar. Vuelve en el paso 2, y el `X/N` del paso 3 con ella.

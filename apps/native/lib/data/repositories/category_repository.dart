@@ -1,6 +1,7 @@
 import 'package:drift/drift.dart';
 
 import '../../database.dart';
+import '../occurrence.dart';
 import '../ids.dart';
 import '../models/entity_counts.dart';
 import 'repository_base.dart';
@@ -50,12 +51,15 @@ class CategoryRepository extends RepositoryBase {
                c.created_at, c.updated_at, c.dirty,
                COUNT(t.id) AS transaction_count
         FROM categories c
-        LEFT JOIN transactions t ON t.category_id = c.id
+        LEFT JOIN transactions t
+               ON t.category_id = c.id
+              AND t.date < ?
         WHERE c.is_archived = 0
         GROUP BY c.id, c.name, c.description, c.color, c.icon, c.is_archived,
                  c.created_at, c.updated_at, c.dirty
         ORDER BY c.name COLLATE NOCASE
       ''',
+      variables: [Variable.withBigInt(pastCutoffMs())],
       readsFrom: {db.categories, db.transactions},
     );
 
@@ -97,7 +101,8 @@ class CategoryRepository extends RepositoryBase {
             db.transactions.categoryId.equals(categoryId) &
             db.transactions.type.equals('expense') &
             db.transactions.date.isBiggerOrEqualValue(fromMs) &
-            db.transactions.date.isSmallerThanValue(toExclusiveMs),
+            db.transactions.date.isSmallerThanValue(toExclusiveMs) &
+            db.transactions.date.isSmallerThanValue(pastCutoffMs()),
       )
       ..groupBy([currency]);
 

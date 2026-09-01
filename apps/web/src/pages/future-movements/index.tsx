@@ -1,143 +1,116 @@
-import { IconButton } from 'actify'
-import { useCallback, useMemo, useState } from 'react'
+import { api } from '@wallet-bot/backend/api'
+import { CircularProgress, IconButton } from 'actify'
+import { usePaginatedQuery, useQuery } from 'convex/react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useOutletContext, useParams } from 'react-router-dom'
-import { toast } from 'sonner'
 import { AppBar } from '@/components/m3/app-bar'
 import { Icon } from '@/components/m3/icon'
 import { ListDetailLayout } from '@/components/m3/list-detail-layout'
 import { StateMessage } from '@/components/m3/state-message'
+import { Skeleton } from '@/components/ui/skeleton'
+import { useOccurrenceCutoff } from '@/hooks/use-occurrence-cutoff'
+import {
+    ACCOUNT_DEFAULT_COLOR,
+    CATEGORY_DEFAULT_COLOR,
+    normalizeColor,
+} from '@/lib/entity-colors'
 import { useFormatLocale, useT } from '@/lib/i18n'
 import {
+    type ActivityTransaction,
     estimatedDescription,
     formatTransactionTime,
     transactionTimeStatus,
 } from '../activity/helpers'
 import { TransactionRow } from '../activity/transaction-row'
 import { FutureMovementDetail } from './detail'
-import {
-    buildFutureEntries,
-    buildMockMovements,
-    type FutureMovement,
-    frequencyLabel,
-    identitiesFor,
-    type RecurrenceScope,
-    stepDate,
-} from './helpers'
+import { buildFutureEntries, identitiesFor } from './helpers'
+
+const PAGE_SIZE = 50
 
 /**
- * The upcoming side of Activity: the movements a recurrence rule will produce
- * that have not happened yet.
+ * The upcoming side of Activity: the movements that exist but have not
+ * happened yet.
  *
- * Structurally this is the Activity list — the same `ListDetailLayout`, the
- * same `TransactionRow`, the same day headers — so what is open is the URL's
- * business and a detail behaves the same at every width. The differences are
- * deliberate: the list runs ascending (the soonest movement belongs at the
- * top, not the newest), and there is no filter bar, because a rule's
- * projection is not a query over history.
+ * There is nothing special about the rows — they are ordinary transactions
+ * whose date is past the occurrence cutoff, which is exactly why every read on
+ * the other side of that cutoff has to exclude them. The user is never told a
+ * filter is involved; there are simply two lists, one behind and one ahead.
  *
- * Backed by mock data — nothing here is persisted yet (see
- * docs/recurrency-design.md).
+ * Structurally this is the Activity list: the same `ListDetailLayout`, the
+ * same `TransactionRow`, the same day headers. It runs ascending, because the
+ * soonest movement is the interesting one.
  */
 export function FutureMovements() {
     const t = useT()
     const locale = useFormatLocale()
     const navigate = useNavigate()
-    const [now] = useState(() => Date.now())
-    const [movements, setMovements] = useState<FutureMovement[]>(() =>
-        buildMockMovements(now),
+    const asOfMs = useOccurrenceCutoff()
+
+    const { results, status, loadMore } = usePaginatedQuery(
+        api.v1.transactions.queries.listUpcoming,
+        { asOfMs },
+        { initialNumItems: PAGE_SIZE },
     )
 
+    const accounts = useQuery(api.v1.accounts.queries.list, {
+        includeArchived: true,
+    })
+    const categories = useQuery(api.v1.categories.queries.listActive)
+
+    const accountsById = useMemo(
+        () =>
+            new Map(
+                (accounts ?? []).map((account) => [
+                    account.id,
+                    {
+                        ...account,
+                        color: normalizeColor(
+                            account.color,
+                            ACCOUNT_DEFAULT_COLOR,
+                        ),
+                    },
+                ]),
+            ),
+        [accounts],
+    )
+    const categoriesById = useMemo(
+        () =>
+            new Map(
+                (categories ?? []).map((category) => [
+                    category.id,
+                    {
+                        ...category,
+                        color: normalizeColor(
+                            category.color,
+                            CATEGORY_DEFAULT_COLOR,
+                        ),
+                    },
+                ]),
+            ),
+        [categories],
+    )
+
+    // "Now" is captured once via a lazy initializer, as in Activity: reading
+    // the clock during render is impure, but a one-time mount value is stable.
+    const [nowMs] = useState(() => Date.now())
     const entries = useMemo(
-        () => buildFutureEntries(movements, now, t, locale),
-        [movements, now, t, locale],
+        () => buildFutureEntries(results, nowMs, t, locale),
+        [results, nowMs, t, locale],
     )
 
-    const handleSave = useCallback(
-        (
-            id: string,
-            patch: Partial<FutureMovement>,
-            scope: RecurrenceScope,
-        ) => {
-            setMovements((current) => {
-                const target = current.find((m) => m.id === id)
-                if (!target) return current
-
-                // "This and future": the edited occurrence becomes the new
-                // anchor and the later occurrences of the rule are re-projected
-                // from it — so moving a monthly movement to the 18th shifts the
-                // rest to the 18th, and moving a weekly/custom one recalculates
-                // the following ones from the new date.
-                const laterSorted =
-                    scope === 'all-future'
-                        ? current
-                              .filter(
-                                  (m) =>
-                                      m.ruleId === target.ruleId &&
-                                      m.date > target.date,
-                              )
-                              .sort((a, b) => Number(a.date - b.date))
-                        : []
-                const stepById = new Map(
-                    laterSorted.map((m, i) => [m.id, i + 1]),
-                )
-                const anchor = patch.date ?? target.date
-                const frequency = patch.frequency ?? target.frequency
-                const dayInterval = patch.dayInterval ?? target.dayInterval
-
-                return current.map((m) => {
-                    if (m.id === id) return { ...m, ...patch }
-                    const step = stepById.get(m.id)
-                    if (step !== undefined) {
-                        const rest: Partial<FutureMovement> = { ...patch }
-                        delete rest.date
-                        return {
-                            ...m,
-                            ...rest,
-                            date: stepDate(
-                                anchor,
-                                frequency,
-                                dayInterval,
-                                step,
-                            ),
-                        }
-                    }
-                    return m
-                })
-            })
-            toast.success(
-                scope === 'only-this'
-                    ? t.futureMovements.savedOnlyThis
-                    : t.futureMovements.savedAllFuture,
-            )
-        },
-        [t],
-    )
-
-    const handleDelete = useCallback(
-        (id: string, scope: RecurrenceScope) => {
-            setMovements((current) => {
-                const target = current.find((m) => m.id === id)
-                if (!target) return current
-                return current.filter((m) => {
-                    if (m.id === id) return false
-                    if (
-                        scope === 'all-future' &&
-                        m.ruleId === target.ruleId &&
-                        m.date > target.date
-                    ) {
-                        return false
-                    }
-                    return true
-                })
-            })
-            toast.success(
-                scope === 'only-this'
-                    ? t.futureMovements.deletedOnlyThis
-                    : t.futureMovements.deletedAllFuture,
-            )
-        },
-        [t],
-    )
+    // Infinite scroll, the same sentinel Activity uses.
+    const sentinelRef = useRef<HTMLDivElement>(null)
+    useEffect(() => {
+        const el = sentinelRef.current
+        if (!el) return
+        const observer = new IntersectionObserver((observed) => {
+            if (observed[0]?.isIntersecting && status === 'CanLoadMore') {
+                loadMore(PAGE_SIZE)
+            }
+        })
+        observer.observe(el)
+        return () => observer.disconnect()
+    }, [status, loadMore])
 
     const list = (
         <>
@@ -166,7 +139,9 @@ export function FutureMovements() {
                         </p>
                     </div>
 
-                    {entries.length === 0 ? (
+                    {status === 'LoadingFirstPage' ? (
+                        <ListSkeleton />
+                    ) : entries.length === 0 ? (
                         <p className="m3-body-large py-12 text-center text-on-surface-variant">
                             {t.futureMovements.empty}
                         </p>
@@ -194,20 +169,17 @@ export function FutureMovements() {
                                         timeStatus={transactionTimeStatus(
                                             entry.txn,
                                         )}
-                                        description={[
-                                            frequencyLabel(
-                                                entry.txn.frequency,
-                                                t,
-                                            ),
-                                            estimatedDescription(
-                                                entry.txn,
-                                                t,
-                                                locale,
-                                            ),
-                                        ]
-                                            .filter(Boolean)
-                                            .join(' · ')}
-                                        identities={identitiesFor(entry.txn, t)}
+                                        description={estimatedDescription(
+                                            entry.txn,
+                                            t,
+                                            locale,
+                                        )}
+                                        identities={identitiesFor(
+                                            entry.txn,
+                                            t,
+                                            accountsById,
+                                            categoriesById,
+                                        )}
                                         onClick={() =>
                                             navigate(
                                                 `/future-movements/${entry.txn.id}`,
@@ -218,14 +190,22 @@ export function FutureMovements() {
                             )}
                         </div>
                     )}
+
+                    {status === 'LoadingMore' ? (
+                        <div className="flex justify-center py-6">
+                            <CircularProgress isIndeterminate />
+                        </div>
+                    ) : null}
+
+                    <div ref={sentinelRef} aria-hidden className="h-1" />
                 </div>
             </div>
         </>
     )
 
     const outletContext: FutureMovementsOutletContext = useMemo(
-        () => ({ movements, onSave: handleSave, onDelete: handleDelete }),
-        [movements, handleSave, handleDelete],
+        () => ({ movements: results }),
+        [results],
     )
 
     return (
@@ -246,18 +226,12 @@ export function FutureMovements() {
 }
 
 /**
- * What the list offers its child route. The movements are mock state owned by
- * the list, so unlike Activity — where the detail re-queries by id — the
- * detail is handed the collection and the two mutators.
+ * What the list offers its child route. The detail reads the movement out of
+ * the page the list already holds rather than re-querying by id, because the
+ * list is the only thing that knows which page an upcoming movement is on.
  */
 export type FutureMovementsOutletContext = {
-    movements: readonly FutureMovement[]
-    onSave: (
-        id: string,
-        patch: Partial<FutureMovement>,
-        scope: RecurrenceScope,
-    ) => void
-    onDelete: (id: string, scope: RecurrenceScope) => void
+    movements: readonly ActivityTransaction[]
 }
 
 /** `/future-movements/:movementId` — one upcoming movement's detail. */
@@ -265,8 +239,7 @@ export function FutureMovementDetailRoute() {
     const t = useT()
     const navigate = useNavigate()
     const { movementId } = useParams()
-    const { movements, onSave, onDelete } =
-        useOutletContext<FutureMovementsOutletContext>()
+    const { movements } = useOutletContext<FutureMovementsOutletContext>()
 
     const movement = movements.find((m) => m.id === movementId) ?? null
 
@@ -285,8 +258,16 @@ export function FutureMovementDetailRoute() {
         <FutureMovementDetail
             movement={movement}
             onClose={() => navigate('/future-movements')}
-            onSave={onSave}
-            onDelete={onDelete}
         />
+    )
+}
+
+function ListSkeleton() {
+    return (
+        <div className="flex flex-col gap-2.5 px-4">
+            {Array.from({ length: 6 }).map((_, i) => (
+                <Skeleton key={i} className="h-20 w-full rounded-xl" />
+            ))}
+        </div>
     )
 }

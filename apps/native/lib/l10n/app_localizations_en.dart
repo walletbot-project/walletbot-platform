@@ -120,6 +120,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get amount => 'Amount';
 
   @override
+  String get time => 'Time';
+
+  @override
   String get date => 'Date';
 
   @override

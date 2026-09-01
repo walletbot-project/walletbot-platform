@@ -35,8 +35,8 @@ export const list = query({
 })
 
 export const listActiveWithCounts = query({
-    args: {},
-    handler: async (ctx) => {
+    args: { asOfMs: v.int64() },
+    handler: async (ctx, args) => {
         const userId = await requireAuth(ctx)
         const tags = await ctx.db
             .query('tags')
@@ -53,9 +53,31 @@ export const listActiveWithCounts = query({
                         q.eq('userId', userId).eq('tagId', tag.id),
                     )
                     .collect()
+                // Unlike the category count, a tag count cannot be bounded by
+                // an index: the join row carries no date, so the transaction
+                // behind each one has to be read to know whether it has
+                // happened. Bounded by the tag's own usage, which is what
+                // `.collect()` here already assumes.
+                const counted = await Promise.all(
+                    joins.map(async (join) => {
+                        const txn = await ctx.db
+                            .query('transactions')
+                            .withIndex('by_user_id', (q) =>
+                                q
+                                    .eq('userId', userId)
+                                    .eq('id', join.transactionId),
+                            )
+                            .unique()
+                        return (
+                            txn !== null &&
+                            !txn.isArchived &&
+                            txn.date < args.asOfMs
+                        )
+                    }),
+                )
                 return {
                     ...tag,
-                    transactionCount: joins.length,
+                    transactionCount: counted.filter(Boolean).length,
                 }
             }),
         )
@@ -88,6 +110,7 @@ export const spendByCurrency = query({
         id: v.string(),
         fromMs: v.int64(),
         toExclusiveMs: v.int64(),
+        asOfMs: v.int64(),
     },
     handler: async (ctx, args) => {
         const userId = await requireAuth(ctx)
@@ -108,6 +131,7 @@ export const spendByCurrency = query({
                 .unique()
             if (!t || t.isArchived || t.type !== 'expense') continue
             if (t.date < args.fromMs || t.date >= args.toExclusiveMs) continue
+            if (t.date >= args.asOfMs) continue
             const cents = Math.abs(Number(t.amount))
             totals.set(t.currency, (totals.get(t.currency) ?? 0) + cents)
         }
@@ -120,7 +144,11 @@ export const spendByCurrency = query({
 // The most recent (non-archived) transactions carrying a tag, newest first.
 // Backs the "últimos movimientos" section of the tag details sheet.
 export const recentTransactions = query({
-    args: { id: v.string(), limit: v.optional(v.number()) },
+    args: {
+        id: v.string(),
+        limit: v.optional(v.number()),
+        asOfMs: v.int64(),
+    },
     handler: async (ctx, args) => {
         const userId = await requireAuth(ctx)
         const limit = Math.min(args.limit ?? 5, 50)
@@ -139,7 +167,7 @@ export const recentTransactions = query({
                     q.eq('userId', userId).eq('id', join.transactionId),
                 )
                 .unique()
-            if (t && !t.isArchived) txns.push(t)
+            if (t && !t.isArchived && t.date < args.asOfMs) txns.push(t)
         }
         txns.sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0))
         return txns.slice(0, limit)

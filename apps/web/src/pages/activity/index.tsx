@@ -19,6 +19,7 @@ import { Icon } from '@/components/m3/icon'
 import { ListDetailLayout } from '@/components/m3/list-detail-layout'
 import { StateMessage } from '@/components/m3/state-message'
 import { Skeleton } from '@/components/ui/skeleton'
+import { useOccurrenceCutoff } from '@/hooks/use-occurrence-cutoff'
 import {
     ACCOUNT_DEFAULT_COLOR,
     CATEGORY_DEFAULT_COLOR,
@@ -51,6 +52,7 @@ export function Activity() {
         () => readFilterSeed(location.state) ?? EMPTY_FILTER,
     )
     const navigate = useNavigate()
+    const asOfMs = useOccurrenceCutoff()
 
     // What is open beside the list is the child route's business, not this
     // component's — see `ListDetailLayout`. Opening one is a navigation.
@@ -89,7 +91,7 @@ export function Activity() {
 
     const { results, status, loadMore } = usePaginatedQuery(
         api.v1.transactions.queries.listByFilter,
-        { config },
+        { config, asOfMs },
         { initialNumItems: PAGE_SIZE },
     )
 

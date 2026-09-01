@@ -8,6 +8,7 @@ import { DetailNotFound, DetailSkeleton } from '@/components/detail-fallbacks'
 import { AppBar } from '@/components/m3/app-bar'
 import { Icon } from '@/components/m3/icon'
 import { ListDetailLayout } from '@/components/m3/list-detail-layout'
+import { useOccurrenceCutoff } from '@/hooks/use-occurrence-cutoff'
 import { useT } from '@/lib/i18n'
 import { newId } from '@/lib/new-id'
 import { CategoriesView } from '@/pages/insights/categories-view'
@@ -47,8 +48,12 @@ export function Insights() {
     const navigate = useNavigate()
     const tab = useInsightsTab()
 
-    const categories = useQuery(api.v1.categories.queries.listActiveWithCounts)
-    const tags = useQuery(api.v1.tags.queries.listActiveWithCounts)
+    const asOfMs = useOccurrenceCutoff()
+    const categories = useQuery(
+        api.v1.categories.queries.listActiveWithCounts,
+        { asOfMs },
+    )
+    const tags = useQuery(api.v1.tags.queries.listActiveWithCounts, { asOfMs })
 
     const list = (
         <>
@@ -142,9 +147,10 @@ export function InsightCreateRoute() {
     const navigate = useNavigate()
     const tab = useInsightsTab()
     // Only the tag form needs the tag list (for the parent picker).
+    const asOfMs = useOccurrenceCutoff()
     const tags = useQuery(
         api.v1.tags.queries.listActiveWithCounts,
-        tab === 'tags' ? {} : 'skip',
+        tab === 'tags' ? { asOfMs } : 'skip',
     )
     const createCategory = useMutation(api.v1.categories.mutations.create)
     const createTag = useMutation(api.v1.tags.mutations.create)
@@ -226,13 +232,14 @@ export function InsightDetailRoute() {
     const tab = useInsightsTab()
     const { entityId } = useParams()
     // Each tab reads only its own list.
+    const asOfMs = useOccurrenceCutoff()
     const categories = useQuery(
         api.v1.categories.queries.listActiveWithCounts,
-        tab === 'categories' ? {} : 'skip',
+        tab === 'categories' ? { asOfMs } : 'skip',
     )
     const tags = useQuery(
         api.v1.tags.queries.listActiveWithCounts,
-        tab === 'tags' ? {} : 'skip',
+        tab === 'tags' ? { asOfMs } : 'skip',
     )
 
     const close = () => navigate(`/insights/${tab}`)

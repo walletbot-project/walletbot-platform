@@ -48,6 +48,13 @@ export type EvaluationContext = {
      */
     tagDescendants: Map<string, Set<string>>
     now: Date
+    /**
+     * Exclusive upper bound on `date` for the rows a read may see — the
+     * occurrence cutoff. It rides in the evaluation context so that
+     * `collectMatching`, the single door every dashboard read goes through,
+     * cannot be called without one.
+     */
+    asOfMs: bigint
 }
 
 export function filterFromConfig(config: string | null | undefined): {
@@ -74,12 +81,13 @@ export async function buildEvaluationContext(
     userId: string,
     root: FilterGroup,
     now: Date,
+    asOfMs: bigint,
 ): Promise<EvaluationContext> {
     const conditions = collectTagConditions(root)
     const tagsByTransaction = new Map<string, Set<string>>()
     const tagDescendants = new Map<string, Set<string>>()
     if (conditions.length === 0)
-        return { tagsByTransaction, tagDescendants, now }
+        return { tagsByTransaction, tagDescendants, now, asOfMs }
 
     const wanted = new Set<string>()
     for (const condition of conditions) {
@@ -90,7 +98,8 @@ export async function buildEvaluationContext(
             : []
         for (const id of ids) wanted.add(id)
     }
-    if (wanted.size === 0) return { tagsByTransaction, tagDescendants, now }
+    if (wanted.size === 0)
+        return { tagsByTransaction, tagDescendants, now, asOfMs }
 
     // The ids whose joins must be loaded: the literal selections, plus their
     // descendants when some condition expands subtags.
@@ -145,7 +154,7 @@ export async function buildEvaluationContext(
             tagsByTransaction.set(join.transactionId, set)
         }
     }
-    return { tagsByTransaction, tagDescendants, now }
+    return { tagsByTransaction, tagDescendants, now, asOfMs }
 }
 
 export type MatchResult = {
@@ -162,6 +171,31 @@ export type DateRangeBuilder = {
     ): { lte(fieldName: 'date', value: bigint): IndexRange } & IndexRange
     lte(fieldName: 'date', value: bigint): IndexRange
 } & IndexRange
+
+/**
+ * Narrows a window to the already-happened side of `asOfMs`.
+ *
+ * A recurring rule materialises its occurrences as ordinary transactions with
+ * future dates, so every read that describes what happened has to stop here.
+ * Folding the cutoff into the window means it rides the same index range as
+ * the user's own date filter — it costs nothing and, crucially, it cannot be
+ * forgotten by a caller that already bounds by date.
+ *
+ * `asOfMs` is the exclusive upper bound (the start of the viewer's next local
+ * day); see `pastCutoffMs` in `@wallet-bot/shared` for why it travels as an
+ * argument instead of being read off the server clock.
+ */
+export function occurredWindow(
+    window: DateWindow | null,
+    asOfMs: bigint,
+): DateWindow {
+    const cutoff = Number(asOfMs)
+    const toExclusiveMs =
+        window?.toExclusiveMs === null || window?.toExclusiveMs === undefined
+            ? cutoff
+            : Math.min(window.toExclusiveMs, cutoff)
+    return { fromMs: window?.fromMs ?? null, toExclusiveMs }
+}
 
 export function boundByDate(
     base: DateRangeBuilder,
@@ -240,7 +274,10 @@ export async function collectMatching(
     evaluation: EvaluationContext,
     limit: number | null,
 ): Promise<MatchResult> {
-    const window = indexDateWindow(filter, root, evaluation.now)
+    const window = occurredWindow(
+        indexDateWindow(filter, root, evaluation.now),
+        evaluation.asOfMs,
+    )
 
     const anchorAccount =
         filter.accountIds.length === 1 ? filter.accountIds[0] : null
@@ -501,6 +538,7 @@ export async function evaluateConfig(
     userId: string,
     config: string,
     limit: number | null,
+    asOfMs: bigint,
 ): Promise<MatchResult> {
     const { filter, root } = filterFromConfig(config)
     const evaluation = await buildEvaluationContext(
@@ -508,6 +546,7 @@ export async function evaluateConfig(
         userId,
         root,
         new Date(),
+        asOfMs,
     )
     return collectMatching(ctx, userId, filter, root, evaluation, limit)
 }

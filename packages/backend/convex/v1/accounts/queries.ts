@@ -50,14 +50,21 @@ export const get = query({
 // The most recent (non-archived) transactions for an account, newest first.
 // Backs the "últimas transacciones" section of the account details sheet.
 export const recentTransactions = query({
-    args: { id: v.string(), limit: v.optional(v.number()) },
+    args: {
+        id: v.string(),
+        limit: v.optional(v.number()),
+        asOfMs: v.int64(),
+    },
     handler: async (ctx, args) => {
         const userId = await requireAuth(ctx)
         const limit = Math.min(args.limit ?? 5, 50)
         return await ctx.db
             .query('transactions')
             .withIndex('by_user_account_date', (q) =>
-                q.eq('userId', userId).eq('accountId', args.id),
+                q
+                    .eq('userId', userId)
+                    .eq('accountId', args.id)
+                    .lt('date', args.asOfMs),
             )
             .order('desc')
             .filter((q) => q.eq(q.field('isArchived'), false))

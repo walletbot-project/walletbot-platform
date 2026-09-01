@@ -31,6 +31,7 @@ import {
     parseOptionalDate,
     parseTransactionDate,
     parseWidgetOptions,
+    pastCutoffBigInt,
     resolveFxQuote,
     resolvePlacements,
     runCalculate,
@@ -80,7 +81,7 @@ export const toolExecutors = {
             if (!r.ok) return resolutionError('Account', r)
             const balance = await ctx.client.query(
                 api.v1.transactions.queries.balance,
-                { accountId: r.entity.id },
+                { accountId: r.entity.id, asOfMs: pastCutoffBigInt() },
             )
             if (!balance) return { ok: false, error: 'Account not found' }
             return {
@@ -294,6 +295,7 @@ export const toolExecutors = {
                         numItems: args.limit ?? (hasFilters ? 50 : 10),
                         cursor: null,
                     },
+                    asOfMs: pastCutoffBigInt(),
                     type: args.type,
                     accountId,
                     categoryId,
@@ -449,6 +451,7 @@ export const toolExecutors = {
                     id,
                     accountId: accR.entity.id,
                     balanceAfter: parseAmountToCents(args.balanceAfter),
+                    asOfMs: pastCutoffBigInt(),
                     name: args.name,
                     description: args.description,
                     date,
@@ -574,6 +577,7 @@ export const toolExecutors = {
                     groupBy: args.groupBy,
                     dateFrom,
                     dateTo,
+                    asOfMs: pastCutoffBigInt(),
                     type: args.type,
                     currency: args.currency,
                 },

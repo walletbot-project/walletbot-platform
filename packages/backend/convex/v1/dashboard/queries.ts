@@ -59,6 +59,7 @@ export const layout = query({
 export const stat = query({
     args: {
         config: v.string(),
+        asOfMs: v.int64(),
         aggregation: v.union(
             v.literal('sum'),
             v.literal('net'),
@@ -72,6 +73,7 @@ export const stat = query({
             userId,
             args.config,
             null,
+            args.asOfMs,
         )
 
         let amount = 0n
@@ -88,14 +90,24 @@ export const stat = query({
 })
 
 export const transactions = query({
-    args: { config: v.string(), limit: v.optional(v.number()) },
+    args: {
+        config: v.string(),
+        limit: v.optional(v.number()),
+        asOfMs: v.int64(),
+    },
     handler: async (ctx, args) => {
         const userId = await requireAuth(ctx)
         const limit = Math.min(
             Math.max(Math.trunc(args.limit ?? 5), 1),
             MAX_LIST_LIMIT,
         )
-        const { rows } = await evaluateConfig(ctx, userId, args.config, limit)
+        const { rows } = await evaluateConfig(
+            ctx,
+            userId,
+            args.config,
+            limit,
+            args.asOfMs,
+        )
         return rows
     },
 })
@@ -115,6 +127,7 @@ export const currencyBalance = query({
     args: {
         currency: v.string(),
         accountIds: v.optional(v.array(v.string())),
+        asOfMs: v.int64(),
     },
     handler: async (ctx, args) => {
         const userId = await requireAuth(ctx)
@@ -136,7 +149,7 @@ export const currencyBalance = query({
 
         const balances = await Promise.all(
             matching.map((account) =>
-                computeAccountBalance(ctx, userId, account.id),
+                computeAccountBalance(ctx, userId, account.id, args.asOfMs),
             ),
         )
         return {
@@ -149,6 +162,7 @@ export const currencyBalance = query({
 export const breakdown = query({
     args: {
         config: v.string(),
+        asOfMs: v.int64(),
         groupBy: v.union(
             v.literal('category'),
             v.literal('account'),
@@ -162,6 +176,7 @@ export const breakdown = query({
             userId,
             args.config,
             null,
+            args.asOfMs,
         )
 
         // Transfers move money between the user's own accounts; counting them

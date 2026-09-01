@@ -322,6 +322,7 @@ export const createBalanceAdjustment = mutation({
         dateConfirmed: v.boolean(),
         timeStatus: v.optional(transactionTimeStatus),
         createdBy: createdByArg,
+        asOfMs: v.int64(),
     },
     handler: async (ctx, args) => {
         const userId = await requireAuth(ctx)
@@ -334,10 +335,15 @@ export const createBalanceAdjustment = mutation({
         // balanceAfter is the user's observed truth; amount is just the delta
         // the engine needs to make the books match. computeAccountBalance now
         // reads from the aggregate so this is O(log n).
+        //
+        // The balance being reconciled against is the one the user can see, so
+        // it stops at the occurrence cutoff: a movement scheduled for next
+        // month must not change what "my balance is X right now" means.
         const currentBalance = await computeAccountBalance(
             ctx,
             userId,
             args.accountId,
+            args.asOfMs,
         )
         const amount = args.balanceAfter - currentBalance
 

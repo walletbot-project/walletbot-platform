@@ -4,13 +4,16 @@ import 'package:drift/drift.dart';
 import 'package:flutter/material.dart' show DateTimeRange;
 
 import '../../database.dart';
+import '../occurrence.dart';
 import '../models/summaries.dart';
 import '../models/transaction_filter.dart';
 
 /// Result ordering for transaction lists. The activity screen orders strictly
 /// by creation time (newest first) so day headers stay contiguous; the agent
 /// orders by the (possibly estimated) transaction date.
-enum TxnOrdering { createdAtDesc, dateDesc }
+/// `dateAsc` is the upcoming list's ordering: soonest first, because
+/// nothing there has happened yet.
+enum TxnOrdering { createdAtDesc, dateDesc, dateAsc }
 
 /// Expands the filter's tag selection into match groups against the active
 /// tag set: one group per selected tag, containing the tag itself plus all
@@ -69,9 +72,16 @@ SimpleSelectStatement<$TransactionsTable, Transaction> buildTransactionQuery(
   DateTime? now,
   BigInt? exactFromMs,
   BigInt? exactToInclusiveMs,
+  TxnOccurrence occurrence = TxnOccurrence.occurred,
 }) {
   final query = db.select(db.transactions)
     ..where((t) => t.archived.equals(false));
+
+  // Defaulting to `occurred` is deliberate: every existing caller answers a
+  // question about what happened, so the safe side is the one you get by not
+  // thinking about it. Wanting the scheduled rows is the exceptional case and
+  // has to be asked for.
+  query.where((t) => occurrenceFilter(t, occurrence, now: now));
 
   final advancedRoot = filter.advancedRoot;
   if (advancedRoot != null) {
@@ -104,6 +114,8 @@ SimpleSelectStatement<$TransactionsTable, Transaction> buildTransactionQuery(
       query.orderBy([(t) => OrderingTerm.desc(t.createdAt)]);
     case TxnOrdering.dateDesc:
       query.orderBy([(t) => OrderingTerm.desc(t.date)]);
+    case TxnOrdering.dateAsc:
+      query.orderBy([(t) => OrderingTerm.asc(t.date)]);
   }
   if (limit != null) {
     query.limit(limit);
@@ -403,6 +415,7 @@ Stream<List<Transaction>> watchFilteredTransactions(
   int? limit,
   TxnOrdering ordering = TxnOrdering.createdAtDesc,
   DateTime? now,
+  TxnOccurrence occurrence = TxnOccurrence.occurred,
 }) {
   if (!filter.rootGroup.containsSubtagExpansion) {
     final groups = expandTagGroups(filter, const []);
@@ -413,6 +426,7 @@ Stream<List<Transaction>> watchFilteredTransactions(
       limit: limit,
       ordering: ordering,
       now: now,
+      occurrence: occurrence,
     ).watch();
   }
   final tagsStream = (db.select(
@@ -430,6 +444,7 @@ Stream<List<Transaction>> watchFilteredTransactions(
       limit: limit,
       ordering: ordering,
       now: now,
+      occurrence: occurrence,
     ).watch();
   });
 }

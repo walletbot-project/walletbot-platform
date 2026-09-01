@@ -120,6 +120,9 @@ class AppLocalizationsEs extends AppLocalizations {
   String get amount => 'Monto';
 
   @override
+  String get time => 'Hora';
+
+  @override
   String get date => 'Fecha';
 
   @override

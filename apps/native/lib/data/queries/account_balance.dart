@@ -1,6 +1,7 @@
 import 'package:drift/drift.dart';
 
 import '../../database.dart';
+import '../occurrence.dart';
 import 'stream_utils.dart';
 
 /// Per-transaction balance arithmetic. MUST stay identical to the replay in
@@ -37,10 +38,13 @@ Expression<bool> _touchesAccount($TransactionsTable t, String accountId) =>
     t.accountId.equals(accountId) |
     (t.type.equals('transfer') & t.toAccountId.equals(accountId));
 
+/// A balance is always "as of" a moment, and the moment is the occurrence
+/// cutoff: a movement scheduled for next month is not money the user has.
 Future<BigInt> computeAccountBalance(AppDatabase db, String accountId) async {
   final rows =
       await (db.select(db.transactions)
             ..where((t) => t.archived.equals(false))
+            ..where((t) => t.date.isSmallerThanValue(pastCutoffMs()))
             ..where((t) => _touchesAccount(t, accountId)))
           .get();
   return accountBalanceFromRows(rows, accountId);
@@ -49,6 +53,7 @@ Future<BigInt> computeAccountBalance(AppDatabase db, String accountId) async {
 Stream<BigInt> watchAccountBalance(AppDatabase db, String accountId) {
   return (db.select(db.transactions)
         ..where((t) => t.archived.equals(false))
+        ..where((t) => t.date.isSmallerThanValue(pastCutoffMs()))
         ..where((t) => _touchesAccount(t, accountId)))
       .watch()
       .map((rows) => accountBalanceFromRows(rows, accountId));
@@ -78,9 +83,11 @@ Stream<BigInt> watchTotalBalanceForCurrency(
             ..where((a) => a.archived.equals(false))
             ..where((a) => a.currency.equals(currency)))
           .watch();
-  final txnsStream = (db.select(
-    db.transactions,
-  )..where((t) => t.archived.equals(false))).watch();
+  final txnsStream =
+      (db.select(db.transactions)
+            ..where((t) => t.archived.equals(false))
+            ..where((t) => t.date.isSmallerThanValue(pastCutoffMs())))
+          .watch();
   return combineLatest2(accountsStream, txnsStream, (accounts, txns) {
     var total = BigInt.zero;
     for (final a in accounts) {

@@ -4,6 +4,7 @@ import '../../database.dart';
 import '../../telemetry/business_metrics.dart';
 import '../ids.dart';
 import '../models/transaction_filter.dart';
+import '../occurrence.dart';
 import '../queries/account_balance.dart';
 import '../queries/transaction_query.dart';
 import 'repository_base.dart';
@@ -28,6 +29,18 @@ class TransactionRepository extends RepositoryBase {
     int? limit,
     TxnOrdering ordering = TxnOrdering.createdAtDesc,
   }) => watchFilteredTransactions(db, filter, limit: limit, ordering: ordering);
+
+  /// The other side of the occurrence cutoff: the movements that exist but
+  /// have not happened yet, soonest first. Ordinary transactions — the only
+  /// thing that sets them apart is which side of the cutoff their date is on.
+  Stream<List<Transaction>> watchUpcoming({int? limit}) =>
+      watchFilteredTransactions(
+        db,
+        const TransactionFilter(),
+        limit: limit,
+        ordering: TxnOrdering.dateAsc,
+        occurrence: TxnOccurrence.upcoming,
+      );
 
   /// One-shot variant of [watch], used by the agent tools.
   /// [exactFromMs]/[exactToInclusiveMs] add precise inclusive timestamp

@@ -135,6 +135,10 @@ export {
     MAX_LOCALE_TAG_LENGTH,
     resolveLocale,
 } from './locale'
+export {
+    pastCutoffBigInt,
+    pastCutoffMs,
+} from './occurrence'
 export type { ToolArgs, ToolName } from './tools'
 export {
     AGENT_MODEL,
