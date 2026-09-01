@@ -1,3 +1,4 @@
+import type { Messages } from '@/lib/i18n'
 import {
     type ActivityTransaction,
     sectionLabel,
@@ -13,12 +14,30 @@ export type MockFrequency =
     | 'yearly'
     | 'customDays'
 
-export const FREQUENCY_LABELS: Record<MockFrequency, string> = {
-    daily: 'Diario',
-    weekly: 'Semanal',
-    monthly: 'Mensual',
-    yearly: 'Anual',
-    customDays: 'Cada X días',
+export const FREQUENCY_OPTIONS: readonly MockFrequency[] = [
+    'daily',
+    'weekly',
+    'monthly',
+    'yearly',
+    'customDays',
+]
+
+export function frequencyLabel(
+    frequency: MockFrequency,
+    messages: Messages,
+): string {
+    switch (frequency) {
+        case 'daily':
+            return messages.addManual.recurrenceDaily
+        case 'weekly':
+            return messages.addManual.recurrenceWeekly
+        case 'monthly':
+            return messages.addManual.recurrenceMonthly
+        case 'yearly':
+            return messages.addManual.recurrenceYearly
+        case 'customDays':
+            return messages.addManual.recurrenceCustomDays
+    }
 }
 
 /** The scope a recurring edit/delete applies to. */
@@ -214,6 +233,7 @@ export function buildMockMovements(now: number): FutureMovement[] {
 
 export function identitiesFor(
     txn: ActivityTransaction,
+    messages: Messages,
 ): TransactionRowIdentity[] {
     const account = MOCK_ACCOUNTS[txn.accountId]
     const category = MOCK_CATEGORIES[txn.categoryId]
@@ -222,7 +242,9 @@ export function identitiesFor(
             ? [
                   {
                       type: 'account' as const,
-                      label: `Cuenta: ${account.name}`,
+                      label: messages.futureMovements.accountIdentity(
+                          account.name,
+                      ),
                       icon: account.icon,
                       color: account.color,
                   },
@@ -232,7 +254,9 @@ export function identitiesFor(
             ? [
                   {
                       type: 'category' as const,
-                      label: `Categoría: ${category.name}`,
+                      label: messages.futureMovements.categoryIdentity(
+                          category.name,
+                      ),
                       icon: category.icon,
                       color: category.color,
                   },
@@ -253,6 +277,8 @@ export type FutureEntry =
 export function buildFutureEntries(
     items: readonly FutureMovement[],
     nowMs: number,
+    messages: Messages,
+    locale: string,
 ): FutureEntry[] {
     const sorted = [...items].sort((left, right) => {
         const byDate = Number(left.date - right.date)
@@ -273,7 +299,7 @@ export function buildFutureEntries(
             entries.push({
                 kind: 'header',
                 key: `header-${day}`,
-                label: sectionLabel(day, nowMs),
+                label: sectionLabel(day, nowMs, messages, locale),
             })
             currentDay = day
         }

@@ -19,10 +19,12 @@ import {
     SheetTitle,
 } from '@/components/ui/sheet'
 import { Textarea } from '@/components/ui/textarea'
+import { useT } from '@/lib/i18n'
 import { formatMoney } from '@/lib/money'
 import {
-    FREQUENCY_LABELS,
+    FREQUENCY_OPTIONS,
     type FutureMovement,
+    frequencyLabel,
     fromDateTimeInputs,
     MOCK_ACCOUNTS,
     MOCK_CATEGORIES,
@@ -89,6 +91,7 @@ function DetailsContent({
     ) => void
     onDelete: (id: string, scope: RecurrenceScope) => void
 }) {
+    const t = useT()
     const formId = useId()
     const [editing, setEditing] = useState(false)
     const [name, setName] = useState(movement.name)
@@ -116,12 +119,12 @@ function DetailsContent({
     function buildPatch(): Partial<FutureMovement> | null {
         const trimmedName = name.trim()
         if (!trimmedName) {
-            toast.error('El título es obligatorio')
+            toast.error(t.futureMovements.titleRequired)
             return null
         }
         const parsedAmount = Number(amount.trim().replace(',', '.'))
         if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) {
-            toast.error('El monto debe ser mayor a 0')
+            toast.error(t.futureMovements.amountGreaterThanZero)
             return null
         }
         return {
@@ -165,7 +168,9 @@ function DetailsContent({
         <>
             <SheetHeader className="flex-row items-center border-b">
                 <SheetTitle className="flex-1">
-                    {editing ? 'Editar movimiento' : 'Detalle'}
+                    {editing
+                        ? t.futureMovements.editMovement
+                        : t.futureMovements.detail}
                 </SheetTitle>
                 {editing ? (
                     <span className="size-8 shrink-0" aria-hidden />
@@ -174,7 +179,7 @@ function DetailsContent({
                         variant="ghost"
                         size="icon-sm"
                         onClick={() => setEditing(true)}
-                        aria-label="Editar"
+                        aria-label={t.futureMovements.edit}
                     >
                         <Pencil />
                     </Button>
@@ -183,7 +188,7 @@ function DetailsContent({
                     variant="ghost"
                     size="icon-sm"
                     onClick={() => setPendingScope('delete')}
-                    aria-label="Eliminar"
+                    aria-label={t.futureMovements.delete}
                 >
                     <Trash2 />
                 </Button>
@@ -191,7 +196,7 @@ function DetailsContent({
                     variant="ghost"
                     size="icon-sm"
                     onClick={onClose}
-                    aria-label="Cerrar"
+                    aria-label={t.futureMovements.close}
                 >
                     <X />
                 </Button>
@@ -211,7 +216,7 @@ function DetailsContent({
                             value={name}
                             onChange={(e) => setName(e.target.value)}
                             className="h-11 flex-1 rounded-xl"
-                            placeholder="Título"
+                            placeholder={t.futureMovements.titlePlaceholder}
                         />
                     ) : (
                         <h2 className="text-xl font-bold text-foreground">
@@ -234,7 +239,7 @@ function DetailsContent({
                 </div>
 
                 {editing ? (
-                    <ReceiptRow label="Monto">
+                    <ReceiptRow label={t.futureMovements.amount}>
                         <Input
                             inputMode="decimal"
                             value={amount}
@@ -244,7 +249,7 @@ function DetailsContent({
                     </ReceiptRow>
                 ) : null}
 
-                <ReceiptRow label="Frecuencia">
+                <ReceiptRow label={t.futureMovements.frequency}>
                     {editing ? (
                         <div className="flex flex-col gap-2">
                             <select
@@ -256,20 +261,16 @@ function DetailsContent({
                                 }
                                 className={SELECT_CLASS}
                             >
-                                {(
-                                    Object.keys(
-                                        FREQUENCY_LABELS,
-                                    ) as MockFrequency[]
-                                ).map((key) => (
+                                {FREQUENCY_OPTIONS.map((key) => (
                                     <option key={key} value={key}>
-                                        {FREQUENCY_LABELS[key]}
+                                        {frequencyLabel(key, t)}
                                     </option>
                                 ))}
                             </select>
                             {frequency === 'customDays' ? (
                                 <div className="flex items-center gap-2">
                                     <span className="text-sm">
-                                        Repetir cada
+                                        {t.addManual.recurrenceRepeatEvery}
                                     </span>
                                     <Input
                                         type="number"
@@ -289,22 +290,24 @@ function DetailsContent({
                                         }}
                                         className="h-10 w-20 rounded-xl text-center"
                                     />
-                                    <span className="text-sm">días</span>
+                                    <span className="text-sm">
+                                        {t.addManual.recurrenceDaysUnit}
+                                    </span>
                                 </div>
                             ) : null}
                         </div>
                     ) : (
                         <span>
-                            {FREQUENCY_LABELS[movement.frequency]}
+                            {frequencyLabel(movement.frequency, t)}
                             {movement.frequency === 'customDays' &&
                             movement.dayInterval
-                                ? ` (${movement.dayInterval} días)`
+                                ? ` (${movement.dayInterval} ${t.addManual.recurrenceDaysUnit})`
                                 : ''}
                         </span>
                     )}
                 </ReceiptRow>
 
-                <ReceiptRow label="Fecha">
+                <ReceiptRow label={t.futureMovements.date}>
                     {editing ? (
                         <Input
                             type="date"
@@ -317,7 +320,7 @@ function DetailsContent({
                     )}
                 </ReceiptRow>
 
-                <ReceiptRow label="Hora">
+                <ReceiptRow label={t.futureMovements.time}>
                     {editing ? (
                         <Input
                             type="time"
@@ -330,7 +333,7 @@ function DetailsContent({
                     )}
                 </ReceiptRow>
 
-                <ReceiptRow label="Cuenta">
+                <ReceiptRow label={t.futureMovements.account}>
                     {editing ? (
                         <select
                             value={accountId}
@@ -350,7 +353,7 @@ function DetailsContent({
                     )}
                 </ReceiptRow>
 
-                <ReceiptRow label="Categoría">
+                <ReceiptRow label={t.futureMovements.category}>
                     {editing ? (
                         <select
                             value={categoryId}
@@ -372,18 +375,21 @@ function DetailsContent({
                     )}
                 </ReceiptRow>
 
-                <ReceiptRow label="Descripción">
+                <ReceiptRow label={t.futureMovements.description}>
                     {editing ? (
                         <Textarea
                             value={description}
                             onChange={(e) => setDescription(e.target.value)}
                             rows={2}
                             className="rounded-xl"
-                            placeholder="Detalle opcional"
+                            placeholder={
+                                t.futureMovements.descriptionPlaceholder
+                            }
                         />
                     ) : (
                         <span className="text-muted-foreground">
-                            {movement.description || 'Sin descripción'}
+                            {movement.description ||
+                                t.futureMovements.noDescription}
                         </span>
                     )}
                 </ReceiptRow>
@@ -403,13 +409,15 @@ function DetailsContent({
                 destructive={pendingScope === 'delete'}
                 title={
                     pendingScope === 'delete'
-                        ? 'Eliminar movimiento recurrente'
-                        : 'Guardar cambios'
+                        ? t.futureMovements.deleteRecurring
+                        : t.futureMovements.saveChanges
                 }
                 description={
                     pendingScope === 'delete'
-                        ? `¿Querés eliminar “${movement.name}” solo esta vez o también los futuros?`
-                        : '¿Aplicar los cambios solo a este movimiento o también a los futuros?'
+                        ? t.futureMovements.scopeDeleteDescription(
+                              movement.name,
+                          )
+                        : t.futureMovements.scopeEditDescription
                 }
                 onOpenChange={(next) => {
                     if (!next) setPendingScope(null)
@@ -452,6 +460,7 @@ function ScopeDialog({
     onOpenChange: (open: boolean) => void
     onChoose: (scope: RecurrenceScope) => void
 }) {
+    const t = useT()
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent>
@@ -465,21 +474,21 @@ function ScopeDialog({
                         className="w-full"
                         onClick={() => onChoose('only-this')}
                     >
-                        Solo este movimiento
+                        {t.futureMovements.scopeOnlyThis}
                     </Button>
                     <Button
                         variant={destructive ? 'destructive' : 'default'}
                         className="w-full"
                         onClick={() => onChoose('all-future')}
                     >
-                        Este y los futuros
+                        {t.futureMovements.scopeAllFuture}
                     </Button>
                     <Button
                         variant="outline"
                         className="w-full"
                         onClick={() => onOpenChange(false)}
                     >
-                        Cancelar
+                        {t.futureMovements.cancel}
                     </Button>
                 </DialogFooter>
             </DialogContent>

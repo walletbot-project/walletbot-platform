@@ -1,6 +1,11 @@
+import { IconButton } from 'actify'
 import { CalendarClock, Info } from 'lucide-react'
 import { useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
+import { AppBar } from '@/components/m3/app-bar'
+import { Icon } from '@/components/m3/icon'
+import { useFormatLocale, useT } from '@/lib/i18n'
 import {
     estimatedDescription,
     formatTransactionTime,
@@ -11,14 +16,17 @@ import { FutureMovementDetailsSheet } from './details-sheet'
 import {
     buildFutureEntries,
     buildMockMovements,
-    FREQUENCY_LABELS,
     type FutureMovement,
+    frequencyLabel,
     identitiesFor,
     type RecurrenceScope,
     stepDate,
 } from './helpers'
 
 export function FutureMovements() {
+    const t = useT()
+    const locale = useFormatLocale()
+    const navigate = useNavigate()
     const [now] = useState(() => Date.now())
     const [movements, setMovements] = useState<FutureMovement[]>(() =>
         buildMockMovements(now),
@@ -26,8 +34,8 @@ export function FutureMovements() {
     const [selectedId, setSelectedId] = useState<string | null>(null)
 
     const entries = useMemo(
-        () => buildFutureEntries(movements, now),
-        [movements, now],
+        () => buildFutureEntries(movements, now, t, locale),
+        [movements, now, t, locale],
     )
     const selected = movements.find((m) => m.id === selectedId) ?? null
 
@@ -76,8 +84,8 @@ export function FutureMovements() {
         )
         toast.success(
             scope === 'only-this'
-                ? 'Cambios aplicados a este movimiento'
-                : 'Cambios aplicados a este y los futuros',
+                ? t.futureMovements.savedOnlyThis
+                : t.futureMovements.savedAllFuture,
         )
     }
 
@@ -100,19 +108,30 @@ export function FutureMovements() {
         setSelectedId(null)
         toast.success(
             scope === 'only-this'
-                ? 'Movimiento eliminado'
-                : 'Movimiento y sus futuros eliminados',
+                ? t.futureMovements.deletedOnlyThis
+                : t.futureMovements.deletedAllFuture,
         )
     }
 
     return (
         <div className="flex flex-1 flex-col">
+            <AppBar
+                title={t.futureMovements.title}
+                leading={
+                    <IconButton
+                        aria-label={t.common.goBack}
+                        onPress={() => navigate(-1)}
+                        className="text-on-surface-variant"
+                    >
+                        <Icon name="arrow_back" />
+                    </IconButton>
+                }
+            />
             <div className="mx-auto flex w-full max-w-2xl flex-1 flex-col gap-4 p-4">
                 <div className="flex items-start gap-3 rounded-xl border border-[#21C4B6]/40 bg-[#21C4B6]/10 px-4 py-3">
                     <Info className="mt-0.5 size-4 shrink-0 text-[#11796F]" />
                     <p className="text-sm text-[#11796F]">
-                        Estos son tus movimientos recurrentes que todavía no
-                        ocurrieron. No aparecen en Actividad hasta que suceden.
+                        {t.futureMovements.info}
                     </p>
                 </div>
 
@@ -122,7 +141,7 @@ export function FutureMovements() {
                             <CalendarClock className="size-5 text-muted-foreground" />
                         </div>
                         <p className="text-sm text-muted-foreground">
-                            No tenés movimientos futuros programados
+                            {t.futureMovements.empty}
                         </p>
                     </div>
                 ) : (
@@ -144,17 +163,22 @@ export function FutureMovements() {
                                     dateConfirmed={entry.txn.dateConfirmed}
                                     timeLabel={formatTransactionTime(
                                         entry.txn.date,
+                                        locale,
                                     )}
                                     timeStatus={transactionTimeStatus(
                                         entry.txn,
                                     )}
                                     description={[
-                                        FREQUENCY_LABELS[entry.txn.frequency],
-                                        estimatedDescription(entry.txn),
+                                        frequencyLabel(entry.txn.frequency, t),
+                                        estimatedDescription(
+                                            entry.txn,
+                                            t,
+                                            locale,
+                                        ),
                                     ]
                                         .filter(Boolean)
                                         .join(' · ')}
-                                    identities={identitiesFor(entry.txn)}
+                                    identities={identitiesFor(entry.txn, t)}
                                     onClick={() => setSelectedId(entry.txn.id)}
                                 />
                             ),
