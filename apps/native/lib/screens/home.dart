@@ -134,8 +134,16 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _openFutureMovements() {
+    // Same as _openManualAdd: the pushed route sits above the account-scoped
+    // providers, so the screen's data layer has to be re-provided into it.
+    final repos = context.read<AppRepositories>();
     Navigator.of(context).push(
-      MaterialPageRoute<void>(builder: (_) => const FutureMovementsScreen()),
+      MaterialPageRoute<void>(
+        builder: (_) => Provider<AppRepositories>.value(
+          value: repos,
+          child: const FutureMovementsScreen(),
+        ),
+      ),
     );
   }
 
