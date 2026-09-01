@@ -991,28 +991,34 @@ class _InfoBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // The demo painted this callout in a fixed teal wash with dark teal text,
+    // which reads fine on a white page and nearly disappears on a dark one.
+    // `secondaryContainer` is the scheme's own informational surface and
+    // carries its matching foreground in both brightnesses.
+    final colorScheme = Theme.of(context).colorScheme;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Container(
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
-          color: const Color(0x1A21C4B6),
+          color: colorScheme.secondaryContainer,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: const Color(0x6621C4B6)),
         ),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Icon(
+            Icon(
               Icons.info_outline_rounded,
               size: 20,
-              color: Color(0xFF11796F),
+              color: colorScheme.onSecondaryContainer,
             ),
             const SizedBox(width: 10),
             Expanded(
               child: Text(
                 text,
-                style: const TextStyle(fontSize: 14, color: Color(0xFF11796F)),
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: colorScheme.onSecondaryContainer,
+                ),
               ),
             ),
           ],

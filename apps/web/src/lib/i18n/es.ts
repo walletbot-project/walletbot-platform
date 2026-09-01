@@ -856,6 +856,7 @@ export const es = {
     },
 
     futureMovements: {
+        selectDetail: 'Elegí un movimiento para ver su detalle',
         title: 'Movimientos futuros',
         info: 'Estos son tus movimientos recurrentes que todavía no ocurrieron. No aparecen en Actividad hasta que suceden.',
         empty: 'No tenés movimientos futuros programados',

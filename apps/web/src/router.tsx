@@ -255,6 +255,18 @@ export const router = createBrowserRouter([
                                             ).then((m) => ({
                                                 Component: m.FutureMovements,
                                             })),
+                                        children: [
+                                            {
+                                                path: ':movementId',
+                                                lazy: () =>
+                                                    import(
+                                                        '@/pages/future-movements'
+                                                    ).then((m) => ({
+                                                        Component:
+                                                            m.FutureMovementDetailRoute,
+                                                    })),
+                                            },
+                                        ],
                                     },
                                     {
                                         path: '/settings',

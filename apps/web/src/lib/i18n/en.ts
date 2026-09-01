@@ -814,6 +814,7 @@ export const en: Messages = {
         categoryNamePlaceholder: 'e.g. Food, Gift, Freelance',
     },
     futureMovements: {
+        selectDetail: 'Pick a movement to see its details',
         title: 'Future movements',
         info: "These are your recurring movements that haven't happened yet. They won't show in Activity until they occur.",
         empty: 'You have no scheduled future movements',
