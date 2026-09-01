@@ -125,3 +125,8 @@ export const whatsappOutboundMessages = defineTable({
 })
     .index('by_wamid', ['wamid'])
     .index('by_conversationId', ['conversationId'])
+
+export const whatsappWebhookRoutes = defineTable({
+    waId: v.string(),
+    url: v.string(),
+}).index('by_waId', ['waId'])

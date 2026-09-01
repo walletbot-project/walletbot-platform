@@ -442,6 +442,15 @@ export const isEnabledForUser = internalQuery({
     },
 })
 
+export const webhookRoute = internalQuery({
+    args: { waId: v.string() },
+    handler: async (ctx, args) =>
+        await ctx.db
+            .query('whatsappWebhookRoutes')
+            .withIndex('by_waId', (q) => q.eq('waId', args.waId))
+            .first(),
+})
+
 export const recentHistory = internalQuery({
     args: { conversationId: v.id('whatsappConversations') },
     handler: async (ctx, { conversationId }) => {

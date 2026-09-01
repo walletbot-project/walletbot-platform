@@ -36,6 +36,7 @@ import {
     whatsappInboundMessages,
     whatsappLinkCodes,
     whatsappOutboundMessages,
+    whatsappWebhookRoutes,
 } from './schema/whatsapp'
 
 export default defineSchema({
@@ -74,4 +75,5 @@ export default defineSchema({
     whatsappInboundMessages,
     whatsappLinkCodes,
     whatsappOutboundMessages,
+    whatsappWebhookRoutes,
 })

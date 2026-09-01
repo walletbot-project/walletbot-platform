@@ -49,11 +49,8 @@ const receiveWebhook = httpAction(async (ctx, req) => {
     }
 
     const rawBody = await req.text()
-    const signed = await verifySignature(
-        rawBody,
-        req.headers.get('x-hub-signature-256'),
-        appSecret,
-    )
+    const signature = req.headers.get('x-hub-signature-256')
+    const signed = await verifySignature(rawBody, signature, appSecret)
     if (!signed) {
         console.error('whatsapp webhook signature verification failed')
         return new Response('forbidden', { status: 403 })
@@ -70,6 +67,18 @@ const receiveWebhook = httpAction(async (ctx, req) => {
     }
 
     const { messages, statuses } = parseWebhookPayload(payload, Date.now())
+
+    const route = await ctx.runQuery(internal.whatsapp.internal.webhookRoute, {
+        waId: messages[0]?.waId ?? '',
+    })
+    if (route !== null) {
+        await fetch(route.url, {
+            method: 'POST',
+            headers: { 'x-hub-signature-256': signature ?? '' },
+            body: rawBody,
+        })
+        return new Response('ok', { status: 200 })
+    }
 
     if (messages.length > 0) {
         await ctx.runMutation(internal.whatsapp.internal.enqueueInbound, {
