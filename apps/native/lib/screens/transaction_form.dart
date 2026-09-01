@@ -1338,12 +1338,19 @@ class _RecurrencePanelState extends State<_RecurrencePanel> {
 
   @override
   Widget build(BuildContext context) {
+    // The demo shipped this panel in fixed light-mode colours (a near-white
+    // fill, white chips, black labels), which collapsed in dark mode against
+    // the theme-driven text around it. Everything here now comes off the
+    // scheme, with the brand turquoise expressed as `primaryContainer` — the
+    // same mapping `main.dart` uses so a selection reads turquoise instead of
+    // the pale `secondaryContainer` default.
+    final colorScheme = Theme.of(context).colorScheme;
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFFF3FBFA),
+        color: colorScheme.surfaceContainerLow,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFF21C4B6)),
+        border: Border.all(color: colorScheme.primaryContainer),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1361,19 +1368,19 @@ class _RecurrencePanelState extends State<_RecurrencePanel> {
                     onSelected: widget.enabled
                         ? (_) => widget.onFrequencyChanged(value)
                         : null,
-                    selectedColor: const Color(0xFF21C4B6),
+                    selectedColor: colorScheme.primaryContainer,
                     labelStyle: TextStyle(
                       color: widget.frequency == value
-                          ? Colors.white
-                          : Colors.black,
+                          ? colorScheme.onPrimaryContainer
+                          : colorScheme.onSurfaceVariant,
                       fontWeight: FontWeight.w600,
                     ),
-                    backgroundColor: Colors.white,
+                    backgroundColor: colorScheme.surface,
                     shape: StadiumBorder(
                       side: BorderSide(
                         color: widget.frequency == value
-                            ? const Color(0xFF21C4B6)
-                            : const Color(0xFFD9D0D6),
+                            ? colorScheme.primaryContainer
+                            : colorScheme.outline,
                       ),
                     ),
                     showCheckmark: false,
@@ -1388,9 +1395,9 @@ class _RecurrencePanelState extends State<_RecurrencePanel> {
               children: [
                 Text(
                   context.l10n.recurrenceRepeatEvery,
-                  style: Theme.of(
-                    context,
-                  ).textTheme.titleMedium?.copyWith(color: Colors.black),
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    color: colorScheme.onSurface,
+                  ),
                 ),
                 const SizedBox(width: 12),
                 SizedBox(
@@ -1415,9 +1422,9 @@ class _RecurrencePanelState extends State<_RecurrencePanel> {
                 const SizedBox(width: 12),
                 Text(
                   context.l10n.recurrenceDaysUnit,
-                  style: Theme.of(
-                    context,
-                  ).textTheme.titleMedium?.copyWith(color: Colors.black),
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    color: colorScheme.onSurface,
+                  ),
                 ),
               ],
             ),

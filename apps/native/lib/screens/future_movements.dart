@@ -62,7 +62,7 @@ const _categoryOptions = <_CategoryOption>[
 ];
 
 /// A single upcoming recurring movement. Backed by mock data — future movements
-/// are not persisted yet (see RECURRENCYDESIGN.md).
+/// are not persisted yet (see docs/recurrency-design.md).
 class _FutureMovement {
   const _FutureMovement({
     required this.id,
