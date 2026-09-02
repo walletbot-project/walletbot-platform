@@ -388,11 +388,70 @@ dejar que LWW le borre el vínculo con la serie.
 El backend **no** regenera una serie que recibió por sync, así que los dos
 caminos no pueden duplicarse.
 
-`materializeBatch` es idempotente por construcción: lee qué índices ya existen
-y llena sólo los huecos. Un paso del workflow reintentado después de una falla
-parcial completa el lote en vez de duplicarlo — y acá un duplicado es plata que
-el usuario nunca gastó.
+`materializeBatch` es idempotente por construcción: lee qué ocurrencias ya
+existen en la ventana que le toca y llena sólo los huecos. Un paso del workflow
+reintentado después de una falla parcial completa el lote en vez de duplicarlo
+— y acá un duplicado es plata que el usuario nunca gastó.
+
+El rango `[from, to)` es **argumento**, nunca se re-deriva adentro. Eso es lo
+que hace segura la ampliación del paso 2B: "añadir 48 más" se resuelve a una
+ventana concreta en el momento del click, así que un reintento llena esa misma
+ventana en vez de leer una serie que ya creció y estirarla otra vez.
+
+La presencia se chequea sobre `by_user_recurrence_index`, un rango
+`[from, to)` que contiene exactamente las ocurrencias del lote: trabajo acotado
+por lote, en lugar de releer la serie entera (que crece con cada ampliación).
+Por **índice** y no por fecha, a propósito — hay dos índices sobre la serie y no
+son redundantes: en cuanto el paso 4 permita editar la fecha de una sola
+ocurrencia, el orden por índice y el orden por fecha dejan de coincidir, y el
+que dice qué lugares están ocupados es el índice.
 
 La regla y su ocurrencia 0 se escriben juntas a propósito: las ocurrencias
 copian sus campos de la ancla, así que una regla sin ancla no tiene forma y el
 materializador se niega a correr.
+
+### 5.3. Paso 2B — ampliar una serie abierta
+
+En el detalle de un movimiento futuro hay un botón "añadir N más", con el mismo
+N con el que se creó la regla (`recurrenceHorizon`).
+
+#### Continúa desde la última ocurrencia que existe, no desde la abierta
+
+Es la única invariante que importa acá. Abrir el movimiento de septiembre de una
+serie ya materializada hasta noviembre y pedir 48 más tiene que significar
+diciembre en adelante: cualquier otra lectura o choca con los movimientos que ya
+están o deja un hueco.
+
+Por eso la operación se dirige **a la regla**, no a la ocurrencia: el índice del
+movimiento abierto no es ni un argumento. `from` sale del máximo `recurrenceIndex`
+de la serie, una sola lectura por índice descendente.
+
+Y lo que las ocurrencias nuevas *copian* es la ocurrencia 0, no la última: el
+ancla es la forma de la regla. Copiar la última dejaría que un movimiento
+editado redefina en silencio toda la serie futura, que es justamente la
+decisión que "sólo este" vs "este y los futuros" existe para hacer explícita.
+
+#### Sólo para reglas sin fecha de fin
+
+Una regla con fecha de fin ya está completa: el usuario puso ese límite a
+propósito y pasarlo sería editar la regla, no ampliarla (eso es el paso 4). El
+botón no aparece.
+
+#### No hace falta persistir "cuántas pidió"
+
+La tentación era guardar un contador en `recurrences`. No hace falta y sería una
+segunda fuente de verdad: con el rango como argumento del workflow, "cuántas
+hay" sigue siendo una propiedad de las filas y nada puede contradecirlas.
+
+#### Los dos caminos, otra vez
+
+- **Web**: `v1/recurrences/mutations:addOccurrences` resuelve `from`/`to` y
+  arranca el mismo workflow del paso 2.
+- **Nativo**: `TransactionRepository.addOccurrences` las escribe localmente, en
+  una transacción de drift, copiando los campos de la última ocurrencia.
+
+Devuelven cuántas crearon, y el snackbar/toast reporta **ese** número, no el que
+ofrecía el botón: si la regla cambió abajo, la escritura es la que dice la
+verdad. Cero significa que la regla dejó de ser ampliable mientras preguntábamos
+(borrada, o con fecha de fin puesta en otro dispositivo) y se reporta como error,
+no como un éxito vacío.

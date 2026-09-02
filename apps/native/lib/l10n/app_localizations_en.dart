@@ -1110,6 +1110,26 @@ class AppLocalizationsEn extends AppLocalizations {
   String get noFutureMovements => 'You have no scheduled future movements';
 
   @override
+  String addMoreMovements(int count) {
+    return 'Add $count more';
+  }
+
+  @override
+  String get addMoreMovementsHint =>
+      'The new movements carry on from the last one in the series, not from this one.';
+
+  @override
+  String get addingMoreMovements => 'Adding movements…';
+
+  @override
+  String addedMoreMovements(int count) {
+    return 'Added $count movements';
+  }
+
+  @override
+  String get addMoreMovementsFailed => 'The movements could not be added';
+
+  @override
   String get leaves => 'Leaves';
 
   @override

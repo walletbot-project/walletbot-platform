@@ -99,6 +99,18 @@ RecurrenceHorizon recurrenceHorizon(
 /// the policy above and the screens that render it share one definition.
 enum RecurrenceFrequency { daily, weekly, monthly, yearly, customDays }
 
+/// Parses the stored `frequency` string back into the enum, tolerating a value
+/// this build does not know: the column is plain text and a newer client may
+/// have synced a cadence added after this version shipped. Null means "cannot
+/// interpret", which callers treat as "leave the series alone" rather than
+/// guessing at it.
+RecurrenceFrequency? recurrenceFrequencyFromName(String name) {
+  for (final frequency in RecurrenceFrequency.values) {
+    if (frequency.name == name) return frequency;
+  }
+  return null;
+}
+
 /// Days in a given local month, with [month] 1-based as in [DateTime.month].
 /// Day 0 of the next month is the last day of this one.
 int _daysInMonth(int year, int month) => DateTime(year, month + 1, 0).day;

@@ -838,6 +838,12 @@ export const en: Messages = {
         description: 'Description',
         descriptionPlaceholder: 'Optional detail',
         noDescription: 'No description',
+        addMore: (p: { count: number }) => `Add ${p.count} more`,
+        addMoreHint:
+            'The new movements carry on from the last one in the series, not from this one.',
+        addingMore: 'Adding movements…',
+        addedMore: (p: { count: number }) => `Added ${p.count} movements`,
+        addMoreFailed: 'The movements could not be added',
         saveChanges: 'Save changes',
         deleteRecurring: 'Delete recurring movement',
         titleRequired: 'A title is required',

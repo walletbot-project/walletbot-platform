@@ -111,6 +111,7 @@ import type * as v1_live_actions from "../v1/live/actions.js";
 import type * as v1_memories_mutations from "../v1/memories/mutations.js";
 import type * as v1_memories_queries from "../v1/memories/queries.js";
 import type * as v1_recurrences_mutations from "../v1/recurrences/mutations.js";
+import type * as v1_recurrences_queries from "../v1/recurrences/queries.js";
 import type * as v1_support_queries from "../v1/support/queries.js";
 import type * as v1_sync_mutations from "../v1/sync/mutations.js";
 import type * as v1_sync_queries from "../v1/sync/queries.js";
@@ -236,6 +237,7 @@ declare const fullApi: ApiFromModules<{
   "v1/memories/mutations": typeof v1_memories_mutations;
   "v1/memories/queries": typeof v1_memories_queries;
   "v1/recurrences/mutations": typeof v1_recurrences_mutations;
+  "v1/recurrences/queries": typeof v1_recurrences_queries;
   "v1/support/queries": typeof v1_support_queries;
   "v1/sync/mutations": typeof v1_sync_mutations;
   "v1/sync/queries": typeof v1_sync_queries;

@@ -2,10 +2,11 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:app/data/data.dart';
+import 'package:app/data/recurrence.dart';
 import 'package:app/database.dart';
 import 'package:app/telemetry/business_metrics.dart';
 import 'package:app/telemetry/telemetry_client.dart';
-import 'package:drift/drift.dart' show Value;
+import 'package:drift/drift.dart' show OrderingTerm, Value;
 import 'package:drift/native.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter/material.dart' show DateTimeRange;
@@ -470,6 +471,143 @@ void main() {
       await repos.tags.update(child, parentId: Value(parent));
       await Future<void>.delayed(const Duration(milliseconds: 200));
       expect(emissions.last, [txn]);
+    });
+  });
+
+  group('recurring series', () {
+    /// A monthly rule anchored on the 15th, with no end date. 48 occurrences
+    /// up front (`recurrenceHorizon`), indices 0..47.
+    Future<String> createMonthlySeries({DateTime? endDate}) =>
+        repos.transactions.addExpense(
+          accountId: cashId,
+          categoryId: foodId,
+          name: 'Rent',
+          amountCents: BigInt.from(150000),
+          currency: 'ARS',
+          dateMs: BigInt.from(
+            DateTime(2026, 1, 15, 9, 30).millisecondsSinceEpoch,
+          ),
+          // Confirmed, so the anchor keeps the 09:30 it was given (an
+          // unconfirmed time is replaced by the clock — see
+          // `_resolveTransactionDate`) and the series can be asserted exactly.
+          timeStatus: TransactionTimeStatus.confirmed,
+          recurrence: RecurrenceDraft(
+            frequency: RecurrenceFrequency.monthly,
+            endDate: endDate,
+          ),
+        );
+
+    /// Straight off the table, on purpose: the repository's read paths sit
+    /// behind the occurrence cutoff, and a series spans both sides of it.
+    Future<List<Transaction>> seriesRows(String recurrenceId) =>
+        (db.select(db.transactions)
+              ..where((t) => t.recurrenceId.equals(recurrenceId))
+              ..orderBy([(t) => OrderingTerm.asc(t.recurrenceIndex)]))
+            .get();
+
+    Future<String> ruleIdOf(String transactionId) async {
+      final txn = await repos.transactions.getById(transactionId);
+      return txn!.recurrenceId!;
+    }
+
+    test('creates the whole batch up front, indexed from the anchor', () async {
+      final id = await createMonthlySeries();
+      final rows = await seriesRows(await ruleIdOf(id));
+
+      expect(rows, hasLength(48));
+      expect(rows.first.id, id);
+      expect(rows.map((t) => t.recurrenceIndex), List.generate(48, (i) => i));
+      // Index 12 is one year on, still the 15th — projected from the anchor.
+      final twelfth = DateTime.fromMillisecondsSinceEpoch(
+        rows[12].date.toInt(),
+      );
+      expect(twelfth, DateTime(2027, 1, 15, 9, 30));
+    });
+
+    test(
+      'addOccurrences continues from the last occurrence, not the opened one',
+      () async {
+        final id = await createMonthlySeries();
+        final ruleId = await ruleIdOf(id);
+        final before = await seriesRows(ruleId);
+        final lastBefore = DateTime.fromMillisecondsSinceEpoch(
+          before.last.date.toInt(),
+        );
+
+        // The occurrence the user had open is not even an argument — the
+        // top-up is addressed to the rule, so where they were standing cannot
+        // affect where the new movements land. That is the guarantee; this
+        // asserts the result of it.
+        final added = await repos.transactions.addOccurrences(ruleId);
+        expect(added, 48);
+
+        final after = await seriesRows(ruleId);
+        expect(after, hasLength(96));
+        expect(
+          after.map((t) => t.recurrenceIndex),
+          List.generate(96, (i) => i),
+          reason: 'indices stay contiguous — no gap and no duplicate',
+        );
+
+        // The first new occurrence is one month after the last old one, not
+        // one month after occurrence 3.
+        final firstNew = DateTime.fromMillisecondsSinceEpoch(
+          after[48].date.toInt(),
+        );
+        expect(firstNew.isAfter(lastBefore), isTrue);
+        expect(
+          firstNew,
+          DateTime(lastBefore.year, lastBefore.month + 1, 15, 9, 30),
+        );
+
+        // Every date distinct: a top-up that overlapped would double-charge.
+        expect(after.map((t) => t.date).toSet(), hasLength(96));
+      },
+    );
+
+    test('addOccurrences copies the anchor, not the last occurrence', () async {
+      final id = await createMonthlySeries();
+      final ruleId = await ruleIdOf(id);
+      final before = await seriesRows(ruleId);
+
+      // Edit one occurrence — the last one, the worst case, since that is
+      // where the top-up continues from. Its edit must not leak into the new
+      // movements: the anchor is the rule's shape, and redefining the future
+      // series is the explicit choice that "this one and the ones after it"
+      // exists to make.
+      await repos.transactions.update(
+        before.last.id,
+        name: const Value('Rent (renegotiated)'),
+        amount: Value(BigInt.from(999999)),
+        accountId: Value(bankId),
+      );
+
+      await repos.transactions.addOccurrences(ruleId);
+      final fresh = (await seriesRows(ruleId)).last;
+
+      expect(fresh.name, 'Rent');
+      expect(fresh.amount, BigInt.from(150000));
+      expect(fresh.accountId, cashId);
+      expect(fresh.categoryId, foodId);
+      expect(fresh.currency, 'ARS');
+      expect(fresh.type, 'expense');
+      expect(fresh.dirty, isTrue, reason: 'new rows have to sync up');
+    });
+
+    test('addOccurrences refuses a rule with an end date', () async {
+      // Ends inside the horizon, so the series is shorter than 48 and, by the
+      // user's own choice, complete.
+      final id = await createMonthlySeries(endDate: DateTime(2026, 6, 30));
+      final ruleId = await ruleIdOf(id);
+      final before = await seriesRows(ruleId);
+      expect(before, hasLength(6));
+
+      expect(await repos.transactions.addOccurrences(ruleId), 0);
+      expect(await seriesRows(ruleId), hasLength(6));
+    });
+
+    test('addOccurrences is a no-op for an unknown rule', () async {
+      expect(await repos.transactions.addOccurrences('nope'), 0);
     });
   });
 }

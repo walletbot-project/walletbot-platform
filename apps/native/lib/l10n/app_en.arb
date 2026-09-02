@@ -364,6 +364,17 @@
   "futureMovements": "Future movements",
   "futureMovementsInfo": "These are your recurring movements that haven't happened yet. They won't show in Activity until they occur.",
   "noFutureMovements": "You have no scheduled future movements",
+  "addMoreMovements": "Add {count} more",
+  "@addMoreMovements": {
+    "placeholders": { "count": { "type": "int" } }
+  },
+  "addMoreMovementsHint": "The new movements carry on from the last one in the series, not from this one.",
+  "addingMoreMovements": "Adding movements…",
+  "addedMoreMovements": "Added {count} movements",
+  "@addedMoreMovements": {
+    "placeholders": { "count": { "type": "int" } }
+  },
+  "addMoreMovementsFailed": "The movements could not be added",
   "leaves": "Leaves",
   "enters": "Enters",
   "required": "Required",

@@ -46,6 +46,8 @@ export type ActivityTransaction = {
     timeStatus?: TransactionTimeStatus
     isArchived: boolean
     tagIds?: string[]
+    /** Set when the movement is one occurrence of a recurring rule. */
+    recurrenceId?: string
 }
 
 /**

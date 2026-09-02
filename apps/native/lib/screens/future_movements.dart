@@ -7,6 +7,7 @@ import '../components/color_utils.dart';
 import '../components/transaction_row.dart';
 import '../data/data.dart';
 import '../data/queries/stream_utils.dart';
+import '../data/recurrence.dart';
 import '../database.dart';
 import '../l10n/l10n.dart';
 
@@ -20,9 +21,9 @@ import '../l10n/l10n.dart';
 /// two lists, one behind and one ahead.
 ///
 /// Runs ascending, unlike Activity: the soonest movement is the interesting
-/// one. Read-only for now — editing or deleting an occurrence has to say
-/// whether it means this one or this one and the ones after it, and "the ones
-/// after it" needs the recurrence rule that materialised them.
+/// one. An open-ended series can be topped up from a movement's detail;
+/// editing and deleting are still absent, because either one has to say
+/// whether it means this occurrence or this one and the ones after it.
 class FutureMovementsScreen extends StatefulWidget {
   const FutureMovementsScreen({super.key});
 
@@ -201,20 +202,28 @@ class _FutureMovementsScreenState extends State<FutureMovementsScreen> {
   }
 
   void _openDetail(Transaction txn, _Payload payload) {
+    // A pushed route sits above the account-scoped providers, so the
+    // repositories have to be re-provided (the same instance) for the detail
+    // to read the recurrence rule — see `_openManualAdd` in the home screen.
+    final repos = context.read<AppRepositories>();
     Navigator.of(context).push<void>(
       MaterialPageRoute(
-        builder: (_) => _FutureMovementDetailScreen(
-          movement: txn,
-          account: payload.accountsById[txn.accountId],
-          category: payload.categoriesById[txn.categoryId],
+        builder: (_) => Provider<AppRepositories>.value(
+          value: repos,
+          child: _FutureMovementDetailScreen(
+            movement: txn,
+            account: payload.accountsById[txn.accountId],
+            category: payload.categoriesById[txn.categoryId],
+          ),
         ),
       ),
     );
   }
 }
 
-/// One upcoming movement, read-only. Mirrors the web detail's receipt rows.
-class _FutureMovementDetailScreen extends StatelessWidget {
+/// One upcoming movement. Mirrors the web detail's receipt rows, plus the
+/// top-up button for an open-ended series.
+class _FutureMovementDetailScreen extends StatefulWidget {
   const _FutureMovementDetailScreen({
     required this.movement,
     required this.account,
@@ -226,7 +235,64 @@ class _FutureMovementDetailScreen extends StatelessWidget {
   final Category? category;
 
   @override
+  State<_FutureMovementDetailScreen> createState() =>
+      _FutureMovementDetailScreenState();
+}
+
+class _FutureMovementDetailScreenState
+    extends State<_FutureMovementDetailScreen> {
+  late final Stream<Recurrence?> _rule;
+  bool _adding = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _rule = context.read<AppRepositories>().transactions.watchRecurrence(
+      widget.movement.recurrenceId,
+    );
+  }
+
+  /// Reports the count the *write* returned, not the one the button offered:
+  /// the two only differ if the rule changed underneath, and in that case the
+  /// write is the one telling the truth.
+  Future<void> _addMore(String recurrenceId) async {
+    setState(() => _adding = true);
+    final messenger = ScaffoldMessenger.of(context);
+    final l10n = context.l10n;
+    messenger.showSnackBar(SnackBar(content: Text(l10n.addingMoreMovements)));
+    try {
+      final added = await context
+          .read<AppRepositories>()
+          .transactions
+          .addOccurrences(recurrenceId);
+      messenger.removeCurrentSnackBar();
+      // Zero means the rule stopped being extendable while we were asking —
+      // deleted, or given an end date on another device. Nothing was written,
+      // so say so rather than reporting a successful nothing.
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            added == 0
+                ? l10n.addMoreMovementsFailed
+                : l10n.addedMoreMovements(added),
+          ),
+        ),
+      );
+    } catch (_) {
+      messenger.removeCurrentSnackBar();
+      messenger.showSnackBar(
+        SnackBar(content: Text(l10n.addMoreMovementsFailed)),
+      );
+    } finally {
+      if (mounted) setState(() => _adding = false);
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final movement = widget.movement;
+    final account = widget.account;
+    final category = widget.category;
     final colorScheme = Theme.of(context).colorScheme;
     final date = DateTime.fromMillisecondsSinceEpoch(movement.date.toInt());
     final description = movement.description;
@@ -277,6 +343,69 @@ class _FutureMovementDetailScreen extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           Divider(color: colorScheme.outlineVariant),
+          StreamBuilder<Recurrence?>(
+            stream: _rule,
+            builder: (context, snapshot) => _TopUpSection(
+              rule: snapshot.data,
+              adding: _adding,
+              onAddMore: _addMore,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// The "add N more" affordance, or nothing at all.
+///
+/// Only an open-ended series can be topped up. One with an end date is already
+/// complete, and running past a boundary the user set on purpose would be
+/// editing the rule rather than extending it.
+class _TopUpSection extends StatelessWidget {
+  const _TopUpSection({
+    required this.rule,
+    required this.adding,
+    required this.onAddMore,
+  });
+
+  final Recurrence? rule;
+  final bool adding;
+  final Future<void> Function(String recurrenceId) onAddMore;
+
+  @override
+  Widget build(BuildContext context) {
+    final rule = this.rule;
+    if (rule == null || rule.endDate != null) return const SizedBox.shrink();
+    final frequency = recurrenceFrequencyFromName(rule.frequency);
+    if (frequency == null) return const SizedBox.shrink();
+
+    final count = recurrenceHorizon(
+      frequency,
+      dayInterval: rule.dayInterval ?? 1,
+    ).count;
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          FilledButton(
+            onPressed: adding ? null : () => onAddMore(rule.id),
+            child: Text(
+              adding
+                  ? context.l10n.addingMoreMovements
+                  : context.l10n.addMoreMovements(count),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            context.l10n.addMoreMovementsHint,
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+          ),
         ],
       ),
     );

@@ -2054,6 +2054,36 @@ abstract class AppLocalizations {
   /// **'You have no scheduled future movements'**
   String get noFutureMovements;
 
+  /// No description provided for @addMoreMovements.
+  ///
+  /// In en, this message translates to:
+  /// **'Add {count} more'**
+  String addMoreMovements(int count);
+
+  /// No description provided for @addMoreMovementsHint.
+  ///
+  /// In en, this message translates to:
+  /// **'The new movements carry on from the last one in the series, not from this one.'**
+  String get addMoreMovementsHint;
+
+  /// No description provided for @addingMoreMovements.
+  ///
+  /// In en, this message translates to:
+  /// **'Adding movements…'**
+  String get addingMoreMovements;
+
+  /// No description provided for @addedMoreMovements.
+  ///
+  /// In en, this message translates to:
+  /// **'Added {count} movements'**
+  String addedMoreMovements(int count);
+
+  /// No description provided for @addMoreMovementsFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'The movements could not be added'**
+  String get addMoreMovementsFailed;
+
   /// No description provided for @leaves.
   ///
   /// In en, this message translates to:

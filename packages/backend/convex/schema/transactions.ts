@@ -59,9 +59,17 @@ export const transactions = defineTable({
     .index('by_user_account_date', ['userId', 'accountId', 'date'])
     .index('by_user_category_date', ['userId', 'categoryId', 'date'])
     .index('by_user_to_account_date', ['userId', 'toAccountId', 'date'])
-    // The series, in occurrence order: what "this and the ones after it" and
-    // "append from the last one" both walk.
+    // The series in calendar order: what "this and the ones after it" walks,
+    // and where "the last one" is read from when a series is topped up.
     .index('by_user_recurrence_date', ['userId', 'recurrenceId', 'date'])
+    // The series in occurrence order. Not redundant with the one above: the
+    // materialiser addresses occurrences *by index*, and once an occurrence's
+    // date can be edited on its own, index order and date order stop agreeing.
+    .index('by_user_recurrence_index', [
+        'userId',
+        'recurrenceId',
+        'recurrenceIndex',
+    ])
     // Text search over the user's whole history. Native filters with SQL LIKE
     // against its local database, so a web search that only looked at the rows
     // already paged in silently missed older matches. A search index takes one

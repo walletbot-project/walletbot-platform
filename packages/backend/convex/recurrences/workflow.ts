@@ -5,7 +5,7 @@ import { components, internal } from '../_generated/api'
 export const workflow = new WorkflowManager(components.workflow)
 
 /**
- * Materialises a recurring rule's occurrences, one batch per step.
+ * Materialises a range of a recurring rule's occurrences, one batch per step.
  *
  * A rule with no end date can be 500 movements; they are ordinary transactions
  * (docs/recurrency-design.md §2.5), so this is 500 inserts plus their
@@ -13,21 +13,35 @@ export const workflow = new WorkflowManager(components.workflow)
  * separate transaction the workflow can retry on its own, and
  * `materializeBatch` only fills gaps, so a retry never duplicates.
  *
+ * `from`/`to` are resolved by the caller and carried unchanged, so a top-up
+ * extends the series exactly once no matter how the run is retried.
+ *
  * Only the web path runs this. Native materialises locally — it has to work
  * offline — and pushes the rows up, so generating them here as well would
  * double the series.
  */
 export const materializeRecurrence = workflow.define({
-    args: { userId: v.string(), recurrenceId: v.string() },
+    args: {
+        userId: v.string(),
+        recurrenceId: v.string(),
+        from: v.number(),
+        to: v.number(),
+    },
     handler: async (step, args): Promise<number> => {
-        let from = 1 // Occurrence 0 is the transaction the user just created.
-        for (;;) {
+        let from = args.from
+        while (from < args.to) {
             const result = await step.runMutation(
                 internal.recurrences.internal.materializeBatch,
-                { userId: args.userId, recurrenceId: args.recurrenceId, from },
+                {
+                    userId: args.userId,
+                    recurrenceId: args.recurrenceId,
+                    from,
+                    to: args.to,
+                },
             )
             if (result.done) return result.next
             from = result.next
         }
+        return from
     },
 })

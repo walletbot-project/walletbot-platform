@@ -1,3 +1,4 @@
+import { occurrenceCount, recurrenceHorizon } from '@wallet-bot/shared'
 import { v } from 'convex/values'
 import { internal } from '../../_generated/api'
 import type { Doc } from '../../_generated/dataModel'
@@ -129,12 +130,84 @@ export const create = mutation({
             ingestPath: 'direct_mutation',
         })
 
+        // The range is resolved here, not inside the materialiser, so retries
+        // fill the same window instead of re-reading a growing series.
+        const total = occurrenceCount(
+            Number(args.date),
+            args.frequency,
+            args.endDate === undefined ? null : Number(args.endDate),
+            args.dayInterval === undefined ? 1 : Number(args.dayInterval),
+        )
         await workflow.start(
             ctx,
             internal.recurrences.workflow.materializeRecurrence,
-            { userId, recurrenceId: args.recurrenceId },
+            {
+                userId,
+                recurrenceId: args.recurrenceId,
+                from: 1, // Occurrence 0 is the transaction inserted above.
+                to: total,
+            },
         )
 
         return args.transactionId
+    },
+})
+
+/**
+ * Tops a rule up by another batch: the same N the rule was created with
+ * (`recurrenceHorizon`), continuing from the **last occurrence that exists**.
+ *
+ * Not from the occurrence the user was looking at when they asked. Opening
+ * September's movement of a series already materialised through November and
+ * asking for 48 more has to mean December onwards — anything else would either
+ * collide with the movements already there or leave a hole.
+ *
+ * Only for open-ended rules. A rule with an end date is already complete; more
+ * occurrences would run past a boundary the user set on purpose, and moving
+ * that boundary is editing the rule, not extending it.
+ */
+export const addOccurrences = mutation({
+    args: { recurrenceId: v.string() },
+    handler: async (ctx, args) => {
+        const userId = await requireAuth(ctx)
+
+        const rule = await ctx.db
+            .query('recurrences')
+            .withIndex('by_user_id', (q) =>
+                q.eq('userId', userId).eq('id', args.recurrenceId),
+            )
+            .unique()
+        if (!rule || rule.isArchived) throw new Error('Recurrence not found')
+        if (rule.endDate !== undefined) {
+            throw new Error('Recurrence has an end date')
+        }
+
+        // The highest occurrence index, not the newest date: once a single
+        // occurrence's date can be edited, the two stop agreeing, and it is
+        // the index that says which slots are taken.
+        const last = await ctx.db
+            .query('transactions')
+            .withIndex('by_user_recurrence_index', (q) =>
+                q.eq('userId', userId).eq('recurrenceId', args.recurrenceId),
+            )
+            .order('desc')
+            .first()
+        if (!last || last.recurrenceIndex === undefined) {
+            throw new Error('Recurrence has no occurrences')
+        }
+
+        const count = recurrenceHorizon(
+            rule.frequency,
+            rule.dayInterval === undefined ? 1 : Number(rule.dayInterval),
+        ).count
+        const from = Number(last.recurrenceIndex) + 1
+
+        await workflow.start(
+            ctx,
+            internal.recurrences.workflow.materializeRecurrence,
+            { userId, recurrenceId: args.recurrenceId, from, to: from + count },
+        )
+
+        return count
     },
 })

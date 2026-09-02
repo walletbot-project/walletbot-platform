@@ -1,7 +1,9 @@
 import { api } from '@wallet-bot/backend/api'
-import { IconButton } from 'actify'
-import { useQuery } from 'convex/react'
-import type { ReactNode } from 'react'
+import { recurrenceHorizon } from '@wallet-bot/shared'
+import { Button, IconButton } from 'actify'
+import { useMutation, useQuery } from 'convex/react'
+import { type ReactNode, useState } from 'react'
+import { toast } from 'sonner'
 import { AppBar } from '@/components/m3/app-bar'
 import { Icon } from '@/components/m3/icon'
 import { useFormatLocale, useT } from '@/lib/i18n'
@@ -19,11 +21,11 @@ import {
  * one: the layout's occupant, headed by its own `AppBar`. `ListDetailLayout`
  * decides whether that lands in a sheet, a dialog or the split pane.
  *
- * Read-only for now, deliberately. Editing or deleting an occurrence has to
- * say whether it means this one or this one and the ones after it, and "the
- * ones after it" needs the recurrence rule that materialised them — which does
- * not exist yet. Wiring the actions to something that silently touched a
- * single row would be a worse answer than not offering them.
+ * An open-ended series can be topped up from here. Editing and deleting are
+ * still absent, deliberately: either one has to say whether it means this
+ * occurrence or this one and the ones after it, and wiring them to something
+ * that silently touched a single row would be a worse answer than not
+ * offering them yet.
  */
 export function FutureMovementDetail({
     movement,
@@ -39,6 +41,42 @@ export function FutureMovementDetail({
         includeArchived: true,
     })
     const categories = useQuery(api.v1.categories.queries.listActive)
+
+    const rule = useQuery(api.v1.recurrences.queries.get, {
+        recurrenceId: movement.recurrenceId,
+    })
+    const addOccurrences = useMutation(
+        api.v1.recurrences.mutations.addOccurrences,
+    )
+    const [adding, setAdding] = useState(false)
+
+    // Only an open-ended series can be topped up. One with an end date is
+    // already complete, and running past a boundary the user set on purpose
+    // would be editing the rule rather than extending it.
+    const topUp =
+        rule && rule.endDate === undefined
+            ? recurrenceHorizon(
+                  rule.frequency,
+                  rule.dayInterval === undefined
+                      ? undefined
+                      : Number(rule.dayInterval),
+              ).count
+            : null
+
+    const onAddMore = async (recurrenceId: string, count: number) => {
+        setAdding(true)
+        const pending = toast.loading(t.futureMovements.addingMore)
+        try {
+            await addOccurrences({ recurrenceId })
+            toast.success(t.futureMovements.addedMore({ count }), {
+                id: pending,
+            })
+        } catch {
+            toast.error(t.futureMovements.addMoreFailed, { id: pending })
+        } finally {
+            setAdding(false)
+        }
+    }
 
     const account = accounts?.find((a) => a.id === movement.accountId)
     const category = categories?.find((c) => c.id === movement.categoryId)
@@ -129,6 +167,24 @@ export function FutureMovementDetail({
                         </span>
                     </ReceiptRow>
                 </div>
+
+                {topUp !== null && rule ? (
+                    <div className="flex flex-col items-stretch gap-2 pt-6">
+                        <Button
+                            type="button"
+                            variant="filled"
+                            isDisabled={adding}
+                            onPress={() => void onAddMore(rule.id, topUp)}
+                        >
+                            {adding
+                                ? t.futureMovements.addingMore
+                                : t.futureMovements.addMore({ count: topUp })}
+                        </Button>
+                        <p className="m3-body-small text-center text-on-surface-variant">
+                            {t.futureMovements.addMoreHint}
+                        </p>
+                    </div>
+                ) : null}
             </div>
         </>
     )

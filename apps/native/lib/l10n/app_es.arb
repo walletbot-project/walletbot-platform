@@ -335,6 +335,17 @@
   "futureMovements": "Movimientos futuros",
   "futureMovementsInfo": "Estos son tus movimientos recurrentes que todavía no ocurrieron. No aparecen en Actividad hasta que suceden.",
   "noFutureMovements": "No tenés movimientos futuros programados",
+  "addMoreMovements": "Añadir {count} más",
+  "@addMoreMovements": {
+    "placeholders": { "count": { "type": "int" } }
+  },
+  "addMoreMovementsHint": "Los nuevos movimientos continúan a partir del último de la serie, no de este.",
+  "addingMoreMovements": "Añadiendo movimientos…",
+  "addedMoreMovements": "Se añadieron {count} movimientos",
+  "@addedMoreMovements": {
+    "placeholders": { "count": { "type": "int" } }
+  },
+  "addMoreMovementsFailed": "No se pudieron añadir los movimientos",
   "leaves": "Sale",
   "enters": "Entra",
   "required": "Obligatorio",

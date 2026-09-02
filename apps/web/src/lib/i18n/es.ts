@@ -880,6 +880,13 @@ export const es = {
         description: 'Descripción',
         descriptionPlaceholder: 'Detalle opcional',
         noDescription: 'Sin descripción',
+        addMore: (p: { count: number }) => `Añadir ${p.count} más`,
+        addMoreHint:
+            'Los nuevos movimientos continúan a partir del último de la serie, no de este.',
+        addingMore: 'Añadiendo movimientos…',
+        addedMore: (p: { count: number }) =>
+            `Se añadieron ${p.count} movimientos`,
+        addMoreFailed: 'No se pudieron añadir los movimientos',
         saveChanges: 'Guardar cambios',
         deleteRecurring: 'Eliminar movimiento recurrente',
         titleRequired: 'El título es obligatorio',

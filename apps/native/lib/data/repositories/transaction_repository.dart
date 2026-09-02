@@ -43,6 +43,15 @@ class TransactionRepository extends RepositoryBase {
         occurrence: TxnOccurrence.upcoming,
       );
 
+  /// The rule a movement belongs to, or `null` when it is a one-off (or the
+  /// rule has since been deleted — the movement itself stays perfectly valid).
+  Stream<Recurrence?> watchRecurrence(String? recurrenceId) {
+    if (recurrenceId == null) return Stream.value(null);
+    return (db.select(db.recurrences)
+          ..where((r) => r.id.equals(recurrenceId) & r.archived.equals(false)))
+        .watchSingleOrNull();
+  }
+
   /// One-shot variant of [watch], used by the agent tools.
   /// [exactFromMs]/[exactToInclusiveMs] add precise inclusive timestamp
   /// bounds on top of the filter (the agent's dates are exact instants, not
@@ -318,6 +327,101 @@ class TransactionRepository extends RepositoryBase {
     });
     _trackCreatedMetric(type: type, createdBy: createdBy);
     return id;
+  }
+
+  /// Tops a rule up by another batch: the same N it was created with
+  /// ([recurrenceHorizon]), continuing from the **last occurrence that
+  /// exists**. Returns how many were created.
+  ///
+  /// Not from the occurrence the user was looking at when they asked. Opening
+  /// September's movement of a series already materialised through November
+  /// and asking for 48 more has to mean December onwards — anything else would
+  /// either collide with the movements already there or leave a hole.
+  ///
+  /// Only for open-ended rules: a rule with an end date is already complete,
+  /// and running past a boundary the user set on purpose is editing the rule,
+  /// not extending it. Returns 0 when there is nothing to extend.
+  ///
+  /// Written locally, like the initial batch — a movement created offline has
+  /// to exist offline. The rows sync up as ordinary transactions and the
+  /// backend never regenerates a series it received, so the two paths cannot
+  /// double up.
+  Future<int> addOccurrences(String recurrenceId) async {
+    final rule =
+        await (db.select(db.recurrences)..where(
+              (r) => r.id.equals(recurrenceId) & r.archived.equals(false),
+            ))
+            .getSingleOrNull();
+    if (rule == null || rule.endDate != null) return 0;
+
+    final frequency = recurrenceFrequencyFromName(rule.frequency);
+    if (frequency == null) return 0;
+    final dayInterval = rule.dayInterval ?? 1;
+    final anchor = DateTime.fromMillisecondsSinceEpoch(rule.anchorDate.toInt());
+
+    // The highest occurrence index says where to continue *from*. By index,
+    // not by date: once a single occurrence's date can be edited the two stop
+    // agreeing, and it is the index that says which slots are taken.
+    final last =
+        await (db.select(db.transactions)
+              ..where((t) => t.recurrenceId.equals(recurrenceId))
+              ..orderBy([(t) => OrderingTerm.desc(t.recurrenceIndex)])
+              ..limit(1))
+            .getSingleOrNull();
+    if (last == null || last.recurrenceIndex == null) return 0;
+
+    // What the new movements *look like* comes from occurrence 0, though, not
+    // from the last one: the anchor is the rule's shape. Copying the last
+    // occurrence would let a single edited movement silently redefine the
+    // whole future series, which is precisely the choice "this one" vs "this
+    // one and the ones after it" exists to make explicit.
+    final anchorRow =
+        await (db.select(db.transactions)..where(
+              (t) =>
+                  t.recurrenceId.equals(recurrenceId) &
+                  t.recurrenceIndex.equals(0),
+            ))
+            .getSingleOrNull();
+    if (anchorRow == null) return 0;
+
+    final count = recurrenceHorizon(frequency, dayInterval: dayInterval).count;
+    final from = last.recurrenceIndex! + 1;
+    final now = currentMs;
+
+    await db.transaction(() async {
+      for (var index = from; index < from + count; index++) {
+        final occurrence = occurrenceDate(
+          anchor,
+          frequency,
+          index,
+          dayInterval: dayInterval,
+        );
+        await db
+            .into(db.transactions)
+            .insert(
+              TransactionsCompanion.insert(
+                id: newUuid(),
+                recurrenceId: Value(recurrenceId),
+                recurrenceIndex: Value(index),
+                type: anchorRow.type,
+                name: anchorRow.name,
+                description: Value(anchorRow.description),
+                status: anchorRow.status,
+                date: BigInt.from(occurrence.millisecondsSinceEpoch),
+                timeStatus: Value(anchorRow.timeStatus),
+                accountId: anchorRow.accountId,
+                categoryId: anchorRow.categoryId,
+                amount: anchorRow.amount,
+                currency: anchorRow.currency,
+                dateConfirmed: Value(anchorRow.dateConfirmed),
+                createdAt: now,
+                updatedAt: now,
+                dirty: const Value(true),
+              ),
+            );
+      }
+    });
+    return count;
   }
 
   /// Creates a transfer between two different accounts and returns its id.
