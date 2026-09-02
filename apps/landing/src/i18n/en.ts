@@ -17,7 +17,7 @@ export const en: Messages = {
         languageLabel: 'Language',
         features: 'Features',
         download: 'Download',
-        getApp: 'Get the app',
+        requestAccess: 'Request access',
     },
 
     hero: {
@@ -81,6 +81,11 @@ export const en: Messages = {
                 title: 'A home screen that’s yours',
                 body: 'Build the mobile app’s home with widgets: stats, lists, and pie, bar or line charts. The assistant can even build it for you.',
             },
+            whatsapp: {
+                title: 'Log it from WhatsApp',
+                body: 'Send a message or a voice note on WhatsApp and the expense is written down, without opening the app.',
+                chip: 'Coming soon',
+            },
             filters: {
                 title: 'Filters that remember',
                 body: 'Search by text, combine conditions, and save your favorite views to come back to them in one tap.',
@@ -94,23 +99,50 @@ export const en: Messages = {
     },
 
     download: {
-        title: 'Download it free',
-        subtitle: 'On Android today. iPhone coming soon.',
+        title: 'Try it free',
+        subtitle:
+            'The web app is open now. Android is in closed beta and iPhone is coming soon.',
         android: {
-            lead: 'Get it on',
+            lead: 'Closed beta on',
             name: 'Google Play',
         },
         ios: {
             lead: 'Coming soon on',
             name: 'App Store',
         },
+        web: {
+            lead: 'Open beta',
+            name: 'Web app',
+        },
+    },
+
+    beta: {
+        meta: {
+            title: 'Wallet Bot — Request beta access',
+            description:
+                'Join the Wallet Bot closed beta on Android and be the first to know when the iPhone app lands.',
+        },
+        chip: {
+            android: 'Android in closed beta',
+            ios: 'iPhone coming soon',
+        },
+        heading: 'Request beta access',
+        body: 'Android is in closed beta: leave us your email and we’ll add you to the tester list.',
+        formCta: {
+            title: 'Fill out the form',
+            body: 'It’s a couple of questions. We’ll email you once you’re on the list.',
+        },
+        iosNote:
+            'On iPhone? Fill it out anyway. We use the same list to let you know the moment the app lands on the App Store.',
+        webNotice: 'No need to wait: the web app is open to anyone.',
+        webCta: 'Open the web app',
+        backHome: 'Back to home',
     },
 
     footer: {
         tagline: 'A simple, conversational personal expense tracker.',
         privacy: 'Privacy Policy',
         terms: 'Terms and Conditions',
-        webApp: 'Web app (beta)',
         copyright: (p) => `© ${p.year} Wallet Bot`,
     },
 
