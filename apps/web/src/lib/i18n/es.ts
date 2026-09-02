@@ -819,6 +819,11 @@ export const es = {
         recurrenceDaysUnit: 'días',
         recurrenceEndDateOptional: 'Fecha de fin (opcional)',
         recurrenceNoEndDate: 'Sin fecha de fin',
+        recurrenceSpanDays: (value: number) => `${value} días`,
+        recurrenceSpanMonths: (value: number) => `${value} meses`,
+        recurrenceSpanYears: (value: number) => `${value} años`,
+        recurrenceOpenEndedNote: (count: number, span: string) =>
+            `Sin fecha de fin no es para siempre: se crean ${count} movimientos, que cubren unos ${span}. Podés agregar más cuando quieras.`,
         newTransaction: 'Añadir movimiento',
         select: 'Seleccionar',
         newAccount: 'Nueva cuenta',

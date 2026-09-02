@@ -53,6 +53,7 @@ class TagRepository extends RepositoryBase {
         LEFT JOIN transaction_tags tt ON tt.tag_id = tg.id
         LEFT JOIN transactions t
                ON t.id = tt.transaction_id
+              AND t.is_archived = 0
               AND t.date < ?
         WHERE tg.is_archived = 0
         GROUP BY tg.id, tg.name, tg.description, tg.parent_id, tg.color,

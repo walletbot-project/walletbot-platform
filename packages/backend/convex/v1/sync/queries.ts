@@ -15,6 +15,7 @@ const MAX_LIMIT = 500
 const SYNCED_TABLES = [
     'accounts',
     'categories',
+    'recurrences',
     'transactions',
     'tags',
     'transactionTags',
@@ -102,19 +103,23 @@ function tablePriority(t: SyncedTable): number {
             return 1
         case 'tags':
             return 2
-        case 'transactions':
+        // Before transactions: an occurrence carries `recurrenceId`, so the
+        // rule has to exist by the time the row lands.
+        case 'recurrences':
             return 3
-        case 'transactionTags':
+        case 'transactions':
             return 4
+        case 'transactionTags':
+            return 5
         // Dashboard layout: saved filters before widgets (a widget's filterId
         // soft-references a saved filter).
         case 'savedFilters':
-            return 5
-        case 'dashboardWidgets':
             return 6
+        case 'dashboardWidgets':
+            return 7
         // No FKs in either direction — order is only for determinism.
         case 'agentMemories':
-            return 7
+            return 8
     }
 }
 
@@ -210,6 +215,15 @@ async function fetchTableRows(
         case 'agentMemories':
             docs = await ctx.db
                 .query('agentMemories')
+                .withIndex('by_user_seq', (q) =>
+                    q.eq('userId', userId).gt('seq', since),
+                )
+                .order('asc')
+                .take(take)
+            break
+        case 'recurrences':
+            docs = await ctx.db
+                .query('recurrences')
                 .withIndex('by_user_seq', (q) =>
                     q.eq('userId', userId).gt('seq', since),
                 )

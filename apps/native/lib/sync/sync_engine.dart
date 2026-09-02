@@ -171,6 +171,7 @@ class SyncEngine extends ChangeNotifier {
             _db.savedFilters,
             _db.dashboardWidgets,
             _db.agentMemories,
+            _db.recurrences,
             _db.tombstones,
           ]),
         )
@@ -478,6 +479,14 @@ class SyncEngine extends ChangeNotifier {
     chunk.agentMemories.addAll(dirtyAgentMemories);
     if (chunk.size >= pushChunkLimit) return chunk;
 
+    final dirtyRecurrences =
+        await (_db.select(_db.recurrences)
+              ..where((r) => r.dirty.equals(true))
+              ..limit(pushChunkLimit - chunk.size))
+            .get();
+    chunk.recurrences.addAll(dirtyRecurrences);
+    if (chunk.size >= pushChunkLimit) return chunk;
+
     final dirtyTxns =
         await (_db.select(_db.transactions)
               ..where((t) => t.dirty.equals(true))
@@ -549,6 +558,8 @@ class SyncEngine extends ChangeNotifier {
           'agentMemories': chunk.agentMemories
               .map(_serializeAgentMemory)
               .toList(),
+        if (chunk.recurrences.isNotEmpty)
+          'recurrences': chunk.recurrences.map(_serializeRecurrence).toList(),
         if (chunk.transactions.isNotEmpty)
           'transactions': chunk.transactions
               .map(_serializeTransaction)
@@ -647,6 +658,16 @@ class SyncEngine extends ChangeNotifier {
           await (_db.update(_db.agentMemories)
                 ..where((row) => row.id.equals(m.id)))
               .write(const AgentMemoriesCompanion(dirty: Value(false)));
+        }
+      }
+      for (final r in chunk.recurrences) {
+        final cur = await (_db.select(
+          _db.recurrences,
+        )..where((row) => row.id.equals(r.id))).getSingleOrNull();
+        if (cur != null && cur.updatedAt == r.updatedAt) {
+          await (_db.update(_db.recurrences)
+                ..where((row) => row.id.equals(r.id)))
+              .write(const RecurrencesCompanion(dirty: Value(false)));
         }
       }
       for (final t in chunk.transactions) {
@@ -760,6 +781,17 @@ class SyncEngine extends ChangeNotifier {
     'updatedAt': row.updatedAt,
   };
 
+  Map<String, Object?> _serializeRecurrence(Recurrence row) => {
+    'id': row.id,
+    'frequency': row.frequency,
+    if (row.dayInterval != null) 'dayInterval': BigInt.from(row.dayInterval!),
+    'anchorDate': row.anchorDate,
+    if (row.endDate != null) 'endDate': row.endDate,
+    'isArchived': row.archived,
+    'createdAt': row.createdAt,
+    'updatedAt': row.updatedAt,
+  };
+
   Map<String, Object?> _serializeTransaction(Transaction row) => {
     'id': row.id,
     'type': row.type,
@@ -778,6 +810,9 @@ class SyncEngine extends ChangeNotifier {
     if (row.toCurrency != null) 'toCurrency': row.toCurrency,
     if (row.exchangeRate != null) 'exchangeRate': row.exchangeRate,
     if (row.balanceAfter != null) 'balanceAfter': row.balanceAfter,
+    if (row.recurrenceId != null) 'recurrenceId': row.recurrenceId,
+    if (row.recurrenceIndex != null)
+      'recurrenceIndex': BigInt.from(row.recurrenceIndex!),
     'isArchived': row.archived,
     'createdAt': row.createdAt,
     'updatedAt': row.updatedAt,
@@ -808,6 +843,7 @@ class _Chunk {
   final List<SavedFilter> savedFilters = [];
   final List<DashboardWidget> dashboardWidgets = [];
   final List<AgentMemory> agentMemories = [];
+  final List<Recurrence> recurrences = [];
   final List<Transaction> transactions = [];
   final List<TransactionTag> transactionTags = [];
   final List<Tombstone> tombstones = [];
@@ -819,6 +855,7 @@ class _Chunk {
       savedFilters.length +
       dashboardWidgets.length +
       agentMemories.length +
+      recurrences.length +
       transactions.length +
       transactionTags.length +
       tombstones.length;

@@ -5,6 +5,7 @@ import '../../telemetry/business_metrics.dart';
 import '../ids.dart';
 import '../models/transaction_filter.dart';
 import '../occurrence.dart';
+import '../recurrence.dart';
 import '../queries/account_balance.dart';
 import '../queries/transaction_query.dart';
 import 'repository_base.dart';
@@ -142,6 +143,7 @@ class TransactionRepository extends RepositoryBase {
     bool dateConfirmed = true,
     TransactionTimeStatus timeStatus = TransactionTimeStatus.none,
     List<String> tagIds = const [],
+    RecurrenceDraft? recurrence,
   }) => _addSimple(
     type: 'expense',
     accountId: accountId,
@@ -156,6 +158,7 @@ class TransactionRepository extends RepositoryBase {
     timeStatus: timeStatus,
     tagIds: tagIds,
     createdBy: createdBy,
+    recurrence: recurrence,
   );
 
   /// Creates an income. Same shape and semantics as [addExpense].
@@ -172,6 +175,7 @@ class TransactionRepository extends RepositoryBase {
     bool dateConfirmed = true,
     TransactionTimeStatus timeStatus = TransactionTimeStatus.none,
     List<String> tagIds = const [],
+    RecurrenceDraft? recurrence,
   }) => _addSimple(
     type: 'income',
     accountId: accountId,
@@ -186,6 +190,7 @@ class TransactionRepository extends RepositoryBase {
     timeStatus: timeStatus,
     tagIds: tagIds,
     createdBy: createdBy,
+    recurrence: recurrence,
   );
 
   Future<String> _addSimple({
@@ -202,24 +207,57 @@ class TransactionRepository extends RepositoryBase {
     required TransactionTimeStatus timeStatus,
     required List<String> tagIds,
     required String createdBy,
+    RecurrenceDraft? recurrence,
   }) async {
     final id = newUuid();
     final now = currentMs;
+    final date = _resolveTransactionDate(
+      dateMs: dateMs,
+      timeStatus: timeStatus,
+      loadedAtMs: now,
+    );
+    final recurrenceId = recurrence == null ? null : newUuid();
+    final anchor = DateTime.fromMillisecondsSinceEpoch(date.toInt());
     await db.transaction(() async {
+      if (recurrence != null && recurrenceId != null) {
+        await db
+            .into(db.recurrences)
+            .insert(
+              RecurrencesCompanion.insert(
+                id: recurrenceId,
+                frequency: recurrence.frequency.name,
+                dayInterval:
+                    recurrence.frequency == RecurrenceFrequency.customDays
+                    ? Value(recurrence.dayInterval)
+                    : const Value.absent(),
+                anchorDate: date,
+                endDate: recurrence.endDate != null
+                    ? Value(
+                        BigInt.from(recurrence.endDate!.millisecondsSinceEpoch),
+                      )
+                    : const Value.absent(),
+                createdAt: now,
+                updatedAt: now,
+                dirty: const Value(true),
+              ),
+            );
+      }
       await db
           .into(db.transactions)
           .insert(
             TransactionsCompanion.insert(
               id: id,
+              recurrenceId: recurrenceId != null
+                  ? Value(recurrenceId)
+                  : const Value.absent(),
+              recurrenceIndex: recurrenceId != null
+                  ? const Value(0)
+                  : const Value.absent(),
               type: type,
               name: name,
               description: Value(description),
               status: status,
-              date: _resolveTransactionDate(
-                dateMs: dateMs,
-                timeStatus: timeStatus,
-                loadedAtMs: now,
-              ),
+              date: date,
               timeStatus: Value(timeStatus),
               accountId: accountId,
               categoryId: categoryId,
@@ -232,6 +270,51 @@ class TransactionRepository extends RepositoryBase {
             ),
           );
       await _attachTagsTx(id, tagIds, now);
+
+      // The rest of the series. Unlike the web — where a workflow materialises
+      // these server-side — native writes them locally: a movement created
+      // offline has to exist offline. They sync up like any other row, and the
+      // backend never regenerates a series it received, so the two paths
+      // cannot double up.
+      if (recurrence != null && recurrenceId != null) {
+        final total = occurrenceCount(
+          anchor,
+          recurrence.frequency,
+          recurrence.endDate,
+          dayInterval: recurrence.dayInterval,
+        );
+        for (var index = 1; index < total; index++) {
+          final occurrence = occurrenceDate(
+            anchor,
+            recurrence.frequency,
+            index,
+            dayInterval: recurrence.dayInterval,
+          );
+          await db
+              .into(db.transactions)
+              .insert(
+                TransactionsCompanion.insert(
+                  id: newUuid(),
+                  recurrenceId: Value(recurrenceId),
+                  recurrenceIndex: Value(index),
+                  type: type,
+                  name: name,
+                  description: Value(description),
+                  status: status,
+                  date: BigInt.from(occurrence.millisecondsSinceEpoch),
+                  timeStatus: Value(timeStatus),
+                  accountId: accountId,
+                  categoryId: categoryId,
+                  amount: amountCents,
+                  currency: currency,
+                  dateConfirmed: Value(dateConfirmed),
+                  createdAt: now,
+                  updatedAt: now,
+                  dirty: const Value(true),
+                ),
+              );
+        }
+      }
     });
     _trackCreatedMetric(type: type, createdBy: createdBy);
     return id;

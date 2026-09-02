@@ -1994,6 +1994,30 @@ abstract class AppLocalizations {
   /// **'No end date'**
   String get recurrenceNoEndDate;
 
+  /// No description provided for @recurrenceSpanDays.
+  ///
+  /// In en, this message translates to:
+  /// **'{value} days'**
+  String recurrenceSpanDays(int value);
+
+  /// No description provided for @recurrenceSpanMonths.
+  ///
+  /// In en, this message translates to:
+  /// **'{value} months'**
+  String recurrenceSpanMonths(int value);
+
+  /// No description provided for @recurrenceSpanYears.
+  ///
+  /// In en, this message translates to:
+  /// **'{value} years'**
+  String recurrenceSpanYears(int value);
+
+  /// No description provided for @recurrenceOpenEndedNote.
+  ///
+  /// In en, this message translates to:
+  /// **'No end date does not mean forever: {count} movements are created, covering about {span}. You can add more whenever you want.'**
+  String recurrenceOpenEndedNote(int count, String span);
+
   /// No description provided for @recurrenceCustomDays.
   ///
   /// In en, this message translates to:

@@ -6,6 +6,7 @@ import 'package:app/components/category_icons.dart';
 import 'package:app/components/color_utils.dart';
 import 'package:app/components/readable_time_picker.dart';
 import 'package:app/data/data.dart';
+import 'package:app/data/recurrence.dart';
 import 'package:app/database.dart';
 import 'package:app/l10n/l10n.dart';
 import 'package:app/shared/adaptive_modal.dart';
@@ -15,8 +16,6 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 enum TransactionFormType { income, expense, transfer }
-
-enum RecurrenceFrequency { daily, weekly, monthly, yearly, customDays }
 
 const _defaultRecurrenceDayInterval = 15;
 
@@ -533,6 +532,15 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
           .map((tag) => tag.id)
           .whereType<String>()
           .toList(growable: false);
+      // Only expenses and incomes recur — a transfer between the user's own
+      // accounts has no cadence to repeat (see the gate on the toggle above).
+      final recurrence = _isRecurring && _type != TransactionFormType.transfer
+          ? RecurrenceDraft(
+              frequency: _recurrenceFrequency,
+              dayInterval: _recurrenceDayInterval,
+              endDate: _recurrenceEndDate,
+            )
+          : null;
       switch (_type) {
         case TransactionFormType.income:
           await repos.transactions.addIncome(
@@ -545,6 +553,7 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
             dateMs: dateMs,
             timeStatus: timeStatus,
             tagIds: tagIds,
+            recurrence: recurrence,
           );
         case TransactionFormType.expense:
           await repos.transactions.addExpense(
@@ -557,6 +566,7 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
             dateMs: dateMs,
             timeStatus: timeStatus,
             tagIds: tagIds,
+            recurrence: recurrence,
           );
         case TransactionFormType.transfer:
           await repos.transactions.addTransfer(
@@ -753,7 +763,7 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
                   dayInterval: _recurrenceDayInterval,
                   endDate: _recurrenceEndDate,
                   endDateLabel: _recurrenceEndDate == null
-                      ? context.l10n.recurrenceNoEndDate
+                      ? '${context.l10n.recurrenceNoEndDate}*'
                       : _formatDate(context, _recurrenceEndDate!),
                   enabled: !_isSaving,
                   onFrequencyChanged: (value) =>
@@ -1437,9 +1447,38 @@ class _RecurrencePanelState extends State<_RecurrencePanel> {
             onTap: widget.enabled ? widget.onPickEndDate : null,
             onClear: widget.enabled ? widget.onClearEndDate : null,
           ),
+          if (widget.endDate == null) ...[
+            const SizedBox(height: 8),
+            Builder(
+              builder: (context) {
+                final horizon = recurrenceHorizon(
+                  widget.frequency,
+                  dayInterval: widget.dayInterval,
+                );
+                return Text(
+                  '* ${context.l10n.recurrenceOpenEndedNote(horizon.count, _spanLabel(context, horizon.span))}',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+                );
+              },
+            ),
+          ],
         ],
       ),
     );
+  }
+}
+
+/// Renders a horizon's reach in the unit the policy chose for it.
+String _spanLabel(BuildContext context, RecurrenceSpan span) {
+  switch (span.unit) {
+    case RecurrenceSpanUnit.days:
+      return context.l10n.recurrenceSpanDays(span.value);
+    case RecurrenceSpanUnit.months:
+      return context.l10n.recurrenceSpanMonths(span.value);
+    case RecurrenceSpanUnit.years:
+      return context.l10n.recurrenceSpanYears(span.value);
   }
 }
 

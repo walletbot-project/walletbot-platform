@@ -1075,6 +1075,26 @@ class AppLocalizationsEs extends AppLocalizations {
   String get recurrenceNoEndDate => 'Sin fecha de fin';
 
   @override
+  String recurrenceSpanDays(int value) {
+    return '$value días';
+  }
+
+  @override
+  String recurrenceSpanMonths(int value) {
+    return '$value meses';
+  }
+
+  @override
+  String recurrenceSpanYears(int value) {
+    return '$value años';
+  }
+
+  @override
+  String recurrenceOpenEndedNote(int count, String span) {
+    return 'Sin fecha de fin no es para siempre: se crean $count movimientos, que cubren unos $span. Podés agregar más cuando quieras.';
+  }
+
+  @override
   String get recurrenceCustomDays => 'Cada X días';
 
   @override

@@ -96,6 +96,12 @@ enum TransactionTimeStatus { confirmed, approximation, none }
   name: 'transactions_category_id_date',
   columns: {#categoryId, #date},
 )
+// The series, in occurrence order: what "this and the ones after it" and
+// "append from the last one" both walk.
+@TableIndex(
+  name: 'transactions_recurrence_id_date',
+  columns: {#recurrenceId, #date},
+)
 @TableIndex.sql('''
   CREATE INDEX transactions_needs_sync ON transactions (updated_at)
     WHERE dirty = 1;
@@ -134,6 +140,14 @@ class Transactions extends Table {
   Int64Column get balanceAfter => int64()
       .named('balance_after')
       .nullable()(); // cents, for balance adjustments
+
+  // Set on every occurrence a recurring rule materialised; null on a one-off.
+  // `recurrenceIndex` is the occurrence's position in the series (0 is the
+  // anchor) — stored rather than derived from the date, so editing one
+  // occurrence cannot renumber the rest.
+  TextColumn get recurrenceId => text().named('recurrence_id').nullable()();
+  IntColumn get recurrenceIndex =>
+      integer().named('recurrence_index').nullable()();
 
   BoolColumn get archived =>
       boolean().named('is_archived').withDefault(const Constant(false))();
@@ -292,6 +306,51 @@ class AgentMemories extends Table {
   Set<Column<Object>> get primaryKey => {id};
 }
 
+// A recurring rule: the thing the user set up once, of which every upcoming
+// movement is an occurrence. Synced like every other entity (v5 of the
+// coordinated schema; the backend counterpart is
+// `packages/backend/convex/schema/recurrences.ts`).
+//
+// Holds only what cannot be derived from the occurrences themselves: how many
+// exist is a count of the rows carrying its id, and how far it is covered is
+// the latest date among them. Storing either here would be a second source of
+// truth that could disagree with the rows after an edit.
+@TableIndex(name: 'recurrences_archived', columns: {#archived})
+@TableIndex(name: 'recurrences_updated_at', columns: {#updatedAt})
+@TableIndex.sql('''
+  CREATE INDEX recurrences_needs_sync ON recurrences (updated_at)
+    WHERE dirty = 1;
+''')
+class Recurrences extends Table {
+  TextColumn get id => text().named('id')();
+
+  /// "daily" | "weekly" | "monthly" | "yearly" | "customDays"
+  TextColumn get frequency => text().named('frequency')();
+
+  /// Only meaningful for "customDays".
+  IntColumn get dayInterval => integer().named('day_interval').nullable()();
+
+  /// The first occurrence's date. Every later one is projected from *here*, by
+  /// index, never from its predecessor — that is what keeps a February clipped
+  /// to the 28th from dragging March with it (docs/recurrency-design.md §2.3).
+  Int64Column get anchorDate => int64().named('anchor_date')();
+
+  /// Inclusive. Null means open-ended, capped by the frequency's batch.
+  Int64Column get endDate => int64().named('end_date').nullable()();
+
+  BoolColumn get archived =>
+      boolean().named('is_archived').withDefault(const Constant(false))();
+  Int64Column get createdAt => int64().named('created_at')();
+  Int64Column get updatedAt => int64().named('updated_at')();
+
+  // Sync
+  BoolColumn get dirty =>
+      boolean().named('dirty').withDefault(const Constant(false))();
+
+  @override
+  Set<Column<Object>> get primaryKey => {id};
+}
+
 // Singleton — tracks the highest server-side seq the client has pulled.
 class SyncState extends Table {
   TextColumn get id =>
@@ -436,6 +495,7 @@ class LegalAcceptances extends Table {
     SavedFilters,
     DashboardWidgets,
     AgentMemories,
+    Recurrences,
     SyncState,
     Tombstones,
     VoiceSessions,
@@ -454,7 +514,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.executor);
 
   @override
-  int get schemaVersion => 4;
+  int get schemaVersion => 5;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -462,14 +522,14 @@ class AppDatabase extends _$AppDatabase {
     onUpgrade: (m, from, to) async {
       // Anything below the v1 baseline, a downgrade, or a version this build
       // has never heard of must fail loudly rather than be guessed at.
-      if (from < 1 || from > to || to > 4) {
+      if (from < 1 || from > to || to > 5) {
         throw UnsupportedError(
           'Unhandled SQLite migration path: v$from -> v$to. '
           'Define an explicit upgrade path in AppDatabase.migration.',
         );
       }
       // Steps are cumulative and must stay that way: a v1 database upgrading
-      // straight to v4 runs all three. (The previous single-step form returned
+      // straight to v5 runs all four. (The previous single-step form returned
       // early after v2, which would have skipped everything after it.)
       //
       // v2: approximate/confirmed timing metadata on transactions.
@@ -494,6 +554,21 @@ class AppDatabase extends _$AppDatabase {
         await m.create(agentMemoriesArchived);
         await m.create(agentMemoriesUpdatedAt);
         await m.create(agentMemoriesNeedsSync);
+      }
+      // v5: recurring movements. A new table for the rules, plus the two
+      // nullable columns that tie an occurrence back to its rule. Existing
+      // transactions keep NULL in both, which is exactly what a one-off is —
+      // no backfill needed, no rows touched. Coordinated with the backend:
+      // `minSupportedVersion` moves in the same change, so a pre-v5 client
+      // fails closed on sync rather than dropping the new fields under LWW.
+      if (from < 5) {
+        await m.createTable(recurrences);
+        await m.create(recurrencesArchived);
+        await m.create(recurrencesUpdatedAt);
+        await m.create(recurrencesNeedsSync);
+        await m.addColumn(transactions, transactions.recurrenceId);
+        await m.addColumn(transactions, transactions.recurrenceIndex);
+        await m.create(transactionsRecurrenceIdDate);
       }
     },
     beforeOpen: (details) async {

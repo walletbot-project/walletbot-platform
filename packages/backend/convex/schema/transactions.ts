@@ -38,6 +38,13 @@ export const transactions = defineTable({
     // Balance adjustments
     balanceAfter: v.optional(v.int64()), // cents
 
+    // Set on every occurrence a recurring rule materialised; absent on a
+    // one-off. `recurrenceIndex` is the occurrence's position in the series
+    // (0 is the anchor) — stored rather than derived from the date, so an
+    // edit that moves one occurrence cannot renumber the rest.
+    recurrenceId: v.optional(v.string()),
+    recurrenceIndex: v.optional(v.int64()),
+
     isArchived: v.boolean(),
     createdAt: v.int64(),
     updatedAt: v.int64(),
@@ -52,6 +59,9 @@ export const transactions = defineTable({
     .index('by_user_account_date', ['userId', 'accountId', 'date'])
     .index('by_user_category_date', ['userId', 'categoryId', 'date'])
     .index('by_user_to_account_date', ['userId', 'toAccountId', 'date'])
+    // The series, in occurrence order: what "this and the ones after it" and
+    // "append from the last one" both walk.
+    .index('by_user_recurrence_date', ['userId', 'recurrenceId', 'date'])
     // Text search over the user's whole history. Native filters with SQL LIKE
     // against its local database, so a web search that only looked at the rows
     // already paged in silently missed older matches. A search index takes one

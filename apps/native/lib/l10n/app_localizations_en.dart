@@ -1071,6 +1071,26 @@ class AppLocalizationsEn extends AppLocalizations {
   String get recurrenceNoEndDate => 'No end date';
 
   @override
+  String recurrenceSpanDays(int value) {
+    return '$value days';
+  }
+
+  @override
+  String recurrenceSpanMonths(int value) {
+    return '$value months';
+  }
+
+  @override
+  String recurrenceSpanYears(int value) {
+    return '$value years';
+  }
+
+  @override
+  String recurrenceOpenEndedNote(int count, String span) {
+    return 'No end date does not mean forever: $count movements are created, covering about $span. You can add more whenever you want.';
+  }
+
+  @override
   String get recurrenceCustomDays => 'Every X days';
 
   @override

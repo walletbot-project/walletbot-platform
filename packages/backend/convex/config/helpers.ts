@@ -76,21 +76,24 @@ type AccountConfigAccount =
     | { type: 'local'; name: string | null; accountId: string | null }
     | null
 
-// apps/native/pubspec.yaml is currently 0.3.0+6. PackageInfo.version sends the
-// build-name only, so the backend compares against 0.3.0.
+// apps/native/pubspec.yaml is currently 0.4.0+7. PackageInfo.version sends the
+// build-name only, so the backend compares against 0.4.0.
 //
-// Bumped from 0.2.0 alongside native drift schemaVersion v3 -> v4 (adds the
-// synced `agent_memories` table — the agent-overhaul memory subsystem). Per
-// the CLAUDE.md client–server contract, a change to the set of synced tables
-// must bump BOTH this `minSupportedVersion` and the drift `schemaVersion` in
-// the same change so pre-v4 clients fail CLOSED on sync (they keep working
-// offline on local data). Previous bump: 0.1.0 -> 0.2.0 with v1 -> v2
-// (`transactions.time_status`).
-const BASE_MIN_SUPPORTED_VERSION = '0.3.0'
+// Bumped from 0.3.0 alongside native drift schemaVersion v4 -> v5 (adds the
+// synced `recurrences` table and the `recurrence_id`/`recurrence_index`
+// columns on transactions — recurring movements). Per the CLAUDE.md
+// client–server contract, a change to the set of synced tables or fields must
+// bump BOTH this `minSupportedVersion` and the drift `schemaVersion` in the
+// same change so pre-v5 clients fail CLOSED on sync (they keep working offline
+// on local data). Without it an old client would round-trip an occurrence
+// without its recurrence fields and LWW would strip the series link.
+// Previous bumps: 0.2.0 -> 0.3.0 with v3 -> v4 (`agent_memories`), and
+// 0.1.0 -> 0.2.0 with v1 -> v2 (`transactions.time_status`).
+const BASE_MIN_SUPPORTED_VERSION = '0.4.0'
 // Keep in lockstep with the shipped `apps/native/pubspec.yaml` build-name.
 // Setting this ahead of the released build nags every current client with the
 // soft-update banner for a version that isn't out yet.
-const BASE_LATEST_VERSION = '0.3.0'
+const BASE_LATEST_VERSION = '0.4.0'
 
 // A client that cannot determine its own version reports '0.0.0' (and any
 // unparseable string parses to 0.0.0 too — see utils.ts). Treat that as

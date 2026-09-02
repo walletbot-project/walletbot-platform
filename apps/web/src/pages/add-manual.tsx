@@ -1,8 +1,10 @@
 import { api } from '@wallet-bot/backend/api'
+import type { RecurrenceSpan } from '@wallet-bot/shared'
 import {
     computeExchangeRate,
     parseAmountToCents,
     parseTransactionDate,
+    recurrenceHorizon,
 } from '@wallet-bot/shared'
 import {
     Button,
@@ -235,6 +237,7 @@ export function TransactionForm({
     const flags = useQuery(api.v1.featureFlags.queries.getMyFlags)
 
     const createIncome = useMutation(api.v1.transactions.mutations.createIncome)
+    const createRecurrence = useMutation(api.v1.recurrences.mutations.create)
     const createExpense = useMutation(
         api.v1.transactions.mutations.createExpense,
     )
@@ -609,7 +612,37 @@ export function TransactionForm({
             }
 
             const transactionId = newId()
-            if (type === 'income') {
+            if (showRecurrence && isRecurring) {
+                // One call creates the rule and this movement as occurrence 0;
+                // the rest of the series is materialised by a workflow, so the
+                // form returns as soon as the first one exists.
+                await createRecurrence({
+                    recurrenceId: newId(),
+                    frequency: recurrenceFrequency,
+                    dayInterval:
+                        recurrenceFrequency === 'customDays'
+                            ? BigInt(recurrenceDayInterval)
+                            : undefined,
+                    endDate:
+                        recurrenceEndDate === ''
+                            ? undefined
+                            : BigInt(
+                                  new Date(
+                                      `${recurrenceEndDate}T23:59:59`,
+                                  ).getTime(),
+                              ),
+                    transactionId,
+                    type: type === 'income' ? 'income' : 'expense',
+                    name: trimmedTitle,
+                    description: trimmedDescription,
+                    amount: parseAmountToCents(parsedAmount),
+                    accountId,
+                    categoryId,
+                    date: sourceDate,
+                    dateConfirmed: true,
+                    timeStatus,
+                })
+            } else if (type === 'income') {
                 await createIncome({
                     id: transactionId,
                     name: trimmedTitle,
@@ -1149,6 +1182,7 @@ function RecurrencePanel({
     isDisabled: boolean
 }) {
     const t = useT()
+    const horizon = recurrenceHorizon(frequency, dayInterval)
     return (
         <div className="rounded-xl border border-outline-variant bg-surface-container-low p-4">
             <span className="m3-title-small text-on-surface">
@@ -1198,14 +1232,39 @@ function RecurrencePanel({
                     value={endDate}
                     onChange={onEndDateChange}
                     label={t.addManual.recurrenceEndDateOptional}
-                    placeholder={t.addManual.recurrenceNoEndDate}
+                    // The asterisk marks the placeholder, not the label: it is
+                    // the *absence* of an end date that the note below
+                    // qualifies, so it belongs on the words that say so.
+                    placeholder={`${t.addManual.recurrenceNoEndDate}*`}
                     icon="event_repeat"
                     isDisabled={isDisabled}
                     onClear={() => onEndDateChange('')}
                 />
             </div>
+
+            {endDate === '' ? (
+                <p className="m3-body-small mt-2 text-on-surface-variant">
+                    <span aria-hidden>* </span>
+                    {t.addManual.recurrenceOpenEndedNote(
+                        horizon.count,
+                        spanLabel(horizon.span, t),
+                    )}
+                </p>
+            ) : null}
         </div>
     )
+}
+
+/** Renders a horizon's reach in the unit the policy chose for it. */
+function spanLabel(span: RecurrenceSpan, t: Messages): string {
+    switch (span.unit) {
+        case 'days':
+            return t.addManual.recurrenceSpanDays(span.value)
+        case 'months':
+            return t.addManual.recurrenceSpanMonths(span.value)
+        case 'years':
+            return t.addManual.recurrenceSpanYears(span.value)
+    }
 }
 
 function TransferAmounts({

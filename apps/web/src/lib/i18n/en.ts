@@ -776,6 +776,11 @@ export const en: Messages = {
         recurrenceDaysUnit: 'days',
         recurrenceEndDateOptional: 'End date (optional)',
         recurrenceNoEndDate: 'No end date',
+        recurrenceSpanDays: (value: number) => `${value} days`,
+        recurrenceSpanMonths: (value: number) => `${value} months`,
+        recurrenceSpanYears: (value: number) => `${value} years`,
+        recurrenceOpenEndedNote: (count: number, span: string) =>
+            `No end date does not mean forever: ${count} movements are created, covering about ${span}. You can add more whenever you want.`,
         newTransaction: 'Add transaction',
         select: 'Select',
         newAccount: 'New account',

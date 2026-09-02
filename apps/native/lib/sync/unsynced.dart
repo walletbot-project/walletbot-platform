@@ -22,6 +22,8 @@ Future<bool> hasUnsyncedChanges(AppDatabase db) async {
     db.transactionTags,
     db.savedFilters,
     db.dashboardWidgets,
+    db.agentMemories,
+    db.recurrences,
     db.tombstones,
   ];
   // One compound select with a single trailing LIMIT: SQLite stops at the

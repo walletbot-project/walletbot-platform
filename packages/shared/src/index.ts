@@ -139,6 +139,17 @@ export {
     pastCutoffBigInt,
     pastCutoffMs,
 } from './occurrence'
+export type {
+    RecurrenceFrequency,
+    RecurrenceHorizon,
+    RecurrenceSpan,
+} from './recurrence'
+export {
+    customDaysCount,
+    occurrenceCount,
+    occurrenceDateMs,
+    recurrenceHorizon,
+} from './recurrence'
 export type { ToolArgs, ToolName } from './tools'
 export {
     AGENT_MODEL,

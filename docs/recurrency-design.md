@@ -313,3 +313,86 @@ respuesta que no ofrecerlos; vuelven en el paso 4.
 
 Por la misma razón la fila pierde la frecuencia en su descripción: sin regla no
 hay frecuencia que mostrar. Vuelve en el paso 2, y el `X/N` del paso 3 con ella.
+
+### 5.2. Paso 2 — la regla se persiste y materializa sus ocurrencias
+
+#### "Sin fecha de fin" no puede significar "para siempre"
+
+Las ocurrencias son transacciones comunes (§2.5), así que una regla sin límite
+sería una cantidad ilimitada de filas. Cada frecuencia materializa un lote fijo
+por adelantado, y el usuario lo amplía cuando quiere. Como eso es una decisión
+del producto y no un detalle, el formulario **lo dice**: el placeholder pasa a
+"Sin fecha de fin\*" y una nota al pie aclara cuántos movimientos se crean y
+qué período cubren.
+
+| Frecuencia | N | T |
+|---|---|---|
+| Diario | 500 | 500 días |
+| Semanal | 100 | 23 meses (100 semanas) |
+| Mensual | 48 | 4 años |
+| Anual | 20 | 20 años |
+| Cada X días | según X | N × X días, en meses o años |
+
+Para "cada X días" el lote sale de la cadencia a la que X se parece, en bandas
+semiabiertas hacia arriba: X < 7 usa el de diario, X < 30 el de semanal,
+X < 365 el de mensual, y de ahí en adelante el de anual. El asterisco va sobre
+el *placeholder*, no sobre la etiqueta: lo que la nota matiza es la **ausencia**
+de fecha de fin.
+
+La política vive en `packages/shared/src/recurrence.ts` y su espejo Dart
+`apps/native/lib/data/recurrence.dart`, con tests equivalentes en ambos lados —
+una serie creada en el teléfono tiene que caer en los mismos días que una
+creada en la web.
+
+#### La proyección se hace desde el ancla, siempre
+
+`occurrenceDateMs` / `occurrenceDate` implementan §2.3 al pie: cada ocurrencia
+se calcula desde la fecha ancla por índice, nunca desde la anterior, y un ancla
+que cae en el último día de su mes se trata como "último día del mes". Los
+tests cubren el ejemplo del doc (31 ene → 28 feb → 31 mar → 30 abr), el 29 de
+febrero anual, y que un febrero recortado no arrastre marzo.
+
+Toda la aritmética es sobre componentes de calendario locales, así que un
+cambio de horario de verano mueve el instante pero nunca el día ni la hora de
+reloj.
+
+#### Esquema: una tabla de reglas, no campos denormalizados
+
+`recurrences` guarda la regla una sola vez y cada ocurrencia la referencia por
+`recurrenceId` (+ `recurrenceIndex`, su posición en la serie). El índice se
+**almacena** en vez de derivarse de la fecha, para que editar una ocurrencia no
+renumere el resto.
+
+La regla guarda sólo lo que no se puede derivar de sus filas: cuántas hay es un
+conteo, y hasta cuándo está cubierta es la fecha máxima. Guardar cualquiera de
+las dos sería una segunda fuente de verdad capaz de contradecir a las filas
+después de una edición.
+
+Es un cambio de wire, así que es un bump coordinado, como pide CLAUDE.md:
+drift `schemaVersion` 4 → 5 (tabla nueva + dos columnas nullable, sin backfill:
+una transacción anterior a la recurrencia **es** un movimiento suelto),
+`minSupportedVersion` 0.3.0 → 0.4.0 y `pubspec` 0.4.0+7. Un cliente pre-v5
+falla cerrado en sync en vez de round-tripear una ocurrencia sin sus campos y
+dejar que LWW le borre el vínculo con la serie.
+
+#### Quién materializa: cada origen el suyo, exactamente una vez
+
+- **Web** llama `v1/recurrences/mutations:create`, que escribe la regla y la
+  ocurrencia 0 en una sola mutation, y arranca un workflow que crea el resto en
+  lotes de 50. Una regla diaria son 500 inserts más sus updates de agregado:
+  demasiado para una transacción sola.
+- **Nativo** las escribe localmente, en la misma transacción de drift. No es
+  una asimetría gratuita: un movimiento creado sin conexión tiene que existir
+  sin conexión. Suben por push como cualquier fila.
+
+El backend **no** regenera una serie que recibió por sync, así que los dos
+caminos no pueden duplicarse.
+
+`materializeBatch` es idempotente por construcción: lee qué índices ya existen
+y llena sólo los huecos. Un paso del workflow reintentado después de una falla
+parcial completa el lote en vez de duplicarlo — y acá un duplicado es plata que
+el usuario nunca gastó.
+
+La regla y su ocurrencia 0 se escriben juntas a propósito: las ocurrencias
+copian sus campos de la ancla, así que una regla sin ancla no tiene forma y el
+materializador se niega a correr.

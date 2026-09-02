@@ -53,6 +53,7 @@ class CategoryRepository extends RepositoryBase {
         FROM categories c
         LEFT JOIN transactions t
                ON t.category_id = c.id
+              AND t.is_archived = 0
               AND t.date < ?
         WHERE c.is_archived = 0
         GROUP BY c.id, c.name, c.description, c.color, c.icon, c.is_archived,

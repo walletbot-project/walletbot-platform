@@ -17,6 +17,7 @@ import {
     feedbackSweepState,
 } from './schema/feedback'
 import { legalAcceptances } from './schema/legal'
+import { recurrences } from './schema/recurrences'
 import { refreshTokens } from './schema/refreshTokens'
 import { supportEmails } from './schema/supportEmails'
 import { syncCounters, tombstones } from './schema/sync'
@@ -49,6 +50,7 @@ export default defineSchema({
     feedbackAttachments,
     feedbackSweepState,
     legalAcceptances,
+    recurrences,
     refreshTokens,
     savedFilters,
     supportEmails,

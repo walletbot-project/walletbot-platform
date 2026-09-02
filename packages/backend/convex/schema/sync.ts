@@ -22,6 +22,8 @@ export const syncedTable = v.union(
     // Added in the v3 → v4 native schema bump (agent memory). Wire change:
     // minSupportedVersion and the Drift schemaVersion moved together.
     v.literal('agentMemories'),
+    // Added in the v4 → v5 bump (recurring movements), same coordination.
+    v.literal('recurrences'),
 )
 
 export const tombstones = defineTable({
