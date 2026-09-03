@@ -256,6 +256,9 @@ export function FutureMovementDetailRoute() {
 
     return (
         <FutureMovementDetail
+            // Keyed so opening a different movement gets a fresh form rather
+            // than one still holding the previous occurrence's edits.
+            key={movement.id}
             movement={movement}
             onClose={() => navigate('/future-movements')}
         />

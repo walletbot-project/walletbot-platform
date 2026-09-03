@@ -407,6 +407,23 @@ export function frequencyLabel(
     }
 }
 
+/**
+ * The cadence as a *picker option*, where the interval has its own field
+ * alongside — so `customDays` stays the open "Cada X días" rather than
+ * naming a specific interval it is not choosing.
+ *
+ * The counterpart to `frequencyLabel`, which describes a rule that already
+ * has one. Mirrors `_frequencyOptionLabel` in the native detail.
+ */
+export function frequencyOptionLabel(
+    frequency: RecurrenceFrequency,
+    messages: Messages,
+): string {
+    return frequency === 'customDays'
+        ? messages.addManual.recurrenceCustomDays
+        : frequencyLabel(frequency, 1, messages)
+}
+
 /** The rule and series reach as `v1/recurrences/queries:get` returns them. */
 export type RecurrenceSeries = {
     frequency: RecurrenceFrequency
@@ -441,4 +458,55 @@ export function seriesReachLabel(
     return messages.futureMovements.coveredThrough(
         formatDate(new Date(Number(series.coveredThroughMs))),
     )
+}
+
+// ───── Field <-> value conversions, shared by the two detail forms ─────
+//
+// The Activity detail and the future-movements detail edit the same shape, so
+// they parse and format it the same way rather than each rolling its own.
+
+export function centsToInput(cents: bigint): string {
+    return (Number(cents < 0n ? -cents : cents) / 100).toFixed(2)
+}
+
+export function normalizeAmount(value: string): string {
+    const normalized = value.replace(',', '.')
+    return normalized.replace(/[^\d.]/g, '').replace(/(\..*)\./g, '$1')
+}
+
+export function inputToCents(value: string): bigint | null {
+    const parsed = Number(value.replace(',', '.'))
+    if (!Number.isFinite(parsed)) return null
+    return BigInt(Math.round(Math.abs(parsed) * 100))
+}
+
+export function dateInputValue(epoch: bigint): string {
+    const date = new Date(Number(epoch))
+    return `${date.getFullYear().toString().padStart(4, '0')}-${(date.getMonth() + 1).toString().padStart(2, '0')}-${date.getDate().toString().padStart(2, '0')}`
+}
+
+export function timeInputValue(epoch: bigint): string {
+    const date = new Date(Number(epoch))
+    return `${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`
+}
+
+export function localDateTimeEpoch(
+    dateValue: string,
+    timeValue: string,
+): bigint {
+    const [year, month, day] = dateValue.split('-').map(Number)
+    const [hour, minute] = timeValue.split(':').map(Number)
+    return BigInt(new Date(year, month - 1, day, hour, minute, 0, 0).getTime())
+}
+
+export function formatDate(epoch: bigint, locale: string): string {
+    return new Intl.DateTimeFormat(locale).format(new Date(Number(epoch)))
+}
+
+export function formatTime(epoch: bigint, locale: string): string {
+    return new Intl.DateTimeFormat(locale, {
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false,
+    }).format(new Date(Number(epoch)))
 }

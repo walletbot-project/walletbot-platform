@@ -1,14 +1,18 @@
 import { computeExchangeRate } from '@wallet-bot/shared'
 import { v } from 'convex/values'
-import type { Doc, Id } from '../../_generated/dataModel'
+import type { Doc } from '../../_generated/dataModel'
 import type { MutationCtx } from '../../_generated/server'
 import { mutation } from '../../_generated/server'
-import { inflowsByAccount, outflowsByAccount } from '../../aggregates'
 import { nextSeq, writeTombstone } from '../../sync/helpers'
 import {
     recordMovementCreated,
     recordTransferCreated,
 } from '../../telemetry/metrics'
+import {
+    aggregateInsert,
+    aggregateReplace,
+    archiveTransactionRow,
+} from '../../transactions/helpers'
 import { requireAuth } from '../../users/helpers'
 import { computeAccountBalance } from './queries'
 
@@ -78,27 +82,6 @@ async function assertNoExistingId(
 ): Promise<void> {
     const existing = await getTransaction(ctx, userId, id)
     if (existing) throw new Error('Transaction with that id already exists')
-}
-
-async function aggregateInsert(
-    ctx: MutationCtx,
-    id: Id<'transactions'>,
-): Promise<void> {
-    const doc = await ctx.db.get(id)
-    if (!doc) return
-    await outflowsByAccount.insert(ctx, doc)
-    await inflowsByAccount.insert(ctx, doc)
-}
-
-async function aggregateReplace(
-    ctx: MutationCtx,
-    oldDoc: Doc<'transactions'>,
-    id: Id<'transactions'>,
-): Promise<void> {
-    const newDoc = await ctx.db.get(id)
-    if (!newDoc) return
-    await outflowsByAccount.replace(ctx, oldDoc, newDoc)
-    await inflowsByAccount.replace(ctx, oldDoc, newDoc)
 }
 
 function assertPositiveAmount(amount: bigint, label: string): void {
@@ -543,41 +526,7 @@ export const archive = mutation({
         const userId = await requireAuth(ctx)
         const row = await getTransaction(ctx, userId, args.id)
         if (!row) return
-
-        // Detach join rows so tag counts stay accurate.
-        const joins = await ctx.db
-            .query('transactionTags')
-            .withIndex('by_user_transaction', (q) =>
-                q.eq('userId', userId).eq('transactionId', args.id),
-            )
-            .collect()
-        for (const j of joins) {
-            const jSeq = await nextSeq(ctx, userId)
-            await ctx.db.delete(j._id)
-            await writeTombstone(ctx, {
-                userId,
-                tableName: 'transactionTags',
-                entityId: j.id,
-                seq: jSeq,
-            })
-        }
-
-        const seq = await nextSeq(ctx, userId)
-        const now = BigInt(Date.now())
-        await ctx.db.patch(row._id, {
-            isArchived: true,
-            updatedAt: now,
-            seq,
-        })
-        // Archived docs contribute 0 to sums (see aggregates.ts). Use replace
-        // rather than delete so we retain the entry for potential un-archive.
-        await aggregateReplace(ctx, row, row._id)
-        await writeTombstone(ctx, {
-            userId,
-            tableName: 'transactions',
-            entityId: args.id,
-            seq,
-        })
+        await archiveTransactionRow(ctx, userId, row)
     },
 })
 

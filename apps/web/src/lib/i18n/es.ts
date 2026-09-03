@@ -864,7 +864,7 @@ export const es = {
     futureMovements: {
         selectDetail: 'Elegí un movimiento para ver su detalle',
         title: 'Movimientos futuros',
-        info: 'Estos son tus movimientos recurrentes que todavía no ocurrieron. No aparecen en Actividad hasta que suceden.',
+        info: 'Estos son tus movimientos futuros: los que todavía no ocurrieron. No aparecen en Actividad hasta que suceden.',
         empty: 'No tenés movimientos futuros programados',
         detail: 'Detalle',
         editMovement: 'Editar movimiento',
@@ -902,6 +902,8 @@ export const es = {
             '¿Aplicar los cambios solo a este movimiento o también a los futuros?',
         scopeDeleteDescription: (name: string) =>
             `¿Querés eliminar “${name}” solo esta vez o también los futuros?`,
+        scopeOnlyThisUnavailable:
+            'Cambiar la frecuencia siempre afecta a los movimientos futuros.',
         scopeOnlyThis: 'Solo este movimiento',
         scopeAllFuture: 'Este y los futuros',
         cancel: 'Cancelar',

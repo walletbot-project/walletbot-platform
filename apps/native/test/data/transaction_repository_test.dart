@@ -669,6 +669,182 @@ void main() {
       expect(await repos.transactions.seriesOf(null), isNull);
     });
 
+    Future<Recurrence?> ruleOf(String recurrenceId) => (db.select(
+      db.recurrences,
+    )..where((r) => r.id.equals(recurrenceId))).getSingleOrNull();
+
+    group('scoped edit and delete', () {
+      test('"only this" touches one occurrence and leaves the rule', () async {
+        final id = await createMonthlySeries();
+        final ruleId = await ruleIdOf(id);
+        final rows = await seriesRows(ruleId);
+        final third = rows[2];
+
+        await repos.transactions.delete(third.id);
+
+        final after = await seriesRows(ruleId);
+        expect(after.where((t) => t.archived).map((t) => t.id), [third.id]);
+        expect(after, hasLength(48), reason: 'a soft delete keeps the row');
+        final rule = await ruleOf(ruleId);
+        expect(rule!.endDate, isNull, reason: 'the rule still runs on');
+      });
+
+      test('"this and the future" archives the tail, keeps the past', () async {
+        final id = await createMonthlySeries();
+        final ruleId = await ruleIdOf(id);
+        final rows = await seriesRows(ruleId);
+
+        final archived = await repos.transactions.deleteFuture(rows[3].id);
+        expect(archived, 45, reason: 'occurrences 3..47');
+
+        final after = await seriesRows(ruleId);
+        for (final row in after) {
+          expect(
+            row.archived,
+            row.recurrenceIndex! >= 3,
+            reason: 'index ${row.recurrenceIndex}',
+          );
+        }
+      });
+
+      test('deleting the tail ends the rule on the last survivor', () async {
+        final id = await createMonthlySeries();
+        final ruleId = await ruleIdOf(id);
+        final rows = await seriesRows(ruleId);
+
+        await repos.transactions.deleteFuture(rows[3].id);
+
+        // The rule must not keep claiming a reach it no longer has: `X/N` and
+        // the top-up button both read its end date.
+        final rule = await ruleOf(ruleId);
+        expect(rule!.endDate, rows[2].date);
+      });
+
+      test('deleting from the anchor archives the rule itself', () async {
+        final id = await createMonthlySeries();
+        final ruleId = await ruleIdOf(id);
+
+        await repos.transactions.deleteFuture(id);
+
+        final rule = await ruleOf(ruleId);
+        expect(rule!.archived, isTrue);
+        expect(await repos.transactions.watchSeries(ruleId).first, isNull);
+        expect((await seriesRows(ruleId)).every((t) => t.archived), isTrue);
+      });
+
+      test('updateFuture changes the tail and nothing before it', () async {
+        final id = await createMonthlySeries();
+        final ruleId = await ruleIdOf(id);
+        final rows = await seriesRows(ruleId);
+
+        final changed = await repos.transactions.updateFuture(
+          rows[3].id,
+          name: const Value('Rent (raised)'),
+          amount: Value(BigInt.from(180000)),
+        );
+        expect(changed, 45);
+
+        final after = await seriesRows(ruleId);
+        for (final row in after) {
+          final expected = row.recurrenceIndex! >= 3;
+          expect(row.name, expected ? 'Rent (raised)' : 'Rent');
+          expect(
+            row.amount,
+            BigInt.from(expected ? 180000 : 150000),
+            reason: 'index ${row.recurrenceIndex}',
+          );
+          expect(row.dirty, isTrue);
+        }
+      });
+
+      test('splitSeries ends the old rule and starts a new one', () async {
+        final id = await createMonthlySeries();
+        final oldRuleId = await ruleIdOf(id);
+        final rows = await seriesRows(oldRuleId);
+        final pivot = rows[3];
+
+        final newAnchorId = await repos.transactions.splitSeries(
+          pivot.id,
+          frequency: RecurrenceFrequency.weekly,
+          dayInterval: 1,
+          date: pivot.date,
+          dateConfirmed: true,
+          timeStatus: TransactionTimeStatus.confirmed,
+          name: 'Rent',
+          description: null,
+          amountCents: BigInt.from(150000),
+          accountId: cashId,
+          currency: 'ARS',
+          categoryId: foodId,
+        );
+
+        // The old rule stops at the last occurrence it still owns, and its
+        // tail is gone.
+        final oldRule = await ruleOf(oldRuleId);
+        expect(oldRule!.endDate, rows[2].date);
+        final oldRows = await seriesRows(oldRuleId);
+        for (final row in oldRows) {
+          expect(row.archived, row.recurrenceIndex! >= 3);
+        }
+
+        // The new one is anchored at the pivot, weekly, and open-ended like
+        // the rule it came from.
+        final newRuleId = await ruleIdOf(newAnchorId!);
+        expect(newRuleId, isNot(oldRuleId));
+        final newRule = await ruleOf(newRuleId);
+        expect(newRule!.frequency, 'weekly');
+        expect(newRule.anchorDate, pivot.date);
+        expect(newRule.endDate, isNull);
+
+        final newRows = await seriesRows(newRuleId);
+        expect(newRows, hasLength(100), reason: 'the weekly batch');
+        expect(newRows.first.id, newAnchorId);
+        final first = DateTime.fromMillisecondsSinceEpoch(
+          newRows.first.date.toInt(),
+        );
+        final second = DateTime.fromMillisecondsSinceEpoch(
+          newRows[1].date.toInt(),
+        );
+        expect(second.difference(first).inDays, 7);
+      });
+
+      test('splitSeries carries over a bounded rule\'s end date', () async {
+        final id = await createMonthlySeries(
+          endDate: DateTime(2027, 1, 15, 23, 59),
+        );
+        final rows = await seriesRows(await ruleIdOf(id));
+        expect(rows, hasLength(13));
+
+        final newAnchorId = await repos.transactions.splitSeries(
+          rows[3].id,
+          frequency: RecurrenceFrequency.weekly,
+          dayInterval: 1,
+          date: rows[3].date,
+          dateConfirmed: true,
+          timeStatus: TransactionTimeStatus.confirmed,
+          name: 'Rent',
+          description: null,
+          amountCents: BigInt.from(150000),
+          accountId: cashId,
+          currency: 'ARS',
+          categoryId: foodId,
+        );
+
+        // The user changed the cadence, not the end: the new series still
+        // stops where they said it would.
+        final newRule = await ruleOf(await ruleIdOf(newAnchorId!));
+        expect(
+          newRule!.endDate,
+          BigInt.from(DateTime(2027, 1, 15, 23, 59).millisecondsSinceEpoch),
+        );
+        final newRows = await seriesRows(newRule.id);
+        final last = DateTime.fromMillisecondsSinceEpoch(
+          newRows.last.date.toInt(),
+        );
+        expect(last.isBefore(DateTime(2027, 1, 16)), isTrue);
+      });
+    });
+
     test('watchSeries is single-subscription — consume it once', () async {
       final id = await createMonthlySeries();
       final stream = repos.transactions.watchSeries(await ruleIdOf(id));

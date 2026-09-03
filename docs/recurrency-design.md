@@ -552,3 +552,103 @@ y el detalle pasado.
 `seriesReachLabel` pasó a recibir el índice de la ocurrencia en vez de la
 transacción entera: era lo único que usaba, y así sirve a los dos detalles sin
 acoplarlos al tipo de fila de cada lista.
+
+### 5.6. Paso 4 — editar y eliminar, con alcance
+
+El detalle de movimientos futuros ahora edita y elimina, y las dos operaciones
+hacen la pregunta que una serie obliga a hacer: **este movimiento, o este y los
+futuros**. No se escribe nada hasta que está contestada — el alcance no es un
+default que el usuario pueda pasar por alto.
+
+#### "Solo este movimiento" no necesitó nada nuevo
+
+Una ocurrencia es una transacción ordinaria (§2.5), así que ese alcance usa las
+mutations que ya existían: `v1/transactions/mutations:update` y `:archive` en
+web, `TransactionRepository.update`/`delete` en nativo. La regla no se toca.
+
+#### "Este y los futuros" va por lotes
+
+Hasta 500 filas más sus entradas de agregado: el mismo problema que
+materializar, así que la misma solución. `updateFutureBatch` y
+`archiveFutureBatch` procesan 50 por vez y los workflows caminan los lotes. El
+recorrido es por **índice** (`by_user_recurrence_index`), no por fecha: "los que
+siguen" significa más adelante en la serie, y desde que se puede editar la
+fecha de una sola ocurrencia los dos órdenes dejan de coincidir.
+
+La ocurrencia abierta se escribe sincrónicamente y la cola sigue en lotes, así
+que la pantalla que el usuario está mirando queda bien en el momento en que la
+mutation vuelve.
+
+#### Borrar la cola trunca la regla
+
+La `endDate` de la regla es lo que leen el `X/N` y el botón de ampliar, así que
+dejarla apuntando más allá de una cola que ya no existe haría que el detalle
+describa una serie más larga que la de la pantalla. Se corta en la fecha de la
+ocurrencia **anterior**. En el índice 0 no hay anterior, así que se archiva la
+regla entera.
+
+El orden importa: primero truncar, mientras la ocurrencia `index - 1` todavía
+es la última en pie, y después borrar.
+
+#### Cambiar la cadencia parte la regla en dos
+
+No hay forma de expresar "de acá en adelante, semanal" con una sola regla: cada
+ocurrencia se proyecta desde el ancla por índice (§2.3), así que cambiar la
+frecuencia movería también las ocurrencias **anteriores** a esta. Lo que el
+usuario quiere son dos reglas — la original terminando donde la cortó, y una
+nueva empezando acá — y eso es lo que se escribe.
+
+Sale compuesto de las dos operaciones que ya existían: se borra la cola vieja y
+se crea una serie nueva en la fecha editada. La regla nueva hereda la
+`endDate` de la vieja, porque el usuario movió la cadencia, no el final.
+
+Lo mismo aplica a mover la **fecha** con alcance "este y los futuros": es un
+re-anclaje, así que va por el mismo camino.
+
+Y como la cadencia no se puede confinar a una ocurrencia, cuando el formulario
+la cambió el diálogo deshabilita "solo este movimiento" y dice por qué
+(`scopeOnlyThisUnavailable`) en lugar de aceptar la elección y descartar el
+cambio en silencio.
+
+Eso hace que "¿cambió la cadencia?" tenga que ser exacto. La primera versión en
+web sembraba los campos de frecuencia desde la regla en el `useState` inicial,
+que parece equivalente y no lo es: la query todavía está cargando en el primer
+render, así que el fallback quedaba como cadencia "actual" y **cualquier**
+guardado parecía un cambio de cadencia. Ahora los campos guardan sólo la
+elección del usuario y se resuelven contra la regla al leerlos. El nativo tenía
+el mismo error por el mismo motivo (la regla llega con el stream, no con el
+movimiento) y se arregló igual.
+
+#### El diálogo, igual en los dos lados
+
+Orden de Material y el mismo en las dos plataformas: primero la salida
+(`Cancelar`), después los dos alcances. Una elección destructiva sólo recolorea
+su etiqueta.
+
+#### El formulario no reusa la forma del recibo
+
+En modo lectura el detalle es un recibo: etiqueta a la izquierda, valor
+alineado a la derecha. En modo edición pasa al layout apilado del demo
+(wal-153): la etiqueta arriba en versalitas y el control abajo a todo el ancho.
+Un slot alineado a la derecha funciona para texto y pelea con cualquier cosa en
+la que se pueda escribir — un dropdown o un campo de texto exprimidos ahí se
+ven mal.
+
+En nativo el split va en **una** transacción de drift (anidan como savepoints):
+uno que sólo llegara a borrar la cola vieja dejaría al usuario sin ninguna de
+las dos series.
+
+#### Un bug latente que este paso destapó
+
+`writeTombstone` tenía la unión de tablas sincronizadas **repetida a mano**, y
+había quedado atrás de `recurrences`. Nada lo notaba porque el push escribe los
+tombstones directo a la tabla y hasta acá el backend nunca había necesitado
+tombstonear una regla — recién al truncar una serie en el índice 0 hacía falta.
+Ahora el tipo se deriva del schema (`Infer<typeof syncedTable>`), así que no
+puede volver a divergir.
+
+De paso se extrajo `archiveTransactionRow` a `convex/transactions/helpers.ts`:
+borrar "este y los futuros" tiene que dejar cada ocurrencia exactamente como la
+dejaría borrarla sola —los tombstones por join incluidos, que son
+load-bearing porque el servidor no recibe cascada de un tombstone de
+transacción— y con el cuerpo duplicado eso duraba hasta el primer cambio.

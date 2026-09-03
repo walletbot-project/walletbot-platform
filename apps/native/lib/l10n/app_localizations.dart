@@ -2177,7 +2177,7 @@ abstract class AppLocalizations {
   /// No description provided for @futureMovementsInfo.
   ///
   /// In en, this message translates to:
-  /// **'These are your recurring movements that haven\'t happened yet. They won\'t show in Activity until they occur.'**
+  /// **'These are your future movements: the ones that haven\'t happened yet. They won\'t show in Activity until they occur.'**
   String get futureMovementsInfo;
 
   /// No description provided for @noFutureMovements.
@@ -2227,6 +2227,90 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'The movements could not be added'**
   String get addMoreMovementsFailed;
+
+  /// No description provided for @editMovement.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit movement'**
+  String get editMovement;
+
+  /// No description provided for @titlePlaceholder.
+  ///
+  /// In en, this message translates to:
+  /// **'Title'**
+  String get titlePlaceholder;
+
+  /// No description provided for @descriptionPlaceholder.
+  ///
+  /// In en, this message translates to:
+  /// **'Optional detail'**
+  String get descriptionPlaceholder;
+
+  /// No description provided for @saveChanges.
+  ///
+  /// In en, this message translates to:
+  /// **'Save changes'**
+  String get saveChanges;
+
+  /// No description provided for @deleteRecurring.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete recurring movement'**
+  String get deleteRecurring;
+
+  /// No description provided for @savedOnlyThis.
+  ///
+  /// In en, this message translates to:
+  /// **'Changes applied to this movement'**
+  String get savedOnlyThis;
+
+  /// No description provided for @savedAllFuture.
+  ///
+  /// In en, this message translates to:
+  /// **'Changes applied to this movement and future ones'**
+  String get savedAllFuture;
+
+  /// No description provided for @deletedOnlyThis.
+  ///
+  /// In en, this message translates to:
+  /// **'Movement deleted'**
+  String get deletedOnlyThis;
+
+  /// No description provided for @deletedAllFuture.
+  ///
+  /// In en, this message translates to:
+  /// **'Movement and its future ones deleted'**
+  String get deletedAllFuture;
+
+  /// No description provided for @scopeEditDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Apply the changes to this movement only, or to the future ones too?'**
+  String get scopeEditDescription;
+
+  /// No description provided for @scopeDeleteDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete “{name}” just this once, or the future ones too?'**
+  String scopeDeleteDescription(String name);
+
+  /// No description provided for @scopeOnlyThis.
+  ///
+  /// In en, this message translates to:
+  /// **'This movement only'**
+  String get scopeOnlyThis;
+
+  /// No description provided for @scopeAllFuture.
+  ///
+  /// In en, this message translates to:
+  /// **'This and the future ones'**
+  String get scopeAllFuture;
+
+  /// No description provided for @scopeOnlyThisUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Changing the frequency always affects the future movements.'**
+  String get scopeOnlyThisUnavailable;
 
   /// No description provided for @leaves.
   ///

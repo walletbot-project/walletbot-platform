@@ -1,9 +1,15 @@
 import { occurrenceDateMs } from '@wallet-bot/shared'
 import { v } from 'convex/values'
 import type { Doc } from '../_generated/dataModel'
+import type { MutationCtx, QueryCtx } from '../_generated/server'
 import { internalMutation } from '../_generated/server'
 import { inflowsByAccount, outflowsByAccount } from '../aggregates'
 import { nextSeq } from '../sync/helpers'
+import {
+    aggregateReplace,
+    archiveTransactionRow,
+    occurrencePatch,
+} from '../transactions/helpers'
 
 /**
  * How many occurrences one mutation materialises. A whole 500-occurrence rule
@@ -123,5 +129,134 @@ export const materializeBatch = internalMutation({
         }
 
         return { done: to >= args.to, next: to }
+    },
+})
+
+/**
+ * The occurrences of a rule from `fromIndex` up, at most `BATCH_SIZE` of them.
+ *
+ * By index, not by date: "the ones after this" means later in the series, and
+ * once a single occurrence's date can be edited the two orders stop agreeing.
+ */
+async function tailBatch(
+    ctx: QueryCtx,
+    userId: string,
+    recurrenceId: string,
+    fromIndex: number,
+): Promise<Doc<'transactions'>[]> {
+    return await ctx.db
+        .query('transactions')
+        .withIndex('by_user_recurrence_index', (q) =>
+            q
+                .eq('userId', userId)
+                .eq('recurrenceId', recurrenceId)
+                .gte('recurrenceIndex', BigInt(fromIndex)),
+        )
+        .order('asc')
+        .take(BATCH_SIZE)
+}
+
+/** Where the next batch starts, or `done` when this one was the last. */
+function nextCursor(
+    rows: Doc<'transactions'>[],
+    fromIndex: number,
+): { done: boolean; next: number } {
+    if (rows.length < BATCH_SIZE) return { done: true, next: fromIndex }
+    const last = rows[rows.length - 1]
+    const lastIndex = Number(last?.recurrenceIndex ?? fromIndex)
+    return { done: false, next: lastIndex + 1 }
+}
+
+/**
+ * Carries an edit to one batch of a series' tail.
+ *
+ * Only the value fields travel: a change of cadence or of the anchor is not an
+ * update but a split into two rules (`v1/recurrences/mutations:splitSeries`),
+ * because the occurrences before this one keep their own spacing.
+ */
+export const updateFutureBatch = internalMutation({
+    args: {
+        userId: v.string(),
+        recurrenceId: v.string(),
+        fromIndex: v.number(),
+        patch: occurrencePatch,
+    },
+    handler: async (ctx, args): Promise<{ done: boolean; next: number }> => {
+        const rows = await tailBatch(
+            ctx,
+            args.userId,
+            args.recurrenceId,
+            args.fromIndex,
+        )
+        for (const row of rows) {
+            if (row.isArchived) continue
+            await applyOccurrencePatch(ctx, args.userId, row, args.patch)
+        }
+        return nextCursor(rows, args.fromIndex)
+    },
+})
+
+/** Patches one occurrence and keeps its aggregate entry in step. */
+export async function applyOccurrencePatch(
+    ctx: MutationCtx,
+    userId: string,
+    row: Doc<'transactions'>,
+    patch: {
+        name?: string
+        description?: string | null
+        amount?: bigint
+        accountId?: string
+        categoryId?: string
+    },
+): Promise<void> {
+    const fields: Partial<Doc<'transactions'>> = {
+        updatedAt: BigInt(Date.now()),
+        seq: await nextSeq(ctx, userId),
+    }
+    if (patch.name !== undefined) fields.name = patch.name
+    if (patch.description !== undefined) {
+        fields.description = patch.description ?? undefined
+    }
+    if (patch.amount !== undefined) fields.amount = patch.amount
+    if (patch.categoryId !== undefined) fields.categoryId = patch.categoryId
+    if (patch.accountId !== undefined) {
+        const account = await ctx.db
+            .query('accounts')
+            .withIndex('by_user_id', (q) =>
+                q.eq('userId', userId).eq('id', patch.accountId as string),
+            )
+            .unique()
+        if (!account) throw new Error('Account not found')
+        fields.accountId = patch.accountId
+        // The account owns the currency, so moving an occurrence between
+        // accounts moves its currency too.
+        fields.currency = account.currency
+    }
+    await ctx.db.patch(row._id, fields)
+    await aggregateReplace(ctx, row, row._id)
+}
+
+/**
+ * Archives one batch of a series' tail, leaving every occurrence exactly as
+ * deleting it on its own would (`archiveTransactionRow`).
+ */
+export const archiveFutureBatch = internalMutation({
+    args: {
+        userId: v.string(),
+        recurrenceId: v.string(),
+        fromIndex: v.number(),
+    },
+    handler: async (ctx, args): Promise<{ done: boolean; next: number }> => {
+        const rows = await tailBatch(
+            ctx,
+            args.userId,
+            args.recurrenceId,
+            args.fromIndex,
+        )
+        for (const row of rows) {
+            if (row.isArchived) continue
+            await archiveTransactionRow(ctx, args.userId, row)
+        }
+        return nextCursor(rows, args.fromIndex)
     },
 })

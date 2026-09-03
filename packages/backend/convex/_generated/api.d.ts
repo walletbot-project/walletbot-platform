@@ -86,6 +86,7 @@ import type * as telemetry_queries from "../telemetry/queries.js";
 import type * as telemetry_types from "../telemetry/types.js";
 import type * as telemetry_validators from "../telemetry/validators.js";
 import type * as transactions_backfill from "../transactions/backfill.js";
+import type * as transactions_helpers from "../transactions/helpers.js";
 import type * as userDeletion_helpers from "../userDeletion/helpers.js";
 import type * as userDeletion_http from "../userDeletion/http.js";
 import type * as userDeletion_internal from "../userDeletion/internal.js";
@@ -212,6 +213,7 @@ declare const fullApi: ApiFromModules<{
   "telemetry/types": typeof telemetry_types;
   "telemetry/validators": typeof telemetry_validators;
   "transactions/backfill": typeof transactions_backfill;
+  "transactions/helpers": typeof transactions_helpers;
   "userDeletion/helpers": typeof userDeletion_helpers;
   "userDeletion/http": typeof userDeletion_http;
   "userDeletion/internal": typeof userDeletion_internal;

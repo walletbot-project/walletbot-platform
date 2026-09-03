@@ -822,7 +822,7 @@ export const en: Messages = {
     futureMovements: {
         selectDetail: 'Pick a movement to see its details',
         title: 'Future movements',
-        info: "These are your recurring movements that haven't happened yet. They won't show in Activity until they occur.",
+        info: "These are your future movements: the ones that haven't happened yet. They won't show in Activity until they occur.",
         empty: 'You have no scheduled future movements',
         detail: 'Details',
         editMovement: 'Edit movement',
@@ -859,6 +859,8 @@ export const en: Messages = {
             'Apply the changes only to this movement, or to future ones as well?',
         scopeDeleteDescription: (name: string) =>
             `Delete “${name}” only this time, or future ones as well?`,
+        scopeOnlyThisUnavailable:
+            'Changing the frequency always affects the future movements.',
         scopeOnlyThis: 'Only this movement',
         scopeAllFuture: 'This and future ones',
         cancel: 'Cancel',

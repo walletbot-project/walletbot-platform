@@ -1183,7 +1183,7 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get futureMovementsInfo =>
-      'Estos son tus movimientos recurrentes que todavía no ocurrieron. No aparecen en Actividad hasta que suceden.';
+      'Estos son tus movimientos futuros: los que todavía no ocurrieron. No aparecen en Actividad hasta que suceden.';
 
   @override
   String get noFutureMovements => 'No tenés movimientos futuros programados';
@@ -1217,6 +1217,52 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get addMoreMovementsFailed => 'No se pudieron añadir los movimientos';
+
+  @override
+  String get editMovement => 'Editar movimiento';
+
+  @override
+  String get titlePlaceholder => 'Título';
+
+  @override
+  String get descriptionPlaceholder => 'Detalle opcional';
+
+  @override
+  String get saveChanges => 'Guardar cambios';
+
+  @override
+  String get deleteRecurring => 'Eliminar movimiento recurrente';
+
+  @override
+  String get savedOnlyThis => 'Cambios aplicados a este movimiento';
+
+  @override
+  String get savedAllFuture => 'Cambios aplicados a este y los futuros';
+
+  @override
+  String get deletedOnlyThis => 'Movimiento eliminado';
+
+  @override
+  String get deletedAllFuture => 'Movimiento y sus futuros eliminados';
+
+  @override
+  String get scopeEditDescription =>
+      '¿Aplicar los cambios solo a este movimiento o también a los futuros?';
+
+  @override
+  String scopeDeleteDescription(String name) {
+    return '¿Querés eliminar “$name” solo esta vez o también los futuros?';
+  }
+
+  @override
+  String get scopeOnlyThis => 'Solo este movimiento';
+
+  @override
+  String get scopeAllFuture => 'Este y los futuros';
+
+  @override
+  String get scopeOnlyThisUnavailable =>
+      'Cambiar la frecuencia siempre afecta a los movimientos futuros.';
 
   @override
   String get leaves => 'Sale';

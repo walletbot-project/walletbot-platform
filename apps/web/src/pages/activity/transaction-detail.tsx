@@ -29,10 +29,18 @@ import { formatMoney } from '@/lib/money'
 import { normalizeTagColor } from '@/lib/tag-colors'
 import { cn } from '@/lib/utils'
 import {
+    centsToInput,
+    dateInputValue,
+    formatDate,
+    formatTime,
     frequencyLabel,
+    inputToCents,
+    localDateTimeEpoch,
+    normalizeAmount,
     seriesReachLabel,
     type TransactionTimeStatus,
     type TransactionTransferSide,
+    timeInputValue,
 } from './helpers'
 
 type Transaction = NonNullable<
@@ -1073,47 +1081,4 @@ function displaySignedAmount(
         case 'balance_adjustment':
             return amount
     }
-}
-
-function centsToInput(cents: bigint): string {
-    return (Number(cents < 0n ? -cents : cents) / 100).toFixed(2)
-}
-
-function normalizeAmount(value: string): string {
-    const normalized = value.replace(',', '.')
-    return normalized.replace(/[^\d.]/g, '').replace(/(\..*)\./g, '$1')
-}
-
-function inputToCents(value: string): bigint | null {
-    const parsed = Number(value.replace(',', '.'))
-    if (!Number.isFinite(parsed)) return null
-    return BigInt(Math.round(Math.abs(parsed) * 100))
-}
-
-function dateInputValue(epoch: bigint): string {
-    const date = new Date(Number(epoch))
-    return `${date.getFullYear().toString().padStart(4, '0')}-${(date.getMonth() + 1).toString().padStart(2, '0')}-${date.getDate().toString().padStart(2, '0')}`
-}
-
-function timeInputValue(epoch: bigint): string {
-    const date = new Date(Number(epoch))
-    return `${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`
-}
-
-function localDateTimeEpoch(dateValue: string, timeValue: string): bigint {
-    const [year, month, day] = dateValue.split('-').map(Number)
-    const [hour, minute] = timeValue.split(':').map(Number)
-    return BigInt(new Date(year, month - 1, day, hour, minute, 0, 0).getTime())
-}
-
-function formatDate(epoch: bigint, locale: string): string {
-    return new Intl.DateTimeFormat(locale).format(new Date(Number(epoch)))
-}
-
-function formatTime(epoch: bigint, locale: string): string {
-    return new Intl.DateTimeFormat(locale, {
-        hour: '2-digit',
-        minute: '2-digit',
-        hour12: false,
-    }).format(new Date(Number(epoch)))
 }

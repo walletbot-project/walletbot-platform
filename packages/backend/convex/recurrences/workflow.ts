@@ -1,6 +1,7 @@
 import { WorkflowManager } from '@convex-dev/workflow'
 import { v } from 'convex/values'
 import { components, internal } from '../_generated/api'
+import { occurrencePatch } from '../transactions/helpers'
 
 export const workflow = new WorkflowManager(components.workflow)
 
@@ -43,5 +44,65 @@ export const materializeRecurrence = workflow.define({
             from = result.next
         }
         return from
+    },
+})
+
+/**
+ * Carries an edit down a series' tail, one batch per step.
+ *
+ * Same reason as materialising: "this and the ones after it" on a daily rule
+ * is up to 500 rows plus their aggregate entries, which is not one mutation's
+ * worth of work. Each step is retryable on its own, and re-patching an
+ * occurrence with the same values is harmless.
+ */
+export const updateFutureOccurrences = workflow.define({
+    args: {
+        userId: v.string(),
+        recurrenceId: v.string(),
+        fromIndex: v.number(),
+        patch: occurrencePatch,
+    },
+    handler: async (step, args): Promise<number> => {
+        let fromIndex = args.fromIndex
+        for (;;) {
+            const result = await step.runMutation(
+                internal.recurrences.internal.updateFutureBatch,
+                {
+                    userId: args.userId,
+                    recurrenceId: args.recurrenceId,
+                    fromIndex,
+                    patch: args.patch,
+                },
+            )
+            if (result.done) return result.next
+            fromIndex = result.next
+        }
+    },
+})
+
+/**
+ * Archives a series' tail, one batch per step. Idempotent: an occurrence that
+ * is already archived is skipped, so a retried step never double-tombstones.
+ */
+export const archiveFutureOccurrences = workflow.define({
+    args: {
+        userId: v.string(),
+        recurrenceId: v.string(),
+        fromIndex: v.number(),
+    },
+    handler: async (step, args): Promise<number> => {
+        let fromIndex = args.fromIndex
+        for (;;) {
+            const result = await step.runMutation(
+                internal.recurrences.internal.archiveFutureBatch,
+                {
+                    userId: args.userId,
+                    recurrenceId: args.recurrenceId,
+                    fromIndex,
+                },
+            )
+            if (result.done) return result.next
+            fromIndex = result.next
+        }
     },
 })
