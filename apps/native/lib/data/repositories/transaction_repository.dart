@@ -115,6 +115,56 @@ class TransactionRepository extends RepositoryBase {
     );
   }
 
+  /// One-shot [watchUpcoming], for the agent tool.
+  Future<List<Transaction>> listUpcoming({int? limit}) => list(
+    const TransactionFilter(),
+    limit: limit,
+    ordering: TxnOrdering.dateAsc,
+    occurrence: TxnOccurrence.upcoming,
+  );
+
+  /// The user's live recurring rules, each with the movement it creates and
+  /// how far its series reaches — what the agent needs to answer "what do I
+  /// have repeating?" and to address a rule by name.
+  Future<
+    List<({Recurrence rule, Transaction? anchor, DateTime? coveredThrough})>
+  >
+  listRecurrences({int limit = 50}) async {
+    final rules =
+        await (db.select(db.recurrences)
+              ..where((r) => r.archived.equals(false))
+              ..orderBy([(r) => OrderingTerm.desc(r.createdAt)])
+              ..limit(limit))
+            .get();
+    final out =
+        <({Recurrence rule, Transaction? anchor, DateTime? coveredThrough})>[];
+    for (final rule in rules) {
+      final anchor =
+          await (db.select(db.transactions)..where(
+                (t) =>
+                    t.recurrenceId.equals(rule.id) &
+                    t.recurrenceIndex.equals(0),
+              ))
+              .getSingleOrNull();
+      final last = await _lastOccurrenceOf(rule.id);
+      out.add((
+        rule: rule,
+        anchor: anchor,
+        coveredThrough: last == null
+            ? null
+            : DateTime.fromMillisecondsSinceEpoch(last.date.toInt()),
+      ));
+    }
+    return out;
+  }
+
+  Future<Transaction?> _lastOccurrenceOf(String recurrenceId) =>
+      (db.select(db.transactions)
+            ..where((t) => t.recurrenceId.equals(recurrenceId))
+            ..orderBy([(t) => OrderingTerm.desc(t.recurrenceIndex)])
+            ..limit(1))
+          .getSingleOrNull();
+
   /// One-shot variant of [watch], used by the agent tools.
   /// [exactFromMs]/[exactToInclusiveMs] add precise inclusive timestamp
   /// bounds on top of the filter (the agent's dates are exact instants, not
@@ -125,6 +175,7 @@ class TransactionRepository extends RepositoryBase {
     TxnOrdering ordering = TxnOrdering.dateDesc,
     BigInt? exactFromMs,
     BigInt? exactToInclusiveMs,
+    TxnOccurrence occurrence = TxnOccurrence.occurred,
   }) async {
     List<Set<String>> groups;
     List<Tag> tags = const [];
@@ -145,6 +196,7 @@ class TransactionRepository extends RepositoryBase {
       ordering: ordering,
       exactFromMs: exactFromMs,
       exactToInclusiveMs: exactToInclusiveMs,
+      occurrence: occurrence,
     ).get();
   }
 

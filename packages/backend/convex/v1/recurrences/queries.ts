@@ -80,3 +80,63 @@ export const get = query({
         }
     },
 })
+
+/** How many rules one `list` returns. Rules are few by nature. */
+const RULE_LIST_CAP = 50
+
+/**
+ * The user's recurring rules, with the movement each one creates and how far
+ * its series reaches.
+ *
+ * Two indexed reads per rule (the anchor for the name and amount, the last
+ * occurrence for the reach) rather than the capped survivor count `get` does:
+ * a list answers "what repeats?", and the position of a specific occurrence is
+ * a question about that occurrence.
+ */
+export const list = query({
+    args: {},
+    handler: async (ctx) => {
+        const userId = await requireAuth(ctx)
+        const rules = await ctx.db
+            .query('recurrences')
+            .withIndex('by_user_archived', (q) =>
+                q.eq('userId', userId).eq('isArchived', false),
+            )
+            .take(RULE_LIST_CAP)
+
+        const items = []
+        for (const rule of rules) {
+            const anchor = await ctx.db
+                .query('transactions')
+                .withIndex('by_user_recurrence_index', (q) =>
+                    q
+                        .eq('userId', userId)
+                        .eq('recurrenceId', rule.id)
+                        .eq('recurrenceIndex', 0n),
+                )
+                .first()
+            const last = await ctx.db
+                .query('transactions')
+                .withIndex('by_user_recurrence_index', (q) =>
+                    q.eq('userId', userId).eq('recurrenceId', rule.id),
+                )
+                .order('desc')
+                .first()
+            items.push({
+                id: rule.id,
+                name: anchor?.name ?? null,
+                type: anchor?.type ?? null,
+                amount: anchor?.amount ?? null,
+                currency: anchor?.currency ?? null,
+                accountId: anchor?.accountId ?? null,
+                categoryId: anchor?.categoryId ?? null,
+                frequency: rule.frequency,
+                dayInterval: rule.dayInterval,
+                anchorDate: rule.anchorDate,
+                endDate: rule.endDate,
+                coveredThroughMs: last?.date ?? null,
+            })
+        }
+        return items
+    },
+})

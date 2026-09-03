@@ -50,21 +50,27 @@ const toolDescriptions = {
     listTransactions:
         'List transactions, newest first, with optional filters: type, account, category, tag, status, date range. With no filters it returns the 10 most recent movements; with filters the default limit is 50.',
     getTransaction:
-        'Get a single transaction by id, including its tagIds. Fails with "Transaction not found" for unknown ids.',
+        'Get a single transaction by id, including its tagIds and, when it belongs to a recurring series, that series (cadence, its position in it, and how far the series reaches). Fails with "Transaction not found" for unknown ids.',
+    listUpcomingTransactions:
+        'List the movements that exist but have NOT happened yet, soonest first — the other side of Activity. These are excluded from listTransactions, balances and summaries until their date arrives, so this is the only way to see them. Use it for "what do I have coming up?". Includes both occurrences of recurring rules and one-off movements dated in the future.',
+    listRecurrences:
+        'List the user recurring rules: id, the name of the movements they create, amount, cadence, end date, and how far the series currently reaches. Call it before addRecurrenceOccurrences (which needs a rule id) and to answer "what do I have set to repeat?".',
 
     // Transactions: write
     addExpense:
-        'Record an expense (money out). Subtracts from the account balance. Requires account + category; the currency comes from the account.',
+        'Record an expense (money out). Subtracts from the account balance. Requires account + category; the currency comes from the account. Pass `recurrence` to make it repeat — the whole series is created up front as future movements, and the result reports how many and through when.',
     addIncome:
-        'Record an income (money in). Adds to the account balance. Requires account + category; the currency comes from the account.',
+        'Record an income (money in). Adds to the account balance. Requires account + category; the currency comes from the account. Pass `recurrence` to make it repeat, same as addExpense.',
     addTransfer:
         'Record a transfer between two of the user accounts. Category is optional. For cross-currency transfers, provide toAmount (and optionally exchangeRate) — same-currency transfers derive toAmount automatically.',
     addBalanceAdjustment:
         'Record that the actual balance of an account is balanceAfter. The system computes the difference. Use when the user counted cash or reconciles a statement.',
     updateTransaction:
-        'Update a transaction: name, description, date/time, amount, category, status, and tags (addTagIdsOrNames / removeTagIdsOrNames apply atomically with the rest of the edit). Unknown tag names are skipped and reported in `missing`.',
+        'Update a transaction: name, description, date/time, amount, category, status, and tags (addTagIdsOrNames / removeTagIdsOrNames apply atomically with the rest of the edit). Unknown tag names are skipped and reported in `missing`. For an occurrence of a recurring series, `scope` decides whether the edit stops at this movement or carries to every later one — ask the user which, and pass `recurrence` with scope all-future to change the cadence from here on.',
     deleteTransaction:
-        'Delete a transaction. It is archived (soft delete; there is no in-app restore yet) and balances update accordingly. Idempotent: deleting an unknown id still reports ok.',
+        'Delete a transaction. It is archived (soft delete; there is no in-app restore yet) and balances update accordingly. Idempotent: deleting an unknown id still reports ok. For an occurrence of a recurring series, `scope` decides whether this deletes one movement or this one and every later one (which also stops the rule there) — ask the user which before calling.',
+    addRecurrenceOccurrences:
+        'Extend an open-ended recurring rule by another batch, continuing from the LAST occurrence that exists — not from whichever one the user mentioned. Returns how many were created. Fails for a rule with an end date: that series is already complete, so change the end date instead.',
 
     // Summaries
     summarizeTransactions:

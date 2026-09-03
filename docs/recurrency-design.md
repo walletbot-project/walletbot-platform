@@ -729,3 +729,83 @@ mantenimiento (`transactions/helpers.ts`, `recurrences/internal.ts`,
 helpers antes de agregar un tercero, y sobre todo **requiere un backfill**: un
 agregado sólo es correcto si toda fila existente entró en él, así que sería un
 paso de deploy y no de merge.
+
+### 5.8. Gastón
+
+El agente operaba sobre la app anterior a esta branch. Los cuatro pasos le
+dejaron tres agujeros de distinta gravedad, y uno de ellos era peligroso.
+
+#### Lo que ya estaba bien
+
+El corte de ocurrencia (§5.1) le llegó gratis. `buildTransactionQuery`
+defaultea a `TxnOccurrence.occurred` y los ejecutores de web ya pasaban
+`pastCutoffMs`, así que `listTransactions` y `summarizeTransactions` nunca
+vieron movimientos futuros. Ese default es deliberado: toda pregunta existente
+es sobre lo que pasó, y querer las filas programadas es el caso excepcional que
+hay que pedir.
+
+#### Lo que faltaba
+
+1. **No podía ver el futuro.** Ninguna tool devuelve movimientos del otro lado
+   del corte, así que "¿qué tengo por pagar la semana que viene?" no tenía
+   respuesta posible. Nuevo `listUpcomingTransactions`.
+2. **No podía crear una recurrencia.** "Cargá el alquiler todos los meses"
+   habría creado un gasto suelto. `addExpense`/`addIncome` ahora aceptan
+   `recurrence`, y el resultado reporta cuántas ocurrencias se crearon y hasta
+   cuándo llegan — para que el modelo diga el número en vez de dar a entender
+   "para siempre".
+3. **Editar y borrar eran una trampa.** `deleteTransaction` borraba una fila.
+   "Borrá el alquiler" habría borrado un mes y el usuario habría creído que la
+   serie entera se fue. Este era el agujero grave, y el arreglo no es sólo un
+   argumento: es la instrucción de **preguntar**.
+
+#### Cómo se resolvió el alcance
+
+`scope` va en las tools que ya existen, no en tools nuevas. Es a propósito: el
+modelo ya alcanza `deleteTransaction` por reflejo, y si el alcance viviera en
+una tool aparte podría borrar una ocurrencia sin considerar nunca la serie —
+exactamente la trampa que hay que cerrar. Con el argumento donde ya está, la
+decisión aparece en el lugar donde se toma, el default es el reversible
+(`only-this`), y la descripción de la tool más la sección del prompt le dicen
+que pregunte antes.
+
+Dos refusals en vez de adivinar:
+
+- Cambiar la cadencia con `only-this` se rechaza explicando por qué es
+  imposible (las ocurrencias anteriores conservan su espaciado).
+- Mover la fecha con `all-future` se rechaza indicando el camino: es un split,
+  así que necesita `recurrence`; o `only-this` para mover sólo esta.
+
+#### Los gates
+
+- **Versión nativa 0.4.0** para las tres tools nuevas: los ejecutores necesitan
+  el schema local v5 (la tabla `recurrences` y las columnas de ocurrencia), que
+  es el bump coordinado de 0.4.0. Un binario 0.3.x no tiene dónde poner una
+  regla, y el mint nunca debe declarar una tool que el cliente no puede
+  ejecutar.
+- **Feature flag `recurringExpense`** para `listRecurrences` y
+  `addRecurrenceOccurrences`, el mismo que gatea la UI: con el flag apagado el
+  usuario no tiene forma de ver ni administrar una regla, así que el agente no
+  debe poder crear una.
+- **`listUpcomingTransactions` NO está gateada.** Un movimiento suelto con
+  fecha futura existe con el flag apagado, y es invisible en todo el resto de
+  la app, así que el agente tiene que poder verlo de cualquier manera.
+- El prompt sigue la misma regla que `MATH_GUIDE` y `FX_GUIDE`:
+  `RECURRENCE_GUIDE` sólo entra si la sesión declaró las tools, así que nunca
+  menciona algo que no se puede llamar.
+
+#### La skill
+
+`recurring-movements` entra al índice de skills. Ahí van las reglas que el
+modelo necesita **antes** de explicar el feature: que las ocurrencias son
+movimientos reales creados por adelantado, que "sin fecha de fin" es un lote y
+no el infinito, que estar en la lista de futuros no implica ser recurrente, y
+que la posición cuenta movimientos que existen y no pasos de cadencia desde el
+inicio.
+
+#### Un detalle de telemetría
+
+`v1/recurrences/mutations:create` hardcodeaba `createdBy: 'form'`. Ahora toma el
+argumento como las demás mutations de creación, porque desde este paso el
+agente también crea recurrencias y el dashboard las habría contado todas como
+cargas manuales.

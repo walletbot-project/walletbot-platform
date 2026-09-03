@@ -340,9 +340,79 @@ export const toolExecutors = {
                 },
             )
             if (!txn) return { ok: false, error: 'Transaction not found' }
-            return { ok: true, transaction: serializeTransaction(txn) }
+            // The series it belongs to, when it belongs to one: the model
+            // needs to know before it can offer the user a scope choice.
+            const series = await ctx.client.query(
+                api.v1.recurrences.queries.get,
+                {
+                    recurrenceId: txn.recurrenceId,
+                    occurrenceIndex: txn.recurrenceIndex,
+                },
+            )
+            return {
+                ok: true,
+                transaction: {
+                    ...serializeTransaction(txn),
+                    ...(series === null
+                        ? {}
+                        : { recurrence: serializeSeries(series) }),
+                },
+            }
         },
     ),
+    // The other side of the occurrence cutoff. Ascending, because the soonest
+    // movement is the interesting one.
+    listUpcomingTransactions: defineTool(
+        toolSchemas.listUpcomingTransactions,
+        async (ctx, args) => {
+            const page = await ctx.client.query(
+                api.v1.transactions.queries.listUpcoming,
+                {
+                    paginationOpts: {
+                        numItems: args.limit ?? 20,
+                        cursor: null,
+                    },
+                    asOfMs: pastCutoffBigInt(),
+                },
+            )
+            return {
+                ok: true,
+                items: page.page.map(serializeTransaction),
+            }
+        },
+    ),
+    listRecurrences: defineTool(toolSchemas.listRecurrences, async (ctx) => {
+        const items = await ctx.client.query(
+            api.v1.recurrences.queries.list,
+            {},
+        )
+        return {
+            ok: true,
+            items: items.map((rule) => ({
+                id: rule.id,
+                name: rule.name,
+                type: rule.type,
+                amount: rule.amount === null ? null : Number(rule.amount) / 100,
+                currency: rule.currency,
+                accountId: rule.accountId,
+                categoryId: rule.categoryId,
+                frequency: rule.frequency,
+                dayInterval:
+                    rule.dayInterval === undefined
+                        ? undefined
+                        : Number(rule.dayInterval),
+                anchorDate: Number(rule.anchorDate),
+                endDate:
+                    rule.endDate === undefined
+                        ? undefined
+                        : Number(rule.endDate),
+                coveredThrough:
+                    rule.coveredThroughMs === null
+                        ? null
+                        : Number(rule.coveredThroughMs),
+            })),
+        }
+    }),
     // ───── Transactions: write ─────
     addExpense: defineTool(toolSchemas.addExpense, async (ctx, args) => {
         const accR = await resolveAccount(ctx, args.accountIdOrName)
@@ -350,8 +420,42 @@ export const toolExecutors = {
         const catR = await resolveCategory(ctx, args.categoryIdOrName)
         if (!catR.ok) return resolutionError('Category', catR)
 
+        const recurrence = parseRecurrence(args.recurrence)
+        if (!recurrence.ok) return { ok: false, error: recurrence.error }
+
         const id = newId()
         const date = parseTransactionDate(args.date, args.timeStatus, args.time)
+        if (recurrence.value !== undefined) {
+            // The rule and its whole series, in one call: `create` writes the
+            // rule plus occurrence 0 atomically and hands the rest to a
+            // workflow.
+            const recurrenceId = newId()
+            await ctx.client.mutation(api.v1.recurrences.mutations.create, {
+                recurrenceId,
+                frequency: recurrence.value.frequency,
+                dayInterval: recurrence.value.dayInterval,
+                endDate: recurrence.value.endDate,
+                transactionId: id,
+                type: 'expense',
+                name: args.name,
+                description: args.description,
+                amount: parseAmountToCents(args.amount),
+                accountId: accR.entity.id,
+                categoryId: catR.entity.id,
+                date,
+                dateConfirmed: args.date !== undefined,
+                timeStatus: args.timeStatus,
+                createdBy: 'agent',
+            })
+            await attachTags(ctx, id, args.tagIdsOrNames)
+            return {
+                ok: true,
+                id,
+                date: Number(date),
+                timeStatus: args.timeStatus,
+                ...(await seriesResult(ctx, recurrenceId, 0n)),
+            }
+        }
         await ctx.client.mutation(api.v1.transactions.mutations.createExpense, {
             id,
             name: args.name,
@@ -374,8 +478,42 @@ export const toolExecutors = {
         const catR = await resolveCategory(ctx, args.categoryIdOrName)
         if (!catR.ok) return resolutionError('Category', catR)
 
+        const recurrence = parseRecurrence(args.recurrence)
+        if (!recurrence.ok) return { ok: false, error: recurrence.error }
+
         const id = newId()
         const date = parseTransactionDate(args.date, args.timeStatus, args.time)
+        if (recurrence.value !== undefined) {
+            // The rule and its whole series, in one call: `create` writes the
+            // rule plus occurrence 0 atomically and hands the rest to a
+            // workflow.
+            const recurrenceId = newId()
+            await ctx.client.mutation(api.v1.recurrences.mutations.create, {
+                recurrenceId,
+                frequency: recurrence.value.frequency,
+                dayInterval: recurrence.value.dayInterval,
+                endDate: recurrence.value.endDate,
+                transactionId: id,
+                type: 'income',
+                name: args.name,
+                description: args.description,
+                amount: parseAmountToCents(args.amount),
+                accountId: accR.entity.id,
+                categoryId: catR.entity.id,
+                date,
+                dateConfirmed: args.date !== undefined,
+                timeStatus: args.timeStatus,
+                createdBy: 'agent',
+            })
+            await attachTags(ctx, id, args.tagIdsOrNames)
+            return {
+                ok: true,
+                id,
+                date: Number(date),
+                timeStatus: args.timeStatus,
+                ...(await seriesResult(ctx, recurrenceId, 0n)),
+            }
+        }
         await ctx.client.mutation(api.v1.transactions.mutations.createIncome, {
             id,
             name: args.name,
@@ -477,6 +615,28 @@ export const toolExecutors = {
                 if (!r.ok) return resolutionError('Category', r)
                 categoryId = r.entity.id
             }
+
+            const allFuture = args.scope === 'all-future'
+            const recurrence = parseRecurrence(args.recurrence)
+            if (!recurrence.ok) return { ok: false, error: recurrence.error }
+            if (recurrence.value !== undefined && !allFuture) {
+                return {
+                    ok: false,
+                    error: 'Changing the cadence needs scope all-future: the occurrences before this one keep their own spacing, so it cannot apply to one movement.',
+                }
+            }
+            if (recurrence.value !== undefined) {
+                return await splitSeries(
+                    ctx,
+                    args,
+                    recurrence.value,
+                    categoryId,
+                )
+            }
+            if (allFuture) {
+                return await updateFuture(ctx, args, categoryId)
+            }
+
             // Tag changes ride the same mutation as the field edits, so
             // everything commits atomically. Unknown names are skipped and
             // reported back in `missing` (never created on the fly).
@@ -550,16 +710,59 @@ export const toolExecutors = {
                     ? {}
                     : { timeStatus: args.timeStatus }),
                 ...(missing.length === 0 ? {} : { missing }),
+                scope: 'only-this',
             }
         },
     ),
     deleteTransaction: defineTool(
         toolSchemas.deleteTransaction,
         async (ctx, args) => {
+            if (args.scope === 'all-future') {
+                // Also truncates the rule, so nothing new is created past
+                // here. On a movement with no series this degrades to
+                // deleting that one.
+                await ctx.client.mutation(
+                    api.v1.recurrences.mutations.deleteFuture,
+                    { transactionId: args.id },
+                )
+                return { ok: true, id: args.id, scope: 'all-future' }
+            }
             await ctx.client.mutation(api.v1.transactions.mutations.archive, {
                 id: args.id,
             })
-            return { ok: true, id: args.id }
+            return { ok: true, id: args.id, scope: 'only-this' }
+        },
+    ),
+    // Extends an open-ended rule by another batch, from the last occurrence
+    // that exists.
+    addRecurrenceOccurrences: defineTool(
+        toolSchemas.addRecurrenceOccurrences,
+        async (ctx, args) => {
+            try {
+                const added = await ctx.client.mutation(
+                    api.v1.recurrences.mutations.addOccurrences,
+                    { recurrenceId: args.recurrenceId },
+                )
+                const series = await ctx.client.query(
+                    api.v1.recurrences.queries.get,
+                    { recurrenceId: args.recurrenceId },
+                )
+                return {
+                    ok: true,
+                    recurrenceId: args.recurrenceId,
+                    added,
+                    coveredThrough:
+                        series?.coveredThroughMs === null ||
+                        series?.coveredThroughMs === undefined
+                            ? null
+                            : Number(series.coveredThroughMs),
+                }
+            } catch {
+                return {
+                    ok: false,
+                    error: 'That rule cannot be extended: it either has an end date (so the series is already complete) or no longer exists.',
+                }
+            }
         },
     ),
     // ───── Summaries ─────
@@ -1056,6 +1259,236 @@ function serializeTransaction(t: TxnLite) {
                 ? Number(t.balanceAfter) / 100
                 : undefined,
         tagIds: t.tagIds,
+    }
+}
+
+/**
+ * Carries the value fields to this occurrence and every later one.
+ *
+ * Only the value fields travel: a date or cadence change is a split, not an
+ * update, because the occurrences before this one keep their own spacing.
+ * Tags stay per-occurrence for the same reason a date does.
+ */
+async function updateFuture(
+    ctx: { client: import('convex/react').ConvexReactClient },
+    args: {
+        id: string
+        name?: string
+        description?: string
+        amount?: number
+        date?: string
+        time?: string
+    },
+    categoryId: string | undefined,
+) {
+    if (args.date !== undefined || args.time !== undefined) {
+        return {
+            ok: false as const,
+            error: 'Moving the date of this movement and the ones after it re-anchors the series, so it needs a recurrence argument (it splits the rule in two). To move just this movement, use scope only-this.',
+        }
+    }
+    await ctx.client.mutation(api.v1.recurrences.mutations.updateFuture, {
+        transactionId: args.id,
+        patch: {
+            name: args.name,
+            description: args.description,
+            amount:
+                args.amount !== undefined
+                    ? parseAmountToCents(args.amount)
+                    : undefined,
+            categoryId,
+        },
+    })
+    return { ok: true as const, id: args.id, scope: 'all-future' }
+}
+
+/** Re-cadences the series from this occurrence on, by splitting it in two. */
+async function splitSeries(
+    ctx: { client: import('convex/react').ConvexReactClient },
+    args: {
+        id: string
+        name?: string
+        description?: string
+        amount?: number
+        date?: string
+        time?: string
+        timeStatus?: 'confirmed' | 'approximation' | 'none'
+    },
+    recurrence: {
+        frequency: 'daily' | 'weekly' | 'monthly' | 'yearly' | 'customDays'
+        dayInterval?: bigint
+        endDate?: bigint
+    },
+    categoryId: string | undefined,
+) {
+    const existing = await ctx.client.query(api.v1.transactions.queries.get, {
+        id: args.id,
+    })
+    if (!existing) return { ok: false as const, error: 'Transaction not found' }
+
+    const existingDate = new Date(Number(existing.date))
+    const pad = (n: number) => String(n).padStart(2, '0')
+    const dateInput =
+        args.date ??
+        `${existingDate.getFullYear()}-${pad(
+            existingDate.getMonth() + 1,
+        )}-${pad(existingDate.getDate())}`
+    const timeInput =
+        args.time ??
+        `${pad(existingDate.getHours())}:${pad(existingDate.getMinutes())}`
+    const date = parseTransactionDate(dateInput, 'confirmed', timeInput)
+
+    const recurrenceId = newId()
+    const anchorId = await ctx.client.mutation(
+        api.v1.recurrences.mutations.splitSeries,
+        {
+            transactionId: args.id,
+            recurrenceId,
+            frequency: recurrence.frequency,
+            dayInterval: recurrence.dayInterval,
+            date,
+            dateConfirmed: args.date !== undefined || existing.dateConfirmed,
+            timeStatus: args.timeStatus ?? existing.timeStatus,
+            patch: {
+                name: args.name,
+                description: args.description,
+                amount:
+                    args.amount !== undefined
+                        ? parseAmountToCents(args.amount)
+                        : undefined,
+                categoryId,
+            },
+        },
+    )
+    return {
+        ok: true as const,
+        id: anchorId,
+        splitFrom: args.id,
+        scope: 'all-future',
+        ...(await seriesResult(ctx, recurrenceId, 0n)),
+    }
+}
+
+/**
+ * The recurrence the model asked for, as the mutations want it, or an error
+ * string instead — so a payload we cannot interpret is reported rather than
+ * silently creating a one-off.
+ */
+function parseRecurrence(
+    recurrence:
+        | { frequency: string; dayInterval?: number; endDate?: string }
+        | undefined,
+):
+    | {
+          ok: true
+          value:
+              | {
+                    frequency:
+                        | 'daily'
+                        | 'weekly'
+                        | 'monthly'
+                        | 'yearly'
+                        | 'customDays'
+                    dayInterval?: bigint
+                    endDate?: bigint
+                }
+              | undefined
+      }
+    | { ok: false; error: string } {
+    if (recurrence === undefined) return { ok: true, value: undefined }
+    const frequency = recurrence.frequency
+    if (
+        frequency !== 'daily' &&
+        frequency !== 'weekly' &&
+        frequency !== 'monthly' &&
+        frequency !== 'yearly' &&
+        frequency !== 'customDays'
+    ) {
+        return {
+            ok: false,
+            error: `Unknown recurrence frequency: ${frequency}. Use daily, weekly, monthly, yearly or customDays.`,
+        }
+    }
+    if (
+        frequency === 'customDays' &&
+        (recurrence.dayInterval === undefined || recurrence.dayInterval < 1)
+    ) {
+        return {
+            ok: false,
+            error: 'dayInterval of at least 1 is required for customDays',
+        }
+    }
+    let endDate: bigint | undefined
+    if (recurrence.endDate !== undefined) {
+        // Inclusive to the end of the day the user named: "hasta el 31" has to
+        // include the 31st, and the anchor's clock time is not midnight.
+        const day = new Date(Number(parseNaturalDate(recurrence.endDate)))
+        endDate = BigInt(
+            new Date(
+                day.getFullYear(),
+                day.getMonth(),
+                day.getDate(),
+                23,
+                59,
+                59,
+                999,
+            ).getTime(),
+        )
+    }
+    return {
+        ok: true,
+        value: {
+            frequency,
+            dayInterval:
+                frequency === 'customDays'
+                    ? BigInt(recurrence.dayInterval ?? 1)
+                    : undefined,
+            endDate,
+        },
+    }
+}
+
+/**
+ * The `recurrence` block a write result carries, so the model can tell the
+ * user how many movements it created instead of implying "forever".
+ */
+async function seriesResult(
+    ctx: { client: import('convex/react').ConvexReactClient },
+    recurrenceId: string,
+    occurrenceIndex: bigint,
+) {
+    const series = await ctx.client.query(api.v1.recurrences.queries.get, {
+        recurrenceId,
+        occurrenceIndex,
+    })
+    return series === null ? {} : { recurrence: serializeSeries(series) }
+}
+
+/** The series summary both `getTransaction` and the write results carry. */
+function serializeSeries(series: {
+    id: string
+    frequency: string
+    dayInterval?: bigint
+    endDate?: bigint
+    position: number | null
+    total: number | null
+    coveredThroughMs: bigint | null
+}) {
+    return {
+        recurrenceId: series.id,
+        frequency: series.frequency,
+        dayInterval:
+            series.dayInterval === undefined
+                ? undefined
+                : Number(series.dayInterval),
+        endDate:
+            series.endDate === undefined ? undefined : Number(series.endDate),
+        position: series.position,
+        total: series.total,
+        coveredThrough:
+            series.coveredThroughMs === null
+                ? null
+                : Number(series.coveredThroughMs),
     }
 }
 

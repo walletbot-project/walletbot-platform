@@ -126,6 +126,38 @@ Recipes:
 Widget notes: numeric (stat sum/net) widgets should carry a currency condition; count-only stats need none. Balance widgets take NO filter — they use options currency/accountIds and are always as-of-now. Chart widgets exclude transfers regardless of the filter.`,
     },
     {
+        slug: 'recurring-movements',
+        title: 'Recurring movements & future movements',
+        oneLiner:
+            'How repeating movements are stored, why they stay invisible until their date, and what "this one" vs "this and the future ones" does.',
+        body: `# Recurring movements & future movements
+
+## They are ordinary movements, created in advance
+- A recurring rule is set up once, and its occurrences are created immediately as **real movements** with future dates. There is no "it will appear later" mechanism: the rows exist from the moment the rule is created.
+- A future movement is invisible to everything that describes what already happened: absent from Activity, from account balances, from category and account summaries, and from every dashboard widget. It becomes visible on its own date, with no action from anyone.
+- The cutoff is the end of the user's current day, so a movement dated today at 20:00 counts as having happened all day today rather than appearing at 20:00.
+- So \`listTransactions\` and \`summarizeTransactions\` never show future movements. \`listUpcomingTransactions\` is the only way to see them.
+- A one-off movement dated in the future behaves exactly the same way and also appears in \`listUpcomingTransactions\` — being in that list does not mean it repeats. Check whether the movement has a series before offering scope choices.
+
+## "No end date" does not mean forever
+- With an end date, every occurrence up to that day is created. "Monthly until 2036" is 120 movements.
+- Without one, a fixed batch is created up front: 500 daily, 100 weekly, 48 monthly, 20 yearly. For "every N days" the batch follows the cadence N resembles. The create result reports the count and roughly how far it reaches — say that back to the user, because the app tells them the same thing and it is the honest answer to "forever?".
+- When an open-ended series runs low, \`addRecurrenceOccurrences\` adds another batch. It continues from the **last occurrence that exists**, never from the one the user happened to mention: asking for more while looking at September, in a series already reaching November, means December onwards.
+- A series with an end date cannot be extended that way — it is complete by the user's own choice. Moving the end is an edit to the rule.
+
+## Editing and deleting: always ask the scope
+- Every edit or delete of an occurrence has two possible meanings, and they are not interchangeable:
+  - only-this — this one movement. The rest of the series is untouched.
+  - all-future — this one and every later occurrence. Deleting also stops the rule there, so nothing new is created past it.
+- ASK which one the user means. Never assume. "Borrá el alquiler" is ambiguous, and deleting one month when they meant the whole series cannot be undone in the app.
+- Occurrences BEFORE the one being edited are never touched by either scope. To change what already happened, edit those movements individually.
+- Changing the cadence only works with all-future, and splits the rule in two: the original ends at the previous occurrence and a new one starts here. Say so plainly — the earlier movements keep their old spacing, which is what the user asked for.
+
+## Counting
+- An occurrence's detail shows its position in the series ("the 3rd of 12") when the rule has an end date, and how far the series reaches when it does not.
+- Both numbers count the movements that **exist**: delete one of five and the rest renumber. Never compute a position yourself by counting cadence steps from the start date — it will disagree with the app.`,
+    },
+    {
         slug: 'dates-and-time-confidence',
         title: 'Dates & time confidence',
         oneLiner:

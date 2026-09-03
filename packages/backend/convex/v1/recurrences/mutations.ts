@@ -60,6 +60,7 @@ export const create = mutation({
                 v.literal('none'),
             ),
         ),
+        createdBy: v.optional(v.union(v.literal('form'), v.literal('agent'))),
     },
     handler: async (ctx, args) => {
         const userId = await requireAuth(ctx)
@@ -133,7 +134,7 @@ export const create = mutation({
         await recordMovementCreated(ctx, {
             userId,
             movementType: args.type,
-            createdBy: 'form',
+            createdBy: args.createdBy ?? 'form',
             ingestPath: 'direct_mutation',
         })
 

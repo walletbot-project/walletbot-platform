@@ -88,6 +88,12 @@ const NATIVE_TOOL_MIN_VERSION: Readonly<Record<string, string>> = {
     // Ships in the same release as the calculators, plus the device-scoped
     // rate cache the executor reads (apps/native/lib/fx/).
     getExchangeRate: '0.3.1',
+    // Recurring movements: the executors need the v5 local schema (the
+    // `recurrences` table and the occurrence columns), which is the 0.4.0
+    // coordinated bump. A 0.3.x binary has nowhere to put a rule.
+    listUpcomingTransactions: '0.4.0',
+    listRecurrences: '0.4.0',
+    addRecurrenceOccurrences: '0.4.0',
 }
 
 // Tools behind a feature flag, on every platform. Unlike the version gate
@@ -96,6 +102,13 @@ const NATIVE_TOOL_MIN_VERSION: Readonly<Record<string, string>> = {
 // model cannot call something the rollout has not reached yet.
 const FLAG_GATED_TOOLS: Readonly<Record<string, FlagKey>> = {
     getExchangeRate: 'exchangeRates',
+    // Same flag that gates the UI. With it off the user has no way to see or
+    // manage a recurring rule, so the agent must not be able to create one.
+    listRecurrences: 'recurringExpense',
+    addRecurrenceOccurrences: 'recurringExpense',
+    // `listUpcomingTransactions` is NOT gated: one-off movements dated in the
+    // future exist regardless of the flag, and they are invisible everywhere
+    // else, so the agent needs to be able to see them either way.
 }
 
 export function declarationsFor(
@@ -143,7 +156,9 @@ You manage four kinds of movements:
 - Transfer — moving money between two accounts. If the accounts hold different currencies, ask for the exchange rate or the amount received on the other side. A category is optional on transfers.
 - Balance adjustment — when the user counted cash or saw the actual balance on a statement. Record that final number; the system computes the difference.
 
-You can also list, search, update, archive, or delete movements; manage accounts, categories, and tags (including attaching/detaching tags through updateTransaction); produce summaries by category or account over a date range (summarizeTransactions); and manage the home dashboard's saved filters and widgets.`
+You can also list, search, update, archive, or delete movements; manage accounts, categories, and tags (including attaching/detaching tags through updateTransaction); produce summaries by category or account over a date range (summarizeTransactions); and manage the home dashboard's saved filters and widgets.
+
+Movements can also be dated in the FUTURE. Those exist but have not happened yet, so they are deliberately absent from Activity, balances, summaries and widgets until their date arrives — listTransactions and summarizeTransactions never show them. Use listUpcomingTransactions to see what is coming.`
 
 const DASHBOARD_GUIDE = `# Home dashboard and filters
 - The home dashboard is made of saved filters plus widgets. It is the same dashboard on every one of the user's devices.
@@ -204,6 +219,18 @@ const FX_GUIDE = `# Exchange rates
 - It defaults to the official market. Pass \`market\` when the user names another Argentine quote — blue, MEP (bolsa), CCL, tarjeta, cripto, mayorista. ARS results also carry the other quotes in \`alternatives\`, so you can mention them without asking again.
 - A market quote is never the user's own rate. On a real cross-currency transfer, ask what actually arrived on the destination side and record that as toAmount; offer the quote only as a suggestion to confirm.
 - Say the date when a result comes back \`stale\`, and read the exchange-rates skill before explaining any of this in depth.`
+
+// Only included when the connecting client declares the recurrence tools
+// (feature flag + native version) — the prompt must never reference a tool the
+// session cannot call.
+const RECURRENCE_GUIDE = `# Recurring movements
+- A movement can repeat: pass \`recurrence\` on addExpense/addIncome with a frequency (daily, weekly, monthly, yearly, or customDays plus dayInterval) and, if the user gave one, an end date.
+- The occurrences are created up front as real future movements. With an end date, all of them; without one, a fixed batch. The result says how many were created and roughly how far they reach — tell the user that number instead of implying it repeats forever, and mention they can add more later.
+- listRecurrences shows what the user has repeating. addRecurrenceOccurrences extends an open-ended rule by another batch, continuing from the last occurrence that exists.
+- EDITING OR DELETING an occurrence is ambiguous and you must resolve it: \`scope: 'only-this'\` touches that one movement, \`scope: 'all-future'\` touches it and every later one (and a delete also stops the rule there). Ask the user which they mean — never guess, and never let a "delete the rent" become one month or the whole series by accident.
+- Occurrences before the one you are editing are never affected by either scope.
+- Changing the cadence needs scope all-future and splits the rule in two: the old one ends at the previous occurrence, a new one starts at this one. Say so — the earlier movements keep their old spacing.
+- Read the recurring-movements skill before explaining any of this in depth.`
 
 const FEATURE_DISCOVERY = `# Suggesting features (gently)
 The user may not know everything the app can do. When a feature clearly fits what they are doing, offer it in ONE short sentence AFTER completing their request — never instead of it, and never as a lecture:
@@ -389,6 +416,7 @@ export function buildSystemInstruction(
         CORE_RULES,
         declared.has('calculate') ? MATH_GUIDE : null,
         declared.has('getExchangeRate') ? FX_GUIDE : null,
+        declared.has('listRecurrences') ? RECURRENCE_GUIDE : null,
         FEATURE_DISCOVERY,
         MEMORY_RULES,
         SKILLS_INDEX,
