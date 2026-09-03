@@ -13,6 +13,8 @@ import {
     type ActivityTransaction,
     formatNumericDate,
     formatTransactionTime,
+    frequencyLabel,
+    seriesReachLabel,
     signedAmountCents,
 } from '../activity/helpers'
 
@@ -42,7 +44,7 @@ export function FutureMovementDetail({
     })
     const categories = useQuery(api.v1.categories.queries.listActive)
 
-    const rule = useQuery(api.v1.recurrences.queries.get, {
+    const series = useQuery(api.v1.recurrences.queries.get, {
         recurrenceId: movement.recurrenceId,
     })
     const addOccurrences = useMutation(
@@ -54,14 +56,20 @@ export function FutureMovementDetail({
     // already complete, and running past a boundary the user set on purpose
     // would be editing the rule rather than extending it.
     const topUp =
-        rule && rule.endDate === undefined
+        series && series.endDate === undefined
             ? recurrenceHorizon(
-                  rule.frequency,
-                  rule.dayInterval === undefined
+                  series.frequency,
+                  series.dayInterval === undefined
                       ? undefined
-                      : Number(rule.dayInterval),
+                      : Number(series.dayInterval),
               ).count
             : null
+
+    const seriesReach = series
+        ? seriesReachLabel(series, movement.recurrenceIndex, t, (date) =>
+              formatNumericDate(date, formatLocale),
+          )
+        : null
 
     const onAddMore = async (recurrenceId: string, count: number) => {
         setAdding(true)
@@ -119,6 +127,30 @@ export function FutureMovementDetail({
                 </div>
 
                 <div className="divide-y divide-outline-variant">
+                    {series ? (
+                        <ReceiptRow
+                            icon={<Icon name="repeat" />}
+                            label={t.futureMovements.frequency}
+                        >
+                            <span className="flex items-center justify-end gap-2">
+                                <span>
+                                    {frequencyLabel(
+                                        series.frequency,
+                                        series.dayInterval === undefined
+                                            ? 1
+                                            : Number(series.dayInterval),
+                                        t,
+                                    )}
+                                </span>
+                                {seriesReach ? (
+                                    <span className="font-normal text-on-surface-variant">
+                                        {seriesReach}
+                                    </span>
+                                ) : null}
+                            </span>
+                        </ReceiptRow>
+                    ) : null}
+
                     <ReceiptRow
                         icon={<Icon name="calendar_month" />}
                         label={t.futureMovements.date}
@@ -131,7 +163,7 @@ export function FutureMovementDetail({
 
                     <ReceiptRow
                         icon={<Icon name="schedule" />}
-                        label={t.futureMovements.time}
+                        label={t.transaction.time}
                     >
                         {formatTransactionTime(movement.date, formatLocale)}
                     </ReceiptRow>
@@ -168,13 +200,13 @@ export function FutureMovementDetail({
                     </ReceiptRow>
                 </div>
 
-                {topUp !== null && rule ? (
+                {topUp !== null && series ? (
                     <div className="flex flex-col items-stretch gap-2 pt-6">
                         <Button
                             type="button"
                             variant="filled"
                             isDisabled={adding}
-                            onPress={() => void onAddMore(rule.id, topUp)}
+                            onPress={() => void onAddMore(series.id, topUp)}
                         >
                             {adding
                                 ? t.futureMovements.addingMore

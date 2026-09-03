@@ -182,28 +182,78 @@ DateTime occurrenceDate(
   }
 }
 
-/// How many occurrences a rule produces, capped by its horizon. An end date is
-/// inclusive and wins when it is the tighter of the two.
+/// How many occurrences a rule produces. Mirror of `occurrenceCount` in
+/// `packages/shared/src/recurrence.ts`.
+///
+/// The batch exists only to give an *open-ended* rule a finite size. With an
+/// [endDate] the user already said where the series stops, so all of its
+/// occurrences get created — "monthly until 2036" means 120 movements, not the
+/// first 48 of them. [endDate] is inclusive.
+///
+/// Binary search rather than stepping: the dates rise strictly with the index,
+/// and "daily until 2050" is some 8,700 occurrences that nothing should have
+/// to walk one at a time just to count them.
 int occurrenceCount(
   DateTime anchor,
   RecurrenceFrequency frequency,
   DateTime? endDate, {
   int dayInterval = 1,
 }) {
-  final horizon = recurrenceHorizon(frequency, dayInterval: dayInterval).count;
-  if (endDate == null) return horizon;
-  var count = 0;
-  while (count < horizon) {
-    final next = occurrenceDate(
-      anchor,
-      frequency,
-      count,
-      dayInterval: dayInterval,
-    );
-    if (next.isAfter(endDate)) break;
-    count += 1;
+  if (endDate == null) {
+    return recurrenceHorizon(frequency, dayInterval: dayInterval).count;
   }
-  return count;
+
+  DateTime dateAt(int index) =>
+      occurrenceDate(anchor, frequency, index, dayInterval: dayInterval);
+  if (dateAt(0).isAfter(endDate)) return 0;
+
+  var lo = 0;
+  var hi = _indexUpperBound(anchor, frequency, endDate, dayInterval);
+  while (lo < hi) {
+    final mid = (lo + hi + 1) ~/ 2;
+    if (dateAt(mid).isAfter(endDate)) {
+      hi = mid - 1;
+    } else {
+      lo = mid;
+    }
+  }
+  return lo + 1;
+}
+
+/// An index guaranteed to be at or past the last occurrence on or before
+/// [endDate] — the search's right edge.
+///
+/// Only ever an over-estimate. The day-based cadences step by calendar days
+/// while this divides an elapsed duration, so a DST transition can shift the
+/// quotient by a fraction of a day; the slack absorbs it.
+int _indexUpperBound(
+  DateTime anchor,
+  RecurrenceFrequency frequency,
+  DateTime endDate,
+  int dayInterval,
+) {
+  switch (frequency) {
+    case RecurrenceFrequency.monthly:
+      final months =
+          (endDate.year - anchor.year) * 12 + (endDate.month - anchor.month);
+      return months + 2 < 0 ? 0 : months + 2;
+    case RecurrenceFrequency.yearly:
+      final years = endDate.year - anchor.year + 2;
+      return years < 0 ? 0 : years;
+    case RecurrenceFrequency.daily:
+    case RecurrenceFrequency.weekly:
+    case RecurrenceFrequency.customDays:
+      final step = switch (frequency) {
+        RecurrenceFrequency.weekly => 7,
+        RecurrenceFrequency.daily => 1,
+        _ => dayInterval < 1 ? 1 : dayInterval,
+      };
+      final days =
+          endDate.difference(anchor).inMilliseconds /
+          Duration.millisecondsPerDay;
+      final bound = (days / step).floor() + 3;
+      return bound < 0 ? 0 : bound;
+  }
 }
 
 /// The rule a movement is being created under — what the form collected,

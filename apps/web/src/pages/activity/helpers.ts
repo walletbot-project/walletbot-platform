@@ -5,6 +5,7 @@
 // The label-producing helpers take the active catalog and BCP 47 tag rather
 // than reading a module-level locale, so they stay pure and testable.
 
+import type { RecurrenceFrequency } from '@wallet-bot/shared'
 import {
     EMPTY_FILTER,
     parseFilterConfig,
@@ -48,6 +49,8 @@ export type ActivityTransaction = {
     tagIds?: string[]
     /** Set when the movement is one occurrence of a recurring rule. */
     recurrenceId?: string
+    /** Its position in that rule's series, counting the anchor as 0. */
+    recurrenceIndex?: bigint
 }
 
 /**
@@ -373,4 +376,69 @@ export function buildListEntries(
         }
     }
     return entries
+}
+
+/**
+ * How a cadence reads in a sentence. Deliberately the same catalogue the form
+ * offers ("Mensual", "Cada 3 días"), so a rule is described identically where
+ * it is created and where it is read back — the labels live in `addManual`
+ * because that is where the vocabulary is defined.
+ *
+ * `customDays` is the one that differs: the form shows the chip "Cada X días"
+ * with the interval in its own field, while here the interval is part of the
+ * description.
+ */
+export function frequencyLabel(
+    frequency: RecurrenceFrequency,
+    dayInterval: number,
+    messages: Messages,
+): string {
+    switch (frequency) {
+        case 'daily':
+            return messages.addManual.recurrenceDaily
+        case 'weekly':
+            return messages.addManual.recurrenceWeekly
+        case 'monthly':
+            return messages.addManual.recurrenceMonthly
+        case 'yearly':
+            return messages.addManual.recurrenceYearly
+        case 'customDays':
+            return messages.addManual.recurrenceEveryNDays(dayInterval)
+    }
+}
+
+/** The rule and series reach as `v1/recurrences/queries:get` returns them. */
+export type RecurrenceSeries = {
+    frequency: RecurrenceFrequency
+    dayInterval?: bigint
+    endDate?: bigint
+    count: number
+    coveredThroughMs: bigint | null
+}
+
+/**
+ * What the series reaches, shown beside the cadence.
+ *
+ * A bounded rule says where this movement sits in it ("3/12"): the total is
+ * knowable, so the position is the useful fact. An open-ended one has no total
+ * to be a fraction of, so it says how far the movements that exist go instead
+ * — which is also exactly what the top-up button extends.
+ */
+export function seriesReachLabel(
+    series: RecurrenceSeries,
+    occurrenceIndex: bigint | undefined,
+    messages: Messages,
+    formatDate: (date: Date) => string,
+): string | null {
+    if (series.endDate !== undefined) {
+        if (occurrenceIndex === undefined || series.count === 0) return null
+        return messages.futureMovements.seriesPosition({
+            index: Number(occurrenceIndex) + 1,
+            total: series.count,
+        })
+    }
+    if (series.coveredThroughMs === null) return null
+    return messages.futureMovements.coveredThrough(
+        formatDate(new Date(Number(series.coveredThroughMs))),
+    )
 }

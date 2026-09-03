@@ -198,15 +198,85 @@ void main() {
       );
     });
 
-    test('never exceeds the horizon even with a distant end date', () {
+    test('creates every occurrence up to a distant end date', () {
+      // The batch is only there to give an *open-ended* rule a finite size.
+      // "Monthly until 2036" means 120 movements, not the first 48 of them.
+      expect(
+        occurrenceCount(
+          DateTime(2026, 1, 15),
+          RecurrenceFrequency.monthly,
+          DateTime(2036, 1, 15),
+        ),
+        121,
+      );
+      expect(
+        occurrenceCount(
+          DateTime(2026, 1, 15),
+          RecurrenceFrequency.monthly,
+          DateTime(2036, 1, 14),
+        ),
+        120,
+      );
+    });
+
+    test('counts a long day-based series exactly', () {
+      // 2028 is a leap year: 2026-01-01 to 2030-01-01 is 1461 days, so 1462
+      // daily occurrences counting both ends.
       expect(
         occurrenceCount(
           DateTime(2026, 1, 1),
-          RecurrenceFrequency.monthly,
-          DateTime(2099, 1, 1),
+          RecurrenceFrequency.daily,
+          DateTime(2030, 1, 1),
         ),
-        48,
+        1462,
       );
+      expect(
+        occurrenceCount(
+          DateTime(2026, 1, 1),
+          RecurrenceFrequency.weekly,
+          DateTime(2030, 1, 1),
+        ),
+        1461 ~/ 7 + 1,
+      );
+      expect(
+        occurrenceCount(
+          DateTime(2026, 1, 1),
+          RecurrenceFrequency.customDays,
+          DateTime(2030, 1, 1),
+          dayInterval: 10,
+        ),
+        1461 ~/ 10 + 1,
+      );
+    });
+
+    test('counts a yearly series past its open-ended batch', () {
+      expect(
+        occurrenceCount(
+          DateTime(2026, 3, 1),
+          RecurrenceFrequency.yearly,
+          DateTime(2076, 3, 1),
+        ),
+        51,
+      );
+    });
+
+    test('agrees with stepping one occurrence at a time', () {
+      // The count is found by binary search; this is the naive walk it
+      // replaced, kept as the oracle.
+      final anchor = DateTime(2026, 1, 31, 9);
+      final cases = <(RecurrenceFrequency, DateTime)>[
+        (RecurrenceFrequency.daily, DateTime(2026, 4, 17)),
+        (RecurrenceFrequency.weekly, DateTime(2027, 2, 2)),
+        (RecurrenceFrequency.monthly, DateTime(2031, 7, 15)),
+        (RecurrenceFrequency.yearly, DateTime(2044, 1, 30)),
+      ];
+      for (final (frequency, end) in cases) {
+        var walked = 0;
+        while (!occurrenceDate(anchor, frequency, walked).isAfter(end)) {
+          walked += 1;
+        }
+        expect(occurrenceCount(anchor, frequency, end), walked);
+      }
     });
 
     test('is zero when the end date precedes the anchor', () {

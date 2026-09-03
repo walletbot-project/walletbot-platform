@@ -594,6 +594,21 @@ void main() {
       expect(fresh.dirty, isTrue, reason: 'new rows have to sync up');
     });
 
+    test('an end date past the batch still creates every occurrence', () async {
+      // The batch is only there to give an *open-ended* rule a finite size.
+      // "Monthly until the end of 2035" is 120 movements, not the first 48.
+      final id = await createMonthlySeries(
+        endDate: DateTime(2035, 12, 31, 23, 59),
+      );
+      final rows = await seriesRows(await ruleIdOf(id));
+
+      expect(rows, hasLength(120));
+      expect(
+        DateTime.fromMillisecondsSinceEpoch(rows.last.date.toInt()),
+        DateTime(2035, 12, 15, 9, 30),
+      );
+    });
+
     test('addOccurrences refuses a rule with an end date', () async {
       // Ends inside the horizon, so the series is shorter than 48 and, by the
       // user's own choice, complete.
@@ -608,6 +623,75 @@ void main() {
 
     test('addOccurrences is a no-op for an unknown rule', () async {
       expect(await repos.transactions.addOccurrences('nope'), 0);
+    });
+
+    test('watchSeries derives the count and the reach from the rows', () async {
+      final id = await createMonthlySeries();
+      final ruleId = await ruleIdOf(id);
+      final rows = await seriesRows(ruleId);
+
+      final series = await repos.transactions.watchSeries(ruleId).first;
+      expect(series, isNotNull);
+      expect(series!.count, 48);
+      expect(
+        series.coveredThrough,
+        DateTime.fromMillisecondsSinceEpoch(rows.last.date.toInt()),
+      );
+    });
+
+    test('watchSeries follows a top-up', () async {
+      final id = await createMonthlySeries();
+      final ruleId = await ruleIdOf(id);
+      final before = await repos.transactions.watchSeries(ruleId).first;
+
+      await repos.transactions.addOccurrences(ruleId);
+      final after = await repos.transactions.watchSeries(ruleId).first;
+
+      expect(before!.count, 48);
+      expect(after!.count, 96);
+      expect(after.coveredThrough!.isAfter(before.coveredThrough!), isTrue);
+    });
+
+    test('seriesOf reads the same series as watchSeries, once', () async {
+      final id = await createMonthlySeries();
+      final ruleId = await ruleIdOf(id);
+
+      final watched = await repos.transactions.watchSeries(ruleId).first;
+      final fetched = await repos.transactions.seriesOf(ruleId);
+
+      expect(fetched, isNotNull);
+      expect(fetched!.count, watched!.count);
+      expect(fetched.coveredThrough, watched.coveredThrough);
+      expect(fetched.rule.id, ruleId);
+    });
+
+    test('seriesOf is null for a one-off movement', () async {
+      expect(await repos.transactions.seriesOf(null), isNull);
+    });
+
+    test('watchSeries is single-subscription — consume it once', () async {
+      final id = await createMonthlySeries();
+      final stream = repos.transactions.watchSeries(await ruleIdOf(id));
+      await stream.first;
+
+      // This is why the detail screen wraps its whole body in ONE
+      // StreamBuilder: a second listener threw "Stream has already been
+      // listened to" and painted the screen red as soon as a movement was
+      // opened.
+      expect(() => stream.listen((_) {}), throwsStateError);
+    });
+
+    test('watchSeries is null for a one-off movement', () async {
+      final id = await repos.transactions.addExpense(
+        accountId: cashId,
+        categoryId: foodId,
+        name: 'Coffee',
+        amountCents: BigInt.from(500),
+        currency: 'ARS',
+      );
+      final txn = await repos.transactions.getById(id);
+      expect(txn!.recurrenceId, isNull);
+      expect(await repos.transactions.watchSeries(null).first, isNull);
     });
   });
 }

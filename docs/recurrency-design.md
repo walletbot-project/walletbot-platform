@@ -318,6 +318,17 @@ hay frecuencia que mostrar. Vuelve en el paso 2, y el `X/N` del paso 3 con ella.
 
 #### "Sin fecha de fin" no puede significar "para siempre"
 
+**El lote aplica sólo al caso abierto.** Con fecha de fin el usuario ya dijo
+dónde termina la serie, así que se crean **todas** sus ocurrencias: "mensual
+hasta 2036" son 120 movimientos, no los primeros 48. `occurrenceCount` sólo
+consulta el horizonte cuando `endDate` es nulo.
+
+La cuenta se resuelve por **búsqueda binaria** sobre la proyección, no
+recorriendo ocurrencia por ocurrencia: las fechas crecen estrictamente con el
+índice, y "diario hasta 2050" son unas 8.700 ocurrencias que nada debería
+caminar de a una sólo para contarlas. Hay un test en los dos lados que compara
+la búsqueda binaria contra el recorrido ingenuo, que quedó como oráculo.
+
 Las ocurrencias son transacciones comunes (§2.5), así que una regla sin límite
 sería una cantidad ilimitada de filas. Cada frecuencia materializa un lote fijo
 por adelantado, y el usuario lo amplía cuando quiere. Como eso es una decisión
@@ -455,3 +466,89 @@ ofrecía el botón: si la regla cambió abajo, la escritura es la que dice la
 verdad. Cero significa que la regla dejó de ser ampliable mientras preguntábamos
 (borrada, o con fecha de fin puesta en otro dispositivo) y se reporta como error,
 no como un éxito vacío.
+
+### 5.4. Paso 3 — cuánto abarca la serie, en el detalle
+
+El detalle ahora abre con una fila de **frecuencia**, y a su derecha, en tono
+apagado, hasta dónde llega la serie. La fila no existía: el detalle mostraba
+fecha, hora, cuenta, categoría y descripción, ninguna de las cuales dice que
+este movimiento es parte de algo.
+
+Qué se muestra depende de si la regla tiene fecha de fin, porque son dos
+preguntas distintas:
+
+- **Con fecha de fin** → `X/N`. El total se conoce, así que el dato útil es la
+  posición: "este es el 3.º de 12".
+- **Sin fecha de fin** → `hasta 15/01/2030`. No hay un total del que ser
+  fracción — la regla es abierta y el lote es una decisión de implementación,
+  no una promesa —, así que dice hasta dónde llegan los movimientos que
+  existen. Que es exactamente lo que amplía el botón del paso 2B.
+
+#### Las dos cifras se derivan, y cuestan una lectura
+
+`N` y "hasta cuándo" salen de la **última ocurrencia**, en un solo documento:
+los índices corren contiguos desde 0, así que el índice más alto *es* la
+cantidad. No hay que contar filas (lo que además violaría la regla de no hacer
+conteos por colección), y no hay nada nuevo persistido: las filas siguen siendo
+la única verdad sobre hasta dónde llegó una serie.
+
+`X` es `recurrenceIndex + 1` del movimiento abierto, que ya venía en la fila.
+
+#### La frecuencia se lee del mismo catálogo con el que se escribe
+
+Las etiquetas ("Diario", "Mensual") son las que ya usa el formulario
+(`addManual.recurrence*` en web, las mismas claves en los ARB), no un juego
+nuevo: una regla se describe igual donde se crea y donde se lee. La única que
+difiere es `customDays`, porque el formulario muestra el chip "Cada X días" con
+el intervalo en su propio campo y acá el intervalo es parte de la descripción
+(`recurrenceEveryNDays`).
+
+#### Un hueco que este paso hizo visible, y se cerró
+
+Mientras se escribía este paso apareció que `occurrenceCount` topeaba en el
+horizonte **también** con fecha de fin: una regla "mensual hasta 2036"
+materializaba 48 ocurrencias en vez de las 120 pedidas, y como el botón de
+ampliar sólo aparece para reglas sin fecha de fin, no había forma de
+completarla. El `X/N` de este paso lo dejaba a la vista sin remedio.
+
+Está arreglado en §5.2: el lote es sólo para reglas abiertas. Con eso el gate
+del botón vuelve a ser exacto — una regla con fecha de fin **sí** está completa
+— y `X/N` es el total de verdad.
+
+El costo es que el usuario ahora manda: "diario hasta 2050" son unas 8.700
+transacciones reales. En web las crea el workflow en lotes de 50 (unos 174
+pasos); en nativo es un solo `db.transaction` con esas 8.700 inserciones, que en
+un teléfono se va a notar. Es lo pedido, y el corte de ocurrencia las mantiene
+fuera de Actividad, del saldo y de los contadores, pero es la razón por la que
+R-039 sigue pidiendo un tope antes de sacar el feature flag.
+
+### 5.5. La misma fila en el detalle de Actividad
+
+Un movimiento que ya ocurrió sigue siendo una ocurrencia de su regla, y "el 3.º
+de 12" es igual de útil mirando atrás que mirando adelante. Así que el detalle
+de Actividad muestra la misma fila de frecuencia que el de movimientos futuros,
+con el mismo `X/N` o el mismo "hasta ...".
+
+Salió barato porque no había nada nuevo que calcular:
+
+- **Costo de lectura**: dos filas por índice (la regla y su última ocurrencia),
+  y sólo cuando el movimiento tiene `recurrenceId`. Es la misma consulta del
+  paso 3, ya acotada por índice y sin conteos.
+- **Web**: un `useQuery` más en `TransactionDetail`.
+- **Nativo**: el detalle de Actividad carga con lecturas puntuales, no con
+  streams, así que se sumó un `seriesOf` — la versión one-shot de
+  `watchSeries`, compartiendo las mismas consultas y el mismo constructor. No
+  puede entrar en el `Future.wait` porque necesita la transacción primero, así
+  que es un await encadenado.
+
+Lo que hubo que mover para no duplicar: las etiquetas de cadencia y de alcance
+vivían privadas en la pantalla de movimientos futuros. Ahora están en
+`activity/helpers.ts` (web — la dirección de dependencia que ya existía:
+future-movements ya importaba de activity) y en
+`lib/components/recurrence_summary.dart` (nativo). Una regla se describe igual
+en los tres lugares donde aparece: el formulario que la crea, el detalle futuro
+y el detalle pasado.
+
+`seriesReachLabel` pasó a recibir el índice de la ocurrencia en vez de la
+transacción entera: era lo único que usaba, y así sirve a los dos detalles sin
+acoplarlos al tipo de fila de cada lista.

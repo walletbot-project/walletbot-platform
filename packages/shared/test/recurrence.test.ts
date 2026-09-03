@@ -165,10 +165,55 @@ describe('occurrence count', () => {
         ).toBe(2)
     })
 
-    it('never exceeds the horizon even with a distant end date', () => {
+    it('creates every occurrence up to a distant end date', () => {
+        // The batch is only there to give an *open-ended* rule a finite size.
+        // "Monthly until 2036" means 120 movements, not the first 48 of them.
         expect(
-            occurrenceCount(at(2026, 1, 1), 'monthly', at(2099, 1, 1)),
-        ).toBe(48)
+            occurrenceCount(at(2026, 1, 15), 'monthly', at(2036, 1, 15)),
+        ).toBe(121)
+        expect(
+            occurrenceCount(at(2026, 1, 15), 'monthly', at(2036, 1, 14)),
+        ).toBe(120)
+    })
+
+    it('counts a long day-based series exactly', () => {
+        // 2028 is a leap year: 2026-01-01 to 2030-01-01 is 1461 days, so 1462
+        // daily occurrences counting both ends.
+        expect(occurrenceCount(at(2026, 1, 1), 'daily', at(2030, 1, 1))).toBe(
+            1462,
+        )
+        // Same span, weekly: every 7th day of those 1461.
+        expect(occurrenceCount(at(2026, 1, 1), 'weekly', at(2030, 1, 1))).toBe(
+            Math.floor(1461 / 7) + 1,
+        )
+        // And "every 10 days" honours its own interval.
+        expect(
+            occurrenceCount(at(2026, 1, 1), 'customDays', at(2030, 1, 1), 10),
+        ).toBe(Math.floor(1461 / 10) + 1)
+    })
+
+    it('counts a yearly series past its open-ended batch', () => {
+        expect(occurrenceCount(at(2026, 3, 1), 'yearly', at(2076, 3, 1))).toBe(
+            51,
+        )
+    })
+
+    it('agrees with stepping one occurrence at a time', () => {
+        // The count is found by binary search; this is the naive walk it
+        // replaced, kept as the oracle.
+        const anchor = at(2026, 1, 31, 9)
+        for (const [frequency, end] of [
+            ['daily', at(2026, 4, 17)],
+            ['weekly', at(2027, 2, 2)],
+            ['monthly', at(2031, 7, 15)],
+            ['yearly', at(2044, 1, 30)],
+        ] as const) {
+            let walked = 0
+            while (occurrenceDateMs(anchor, frequency, walked) <= end) {
+                walked += 1
+            }
+            expect(occurrenceCount(anchor, frequency, end)).toBe(walked)
+        }
     })
 
     it('is zero when the end date precedes the anchor', () => {

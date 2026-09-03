@@ -350,6 +350,132 @@ abstract class AppLocalizations {
   /// **'Exchange rate'**
   String get exchangeRate;
 
+  /// No description provided for @accountIdentity.
+  ///
+  /// In en, this message translates to:
+  /// **'Account: {name}'**
+  String accountIdentity(String name);
+
+  /// No description provided for @categoryIdentity.
+  ///
+  /// In en, this message translates to:
+  /// **'Category: {name}'**
+  String categoryIdentity(String name);
+
+  /// No description provided for @detail.
+  ///
+  /// In en, this message translates to:
+  /// **'Details'**
+  String get detail;
+
+  /// No description provided for @editActivity.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit activity'**
+  String get editActivity;
+
+  /// No description provided for @activityGone.
+  ///
+  /// In en, this message translates to:
+  /// **'This activity no longer exists'**
+  String get activityGone;
+
+  /// No description provided for @estimatedDate.
+  ///
+  /// In en, this message translates to:
+  /// **'Estimated date'**
+  String get estimatedDate;
+
+  /// No description provided for @estimatedTime.
+  ///
+  /// In en, this message translates to:
+  /// **'Estimated time'**
+  String get estimatedTime;
+
+  /// No description provided for @sourceAccount.
+  ///
+  /// In en, this message translates to:
+  /// **'Source account'**
+  String get sourceAccount;
+
+  /// No description provided for @destinationAccount.
+  ///
+  /// In en, this message translates to:
+  /// **'Destination account'**
+  String get destinationAccount;
+
+  /// No description provided for @noTags.
+  ///
+  /// In en, this message translates to:
+  /// **'No tags'**
+  String get noTags;
+
+  /// No description provided for @noCategory.
+  ///
+  /// In en, this message translates to:
+  /// **'No category'**
+  String get noCategory;
+
+  /// No description provided for @balanceUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Balance unavailable'**
+  String get balanceUnavailable;
+
+  /// No description provided for @sameAccounts.
+  ///
+  /// In en, this message translates to:
+  /// **'The source and destination accounts must be different'**
+  String get sameAccounts;
+
+  /// No description provided for @invalidAmount.
+  ///
+  /// In en, this message translates to:
+  /// **'The amount isn\'t valid'**
+  String get invalidAmount;
+
+  /// No description provided for @noOtherAccount.
+  ///
+  /// In en, this message translates to:
+  /// **'No other account available'**
+  String get noOtherAccount;
+
+  /// No description provided for @amountNotEditable.
+  ///
+  /// In en, this message translates to:
+  /// **'The amount of balance adjustments and initial balances cannot be edited.'**
+  String get amountNotEditable;
+
+  /// No description provided for @change.
+  ///
+  /// In en, this message translates to:
+  /// **'Change'**
+  String get change;
+
+  /// No description provided for @activityUpdateFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'The activity could not be saved'**
+  String get activityUpdateFailed;
+
+  /// No description provided for @activityDeleteTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete activity'**
+  String get activityDeleteTitle;
+
+  /// No description provided for @activityDeleteConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete “{name}”?'**
+  String activityDeleteConfirm(String name);
+
+  /// No description provided for @activityDeleteFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'The activity could not be deleted'**
+  String get activityDeleteFailed;
+
   /// No description provided for @status.
   ///
   /// In en, this message translates to:
@@ -2036,6 +2162,12 @@ abstract class AppLocalizations {
   /// **'days'**
   String get recurrenceDaysUnit;
 
+  /// No description provided for @recurrenceEveryNDays.
+  ///
+  /// In en, this message translates to:
+  /// **'Every {days} days'**
+  String recurrenceEveryNDays(int days);
+
   /// No description provided for @futureMovements.
   ///
   /// In en, this message translates to:
@@ -2053,6 +2185,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'You have no scheduled future movements'**
   String get noFutureMovements;
+
+  /// No description provided for @seriesPosition.
+  ///
+  /// In en, this message translates to:
+  /// **'{index}/{total}'**
+  String seriesPosition(int index, int total);
+
+  /// No description provided for @coveredThrough.
+  ///
+  /// In en, this message translates to:
+  /// **'until {date}'**
+  String coveredThrough(String date);
 
   /// No description provided for @addMoreMovements.
   ///

@@ -28,7 +28,12 @@ import { useFormatLocale, useT } from '@/lib/i18n'
 import { formatMoney } from '@/lib/money'
 import { normalizeTagColor } from '@/lib/tag-colors'
 import { cn } from '@/lib/utils'
-import type { TransactionTimeStatus, TransactionTransferSide } from './helpers'
+import {
+    frequencyLabel,
+    seriesReachLabel,
+    type TransactionTimeStatus,
+    type TransactionTransferSide,
+} from './helpers'
 
 type Transaction = NonNullable<
     FunctionReturnType<typeof api.v1.transactions.queries.get>
@@ -142,6 +147,24 @@ function TransactionDetailsContent({
     const navigate = useNavigate()
     const t = useT()
     const formatLocale = useFormatLocale()
+
+    // The recurring series this movement belongs to, if any. A movement that
+    // has already happened is still an occurrence of its rule, and "the 3rd of
+    // 12" is as useful looking back as looking ahead — so Activity shows the
+    // same cadence row the future-movements detail does.
+    const series = useQuery(api.v1.recurrences.queries.get, {
+        recurrenceId: transaction.recurrenceId,
+    })
+    const seriesReach = series
+        ? seriesReachLabel(
+              series,
+              transaction.recurrenceIndex,
+              t,
+              // This file's own date formatter, so the covered-through date
+              // reads exactly like the date row below it. It takes an epoch.
+              (date) => formatDate(BigInt(date.getTime()), formatLocale),
+          )
+        : null
 
     // Running balance of each involved account before/after this transaction.
     // Keyed off the saved account ids (not the edit-mode selection) since it
@@ -477,6 +500,30 @@ function TransactionDetailsContent({
                                 <span>{transaction.description}</span>
                             ) : null}
                         </ReceiptRow>
+
+                        {series ? (
+                            <ReceiptRow
+                                icon={<Icon name="repeat" />}
+                                label={t.futureMovements.frequency}
+                            >
+                                <span className="flex items-center justify-end gap-2">
+                                    <span>
+                                        {frequencyLabel(
+                                            series.frequency,
+                                            series.dayInterval === undefined
+                                                ? 1
+                                                : Number(series.dayInterval),
+                                            t,
+                                        )}
+                                    </span>
+                                    {seriesReach ? (
+                                        <span className="font-normal text-muted-foreground">
+                                            {seriesReach}
+                                        </span>
+                                    ) : null}
+                                </span>
+                            </ReceiptRow>
+                        ) : null}
 
                         <ReceiptRow
                             icon={

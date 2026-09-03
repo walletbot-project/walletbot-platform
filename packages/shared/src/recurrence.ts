@@ -163,13 +163,65 @@ export function occurrenceCount(
     endDateMs: number | null,
     dayInterval = 1,
 ): number {
-    const horizon = recurrenceHorizon(frequency, dayInterval).count
-    if (endDateMs === null) return horizon
-    let count = 0
-    while (count < horizon) {
-        const next = occurrenceDateMs(anchorMs, frequency, count, dayInterval)
-        if (next > endDateMs) break
-        count += 1
+    // The batch exists only to give an *open-ended* rule a finite size. With
+    // an end date the user already said where the series stops, so all of its
+    // occurrences get created — "monthly until 2036" means 120 movements, not
+    // the first 48 of them.
+    if (endDateMs === null) {
+        return recurrenceHorizon(frequency, dayInterval).count
     }
-    return count
+
+    const dateAt = (index: number) =>
+        occurrenceDateMs(anchorMs, frequency, index, dayInterval)
+    if (dateAt(0) > endDateMs) return 0
+
+    // Binary search rather than stepping: the dates rise strictly with the
+    // index, and "daily until 2050" is some 8,700 occurrences that nothing
+    // should have to walk one at a time just to count them.
+    let lo = 0
+    let hi = indexUpperBound(anchorMs, frequency, endDateMs, dayInterval)
+    while (lo < hi) {
+        const mid = Math.ceil((lo + hi) / 2)
+        if (dateAt(mid) <= endDateMs) lo = mid
+        else hi = mid - 1
+    }
+    return lo + 1
+}
+
+/**
+ * An index guaranteed to be at or past the last occurrence on or before
+ * `endDateMs` — the search's right edge.
+ *
+ * Only ever an over-estimate. The day-based cadences step by calendar days
+ * while this divides elapsed milliseconds, so a DST transition can shift the
+ * quotient by a fraction of a day; the slack absorbs it.
+ */
+function indexUpperBound(
+    anchorMs: number,
+    frequency: RecurrenceFrequency,
+    endDateMs: number,
+    dayInterval: number,
+): number {
+    const anchor = new Date(anchorMs)
+    const end = new Date(endDateMs)
+    const months =
+        (end.getFullYear() - anchor.getFullYear()) * 12 +
+        (end.getMonth() - anchor.getMonth())
+
+    switch (frequency) {
+        case 'monthly':
+            return Math.max(0, months + 2)
+        case 'yearly':
+            return Math.max(0, end.getFullYear() - anchor.getFullYear() + 2)
+        default: {
+            const step =
+                frequency === 'weekly'
+                    ? 7
+                    : frequency === 'daily'
+                      ? 1
+                      : Math.max(1, Math.floor(dayInterval))
+            const days = (endDateMs - anchorMs) / 86_400_000
+            return Math.max(0, Math.floor(days / step) + 3)
+        }
+    }
 }

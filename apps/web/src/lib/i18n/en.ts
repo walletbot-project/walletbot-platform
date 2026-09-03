@@ -772,6 +772,7 @@ export const en: Messages = {
         recurrenceMonthly: 'Monthly',
         recurrenceYearly: 'Yearly',
         recurrenceCustomDays: 'Every X days',
+        recurrenceEveryNDays: (days: number) => `Every ${days} days`,
         recurrenceRepeatEvery: 'Repeat every',
         recurrenceDaysUnit: 'days',
         recurrenceEndDateOptional: 'End date (optional)',
@@ -832,12 +833,14 @@ export const en: Messages = {
         amount: 'Amount',
         frequency: 'Frequency',
         date: 'Date',
-        time: 'Time',
         account: 'Account',
         category: 'Category',
         description: 'Description',
         descriptionPlaceholder: 'Optional detail',
         noDescription: 'No description',
+        seriesPosition: (p: { index: number; total: number }) =>
+            `${p.index}/${p.total}`,
+        coveredThrough: (date: string) => `until ${date}`,
         addMore: (p: { count: number }) => `Add ${p.count} more`,
         addMoreHint:
             'The new movements carry on from the last one in the series, not from this one.',

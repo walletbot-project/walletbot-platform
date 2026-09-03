@@ -815,6 +815,7 @@ export const es = {
         recurrenceMonthly: 'Mensual',
         recurrenceYearly: 'Anual',
         recurrenceCustomDays: 'Cada X días',
+        recurrenceEveryNDays: (days: number) => `Cada ${days} días`,
         recurrenceRepeatEvery: 'Repetir cada',
         recurrenceDaysUnit: 'días',
         recurrenceEndDateOptional: 'Fecha de fin (opcional)',
@@ -874,12 +875,14 @@ export const es = {
         amount: 'Monto',
         frequency: 'Frecuencia',
         date: 'Fecha',
-        time: 'Hora',
         account: 'Cuenta',
         category: 'Categoría',
         description: 'Descripción',
         descriptionPlaceholder: 'Detalle opcional',
         noDescription: 'Sin descripción',
+        seriesPosition: (p: { index: number; total: number }) =>
+            `${p.index}/${p.total}`,
+        coveredThrough: (date: string) => `hasta ${date}`,
         addMore: (p: { count: number }) => `Añadir ${p.count} más`,
         addMoreHint:
             'Los nuevos movimientos continúan a partir del último de la serie, no de este.',

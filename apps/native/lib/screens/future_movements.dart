@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../components/account_icons.dart';
 import '../components/category_icons.dart';
 import '../components/color_utils.dart';
+import '../components/recurrence_summary.dart';
 import '../components/transaction_row.dart';
 import '../data/data.dart';
 import '../data/queries/stream_utils.dart';
@@ -181,7 +182,7 @@ class _FutureMovementsScreenState extends State<FutureMovementsScreen> {
       identities.add(
         TransactionRowVisualIdentity(
           type: TransactionRowVisualIdentityType.account,
-          label: '${context.l10n.account}: ${account.name}',
+          label: context.l10n.accountIdentity(account.name),
           icon: accountIconFromName(account.icon),
           color: colorFromHex(account.color, fallback: accountDefaultColor),
         ),
@@ -192,7 +193,7 @@ class _FutureMovementsScreenState extends State<FutureMovementsScreen> {
       identities.add(
         TransactionRowVisualIdentity(
           type: TransactionRowVisualIdentityType.category,
-          label: '${context.l10n.category}: ${category.name}',
+          label: context.l10n.categoryIdentity(category.name),
           icon: categoryIconFromName(category.icon),
           color: colorFromHex(category.color, fallback: categoryDefaultColor),
         ),
@@ -241,13 +242,13 @@ class _FutureMovementDetailScreen extends StatefulWidget {
 
 class _FutureMovementDetailScreenState
     extends State<_FutureMovementDetailScreen> {
-  late final Stream<Recurrence?> _rule;
+  late final Stream<RecurrenceSeries?> _series;
   bool _adding = false;
 
   @override
   void initState() {
     super.initState();
-    _rule = context.read<AppRepositories>().transactions.watchRecurrence(
+    _series = context.read<AppRepositories>().transactions.watchSeries(
       widget.movement.recurrenceId,
     );
   }
@@ -297,62 +298,107 @@ class _FutureMovementDetailScreenState
     final date = DateTime.fromMillisecondsSinceEpoch(movement.date.toInt());
     final description = movement.description;
 
+    // One StreamBuilder for the whole body, not one per consumer: the series
+    // stream is single-subscription (`combineLatest2`), so a second listener
+    // throws "Stream has already been listened to".
     return Scaffold(
       appBar: AppBar(title: Text(context.l10n.futureMovements)),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          Center(
-            child: Text(
-              context.l10n.transactionName(movement.name, movement.type),
-              style: Theme.of(
-                context,
-              ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
-            ),
-          ),
-          const SizedBox(height: 24),
-          _DetailRow(
-            icon: Icons.calendar_month_rounded,
-            label: context.l10n.date,
-            value: formatNumericDate(date, context.localeName),
-          ),
-          _DetailRow(
-            icon: Icons.schedule_outlined,
-            label: context.l10n.time,
-            value: MaterialLocalizations.of(
-              context,
-            ).formatTimeOfDay(TimeOfDay.fromDateTime(date)),
-          ),
-          _DetailRow(
-            icon: Icons.account_balance_rounded,
-            label: context.l10n.account,
-            value: account?.name ?? '—',
-          ),
-          _DetailRow(
-            icon: Icons.sell_rounded,
-            label: context.l10n.category,
-            value: category?.name ?? '—',
-          ),
-          _DetailRow(
-            icon: Icons.notes_rounded,
-            label: context.l10n.description,
-            value: description == null || description.isEmpty
-                ? context.l10n.noDescription
-                : description,
-            muted: description == null || description.isEmpty,
-          ),
-          const SizedBox(height: 8),
-          Divider(color: colorScheme.outlineVariant),
-          StreamBuilder<Recurrence?>(
-            stream: _rule,
-            builder: (context, snapshot) => _TopUpSection(
-              rule: snapshot.data,
-              adding: _adding,
-              onAddMore: _addMore,
-            ),
-          ),
-        ],
+      body: StreamBuilder<RecurrenceSeries?>(
+        stream: _series,
+        builder: (context, snapshot) {
+          final series = snapshot.data;
+          return ListView(
+            padding: const EdgeInsets.all(16),
+            children: [
+              Center(
+                child: Text(
+                  context.l10n.transactionName(movement.name, movement.type),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+                ),
+              ),
+              const SizedBox(height: 24),
+              _FrequencyRow(
+                series: series,
+                label: series == null
+                    ? null
+                    : recurrenceFrequencyLabel(context, series),
+                trailing: series == null
+                    ? null
+                    : recurrenceReachLabel(
+                        context,
+                        series,
+                        occurrenceIndex: movement.recurrenceIndex,
+                      ),
+              ),
+              _DetailRow(
+                icon: Icons.calendar_month_rounded,
+                label: context.l10n.date,
+                value: formatNumericDate(date, context.localeName),
+              ),
+              _DetailRow(
+                icon: Icons.schedule_outlined,
+                label: context.l10n.time,
+                value: MaterialLocalizations.of(
+                  context,
+                ).formatTimeOfDay(TimeOfDay.fromDateTime(date)),
+              ),
+              _DetailRow(
+                icon: Icons.account_balance_rounded,
+                label: context.l10n.account,
+                value: account?.name ?? '—',
+              ),
+              _DetailRow(
+                icon: Icons.sell_rounded,
+                label: context.l10n.category,
+                value: category?.name ?? '—',
+              ),
+              _DetailRow(
+                icon: Icons.notes_rounded,
+                label: context.l10n.description,
+                value: description == null || description.isEmpty
+                    ? context.l10n.noDescription
+                    : description,
+                muted: description == null || description.isEmpty,
+              ),
+              const SizedBox(height: 8),
+              Divider(color: colorScheme.outlineVariant),
+              _TopUpSection(
+                series: series,
+                adding: _adding,
+                onAddMore: _addMore,
+              ),
+            ],
+          );
+        },
       ),
+    );
+  }
+}
+
+/// The cadence row, with how far the series reaches beside it. Absent for a
+/// one-off movement, and while the series is still loading.
+class _FrequencyRow extends StatelessWidget {
+  const _FrequencyRow({
+    required this.series,
+    required this.label,
+    required this.trailing,
+  });
+
+  final RecurrenceSeries? series;
+  final String? label;
+  final String? trailing;
+
+  @override
+  Widget build(BuildContext context) {
+    final label = this.label;
+    if (series == null || label == null) return const SizedBox.shrink();
+    return _DetailRow(
+      icon: Icons.repeat_rounded,
+      label: context.l10n.frequency,
+      value: label,
+      trailing: trailing,
     );
   }
 }
@@ -364,18 +410,18 @@ class _FutureMovementDetailScreenState
 /// editing the rule rather than extending it.
 class _TopUpSection extends StatelessWidget {
   const _TopUpSection({
-    required this.rule,
+    required this.series,
     required this.adding,
     required this.onAddMore,
   });
 
-  final Recurrence? rule;
+  final RecurrenceSeries? series;
   final bool adding;
   final Future<void> Function(String recurrenceId) onAddMore;
 
   @override
   Widget build(BuildContext context) {
-    final rule = this.rule;
+    final rule = series?.rule;
     if (rule == null || rule.endDate != null) return const SizedBox.shrink();
     final frequency = recurrenceFrequencyFromName(rule.frequency);
     if (frequency == null) return const SizedBox.shrink();
@@ -417,12 +463,16 @@ class _DetailRow extends StatelessWidget {
     required this.icon,
     required this.label,
     required this.value,
+    this.trailing,
     this.muted = false,
   });
 
   final IconData icon;
   final String label;
   final String value;
+
+  /// A subdued note after the value, on the same line.
+  final String? trailing;
   final bool muted;
 
   @override
@@ -454,6 +504,15 @@ class _DetailRow extends StatelessWidget {
               ),
             ),
           ),
+          if (trailing != null) ...[
+            const SizedBox(width: 8),
+            Text(
+              trailing!,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ],
         ],
       ),
     );

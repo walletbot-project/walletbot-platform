@@ -3,10 +3,12 @@ import 'package:drift/drift.dart';
 import '../../database.dart';
 import '../../telemetry/business_metrics.dart';
 import '../ids.dart';
+import '../models/recurrence_series.dart';
 import '../models/transaction_filter.dart';
 import '../occurrence.dart';
 import '../recurrence.dart';
 import '../queries/account_balance.dart';
+import '../queries/stream_utils.dart';
 import '../queries/transaction_query.dart';
 import 'repository_base.dart';
 
@@ -43,13 +45,53 @@ class TransactionRepository extends RepositoryBase {
         occurrence: TxnOccurrence.upcoming,
       );
 
-  /// The rule a movement belongs to, or `null` when it is a one-off (or the
-  /// rule has since been deleted — the movement itself stays perfectly valid).
-  Stream<Recurrence?> watchRecurrence(String? recurrenceId) {
+  /// The rule a movement belongs to and how far its series reaches, or `null`
+  /// when the movement is a one-off (or the rule has since been deleted — the
+  /// movement itself stays perfectly valid).
+  ///
+  /// Reactive to the series growing, so a top-up updates the reach shown in
+  /// the detail without the screen having to ask again.
+  Stream<RecurrenceSeries?> watchSeries(String? recurrenceId) {
     if (recurrenceId == null) return Stream.value(null);
-    return (db.select(db.recurrences)
-          ..where((r) => r.id.equals(recurrenceId) & r.archived.equals(false)))
-        .watchSingleOrNull();
+    return combineLatest2(
+      _ruleQuery(recurrenceId).watchSingleOrNull(),
+      _lastOccurrenceQuery(recurrenceId).watchSingleOrNull(),
+      _series,
+    );
+  }
+
+  /// One-shot [watchSeries], for the screens that load their detail once
+  /// rather than subscribing (the Activity detail's `Future.wait`).
+  Future<RecurrenceSeries?> seriesOf(String? recurrenceId) async {
+    if (recurrenceId == null) return null;
+    final rule = await _ruleQuery(recurrenceId).getSingleOrNull();
+    final last = await _lastOccurrenceQuery(recurrenceId).getSingleOrNull();
+    return _series(rule, last);
+  }
+
+  SimpleSelectStatement<$RecurrencesTable, Recurrence> _ruleQuery(String id) =>
+      db.select(db.recurrences)
+        ..where((r) => r.id.equals(id) & r.archived.equals(false));
+
+  /// Highest index first: indices run contiguously from 0, so this one row
+  /// carries both the count and the reach.
+  SimpleSelectStatement<$TransactionsTable, Transaction> _lastOccurrenceQuery(
+    String recurrenceId,
+  ) => db.select(db.transactions)
+    ..where((t) => t.recurrenceId.equals(recurrenceId))
+    ..orderBy([(t) => OrderingTerm.desc(t.recurrenceIndex)])
+    ..limit(1);
+
+  RecurrenceSeries? _series(Recurrence? rule, Transaction? last) {
+    if (rule == null) return null;
+    final index = last?.recurrenceIndex;
+    return RecurrenceSeries(
+      rule: rule,
+      count: index == null ? 0 : index + 1,
+      coveredThrough: index == null || last == null
+          ? null
+          : DateTime.fromMillisecondsSinceEpoch(last.date.toInt()),
+    );
   }
 
   /// One-shot variant of [watch], used by the agent tools.

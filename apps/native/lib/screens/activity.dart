@@ -786,7 +786,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
       identities.add(
         TransactionRowVisualIdentity(
           type: TransactionRowVisualIdentityType.account,
-          label: 'Cuenta: ${account.name}',
+          label: context.l10n.accountIdentity(account.name),
           icon: accountIconFromName(account.icon),
           color: colorFromHex(account.color, fallback: accountDefaultColor),
         ),
@@ -800,7 +800,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
         identities.add(
           TransactionRowVisualIdentity(
             type: TransactionRowVisualIdentityType.category,
-            label: 'Categoria: ${category.name}',
+            label: context.l10n.categoryIdentity(category.name),
             icon: categoryIconFromName(category.icon),
             color: colorFromHex(category.color, fallback: categoryDefaultColor),
           ),

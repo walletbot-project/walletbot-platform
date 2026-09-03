@@ -135,6 +135,77 @@ class AppLocalizationsEn extends AppLocalizations {
   String get exchangeRate => 'Exchange rate';
 
   @override
+  String accountIdentity(String name) {
+    return 'Account: $name';
+  }
+
+  @override
+  String categoryIdentity(String name) {
+    return 'Category: $name';
+  }
+
+  @override
+  String get detail => 'Details';
+
+  @override
+  String get editActivity => 'Edit activity';
+
+  @override
+  String get activityGone => 'This activity no longer exists';
+
+  @override
+  String get estimatedDate => 'Estimated date';
+
+  @override
+  String get estimatedTime => 'Estimated time';
+
+  @override
+  String get sourceAccount => 'Source account';
+
+  @override
+  String get destinationAccount => 'Destination account';
+
+  @override
+  String get noTags => 'No tags';
+
+  @override
+  String get noCategory => 'No category';
+
+  @override
+  String get balanceUnavailable => 'Balance unavailable';
+
+  @override
+  String get sameAccounts =>
+      'The source and destination accounts must be different';
+
+  @override
+  String get invalidAmount => 'The amount isn\'t valid';
+
+  @override
+  String get noOtherAccount => 'No other account available';
+
+  @override
+  String get amountNotEditable =>
+      'The amount of balance adjustments and initial balances cannot be edited.';
+
+  @override
+  String get change => 'Change';
+
+  @override
+  String get activityUpdateFailed => 'The activity could not be saved';
+
+  @override
+  String get activityDeleteTitle => 'Delete activity';
+
+  @override
+  String activityDeleteConfirm(String name) {
+    return 'Delete “$name”?';
+  }
+
+  @override
+  String get activityDeleteFailed => 'The activity could not be deleted';
+
+  @override
   String get status => 'Status';
 
   @override
@@ -1100,6 +1171,11 @@ class AppLocalizationsEn extends AppLocalizations {
   String get recurrenceDaysUnit => 'days';
 
   @override
+  String recurrenceEveryNDays(int days) {
+    return 'Every $days days';
+  }
+
+  @override
   String get futureMovements => 'Future movements';
 
   @override
@@ -1108,6 +1184,16 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get noFutureMovements => 'You have no scheduled future movements';
+
+  @override
+  String seriesPosition(int index, int total) {
+    return '$index/$total';
+  }
+
+  @override
+  String coveredThrough(String date) {
+    return 'until $date';
+  }
 
   @override
   String addMoreMovements(int count) {

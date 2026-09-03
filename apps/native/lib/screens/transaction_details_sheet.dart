@@ -3,6 +3,7 @@ import 'package:app/components/category_icons.dart';
 import 'package:app/components/color_utils.dart';
 import 'package:app/components/grouped_card.dart';
 import 'package:app/components/raised_card.dart';
+import 'package:app/components/recurrence_summary.dart';
 import 'package:app/components/tag_chip.dart';
 import 'package:app/components/readable_time_picker.dart';
 import 'package:app/data/data.dart';
@@ -58,6 +59,11 @@ class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
   TransactionTimeStatus _selectedTimeStatus = TransactionTimeStatus.none;
   Map<String, AccountBalanceAroundTransaction?> _balances = const {};
 
+  /// The recurring series this movement belongs to, if any. A movement that
+  /// has already happened is still an occurrence of its rule, and "the 3rd of
+  /// 12" is as useful looking back as looking ahead.
+  RecurrenceSeries? _series;
+
   bool _loading = true;
   bool _editing = false;
   bool _saving = false;
@@ -92,6 +98,14 @@ class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
     final categories = List<Category>.from(results[2] as List<Category>);
     final tags = List<Tag>.from(results[3] as List<Tag>);
     final tagIds = Set<String>.from(results[4] as List<String>);
+
+    // Needs the transaction first, so it cannot join the batch above. Two
+    // indexed row reads, and only when the movement is part of a series.
+    final series = await widget.repos.transactions.seriesOf(
+      transaction?.recurrenceId,
+    );
+    if (!mounted) return;
+    _series = series;
 
     categories.sort((a, b) => a.name.compareTo(b.name));
     tags.sort((a, b) => a.name.compareTo(b.name));
@@ -202,13 +216,13 @@ class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
 
     final name = _nameController.text.trim();
     if (name.isEmpty) {
-      _showSnack('El nombre no puede estar vacío');
+      _showSnack(context.l10n.nameCannotBeEmpty);
       return;
     }
 
     final selectedAccount = _selectedAccount;
     if (selectedAccount == null) {
-      _showSnack('Elegí una cuenta');
+      _showSnack(context.l10n.selectAccount);
       return;
     }
 
@@ -216,11 +230,11 @@ class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
     if (transaction.type == 'transfer') {
       selectedDestinationAccount = _selectedDestinationAccount;
       if (selectedDestinationAccount == null) {
-        _showSnack('Elegí una cuenta destino');
+        _showSnack(context.l10n.selectDestinationAccount);
         return;
       }
       if (selectedDestinationAccount.id == selectedAccount.id) {
-        _showSnack('La cuenta origen y destino deben ser distintas');
+        _showSnack(context.l10n.sameAccounts);
         return;
       }
     }
@@ -231,7 +245,7 @@ class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
         _amountController.text.trim().replaceAll(',', '.'),
       );
       if (parsed == null || !parsed.isFinite) {
-        _showSnack('El monto no es válido');
+        _showSnack(context.l10n.invalidAmount);
         return;
       }
       parsedAmount = BigInt.from((parsed.abs() * 100).round());
@@ -337,7 +351,7 @@ class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
       debugPrint('Error updating transaction: $error\n$stackTrace');
       if (mounted) {
         setState(() => _saving = false);
-        _showSnack('No se pudo guardar la actividad');
+        _showSnack(context.l10n.activityUpdateFailed);
       }
     }
   }
@@ -350,17 +364,17 @@ class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
       builder: (dialogContext) {
         final colors = Theme.of(dialogContext).colorScheme;
         return AlertDialog(
-          title: const Text('Eliminar actividad'),
-          content: Text('¿Seguro que querés eliminar "${transaction.name}"?'),
+          title: Text(context.l10n.activityDeleteTitle),
+          content: Text(context.l10n.activityDeleteConfirm(transaction.name)),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(dialogContext).pop(false),
-              child: const Text('Cancelar'),
+              child: Text(context.l10n.cancel),
             ),
             TextButton(
               onPressed: () => Navigator.of(dialogContext).pop(true),
               style: TextButton.styleFrom(foregroundColor: colors.error),
-              child: const Text('Eliminar'),
+              child: Text(context.l10n.delete),
             ),
           ],
         );
@@ -377,7 +391,7 @@ class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
       debugPrint('Error deleting transaction: $error\n$stackTrace');
       if (mounted) {
         setState(() => _saving = false);
-        _showSnack('No se pudo eliminar la actividad');
+        _showSnack(context.l10n.activityDeleteFailed);
       }
     }
   }
@@ -431,7 +445,7 @@ class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
         if (!account.archived && account.id != otherAccountId) account,
     ];
     if (availableAccounts.isEmpty) {
-      _showSnack('No hay otra cuenta disponible');
+      _showSnack(context.l10n.noOtherAccount);
       return;
     }
 
@@ -533,7 +547,7 @@ class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
             shrinkWrap: true,
             children: [
               if (available.isEmpty)
-                const ListTile(title: Text('No hay etiquetas disponibles')),
+                ListTile(title: Text(context.l10n.noTagsAvailable)),
               for (final tag in available)
                 ListTile(
                   leading: CircleAvatar(
@@ -566,7 +580,7 @@ class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
   @override
   Widget build(BuildContext context) {
     final transaction = _transaction;
-    final title = _editing ? 'Editar actividad' : 'Detalle';
+    final title = _editing ? context.l10n.editActivity : context.l10n.detail;
 
     return Scaffold(
       appBar: AppBar(
@@ -603,14 +617,14 @@ class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
             )
           else
             IconButton(
-              tooltip: _editing ? 'Guardar' : 'Editar',
+              tooltip: _editing ? context.l10n.save : context.l10n.edit,
               onPressed: _loading || transaction == null
                   ? null
                   : _toggleEditing,
               icon: Icon(_editing ? Icons.check_rounded : Icons.edit_outlined),
             ),
           IconButton(
-            tooltip: 'Eliminar',
+            tooltip: context.l10n.delete,
             onPressed: _loading || transaction == null || _saving
                 ? null
                 : _confirmDelete,
@@ -629,7 +643,7 @@ class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
 
     final transaction = _transaction;
     if (transaction == null) {
-      return const Center(child: Text('La actividad ya no existe'));
+      return Center(child: Text(context.l10n.activityGone));
     }
 
     return ListView(
@@ -659,7 +673,7 @@ class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
     final rows = <Widget>[
       _ReceiptRow(
         icon: Icons.notes_rounded,
-        label: 'Descripción',
+        label: context.l10n.description,
         stacked: true,
         value: _editing
             ? TextField(
@@ -667,23 +681,26 @@ class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
                 minLines: 1,
                 maxLines: 3,
                 textCapitalization: TextCapitalization.sentences,
-                decoration: const InputDecoration(
-                  border: OutlineInputBorder(),
-                  hintText: 'Sin descripción',
+                decoration: InputDecoration(
+                  border: const OutlineInputBorder(),
+                  hintText: context.l10n.noDescription,
                 ),
               )
             : (description == null || description.isEmpty
                   ? null
                   : Text(description)),
       ),
+      ?_recurrenceRow(context, transaction),
       _ReceiptRow(
         icon: _selectedDateConfirmed
             ? Icons.calendar_month_rounded
             : Icons.help_outline_rounded,
         attention: !_selectedDateConfirmed,
-        label: _selectedDateConfirmed ? 'Fecha' : 'Fecha estimada',
+        label: _selectedDateConfirmed
+            ? context.l10n.date
+            : context.l10n.estimatedDate,
         trailing: _editing
-            ? TextButton(onPressed: _pickDate, child: const Text('Cambiar'))
+            ? TextButton(onPressed: _pickDate, child: Text(context.l10n.change))
             : null,
         value: _filterableValue(
           child: Text(_formatDate(_selectedDate)),
@@ -708,33 +725,37 @@ class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
             ? Icons.help_outline_rounded
             : Icons.schedule_outlined,
         attention: timeNeedsAttention,
-        label: timeNeedsAttention ? 'Horario estimado' : 'Horario',
+        label: timeNeedsAttention
+            ? context.l10n.estimatedTime
+            : context.l10n.time,
         trailing: _editing
-            ? TextButton(onPressed: _pickTime, child: const Text('Cambiar'))
+            ? TextButton(onPressed: _pickTime, child: Text(context.l10n.change))
             : null,
         value: Text(_formatTime(context, _selectedDate)),
       ),
       if (_account != null)
         _accountReceiptRow(
-          label: transaction.type == 'transfer' ? 'Cuenta origen' : 'Cuenta',
+          label: transaction.type == 'transfer'
+              ? context.l10n.sourceAccount
+              : context.l10n.account,
           account: _account!,
           balance: _balances[_account!.id],
           trailing: _editing && _canEditAccount
               ? TextButton(
                   onPressed: () => _pickAccount(destination: false),
-                  child: const Text('Cambiar'),
+                  child: Text(context.l10n.change),
                 )
               : null,
         ),
       if (_destinationAccount != null)
         _accountReceiptRow(
-          label: 'Cuenta destino',
+          label: context.l10n.destinationAccount,
           account: _destinationAccount!,
           balance: _balances[_destinationAccount!.id],
           trailing: _editing && _canEditAccount
               ? TextButton(
                   onPressed: () => _pickAccount(destination: true),
-                  child: const Text('Cambiar'),
+                  child: Text(context.l10n.change),
                 )
               : null,
         ),
@@ -742,19 +763,19 @@ class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
       _ReceiptRow(
         icon: categoryIcon,
         iconColor: category == null ? null : categoryColor,
-        label: 'Categoría',
+        label: context.l10n.category,
         trailing: _editing
             ? TextButton(
                 onPressed: _categories.any((category) => !category.archived)
                     ? _pickCategory
                     : null,
-                child: const Text('Cambiar'),
+                child: Text(context.l10n.change),
               )
             : null,
         value: category == null
             ? (_editing
                   ? Text(
-                      'Sin categoría',
+                      context.l10n.noCategory,
                       style: TextStyle(color: colors.onSurfaceVariant),
                     )
                   : null)
@@ -797,8 +818,8 @@ class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
                 style: textTheme.titleLarge?.copyWith(
                   fontWeight: FontWeight.w700,
                 ),
-                decoration: const InputDecoration(
-                  hintText: 'Nombre',
+                decoration: InputDecoration(
+                  hintText: context.l10n.name,
                   border: InputBorder.none,
                 ),
               )
@@ -840,7 +861,7 @@ class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
             if (!_canEditAmount && _editing) ...[
               const SizedBox(height: 8),
               Text(
-                'El monto de ajustes de saldo y balances iniciales no son editables.',
+                context.l10n.amountNotEditable,
                 textAlign: TextAlign.center,
                 style: textTheme.bodySmall?.copyWith(
                   color: colors.onSurfaceVariant,
@@ -899,7 +920,7 @@ class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
               const SizedBox(height: 4),
               if (balance == null)
                 Text(
-                  'Saldo no disponible',
+                  context.l10n.balanceUnavailable,
                   style: TextStyle(color: colors.onSurfaceVariant),
                 )
               else
@@ -922,16 +943,16 @@ class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
     final selectedTags = _selectedTags;
     return _ReceiptRow(
       icon: Icons.sell_outlined,
-      label: 'Tags',
+      label: context.l10n.tags,
       stacked: true,
       trailing: _editing
-          ? TextButton(onPressed: _pickTag, child: const Text('Agregar'))
+          ? TextButton(onPressed: _pickTag, child: Text(context.l10n.add))
           : null,
       value: selectedTags.isEmpty
           ? (_editing
                 ? Builder(
                     builder: (context) => Text(
-                      'Sin tags',
+                      context.l10n.noTags,
                       style: TextStyle(
                         color: Theme.of(context).colorScheme.onSurfaceVariant,
                       ),
@@ -972,6 +993,46 @@ class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
         label: Text(tag.name),
         labelStyle: style.labelStyle,
         backgroundColor: style.background,
+      ),
+    );
+  }
+
+  /// Read-only cadence row for a movement that belongs to a recurring series,
+  /// with how far the series reaches beside it — the same summary the
+  /// future-movements detail shows, because it is the same fact. Null for a
+  /// one-off movement, and for a cadence this build cannot interpret.
+  _ReceiptRow? _recurrenceRow(BuildContext context, Transaction transaction) {
+    final series = _series;
+    if (series == null) return null;
+    final label = recurrenceFrequencyLabel(context, series);
+    if (label == null) return null;
+    final reach = recurrenceReachLabel(
+      context,
+      series,
+      occurrenceIndex: transaction.recurrenceIndex,
+    );
+    // Both halves go in `value`, not one in `trailing`: `trailing` butts
+    // straight up against the value, which is right for the "Cambiar" buttons
+    // the other rows put there (they carry their own padding) and wrong for a
+    // bare piece of text.
+    return _ReceiptRow(
+      icon: Icons.repeat_rounded,
+      label: context.l10n.frequency,
+      value: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(label),
+          if (reach != null) ...[
+            const SizedBox(width: 8),
+            Text(
+              reach,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                fontWeight: FontWeight.w400,
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ],
+        ],
       ),
     );
   }
