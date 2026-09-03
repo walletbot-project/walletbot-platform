@@ -480,6 +480,10 @@ class _FutureMovementDetailScreenState
     final valid = _validated();
     if (valid == null) return;
 
+    // A one-off future movement has no series to scope over, so there is no
+    // question to ask: both answers would mean the same thing.
+    final scoped = movement.recurrenceId != null;
+
     final storedFrequency = series == null
         ? null
         : recurrenceFrequencyFromName(series.rule.frequency);
@@ -493,10 +497,9 @@ class _FutureMovementDetailScreenState
     final anchorChanged =
         BigInt.from(_date.millisecondsSinceEpoch) != movement.date;
 
-    final scope = await _askScope(
-      deleting: false,
-      cadenceChanged: cadenceChanged,
-    );
+    final scope = scoped
+        ? await _askScope(deleting: false, cadenceChanged: cadenceChanged)
+        : _RecurrenceScope.onlyThis;
     if (scope == null || !mounted) return;
 
     setState(() => _busy = true);
@@ -573,7 +576,11 @@ class _FutureMovementDetailScreenState
   Future<void> _delete() async {
     final movement = _current;
     if (movement == null) return;
-    final scope = await _askScope(deleting: true);
+    // Same as saving: with no series behind it, "this one" and "this and the
+    // ones after it" are the same movement.
+    final scope = movement.recurrenceId != null
+        ? await _askScope(deleting: true)
+        : _RecurrenceScope.onlyThis;
     if (scope == null || !mounted) return;
 
     setState(() => _busy = true);

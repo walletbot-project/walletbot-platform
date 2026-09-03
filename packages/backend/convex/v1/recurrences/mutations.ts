@@ -240,16 +240,18 @@ async function resolveOccurrence(
         )
         .unique()
     if (!row) throw new Error('Transaction not found')
-    if (row.recurrenceId === undefined || row.recurrenceIndex === undefined) {
-        throw new Error('Transaction is not part of a recurring series')
+    const recurrenceId = row.recurrenceId
+    if (recurrenceId === undefined || row.recurrenceIndex === undefined) {
+        return { row, rule: null, index: 0 }
     }
     const rule = await ctx.db
         .query('recurrences')
         .withIndex('by_user_id', (q) =>
-            q.eq('userId', userId).eq('id', row.recurrenceId as string),
+            q.eq('userId', userId).eq('id', recurrenceId),
         )
         .unique()
-    if (!rule) throw new Error('Recurrence not found')
+    // A null rule reads as "no series": the caller then treats "this and the
+    // ones after it" as this one, which is what it means when there are none.
     return { row, rule, index: Number(row.recurrenceIndex) }
 }
 
@@ -326,6 +328,7 @@ export const updateFuture = mutation({
         // This one synchronously, so the screen the user is looking at is
         // right the moment the mutation returns; the tail follows in batches.
         await applyOccurrencePatch(ctx, userId, row, args.patch)
+        if (!rule) return
         await workflow.start(
             ctx,
             internal.recurrences.workflow.updateFutureOccurrences,
@@ -350,6 +353,10 @@ export const deleteFuture = mutation({
             args.transactionId,
         )
 
+        if (!rule) {
+            await archiveTransactionRow(ctx, userId, row)
+            return
+        }
         // Truncate first, while occurrence `index - 1` is still the last one
         // standing — after the tail goes, its date is what the rule ends on.
         await truncateRuleBefore(ctx, userId, rule, index)
@@ -400,6 +407,9 @@ export const splitSeries = mutation({
             rule: oldRule,
             index,
         } = await resolveOccurrence(ctx, userId, args.transactionId)
+        if (!oldRule) {
+            throw new Error('Transaction is not part of a recurring series')
+        }
 
         await truncateRuleBefore(ctx, userId, oldRule, index)
 

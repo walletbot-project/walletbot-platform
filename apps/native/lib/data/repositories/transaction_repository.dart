@@ -548,7 +548,13 @@ class TransactionRepository extends RepositoryBase {
   /// Returns how many were archived. No-op for a one-off movement.
   Future<int> deleteFuture(String transactionId) async {
     final found = await _occurrenceOf(transactionId);
-    if (found == null) return 0;
+    // No series: "this one and the ones after it" has nothing after it, so it
+    // means this one. Degrading beats returning 0 and letting the caller
+    // report a delete that never happened.
+    if (found == null) {
+      await delete(transactionId);
+      return 1;
+    }
 
     final tail =
         await (db.select(db.transactions)
@@ -589,7 +595,19 @@ class TransactionRepository extends RepositoryBase {
     Value<String> categoryId = const Value.absent(),
   }) async {
     final found = await _occurrenceOf(transactionId);
-    if (found == null) return 0;
+    // No series: the edit applies to this movement and that is all of them.
+    if (found == null) {
+      await update(
+        transactionId,
+        name: name,
+        description: description,
+        amount: amount,
+        accountId: accountId,
+        currency: currency,
+        categoryId: categoryId,
+      );
+      return 1;
+    }
 
     final now = currentMs;
     // One statement for the whole tail: unlike the delete, a value edit needs

@@ -105,6 +105,11 @@ export function FutureMovementDetail({
     // answered, so this doubles as "an operation is staged".
     const [asking, setAsking] = useState<'save' | 'delete' | null>(null)
 
+    // A one-off future movement has no series to scope over, so there is no
+    // question to ask: both answers would mean the same movement. Read off the
+    // row rather than the rule query, which is still loading on first render.
+    const scoped = movement.recurrenceId !== undefined
+
     const account = accounts?.find((a) => a.id === movement.accountId)
     const category = categories?.find((c) => c.id === movement.categoryId)
 
@@ -157,9 +162,9 @@ export function FutureMovementDetail({
         return { name: trimmed, amount: cents }
     }
 
-    function apply(scope: RecurrenceScope) {
+    function apply(operation: 'save' | 'delete', scope: RecurrenceScope) {
         setAsking(null)
-        if (asking === 'delete') {
+        if (operation === 'delete') {
             const promise =
                 scope === 'only-this'
                     ? archiveOne({ id: movement.id })
@@ -270,7 +275,10 @@ export function FutureMovementDetail({
                         )}
                         <IconButton
                             aria-label={t.futureMovements.delete}
-                            onPress={() => setAsking('delete')}
+                            onPress={() => {
+                                if (scoped) setAsking('delete')
+                                else apply('delete', 'only-this')
+                            }}
                             isDisabled={pending}
                             className="text-on-surface-variant"
                         >
@@ -285,7 +293,9 @@ export function FutureMovementDetail({
                 className="flex flex-1 flex-col px-4 pb-8"
                 onSubmit={(event) => {
                     event.preventDefault()
-                    if (validate()) setAsking('save')
+                    if (!validate()) return
+                    if (scoped) setAsking('save')
+                    else apply('save', 'only-this')
                 }}
             >
                 <div className="flex flex-col items-center pt-2 pb-4">
@@ -625,12 +635,14 @@ export function FutureMovementDetail({
                             label={t.futureMovements.scopeOnlyThis}
                             isDisabled={asking === 'save' && cadenceChanged}
                             destructive={asking === 'delete'}
-                            onPress={() => apply('only-this')}
+                            onPress={() => asking && apply(asking, 'only-this')}
                         />
                         <DialogAction
                             label={t.futureMovements.scopeAllFuture}
                             destructive={asking === 'delete'}
-                            onPress={() => apply('all-future')}
+                            onPress={() =>
+                                asking && apply(asking, 'all-future')
+                            }
                         />
                     </>
                 }

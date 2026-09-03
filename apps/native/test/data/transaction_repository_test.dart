@@ -724,6 +724,53 @@ void main() {
         expect(series.coveredThrough, isNotNull);
       });
 
+      test('a one-off movement has no series at all', () async {
+        final id = await repos.transactions.addExpense(
+          accountId: cashId,
+          categoryId: foodId,
+          name: 'Concert',
+          amountCents: BigInt.from(9000),
+          currency: 'ARS',
+        );
+        final txn = await repos.transactions.getById(id);
+        expect(txn!.recurrenceId, isNull);
+        expect(await repos.transactions.seriesOf(txn.recurrenceId), isNull);
+      });
+
+      test('a scoped delete on a one-off still deletes it', () async {
+        final id = await repos.transactions.addExpense(
+          accountId: cashId,
+          categoryId: foodId,
+          name: 'Concert',
+          amountCents: BigInt.from(9000),
+          currency: 'ARS',
+        );
+
+        // "This and the ones after it" has nothing after it, so it means this
+        // one. It used to report success and delete nothing.
+        expect(await repos.transactions.deleteFuture(id), 1);
+        expect((await repos.transactions.getById(id))!.archived, isTrue);
+      });
+
+      test('a scoped edit on a one-off still edits it', () async {
+        final id = await repos.transactions.addExpense(
+          accountId: cashId,
+          categoryId: foodId,
+          name: 'Concert',
+          amountCents: BigInt.from(9000),
+          currency: 'ARS',
+        );
+
+        expect(
+          await repos.transactions.updateFuture(
+            id,
+            name: const Value('Concert (moved)'),
+          ),
+          1,
+        );
+        expect((await repos.transactions.getById(id))!.name, 'Concert (moved)');
+      });
+
       test('seriesOf agrees with watchSeries about the position', () async {
         final id = await createMonthlySeries(
           endDate: DateTime(2026, 5, 31, 23, 59),

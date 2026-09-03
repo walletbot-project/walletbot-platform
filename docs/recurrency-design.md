@@ -625,6 +625,23 @@ Orden de Material y el mismo en las dos plataformas: primero la salida
 (`Cancelar`), después los dos alcances. Una elección destructiva sólo recolorea
 su etiqueta.
 
+#### Un movimiento suelto no tiene alcance que preguntar
+
+La lista de movimientos futuros se llena por el corte de ocurrencia, que filtra
+por fecha y no sabe nada de recurrencias (§5.1). Así que un movimiento suelto
+con fecha futura cae ahí igual, sin regla — y editarlo o borrarlo no tiene dos
+alcances posibles: las dos respuestas significan el mismo movimiento.
+
+El diálogo ahora se saltea cuando el movimiento no tiene `recurrenceId`. Se
+decide sobre la fila y no sobre la query de la regla, que en el primer render
+todavía está cargando.
+
+Y las operaciones **degradan** en vez de fallar: `deleteFuture`/`updateFuture`
+sobre algo sin serie actúan sobre esa única fila. Antes el nativo devolvía 0 y
+el llamador reportaba un borrado que nunca había pasado — un botón muerto que
+además mentía. "Este y los que siguen", cuando no hay ninguno que siga,
+significa este.
+
 #### El formulario no reusa la forma del recibo
 
 En modo lectura el detalle es un recibo: etiqueta a la izquierda, valor
