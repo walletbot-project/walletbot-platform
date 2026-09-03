@@ -11,19 +11,50 @@ import '../database.dart';
 /// dashboard tile — stops here, and the upcoming list starts here. The split
 /// is invisible to the user: neither side presents it as a filter.
 ///
-/// **The cutoff is the end of the local day, not the current instant.** A
-/// movement dated today at 20:00 counts as having happened from the start of
-/// the day, which is how the app behaved before recurrence existed. Cutting at
-/// the instant would make a movement entered this morning for tonight vanish
-/// from Activity until 20:00.
+/// **The boundary is the end of the current 20-minute block**, and it rounds
+/// **up**. That is load-bearing: the cutoff is an exclusive upper bound, so
+/// rounding down would put a movement recorded *right now* above it and make
+/// the expense the user just entered vanish from the activity list for up to
+/// twenty minutes.
 ///
-/// Unlike the web, nothing has to travel here: the device owns both the clock
-/// and the database, and the local timezone is simply the device's.
+/// Quantizing exists for the web, where the cutoff is a Convex query argument
+/// and a value that changed every millisecond would miss the cache on every
+/// call. It costs nothing here, and both platforms use the same grain so a
+/// movement lands on the same side of the boundary on the phone and on the web
+/// (`occurrence.test.ts` and `occurrence_test.dart` pin the same numbers).
+
+/// How coarse the cutoff is, in seconds. Mirrors `OCCURRENCE_BUCKET_MS`.
+const int occurrenceBucketSeconds = 20 * 60;
+
+/// The end of the 20-minute block [now] falls in.
+///
+/// Always strictly after [now], including when [now] sits exactly on a
+/// boundary — the same way the old day cutoff was always the *next* midnight.
 BigInt pastCutoffMs([DateTime? now]) {
-  final today = now ?? DateTime.now();
-  final tomorrow = DateTime(today.year, today.month, today.day + 1);
-  return BigInt.from(tomorrow.millisecondsSinceEpoch);
+  final ms = (now ?? DateTime.now()).millisecondsSinceEpoch;
+  final bucketMs = occurrenceBucketSeconds * 1000;
+  return BigInt.from((ms ~/ bucketMs + 1) * bucketMs);
 }
+
+/// The cutoff as SQL, evaluated when the statement runs.
+///
+/// Not a bound Dart value, on purpose. Drift bakes a value into the statement
+/// it builds and re-runs *that* statement when the tables change, so a
+/// constant would freeze the cutoff for as long as the screen holding the
+/// stream lives. With a day boundary that was a once-a-day staleness nobody
+/// hit; at twenty minutes it would be the common case. Computed in SQL, every
+/// re-run of the query — including the one a write triggers — asks the clock
+/// again.
+///
+/// `strftime('%s')` rather than `unixepoch()`: the latter needs SQLite 3.38,
+/// and this has to hold on whatever the device ships.
+const String pastCutoffSql =
+    "((CAST(strftime('%s','now') AS INTEGER) / $occurrenceBucketSeconds + 1) "
+    '* $occurrenceBucketSeconds * 1000)';
+
+/// [pastCutoffSql] as a drift expression, for the query builders.
+Expression<BigInt> pastCutoffExpression() =>
+    const CustomExpression<BigInt>(pastCutoffSql);
 
 /// Which side of the cutoff a read wants.
 enum TxnOccurrence {
@@ -36,15 +67,21 @@ enum TxnOccurrence {
 }
 
 /// The cutoff predicate for [occurrence].
+///
+/// [now] pins the boundary for tests; production reads it from SQL so an open
+/// stream keeps up.
 Expression<bool> occurrenceFilter(
   $TransactionsTable t,
   TxnOccurrence occurrence, {
   DateTime? now,
 }) {
+  final cutoff = now == null
+      ? pastCutoffExpression()
+      : Constant<BigInt>(pastCutoffMs(now));
   switch (occurrence) {
     case TxnOccurrence.occurred:
-      return t.date.isSmallerThanValue(pastCutoffMs(now));
+      return t.date.isSmallerThan(cutoff);
     case TxnOccurrence.upcoming:
-      return t.date.isBiggerOrEqualValue(pastCutoffMs(now));
+      return t.date.isBiggerOrEqual(cutoff);
   }
 }

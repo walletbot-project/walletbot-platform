@@ -135,7 +135,7 @@ Widget notes: numeric (stat sum/net) widgets should carry a currency condition; 
 ## They are ordinary movements, created in advance
 - A recurring rule is set up once, and its occurrences are created immediately as **real movements** with future dates. There is no "it will appear later" mechanism: the rows exist from the moment the rule is created.
 - A future movement is invisible to everything that describes what already happened: absent from Activity, from account balances, from category and account summaries, and from every dashboard widget. It becomes visible on its own date, with no action from anyone.
-- The cutoff is the end of the user's current day, so a movement dated today at 20:00 counts as having happened all day today rather than appearing at 20:00.
+- The cutoff is the end of the current 20-minute block, so a movement lands in Activity within twenty minutes of its own date and time — not at the start of its day. It rounds up, so something the user records right now always counts as already happened.
 - So \`listTransactions\` and \`summarizeTransactions\` never show future movements. \`listUpcomingTransactions\` is the only way to see them.
 - A one-off movement dated in the future behaves exactly the same way and also appears in \`listUpcomingTransactions\` — being in that list does not mean it repeats. Check whether the movement has a series before offering scope choices.
 

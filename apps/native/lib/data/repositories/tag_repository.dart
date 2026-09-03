@@ -54,13 +54,12 @@ class TagRepository extends RepositoryBase {
         LEFT JOIN transactions t
                ON t.id = tt.transaction_id
               AND t.is_archived = 0
-              AND t.date < ?
+              AND t.date < $pastCutoffSql
         WHERE tg.is_archived = 0
         GROUP BY tg.id, tg.name, tg.description, tg.parent_id, tg.color,
                  tg.is_archived, tg.created_at, tg.updated_at, tg.dirty
         ORDER BY tg.name COLLATE NOCASE
       ''',
-      variables: [Variable.withBigInt(pastCutoffMs())],
       readsFrom: {db.tags, db.transactionTags, db.transactions},
     );
 
@@ -110,7 +109,7 @@ class TagRepository extends RepositoryBase {
                 db.transactions.type.equals('expense') &
                 db.transactions.date.isBiggerOrEqualValue(fromMs) &
                 db.transactions.date.isSmallerThanValue(toExclusiveMs) &
-                db.transactions.date.isSmallerThanValue(pastCutoffMs()),
+                db.transactions.date.isSmallerThan(pastCutoffExpression()),
           )
           ..groupBy([currency]);
 

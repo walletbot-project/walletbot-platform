@@ -235,16 +235,59 @@ lista de Actividad, el saldo de una cuenta, el gasto de una categoría, el
 contador de un tag, cada tile del dashboard. Si una sola se olvida, un gasto
 programado para diciembre baja el saldo hoy.
 
-#### Dónde cae el corte: fin del día local, no el instante
+#### Dónde cae el corte: fin del bloque de 20 minutos
 
-`date <= ahora` es la lectura literal, pero rompe algo que ya funcionaba: un
-gasto cargado hoy a las 10:00 con hora confirmada 20:00 desaparecería de
-Actividad y del saldo hasta las 20:00. El corte es entonces **el comienzo del
-día siguiente en hora local**: todo lo fechado hoy ya ocurrió, sin importar la
-hora.
+`date <= ahora` es la lectura literal y es la que queremos, pero un valor que
+cambia a cada milisegundo no sirve como argumento de una query de Convex: el
+caché está indexado por argumentos, así que cada llamada erraría el caché. La
+solución es **cuantizar**: el corte es el final del bloque de 20 minutos en
+curso.
+
+Veinte minutos es fino como para que un movimiento entre en Actividad cuando
+efectivamente ocurre, y grueso como para que el argumento cambie tres veces por
+hora en vez de constantemente. Dentro de un bloque, todos los clientes mandan
+el mismo número y comparten la respuesta cacheada.
+
+**Redondea hacia arriba, y eso es load-bearing.** El corte es una cota superior
+exclusiva, así que redondear hacia abajo pondría un movimiento cargado *recién
+ahora* por encima del corte: el gasto que el usuario acaba de anotar
+desaparecería de Actividad hasta 20 minutos. Hacia arriba se conserva la
+dirección de la regla anterior —errar hacia "ya ocurrió"— con grano más fino. El
+costo es que algo que vence en los próximos minutos cuenta como hecho un rato
+antes, que nadie puede notar.
+
+La versión anterior cortaba en **fin del día local**, para que un gasto cargado
+a la mañana con hora 20:00 no desapareciera hasta las 20:00. El redondeo hacia
+arriba conserva esa propiedad en lo que importaba (nada que acabás de cargar se
+esconde) y a cambio deja de contar todo el día por adelantado.
+
+Un efecto secundario que no habíamos previsto: los bloques se cortan **desde el
+epoch**, no desde un día local, así que el corte pasó a ser independiente de la
+zona horaria. Un mediodía en Buenos Aires y un mediodía en Madrid son el mismo
+instante y mandan el mismo argumento, cosa que un límite de medianoche local no
+podía hacer.
 
 - TS: `pastCutoffMs()` en `packages/shared/src/occurrence.ts`.
 - Dart: `pastCutoffMs()` en `apps/native/lib/data/occurrence.dart`.
+
+#### En nativo el corte lo evalúa SQL, no Dart
+
+Drift **hornea** los valores en la sentencia que construye, y re-ejecuta *esa*
+sentencia cuando cambian las tablas. Con el corte como constante de Dart, una
+pantalla que sostiene el stream se queda con el corte del momento en que se
+construyó la query — ni una escritura lo refresca. Con un límite diario eso era
+una desactualización de una vez por día que nadie llegaba a ver; a 20 minutos
+sería el caso común.
+
+Así que el predicado es SQL (`pastCutoffSql`): cada re-ejecución de la query
+—incluida la que dispara una escritura— vuelve a preguntar el reloj. Con
+`strftime('%s','now')` y no `unixepoch()`, que necesita SQLite 3.38 y acá hay
+que aguantar lo que traiga el dispositivo.
+
+Queda un caso sin cubrir: una pantalla nativa abierta sin que se escriba nada
+no se actualiza sola al cruzar un bloque. En web sí, porque
+`useOccurrenceCutoff` rearma un timer en cada límite. Hacerlo en nativo pedía un
+notifier de app entera y ocho sitios replumbados; se puede agregar si molesta.
 
 #### El corte viaja como argumento, no se lee del reloj del servidor
 

@@ -136,6 +136,7 @@ export {
     resolveLocale,
 } from './locale'
 export {
+    OCCURRENCE_BUCKET_MS,
     pastCutoffBigInt,
     pastCutoffMs,
 } from './occurrence'

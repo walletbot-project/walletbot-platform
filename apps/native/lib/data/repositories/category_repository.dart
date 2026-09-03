@@ -54,13 +54,12 @@ class CategoryRepository extends RepositoryBase {
         LEFT JOIN transactions t
                ON t.category_id = c.id
               AND t.is_archived = 0
-              AND t.date < ?
+              AND t.date < $pastCutoffSql
         WHERE c.is_archived = 0
         GROUP BY c.id, c.name, c.description, c.color, c.icon, c.is_archived,
                  c.created_at, c.updated_at, c.dirty
         ORDER BY c.name COLLATE NOCASE
       ''',
-      variables: [Variable.withBigInt(pastCutoffMs())],
       readsFrom: {db.categories, db.transactions},
     );
 
@@ -103,7 +102,7 @@ class CategoryRepository extends RepositoryBase {
             db.transactions.type.equals('expense') &
             db.transactions.date.isBiggerOrEqualValue(fromMs) &
             db.transactions.date.isSmallerThanValue(toExclusiveMs) &
-            db.transactions.date.isSmallerThanValue(pastCutoffMs()),
+            db.transactions.date.isSmallerThan(pastCutoffExpression()),
       )
       ..groupBy([currency]);
 

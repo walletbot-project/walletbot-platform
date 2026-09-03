@@ -100,7 +100,7 @@ class SummaryRepository extends RepositoryBase {
   }) async {
     final query = db.select(db.transactions)
       ..where((t) => t.archived.equals(false))
-      ..where((t) => t.date.isSmallerThanValue(pastCutoffMs()))
+      ..where((t) => t.date.isSmallerThan(pastCutoffExpression()))
       ..where((t) => t.date.isBiggerOrEqualValue(fromMs))
       ..where((t) => t.date.isSmallerOrEqualValue(toMs));
     if (type != null) {
@@ -140,7 +140,7 @@ class SummaryRepository extends RepositoryBase {
     final items =
         await (db.select(db.transactions)
               ..where((t) => t.archived.equals(false))
-              ..where((t) => t.date.isSmallerThanValue(pastCutoffMs()))
+              ..where((t) => t.date.isSmallerThan(pastCutoffExpression()))
               ..where((t) => t.date.isBiggerOrEqualValue(fromMs))
               ..where((t) => t.date.isSmallerOrEqualValue(toMs)))
             .get();

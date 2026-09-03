@@ -44,7 +44,7 @@ Future<BigInt> computeAccountBalance(AppDatabase db, String accountId) async {
   final rows =
       await (db.select(db.transactions)
             ..where((t) => t.archived.equals(false))
-            ..where((t) => t.date.isSmallerThanValue(pastCutoffMs()))
+            ..where((t) => t.date.isSmallerThan(pastCutoffExpression()))
             ..where((t) => _touchesAccount(t, accountId)))
           .get();
   return accountBalanceFromRows(rows, accountId);
@@ -53,7 +53,7 @@ Future<BigInt> computeAccountBalance(AppDatabase db, String accountId) async {
 Stream<BigInt> watchAccountBalance(AppDatabase db, String accountId) {
   return (db.select(db.transactions)
         ..where((t) => t.archived.equals(false))
-        ..where((t) => t.date.isSmallerThanValue(pastCutoffMs()))
+        ..where((t) => t.date.isSmallerThan(pastCutoffExpression()))
         ..where((t) => _touchesAccount(t, accountId)))
       .watch()
       .map((rows) => accountBalanceFromRows(rows, accountId));
@@ -86,7 +86,7 @@ Stream<BigInt> watchTotalBalanceForCurrency(
   final txnsStream =
       (db.select(db.transactions)
             ..where((t) => t.archived.equals(false))
-            ..where((t) => t.date.isSmallerThanValue(pastCutoffMs())))
+            ..where((t) => t.date.isSmallerThan(pastCutoffExpression())))
           .watch();
   return combineLatest2(accountsStream, txnsStream, (accounts, txns) {
     var total = BigInt.zero;
