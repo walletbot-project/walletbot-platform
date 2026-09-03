@@ -149,6 +149,7 @@ export {
     occurrenceCount,
     occurrenceDateMs,
     recurrenceHorizon,
+    SERIES_COUNT_CAP,
 } from './recurrence'
 export type { ToolArgs, ToolName } from './tools'
 export {

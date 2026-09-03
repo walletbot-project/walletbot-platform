@@ -283,6 +283,7 @@ class _FutureMovementDetailScreenState
     _current = movement;
     _series = context.read<AppRepositories>().transactions.watchSeries(
       movement.recurrenceId,
+      occurrenceIndex: movement.recurrenceIndex,
     );
     _name = TextEditingController(text: movement.name);
     _description = TextEditingController(text: movement.description ?? '');
@@ -681,13 +682,7 @@ class _FutureMovementDetailScreenState
         label: series == null
             ? null
             : recurrenceFrequencyLabel(context, series),
-        trailing: series == null
-            ? null
-            : recurrenceReachLabel(
-                context,
-                series,
-                occurrenceIndex: movement.recurrenceIndex,
-              ),
+        trailing: series == null ? null : recurrenceReachLabel(context, series),
       ),
       _DetailRow(
         icon: Icons.calendar_month_rounded,

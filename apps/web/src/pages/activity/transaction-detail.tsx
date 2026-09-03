@@ -162,11 +162,11 @@ function TransactionDetailsContent({
     // same cadence row the future-movements detail does.
     const series = useQuery(api.v1.recurrences.queries.get, {
         recurrenceId: transaction.recurrenceId,
+        occurrenceIndex: transaction.recurrenceIndex,
     })
     const seriesReach = series
         ? seriesReachLabel(
               series,
-              transaction.recurrenceIndex,
               t,
               // This file's own date formatter, so the covered-through date
               // reads exactly like the date row below it. It takes an epoch.

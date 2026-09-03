@@ -625,14 +625,14 @@ void main() {
       expect(await repos.transactions.addOccurrences('nope'), 0);
     });
 
-    test('watchSeries derives the count and the reach from the rows', () async {
+    test('watchSeries derives the reach from the rows', () async {
       final id = await createMonthlySeries();
       final ruleId = await ruleIdOf(id);
       final rows = await seriesRows(ruleId);
 
       final series = await repos.transactions.watchSeries(ruleId).first;
       expect(series, isNotNull);
-      expect(series!.count, 48);
+      expect(series!.total, 48);
       expect(
         series.coveredThrough,
         DateTime.fromMillisecondsSinceEpoch(rows.last.date.toInt()),
@@ -647,9 +647,101 @@ void main() {
       await repos.transactions.addOccurrences(ruleId);
       final after = await repos.transactions.watchSeries(ruleId).first;
 
-      expect(before!.count, 48);
-      expect(after!.count, 96);
+      expect(before!.total, 48);
+      expect(after!.total, 96);
       expect(after.coveredThrough!.isAfter(before.coveredThrough!), isTrue);
+    });
+
+    group('position and total count survivors, not slots', () {
+      test('deleting one renumbers the ones after it', () async {
+        // Five monthly occurrences, and the second one goes.
+        final id = await createMonthlySeries(
+          endDate: DateTime(2026, 5, 31, 23, 59),
+        );
+        final ruleId = await ruleIdOf(id);
+        final rows = await seriesRows(ruleId);
+        expect(rows, hasLength(5));
+
+        await repos.transactions.delete(rows[1].id);
+
+        // The deleted slot keeps its index — it has to, or the materialiser
+        // would recreate it — so the numbers cannot come from the index.
+        final surviving = await seriesRows(ruleId);
+        expect(surviving[2].recurrenceIndex, 2);
+
+        Future<RecurrenceSeries?> seriesAt(int index) => repos.transactions
+            .watchSeries(ruleId, occurrenceIndex: index)
+            .first;
+
+        expect((await seriesAt(0))!.position, 1);
+        expect((await seriesAt(2))!.position, 2, reason: 'was 3/5, now 2/4');
+        expect((await seriesAt(3))!.position, 3);
+        expect((await seriesAt(4))!.position, 4);
+        for (final index in [0, 2, 3, 4]) {
+          expect((await seriesAt(index))!.total, 4);
+        }
+      });
+
+      test('the reach follows the last survivor', () async {
+        final id = await createMonthlySeries(
+          endDate: DateTime(2026, 5, 31, 23, 59),
+        );
+        final ruleId = await ruleIdOf(id);
+        final rows = await seriesRows(ruleId);
+
+        await repos.transactions.delete(rows.last.id);
+
+        final series = await repos.transactions.watchSeries(ruleId).first;
+        expect(series!.total, 4);
+        expect(
+          series.coveredThrough,
+          DateTime.fromMillisecondsSinceEpoch(rows[3].date.toInt()),
+        );
+      });
+
+      test('a series past the cap is not counted at all', () async {
+        // 500 daily occurrences plus a top-up puts it past `seriesCountCap`.
+        final id = await repos.transactions.addExpense(
+          accountId: cashId,
+          categoryId: foodId,
+          name: 'Pills',
+          amountCents: BigInt.from(500),
+          currency: 'ARS',
+          recurrence: const RecurrenceDraft(
+            frequency: RecurrenceFrequency.daily,
+          ),
+        );
+        final ruleId = await ruleIdOf(id);
+        await repos.transactions.addOccurrences(ruleId);
+
+        final series = await repos.transactions
+            .watchSeries(ruleId, occurrenceIndex: 3)
+            .first;
+        // Nothing to count cheaply, so the detail falls back to the reach —
+        // and an "X/1000" was never the useful fact anyway.
+        expect(series!.total, isNull);
+        expect(series.position, isNull);
+        expect(series.coveredThrough, isNotNull);
+      });
+
+      test('seriesOf agrees with watchSeries about the position', () async {
+        final id = await createMonthlySeries(
+          endDate: DateTime(2026, 5, 31, 23, 59),
+        );
+        final ruleId = await ruleIdOf(id);
+        final rows = await seriesRows(ruleId);
+        await repos.transactions.delete(rows[1].id);
+
+        final watched = await repos.transactions
+            .watchSeries(ruleId, occurrenceIndex: 2)
+            .first;
+        final fetched = await repos.transactions.seriesOf(
+          ruleId,
+          occurrenceIndex: 2,
+        );
+        expect(fetched!.position, watched!.position);
+        expect(fetched.total, watched.total);
+      });
     });
 
     test('seriesOf reads the same series as watchSeries, once', () async {
@@ -660,7 +752,7 @@ void main() {
       final fetched = await repos.transactions.seriesOf(ruleId);
 
       expect(fetched, isNotNull);
-      expect(fetched!.count, watched!.count);
+      expect(fetched!.total, watched!.total);
       expect(fetched.coveredThrough, watched.coveredThrough);
       expect(fetched.rule.id, ruleId);
     });

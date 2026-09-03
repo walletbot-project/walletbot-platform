@@ -429,7 +429,8 @@ export type RecurrenceSeries = {
     frequency: RecurrenceFrequency
     dayInterval?: bigint
     endDate?: bigint
-    count: number
+    position: number | null
+    total: number | null
     coveredThroughMs: bigint | null
 }
 
@@ -440,18 +441,25 @@ export type RecurrenceSeries = {
  * knowable, so the position is the useful fact. An open-ended one has no total
  * to be a fraction of, so it says how far the movements that exist go instead
  * — which is also exactly what the top-up button extends.
+ *
+ * Both numbers count the occurrences that survive, so deleting one renumbers
+ * the rest. A series too long to count cheaply falls back to the reach, the
+ * same as an open-ended one.
  */
 export function seriesReachLabel(
     series: RecurrenceSeries,
-    occurrenceIndex: bigint | undefined,
     messages: Messages,
     formatDate: (date: Date) => string,
 ): string | null {
-    if (series.endDate !== undefined) {
-        if (occurrenceIndex === undefined || series.count === 0) return null
+    if (
+        series.endDate !== undefined &&
+        series.position !== null &&
+        series.total !== null &&
+        series.total > 0
+    ) {
         return messages.futureMovements.seriesPosition({
-            index: Number(occurrenceIndex) + 1,
-            total: series.count,
+            index: series.position,
+            total: series.total,
         })
     }
     if (series.coveredThroughMs === null) return null

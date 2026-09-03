@@ -103,6 +103,7 @@ class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
     // indexed row reads, and only when the movement is part of a series.
     final series = await widget.repos.transactions.seriesOf(
       transaction?.recurrenceId,
+      occurrenceIndex: transaction?.recurrenceIndex,
     );
     if (!mounted) return;
     _series = series;
@@ -690,7 +691,7 @@ class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
                   ? null
                   : Text(description)),
       ),
-      ?_recurrenceRow(context, transaction),
+      ?_recurrenceRow(context),
       _ReceiptRow(
         icon: _selectedDateConfirmed
             ? Icons.calendar_month_rounded
@@ -1001,16 +1002,12 @@ class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
   /// with how far the series reaches beside it — the same summary the
   /// future-movements detail shows, because it is the same fact. Null for a
   /// one-off movement, and for a cadence this build cannot interpret.
-  _ReceiptRow? _recurrenceRow(BuildContext context, Transaction transaction) {
+  _ReceiptRow? _recurrenceRow(BuildContext context) {
     final series = _series;
     if (series == null) return null;
     final label = recurrenceFrequencyLabel(context, series);
     if (label == null) return null;
-    final reach = recurrenceReachLabel(
-      context,
-      series,
-      occurrenceIndex: transaction.recurrenceIndex,
-    );
+    final reach = recurrenceReachLabel(context, series);
     // Both halves go in `value`, not one in `trailing`: `trailing` butts
     // straight up against the value, which is right for the "Cambiar" buttons
     // the other rows put there (they carry their own padding) and wrong for a

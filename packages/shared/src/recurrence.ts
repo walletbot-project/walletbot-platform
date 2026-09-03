@@ -8,6 +8,23 @@
  * why the form has to say so rather than quietly capping them.
  */
 
+/**
+ * How many occurrences of a series a client will read to work out "the 3rd of
+ * 12".
+ *
+ * Position and total are counted over the occurrences that *survive*, which
+ * cannot be derived from `recurrenceIndex`: a deleted occurrence keeps its
+ * index (the delete is logical, and the index is the projection key), so the
+ * highest index counts slots, not movements. Counting survivors means reading
+ * them, so the read is capped and a series past the cap shows how far it
+ * reaches instead — an `X/8700` was never the useful fact anyway.
+ *
+ * The cap is shared so both platforms fall back at the same size; making it
+ * exact and uncapped is what the aggregate in `docs/recurrency-design.md`
+ * §5.7 is for.
+ */
+export const SERIES_COUNT_CAP = 500
+
 export type RecurrenceFrequency =
     | 'daily'
     | 'weekly'

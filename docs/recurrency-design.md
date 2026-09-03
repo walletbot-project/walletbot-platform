@@ -652,3 +652,63 @@ borrar "este y los futuros" tiene que dejar cada ocurrencia exactamente como la
 dejaría borrarla sola —los tombstones por join incluidos, que son
 load-bearing porque el servidor no recibe cascada de un tombstone de
 transacción— y con el cuerpo duplicado eso duraba hasta el primer cambio.
+
+### 5.7. El `X/N` cuenta movimientos, no casilleros
+
+Con 5 mensuales, borrar el 2/5 dejaba a los demás diciendo `3/5`, `4/5`, `5/5`
+— cuando ya son cuatro movimientos y el tercero es el `2/4`.
+
+La causa: `recurrenceIndex` estaba haciendo **dos trabajos** que coinciden sólo
+mientras la serie no tenga agujeros.
+
+1. Es la **clave de proyección**: `occurrenceDateMs(ancla, frecuencia, índice)`.
+   El índice 3 *significa* "tres meses después del ancla".
+2. Se estaba usando además como **posición a mostrar** (`X = índice + 1`,
+   `N = índice_máximo + 1`).
+
+El borrado es lógico (`isArchived`), así que la fila borrada conserva su
+índice, el máximo no se mueve y el `N` sigue contando casilleros.
+
+**Y el índice no se puede renumerar.** Es load-bearing en cuatro lugares: la
+proyección de fechas, el relleno de huecos del materializador (que usa "el
+índice 1 ya existe" justamente para **no** recrear lo borrado), el
+`recurrenceIndex >= x` de "este y los futuros", y el `maxIndex + 1` del botón
+de ampliar. Renumerar reviviría movimientos borrados.
+
+Así que posición y total se cuentan sobre los **sobrevivientes**, aparte del
+índice.
+
+#### El costo, y por qué hay un tope
+
+Contar sobrevivientes obliga a mirar `isArchived` fila por fila: no hay señal
+libre que diga "esta serie tiene un agujero". Y `X/N` sólo se muestra para
+reglas con fecha de fin, que el usuario acota — "diario hasta 2050" son 8.700
+filas.
+
+Así que la lectura está **capeada** en `SERIES_COUNT_CAP` (500, compartido
+entre las dos plataformas para que caigan al fallback al mismo tamaño): se
+leen `cap + 1` casilleros por índice descendente y se filtran los archivados en
+memoria. Sin filtrar en la consulta a propósito — un `.take()` filtrado tendría
+que caminar por todos los borrados que se cruce, y así el costo es exactamente
+`cap + 1` documentos.
+
+Pasado el tope no hay `X/N`: el detalle muestra "hasta \<fecha>", igual que una
+regla abierta. Un `X/8700` nunca era el dato útil.
+
+#### Lo que quedaría por hacer
+
+Hacerlo exacto y sin tope es un agregado de Convex sobre `transactions`:
+namespace `${userId}:${recurrenceId}`, `sortKey` el índice y
+`sumValue: isArchived ? 0 : 1`. Sumar en vez de contar es lo que lo haría
+barato de mantener: los archivados aportan 0, así que la disciplina sería
+idéntica a la de los dos agregados que ya existen (`replace` al archivar, no
+`delete`). `N` sería la suma del namespace y `X` la suma acotada a
+`[0, mi índice]`, dos lecturas O(log n).
+
+No está hecho porque cuesta más que el tope: hay **once** sitios de
+mantenimiento (`transactions/helpers.ts`, `recurrences/internal.ts`,
+`v1/recurrences/mutations.ts`, `v1/accounts/internal.ts`, `v1/sync/mutations.ts`
+×3, `userDeletion/internal.ts`, el backfill), conviene encauzarlos todos por los
+helpers antes de agregar un tercero, y sobre todo **requiere un backfill**: un
+agregado sólo es correcto si toda fila existente entró en él, así que sería un
+paso de deploy y no de merge.

@@ -1,25 +1,35 @@
 import '../../database.dart';
+import '../recurrence.dart';
 
-/// A recurring rule together with how far its series currently reaches.
+/// A recurring rule together with where one of its occurrences sits in it.
 ///
-/// [count] and [coveredThrough] are read off the last occurrence rather than
-/// stored on the rule: occurrence indices run contiguously from 0, so the
-/// highest index *is* the count. Keeping them derived means the rows stay the
-/// only truth about how far a series got
+/// Nothing here is stored on the rule: it is all derived from the occurrence
+/// rows, which stay the only truth about how far a series got
 /// (`docs/recurrency-design.md` §5.2).
+///
+/// [position] and [total] count the occurrences that **survive**, and are
+/// deliberately not `recurrenceIndex + 1` and `maxIndex + 1`: a deleted
+/// occurrence keeps its index, because that index is the key its date is
+/// projected from and the marker that stops the materialiser recreating it.
+/// So the index counts slots, and the user counts movements.
 class RecurrenceSeries {
   const RecurrenceSeries({
     required this.rule,
-    required this.count,
+    required this.position,
+    required this.total,
     required this.coveredThrough,
   });
 
   final Recurrence rule;
 
-  /// Occurrences that exist. Zero only while the series is empty.
-  final int count;
+  /// This occurrence's rank among the survivors, or null when the series is
+  /// longer than [seriesCountCap] and was not counted.
+  final int? position;
 
-  /// The date of the last occurrence — how far the series goes. Null when
-  /// there are none.
+  /// Surviving occurrences, or null when the series is past the cap.
+  final int? total;
+
+  /// The date of the last surviving occurrence — how far the series goes.
+  /// Null when there are none.
   final DateTime? coveredThrough;
 }

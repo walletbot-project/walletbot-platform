@@ -39,18 +39,22 @@ String? recurrenceFrequencyLabel(
 
 /// What the series reaches, shown beside the cadence.
 ///
-/// A bounded rule says where [occurrenceIndex] sits in it ("3/12"): the total
-/// is knowable, so the position is the useful fact. An open-ended one has no
+/// A bounded rule says where this occurrence sits in it ("3/12"): the total is
+/// knowable, so the position is the useful fact. An open-ended one has no
 /// total to be a fraction of, so it says how far the movements that exist go
 /// instead.
-String? recurrenceReachLabel(
-  BuildContext context,
-  RecurrenceSeries series, {
-  required int? occurrenceIndex,
-}) {
-  if (series.rule.endDate != null) {
-    if (occurrenceIndex == null || series.count == 0) return null;
-    return context.l10n.seriesPosition(occurrenceIndex + 1, series.count);
+///
+/// Both numbers count the occurrences that survive, so deleting one renumbers
+/// the rest. A series too long to count cheaply falls back to the reach, the
+/// same as an open-ended one.
+String? recurrenceReachLabel(BuildContext context, RecurrenceSeries series) {
+  final position = series.position;
+  final total = series.total;
+  if (series.rule.endDate != null &&
+      position != null &&
+      total != null &&
+      total > 0) {
+    return context.l10n.seriesPosition(position, total);
   }
   final covered = series.coveredThrough;
   if (covered == null) return null;

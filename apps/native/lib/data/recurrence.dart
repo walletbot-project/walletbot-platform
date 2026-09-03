@@ -10,6 +10,21 @@
 /// the form has to say so rather than quietly capping them.
 library;
 
+/// How many occurrences of a series the app will read to work out "the 3rd of
+/// 12" — the Dart mirror of `SERIES_COUNT_CAP` in
+/// `packages/shared/src/recurrence.ts`.
+///
+/// Position and total are counted over the occurrences that *survive*, which
+/// cannot be derived from `recurrenceIndex`: a deleted occurrence keeps its
+/// index (the delete is logical, and the index is the projection key), so the
+/// highest index counts slots, not movements. Counting survivors means reading
+/// them, so the read is capped and a series past the cap shows how far it
+/// reaches instead.
+///
+/// Shared with web so both platforms fall back at the same size, even though
+/// SQLite could count a bigger series for free.
+const int seriesCountCap = 500;
+
 /// Mean Gregorian month, so a day count converts without drifting over years.
 const double _daysPerMonth = 365.2425 / 12;
 

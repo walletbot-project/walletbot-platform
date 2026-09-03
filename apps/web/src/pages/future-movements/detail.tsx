@@ -65,6 +65,7 @@ export function FutureMovementDetail({
     const categories = useQuery(api.v1.categories.queries.listActive)
     const series = useQuery(api.v1.recurrences.queries.get, {
         recurrenceId: movement.recurrenceId,
+        occurrenceIndex: movement.recurrenceIndex,
     })
 
     const updateOne = useMutation(api.v1.transactions.mutations.update)
@@ -124,7 +125,7 @@ export function FutureMovementDetail({
             : null
 
     const seriesReach = series
-        ? seriesReachLabel(series, movement.recurrenceIndex, t, (value) =>
+        ? seriesReachLabel(series, t, (value) =>
               formatNumericDate(value, formatLocale),
           )
         : null

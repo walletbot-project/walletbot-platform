@@ -51,46 +51,67 @@ class TransactionRepository extends RepositoryBase {
   ///
   /// Reactive to the series growing, so a top-up updates the reach shown in
   /// the detail without the screen having to ask again.
-  Stream<RecurrenceSeries?> watchSeries(String? recurrenceId) {
+  Stream<RecurrenceSeries?> watchSeries(
+    String? recurrenceId, {
+    int? occurrenceIndex,
+  }) {
     if (recurrenceId == null) return Stream.value(null);
     return combineLatest2(
       _ruleQuery(recurrenceId).watchSingleOrNull(),
-      _lastOccurrenceQuery(recurrenceId).watchSingleOrNull(),
-      _series,
+      _seriesSlotsQuery(recurrenceId).watch(),
+      (Recurrence? rule, List<Transaction> slots) =>
+          _series(rule, slots, occurrenceIndex),
     );
   }
 
   /// One-shot [watchSeries], for the screens that load their detail once
   /// rather than subscribing (the Activity detail's `Future.wait`).
-  Future<RecurrenceSeries?> seriesOf(String? recurrenceId) async {
+  Future<RecurrenceSeries?> seriesOf(
+    String? recurrenceId, {
+    int? occurrenceIndex,
+  }) async {
     if (recurrenceId == null) return null;
     final rule = await _ruleQuery(recurrenceId).getSingleOrNull();
-    final last = await _lastOccurrenceQuery(recurrenceId).getSingleOrNull();
-    return _series(rule, last);
+    final slots = await _seriesSlotsQuery(recurrenceId).get();
+    return _series(rule, slots, occurrenceIndex);
   }
 
   SimpleSelectStatement<$RecurrencesTable, Recurrence> _ruleQuery(String id) =>
       db.select(db.recurrences)
         ..where((r) => r.id.equals(id) & r.archived.equals(false));
 
-  /// Highest index first: indices run contiguously from 0, so this one row
-  /// carries both the count and the reach.
-  SimpleSelectStatement<$TransactionsTable, Transaction> _lastOccurrenceQuery(
+  /// The series newest-slot-first, one row past [seriesCountCap] so "did it
+  /// fit?" is answerable.
+  ///
+  /// Archived slots come back too and are filtered in Dart: that keeps the
+  /// read exactly `seriesCountCap + 1` rows instead of however many deleted
+  /// ones a filtered query would have had to walk past.
+  SimpleSelectStatement<$TransactionsTable, Transaction> _seriesSlotsQuery(
     String recurrenceId,
   ) => db.select(db.transactions)
     ..where((t) => t.recurrenceId.equals(recurrenceId))
     ..orderBy([(t) => OrderingTerm.desc(t.recurrenceIndex)])
-    ..limit(1);
+    ..limit(seriesCountCap + 1);
 
-  RecurrenceSeries? _series(Recurrence? rule, Transaction? last) {
+  RecurrenceSeries? _series(
+    Recurrence? rule,
+    List<Transaction> slots,
+    int? occurrenceIndex,
+  ) {
     if (rule == null) return null;
-    final index = last?.recurrenceIndex;
+    final counted = slots.length <= seriesCountCap;
+    final living = slots.where((t) => !t.archived).toList(growable: false);
     return RecurrenceSeries(
       rule: rule,
-      count: index == null ? 0 : index + 1,
-      coveredThrough: index == null || last == null
+      position: counted && occurrenceIndex != null
+          ? living
+                .where((t) => (t.recurrenceIndex ?? 0) <= occurrenceIndex)
+                .length
+          : null,
+      total: counted ? living.length : null,
+      coveredThrough: living.isEmpty
           ? null
-          : DateTime.fromMillisecondsSinceEpoch(last.date.toInt()),
+          : DateTime.fromMillisecondsSinceEpoch(living.first.date.toInt()),
     );
   }
 
