@@ -27,7 +27,7 @@ export const es = {
         languageLabel: 'Idioma',
         features: 'Funciones',
         download: 'Descargar',
-        getApp: 'Descargar la app',
+        requestAccess: 'Pedir acceso',
     },
 
     hero: {
@@ -96,6 +96,15 @@ export const es = {
                 title: 'Inicio a tu medida',
                 body: 'Armá el inicio de la app móvil con widgets: estadísticas, listas y gráficos de torta, barras o líneas. El asistente también puede armarlo por vos.',
             },
+            // Not shipped. The card is on the page anyway because it is
+            // labelled "próximamente" and styled as unavailable, the same
+            // treatment the App Store badge gets — a stated roadmap item, not
+            // a claim about what the app does today.
+            whatsapp: {
+                title: 'Registrá por WhatsApp',
+                body: 'Mandá un mensaje o un audio por WhatsApp y el gasto queda anotado, sin abrir la app.',
+                chip: 'Próximamente',
+            },
             // The filters card is hidden on the home page for now — saved
             // filters aren't shipped in the app yet. Kept so the card can be
             // re-enabled without rewriting the copy.
@@ -111,25 +120,57 @@ export const es = {
         },
     },
 
-    // The service is free of charge per T&C §2.
+    // The service is free of charge per T&C §2. The three surfaces sit at the
+    // same level even though only the web app is open: Android is a closed
+    // test and iOS is not submitted yet, so both stores route to the beta form.
     download: {
-        title: 'Descargala gratis',
-        subtitle: 'Hoy en Android. Muy pronto en iPhone.',
+        title: 'Probala gratis',
+        subtitle:
+            'La app web ya está abierta. Android está en beta cerrada y iPhone llega muy pronto.',
         android: {
-            lead: 'Disponible en',
+            lead: 'Beta cerrada en',
             name: 'Google Play',
         },
         ios: {
             lead: 'Próximamente en',
             name: 'App Store',
         },
+        web: {
+            lead: 'Beta abierta',
+            name: 'App web',
+        },
+    },
+
+    // Landing page for both store badges: the tester list for Android today,
+    // the launch list for iPhone later. The form itself is not built yet.
+    beta: {
+        meta: {
+            title: 'Wallet Bot — Pedí acceso a la beta',
+            description:
+                'Sumate a la beta cerrada de Wallet Bot en Android y enterate primero cuando salga la app de iPhone.',
+        },
+        chip: {
+            android: 'Android en beta cerrada',
+            ios: 'iPhone próximamente',
+        },
+        heading: 'Pedí acceso a la beta',
+        body: 'Android está en beta cerrada: dejanos tu mail y te sumamos a la lista de testers.',
+        formCta: {
+            title: 'Completá el formulario',
+            body: 'Son un par de preguntas. Te escribimos por mail cuando te sumemos a la lista.',
+        },
+        iosNote:
+            'Si tenés iPhone, completalo igual: usamos la misma lista para avisarte apenas la app esté disponible en el App Store.',
+        webNotice:
+            'No hace falta esperar: la app web está abierta para cualquiera.',
+        webCta: 'Abrir la app web',
+        backHome: 'Volver al inicio',
     },
 
     footer: {
         tagline: 'Gestor de gastos personales, conversacional y simple.',
         privacy: 'Política de Privacidad',
         terms: 'Términos y Condiciones',
-        webApp: 'App web (beta)',
         copyright: (p: { year: number }) => `© ${p.year} Wallet Bot`,
     },
 

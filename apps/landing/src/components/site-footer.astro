@@ -1,7 +1,6 @@
 ---
 import { getRelativeLocaleUrl } from 'astro:i18n'
 import { useTranslations } from '@/i18n'
-import { WEB_APP_URL } from '@/lib/links'
 
 const { locale, t } = useTranslations(Astro.currentLocale)
 
@@ -31,13 +30,6 @@ const year = new Date().getFullYear()
                     class="text-slate-300 underline-offset-4 hover:text-white hover:underline"
                 >
                     {t.footer.terms}
-                </a>
-                {/* The web app stays a quiet footer link — stores come first. */}
-                <a
-                    href={WEB_APP_URL}
-                    class="text-slate-500 underline-offset-4 hover:text-slate-300 hover:underline"
-                >
-                    {t.footer.webApp}
                 </a>
             </nav>
             <p class="text-slate-500">{t.footer.copyright({ year })}</p>

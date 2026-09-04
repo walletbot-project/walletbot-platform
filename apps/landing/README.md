@@ -9,6 +9,7 @@ served from `app.walletbot.live` (its own Pages project).
 | Route (per locale) | Source | Content |
 |---|---|---|
 | `/{en,es}/` | `src/components/home-page.astro` | Hero, feature grid, get-the-app links |
+| `/{en,es}/beta` | `src/components/beta-page.astro` | Beta access request — a card out to the Google Form |
 | `/{en,es}/privacy` | `src/components/legal-page.astro` | Renders `docs/legal/privacy-policy.{locale}.md` |
 | `/{en,es}/terms` | `src/components/legal-page.astro` | Renders `docs/legal/terms-and-conditions.{locale}.md` |
 
@@ -18,11 +19,28 @@ features that don't exist — the saved-filters card is commented out until that
 feature ships — and keep local-only wording scoped to *financial records*, per
 `docs/legal/README.md`.
 
-Store links are the primary CTA (hero badges, header button, closing section):
-Google Play points at the real `live.walletbot.app` listing URL (a placeholder
-until the listing goes live) and the App Store badge is "coming soon" (no
-link). The web app is deliberately downplayed — a single quiet footer link to
-`app.walletbot.live`. URLs live in `src/lib/links.ts`.
+The one card describing something unbuilt is WhatsApp, and it says so: dashed
+border, no brand color, a "coming soon" chip (`soonCard` / `soonIconChip` in
+`home-page.astro`). A roadmap item earns a place on the page only with that
+treatment. When it ships, move it onto `card` / `iconChip` and drop the chip.
+
+## Getting the app
+
+`src/components/store-badges.astro` renders the three ways in as one row of
+equal badges, in the hero and again, larger, in the closing section. Only the
+web app is actually open: it links straight to `app.walletbot.live`. Both store
+badges point at `/{locale}/beta` instead of a store, because the Android build
+is a **closed** test (access runs through the tester list) and iOS is not
+submitted yet. The header button asks for access too. URLs live in
+`src/lib/links.ts` — `PLAY_STORE_URL` is kept there, unlinked, for when the
+test opens.
+
+`/{locale}/beta` collects tester requests through a **Google Form**
+(`BETA_FORM_URL`), not a form of our own — the page is one big card out to it,
+plus the web app underneath as the way in that needs no waiting. Nothing on
+this site posts anything anywhere, which is why it can stay a plain static
+build. Unlike `/privacy` and `/terms` the page has no unprefixed alias, so
+anything linking to it has to carry a locale.
 
 ## Legal documents
 

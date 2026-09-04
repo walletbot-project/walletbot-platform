@@ -1,12 +1,16 @@
 ---
+import { getRelativeLocaleUrl } from 'astro:i18n'
 import { useTranslations } from '@/i18n'
-import { PLAY_STORE_URL } from '@/lib/links'
+import { WEB_APP_URL } from '@/lib/links'
 import Icon from './icon.astro'
 
 /**
- * Two-line store badges: Google Play linked, App Store coming soon. The
- * primary conversion element — shown in the hero and again, larger, in the
- * closing download section.
+ * The three ways to get Wallet Bot, side by side. Shown in the hero and again,
+ * larger, in the closing download section.
+ *
+ * Both store badges route to the beta form rather than a store: Android is a
+ * closed test (access runs through the tester list) and iOS is not submitted
+ * yet. Only the web app is open to anyone, so it links straight out.
  */
 type Props = {
     /** `hero`: left-aligned on desktop. `cta`: centered and larger. */
@@ -16,74 +20,90 @@ type Props = {
 const { variant = 'hero' } = Astro.props
 const large = variant === 'cta'
 
-const { t } = useTranslations(Astro.currentLocale)
+const { locale, t } = useTranslations(Astro.currentLocale)
+
+const beta = getRelativeLocaleUrl(locale, 'beta')
+
+// Android leads (brand tint), iOS is muted and dashed because there is nothing
+// to install yet, the web app sits between the two.
+const badges = [
+    {
+        href: beta,
+        icon: 'google-play',
+        copy: t.download.android,
+        tone: 'border-brand/40 bg-brand/10 hover:border-brand/70 hover:bg-brand/15 hover:shadow-[0_8px_30px_rgb(109_231_216/0.25)]',
+        iconTone: 'text-white',
+        leadTone: 'text-slate-300',
+        nameTone: 'text-white',
+    },
+    {
+        href: beta,
+        icon: 'apple',
+        copy: t.download.ios,
+        tone: 'border-dashed border-white/15 bg-white/[0.02] hover:border-white/30 hover:bg-white/5',
+        iconTone: 'text-slate-400',
+        leadTone: 'text-slate-500',
+        nameTone: 'text-slate-300',
+    },
+    {
+        href: WEB_APP_URL,
+        icon: 'monitor',
+        copy: t.download.web,
+        tone: 'border-white/15 bg-white/5 hover:border-white/30 hover:bg-white/[0.09]',
+        iconTone: 'text-white',
+        leadTone: 'text-slate-300',
+        nameTone: 'text-white',
+    },
+] as const
 ---
 
 <div
     class:list={[
-        'flex flex-wrap items-center justify-center gap-3',
-        variant === 'hero' && 'lg:justify-start',
-        large && 'gap-4',
+        'grid w-full gap-3 sm:grid-cols-3',
+        large ? 'max-w-3xl gap-4' : 'max-w-xl',
     ]}
 >
-    <a
-        href={PLAY_STORE_URL}
-        class:list={[
-            'group flex items-center rounded-xl border border-brand/40 bg-brand/10 transition-all hover:-translate-y-0.5 hover:border-brand/70 hover:bg-brand/15 hover:shadow-[0_8px_30px_rgb(109_231_216/0.25)]',
-            large ? 'gap-4 rounded-2xl px-7 py-4' : 'gap-3 px-4 py-2.5',
-        ]}
-    >
-        <Icon
-            name="google-play"
-            class:list={['text-white', large ? 'size-8' : 'size-6']}
-        />
-        <span class="text-left">
-            <span
+    {
+        badges.map((badge) => (
+            <a
+                href={badge.href}
                 class:list={[
-                    'block tracking-wide text-slate-300 uppercase',
-                    large ? 'text-[11px]' : 'text-[10px]',
+                    'group flex items-center border transition-all hover:-translate-y-0.5',
+                    large
+                        ? 'gap-4 rounded-2xl px-7 py-4'
+                        : 'gap-3 rounded-xl px-4 py-2.5',
+                    badge.tone,
                 ]}
             >
-                {t.download.android.lead}
-            </span>
-            <span
-                class:list={[
-                    'block leading-tight font-semibold text-white',
-                    large ? 'text-lg' : 'text-sm',
-                ]}
-            >
-                {t.download.android.name}
-            </span>
-        </span>
-    </a>
-
-    <div
-        class:list={[
-            'flex cursor-default items-center rounded-xl border border-white/10 border-dashed bg-white/[0.02] opacity-70',
-            large ? 'gap-4 rounded-2xl px-7 py-4' : 'gap-3 px-4 py-2.5',
-        ]}
-    >
-        <Icon
-            name="apple"
-            class:list={['text-slate-400', large ? 'size-8' : 'size-6']}
-        />
-        <span class="text-left">
-            <span
-                class:list={[
-                    'block tracking-wide text-slate-500 uppercase',
-                    large ? 'text-[11px]' : 'text-[10px]',
-                ]}
-            >
-                {t.download.ios.lead}
-            </span>
-            <span
-                class:list={[
-                    'block leading-tight font-semibold text-slate-300',
-                    large ? 'text-lg' : 'text-sm',
-                ]}
-            >
-                {t.download.ios.name}
-            </span>
-        </span>
-    </div>
+                <Icon
+                    name={badge.icon}
+                    class:list={[
+                        'shrink-0',
+                        badge.iconTone,
+                        large ? 'size-8' : 'size-6',
+                    ]}
+                />
+                <span class="text-left">
+                    <span
+                        class:list={[
+                            'block tracking-wide uppercase',
+                            badge.leadTone,
+                            large ? 'text-[11px]' : 'text-[10px]',
+                        ]}
+                    >
+                        {badge.copy.lead}
+                    </span>
+                    <span
+                        class:list={[
+                            'block leading-tight font-semibold',
+                            badge.nameTone,
+                            large ? 'text-lg' : 'text-sm',
+                        ]}
+                    >
+                        {badge.copy.name}
+                    </span>
+                </span>
+            </a>
+        ))
+    }
 </div>
