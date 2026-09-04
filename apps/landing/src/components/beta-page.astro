@@ -7,8 +7,9 @@ import { BETA_FORM_URL, WEB_APP_URL } from '@/lib/links'
 
 /**
  * Where both store badges land. The signup itself is a Google Form, so the
- * page's job is to hand the reader one obvious card to click; the web app is
- * offered below as the way in that needs no waiting.
+ * hero holds one filled card and nothing that competes with it. The web app
+ * gets its own quieter section further down, for readers who don't want to
+ * wait for a tester slot.
  */
 const { locale, t } = useTranslations(Astro.currentLocale)
 ---
@@ -54,26 +55,29 @@ const { locale, t } = useTranslations(Astro.currentLocale)
             <div class="flex w-full flex-col gap-4">
                 <a
                     href={BETA_FORM_URL}
-                    class="group flex w-full items-center gap-5 rounded-2xl border border-brand/40 bg-brand/10 px-6 py-7 text-left transition-all hover:-translate-y-0.5 hover:border-brand/70 hover:bg-brand/15 hover:shadow-[0_12px_40px_rgb(109_231_216/0.2)] sm:px-8"
+                    class="group flex w-full items-center gap-5 rounded-2xl bg-brand px-6 py-7 text-left shadow-[0_18px_50px_-12px_rgb(109_231_216/0.45)] ring-1 ring-brand/60 transition-all hover:-translate-y-0.5 hover:brightness-105 hover:shadow-[0_24px_60px_-10px_rgb(109_231_216/0.6)] sm:px-8"
                 >
                     <span
-                        class="flex size-12 shrink-0 items-center justify-center rounded-xl bg-brand/15 ring-1 ring-brand/25"
+                        class="flex size-12 shrink-0 items-center justify-center rounded-xl bg-slate-950/10 ring-1 ring-slate-950/10"
                     >
-                        <Icon name="clipboard-list" class="size-6 text-brand" />
+                        <Icon
+                            name="clipboard-list"
+                            class="size-6 text-slate-950"
+                        />
                     </span>
 
                     <span class="flex-1">
-                        <span class="block text-lg font-semibold text-white">
+                        <span class="block text-lg font-semibold text-slate-950">
                             {t.beta.formCta.title}
                         </span>
-                        <span class="mt-1 block text-sm text-slate-400">
+                        <span class="mt-1 block text-sm text-slate-900/70">
                             {t.beta.formCta.body}
                         </span>
                     </span>
 
                     <Icon
                         name="arrow-right"
-                        class="size-5 shrink-0 text-slate-400 transition-all group-hover:translate-x-1 group-hover:text-white"
+                        class="size-5 shrink-0 text-slate-950/60 transition-all group-hover:translate-x-1 group-hover:text-slate-950"
                     />
                 </a>
 
@@ -88,20 +92,32 @@ const { locale, t } = useTranslations(Astro.currentLocale)
                 </p>
             </div>
 
-            <div class="flex flex-col items-center gap-4">
-                <p class="text-sm text-slate-400">{t.beta.webNotice}</p>
-                <a
-                    href={WEB_APP_URL}
-                    class="flex items-center gap-2.5 rounded-full bg-white px-5 py-2.5 text-sm font-medium text-slate-950 transition-colors hover:bg-slate-200"
-                >
-                    <Icon name="monitor" class="size-4" />
-                    {t.beta.webCta}
-                </a>
-            </div>
+        </div>
+    </section>
+
+    {/* Deliberately quieter than the form card above: a plain outlined button,
+        so the beta signup stays the loudest thing on the page. */}
+    <section class="border-t border-white/10 bg-white/[0.02]">
+        <div
+            class="mx-auto flex w-full max-w-2xl flex-col items-center gap-3 px-6 py-16 text-center"
+        >
+            <h2 class="text-xl font-semibold tracking-tight text-white">
+                {t.beta.webHeading}
+            </h2>
+
+            <p class="text-sm text-balance text-slate-400">{t.beta.webNotice}</p>
+
+            <a
+                href={WEB_APP_URL}
+                class="mt-3 flex items-center gap-2.5 rounded-full border border-white/15 bg-white/5 px-5 py-2.5 text-sm font-medium text-slate-200 transition-colors hover:border-white/25 hover:bg-white/10 hover:text-white"
+            >
+                <Icon name="monitor" class="size-4" />
+                {t.beta.webCta}
+            </a>
 
             <a
                 href={getRelativeLocaleUrl(locale)}
-                class="text-sm text-slate-500 underline-offset-4 hover:text-white hover:underline"
+                class="mt-6 text-sm text-slate-500 underline-offset-4 hover:text-white hover:underline"
             >
                 ← {t.beta.backHome}
             </a>

@@ -21,10 +21,23 @@ export const en: Messages = {
     },
 
     hero: {
-        badge: 'Live voice mode',
+        liveLedger: {
+            label: 'Live voice mode, logging expenses',
+            amounts: [
+                '−$12.00',
+                '−$3.50',
+                '−$18.20',
+                '−$640.00',
+                '+$1,200.00',
+                '−$9.75',
+            ],
+        },
         headline: 'Say it. It’s already logged.',
-        subheadline:
-            'Wallet Bot is a personal expense tracker with a live voice mode: tell it what you spent and the assistant writes it down for you. No spreadsheets. No forms. Just a conversation.',
+        subheadline: {
+            lead: 'Wallet Bot is a',
+            highlight: 'personal expense tracker with a live voice mode',
+            rest: ': tell it what you spent and the assistant writes it down for you. No spreadsheets. No forms. Just a conversation.',
+        },
         ctaFeatures: 'See features',
     },
 
@@ -134,6 +147,7 @@ export const en: Messages = {
         },
         iosNote:
             'On iPhone? Fill it out anyway. We use the same list to let you know the moment the app lands on the App Store.',
+        webHeading: 'Or use it right now in your browser',
         webNotice: 'No need to wait: the web app is open to anyone.',
         webCta: 'Open the web app',
         backHome: 'Back to home',

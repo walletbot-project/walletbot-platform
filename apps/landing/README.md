@@ -139,6 +139,11 @@ tokens go in the `@theme` block in `src/styles/global.css`, which
 - The hero phone mockup (`src/components/phone-mockup.astro`) is a CSS-only
   illustration of the native voice screen; its copy lives in the `demo` catalog
   section.
+- The band between the hero and the stats strip
+  (`src/components/live-ledger.astro`) replaces a text badge: a listening mic
+  and waveform feed a tape of category icons, amounts and checks that scrolls
+  past, saying "live voice, logging expenses" without words. The amounts come from the `hero.liveLedger` catalog section because
+  their formatting is per locale; the sr-only label is the only other text.
 - Legal pages use `@tailwindcss/typography` (`prose prose-invert`), loaded with
   `@plugin` in `global.css`.
 

@@ -31,3 +31,29 @@
         transform: translateY(-12px);
     }
 }
+
+/* Hero balance line: strokes itself in on load, its fill fades up with it. */
+@keyframes draw {
+    from {
+        stroke-dashoffset: 1;
+    }
+    to {
+        stroke-dashoffset: 0;
+    }
+}
+
+@keyframes fade-in {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
+}
+
+/* Live-ledger tape: the list repeats, so -50% loops seamlessly. */
+@keyframes ticker {
+    to {
+        transform: translateX(-50%);
+    }
+}
