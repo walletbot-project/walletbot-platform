@@ -31,10 +31,28 @@ export const es = {
     },
 
     hero: {
-        badge: 'Modo de voz en vivo',
+        // Read by screen readers in place of the live-ledger pill; the amounts
+        // are the rows scrolling through it, formatted for this locale.
+        liveLedger: {
+            label: 'Modo de voz en vivo, registrando gastos',
+            amounts: [
+                '−$8.500',
+                '−$2.300',
+                '−$15.900',
+                '−$420.000',
+                '+$1.500.000',
+                '−$6.200',
+            ],
+        },
         headline: 'Hablá. Ya quedó registrado.',
-        subheadline:
-            'Wallet Bot es un gestor de gastos personales con modo de voz en vivo: contale qué gastaste y el asistente lo anota por vos. Sin planillas. Sin formularios. Solo una conversación.',
+        // Split so the middle part can be bolded. No part carries leading or
+        // trailing spaces; Astro drops the whitespace around an expression, so
+        // the markup puts the one space back explicitly.
+        subheadline: {
+            lead: 'Wallet Bot es un',
+            highlight: 'gestor de gastos personales con modo de voz en vivo',
+            rest: ': contale qué gastaste y el asistente lo anota por vos. Sin planillas. Sin formularios. Solo una conversación.',
+        },
         ctaFeatures: 'Ver funciones',
     },
 
@@ -161,6 +179,7 @@ export const es = {
         },
         iosNote:
             'Si tenés iPhone, completalo igual: usamos la misma lista para avisarte apenas la app esté disponible en el App Store.',
+        webHeading: 'O usala ahora mismo desde el navegador',
         webNotice:
             'No hace falta esperar: la app web está abierta para cualquiera.',
         webCta: 'Abrir la app web',

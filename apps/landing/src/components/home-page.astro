@@ -1,5 +1,6 @@
 ---
 import Icon from '@/components/icon.astro'
+import LiveLedger from '@/components/live-ledger.astro'
 import PhoneMockup from '@/components/phone-mockup.astro'
 import StoreBadges from '@/components/store-badges.astro'
 import { LOCALE_LABELS, useTranslations } from '@/i18n'
@@ -16,6 +17,48 @@ const CHART_BARS = [45, 70, 35, 85, 55, 75, 40]
 
 // Decorative waveform heights (px) for the voice card.
 const VOICE_WAVE = [14, 30, 22, 44, 28, 52, 36, 48, 24, 40, 18, 32]
+
+// Currency glyphs drifting in the hero margins. Classes are literal so
+// Tailwind picks them up; negative delays start each one mid-cycle so they
+// never bob in unison. Small screens keep only the corner ones.
+const HERO_GLYPHS = [
+    {
+        glyph: '$',
+        class: 'top-[7%] left-[3%] text-7xl text-white/[0.07] sm:text-8xl',
+        style: 'animation-duration:11s;animation-delay:-2s',
+    },
+    {
+        glyph: '€',
+        class: 'top-[40%] -left-2 hidden text-6xl text-brand/15 md:block',
+        style: 'animation-duration:13s;animation-delay:-7s',
+    },
+    {
+        glyph: '¥',
+        class: 'top-[10%] right-[5%] text-5xl text-white/[0.06]',
+        style: 'animation-duration:9s;animation-delay:-4s',
+    },
+    {
+        glyph: '£',
+        class: 'top-[50%] left-[40%] hidden text-4xl text-white/[0.07] lg:block',
+        style: 'animation-duration:12s;animation-delay:-9s',
+    },
+    {
+        glyph: 'R$',
+        class: 'top-[28%] right-[2%] hidden text-3xl tracking-tight text-brand/15 lg:block',
+        style: 'animation-duration:10s;animation-delay:-1s',
+    },
+    {
+        glyph: '₩',
+        class: 'top-[54%] right-[16%] hidden text-4xl text-white/[0.07] md:block',
+        style: 'animation-duration:14s;animation-delay:-5s',
+    },
+]
+
+// Rising balance line behind the hero: drawn once on load (motion-safe) and
+// fully visible from the start when animations are off, since pathLength=1
+// with dasharray 1 and the default dashoffset 0 is a complete stroke.
+const BALANCE_LINE =
+    'M0 340 C 90 336, 150 300, 240 292 S 400 262 480 240 S 640 176 720 168 S 900 118 990 92 S 1140 30 1200 22'
 
 // The four "most used" shortcuts from the app's account-creation screen; the
 // catalog has 52 currencies in total, hence the +48 chip.
@@ -64,19 +107,82 @@ const soonIconChip =
         >
         </div>
 
+        {/* Money layer: balance line, coin rings and drifting currency glyphs,
+            fading out under the same mask as the grid. */}
+        <div
+            class="pointer-events-none absolute inset-0 -z-10 select-none overflow-hidden [mask-image:radial-gradient(ellipse_80%_70%_at_50%_5%,black,transparent)]"
+            aria-hidden="true"
+        >
+            <svg
+                class="absolute inset-x-0 top-[14%] h-[58%] w-full text-brand"
+                viewBox="0 0 1200 400"
+                preserveAspectRatio="none"
+                fill="none"
+            >
+                <defs>
+                    <linearGradient id="hero-balance-fill" x1="0" x2="0" y1="0" y2="1">
+                        <stop offset="0" stop-color="currentColor" stop-opacity="0.09" />
+                        <stop offset="1" stop-color="currentColor" stop-opacity="0" />
+                    </linearGradient>
+                </defs>
+                <path
+                    d={`${BALANCE_LINE} V400 H0 Z`}
+                    fill="url(#hero-balance-fill)"
+                    class="motion-safe:animate-[fade-in_2.6s_ease-out_both]"
+                />
+                <path
+                    d={BALANCE_LINE}
+                    pathLength="1"
+                    stroke-dasharray="1"
+                    stroke="currentColor"
+                    stroke-opacity="0.35"
+                    stroke-width="1.5"
+                    stroke-linecap="round"
+                    vector-effect="non-scaling-stroke"
+                    class="motion-safe:animate-[draw_2.4s_ease-out_both]"
+                />
+            </svg>
+
+            <div
+                class="absolute -top-20 -left-20 size-64 rounded-full border border-white/[0.07] sm:size-80"
+            >
+                <div
+                    class="absolute inset-5 rounded-full border border-dashed border-white/[0.06] motion-safe:animate-[spin_120s_linear_infinite]"
+                >
+                </div>
+                <div class="absolute inset-12 rounded-full border border-white/[0.04]">
+                </div>
+            </div>
+            <div
+                class="absolute top-[48%] right-[5%] hidden size-28 rounded-full border border-brand/15 lg:block"
+            >
+                <div
+                    class="absolute inset-2.5 rounded-full border border-dashed border-brand/10 motion-safe:animate-[spin_80s_linear_infinite_reverse]"
+                >
+                </div>
+            </div>
+
+            {
+                HERO_GLYPHS.map(({ glyph, class: position, style }) => (
+                    <span
+                        class:list={[
+                            'absolute font-semibold tracking-tighter motion-safe:animate-[float_10s_ease-in-out_infinite]',
+                            position,
+                        ]}
+                        style={style}
+                    >
+                        {glyph}
+                    </span>
+                ))
+            }
+        </div>
+
         <div
             class="mx-auto grid w-full max-w-6xl items-center gap-16 px-6 pt-16 pb-24 sm:pt-24 lg:grid-cols-[1.1fr_0.9fr] lg:gap-8 lg:pt-28 lg:pb-32"
         >
             <div
                 class="flex flex-col items-center gap-7 text-center lg:items-start lg:text-left"
             >
-                <p
-                    class="flex items-center gap-2 rounded-full border border-brand/30 bg-brand/10 px-3.5 py-1.5 text-xs font-medium text-slate-200 shadow-[0_0_20px_rgb(109_231_216/0.15)]"
-                >
-                    <Icon name="mic" class="size-3.5 text-brand" />
-                    {t.hero.badge}
-                </p>
-
                 <h1
                     class="max-w-2xl bg-gradient-to-b from-white via-white to-slate-400 bg-clip-text text-5xl font-semibold tracking-tighter text-balance text-transparent sm:text-7xl lg:text-8xl"
                 >
@@ -84,7 +190,10 @@ const soonIconChip =
                 </h1>
 
                 <p class="max-w-xl text-lg text-pretty text-slate-400 sm:text-xl">
-                    {t.hero.subheadline}
+                    {t.hero.subheadline.lead}{' '}
+                    <strong class="font-semibold text-slate-200"
+                        >{t.hero.subheadline.highlight}</strong
+                    >{t.hero.subheadline.rest}
                 </p>
 
                 <StoreBadges />
@@ -105,6 +214,9 @@ const soonIconChip =
 
             <PhoneMockup />
         </div>
+
+        {/* Live ledger tape, then the stats strip. */}
+        <LiveLedger />
 
         {/* Stats strip. */}
         <div class="border-t border-white/10 bg-white/[0.02]">
