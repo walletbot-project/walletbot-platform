@@ -119,7 +119,7 @@ export const runAgent = async (
         /** Fallback only: the account's own language wins when it has one. */
         preferredLanguage: 'es' | 'en'
         // Identifies this turn's input. Supplying it makes the turn's writes
-        // idempotent under replay (R-039); omitting it keeps random ids, which
+        // idempotent under replay (R-040); omitting it keeps random ids, which
         // is right for callers that are never retried. See
         // `agent/idempotency.ts`.
         turnKey?: string

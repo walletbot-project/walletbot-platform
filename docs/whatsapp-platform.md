@@ -188,7 +188,7 @@ Set on **both** `dev:proficient-finch-671` and prod:
 | `WHATSAPP_APP_ID` | `2576911202751949` | Our own code |
 | `WHATSAPP_VERIFY_TOKEN` | 32-byte random hex | Webhook handshake |
 | `WHATSAPP_GRAPH_VERSION` | `v23.0` | Our own code |
-| `WHATSAPP_APP_SECRET` | 32-char app secret | Webhook signature verification (R-040) |
+| `WHATSAPP_APP_SECRET` | 32-char app secret | Webhook signature verification (R-041) |
 | `WHATSAPP_BUSINESS_NUMBER` | `5491123991858` | `wa.me` deep link in the account-linking flow |
 
 All nine are set on both `dev:proficient-finch-671` and prod.
@@ -202,7 +202,7 @@ the other (Part 6). It is the only optional variable here: with it unset,
 
 `WHATSAPP_ACCESS_TOKEN` and `WHATSAPP_TOKEN` deliberately hold the same value:
 Chat SDK auto-detects the former (see Part 9), our own helpers read the former.
-If you rotate the token, **rotate both, on both deployments** — see R-043.
+If you rotate the token, **rotate both, on both deployments** — see R-044.
 
 `WHATSAPP_APP_SECRET` comes from App Dashboard → Settings → Basic → App Secret →
 "Mostrar", which requires re-entering your Facebook password and is therefore the
@@ -791,7 +791,7 @@ Coalescing verified against the real database. See Part 12 for the test recipes.
 was received, HMAC-verified against **Meta's own signature**, enqueued, claimed,
 processed, and the conversation released to `idle`. The reply then failed with
 `131037` and was recorded in `whatsappOutboundMessages` with its error code —
-visibly, rather than vanishing, which is precisely what R-041's mitigation
+visibly, rather than vanishing, which is precisely what R-042's mitigation
 exists for.
 
 **Working end to end** (2026-08-17). On `+54 9 11 2399-1858`: a real message from
@@ -832,7 +832,7 @@ exercise settled that reading the SDK could not:
    going silent — but **a paid key is a prerequisite for real use**, not a
    nice-to-have.
 
-**Replayed turns no longer double-write** (2026-08-17). R-039 made an
+**Replayed turns no longer double-write** (2026-08-17). R-040 made an
 idempotency guard a precondition for giving the agent write tools. Two calls
 with the same `writeKey` return the same id with `duplicate: true`, and the
 account balance moves once. See Part 13.
@@ -902,17 +902,17 @@ version of the warnings above:
 
 | ID | Risk | Prob. | Impact |
 | --- | --- | --- | --- |
-| **R-039** | At-least-once turns duplicate **side effects** once the agent can write — **mitigated 2026-08-17** | Media | Alto |
-| **R-040** | The webhook is a public, unauthenticated ingress into the agent | Baja | Crítico |
-| **R-041** | The 24h window drops outbound silently | Alta | Medio |
-| **R-042** | `wa_id` is not "E.164 without the `+`" | Media | Medio |
-| **R-043** | Never-expiring token shared across dev and prod | Baja | Alto |
-| **R-044** | The link code is a bearer credential | Baja | Alto |
-| **R-045** | The agent writes finances **without prior confirmation** | Media | Medio |
-| **R-046** | The user's timezone is inferred from their country code | Media | Bajo |
-| **R-047** | Memories written from a chat change the agent on every other channel | Media | Medio |
+| **R-040** | At-least-once turns duplicate **side effects** once the agent can write — **mitigated 2026-08-17** | Media | Alto |
+| **R-041** | The webhook is a public, unauthenticated ingress into the agent | Baja | Crítico |
+| **R-042** | The 24h window drops outbound silently | Alta | Medio |
+| **R-043** | `wa_id` is not "E.164 without the `+`" | Media | Medio |
+| **R-044** | Never-expiring token shared across dev and prod | Baja | Alto |
+| **R-045** | The link code is a bearer credential | Baja | Alto |
+| **R-046** | The agent writes finances **without prior confirmation** | Media | Medio |
+| **R-047** | The user's timezone is inferred from their country code | Media | Bajo |
+| **R-048** | Memories written from a chat change the agent on every other channel | Media | Medio |
 
-**R-039 had a hard precondition, and it was met.** The turn claims a batch,
+**R-040 had a hard precondition, and it was met.** The turn claims a batch,
 replies, *then* marks it processed; if the action dies in between, the reaper
 requeues and the batch runs twice. While the agent only emitted text that cost a
 duplicate message — but the moment it got a tool that writes to `transactions`,
@@ -921,7 +921,7 @@ required an idempotency key before any write tool shipped, and
 `agent/idempotency.ts` is it: deterministic entity ids derived from the claimed
 row ids, so a retry is a no-op. See Part 13 § Replay safety.
 
-**R-045 is the one to watch now.** Voice shows the user the detected movement
+**R-046 is the one to watch now.** Voice shows the user the detected movement
 before saving; WhatsApp does not. The agent interprets a text message and writes
 in the same turn, so a misread amount is already in the database — and the
 confirmation the user reads is the model's sentence, not the database's. The
@@ -942,7 +942,7 @@ of their arguments, so the confirmation is at least built from real data.
    are deliberately out of scope — see Part 13 § Tool surface. **Add a paid
    Gemini key before real use**: the free tier allows 5 requests/min and one
    turn costs two to four.
-3. ~~Implement the R-039 idempotency key **before** the agent gets write
+3. ~~Implement the R-040 idempotency key **before** the agent gets write
    tools~~ — **done (2026-08-17)**, in the same change. `agent/idempotency.ts`
    derives each created entity's id from the claimed row ids by SHA-256, so a
    replay reuses the id and the create returns `{ok: true, duplicate: true}`
@@ -966,7 +966,7 @@ of their arguments, so the confirmation is at least built from real data.
    during the `131037` incident. We currently subscribe to `messages` only.
 10. **Store the user's timezone in `userSettings`** and have the native app
    write it. The agent currently infers it from the sender's country code
-   (R-046), which is wrong for travellers and for DST countries. The app
+   (R-047), which is wrong for travellers and for DST countries. The app
    already knows the real zone.
 11. Handle inbound **media**. Audio, images and documents are recognised but
    not downloaded: the agent is told "the user sent a `<type>` message, which I
@@ -974,7 +974,7 @@ of their arguments, so the confirmation is at least built from real data.
    the obvious next channel — the transcription path already exists for the
    live agent.
 12. Consider a "this is what I saved" turn summary built from the ids the
-   executor actually wrote, rather than from the model's own sentence (R-045).
+   executor actually wrote, rather than from the model's own sentence (R-046).
 
 ---
 
@@ -997,7 +997,7 @@ What actually exists in the backend, and how to test it.
 | `convex/agent/tools.ts` | `execute` — the server-side tool executor, one internal mutation per call |
 | `convex/agent/resolve.ts` | `idOrName` → entity, mirroring the native resolver |
 | `convex/agent/time.ts` | Offset-aware date parsing, so "hoy" means the user's today |
-| `convex/agent/idempotency.ts` | Deterministic entity ids, so a replayed turn writes nothing twice (R-039) |
+| `convex/agent/idempotency.ts` | Deterministic entity ids, so a replayed turn writes nothing twice (R-040) |
 | `convex/agent/prompt.ts` | The text-channel system instruction |
 | `convex/agent/toolset.ts` | Which tools the text agent may call, and which of them a feature flag gates |
 | `convex/agent/internal.ts` | `turnContext` — memories, default currency, language and flags, in one read |
@@ -1149,7 +1149,7 @@ popup blocker can eat the `wa.me` link, so both paths say so instead of failing
 quietly. The code stays selectable on screen either way.
 
 **Still missing:** there is no notification to the user when their account gets
-linked to a new number (R-044).
+linked to a new number (R-045).
 
 ### The rollout flag
 
@@ -1327,7 +1327,7 @@ timezone — the result is identical wherever the action runs. The offset comes
 from the sender's country code (`utcOffsetMinutesFor`), the same hard-coded
 table shape as the reply language, because a WhatsApp conversation carries no
 locale and the account stores no timezone. That inference is wrong for
-travellers and for DST countries; it is tracked as R-046, whose real fix is
+travellers and for DST countries; it is tracked as R-047, whose real fix is
 storing the timezone in `userSettings` from the native app.
 
 One trap worth naming: `Date.parse('2026-08-17T14:30')` resolves a **zoneless**
@@ -1337,7 +1337,7 @@ double-applies. The parser handles that form field by field instead. Two of the
 
 ### Replay safety
 
-A WhatsApp turn is at-least-once (R-039): if the action dies between sending
+A WhatsApp turn is at-least-once (R-040): if the action dies between sending
 and `finishBatch`, the reaper re-queues the batch and the agent runs again on
 the same input. With read-only tools that cost a repeated reply; with write
 tools it would cost a second expense.

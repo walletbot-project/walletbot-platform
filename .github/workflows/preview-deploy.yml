@@ -39,7 +39,7 @@ jobs:
   # meaningful single-push diff, so those always mark everything changed —
   # correct, since those are exactly the events that need to create things.
   changes:
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     if: |
       contains(github.event.pull_request.labels.*.name, 'create-staging-web') ||
       contains(github.event.pull_request.labels.*.name, 'create-staging-mobile')
@@ -90,7 +90,7 @@ jobs:
 
   web:
     needs: changes
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     if: |
       (contains(github.event.pull_request.labels.*.name, 'create-staging-web') ||
        contains(github.event.pull_request.labels.*.name, 'create-staging-mobile')) &&
@@ -189,7 +189,7 @@ jobs:
             _Use this stable branch-alias URL — per-commit `<hash>.pages.dev` URLs are not trusted by the backend and will CORS-fail. Remove the `create-staging-web` label to tear this down (it also comes down automatically if `create-staging-mobile` is removed and no longer present)._
 
   destroy-web:
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     if: |
       github.event.action == 'unlabeled' &&
       (github.event.label.name == 'create-staging-web' || github.event.label.name == 'create-staging-mobile') &&
@@ -265,7 +265,7 @@ jobs:
             🗑️ **Web staging preview removed**
 
   landing:
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     if: contains(github.event.pull_request.labels.*.name, 'create-staging-landing')
     permissions:
       contents: read
@@ -315,7 +315,7 @@ jobs:
             - **Landing**: ${{ steps.deploy.outputs.pages-deployment-alias-url }}
 
   destroy-landing:
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     if: github.event.action == 'unlabeled' && github.event.label.name == 'create-staging-landing'
     permissions:
       contents: read
@@ -353,7 +353,7 @@ jobs:
 
   mobile:
     needs: [web, changes]
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     if: |
       contains(github.event.pull_request.labels.*.name, 'create-staging-mobile') &&
       needs.changes.outputs.native == 'true' &&
@@ -497,7 +497,7 @@ jobs:
             Download it from the [workflow run artifacts](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) (requires a GitHub login). Remove the `create-staging-mobile` label to remove this build.
 
   destroy-mobile:
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     if: github.event.action == 'unlabeled' && github.event.label.name == 'create-staging-mobile'
     permissions:
       contents: read

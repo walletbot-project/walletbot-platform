@@ -232,6 +232,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
       child: _TelemetryStarter(
         child: Consumer<DisplaySettingsController>(
           builder: (context, settings, _) => MaterialApp(
+            debugShowCheckedModeBanner: false,
             locale: widget.locale ?? settings.locale,
             onGenerateTitle: (context) => context.l10n.appTitle,
             localizationsDelegates: AppLocalizations.localizationsDelegates,

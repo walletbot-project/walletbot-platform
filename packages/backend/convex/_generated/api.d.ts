@@ -132,6 +132,8 @@ import type * as v1_voice_sessions from "../v1/voice/sessions.js";
 import type * as v1_voice_utils from "../v1/voice/utils.js";
 import type * as v1_whatsapp_mutations from "../v1/whatsapp/mutations.js";
 import type * as v1_whatsapp_queries from "../v1/whatsapp/queries.js";
+import type * as voice_internal from "../voice/internal.js";
+import type * as voice_utils from "../voice/utils.js";
 import type * as whatsapp_helpers from "../whatsapp/helpers.js";
 import type * as whatsapp_http from "../whatsapp/http.js";
 import type * as whatsapp_internal from "../whatsapp/internal.js";
@@ -270,6 +272,8 @@ declare const fullApi: ApiFromModules<{
   "v1/voice/utils": typeof v1_voice_utils;
   "v1/whatsapp/mutations": typeof v1_whatsapp_mutations;
   "v1/whatsapp/queries": typeof v1_whatsapp_queries;
+  "voice/internal": typeof voice_internal;
+  "voice/utils": typeof voice_utils;
   "whatsapp/helpers": typeof whatsapp_helpers;
   "whatsapp/http": typeof whatsapp_http;
   "whatsapp/internal": typeof whatsapp_internal;
