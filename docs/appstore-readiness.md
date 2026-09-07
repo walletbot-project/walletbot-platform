@@ -205,18 +205,20 @@ Sharing has to name Google (audio streamed to the Gemini Live API) and Grafana
 Labs (OTLP telemetry export). Declare the account deletion URL
 `https://app.walletbot.live/delete-account`.
 
-### 12. `support@walletbot.live` cannot receive mail yet
+### 12. `support@walletbot.live` receives mail (resolved 2026-09-07)
 
-Legal required-item 2, open since 2026-08-06. The code side landed with WAL-185
-(the Resend inbound webhook at `/resend-inbound-webhook`, the `supportEmails`
-table, forwarding to `SUPPORT_FORWARD_TO`, env vars set in dev and prod), but
-per R-013 the domain's MX records still do not point at Resend and the
-`email.received` webhook has not been created in the dashboard. Until both are
-done, the address published in all four legal documents, and shown to users as
-`feedbackSupportEmail`, silently drops everything sent to it.
+Legal required-item 2, open since 2026-08-06, is closed. `walletbot.live` has
+an MX record pointing at `inbound-smtp.sa-east-1.amazonaws.com`, so the address
+published in all four legal documents, and shown to users as
+`feedbackSupportEmail`, reaches a human. Apple's support-contact requirement is
+satisfied.
 
-Apple requires a working support URL on the listing. A support address that
-swallows mail is worse than no address.
+Note for whoever reads the code next: inbound is **Amazon SES**, not the Resend
+path WAL-185 built. `/resend-inbound-webhook`, the `supportEmails` table and
+`SUPPORT_FORWARD_TO` are still in the codebase and are presumably no longer on
+the delivery path, so the in-app archive of support mail may sit empty while
+support itself works fine. Not a store blocker, but worth resolving one way or
+the other rather than leaving two half-wired inbound routes.
 
 ### 13. The 12-month voice retention cron (resolved 2026-09-06)
 
@@ -249,10 +251,12 @@ user gated out of sync has nowhere to go. Fill in the App Store link the moment
 the app has one, matching `ANDROID_PLAY_STORE_URL`, and flip the landing badge
 off "coming soon" at the same time.
 
-## Store listing assets: none present in the repo
+## Store listing assets
 
-- iPhone 6.9" screenshots, at least one, up to ten
-- iPad 13" screenshots if iPad support stays enabled (see blocker 5)
+Uploaded as of 2026-09-07: iPhone 6.9" and iPad 13" screenshots.
+
+Still to write:
+
 - subtitle, description, keywords, promotional text
 - support URL, marketing URL, privacy policy URL, copyright line
 - optional app preview video
