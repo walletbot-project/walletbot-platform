@@ -4,9 +4,15 @@ on:
   push:
     branches:
       - main
+  # Manual runs exist to debug `build-ios`, which otherwise only fires on a
+  # version bump, and a bump also cuts an Android release. That is a lot of
+  # collateral for retrying an Xcode error. A dispatch runs the iOS job
+  # alone: `deploy` and, through it, `build-android` are held back.
+  workflow_dispatch:
 
 jobs:
   deploy:
+    if: github.event_name == 'push'
     runs-on: blacksmith-4vcpu-ubuntu-2404
     steps:
       - uses: actions/checkout@v4
@@ -266,7 +272,14 @@ jobs:
   # no artifact-only path: an unreleased iOS build has nowhere to go.
   build-ios:
     needs: [deploy, version]
-    if: needs.version.outputs.bumped == 'true'
+    # `skipped` is the manual-dispatch case, where `deploy` never ran.
+    # Spelling the accepted results out rather than using `always()` keeps a
+    # *failed* backend deploy from shipping a client build against it.
+    if: >-
+      !cancelled()
+      && (needs.deploy.result == 'success' || needs.deploy.result == 'skipped')
+      && (github.event_name == 'workflow_dispatch'
+          || needs.version.outputs.bumped == 'true')
     runs-on: blacksmith-6vcpu-macos-15
     steps:
       - uses: actions/checkout@v4
