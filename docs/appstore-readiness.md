@@ -247,14 +247,28 @@ graphics and have no Apple equivalent.
 
 ## Release-process gaps
 
-- **iOS CI now exists, and has never run** (added 2026-09-06). `build-ios` in
-  `.github/workflows/prod-deploy.yml` installs the certificate into a
-  throwaway keychain, compiles with the production dart-defines, verifies the
-  bundled `.env`, archives with `xcodebuild -allowProvisioningUpdates` against
-  the App Store Connect API key, and uploads to TestFlight. It cannot run until
-  the four `IOS_*` / `APPSTORE_*` secrets exist, and nothing in it has been
-  exercised on a runner. Treat the first run as a debugging session, not a
-  release.
+- **iOS CI reaches the export step** (added 2026-09-06, exercised 2026-09-07).
+  Proven on a runner: Xcode 26.3 selected, Dart compile, certificate import,
+  the bundled-`.env` check, and `** ARCHIVE SUCCEEDED **`. `exportArchive`
+  then fails with `Cloud signing permission error` plus `No profiles for
+  'live.walletbot.app' were found`, because the App Store Connect API key must
+  carry the **Admin** role to do cloud signing. App Manager archives fine and
+  cannot export. The second message is the misleading one: it reads as a
+  missing profile and is a missing permission.
+- **What the job does.** `build-ios` in
+  `.github/workflows/prod-deploy.yml` selects the newest Xcode, installs the
+  certificate into a throwaway keychain, compiles with the production
+  dart-defines, verifies the bundled `.env`, archives with
+  `xcodebuild -allowProvisioningUpdates` against the App Store Connect API key,
+  exports, and uploads to TestFlight. `workflow_dispatch` runs it alone, with
+  `deploy` and `build-android` held back, so retrying it costs no version bump
+  and cuts no Android release.
+- **Two things it taught us, both worth keeping.** `connectivity_plus` 7.3.x
+  calls `NWPath.isUltraConstrained`, so the build needs the iOS 26 SDK and the
+  job has to select Xcode explicitly rather than take the image default. And
+  Release must not pin `CODE_SIGN_IDENTITY` while the target signs
+  automatically: `xcodebuild` refuses both at once with "Runner has conflicting
+  provisioning settings".
 - **Do the first upload by hand anyway.** Xcode's Organizer reports what a CI
   log summarizes: whether the profile carries Sign in with Apple, whether the
   entitlements match, and which ITMS warnings the binary earns. Automate the

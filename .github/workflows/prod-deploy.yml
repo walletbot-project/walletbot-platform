@@ -257,7 +257,13 @@ jobs:
   #                             key, exported from Keychain Access as .p12,
   #                             then `base64 -i cert.p12 | pbcopy`
   #   IOS_DIST_CERT_PASSWORD    the password set when exporting that .p12
-  #   APPSTORE_KEY_ID           App Store Connect API key id
+  #   APPSTORE_KEY_ID           App Store Connect API key id. The key MUST have
+  #                             the **Admin** role: cloud signing is the one
+  #                             thing App Manager cannot do, and exportArchive
+  #                             fails with "Cloud signing permission error /
+  #                             No profiles for 'live.walletbot.app' were
+  #                             found" — which reads like a missing profile,
+  #                             not a missing permission.
   #   APPSTORE_ISSUER_ID        App Store Connect API issuer id
   #   APPSTORE_PRIVATE_KEY      the whole AuthKey_<id>.p8 file, including the
   #                             BEGIN/END lines
