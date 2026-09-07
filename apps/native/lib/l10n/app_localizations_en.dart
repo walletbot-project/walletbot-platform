@@ -1763,4 +1763,79 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get reportResponseNoResponseYet =>
       'There is no response to report yet';
+
+  @override
+  String get whatsappTitle => 'WhatsApp';
+
+  @override
+  String get whatsappLocalAccountTitle => 'Not available for local accounts';
+
+  @override
+  String get whatsappLocalAccountBody =>
+      'This space only lives on your device, so there is no account to link. Sign in to sync it first.';
+
+  @override
+  String get whatsappLoadFailed => 'Could not load your WhatsApp status';
+
+  @override
+  String get whatsappUnavailableTitle => 'Not available yet';
+
+  @override
+  String get whatsappUnavailableBody =>
+      'WhatsApp is not configured on this server. Try again later.';
+
+  @override
+  String get whatsappNotConnectedTitle => 'Not connected';
+
+  @override
+  String get whatsappNotConnectedBody =>
+      'Link your number to record expenses by chatting with Gaston on WhatsApp.';
+
+  @override
+  String get whatsappConnect => 'Connect WhatsApp';
+
+  @override
+  String get whatsappCodeLabel => 'Your linking code';
+
+  @override
+  String get whatsappCodeExpiryHint =>
+      'Valid for 10 minutes, and can be used once.';
+
+  @override
+  String get whatsappOpenWhatsapp => 'Open WhatsApp';
+
+  @override
+  String get whatsappCopyCode => 'Copy code';
+
+  @override
+  String get whatsappCodeCopied => 'Code copied';
+
+  @override
+  String get whatsappCodeFailed => 'Could not create a linking code';
+
+  @override
+  String get whatsappOpenFailed =>
+      'Could not open WhatsApp. Copy the code and send it manually.';
+
+  @override
+  String get whatsappConnectedTitle => 'Connected';
+
+  @override
+  String get whatsappConnectedBody =>
+      'Write to Gaston on WhatsApp and it will record your movements.';
+
+  @override
+  String whatsappLinkedOn(String date) {
+    return 'Linked on $date';
+  }
+
+  @override
+  String get whatsappDisconnect => 'Disconnect';
+
+  @override
+  String get whatsappDisconnectConfirm =>
+      'Gaston will stop answering this number until you link it again.';
+
+  @override
+  String get whatsappDisconnectFailed => 'Could not disconnect the number';
 }

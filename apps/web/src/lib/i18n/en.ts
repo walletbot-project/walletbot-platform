@@ -55,6 +55,38 @@ export const en: Messages = {
         language: 'Language',
     },
 
+    whatsapp: {
+        title: 'WhatsApp',
+        subtitle: 'Record expenses by chatting with Gaston',
+        loadFailed: 'Could not load your WhatsApp status',
+        retry: 'Tap to try again',
+        unavailableTitle: 'Not available yet',
+        unavailableBody:
+            'WhatsApp is not enabled for your account. We will let you know when it is.',
+        notConnectedTitle: 'Not connected',
+        notConnectedBody:
+            'Link your number to record expenses by chatting with Gaston on WhatsApp.',
+        connect: 'Connect WhatsApp',
+        codeLabel: 'Your linking code',
+        codeExpiryHint: 'Valid for 10 minutes, and can be used once.',
+        openWhatsapp: 'Open WhatsApp',
+        copyCode: 'Copy code',
+        codeCopied: 'Code copied',
+        copyFailed: 'Could not copy the code. Select it and copy it by hand.',
+        codeFailed: 'Could not create a linking code',
+        openFailed:
+            'Could not open WhatsApp. Copy the code and send it manually.',
+        connectedTitle: 'Connected',
+        connectedBody:
+            'Write to Gaston on WhatsApp and it will record your movements.',
+        linkedOn: (p: { date: string }) => `Linked on ${p.date}`,
+        disconnect: 'Disconnect',
+        disconnectConfirm:
+            'Gaston will stop answering this number until you link it again.',
+        disconnectFailed: 'Could not disconnect the number',
+        disconnected: 'Number disconnected',
+    },
+
     feedback: {
         title: 'Send feedback',
         subtitle:

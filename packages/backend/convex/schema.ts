@@ -31,6 +31,13 @@ import { transactionTags } from './schema/transactionTags'
 import { deletedUsers, userDeletionRequests } from './schema/userDeletion'
 import { userSettings } from './schema/userSettings'
 import { voiceSessionEvents, voiceSessions } from './schema/voice'
+import {
+    whatsappConversations,
+    whatsappInboundMessages,
+    whatsappLinkCodes,
+    whatsappOutboundMessages,
+    whatsappWebhookRoutes,
+} from './schema/whatsapp'
 
 export default defineSchema({
     accounts,
@@ -64,4 +71,9 @@ export default defineSchema({
     userSettings,
     voiceSessionEvents,
     voiceSessions,
+    whatsappConversations,
+    whatsappInboundMessages,
+    whatsappLinkCodes,
+    whatsappOutboundMessages,
+    whatsappWebhookRoutes,
 })

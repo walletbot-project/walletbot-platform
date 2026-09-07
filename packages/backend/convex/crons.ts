@@ -188,4 +188,25 @@ crons.interval(
     {},
 )
 
+// A WhatsApp agent turn that dies mid-flight leaves its conversation stuck in
+// `processing`, and every later message then writes a row without starting a
+// turn — the user is silently ignored forever. This is the only thing that
+// recovers from that.
+crons.interval(
+    'release stuck whatsapp agent turns',
+    { minutes: 5 },
+    internal.whatsapp.internal.releaseStuckTurns,
+    {},
+)
+
+// Link codes are credentials for binding a phone number to an account. They
+// stop being useful minutes after they are minted, so the table is kept small
+// and stale rows are dropped rather than left lying around.
+crons.interval(
+    'purge expired whatsapp link codes',
+    { hours: 1 },
+    internal.whatsapp.internal.purgeExpiredLinkCodes,
+    {},
+)
+
 export default crons
