@@ -186,8 +186,30 @@ export const es = {
         backHome: 'Volver al inicio',
     },
 
+    // Apple wants a working support URL on the App Store listing
+    // (docs/appstore-readiness.md), and there is nothing to put behind it
+    // beyond the mailbox: no form, no ticket system.
+    support: {
+        meta: {
+            title: 'Wallet Bot — Soporte',
+            description:
+                'Escribinos por mail: la dirección de soporte de Wallet Bot.',
+        },
+        heading: 'Soporte',
+        body: 'Cualquier duda, problema con la app o pedido sobre tu cuenta, escribinos por mail.',
+        emailLabel: 'Escribinos a',
+        // Localizada a propósito, igual que `feedback.supportEmail` en
+        // apps/web y `feedbackSupportEmail` en la app nativa: el catálogo en
+        // inglés muestra support@. Las dos direcciones llegan a la misma
+        // bandeja, así que esto no es una frase para traducir libremente.
+        email: 'soporte@walletbot.live',
+        emailSubject: 'Soporte de Wallet Bot',
+        backHome: 'Volver al inicio',
+    },
+
     footer: {
         tagline: 'Gestor de gastos personales, conversacional y simple.',
+        support: 'Soporte',
         privacy: 'Política de Privacidad',
         terms: 'Términos y Condiciones',
         copyright: (p: { year: number }) => `© ${p.year} Wallet Bot`,

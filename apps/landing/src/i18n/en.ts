@@ -153,8 +153,23 @@ export const en: Messages = {
         backHome: 'Back to home',
     },
 
+    support: {
+        meta: {
+            title: 'Wallet Bot — Support',
+            description:
+                'Write to us by email: the Wallet Bot support address.',
+        },
+        heading: 'Support',
+        body: 'Any question, trouble with the app or request about your account, write to us by email.',
+        emailLabel: 'Write to us at',
+        email: 'support@walletbot.live',
+        emailSubject: 'Wallet Bot support',
+        backHome: 'Back to home',
+    },
+
     footer: {
         tagline: 'A simple, conversational personal expense tracker.',
+        support: 'Support',
         privacy: 'Privacy Policy',
         terms: 'Terms and Conditions',
         copyright: (p) => `© ${p.year} Wallet Bot`,

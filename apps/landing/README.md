@@ -10,6 +10,7 @@ served from `app.walletbot.live` (its own Pages project).
 |---|---|---|
 | `/{en,es}/` | `src/components/home-page.astro` | Hero, feature grid, get-the-app links |
 | `/{en,es}/beta` | `src/components/beta-page.astro` | Beta access request — a card out to the Google Form |
+| `/{en,es}/support` | `src/components/support-page.astro` | Support mailbox: one `mailto:` card, nothing else |
 | `/{en,es}/privacy` | `src/components/legal-page.astro` | Renders `docs/legal/privacy-policy.{locale}.md` |
 | `/{en,es}/terms` | `src/components/legal-page.astro` | Renders `docs/legal/terms-and-conditions.{locale}.md` |
 
