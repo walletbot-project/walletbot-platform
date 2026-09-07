@@ -12,7 +12,11 @@ export const voiceSessions = defineTable({
     updatedAt: v.int64(),
     endedAt: v.optional(v.int64()),
     endedExplicitly: v.boolean(),
-}).index('by_userId_and_sessionId', ['userId', 'sessionId'])
+})
+    .index('by_userId_and_sessionId', ['userId', 'sessionId'])
+    // Retention only. Walked oldest-first by the twelve-month cron, never by a
+    // client read.
+    .index('by_startedAt', ['startedAt'])
 
 export const voiceSessionEvents = defineTable({
     userId: v.string(),
@@ -34,3 +38,5 @@ export const voiceSessionEvents = defineTable({
         'sequence',
     ])
     .index('by_userId_and_eventId', ['userId', 'eventId'])
+    // Retention only, same as `voiceSessions.by_startedAt`.
+    .index('by_occurredAt', ['occurredAt'])

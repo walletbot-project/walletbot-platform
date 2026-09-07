@@ -2060,6 +2060,12 @@ abstract class AppLocalizations {
   /// **'Continue with Google'**
   String get continueWithGoogle;
 
+  /// No description provided for @continueWithApple.
+  ///
+  /// In en, this message translates to:
+  /// **'Continue with Apple'**
+  String get continueWithApple;
+
   /// No description provided for @continueLocally.
   ///
   /// In en, this message translates to:
@@ -2263,6 +2269,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Could not sign in with Google: {error}'**
   String googleSignInFailed(Object error);
+
+  /// No description provided for @appleSignInFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not sign in with Apple: {error}'**
+  String appleSignInFailed(Object error);
 
   /// No description provided for @close.
   ///

@@ -2,6 +2,7 @@ import { cronJobs } from 'convex/server'
 import { internal } from './_generated/api'
 import { AGENT_REPORT_RETENTION_MS } from './agentReports/utils'
 import { ORPHAN_ATTACHMENT_TTL_MS } from './feedback/utils'
+import { VOICE_RETENTION_MS } from './voice/utils'
 
 const crons = cronJobs()
 
@@ -151,6 +152,29 @@ crons.interval(
     {
         olderThanMs: AGENT_REPORT_RETENTION_MS,
         limit: 200,
+    },
+)
+
+// Voice history is the retention promise the privacy policy makes most
+// explicitly (§5, §9). Events run on a larger batch than sessions because one
+// session produces hundreds of them.
+crons.interval(
+    'delete old voice sessions',
+    { hours: 6 },
+    internal.voice.internal.deleteOldVoiceSessions,
+    {
+        olderThanMs: VOICE_RETENTION_MS,
+        limit: 200,
+    },
+)
+
+crons.interval(
+    'delete old voice session events',
+    { hours: 6 },
+    internal.voice.internal.deleteOldVoiceSessionEvents,
+    {
+        olderThanMs: VOICE_RETENTION_MS,
+        limit: 2000,
     },
 )
 

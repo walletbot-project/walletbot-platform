@@ -1110,6 +1110,9 @@ class AppLocalizationsEs extends AppLocalizations {
   String get continueWithGoogle => 'Continuar con Google';
 
   @override
+  String get continueWithApple => 'Continuar con Apple';
+
+  @override
   String get continueLocally => 'Continuar sin cuenta';
 
   @override
@@ -1238,6 +1241,11 @@ class AppLocalizationsEs extends AppLocalizations {
   @override
   String googleSignInFailed(Object error) {
     return 'No se pudo iniciar sesión con Google: $error';
+  }
+
+  @override
+  String appleSignInFailed(Object error) {
+    return 'No se pudo iniciar sesión con Apple: $error';
   }
 
   @override

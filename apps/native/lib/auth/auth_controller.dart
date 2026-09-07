@@ -1,15 +1,18 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math';
 
 import 'package:app/auth/account.dart';
 import 'package:app/config.dart';
 import 'package:app/convex/convex_client.dart';
 import 'package:app/database.dart';
 import 'package:app/legal/legal_acceptance_payload.dart';
+import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:http/http.dart' as http;
+import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 
 /// Owns the device's account list and the active Convex auth session.
 /// Token refresh scheduling is delegated to [ConvexClient.setAuth].
@@ -87,6 +90,45 @@ class AuthController extends ChangeNotifier {
     }
 
     final body = await _postJson('/auth/google', {'idToken': idToken});
+    return _saveRemoteAccountFromAuthResponse(
+      body,
+      rejectExisting: rejectExisting,
+    );
+  }
+
+  /// Sign in with Apple. iOS only — the login screen shows the button nowhere
+  /// else, and this would need `webAuthenticationOptions` (a Services ID and a
+  /// browser round trip) to work on Android.
+  ///
+  /// The nonce is generated here and travels two ways: Apple gets its SHA-256
+  /// digest and embeds that in `identityToken`, while the backend gets the raw
+  /// value and re-hashes it to compare. Sending the digest to both would hash
+  /// it twice and the token would fail verification.
+  ///
+  /// `givenName`/`familyName` are only ever populated on the user's FIRST
+  /// authorization of this app; every later sign-in returns them null and the
+  /// name already stored on the account stands.
+  Future<UserAccount> signInWithApple({bool rejectExisting = false}) async {
+    final rawNonce = _generateNonce();
+    final credential = await SignInWithApple.getAppleIDCredential(
+      scopes: const [
+        AppleIDAuthorizationScopes.email,
+        AppleIDAuthorizationScopes.fullName,
+      ],
+      nonce: sha256.convert(utf8.encode(rawNonce)).toString(),
+    );
+
+    final idToken = credential.identityToken;
+    if (idToken == null) {
+      throw StateError('Apple sign-in returned no identityToken');
+    }
+
+    final body = await _postJson('/auth/apple', {
+      'idToken': idToken,
+      'nonce': rawNonce,
+      if (credential.givenName != null) 'givenName': credential.givenName,
+      if (credential.familyName != null) 'familyName': credential.familyName,
+    });
     return _saveRemoteAccountFromAuthResponse(
       body,
       rejectExisting: rejectExisting,
@@ -486,6 +528,19 @@ class AuthController extends ChangeNotifier {
     });
     return write;
   }
+}
+
+const _nonceAlphabet =
+    '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz-._';
+
+/// A single-use value binding an Apple sign-in request to its response.
+/// `Random.secure()` because a guessable nonce is no nonce at all.
+String _generateNonce([int length = 32]) {
+  final random = Random.secure();
+  return List.generate(
+    length,
+    (_) => _nonceAlphabet[random.nextInt(_nonceAlphabet.length)],
+  ).join();
 }
 
 /// Thrown when the user tries to add an account that is already on the device.

@@ -121,6 +121,8 @@ import type * as v1_users_queries from "../v1/users/queries.js";
 import type * as v1_users_utils from "../v1/users/utils.js";
 import type * as v1_voice_sessions from "../v1/voice/sessions.js";
 import type * as v1_voice_utils from "../v1/voice/utils.js";
+import type * as voice_internal from "../voice/internal.js";
+import type * as voice_utils from "../voice/utils.js";
 
 import type {
   ApiFromModules,
@@ -242,6 +244,8 @@ declare const fullApi: ApiFromModules<{
   "v1/users/utils": typeof v1_users_utils;
   "v1/voice/sessions": typeof v1_voice_sessions;
   "v1/voice/utils": typeof v1_voice_utils;
+  "voice/internal": typeof voice_internal;
+  "voice/utils": typeof voice_utils;
 }>;
 
 /**

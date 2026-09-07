@@ -65,24 +65,28 @@ jobs:
           workingDirectory: apps/landing
           command: pages deploy dist --project-name=walletbot-landing --branch=main
 
-  build-android:
-    needs: deploy
+  # Both store jobs gate on the same verdict, so it is computed once. A second
+  # copy of this logic would eventually disagree with the first, and the two
+  # platforms would cut releases from different commits.
+  #
+  # A push that leaves apps/native/pubspec.yaml's `version:` untouched cuts no
+  # release. Android still uploads an APK as a workflow artifact; iOS does not
+  # run at all. The base is `github.event.before` rather than HEAD^ so a push
+  # carrying several commits is compared as a whole. A force-push or an
+  # unreadable base fails closed (no release), because a wrong "bumped" verdict
+  # publishes a release under a version users already have.
+  version:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write # required to publish/update the GitHub Release below
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      bumped: ${{ steps.version.outputs.bumped }}
     steps:
-      # Full history: the version check below reads pubspec.yaml at
+      # Full history: the version check reads pubspec.yaml at
       # `github.event.before`, which a shallow clone does not contain.
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      # A push that leaves apps/native/pubspec.yaml's `version:` untouched cuts
-      # no release. It only uploads an APK as a workflow artifact. The base is
-      # `github.event.before` rather than HEAD^ so a push carrying several
-      # commits is compared as a whole. A force-push or an unreadable base
-      # fails closed (no release), because a wrong "bumped" verdict publishes a
-      # release under a version users already have.
       - name: Detect app version bump
         id: version
         env:
@@ -113,6 +117,14 @@ jobs:
             printf 'version=%s\n' "$current"
             printf 'bumped=%s\n' "$bumped"
           } >> "$GITHUB_OUTPUT"
+
+  build-android:
+    needs: [deploy, version]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # required to publish/update the GitHub Release below
+    steps:
+      - uses: actions/checkout@v4
 
       # convex_flutter cross-compiles a Rust binary per target ABI, which is
       # heavy on disk. GitHub-hosted runners ship with a lot of preinstalled
@@ -183,7 +195,7 @@ jobs:
       # Dart AOT snapshot from scratch, which roughly doubles this job's build
       # time, so it is skipped entirely on pushes that publish no release.
       - name: Build production app bundle
-        if: steps.version.outputs.bumped == 'true'
+        if: needs.version.outputs.bumped == 'true'
         working-directory: apps/native
         env:
           CONVEX_URL: ${{ vars.VITE_CONVEX_URL }}
@@ -200,11 +212,11 @@ jobs:
       # the same version updates that release in place instead of failing on
       # the existing tag.
       - name: Publish production release
-        if: steps.version.outputs.bumped == 'true'
+        if: needs.version.outputs.bumped == 'true'
         working-directory: apps/native
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG: v${{ steps.version.outputs.version }}
+          TAG: v${{ needs.version.outputs.version }}
         run: |
           set -euo pipefail
           apk=build/app/outputs/flutter-apk/app-release.apk
@@ -223,10 +235,190 @@ jobs:
       # No version bump, so the build is still worth keeping as a signed APK
       # anyone can grab from the run page, without it looking like a release.
       - name: Upload APK artifact
-        if: steps.version.outputs.bumped != 'true'
+        if: needs.version.outputs.bumped != 'true'
         uses: actions/upload-artifact@v4
         with:
-          name: app-release-${{ steps.version.outputs.version }}-${{ github.sha }}
+          name: app-release-${{ needs.version.outputs.version }}-${{ github.sha }}
           path: apps/native/build/app/outputs/flutter-apk/app-release.apk
           if-no-files-found: error
           retention-days: 14
+
+  # Requires four secrets that do not exist yet. Until they do, this job fails
+  # at the signing step. docs/appstore-readiness.md § What you have to do walks
+  # through producing them.
+  #
+  #   IOS_DIST_CERT_P12_BASE64  Apple Distribution certificate and its private
+  #                             key, exported from Keychain Access as .p12,
+  #                             then `base64 -i cert.p12 | pbcopy`
+  #   IOS_DIST_CERT_PASSWORD    the password set when exporting that .p12
+  #   APPSTORE_KEY_ID           App Store Connect API key id
+  #   APPSTORE_ISSUER_ID        App Store Connect API issuer id
+  #   APPSTORE_PRIVATE_KEY      the whole AuthKey_<id>.p8 file, including the
+  #                             BEGIN/END lines
+  #
+  # No provisioning profile secret: xcodebuild fetches and renews the profile
+  # itself from the same API key, against the certificate imported below. One
+  # less credential to rotate, and no profile to re-upload when the App ID
+  # gains a capability.
+  #
+  # macOS runners bill at ten times the rate of Linux ones on a private repo,
+  # so unlike Android this job runs only when the version is bumped. There is
+  # no artifact-only path: an unreleased iOS build has nowhere to go.
+  build-ios:
+    needs: [deploy, version]
+    if: needs.version.outputs.bumped == 'true'
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: 3.41.6
+          cache: true
+
+      # Same reason as the Android job: .env is a declared Flutter asset, so
+      # whatever sits at that path ships inside the IPA. The placeholder keeps
+      # flutter_dotenv from throwing on a missing file while carrying nothing
+      # worth leaking. Real values arrive through --dart-define below.
+      - run: cp .env.example .env
+        working-directory: apps/native
+
+      - run: flutter pub get
+        working-directory: apps/native
+
+      # A throwaway keychain, unlocked for the life of the job. `codesign` can
+      # only read the private key after set-key-partition-list; without it the
+      # build stops on a UI prompt no one is there to answer.
+      - name: Import signing certificate
+        env:
+          CERT_P12_BASE64: ${{ secrets.IOS_DIST_CERT_P12_BASE64 }}
+          CERT_PASSWORD: ${{ secrets.IOS_DIST_CERT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          keychain_password=$(uuidgen)
+          printf '%s' "$CERT_P12_BASE64" | base64 -d > "$RUNNER_TEMP/cert.p12"
+
+          security create-keychain -p "$keychain_password" build.keychain
+          security default-keychain -s build.keychain
+          security unlock-keychain -p "$keychain_password" build.keychain
+          security set-keychain-settings -lut 21600 build.keychain
+          security import "$RUNNER_TEMP/cert.p12" -k build.keychain \
+            -P "$CERT_PASSWORD" -T /usr/bin/codesign -T /usr/bin/security
+          security set-key-partition-list -S apple-tool:,apple:,codesign: \
+            -s -k "$keychain_password" build.keychain > /dev/null
+          rm -f "$RUNNER_TEMP/cert.p12"
+
+          security find-identity -v -p codesigning build.keychain
+
+      - name: Install App Store Connect API key
+        env:
+          APPSTORE_KEY_ID: ${{ secrets.APPSTORE_KEY_ID }}
+          APPSTORE_PRIVATE_KEY: ${{ secrets.APPSTORE_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$HOME/.appstoreconnect/private_keys"
+          printf '%s' "$APPSTORE_PRIVATE_KEY" \
+            > "$HOME/.appstoreconnect/private_keys/AuthKey_${APPSTORE_KEY_ID}.p8"
+
+      # Two steps rather than `flutter build ipa`, because the archive needs
+      # -allowProvisioningUpdates and flutter does not pass xcodebuild flags
+      # through. The dart-defines still reach the archive: `flutter build ios`
+      # writes them into ios/Flutter/Generated.xcconfig, which the Xcode build
+      # phase reads.
+      #
+      # The build number comes from the run counter, not from pubspec. Apple
+      # refuses any CFBundleVersion it has already seen for this version
+      # string, including from builds it rejected, and github.run_number is the
+      # only number here that always moves forward.
+      - name: Compile the Dart build
+        working-directory: apps/native
+        env:
+          CONVEX_URL: ${{ vars.VITE_CONVEX_URL }}
+          CONVEX_SITE_URL: ${{ vars.VITE_CONVEX_SITE_URL }}
+          GOOGLE_SERVER_CLIENT_ID: ${{ secrets.GOOGLE_SERVER_CLIENT_ID }}
+        run: |
+          flutter build ios --release --no-codesign \
+            --build-number="${{ github.run_number }}" \
+            --dart-define=CONVEX_URL="$CONVEX_URL" \
+            --dart-define=CONVEX_SITE_URL="$CONVEX_SITE_URL" \
+            --dart-define=GOOGLE_SERVER_CLIENT_ID="$GOOGLE_SERVER_CLIENT_ID"
+
+      # The one check that cannot be left to review: confirm the .env that
+      # actually shipped is the committed placeholder and not somebody's local
+      # file. A developer building this by hand skips the copy step above and
+      # ships their dev deployment URL to Apple.
+      - name: Verify no real credentials shipped in the bundle
+        working-directory: apps/native
+        run: |
+          set -euo pipefail
+          bundled=$(find build -path '*/App.framework/flutter_assets/.env' -print -quit)
+          if [ -z "$bundled" ]; then
+            echo "::error::no bundled .env found; the asset declaration moved"
+            exit 1
+          fi
+          if ! cmp -s "$bundled" .env.example; then
+            echo "::error::the bundled .env differs from .env.example"
+            diff -u .env.example "$bundled" || true
+            exit 1
+          fi
+
+      - name: Archive and export
+        working-directory: apps/native/ios
+        env:
+          APPSTORE_KEY_ID: ${{ secrets.APPSTORE_KEY_ID }}
+          APPSTORE_ISSUER_ID: ${{ secrets.APPSTORE_ISSUER_ID }}
+        run: |
+          set -euo pipefail
+          auth=(
+            -allowProvisioningUpdates
+            -authenticationKeyPath "$HOME/.appstoreconnect/private_keys/AuthKey_${APPSTORE_KEY_ID}.p8"
+            -authenticationKeyID "$APPSTORE_KEY_ID"
+            -authenticationKeyIssuerID "$APPSTORE_ISSUER_ID"
+          )
+
+          cat > ExportOptions.plist <<'PLIST'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>method</key>
+            <string>app-store-connect</string>
+            <key>teamID</key>
+            <string>HN527U7W3J</string>
+            <key>signingStyle</key>
+            <string>automatic</string>
+            <key>uploadSymbols</key>
+            <true/>
+          </dict>
+          </plist>
+          PLIST
+
+          xcodebuild archive \
+            -workspace Runner.xcworkspace \
+            -scheme Runner \
+            -configuration Release \
+            -archivePath "$RUNNER_TEMP/Runner.xcarchive" \
+            "${auth[@]}"
+
+          xcodebuild -exportArchive \
+            -archivePath "$RUNNER_TEMP/Runner.xcarchive" \
+            -exportPath "$RUNNER_TEMP/ipa" \
+            -exportOptionsPlist ExportOptions.plist \
+            "${auth[@]}"
+
+      - name: Upload to TestFlight
+        env:
+          APPSTORE_KEY_ID: ${{ secrets.APPSTORE_KEY_ID }}
+          APPSTORE_ISSUER_ID: ${{ secrets.APPSTORE_ISSUER_ID }}
+        run: |
+          set -euo pipefail
+          ipa=$(find "$RUNNER_TEMP/ipa" -name '*.ipa' -print -quit)
+          xcrun altool --upload-app --type ios --file "$ipa" \
+            --apiKey "$APPSTORE_KEY_ID" --apiIssuer "$APPSTORE_ISSUER_ID"
+
+      - name: Clean up signing material
+        if: always()
+        run: |
+          security delete-keychain build.keychain || true
+          rm -rf "$HOME/.appstoreconnect/private_keys"

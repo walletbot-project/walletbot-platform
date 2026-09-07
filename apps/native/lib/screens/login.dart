@@ -9,12 +9,21 @@ import 'package:app/legal/legal_acceptance_payload.dart';
 import 'package:app/legal/legal_consent_checks.dart';
 import 'package:app/screens/auth_scaffold.dart';
 import 'package:app/telemetry/business_metrics.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:provider/provider.dart';
+import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 
 part 'login_email_flows.dart';
+
+/// Sign in with Apple ships on iOS only. Apple requires it there because the
+/// app offers another third-party sign-in (App Store Review Guideline 4.8);
+/// everywhere else the button would have to run Apple's browser flow, which
+/// needs a Services ID this project does not have.
+final bool _appleSignInAvailable =
+    !kIsWeb && defaultTargetPlatform == TargetPlatform.iOS;
 
 enum _EmailAuthMode { signIn, signUp }
 
@@ -281,6 +290,32 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
+  Future<void> _signInWithApple() async {
+    setState(() => _submitting = true);
+    final messenger = ScaffoldMessenger.of(context);
+    final l10n = context.l10n;
+    try {
+      await context.read<AuthController>().signInWithApple(
+        rejectExisting: widget.canDismiss,
+      );
+    } on SignInWithAppleAuthorizationException catch (e) {
+      // Dismissing Apple's sheet is a choice, not a failure.
+      if (e.code != AuthorizationErrorCode.canceled) {
+        messenger.showSnackBar(
+          SnackBar(content: Text(l10n.appleSignInFailed(e))),
+        );
+      }
+    } on AccountAlreadyAddedError {
+      messenger.showSnackBar(SnackBar(content: Text(l10n.accountAlreadyAdded)));
+    } catch (e) {
+      messenger.showSnackBar(
+        SnackBar(content: Text(l10n.appleSignInFailed(e))),
+      );
+    } finally {
+      if (mounted) setState(() => _submitting = false);
+    }
+  }
+
   Future<void> _signInWithGoogle() async {
     setState(() => _submitting = true);
     final messenger = ScaffoldMessenger.of(context);
@@ -359,6 +394,9 @@ class _LoginScreenState extends State<LoginScreen> {
                                     onModeChanged: (mode) =>
                                         setState(() => _emailMode = mode),
                                     onSubmit: _submitRemote,
+                                    onApple: _appleSignInAvailable
+                                        ? _signInWithApple
+                                        : null,
                                     onGoogle: _signInWithGoogle,
                                     onForgotPassword: _openForgotPassword,
                                   ),
@@ -626,6 +664,7 @@ class _RemoteLoginPanel extends StatelessWidget {
     required this.onAcceptedLegalChanged,
     required this.onModeChanged,
     required this.onSubmit,
+    required this.onApple,
     required this.onGoogle,
     required this.onForgotPassword,
   });
@@ -642,6 +681,11 @@ class _RemoteLoginPanel extends StatelessWidget {
   final TextEditingController passwordController;
   final ValueChanged<_EmailAuthMode> onModeChanged;
   final VoidCallback onSubmit;
+
+  /// Null off iOS: Sign in with Apple is wired for the native Apple sheet
+  /// only, and an Android build would need a Services ID and a browser round
+  /// trip that nothing here sets up.
+  final VoidCallback? onApple;
   final VoidCallback onGoogle;
   final VoidCallback onForgotPassword;
 
@@ -795,26 +839,70 @@ class _RemoteLoginPanel extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 18),
-          SizedBox(
-            height: 54,
-            child: OutlinedButton.icon(
-              onPressed: submitting ? null : onGoogle,
-              style: OutlinedButton.styleFrom(
-                backgroundColor: colors.surface,
-                side: BorderSide(color: colors.outlineVariant),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                ),
-              ),
+          // Apple first: guideline 4.8 wants Sign in with Apple no less
+          // prominent than the other third-party options on the screen.
+          if (onApple != null) ...[
+            _SocialSignInButton(
+              onPressed: submitting ? null : onApple,
+              // The Apple mark is a solid glyph with no colour of its own, so
+              // it takes the button's foreground the way a text label does.
               icon: SvgPicture.asset(
-                'assets/google.svg',
+                'assets/apple.svg',
                 width: 20,
                 height: 20,
+                colorFilter: ColorFilter.mode(
+                  colors.onSurface,
+                  BlendMode.srcIn,
+                ),
               ),
-              label: Text(context.l10n.continueWithGoogle),
+              label: context.l10n.continueWithApple,
             ),
+            const SizedBox(height: 12),
+          ],
+          _SocialSignInButton(
+            onPressed: submitting ? null : onGoogle,
+            icon: SvgPicture.asset(
+              'assets/google.svg',
+              width: 20,
+              height: 20,
+            ),
+            label: context.l10n.continueWithGoogle,
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// One identity provider, styled the same for every provider so none reads as
+/// the preferred one.
+class _SocialSignInButton extends StatelessWidget {
+  const _SocialSignInButton({
+    required this.onPressed,
+    required this.icon,
+    required this.label,
+  });
+
+  final VoidCallback? onPressed;
+  final Widget icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return SizedBox(
+      height: 54,
+      child: OutlinedButton.icon(
+        onPressed: onPressed,
+        style: OutlinedButton.styleFrom(
+          backgroundColor: colors.surface,
+          side: BorderSide(color: colors.outlineVariant),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+        ),
+        icon: icon,
+        label: Text(label),
       ),
     );
   }

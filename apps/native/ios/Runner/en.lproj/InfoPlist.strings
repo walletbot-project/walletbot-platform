@@ -1,2 +1,4 @@
 "CFBundleDisplayName" = "Wallet Bot";
 "NSMicrophoneUsageDescription" = "Wallet Bot uses the microphone to record transactions by voice.";
+"NSPhotoLibraryUsageDescription" = "Wallet Bot uses your photos to attach an image to a support request.";
+"NSCameraUsageDescription" = "Wallet Bot uses the camera to attach a photo to a support request.";
