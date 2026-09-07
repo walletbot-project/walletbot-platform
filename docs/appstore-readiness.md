@@ -153,6 +153,20 @@ fails on the reviewer's iPhone that is a guideline 2.1 rejection, and the
 feedback loop is days long. A device pass before the first upload is worth more
 than everything else on this list.
 
+### 10. `MinimumOSVersion` is 13.0, and Apple stops accepting that in 2027
+
+The only warning on the successful upload:
+
+> MinimumOSVersion too low. This app has a MinimumOSVersion of 13.0. Starting
+> in Spring 2027, all iOS apps must have a MinimumOSVersion of 15.0 or later in
+> order to be uploaded to App Store Connect or submitted for distribution.
+> (90068)
+
+Not blocking today. It is a one-line change (`IPHONEOS_DEPLOYMENT_TARGET` in
+all three configurations, currently 13.0) but it is a product decision, because
+it drops whoever is still on iOS 13 and 14. Worth pairing with the
+`file_picker` 12 upgrade in blocker 3, which needs iOS 14 as its floor anyway.
+
 ### 9. No crash reporting
 
 No Crashlytics, no Sentry, no `FlutterError.onError` handler anywhere in
@@ -247,14 +261,12 @@ graphics and have no Apple equivalent.
 
 ## Release-process gaps
 
-- **iOS CI reaches the export step** (added 2026-09-06, exercised 2026-09-07).
-  Proven on a runner: Xcode 26.3 selected, Dart compile, certificate import,
-  the bundled-`.env` check, and `** ARCHIVE SUCCEEDED **`. `exportArchive`
-  then fails with `Cloud signing permission error` plus `No profiles for
-  'live.walletbot.app' were found`, because the App Store Connect API key must
-  carry the **Admin** role to do cloud signing. App Manager archives fine and
-  cannot export. The second message is the misleading one: it reads as a
-  missing profile and is a missing permission.
+- **iOS CI works end to end** (added 2026-09-06, green 2026-09-07). Build
+  `0.3.1` (74) went from a clean checkout to `UPLOAD SUCCEEDED with no errors,
+  1 warning` on a `blacksmith-6vcpu-macos-15` runner with Xcode 26.3, 27.6 MB
+  IPA, delivery UUID `905bfd23-c447-4e6e-a56d-1f87008a16eb`. No ITMS
+  purpose-string complaints, which is the `Info.plist` work in blocker 3 doing
+  its job. The one server warning is the deployment target, below.
 - **What the job does.** `build-ios` in
   `.github/workflows/prod-deploy.yml` selects the newest Xcode, installs the
   certificate into a throwaway keychain, compiles with the production
@@ -269,10 +281,17 @@ graphics and have no Apple equivalent.
   Release must not pin `CODE_SIGN_IDENTITY` while the target signs
   automatically: `xcodebuild` refuses both at once with "Runner has conflicting
   provisioning settings".
-- **Do the first upload by hand anyway.** Xcode's Organizer reports what a CI
-  log summarizes: whether the profile carries Sign in with Apple, whether the
-  entitlements match, and which ITMS warnings the binary earns. Automate the
-  second upload.
+- **Three things broke on the way there, all now fixed.** Worth keeping,
+  because each cost a run: `connectivity_plus` 7.3.x calls
+  `NWPath.isUltraConstrained`, so the build needs the iOS 26 SDK and the job
+  has to select Xcode instead of taking the image default. Release must not pin
+  `CODE_SIGN_IDENTITY` while the target signs automatically, or `xcodebuild`
+  refuses both at once. And the App Store Connect API key must carry **Admin**,
+  because cloud signing is the one thing App Manager cannot do — reported as
+  `Cloud signing permission error` plus `No profiles for 'live.walletbot.app'
+  were found`, which sends you hunting for a profile instead of a permission. A
+  key's access level cannot be edited after creation; revoke and make a new
+  one.
 - **The version gate is now shared** (changed 2026-09-06). The bump detection
   moved out of `build-android` into its own `version` job, because both store
   jobs must agree on what counts as a release and two copies of that shell
@@ -332,8 +351,9 @@ graphics and have no Apple equivalent.
 
 ## Not verified in this audit
 
-- Whether an App Store Connect record, an Apple Distribution certificate or an
-  App Store Connect API key exist outside this machine.
+- ~~Whether an App Store Connect record, an Apple Distribution certificate or
+  an App Store Connect API key exist~~ — all three exist as of 2026-09-07, and
+  CI has used them to deliver a build.
 - Whether the sending domain for transactional email is registered with Apple's
   Private Email Relay. `apps/native/README.md` documents why it must be:
   password resets to `@privaterelay.appleid.com` users are silently dropped
