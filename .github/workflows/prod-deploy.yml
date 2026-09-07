@@ -7,7 +7,7 @@ on:
 
 jobs:
   deploy:
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     steps:
       - uses: actions/checkout@v4
 
@@ -76,7 +76,7 @@ jobs:
   # unreadable base fails closed (no release), because a wrong "bumped" verdict
   # publishes a release under a version users already have.
   version:
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     outputs:
       version: ${{ steps.version.outputs.version }}
       bumped: ${{ steps.version.outputs.bumped }}
@@ -120,7 +120,7 @@ jobs:
 
   build-android:
     needs: [deploy, version]
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     permissions:
       contents: write # required to publish/update the GitHub Release below
     steps:
@@ -267,7 +267,7 @@ jobs:
   build-ios:
     needs: [deploy, version]
     if: needs.version.outputs.bumped == 'true'
-    runs-on: macos-latest
+    runs-on: blacksmith-6vcpu-macos-15
     steps:
       - uses: actions/checkout@v4
 
