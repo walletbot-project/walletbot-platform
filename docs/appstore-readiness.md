@@ -153,19 +153,22 @@ fails on the reviewer's iPhone that is a guideline 2.1 rejection, and the
 feedback loop is days long. A device pass before the first upload is worth more
 than everything else on this list.
 
-### 10. `MinimumOSVersion` is 13.0, and Apple stops accepting that in 2027
+### 10. `MinimumOSVersion` was 13.0 (resolved 2026-09-07)
 
-The only warning on the successful upload:
+Build 74 uploaded with one warning, ITMS-90068: Apple stops accepting anything
+below 15.0 in Spring 2027. The floor is now 15.0 in all three configurations,
+and the Podfile declares the same value instead of leaving it commented out, so
+CocoaPods and the Xcode project cannot drift.
 
-> MinimumOSVersion too low. This app has a MinimumOSVersion of 13.0. Starting
-> in Spring 2027, all iOS apps must have a MinimumOSVersion of 15.0 or later in
-> order to be uploaded to App Store Connect or submitted for distribution.
-> (90068)
+This cost nothing. iOS 15 runs on every device iOS 13 did, iPhone 6s and later
+plus the 7th-generation iPod touch; the device list did not shrink until
+iOS 16. So the floor excludes no hardware, only someone who owns a supported
+phone and never updated it, on an app that has shipped to nobody. Build 76
+(`0.3.2`) uploaded with **no warnings at all**.
 
-Not blocking today. It is a one-line change (`IPHONEOS_DEPLOYMENT_TARGET` in
-all three configurations, currently 13.0) but it is a product decision, because
-it drops whoever is still on iOS 13 and 14. Worth pairing with the
-`file_picker` 12 upgrade in blocker 3, which needs iOS 14 as its floor anyway.
+It also clears half of blocker 3: `file_picker` 12 needs iOS 14 as its floor,
+so only the `package_info_plus` / `win32` conflict still pins us to 11.x and
+its photo and camera purpose strings.
 
 ### 9. No crash reporting
 
