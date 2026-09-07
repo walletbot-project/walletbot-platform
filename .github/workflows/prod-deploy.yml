@@ -271,6 +271,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # connectivity_plus 7.3.x calls `NWPath.isUltraConstrained`, which only
+      # exists in the iOS 26 SDK, so the build needs Xcode 26 or newer. Images
+      # ship several Xcodes and default to an older one, hence the explicit
+      # select. The listing stays in the log because "which Xcode built this"
+      # is the first question every signing or SDK failure raises.
+      - name: Select the newest Xcode
+        run: |
+          set -euo pipefail
+          ls -d /Applications/Xcode*.app
+          newest=$(ls -d /Applications/Xcode*.app | sort -V | tail -n1)
+          sudo xcode-select -s "$newest/Contents/Developer"
+          xcodebuild -version
+
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
