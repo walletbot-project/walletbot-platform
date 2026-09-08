@@ -6,19 +6,43 @@
  * Design tokens go in an `@theme` block — each one becomes both a CSS custom
  * property and a utility class (e.g. `--color-brand` → `bg-brand`/`text-brand`).
  *
- * `--color-brand` is the native app's Material seed color
- * (apps/native/lib/main.dart). It is too light for text — use it only for
- * accents and tinted backgrounds, mirroring the repo-wide rule.
+ * The palette is the app's own Material scheme, not a second set invented for
+ * the site: every value below is copied from `apps/web/src/styles/m3-theme.css`
+ * (light), which Flutter derives from the seed in `apps/native/lib/main.dart`.
+ *
+ * `--color-brand` (primaryContainer) is the bright turquoise. It is too light
+ * for text on a light surface — 1.5:1 on `--color-surface` — so it is only ever
+ * a fill or a tint. `--color-brand-ink` (primary) is the readable one at 6.2:1,
+ * and is what every brand-coloured glyph and label uses.
  */
 @theme {
     --font-sans: "Inter Variable", ui-sans-serif, system-ui, sans-serif;
-    --color-brand: #6de7d8;
+
+    /* Brand */
+    --color-brand: #6de7d8; /* primaryContainer — fills and tints only */
+    --color-brand-ink: #006a61; /* primary — text and icons, 6.19:1 */
+    --color-brand-on: #00675e; /* onPrimaryContainer — text on a brand fill */
+    --color-brand-tint: #dff5f1;
+    --color-brand-line: #a8ddd5;
+
+    /* Accent — tertiaryContainer, the palette's second colour. */
+    --color-amber: #ffcb73;
+    --color-amber-ink: #7d5704;
+
+    /* Surfaces and ink */
+    --color-surface: #f5fbf8; /* surface — mint-tinted, not grey */
+    --color-panel: #ffffff; /* surfaceContainerLowest */
+    --color-panel-alt: #eff5f2; /* surfaceContainerLow */
+    --color-ink: #171d1c; /* onSurface */
+    --color-ink-soft: #3d4947; /* onSurfaceVariant — 7.4:1, passes AA */
+    --color-line: #dbe5e2;
+    --color-line-strong: #b9c8c4;
 }
 
-/* Mint selection so highlighted text stays on-brand on the dark theme. */
+/* Mint selection, readable against the light surface. */
 ::selection {
-    background-color: rgb(109 231 216 / 0.3);
-    color: white;
+    background-color: rgb(109 231 216 / 0.45);
+    color: #171d1c;
 }
 
 /* Gentle vertical drift for the hero phone mockup (motion-safe only). */
@@ -51,7 +75,7 @@
     }
 }
 
-/* Live-ledger tape: the list repeats, so -50% loops seamlessly. */
+/* Quote tape: the list repeats, so -50% loops seamlessly. */
 @keyframes ticker {
     to {
         transform: translateX(-50%);

@@ -1,96 +1,69 @@
 ---
 import { useTranslations } from '@/i18n'
-import Icon from './icon.astro'
 
 /**
- * Wordless band under the hero: a listening mic feeding a tape of ledger
- * entries that scrolls past like a receipt printing out, each one already
- * ticked. The only text is the amounts, which come from the catalog because
- * their formatting is per locale, plus the sr-only label.
+ * The band under the hero. It used to be a mic feeding a tape of invented
+ * amounts — money moving, carrying no information. It now carries the one
+ * thing the page can actually prove: what people say about tracking expenses
+ * today.
+ *
+ * The fixed chip is not decoration. Unattributed quotes sitting next to a
+ * product read as reviews *of the product*, and these are complaints about the
+ * status quo — without the frame, "I quit after a week" looks like a review of
+ * Wallet Bot. The chip is what makes them the problem instead.
+ *
+ * There is no mic and no waveform here on purpose: a listening indicator next
+ * to people complaining about manual entry reads as the app recording
+ * complaints.
  */
 const { t } = useTranslations(Astro.currentLocale)
 
-// Waveform bar heights (px), staggered like the phone mockup's.
-const WAVE = [10, 22, 15, 28, 12, 20]
-
-// One category icon per catalog amount, cycled if the lists ever differ.
-const LEDGER_ICONS = [
-    'shopping-cart',
-    'coffee',
-    'car',
-    'house',
-    'banknote',
-    'utensils',
-] as const
-
-const rows = t.hero.liveLedger.amounts.map((amount, index) => ({
-    amount,
-    icon: LEDGER_ICONS[index % LEDGER_ICONS.length],
-    income: amount.startsWith('+'),
-}))
-
 // Four copies so one half of the tape is wider than any viewport, which is
 // what lets the -50% translate loop without a gap.
-const loop = [...rows, ...rows, ...rows, ...rows]
+const loop = [
+    ...t.hero.quoteTape.quotes,
+    ...t.hero.quoteTape.quotes,
+    ...t.hero.quoteTape.quotes,
+    ...t.hero.quoteTape.quotes,
+]
 ---
 
-<div class="border-t border-white/10 bg-white/[0.02]">
+<div class="border-t border-line bg-panel-alt">
     <div
-        class="mx-auto flex w-full max-w-6xl items-center gap-5 px-6 py-4 sm:gap-8"
+        class="mx-auto flex w-full max-w-6xl flex-col items-start gap-3 px-6 py-4 sm:flex-row sm:items-center sm:gap-8"
     >
-        <span class="sr-only">{t.hero.liveLedger.label}</span>
+        <span class="sr-only">{t.hero.quoteTape.label}</span>
 
-        <div class="flex shrink-0 items-center gap-3" aria-hidden="true">
-            <span
-                class="relative flex size-11 items-center justify-center rounded-full bg-brand/15 ring-1 ring-brand/30"
-            >
-                <Icon name="mic" class="size-5 text-brand" />
-                <span class="absolute top-0 right-0 flex size-2.5">
-                    <span
-                        class="absolute inline-flex h-full w-full animate-ping rounded-full bg-brand opacity-75"
-                    >
-                    </span>
-                    <span
-                        class="relative inline-flex size-2.5 rounded-full bg-brand"
-                    >
-                    </span>
-                </span>
-            </span>
-
-            <span class="flex items-center gap-1">
-                {
-                    WAVE.map((height, index) => (
-                        <span
-                            class="w-1 animate-pulse rounded-full bg-brand/80"
-                            style={`height:${height}px;animation-delay:${index * 120}ms`}
-                        />
-                    ))
-                }
-            </span>
-
-            <Icon name="arrow-right" class="size-4 text-slate-500" />
-        </div>
-
-        <div
-            class="flex-1 overflow-hidden [mask-image:linear-gradient(to_right,transparent,black_10%,black_90%,transparent)]"
+        <p
+            class="flex shrink-0 items-center gap-2 rounded-full border border-line-strong bg-panel px-4 py-1.5 text-[13px] font-semibold text-ink-soft"
             aria-hidden="true"
         >
+            <span class="relative top-[3px] text-lg leading-none text-brand-ink"
+                >&ldquo;</span
+            >
+            {t.hero.quoteTape.chip}
+        </p>
+
+        {/* Mobile keeps the first quote still: a single line scrolling past a
+            phone-width viewport is more empty tape than text. */}
+        <p class="text-sm text-ink-soft sm:hidden" aria-hidden="true">
+            {t.hero.quoteTape.quotes[0]}
+        </p>
+
+        <div
+            class="hidden flex-1 overflow-hidden [mask-image:linear-gradient(to_right,transparent,black_6%,black_94%,transparent)] sm:block"
+            aria-hidden="true"
+        >
+            {/* 120s, where the old amounts tape ran at 60s. These rows are far
+                wider and a quote has to stay legible long enough to finish
+                reading it, so the tape runs at a quarter of the pace it was
+                first drafted at (90s) and half the original. */}
             <ul
-                class="flex w-max items-center gap-10 motion-safe:animate-[ticker_60s_linear_infinite] sm:gap-14"
+                class="flex w-max items-center gap-14 motion-safe:animate-[ticker_120s_linear_infinite]"
             >
                 {
-                    loop.map((row) => (
-                        <li class="flex items-center gap-2.5 text-sm font-medium tabular-nums">
-                            <Icon
-                                name={row.icon}
-                                class:list={[
-                                    'size-4 shrink-0',
-                                    row.income ? 'text-brand/80' : 'text-slate-400',
-                                ]}
-                            />
-                            <span class="text-slate-100">{row.amount}</span>
-                            <Icon name="check" class="size-3.5 shrink-0 text-brand" />
-                        </li>
+                    loop.map((quote) => (
+                        <li class="text-sm text-ink-soft">{quote}</li>
                     ))
                 }
             </ul>

@@ -129,10 +129,19 @@ retired `@astrojs/tailwind` integration. There is no `tailwind.config.js` —
 tokens go in the `@theme` block in `src/styles/global.css`, which
 `base-layout.astro` imports.
 
-- Dark theme (`bg-slate-950`), Linear-style: white/slate type, hairline
-  `white/10` borders, `--color-brand` (the native app's Material seed color)
-  reserved for glows, icons and tinted chips. It is too light for text — never
-  use it as a text color.
+- Light theme built on the app's own Material scheme, copied token for token
+  from `apps/web/src/styles/m3-theme.css` (light) into the `@theme` block —
+  the site and the app are one palette, not two. Surfaces are `bg-surface` /
+  `bg-panel` / `bg-panel-alt`, type is `text-ink` / `text-ink-soft`, borders
+  are `border-line` / `border-line-strong`.
+- Two brand tokens, and the distinction matters: `--color-brand` (#6de7d8,
+  Material's `primaryContainer`) is the bright turquoise and is **fill only** —
+  it sits at 1.5:1 on `--color-surface`, so it can never carry text. Anything
+  readable uses `--color-brand-ink` (#006a61, `primary`) at 6.2:1. `--color-amber`
+  (`tertiaryContainer`) is the palette's second accent, used for the eyebrow
+  rule and the "zero spinners" chip.
+- Contrast floor is WCAG AA (4.5:1). `--color-ink-soft` is the lightest text
+  token at 7.4:1; there is deliberately nothing between it and the surface.
 - Font: Inter Variable, self-hosted via `@fontsource-variable/inter`.
 - Icons are inline SVGs in `src/components/icon.astro` — Lucide outlines plus
   the Apple and Google Play brand glyphs (Simple Icons paths). No icon font, no
@@ -140,12 +149,16 @@ tokens go in the `@theme` block in `src/styles/global.css`, which
 - The hero phone mockup (`src/components/phone-mockup.astro`) is a CSS-only
   illustration of the native voice screen; its copy lives in the `demo` catalog
   section.
-- The band between the hero and the stats strip
-  (`src/components/live-ledger.astro`) replaces a text badge: a listening mic
-  and waveform feed a tape of category icons, amounts and checks that scrolls
-  past, saying "live voice, logging expenses" without words. The amounts come from the `hero.liveLedger` catalog section because
-  their formatting is per locale; the sr-only label is the only other text.
-- Legal pages use `@tailwindcss/typography` (`prose prose-invert`), loaded with
+- The band closing the hero (`src/components/live-ledger.astro`) is a tape of
+  quotes about why people stop tracking their expenses, from the
+  `hero.quoteTape` catalog section. The fixed chip beside it is load-bearing,
+  not decoration: unattributed quotes next to a product read as reviews *of
+  that product*, and these are complaints about the status quo — the chip is
+  what frames them as the problem. There is no mic or waveform here on purpose;
+  a listening indicator next to complaints about manual entry reads as the app
+  recording complaints. Below `sm` the tape holds one quote still, since a
+  single line scrolling past a phone-width viewport is mostly empty tape.
+- Legal pages use `@tailwindcss/typography` (`prose prose-slate`), loaded with
   `@plugin` in `global.css`.
 
 ## Markdown

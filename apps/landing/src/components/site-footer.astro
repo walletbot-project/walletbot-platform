@@ -8,37 +8,37 @@ const { locale, t } = useTranslations(Astro.currentLocale)
 const year = new Date().getFullYear()
 ---
 
-<footer class="border-t border-white/10">
+<footer class="border-t border-line">
     <div
         class="mx-auto flex w-full max-w-6xl flex-col gap-6 px-6 py-10 sm:flex-row sm:items-center sm:justify-between"
     >
         <div class="space-y-1">
-            <p class="font-semibold tracking-tight text-white">Wallet Bot</p>
-            <p class="text-sm text-slate-400">{t.footer.tagline}</p>
+            <p class="font-semibold tracking-tight text-ink">Wallet Bot</p>
+            <p class="text-sm text-ink-soft">{t.footer.tagline}</p>
         </div>
 
         <div class="flex flex-col gap-2 text-sm sm:items-end">
             <nav class="flex flex-wrap gap-x-5 gap-y-2">
                 <a
                     href={getRelativeLocaleUrl(locale, 'support')}
-                    class="text-slate-300 underline-offset-4 hover:text-white hover:underline"
+                    class="text-ink-soft underline-offset-4 hover:text-ink hover:underline"
                 >
                     {t.footer.support}
                 </a>
                 <a
                     href={getRelativeLocaleUrl(locale, 'privacy')}
-                    class="text-slate-300 underline-offset-4 hover:text-white hover:underline"
+                    class="text-ink-soft underline-offset-4 hover:text-ink hover:underline"
                 >
                     {t.footer.privacy}
                 </a>
                 <a
                     href={getRelativeLocaleUrl(locale, 'terms')}
-                    class="text-slate-300 underline-offset-4 hover:text-white hover:underline"
+                    class="text-ink-soft underline-offset-4 hover:text-ink hover:underline"
                 >
                     {t.footer.terms}
                 </a>
             </nav>
-            <p class="text-slate-500">{t.footer.copyright({ year })}</p>
+            <p class="text-ink-soft">{t.footer.copyright({ year })}</p>
         </div>
     </div>
 </footer>
