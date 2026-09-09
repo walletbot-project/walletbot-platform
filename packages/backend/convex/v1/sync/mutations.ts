@@ -944,7 +944,7 @@ export const push = mutation({
             const key = await applyAccountUpsert(ctx, userId, newSeq, u)
             if (key) {
                 dirtyAccountKeys.set(
-                    `${key.currency} ${key.name.trim().toLowerCase()}`,
+                    `${key.currency}\u0000${key.name.trim().toLowerCase()}`,
                     key,
                 )
             }

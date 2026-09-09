@@ -2013,6 +2013,29 @@
       "type": "index",
       "data": {
         "on": 2,
+        "name": "transactions_recurrence_id_recurrence_index",
+        "sql": null,
+        "unique": false,
+        "columns": [
+          {
+            "column": "recurrence_id",
+            "order_by": null
+          },
+          {
+            "column": "recurrence_index",
+            "order_by": null
+          }
+        ]
+      }
+    },
+    {
+      "id": 32,
+      "references": [
+        2
+      ],
+      "type": "index",
+      "data": {
+        "on": 2,
         "name": "transactions_needs_sync",
         "sql": "  CREATE INDEX transactions_needs_sync ON transactions (updated_at)\n    WHERE dirty = 1;\n",
         "unique": false,
@@ -2020,7 +2043,7 @@
       }
     },
     {
-      "id": 32,
+      "id": 33,
       "references": [
         3
       ],
@@ -2039,7 +2062,7 @@
       }
     },
     {
-      "id": 33,
+      "id": 34,
       "references": [
         3
       ],
@@ -2058,7 +2081,7 @@
       }
     },
     {
-      "id": 34,
+      "id": 35,
       "references": [
         3
       ],
@@ -2077,7 +2100,7 @@
       }
     },
     {
-      "id": 35,
+      "id": 36,
       "references": [
         3
       ],
@@ -2091,7 +2114,7 @@
       }
     },
     {
-      "id": 36,
+      "id": 37,
       "references": [
         4
       ],
@@ -2110,7 +2133,7 @@
       }
     },
     {
-      "id": 37,
+      "id": 38,
       "references": [
         4
       ],
@@ -2129,7 +2152,7 @@
       }
     },
     {
-      "id": 38,
+      "id": 39,
       "references": [
         4
       ],
@@ -2148,7 +2171,7 @@
       }
     },
     {
-      "id": 39,
+      "id": 40,
       "references": [
         4
       ],
@@ -2162,7 +2185,7 @@
       }
     },
     {
-      "id": 40,
+      "id": 41,
       "references": [
         5
       ],
@@ -2181,7 +2204,7 @@
       }
     },
     {
-      "id": 41,
+      "id": 42,
       "references": [
         5
       ],
@@ -2200,7 +2223,7 @@
       }
     },
     {
-      "id": 42,
+      "id": 43,
       "references": [
         5
       ],
@@ -2214,7 +2237,7 @@
       }
     },
     {
-      "id": 43,
+      "id": 44,
       "references": [
         6
       ],
@@ -2233,7 +2256,7 @@
       }
     },
     {
-      "id": 44,
+      "id": 45,
       "references": [
         6
       ],
@@ -2252,7 +2275,7 @@
       }
     },
     {
-      "id": 45,
+      "id": 46,
       "references": [
         6
       ],
@@ -2271,7 +2294,7 @@
       }
     },
     {
-      "id": 46,
+      "id": 47,
       "references": [
         6
       ],
@@ -2285,7 +2308,7 @@
       }
     },
     {
-      "id": 47,
+      "id": 48,
       "references": [
         7
       ],
@@ -2304,7 +2327,7 @@
       }
     },
     {
-      "id": 48,
+      "id": 49,
       "references": [
         7
       ],
@@ -2323,7 +2346,7 @@
       }
     },
     {
-      "id": 49,
+      "id": 50,
       "references": [
         7
       ],
@@ -2337,7 +2360,7 @@
       }
     },
     {
-      "id": 50,
+      "id": 51,
       "references": [
         8
       ],
@@ -2356,7 +2379,7 @@
       }
     },
     {
-      "id": 51,
+      "id": 52,
       "references": [
         8
       ],
@@ -2375,7 +2398,7 @@
       }
     },
     {
-      "id": 52,
+      "id": 53,
       "references": [
         8
       ],
@@ -2389,7 +2412,7 @@
       }
     },
     {
-      "id": 53,
+      "id": 54,
       "references": [
         10
       ],
@@ -2408,7 +2431,7 @@
       }
     },
     {
-      "id": 54,
+      "id": 55,
       "references": [
         10
       ],
@@ -2427,7 +2450,7 @@
       }
     },
     {
-      "id": 55,
+      "id": 56,
       "references": [
         10
       ],
@@ -2441,7 +2464,7 @@
       }
     },
     {
-      "id": 56,
+      "id": 57,
       "references": [
         11
       ],
@@ -2460,7 +2483,7 @@
       }
     },
     {
-      "id": 57,
+      "id": 58,
       "references": [
         11
       ],
@@ -2479,7 +2502,7 @@
       }
     },
     {
-      "id": 58,
+      "id": 59,
       "references": [
         12
       ],
@@ -2498,7 +2521,7 @@
       }
     },
     {
-      "id": 59,
+      "id": 60,
       "references": [
         12
       ],
@@ -2517,7 +2540,7 @@
       }
     },
     {
-      "id": 60,
+      "id": 61,
       "references": [
         13
       ],
@@ -2817,6 +2840,15 @@
         {
           "dialect": "sqlite",
           "sql": "CREATE INDEX transactions_recurrence_id_date ON transactions (recurrence_id, date)"
+        }
+      ]
+    },
+    {
+      "name": "transactions_recurrence_id_recurrence_index",
+      "sql": [
+        {
+          "dialect": "sqlite",
+          "sql": "CREATE INDEX transactions_recurrence_id_recurrence_index ON transactions (recurrence_id, recurrence_index)"
         }
       ]
     },

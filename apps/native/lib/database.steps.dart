@@ -2323,6 +2323,7 @@ final class Schema5 extends i0.VersionedSchema {
     transactionsAccountIdDate,
     transactionsCategoryIdDate,
     transactionsRecurrenceIdDate,
+    transactionsRecurrenceIdRecurrenceIndex,
     transactionsNeedsSync,
     tagsParentId,
     tagsArchived,
@@ -2715,6 +2716,10 @@ final class Schema5 extends i0.VersionedSchema {
   final i1.Index transactionsRecurrenceIdDate = i1.Index(
     'transactions_recurrence_id_date',
     'CREATE INDEX transactions_recurrence_id_date ON transactions (recurrence_id, date)',
+  );
+  final i1.Index transactionsRecurrenceIdRecurrenceIndex = i1.Index(
+    'transactions_recurrence_id_recurrence_index',
+    'CREATE INDEX transactions_recurrence_id_recurrence_index ON transactions (recurrence_id, recurrence_index)',
   );
   final i1.Index transactionsNeedsSync = i1.Index(
     'transactions_needs_sync',

@@ -25,6 +25,34 @@ const recurrenceFrequency = v.union(
 )
 
 /**
+ * Refuses a rule id that is already taken.
+ *
+ * Both mutations that create a rule take its id from the client, and neither
+ * `db.insert` nor the schema enforces uniqueness, so nothing else stops the
+ * same id arriving twice. A second row is not a harmless duplicate: every read
+ * of a rule resolves it with `.unique()` (here, the sync push, the queries,
+ * the workflow), so from that moment opening, editing, deleting or topping up
+ * the series throws instead — for both rows, with no way for the user to say
+ * which one was theirs. Failing the create is the recoverable end of that.
+ *
+ * The sync push needs no such guard: it upserts on the same index, so a
+ * repeated id there updates the rule instead of adding one.
+ */
+async function requireUnusedRecurrenceId(
+    ctx: MutationCtx,
+    userId: string,
+    recurrenceId: string,
+): Promise<void> {
+    const existing = await ctx.db
+        .query('recurrences')
+        .withIndex('by_user_id', (q) =>
+            q.eq('userId', userId).eq('id', recurrenceId),
+        )
+        .unique()
+    if (existing) throw new Error('Recurrence id already exists')
+}
+
+/**
  * Creates a recurring rule together with its first occurrence, then hands the
  * rest to the workflow.
  *
@@ -88,6 +116,7 @@ export const create = mutation({
             )
             .unique()
         if (existing) throw new Error('Transaction id already exists')
+        await requireUnusedRecurrenceId(ctx, userId, args.recurrenceId)
 
         const now = BigInt(Date.now())
 
@@ -403,6 +432,9 @@ export const splitSeries = mutation({
     },
     handler: async (ctx, args) => {
         const userId = await requireAuth(ctx)
+        // Before the old tail is truncated: the split writes a rule under a
+        // client-generated id just like `create` does.
+        await requireUnusedRecurrenceId(ctx, userId, args.recurrenceId)
         const {
             row,
             rule: oldRule,

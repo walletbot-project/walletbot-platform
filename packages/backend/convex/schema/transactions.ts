@@ -56,6 +56,13 @@ export const transactions = defineTable({
     .index('by_user_date', ['userId', 'date'])
     .index('by_user_status', ['userId', 'status'])
     .index('by_user_type', ['userId', 'type'])
+    // Live rows in calendar order. `by_user_date` cannot serve the upcoming
+    // list: archived rows sit in it interleaved with the live ones, so
+    // deleting the tail of a series left the paginator walking hundreds of
+    // rows it would then discard — near-empty pages, and a "load more" that
+    // never reached the end. Every read excludes archived rows, so the
+    // dimension belongs in the index rather than in a predicate after it.
+    .index('by_user_archived_date', ['userId', 'isArchived', 'date'])
     .index('by_user_account_date', ['userId', 'accountId', 'date'])
     .index('by_user_category_date', ['userId', 'categoryId', 'date'])
     .index('by_user_to_account_date', ['userId', 'toAccountId', 'date'])

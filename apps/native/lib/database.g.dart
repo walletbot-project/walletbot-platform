@@ -8328,6 +8328,10 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     'transactions_recurrence_id_date',
     'CREATE INDEX transactions_recurrence_id_date ON transactions (recurrence_id, date)',
   );
+  late final Index transactionsRecurrenceIdRecurrenceIndex = Index(
+    'transactions_recurrence_id_recurrence_index',
+    'CREATE INDEX transactions_recurrence_id_recurrence_index ON transactions (recurrence_id, recurrence_index)',
+  );
   late final Index transactionsNeedsSync = Index(
     'transactions_needs_sync',
     'CREATE INDEX transactions_needs_sync ON transactions (updated_at) WHERE dirty = 1',
@@ -8484,6 +8488,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     transactionsAccountIdDate,
     transactionsCategoryIdDate,
     transactionsRecurrenceIdDate,
+    transactionsRecurrenceIdRecurrenceIndex,
     transactionsNeedsSync,
     tagsParentId,
     tagsArchived,

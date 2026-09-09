@@ -238,6 +238,11 @@ export const listPaginated = query({
  * nearest one belongs first. The rows are ordinary transactions; nothing about
  * them is a different kind of record, which is exactly why every read on the
  * other side of the cutoff has to exclude them.
+ *
+ * Archived rows are excluded by the index, not by a predicate over the page:
+ * deleting the tail of a series archives hundreds of rows that keep their
+ * dates, so filtering afterwards handed back pages that were mostly — or
+ * entirely — empty while still reporting more to come.
  */
 export const listUpcoming = query({
     args: {
@@ -249,17 +254,16 @@ export const listUpcoming = query({
         args,
     ): Promise<PaginationResult<Doc<'transactions'>>> => {
         const userId = await requireAuth(ctx)
-        const result = await ctx.db
+        return await ctx.db
             .query('transactions')
-            .withIndex('by_user_date', (q) =>
-                q.eq('userId', userId).gte('date', args.asOfMs),
+            .withIndex('by_user_archived_date', (q) =>
+                q
+                    .eq('userId', userId)
+                    .eq('isArchived', false)
+                    .gte('date', args.asOfMs),
             )
             .order('asc')
             .paginate(args.paginationOpts)
-        return {
-            ...result,
-            page: result.page.filter((txn) => !txn.isArchived),
-        }
     },
 })
 

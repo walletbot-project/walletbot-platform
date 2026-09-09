@@ -96,11 +96,23 @@ enum TransactionTimeStatus { confirmed, approximation, none }
   name: 'transactions_category_id_date',
   columns: {#categoryId, #date},
 )
-// The series, in occurrence order: what "this and the ones after it" and
-// "append from the last one" both walk.
+// The series in calendar order: what "this and the ones after it" walks when
+// it needs the movements themselves.
 @TableIndex(
   name: 'transactions_recurrence_id_date',
   columns: {#recurrenceId, #date},
+)
+// The series in occurrence order. Not redundant with the one above, for the
+// same reason the backend keeps both (`by_user_recurrence_index`): the slots
+// are addressed by index, and once a single occurrence's date can be edited on
+// its own, index order and date order stop agreeing. Every read that asks
+// "which slots are taken" sorts by this column — `_seriesSlotsQuery`,
+// `_lastOccurrenceOf`, and the `addOccurrences` append — and without the index
+// each of them reads the whole series and sorts it in a temp b-tree to hand
+// back a single row.
+@TableIndex(
+  name: 'transactions_recurrence_id_recurrence_index',
+  columns: {#recurrenceId, #recurrenceIndex},
 )
 @TableIndex.sql('''
   CREATE INDEX transactions_needs_sync ON transactions (updated_at)
@@ -569,6 +581,7 @@ class AppDatabase extends _$AppDatabase {
         await m.addColumn(transactions, transactions.recurrenceId);
         await m.addColumn(transactions, transactions.recurrenceIndex);
         await m.create(transactionsRecurrenceIdDate);
+        await m.create(transactionsRecurrenceIdRecurrenceIndex);
       }
     },
     beforeOpen: (details) async {
