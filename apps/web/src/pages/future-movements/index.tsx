@@ -8,7 +8,7 @@ import { Icon } from '@/components/m3/icon'
 import { ListDetailLayout } from '@/components/m3/list-detail-layout'
 import { StateMessage } from '@/components/m3/state-message'
 import { Skeleton } from '@/components/ui/skeleton'
-import { useOccurrenceCutoff } from '@/hooks/use-occurrence-cutoff'
+import { usePinnedOccurrenceCutoff } from '@/hooks/use-occurrence-cutoff'
 import {
     ACCOUNT_DEFAULT_COLOR,
     CATEGORY_DEFAULT_COLOR,
@@ -44,7 +44,9 @@ export function FutureMovements() {
     const t = useT()
     const locale = useFormatLocale()
     const navigate = useNavigate()
-    const asOfMs = useOccurrenceCutoff()
+    // Pinned, not re-armed: this feeds a paginated query, and moving the cutoff
+    // there discards the pages the reader has already scrolled through.
+    const asOfMs = usePinnedOccurrenceCutoff()
 
     const { results, status, loadMore } = usePaginatedQuery(
         api.v1.transactions.queries.listUpcoming,

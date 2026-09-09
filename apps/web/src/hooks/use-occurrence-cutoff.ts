@@ -11,6 +11,9 @@ import { useEffect, useState } from 'react'
  * frozen Activity. Because the cutoff is a query argument, moving it is what
  * re-runs the queries — there is nothing else to invalidate, and every client
  * inside a block sends the same number, so they share Convex's cached answer.
+ *
+ * Not for a `usePaginatedQuery` argument: moving the cutoff there discards the
+ * pages instead of refreshing them. Use [usePinnedOccurrenceCutoff].
  */
 export function useOccurrenceCutoff(): bigint {
     const [cutoff, setCutoff] = useState(() => pastCutoffMs())
@@ -25,5 +28,27 @@ export function useOccurrenceCutoff(): bigint {
         return () => clearTimeout(timer)
     }, [cutoff])
 
+    return BigInt(cutoff)
+}
+
+/**
+ * The same cutoff for a paginated list: computed once on mount, never re-armed.
+ *
+ * `usePaginatedQuery` keys its accumulated pages on the serialized arguments,
+ * so moving the cutoff does not refresh the list — it throws it away. The hook
+ * rebuilds its initial state: back to one page, requested from a null cursor
+ * under a fresh id, so not even the page it already held is reused. For a
+ * reader scrolled past the first page that means the list collapsing to
+ * `initialNumItems`, the scroll position lost, and the sentinel climbing back
+ * a page per round trip.
+ *
+ * The cost of pinning it is that a movement coming due while the screen is
+ * open does not cross into the list until the next visit — the same trade the
+ * screen already makes for its day headers, which capture `now` once on mount,
+ * and no worse than the list before a cutoff existed. Every read that does not
+ * paginate keeps [useOccurrenceCutoff], where re-arming costs nothing.
+ */
+export function usePinnedOccurrenceCutoff(): bigint {
+    const [cutoff] = useState(() => pastCutoffMs())
     return BigInt(cutoff)
 }
