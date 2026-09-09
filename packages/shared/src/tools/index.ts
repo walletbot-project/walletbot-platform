@@ -6,6 +6,34 @@ import { zodToToolSchema } from './helpers'
 export { AGENT_MODEL, AGENT_VOICE_NAME } from './constants'
 export { toolSchemas } from './definitions'
 
+// The `recurringExpense` flag reaches *inside* these tools rather than gating
+// them whole: an expense is still an expense with the feature off, but the
+// arguments that create or scope a series must not be declared, or the model
+// can build a series the user has no UI to see or manage. `withoutRecurrence`
+// cuts both the arguments and the sentence documenting them; the descriptions
+// below are composed from these suffixes so the two can never drift.
+const RECURRENCE_PARTS: Record<
+    string,
+    { args: readonly string[]; suffix: string }
+> = {
+    addExpense: {
+        args: ['recurrence'],
+        suffix: ' Pass `recurrence` to make it repeat — the whole series is created up front as future movements, and the result reports how many and through when.',
+    },
+    addIncome: {
+        args: ['recurrence'],
+        suffix: ' Pass `recurrence` to make it repeat, same as addExpense.',
+    },
+    updateTransaction: {
+        args: ['scope', 'recurrence'],
+        suffix: ' For an occurrence of a recurring series, `scope` decides whether the edit stops at this movement or carries to every later one — ask the user which, and pass `recurrence` with scope all-future to change the cadence from here on.',
+    },
+    deleteTransaction: {
+        args: ['scope'],
+        suffix: ' For an occurrence of a recurring series, `scope` decides whether this deletes one movement or this one and every later one (which also stops the rule there) — ask the user which before calling.',
+    },
+}
+
 // Tool descriptions. Rules: platform-neutral (every tool behaves identically
 // on the native app and on the web app), state defaults, and state the error
 // contract where it is not the plain `{ ok: false, error }` envelope.
@@ -57,18 +85,14 @@ const toolDescriptions = {
         'List the user recurring rules: id, the name of the movements they create, amount, cadence, end date, and how far the series currently reaches. Call it before addRecurrenceOccurrences (which needs a rule id) and to answer "what do I have set to repeat?".',
 
     // Transactions: write
-    addExpense:
-        'Record an expense (money out). Subtracts from the account balance. Requires account + category; the currency comes from the account. Pass `recurrence` to make it repeat — the whole series is created up front as future movements, and the result reports how many and through when.',
-    addIncome:
-        'Record an income (money in). Adds to the account balance. Requires account + category; the currency comes from the account. Pass `recurrence` to make it repeat, same as addExpense.',
+    addExpense: `Record an expense (money out). Subtracts from the account balance. Requires account + category; the currency comes from the account.${RECURRENCE_PARTS.addExpense.suffix}`,
+    addIncome: `Record an income (money in). Adds to the account balance. Requires account + category; the currency comes from the account.${RECURRENCE_PARTS.addIncome.suffix}`,
     addTransfer:
         'Record a transfer between two of the user accounts. Category is optional. For cross-currency transfers, provide toAmount (and optionally exchangeRate) — same-currency transfers derive toAmount automatically.',
     addBalanceAdjustment:
         'Record that the actual balance of an account is balanceAfter. The system computes the difference. Use when the user counted cash or reconciles a statement.',
-    updateTransaction:
-        'Update a transaction: name, description, date/time, amount, category, status, and tags (addTagIdsOrNames / removeTagIdsOrNames apply atomically with the rest of the edit). Unknown tag names are skipped and reported in `missing`. For an occurrence of a recurring series, `scope` decides whether the edit stops at this movement or carries to every later one — ask the user which, and pass `recurrence` with scope all-future to change the cadence from here on.',
-    deleteTransaction:
-        'Delete a transaction. It is archived (soft delete; there is no in-app restore yet) and balances update accordingly. Idempotent: deleting an unknown id still reports ok. For an occurrence of a recurring series, `scope` decides whether this deletes one movement or this one and every later one (which also stops the rule there) — ask the user which before calling.',
+    updateTransaction: `Update a transaction: name, description, date/time, amount, category, status, and tags (addTagIdsOrNames / removeTagIdsOrNames apply atomically with the rest of the edit). Unknown tag names are skipped and reported in \`missing\`.${RECURRENCE_PARTS.updateTransaction.suffix}`,
+    deleteTransaction: `Delete a transaction. It is archived (soft delete; there is no in-app restore yet) and balances update accordingly. Idempotent: deleting an unknown id still reports ok.${RECURRENCE_PARTS.deleteTransaction.suffix}`,
     addRecurrenceOccurrences:
         'Extend an open-ended recurring rule by another batch, continuing from the LAST occurrence that exists — not from whichever one the user mentioned. Returns how many were created. Fails for a rule with an end date: that series is already complete, so change the end date instead.',
 
@@ -143,6 +167,38 @@ export const TOOL_DEFINITIONS = (Object.keys(toolSchemas) as ToolName[]).map(
             parameters: zodToToolSchema(toolSchemas[name]),
         }) satisfies ToolDefinition,
 )
+
+/**
+ * The same definition with everything the `recurringExpense` flag covers
+ * removed — the arguments that create or scope a recurring series, and the
+ * sentence documenting them. A definition carrying nothing recurring comes
+ * back untouched.
+ *
+ * Applied by the mint when the flag is off, which is the only place the flag
+ * is resolved; the argument names and the text live here, next to the
+ * descriptions they are cut from. Tools that exist *only* for the feature
+ * (`listRecurrences`, `addRecurrenceOccurrences`) are withheld whole there
+ * instead.
+ */
+export function withoutRecurrence(definition: ToolDefinition): ToolDefinition {
+    const part = RECURRENCE_PARTS[definition.name]
+    if (part === undefined) return definition
+    return {
+        name: definition.name,
+        description: definition.description.replace(part.suffix, ''),
+        parameters: {
+            ...definition.parameters,
+            properties: Object.fromEntries(
+                Object.entries(definition.parameters.properties ?? {}).filter(
+                    ([name]) => !part.args.includes(name),
+                ),
+            ),
+            required: definition.parameters.required?.filter(
+                (name) => !part.args.includes(name),
+            ),
+        },
+    }
+}
 
 export const TOOL_MAP = TOOL_DEFINITIONS.reduce<ToolsMap>((acc, tool) => {
     acc[tool.name as ToolName] = tool

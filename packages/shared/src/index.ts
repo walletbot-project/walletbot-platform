@@ -160,6 +160,7 @@ export {
     TOOL_MAP,
     TOOL_NAMES,
     toolSchemas,
+    withoutRecurrence,
 } from './tools'
 export type { CalcStep, CalcStepResult } from './tools/calc'
 export {

@@ -6,6 +6,7 @@ import {
     AGENT_VOICE_NAME,
     sanitizeAgentContext,
     TOOL_DEFINITIONS,
+    withoutRecurrence,
 } from '@wallet-bot/shared'
 import { compareVersions } from '../config/utils'
 import type { FlagKey } from '../featureFlags/utils'
@@ -109,6 +110,13 @@ const FLAG_GATED_TOOLS: Readonly<Record<string, FlagKey>> = {
     // `listUpcomingTransactions` is NOT gated: one-off movements dated in the
     // future exist regardless of the flag, and they are invisible everywhere
     // else, so the agent needs to be able to see them either way.
+    //
+    // Withholding these two is only half of `recurringExpense`: addExpense,
+    // addIncome, updateTransaction and deleteTransaction stay declared but
+    // carry recurrence arguments of their own, so the same flag also strips
+    // those (`withoutRecurrence`, applied in `declarationsFor` below).
+    // Without that the model could still create and scope a series the user
+    // has no way to see.
 }
 
 export function declarationsFor(
@@ -117,7 +125,11 @@ export function declarationsFor(
     flags: Partial<Record<FlagKey, boolean>> = {},
 ): FunctionDeclaration[] {
     const version = appVersion ?? '0.0.0'
-    return TOOL_DECLARATIONS.filter((declaration) => {
+    const declarations =
+        flags.recurringExpense === true
+            ? TOOL_DECLARATIONS
+            : TOOL_DECLARATIONS_WITHOUT_RECURRENCE
+    return declarations.filter((declaration) => {
         const flag = FLAG_GATED_TOOLS[declaration.name]
         if (flag !== undefined && flags[flag] !== true) return false
         // Web ships with the backend, so only the flag gate applies there.
@@ -481,6 +493,13 @@ function toFunctionDeclarations(
 }
 
 const TOOL_DECLARATIONS = toFunctionDeclarations(TOOL_DEFINITIONS)
+// The same set for a user the `recurringExpense` rollout has not reached:
+// every tool that stays declared, minus its recurrence arguments and the
+// sentence documenting them. Converted once at module load like the full set,
+// so a mint never pays for the second pass.
+const TOOL_DECLARATIONS_WITHOUT_RECURRENCE = toFunctionDeclarations(
+    TOOL_DEFINITIONS.map(withoutRecurrence),
+)
 
 // Stamped at module load. A small `moduleAgeMs` on an invocation means the
 // request paid a Node runtime cold start (module re-evaluation, including
