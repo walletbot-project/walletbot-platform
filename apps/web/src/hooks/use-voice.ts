@@ -8,6 +8,13 @@ import type { ToolName } from '@wallet-bot/shared'
 import { useConvex, useQuery } from 'convex/react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { LiveTokenMintArgs } from '@/lib/agent-context'
+import {
+    AgentInteractionCostTracker,
+    estimateSessionCostUsd,
+    recordAgentInteractionCost,
+    recordAgentSessionCostFromUsage,
+    usageTokenAttributes,
+} from '@/lib/agent-metrics'
 import { executeToolCall } from '@/lib/agent-tools'
 import type { AgentToolContext } from '@/lib/agent-tools/helpers'
 import { useT } from '@/lib/i18n'
@@ -260,6 +267,11 @@ export function useVoice(opts: UseVoiceOpts) {
     const historyRef = useRef<VoiceHistoryRecorder | null>(null)
     /** The model the current token was minted for, once it is known. */
     const modelRef = useRef<string | null>(null)
+    const latestUsageMetadataRef = useRef<Record<string, unknown> | null>(null)
+    const sessionCostMetricSentRef = useRef(false)
+    const interactionCostTrackerRef = useRef(new AgentInteractionCostTracker())
+    const inputChunksRef = useRef(0)
+    const textMessagesRef = useRef(0)
 
     useEffect(() => {
         ownerIdRef.current = ownerId
@@ -277,12 +289,64 @@ export function useVoice(opts: UseVoiceOpts) {
         [],
     )
 
+    const currentSessionMode = useCallback((): 'voice' | 'text' | 'mixed' => {
+        if (inputChunksRef.current > 0 && textMessagesRef.current > 0) {
+            return 'mixed'
+        }
+        if (inputChunksRef.current > 0) return 'voice'
+        return 'text'
+    }, [])
+
+    const recordSessionCostMetric = useCallback(() => {
+        if (sessionCostMetricSentRef.current) return
+        const usage = latestUsageMetadataRef.current
+        const sessionId = historyRef.current?.sessionId
+        const model = modelRef.current
+        if (!usage || !sessionId || !model) return
+        sessionCostMetricSentRef.current = true
+        void recordAgentSessionCostFromUsage(convex, {
+            sessionId,
+            model,
+            mode: currentSessionMode(),
+            usage,
+        })
+    }, [convex, currentSessionMode])
+
+    const recordInteractionCostMetric = useCallback(
+        (usage: Record<string, unknown>) => {
+            const sessionId = historyRef.current?.sessionId
+            const model = modelRef.current
+            if (!sessionId || !model) return
+            const totalCostUsd = estimateSessionCostUsd(usage)
+            if (totalCostUsd === null) return
+            const mode = currentSessionMode()
+            const sample = interactionCostTrackerRef.current.nextSample({
+                sessionId,
+                totalCostUsd,
+                fallbackInteractionType: mode,
+                tokenAttributes: usageTokenAttributes(usage),
+            })
+            if (!sample) return
+            void recordAgentInteractionCost(convex, {
+                sessionId,
+                sampleId: sample.sampleId,
+                model,
+                mode,
+                interactionType: sample.interactionType,
+                costUsd: sample.costUsd,
+                tokenAttributes: sample.tokenAttributes,
+            })
+        },
+        [convex, currentSessionMode],
+    )
+
     /**
      * Native's `send_message` client action (`sendText`). A typed turn has no
      * input transcription, so this is the only record of what the user said.
      */
     const recordSendMessage = useCallback(
         (text: string) => {
+            textMessagesRef.current += 1
             conversationLogRef.current.push({ type: 'send_message', text })
             recordHistory(
                 'send_message',
@@ -607,6 +671,7 @@ export function useVoice(opts: UseVoiceOpts) {
             const pcm = floatTo16BitPCM(float32)
             const base64 = arrayBufferToBase64(pcm)
             audioStreamOpenRef.current = true
+            inputChunksRef.current += 1
             session.sendRealtimeInput({
                 audio: { data: base64, mimeType: 'audio/pcm;rate=16000' },
             })
@@ -838,9 +903,24 @@ export function useVoice(opts: UseVoiceOpts) {
                 callbacks: {
                     onmessage: async (msg: LiveServerMessage) => {
                         if (generation !== generationRef.current) return
+                        if (msg.usageMetadata) {
+                            const usage = msg.usageMetadata as Record<
+                                string,
+                                unknown
+                            >
+                            latestUsageMetadataRef.current = usage
+                            recordInteractionCostMetric(usage)
+                            recordHistory('usage_metadata', 'server', {
+                                ...usage,
+                            })
+                        }
+
                         if (msg.toolCall) {
                             const functionCalls =
                                 msg.toolCall.functionCalls ?? []
+                            if (functionCalls.length > 0) {
+                                interactionCostTrackerRef.current.markToolCall()
+                            }
                             const functionResponses: {
                                 id?: string
                                 name?: string
@@ -915,11 +995,6 @@ export function useVoice(opts: UseVoiceOpts) {
                             return
                         }
 
-                        if (msg.usageMetadata) {
-                            recordHistory('usage_metadata', 'server', {
-                                ...msg.usageMetadata,
-                            })
-                        }
                         if (msg.goAway) {
                             recordHistory('go_away', 'server', {
                                 timeLeft: msg.goAway.timeLeft,
@@ -1139,6 +1214,7 @@ export function useVoice(opts: UseVoiceOpts) {
         finalisePendingUser,
         finalisePendingAgent,
         recordHistory,
+        recordInteractionCostMetric,
         scheduleReconnect,
     ])
 
@@ -1167,6 +1243,13 @@ export function useVoice(opts: UseVoiceOpts) {
             discardOutputRef.current = false
             audioPlaybackEnabledRef.current =
                 mode === 'audio' ? true : RESPOND_TO_TEXT_WITH_AUDIO
+            modelRef.current = null
+            latestUsageMetadataRef.current = null
+            sessionCostMetricSentRef.current = false
+            interactionCostTrackerRef.current =
+                new AgentInteractionCostTracker()
+            inputChunksRef.current = 0
+            textMessagesRef.current = 0
             addSystem(catalog.voice.systemConnecting, 'info')
 
             // One recorder per logical session — reconnects reuse it, so one
@@ -1262,6 +1345,7 @@ export function useVoice(opts: UseVoiceOpts) {
     // the command.
     const disconnect = useCallback(() => {
         recordHistory('end_session', 'client')
+        recordSessionCostMetric()
         sessionActiveRef.current = false
         clearReconnectTimers()
         // Invalidate the socket's callbacks and any in-flight attempt before
@@ -1291,6 +1375,7 @@ export function useVoice(opts: UseVoiceOpts) {
         finalisePendingUser,
         finalisePendingAgent,
         recordHistory,
+        recordSessionCostMetric,
         clearReconnectTimers,
     ])
 

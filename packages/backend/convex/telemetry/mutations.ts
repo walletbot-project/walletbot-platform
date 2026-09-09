@@ -1,7 +1,10 @@
 import { v } from 'convex/values'
 import { internal } from '../_generated/api'
-import { internalMutation } from '../_generated/server'
+import { internalMutation, mutation } from '../_generated/server'
+import { requireAuth } from '../users/helpers'
+import { metricCatalog } from './catalog'
 import { insertMetricBatch } from './metrics'
+import type { MetricAttributeValue, MetricInput } from './types'
 import { metricInput, telemetryEventInput } from './validators'
 
 const authMethod = v.union(
@@ -18,6 +21,98 @@ const signInAuthMethod = v.union(
 )
 
 const clientPlatform = v.union(v.literal('native'), v.literal('web'))
+
+const webMetricNames = new Set([
+    'agent.session.cost_usd',
+    'agent.interaction.cost_usd',
+    'agent.interactions.completed_count',
+])
+
+const assertWebMetric = (metric: MetricInput): void => {
+    if (!webMetricNames.has(metric.name)) {
+        throw new Error(`metric ${metric.name} is not accepted from web`)
+    }
+    if (!Number.isFinite(metric.timestamp) || !Number.isFinite(metric.value)) {
+        throw new Error(`metric ${metric.name} has an invalid number`)
+    }
+    if (metric.value <= 0) {
+        throw new Error(`metric ${metric.name} must have a positive value`)
+    }
+    if (
+        metric.name === 'agent.interactions.completed_count' &&
+        metric.value !== 1
+    ) {
+        throw new Error(`metric ${metric.name} must increment by one`)
+    }
+
+    const spec = metricCatalog[metric.name]
+    if (metric.type !== spec.type) {
+        throw new Error(`metric ${metric.name} must be type ${spec.type}`)
+    }
+    if (metric.unit !== spec.unit) {
+        throw new Error(`metric ${metric.name} must use unit ${spec.unit}`)
+    }
+    if (!metric.sessionId) {
+        throw new Error(`metric ${metric.name} requires sessionId`)
+    }
+    if (metric.name === 'agent.interaction.cost_usd' && !metric.sampleId) {
+        throw new Error(`metric ${metric.name} requires sampleId`)
+    }
+
+    const attributes = metric.attributes
+    if (
+        typeof attributes !== 'object' ||
+        attributes === null ||
+        Array.isArray(attributes)
+    ) {
+        throw new Error(`metric ${metric.name} requires attributes`)
+    }
+    if (Object.keys(attributes).length > 32) {
+        throw new Error(`metric ${metric.name} has too many attributes`)
+    }
+
+    for (const [key, value] of Object.entries(attributes)) {
+        const allowed = spec.attributes[key]
+        if (!allowed) {
+            throw new Error(`attribute ${key} is not allowed for ${metric.name}`)
+        }
+        if (
+            (typeof value !== 'string' &&
+                typeof value !== 'number' &&
+                typeof value !== 'boolean') ||
+            (typeof value === 'number' && !Number.isFinite(value)) ||
+            (typeof value === 'string' &&
+                (value.trim().length === 0 || value.length > 256))
+        ) {
+            throw new Error(`attribute ${key} has invalid value`)
+        }
+        if (
+            allowed !== 'string' &&
+            !allowed.has(value as MetricAttributeValue)
+        ) {
+            throw new Error(`attribute ${key} has unsupported value`)
+        }
+    }
+
+    if (typeof attributes.model !== 'string' || !attributes.model.trim()) {
+        throw new Error(`metric ${metric.name} requires model`)
+    }
+    if (typeof attributes.mode !== 'string') {
+        throw new Error(`metric ${metric.name} requires mode`)
+    }
+    if (
+        metric.name === 'agent.interactions.completed_count' &&
+        typeof attributes.interaction_type !== 'string'
+    ) {
+        throw new Error(`metric ${metric.name} requires interaction_type`)
+    }
+    if (
+        metric.name !== 'agent.interactions.completed_count' &&
+        attributes.cost_source !== 'estimated'
+    ) {
+        throw new Error(`metric ${metric.name} must use estimated cost`)
+    }
+}
 
 const metricSeriesKey = (metric: {
     name: string
@@ -79,6 +174,30 @@ export const insertMetricBatchMutation = internalMutation({
         receivedAt: v.number(),
     },
     handler: async (ctx, args) => insertMetricBatch(ctx, args),
+})
+
+export const recordWebMetricBatch = mutation({
+    args: {
+        metrics: v.array(metricInput),
+    },
+    handler: async (ctx, args): Promise<{ accepted: number }> => {
+        if (args.metrics.length > 50) {
+            throw new Error('metrics array max is 50')
+        }
+
+        for (const metric of args.metrics) assertWebMetric(metric)
+
+        const userId = await requireAuth(ctx)
+        return await insertMetricBatch(ctx, {
+            receivedAt: Date.now(),
+            metrics: args.metrics.map((metric) => ({
+                ...metric,
+                source: 'web',
+                userId,
+                platform: 'web',
+            })),
+        })
+    },
 })
 
 export const recordUserAccountCreated = internalMutation({
