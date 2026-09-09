@@ -523,9 +523,15 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
     _active = true;
     _explicitlyStopped = false;
     remoteSync?.schedule(delay: Duration.zero);
-    _logConnectionPhase('session_opened', startStopwatch, {
-      'resumed': session.resumeHandle != null,
-    });
+    final resumed = session.resumeHandle != null;
+    _logConnectionPhase('session_opened', startStopwatch, {'resumed': resumed});
+    // Best effort and fire-and-forget on purpose: a telemetry hop must never
+    // sit between opening the session and starting to connect.
+    agentMetrics?.recordSessionStartedBestEffort(
+      sessionId: session.id,
+      model: _model,
+      resumed: resumed,
+    );
 
     _emit(VoiceConnectingEvent('Connecting to Gemini Live'));
     // The token fetch and the audio engine spin-up are independent and each

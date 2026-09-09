@@ -56,6 +56,7 @@ dots may appear as underscores.
 - `business_transfers_created_count`
 - `business_users_registered_total`
 - `business_user_accounts_signed_in_count`
+- `agent_sessions_started_count`
 - `agent_session_cost_usd`
 - `agent_interaction_cost_usd`
 - `agent_user_monthly_cost_usd`
@@ -76,6 +77,7 @@ Useful labels:
 - `user_hash`
 - `month`
 - `interaction_type`
+- `start_kind`
 - `cost_bucket`
 - `deployment_environment`
 - `service_namespace`
@@ -130,6 +132,32 @@ Sign-ins by auth method and client:
 ```promql
 sum by (auth_method, client_platform) (increase(business_user_accounts_signed_in_count[1d]))
 ```
+
+Agent sessions opened, new vs resumed:
+
+```promql
+sum by (start_kind) (increase(agent_sessions_started_count_total[1d]))
+```
+
+The counter is emitted where a session begins (the client's session
+repository), not where its token is minted: a mint also happens on every
+reconnect and on the voice screen's speculative prefetch, so mints are not
+sessions. `start_kind="new"` is a session that did not exist a moment before;
+`start_kind="resumed"` is the same conversation picked up again through a live
+resume handle. Only the native client emits it today — web has no telemetry
+client yet, so web sessions are missing from this counter.
+
+Sessions that never reported a cost (opened but produced no usage metadata):
+
+```promql
+sum(increase(agent_sessions_started_count_total[1d]))
+  - sum(increase(agent_session_cost_bucket_count[1d]))
+```
+
+Every open is counted, resumed ones included: each is a connection episode that
+should end with a cost report. The difference can go slightly negative at the
+edges of a window, where a session's cost lands inside it and its open fell
+outside.
 
 Agent session cost p95:
 
