@@ -4,6 +4,7 @@ import { AuthGuard } from '@/components/layout/auth-guard'
 import { GlobalErrorBoundary } from '@/components/layout/error-boundary'
 import { LegalGuard } from '@/components/layout/legal-guard'
 import { PublicGuard } from '@/components/layout/public-guard'
+import { RecurringExpenseGuard } from '@/components/layout/recurring-expense-guard'
 import { AuthLayout } from '@/layouts/auth-layout'
 import { RootLayout } from '@/layouts/root-layout'
 import Home from './pages/home'
@@ -248,23 +249,31 @@ export const router = createBrowserRouter([
                                             })),
                                     },
                                     {
-                                        path: '/future-movements',
-                                        lazy: () =>
-                                            import(
-                                                '@/pages/future-movements'
-                                            ).then((m) => ({
-                                                Component: m.FutureMovements,
-                                            })),
+                                        // Behind the same flag as the home
+                                        // card that links here.
+                                        element: <RecurringExpenseGuard />,
                                         children: [
                                             {
-                                                path: ':movementId',
+                                                path: '/future-movements',
                                                 lazy: () =>
                                                     import(
                                                         '@/pages/future-movements'
                                                     ).then((m) => ({
                                                         Component:
-                                                            m.FutureMovementDetailRoute,
+                                                            m.FutureMovements,
                                                     })),
+                                                children: [
+                                                    {
+                                                        path: ':movementId',
+                                                        lazy: () =>
+                                                            import(
+                                                                '@/pages/future-movements'
+                                                            ).then((m) => ({
+                                                                Component:
+                                                                    m.FutureMovementDetailRoute,
+                                                            })),
+                                                    },
+                                                ],
                                             },
                                         ],
                                     },
