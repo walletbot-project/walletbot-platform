@@ -10,7 +10,7 @@ import {
 } from '../convex/live/createToken'
 
 // Every flag-gated tool switched on, i.e. what a fully rolled-out user gets.
-const ALL_FLAGS = { exchangeRates: true } as const
+const ALL_FLAGS = { exchangeRates: true, recurringExpense: true } as const
 
 describe('declarationsFor (compatibility gating)', () => {
     it('web is unrestricted by version', () => {
@@ -27,8 +27,19 @@ describe('declarationsFor (compatibility gating)', () => {
 
     it('a current native build sees the full set', () => {
         expect(
-            declarationsFor('android', '0.3.1', ALL_FLAGS).map((d) => d.name),
+            declarationsFor('android', '0.4.0', ALL_FLAGS).map((d) => d.name),
         ).toEqual(TOOL_NAMES)
+    })
+
+    it('a 0.3.x native build never sees the recurrence tools', () => {
+        // The executors need the v5 local schema, which is the 0.4.0 bump.
+        const names = declarationsFor('android', '0.3.1', ALL_FLAGS).map(
+            (d) => d.name,
+        )
+        expect(names).not.toContain('listUpcomingTransactions')
+        expect(names).not.toContain('listRecurrences')
+        expect(names).not.toContain('addRecurrenceOccurrences')
+        expect(names).toContain('getExchangeRate')
     })
 
     it('a 0.3.0 native build never sees the calculator tools', () => {
