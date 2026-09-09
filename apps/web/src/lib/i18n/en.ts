@@ -507,6 +507,7 @@ export const en: Messages = {
         typeBalanceAdjustment: 'Adjustments',
         noTransactions: 'No transactions',
         addTransaction: 'Add transaction',
+        viewFutureMovements: 'View future movements',
         selectDetail: 'Select a transaction to see its details',
         today: 'Today',
         yesterday: 'Yesterday',

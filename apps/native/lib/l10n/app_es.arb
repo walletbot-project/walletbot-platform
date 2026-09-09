@@ -185,6 +185,7 @@
   "@feedbackEmailBodyFooter": {"placeholders": {"client": {"type": "String"}}},
   "feedbackErrorDismiss": "Cerrar este mensaje",
   "addTransaction": "Añadir movimiento",
+  "viewFutureMovements": "Ver movimientos futuros",
   "transactionsLoadFailed": "No se pudieron cargar las transacciones: {error}",
   "noTransactions": "No hay transacciones",
   "noTransactionsYet": "Sin transacciones todavía",

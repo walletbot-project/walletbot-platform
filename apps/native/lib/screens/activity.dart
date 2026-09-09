@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:app/app_config/app_config_controller.dart';
 import 'package:app/components/account_icons.dart';
 import 'package:app/components/category_icons.dart';
 import 'package:app/components/color_utils.dart';
@@ -14,6 +15,7 @@ import 'package:app/shared/app_navigation.dart';
 import 'package:app/shared/breakpoints.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:app/screens/future_movements.dart';
 import 'package:app/screens/transaction_form.dart';
 import 'package:app/screens/transaction_details_sheet.dart';
 
@@ -82,6 +84,21 @@ class _ActivityScreenState extends State<ActivityScreen> {
     if (windowSizeClassOf(context) != WindowSizeClass.expanded) {
       _pushFormRoute(instant: false);
     }
+  }
+
+  void _openFutureMovements() {
+    // Same shape as the home card's push: the pushed route sits above the
+    // account-scoped providers, so the screen's data layer has to be
+    // re-provided into it.
+    final repos = context.read<AppRepositories>();
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => Provider<AppRepositories>.value(
+          value: repos,
+          child: const FutureMovementsScreen(),
+        ),
+      ),
+    );
   }
 
   /// Presents the form as a real route (the original mobile behavior),
@@ -380,6 +397,19 @@ class _ActivityScreenState extends State<ActivityScreen> {
     final appBar = AppBar(
       title: Text(context.l10n.activity),
       actions: [
+        // The way across to the upcoming side, which Activity otherwise gives
+        // no hint of — the two lists are one timeline split at the occurrence
+        // cutoff, and the home card was the only door. Same icon and flag as
+        // that card, so both read as the same feature and neither shows up
+        // before the rollout does.
+        if (context.watch<AppConfigController>().isFlagEnabled(
+          'recurringExpense',
+        ))
+          IconButton(
+            tooltip: context.l10n.viewFutureMovements,
+            onPressed: _openFutureMovements,
+            icon: const Icon(Icons.event_repeat_rounded),
+          ),
         IconButton(
           tooltip: context.l10n.addTransaction,
           onPressed: _openTransactionForm,

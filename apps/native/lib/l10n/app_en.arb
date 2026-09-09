@@ -198,6 +198,7 @@
   "@feedbackEmailBodyFooter": {"placeholders": {"client": {"type": "String"}}},
   "feedbackErrorDismiss": "Dismiss this message",
   "addTransaction": "Add transaction",
+  "viewFutureMovements": "View future movements",
   "transactionsLoadFailed": "Could not load transactions: {error}",
   "@transactionsLoadFailed": {"placeholders": {"error": {"type": "Object"}}},
   "noTransactions": "No transactions",

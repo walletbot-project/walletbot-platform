@@ -542,6 +542,7 @@ export const es = {
         typeBalanceAdjustment: 'Ajustes',
         noTransactions: 'No hay transacciones',
         addTransaction: 'Agregar transacción',
+        viewFutureMovements: 'Ver movimientos futuros',
         selectDetail: 'Seleccioná una transacción para ver su detalle',
         today: 'Hoy',
         yesterday: 'Ayer',

@@ -603,6 +603,9 @@ class AppLocalizationsEs extends AppLocalizations {
   String get addTransaction => 'Añadir movimiento';
 
   @override
+  String get viewFutureMovements => 'Ver movimientos futuros';
+
+  @override
   String transactionsLoadFailed(Object error) {
     return 'No se pudieron cargar las transacciones: $error';
   }

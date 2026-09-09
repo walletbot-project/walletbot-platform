@@ -1160,6 +1160,12 @@ abstract class AppLocalizations {
   /// **'Add transaction'**
   String get addTransaction;
 
+  /// No description provided for @viewFutureMovements.
+  ///
+  /// In en, this message translates to:
+  /// **'View future movements'**
+  String get viewFutureMovements;
+
   /// No description provided for @transactionsLoadFailed.
   ///
   /// In en, this message translates to:
