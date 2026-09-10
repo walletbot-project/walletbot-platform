@@ -1861,9 +1861,8 @@
                         "spec": {
                             "collapse": false,
                             "layout": {
-                                "kind": "AutoGridLayout",
+                                "kind": "GridLayout",
                                 "spec": {
-                                    "columnWidthMode": "standard",
                                     "items": [
                                         {
                                             "kind": "GridLayoutItem",
@@ -1917,9 +1916,7 @@
                                                 "y": 7
                                             }
                                         }
-                                    ],
-                                    "maxColumnCount": 3,
-                                    "rowHeightMode": "standard"
+                                    ]
                                 }
                             },
                             "title": "Creacion de movimientos"
