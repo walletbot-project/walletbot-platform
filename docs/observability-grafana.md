@@ -56,6 +56,7 @@ dots may appear as underscores.
 - `business_transfers_created_count`
 - `business_users_registered_total`
 - `business_user_accounts_signed_in_count`
+- `agent_sessions_started_count`
 - `agent_session_cost_usd`
 - `agent_interaction_cost_usd`
 - `agent_user_monthly_cost_usd`
@@ -76,12 +77,44 @@ Useful labels:
 - `user_hash`
 - `month`
 - `interaction_type`
+- `start_kind`
 - `cost_bucket`
 - `deployment_environment`
 - `service_namespace`
 - `service_name`
 
 ## Starter PromQL
+
+> **`increase()` lies at low volume.** These counters are cumulative and only
+> get a sample when an event actually happens. `increase(v[w])` is
+> `rate(v[w]) * w`, and `rate()` extrapolates to the edges of the window, so a
+> handful of events clustered inside a much wider window gets projected across
+> all of it — three movements reported as `40.9` — and the result is fractional
+> rather than a count. Worse, `increase()` needs at least two samples in the
+> window, so sparse series return **no data at all** instead of a number.
+>
+> Count the samples instead: `count_over_time(v[$__range])`, which is what the
+> panels in `docs/dashboards/` do. Every event produces exactly one exported
+> row, and every row becomes one OTLP data point stamped with its own
+> `receivedAt`, so counting samples is counting events — exact, integer, and
+> genuinely scoped to the picked range, so 24h answers for 24h and 6h answers
+> for 6h. Per bucket over time, the same function against `[$__interval]`.
+>
+> This holds only while one event is one sample. Rows exported in a single HTTP
+> request share a `receivedAt`, so same-series events emitted inside one
+> mutation would collapse into one data point. Today nothing does that:
+> movements are recorded one mutation per movement and sessions one per open.
+> A future bulk path that emits several of the same counter at once would need
+> distinct timestamps, or this undercounts.
+>
+> Two alternatives, each with a catch: `max_over_time(v[w]) - min_over_time(v[w])`
+> is exact and window-scoped but misses the increment that produced the first
+> sample in the window; `last_over_time(v[$__range])` reads the running total,
+> which is exact but answers "how many ever", not "how many in this window".
+>
+> The queries below keep `increase()` because they are written for a busy
+> deployment, where samples are dense enough that the extrapolation is
+> negligible. On dev, or on any low-traffic series, prefer `count_over_time`.
 
 Movements created per minute:
 
@@ -130,6 +163,32 @@ Sign-ins by auth method and client:
 ```promql
 sum by (auth_method, client_platform) (increase(business_user_accounts_signed_in_count[1d]))
 ```
+
+Agent sessions opened, new vs resumed:
+
+```promql
+sum by (start_kind) (count_over_time(agent_sessions_started_count_total[$__range]))
+```
+
+The counter is emitted where a session begins (the client's session
+repository), not where its token is minted: a mint also happens on every
+reconnect and on the voice screen's speculative prefetch, so mints are not
+sessions. `start_kind="new"` is a session that did not exist a moment before;
+`start_kind="resumed"` is the same conversation picked up again through a live
+resume handle. Only the native client emits it today — web has no telemetry
+client yet, so web sessions are missing from this counter.
+
+Sessions that never reported a cost (opened but produced no usage metadata):
+
+```promql
+sum(count_over_time(agent_sessions_started_count_total[$__range]))
+  - sum(count_over_time(agent_session_cost_bucket_count[$__range]))
+```
+
+Every open is counted, resumed ones included: each is a connection episode that
+should end with a cost report. The difference can go slightly negative at the
+edges of a window, where a session's cost lands inside it and its open fell
+outside.
 
 Agent session cost p95:
 

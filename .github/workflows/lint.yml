@@ -23,3 +23,7 @@ jobs:
 
       - run: pnpm run lint
         working-directory: apps/web
+
+      # Los dashboards de Grafana son JSON versionado que nada mas valida: el
+      # archivo parsea perfecto y el error aparece recien al importarlo a mano.
+      - run: pnpm run validate-dashboards
