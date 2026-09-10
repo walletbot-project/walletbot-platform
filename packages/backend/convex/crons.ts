@@ -98,16 +98,22 @@ crons.interval(
     },
 )
 
+// ⚠️ TEMPORAL — SIN COMMITEAR — REVERTIR DESPUES DE PROBAR ⚠️
+// Los dos gauges de abajo van cada 6 horas en su version real. Bajados a 5
+// minutos solo para poder ver los paneles moverse mientras se prueba el
+// dashboard contra dev:joyous-grouse-582.
+// Revertir con: git checkout -- packages/backend/convex/crons.ts
+// y volver a desplegar. NO mergear esto.
 crons.interval(
     'record registered users total',
-    { hours: 6 },
+    { minutes: 5 },
     internal.telemetry.actions.recordRegisteredUsersTotal,
     {},
 )
 
 crons.interval(
     'record agent monthly usage',
-    { hours: 6 },
+    { minutes: 5 },
     internal.telemetry.actions.recordAgentMonthlyUsage,
     {},
 )
