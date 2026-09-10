@@ -239,7 +239,7 @@
                                             "kind": "DataQuery",
                                             "spec": {
                                                 "editorMode": "code",
-                                                "expr": "sum by(auth_method, client_platform) (increase(business_user_accounts_signed_in_count_total{deployment_environment=\"$Scope\"}[$__range]))",
+                                                "expr": "sum by(auth_method, client_platform) (last_over_time(business_user_accounts_signed_in_count_total{deployment_environment=\"$Scope\"}[$__range]))",
                                                 "instant": true,
                                                 "legendFormat": "{{auth_method}} / {{client_platform}}",
                                                 "range": false
@@ -254,7 +254,7 @@
                             "transformations": []
                         }
                     },
-                    "description": "Inicios de sesion en el rango seleccionado, abiertos por metodo de autenticacion y plataforma cliente (business.user_accounts.signed_in_count). No incluye altas: una cuenta nueva cuenta como alta y como log-in por separado.",
+                    "description": "Inicios de sesion acumuladas, abiertos por metodo de autenticacion y plataforma cliente (business.user_accounts.signed_in_count). No incluye altas: una cuenta nueva cuenta como alta y como log-in por separado.\n\nContador acumulado, no el delta del rango: estas metricas solo reciben una muestra cuando ocurre un evento, y increase() extrapola sobre los huecos. El rango elegido decide hasta donde se mira hacia atras, no cuanto se cuenta.",
                     "id": 11,
                     "links": [],
                     "title": "Log-ins por metodo de autenticacion y plataforma",
@@ -436,7 +436,7 @@
                                             "kind": "DataQuery",
                                             "spec": {
                                                 "editorMode": "code",
-                                                "expr": "sum by(movement_type) (increase(business_movements_created_count_total{deployment_environment=\"$Scope\"}[$__rate_interval]))",
+                                                "expr": "sum by(movement_type) (last_over_time(business_movements_created_count_total{deployment_environment=\"$Scope\"}[$__interval]))",
                                                 "instant": false,
                                                 "legendFormat": "{{movement_type}}",
                                                 "range": true
@@ -451,10 +451,10 @@
                             "transformations": []
                         }
                     },
-                    "description": "Movimientos creados por intervalo, apilados por tipo. No incluye transferencias: viajan en business.transfers.created_count.",
+                    "description": "Movimientos creados por intervalo, apilados por tipo. No incluye transferencias: viajan en business.transfers.created_count.\n\nContador acumulado, no el delta del rango: estas metricas solo reciben una muestra cuando ocurre un evento, y increase() extrapola sobre los huecos. El rango elegido decide hasta donde se mira hacia atras, no cuanto se cuenta.",
                     "id": 2,
                     "links": [],
-                    "title": "Movimientos creados en el tiempo",
+                    "title": "Movimientos creados, acumulado en el tiempo",
                     "vizConfig": {
                         "group": "timeseries",
                         "kind": "VizConfig",
@@ -472,8 +472,8 @@
                                         "axisPlacement": "auto",
                                         "barAlignment": 0,
                                         "barWidthFactor": 0.8,
-                                        "drawStyle": "bars",
-                                        "fillOpacity": 80,
+                                        "drawStyle": "line",
+                                        "fillOpacity": 10,
                                         "gradientMode": "none",
                                         "hideFrom": {
                                             "legend": false,
@@ -481,17 +481,17 @@
                                             "viz": false
                                         },
                                         "insertNulls": false,
-                                        "lineInterpolation": "linear",
-                                        "lineWidth": 0,
-                                        "pointSize": 5,
+                                        "lineInterpolation": "stepAfter",
+                                        "lineWidth": 2,
+                                        "pointSize": 6,
                                         "scaleDistribution": {
                                             "type": "linear"
                                         },
-                                        "showPoints": "never",
-                                        "spanNulls": false,
+                                        "showPoints": "always",
+                                        "spanNulls": true,
                                         "stacking": {
                                             "group": "A",
-                                            "mode": "normal"
+                                            "mode": "none"
                                         },
                                         "thresholdsStyle": {
                                             "mode": "off"
@@ -513,7 +513,7 @@
                             },
                             "options": {
                                 "legend": {
-                                    "calcs": ["sum"],
+                                    "calcs": ["lastNotNull"],
                                     "displayMode": "table",
                                     "placement": "right",
                                     "showLegend": true
@@ -747,7 +747,7 @@
                                             "spec": {
                                                 "editorMode": "code",
                                                 "exemplar": false,
-                                                "expr": "sum by(start_kind) (increase(agent_sessions_started_count_total{deployment_environment=\"$Scope\"}[$__range]))",
+                                                "expr": "sum by(start_kind) (last_over_time(agent_sessions_started_count_total{deployment_environment=\"$Scope\"}[$__range]))",
                                                 "instant": true,
                                                 "legendFormat": "{{start_kind}}",
                                                 "range": false
@@ -762,10 +762,10 @@
                             "transformations": []
                         }
                     },
-                    "description": "Sesiones de voz abiertas en el rango. Nuevas (`new`) son sesiones que no existian un momento antes; re-iniciadas (`resumed`) son la misma conversacion retomada con un resume handle. Se cuenta en el borde de la sesion, no en el mint del token: un mint ocurre tambien en cada reconexion y en el prefetch de la pantalla. Hoy solo emite el cliente nativo.",
+                    "description": "Sesiones de voz abiertas acumuladas. Nuevas (`new`) son sesiones que no existian un momento antes; re-iniciadas (`resumed`) son la misma conversacion retomada con un resume handle. Se cuenta en el borde de la sesion, no en el mint del token: un mint ocurre tambien en cada reconexion y en el prefetch de la pantalla. Hoy solo emite el cliente nativo.\n\nContador acumulado, no el delta del rango: estas metricas solo reciben una muestra cuando ocurre un evento, y increase() extrapola sobre los huecos. El rango elegido decide hasta donde se mira hacia atras, no cuanto se cuenta.",
                     "id": 5,
                     "links": [],
-                    "title": "Sesiones abiertas en el rango",
+                    "title": "Sesiones abiertas (acumulado)",
                     "vizConfig": {
                         "group": "stat",
                         "kind": "VizConfig",
@@ -787,7 +787,8 @@
                                     },
                                     "min": 0,
                                     "noValue": "Sin sesiones",
-                                    "unit": "short"
+                                    "unit": "short",
+                                    "decimals": 0
                                 },
                                 "overrides": [
                                     {
@@ -871,7 +872,7 @@
                                             "kind": "DataQuery",
                                             "spec": {
                                                 "editorMode": "code",
-                                                "expr": "sum by(auth_method) (increase(business_user_accounts_created_count_total{deployment_environment=\"$Scope\"}[$__range]))",
+                                                "expr": "sum by(auth_method) (last_over_time(business_user_accounts_created_count_total{deployment_environment=\"$Scope\"}[$__range]))",
                                                 "instant": true,
                                                 "legendFormat": "{{auth_method}}",
                                                 "range": false
@@ -886,7 +887,7 @@
                             "transformations": []
                         }
                     },
-                    "description": "Cuentas nuevas creadas por metodo de autenticacion dentro del rango seleccionado (business.user_accounts.created_count).",
+                    "description": "Cuentas nuevas creadas por metodo de autenticacion dentro acumulados seleccionado (business.user_accounts.created_count).\n\nContador acumulado, no el delta del rango: estas metricas solo reciben una muestra cuando ocurre un evento, y increase() extrapola sobre los huecos. El rango elegido decide hasta donde se mira hacia atras, no cuanto se cuenta.",
                     "id": 6,
                     "links": [],
                     "title": "Altas de cuenta por metodo de autenticacion",
@@ -1143,7 +1144,7 @@
                                             "kind": "DataQuery",
                                             "spec": {
                                                 "editorMode": "code",
-                                                "expr": "sum(increase(business_movements_created_count_total{deployment_environment=\"$Scope\",created_by=\"agent\"}[$__range])) / sum(increase(business_movements_created_count_total{deployment_environment=\"$Scope\"}[$__range]))",
+                                                "expr": "sum(last_over_time(business_movements_created_count_total{deployment_environment=\"$Scope\",created_by=\"agent\"}[$__range])) / sum(last_over_time(business_movements_created_count_total{deployment_environment=\"$Scope\"}[$__range]))",
                                                 "instant": true,
                                                 "legendFormat": "% agente",
                                                 "range": false
@@ -1158,7 +1159,7 @@
                             "transformations": []
                         }
                     },
-                    "description": "Porcentaje de movimientos del rango creados por el agente de voz sobre el total (form + agente).",
+                    "description": "Porcentaje de movimientos acumulados creados por el agente de voz sobre el total (form + agente).\n\nContador acumulado, no el delta del rango: estas metricas solo reciben una muestra cuando ocurre un evento, y increase() extrapola sobre los huecos. El rango elegido decide hasta donde se mira hacia atras, no cuanto se cuenta.",
                     "id": 14,
                     "links": [],
                     "title": "Movimientos creados por el agente",
@@ -1235,7 +1236,7 @@
                                             "kind": "DataQuery",
                                             "spec": {
                                                 "editorMode": "code",
-                                                "expr": "sum by(created_by) (increase(business_movements_created_count_total{deployment_environment=\"$Scope\"}[$__range]))",
+                                                "expr": "sum by(created_by) (last_over_time(business_movements_created_count_total{deployment_environment=\"$Scope\"}[$__range]))",
                                                 "instant": true,
                                                 "legendFormat": "{{created_by}}",
                                                 "range": false
@@ -1250,7 +1251,7 @@
                             "transformations": []
                         }
                     },
-                    "description": "Movimientos creados en el rango segun el flujo de origen: `form` (alta manual) vs `agent` (agente de voz).",
+                    "description": "Movimientos creados acumuladas segun el flujo de origen: `form` (alta manual) vs `agent` (agente de voz).\n\nContador acumulado, no el delta del rango: estas metricas solo reciben una muestra cuando ocurre un evento, y increase() extrapola sobre los huecos. El rango elegido decide hasta donde se mira hacia atras, no cuanto se cuenta.",
                     "id": 13,
                     "links": [],
                     "title": "Origen de los movimientos",
@@ -1271,7 +1272,8 @@
                                         }
                                     },
                                     "min": 0,
-                                    "unit": "short"
+                                    "unit": "short",
+                                    "decimals": 0
                                 },
                                 "overrides": []
                             },
@@ -1321,7 +1323,7 @@
                                             "kind": "DataQuery",
                                             "spec": {
                                                 "editorMode": "code",
-                                                "expr": "sum by(movement_type, created_by) (increase(business_movements_created_count_total{deployment_environment=\"$Scope\"}[$__range]))",
+                                                "expr": "sum by(movement_type, created_by) (last_over_time(business_movements_created_count_total{deployment_environment=\"$Scope\"}[$__range]))",
                                                 "instant": true,
                                                 "legendFormat": "{{movement_type}} / {{created_by}}",
                                                 "range": false
@@ -1365,7 +1367,7 @@
                             ]
                         }
                     },
-                    "description": "Cruce tipo de movimiento x flujo de origen dentro del rango seleccionado.",
+                    "description": "Cruce tipo de movimiento x flujo de origen dentro acumulados seleccionado.\n\nContador acumulado, no el delta del rango: estas metricas solo reciben una muestra cuando ocurre un evento, y increase() extrapola sobre los huecos. El rango elegido decide hasta donde se mira hacia atras, no cuanto se cuenta.",
                     "id": 15,
                     "links": [],
                     "title": "Detalle por tipo y origen",
@@ -1398,7 +1400,8 @@
                                             }
                                         ]
                                     },
-                                    "unit": "short"
+                                    "unit": "short",
+                                    "decimals": 0
                                 },
                                 "overrides": []
                             },
@@ -1436,7 +1439,7 @@
                                             "kind": "DataQuery",
                                             "spec": {
                                                 "editorMode": "code",
-                                                "expr": "sum by(start_kind) (increase(agent_sessions_started_count_total{deployment_environment=\"$Scope\"}[$__rate_interval]))",
+                                                "expr": "sum by(start_kind) (last_over_time(agent_sessions_started_count_total{deployment_environment=\"$Scope\"}[$__interval]))",
                                                 "instant": false,
                                                 "legendFormat": "{{start_kind}}",
                                                 "range": true
@@ -1451,10 +1454,10 @@
                             "transformations": []
                         }
                     },
-                    "description": "Sesiones de voz abiertas por intervalo. La linea verde son sesiones nuevas (no existia una un momento antes); la naranja son sesiones re-iniciadas, la misma conversacion retomada con un resume handle. Se cuenta en el borde de la sesion, no en el mint del token: hay un mint en cada reconexion y en el prefetch de la pantalla de voz. Con poco volumen conviene ensanchar el rango: increase sobre un intervalo sin muestras se ve como un hueco, no como un cero.",
+                    "description": "Sesiones de voz abiertas por intervalo. La linea verde son sesiones nuevas (no existia una un momento antes); la naranja son sesiones re-iniciadas, la misma conversacion retomada con un resume handle. Se cuenta en el borde de la sesion, no en el mint del token: hay un mint en cada reconexion y en el prefetch de la pantalla de voz. Con poco volumen conviene ensanchar el rango: increase sobre un intervalo sin muestras se ve como un hueco, no como un cero.\n\nContador acumulado, no el delta del rango: estas metricas solo reciben una muestra cuando ocurre un evento, y increase() extrapola sobre los huecos. El rango elegido decide hasta donde se mira hacia atras, no cuanto se cuenta.",
                     "id": 16,
                     "links": [],
-                    "title": "Sesiones abiertas en el tiempo",
+                    "title": "Sesiones abiertas, acumulado en el tiempo",
                     "vizConfig": {
                         "group": "timeseries",
                         "kind": "VizConfig",
@@ -1473,7 +1476,7 @@
                                         "barAlignment": 0,
                                         "barWidthFactor": 0.6,
                                         "drawStyle": "line",
-                                        "fillOpacity": 12,
+                                        "fillOpacity": 10,
                                         "gradientMode": "none",
                                         "hideFrom": {
                                             "legend": false,
@@ -1481,14 +1484,14 @@
                                             "viz": false
                                         },
                                         "insertNulls": false,
-                                        "lineInterpolation": "linear",
+                                        "lineInterpolation": "stepAfter",
                                         "lineWidth": 2,
                                         "pointSize": 6,
                                         "scaleDistribution": {
                                             "type": "linear"
                                         },
-                                        "showPoints": "auto",
-                                        "spanNulls": false,
+                                        "showPoints": "always",
+                                        "spanNulls": true,
                                         "stacking": {
                                             "group": "A",
                                             "mode": "none"
@@ -1547,7 +1550,7 @@
                             },
                             "options": {
                                 "legend": {
-                                    "calcs": ["sum", "max"],
+                                    "calcs": ["lastNotNull"],
                                     "displayMode": "table",
                                     "placement": "bottom",
                                     "showLegend": true
@@ -1582,7 +1585,7 @@
                                             "kind": "DataQuery",
                                             "spec": {
                                                 "editorMode": "code",
-                                                "expr": "sum(increase(agent_sessions_started_count_total{deployment_environment=\"$Scope\"}[$__range])) - sum(increase(agent_session_cost_bucket_count{deployment_environment=\"$Scope\"}[$__range]))",
+                                                "expr": "sum(last_over_time(agent_sessions_started_count_total{deployment_environment=\"$Scope\"}[$__range])) - sum(last_over_time(agent_session_cost_bucket_count{deployment_environment=\"$Scope\"}[$__range]))",
                                                 "instant": true,
                                                 "legendFormat": "Sin costo reportado",
                                                 "range": false
@@ -1597,7 +1600,7 @@
                             "transformations": []
                         }
                     },
-                    "description": "Sesiones abiertas en el rango que nunca reportaron costo. El bucket de costo se emite como efecto de recibir un agent.session.cost_usd, asi que esta resta son sesiones que se abrieron y no produjeron nada: caidas antes del cierre, o sin usageMetadata. Cerca de cero es lo sano. Puede dar negativo en los bordes del rango, cuando el costo de una sesion cae dentro de la ventana y su apertura quedo afuera.",
+                    "description": "Sesiones abiertas acumuladas que nunca reportaron costo. El bucket de costo se emite como efecto de recibir un agent.session.cost_usd, asi que esta resta son sesiones que se abrieron y no produjeron nada: caidas antes del cierre, o sin usageMetadata. Cerca de cero es lo sano. Puede dar negativo en los bordes acumulados, cuando el costo de una sesion cae dentro de la ventana y su apertura quedo afuera.\n\nContador acumulado, no el delta del rango: estas metricas solo reciben una muestra cuando ocurre un evento, y increase() extrapola sobre los huecos. El rango elegido decide hasta donde se mira hacia atras, no cuanto se cuenta.",
                     "id": 17,
                     "links": [],
                     "title": "Sesiones sin costo reportado",

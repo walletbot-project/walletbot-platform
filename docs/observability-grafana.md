@@ -85,6 +85,26 @@ Useful labels:
 
 ## Starter PromQL
 
+> **`increase()` lies at low volume.** These counters are cumulative and only
+> get a sample when an event actually happens. `increase(v[w])` is
+> `rate(v[w]) * w`, and `rate()` extrapolates to the edges of the window, so a
+> handful of events clustered inside a much wider window gets projected across
+> all of it — three movements reported as `40.9` — and the result is fractional
+> rather than a count. Worse, `increase()` needs at least two samples in the
+> window, so sparse series return **no data at all** instead of a number.
+>
+> For an exact count, read the cumulative value with
+> `last_over_time(v[$__range])`, which is what the panels in
+> `docs/dashboards/` do. It answers "how many in total", not "how many in this
+> window" — the range only decides how far back to look for the latest sample.
+> To scope to a window, `max_over_time(v[w]) - min_over_time(v[w])` is exact and
+> never extrapolates, at the cost of missing the increment that produced the
+> first sample in the window.
+>
+> The queries below keep `increase()` because they are written for a busy
+> deployment, where samples are dense enough that the extrapolation is
+> negligible. On dev, or on any low-traffic series, prefer `last_over_time`.
+
 Movements created per minute:
 
 ```promql
@@ -136,7 +156,7 @@ sum by (auth_method, client_platform) (increase(business_user_accounts_signed_in
 Agent sessions opened, new vs resumed:
 
 ```promql
-sum by (start_kind) (increase(agent_sessions_started_count_total[1d]))
+sum by (start_kind) (last_over_time(agent_sessions_started_count_total[$__range]))
 ```
 
 The counter is emitted where a session begins (the client's session
@@ -150,8 +170,8 @@ client yet, so web sessions are missing from this counter.
 Sessions that never reported a cost (opened but produced no usage metadata):
 
 ```promql
-sum(increase(agent_sessions_started_count_total[1d]))
-  - sum(increase(agent_session_cost_bucket_count[1d]))
+sum(last_over_time(agent_sessions_started_count_total[$__range]))
+  - sum(last_over_time(agent_session_cost_bucket_count[$__range]))
 ```
 
 Every open is counted, resumed ones included: each is a connection episode that
