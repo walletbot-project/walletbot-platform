@@ -93,17 +93,28 @@ Useful labels:
 > rather than a count. Worse, `increase()` needs at least two samples in the
 > window, so sparse series return **no data at all** instead of a number.
 >
-> For an exact count, read the cumulative value with
-> `last_over_time(v[$__range])`, which is what the panels in
-> `docs/dashboards/` do. It answers "how many in total", not "how many in this
-> window" — the range only decides how far back to look for the latest sample.
-> To scope to a window, `max_over_time(v[w]) - min_over_time(v[w])` is exact and
-> never extrapolates, at the cost of missing the increment that produced the
-> first sample in the window.
+> Count the samples instead: `count_over_time(v[$__range])`, which is what the
+> panels in `docs/dashboards/` do. Every event produces exactly one exported
+> row, and every row becomes one OTLP data point stamped with its own
+> `receivedAt`, so counting samples is counting events — exact, integer, and
+> genuinely scoped to the picked range, so 24h answers for 24h and 6h answers
+> for 6h. Per bucket over time, the same function against `[$__interval]`.
+>
+> This holds only while one event is one sample. Rows exported in a single HTTP
+> request share a `receivedAt`, so same-series events emitted inside one
+> mutation would collapse into one data point. Today nothing does that:
+> movements are recorded one mutation per movement and sessions one per open.
+> A future bulk path that emits several of the same counter at once would need
+> distinct timestamps, or this undercounts.
+>
+> Two alternatives, each with a catch: `max_over_time(v[w]) - min_over_time(v[w])`
+> is exact and window-scoped but misses the increment that produced the first
+> sample in the window; `last_over_time(v[$__range])` reads the running total,
+> which is exact but answers "how many ever", not "how many in this window".
 >
 > The queries below keep `increase()` because they are written for a busy
 > deployment, where samples are dense enough that the extrapolation is
-> negligible. On dev, or on any low-traffic series, prefer `last_over_time`.
+> negligible. On dev, or on any low-traffic series, prefer `count_over_time`.
 
 Movements created per minute:
 
@@ -156,7 +167,7 @@ sum by (auth_method, client_platform) (increase(business_user_accounts_signed_in
 Agent sessions opened, new vs resumed:
 
 ```promql
-sum by (start_kind) (last_over_time(agent_sessions_started_count_total[$__range]))
+sum by (start_kind) (count_over_time(agent_sessions_started_count_total[$__range]))
 ```
 
 The counter is emitted where a session begins (the client's session
@@ -170,8 +181,8 @@ client yet, so web sessions are missing from this counter.
 Sessions that never reported a cost (opened but produced no usage metadata):
 
 ```promql
-sum(last_over_time(agent_sessions_started_count_total[$__range]))
-  - sum(last_over_time(agent_session_cost_bucket_count[$__range]))
+sum(count_over_time(agent_sessions_started_count_total[$__range]))
+  - sum(count_over_time(agent_session_cost_bucket_count[$__range]))
 ```
 
 Every open is counted, resumed ones included: each is a connection episode that
