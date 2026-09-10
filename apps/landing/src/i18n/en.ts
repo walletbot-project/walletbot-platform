@@ -7,9 +7,9 @@ import type { Messages } from './es'
  */
 export const en: Messages = {
     meta: {
-        title: 'Wallet Bot — Understand where your money goes',
+        title: 'Wallet Bot — Expenses, logged by voice',
         description:
-            'Your own expense assistant. Tell it what you spent, it writes it down, and when you want to know how you’re doing, you ask.',
+            'A simple, fast, modern personal expense tracker. Just talk and your expenses are logged: no spreadsheets, no tedious forms. Just a conversation.',
     },
 
     nav: {
@@ -41,11 +41,11 @@ export const en: Messages = {
                 '“That I feel like it should be automatic”',
             ],
         },
-        headline: 'We help you understand where your money goes.',
+        headline: 'Say it. It’s already logged.',
         subheadline: {
-            lead: 'Your own assistant for your expenses:',
-            highlight: 'tell it what you spent and it writes it down for you',
-            rest: '. When you want to know how you’re doing, you ask.',
+            lead: 'Wallet Bot is a',
+            highlight: 'personal expense tracker with a live voice mode',
+            rest: ': tell it what you spent and the assistant writes it down for you. No spreadsheets. No forms. Just a conversation.',
         },
         ctaFeatures: 'See features',
     },

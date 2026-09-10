@@ -1,5 +1,16 @@
 # Grafana Cloud Observability Setup
 
+**Instance:** <https://fearlesspillar2602.grafana.net> (org access required)
+
+| Dashboard | |
+| --- | --- |
+| Accounts created by auth method | <https://fearlesspillar2602.grafana.net/d/geb465q/user-accounts-created-by-auth-method?var-Scope=production> |
+
+The link keeps `var-Scope=production` because the scope actually selects the
+data; the time range and panel state are left off on purpose so it opens on the
+dashboard's own defaults rather than someone's saved window.
+
+
 ## Goal
 
 Send WalletBot business metrics to Grafana Cloud through OTLP HTTP.

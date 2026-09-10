@@ -17,9 +17,9 @@
  */
 export const es = {
     meta: {
-        title: 'Wallet Bot — Entendé en qué se te va la plata',
+        title: 'Wallet Bot — Tus gastos, registrados con la voz',
         description:
-            'Tu propio asistente de gastos. Le contás lo que gastaste, lo anota por vos, y cuando querés saber cómo venís, le preguntás.',
+            'Gestor de gastos personales simple, rápido y moderno. Hablá y tus gastos quedan registrados: sin planillas, sin formularios tediosos. Solo una conversación.',
     },
 
     nav: {
@@ -63,14 +63,14 @@ export const es = {
                 '«Que siento que debería ser automático»',
             ],
         },
-        headline: 'Te ayudamos a entender en qué se te va la plata.',
+        headline: 'Hablá. Ya quedó registrado.',
         // Split so the middle part can be bolded. No part carries leading or
         // trailing spaces; Astro drops the whitespace around an expression, so
         // the markup puts the one space back explicitly.
         subheadline: {
-            lead: 'Tu propio asistente para tus gastos:',
-            highlight: 'le contás lo que gastaste y lo anota por vos',
-            rest: '. Cuando querés saber cómo venís, le preguntás.',
+            lead: 'Wallet Bot es un',
+            highlight: 'gestor de gastos personales con modo de voz en vivo',
+            rest: ': contale qué gastaste y el asistente lo anota por vos. Sin planillas. Sin formularios. Solo una conversación.',
         },
         ctaFeatures: 'Ver funciones',
     },
