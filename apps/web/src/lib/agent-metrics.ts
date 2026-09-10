@@ -154,6 +154,29 @@ export const estimateSessionCostUsd = (
     return (estimatedInputUsd ?? 0) + (estimatedOutputUsd ?? 0)
 }
 
+export const recordAgentSessionStarted = (
+    client: ConvexReactClient,
+    args: {
+        sessionId: string
+        model: string
+        resumed: boolean
+    },
+): Promise<void> =>
+    recordWebMetricBatch(client, [
+        {
+            name: 'agent.sessions.started_count',
+            timestamp: Date.now(),
+            type: 'counter',
+            value: 1,
+            unit: 'count',
+            attributes: {
+                model: args.model,
+                start_kind: args.resumed ? 'resumed' : 'new',
+            },
+            sessionId: args.sessionId,
+        },
+    ])
+
 export const recordAgentSessionCostFromUsage = (
     client: ConvexReactClient,
     args: {

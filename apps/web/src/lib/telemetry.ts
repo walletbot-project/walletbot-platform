@@ -5,6 +5,7 @@ type MetricType = 'counter' | 'gauge' | 'histogram'
 type MetricUnit = 'count' | 'ms' | 'usd'
 type MetricAttributeValue = string | number | boolean
 type WebMetricName =
+    | 'agent.sessions.started_count'
     | 'agent.session.cost_usd'
     | 'agent.interaction.cost_usd'
     | 'agent.interactions.completed_count'

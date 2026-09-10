@@ -23,6 +23,7 @@ const signInAuthMethod = v.union(
 const clientPlatform = v.union(v.literal('native'), v.literal('web'))
 
 const webMetricNames = new Set([
+    'agent.sessions.started_count',
     'agent.session.cost_usd',
     'agent.interaction.cost_usd',
     'agent.interactions.completed_count',
@@ -39,7 +40,8 @@ const assertWebMetric = (metric: MetricInput): void => {
         throw new Error(`metric ${metric.name} must have a positive value`)
     }
     if (
-        metric.name === 'agent.interactions.completed_count' &&
+        (metric.name === 'agent.sessions.started_count' ||
+            metric.name === 'agent.interactions.completed_count') &&
         metric.value !== 1
     ) {
         throw new Error(`metric ${metric.name} must increment by one`)
@@ -97,8 +99,17 @@ const assertWebMetric = (metric: MetricInput): void => {
     if (typeof attributes.model !== 'string' || !attributes.model.trim()) {
         throw new Error(`metric ${metric.name} requires model`)
     }
-    if (typeof attributes.mode !== 'string') {
+    if (
+        metric.name !== 'agent.sessions.started_count' &&
+        typeof attributes.mode !== 'string'
+    ) {
         throw new Error(`metric ${metric.name} requires mode`)
+    }
+    if (
+        metric.name === 'agent.sessions.started_count' &&
+        typeof attributes.start_kind !== 'string'
+    ) {
+        throw new Error(`metric ${metric.name} requires start_kind`)
     }
     if (
         metric.name === 'agent.interactions.completed_count' &&
@@ -107,7 +118,8 @@ const assertWebMetric = (metric: MetricInput): void => {
         throw new Error(`metric ${metric.name} requires interaction_type`)
     }
     if (
-        metric.name !== 'agent.interactions.completed_count' &&
+        (metric.name === 'agent.session.cost_usd' ||
+            metric.name === 'agent.interaction.cost_usd') &&
         attributes.cost_source !== 'estimated'
     ) {
         throw new Error(`metric ${metric.name} must use estimated cost`)

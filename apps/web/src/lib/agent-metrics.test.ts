@@ -1,11 +1,63 @@
-import { describe, expect, it } from 'vitest'
+import type { ConvexReactClient } from 'convex/react'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
     AgentInteractionCostTracker,
     estimateSessionCostUsd,
+    recordAgentSessionStarted,
     usageTokenAttributes,
 } from '@/lib/agent-metrics'
 
+const installBrowserGlobals = () => {
+    const values = new Map<string, string>()
+    vi.stubGlobal('localStorage', {
+        getItem: (key: string) => values.get(key) ?? null,
+        setItem: (key: string, value: string) => values.set(key, value),
+    })
+    vi.stubGlobal('crypto', { randomUUID: () => 'installation-1' })
+}
+
+afterEach(() => {
+    vi.restoreAllMocks()
+    vi.unstubAllGlobals()
+})
+
 describe('agent web metrics', () => {
+    it('records new and resumed session starts with native-compatible attributes', async () => {
+        installBrowserGlobals()
+        const mutation = vi.fn().mockResolvedValue({ accepted: 1 })
+        const client = { mutation } as unknown as ConvexReactClient
+
+        await recordAgentSessionStarted(client, {
+            sessionId: 'session-new',
+            model: 'gemini-live',
+            resumed: false,
+        })
+        await recordAgentSessionStarted(client, {
+            sessionId: 'session-resumed',
+            model: 'gemini-live',
+            resumed: true,
+        })
+
+        expect(mutation.mock.calls.map((call) => call[1].metrics[0])).toEqual([
+            expect.objectContaining({
+                name: 'agent.sessions.started_count',
+                type: 'counter',
+                value: 1,
+                unit: 'count',
+                sessionId: 'session-new',
+                attributes: { model: 'gemini-live', start_kind: 'new' },
+            }),
+            expect.objectContaining({
+                name: 'agent.sessions.started_count',
+                type: 'counter',
+                value: 1,
+                unit: 'count',
+                sessionId: 'session-resumed',
+                attributes: { model: 'gemini-live', start_kind: 'resumed' },
+            }),
+        ])
+    })
+
     it('estimates Gemini Live cost and token attributes from usage metadata', () => {
         const usage = {
             promptTokenCount: 1000,

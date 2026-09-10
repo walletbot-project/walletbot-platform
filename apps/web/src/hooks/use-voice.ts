@@ -12,6 +12,7 @@ import {
     AgentInteractionCostTracker,
     estimateSessionCostUsd,
     recordAgentInteractionCost,
+    recordAgentSessionStarted,
     recordAgentSessionCostFromUsage,
     usageTokenAttributes,
 } from '@/lib/agent-metrics'
@@ -267,6 +268,7 @@ export function useVoice(opts: UseVoiceOpts) {
     const historyRef = useRef<VoiceHistoryRecorder | null>(null)
     /** The model the current token was minted for, once it is known. */
     const modelRef = useRef<string | null>(null)
+    const sessionStartedMetricSentRef = useRef(false)
     const latestUsageMetadataRef = useRef<Record<string, unknown> | null>(null)
     const sessionCostMetricSentRef = useRef(false)
     const interactionCostTrackerRef = useRef(new AgentInteractionCostTracker())
@@ -878,6 +880,17 @@ export function useVoice(opts: UseVoiceOpts) {
             // becomes uploadable.
             historyRef.current?.open(model)
             modelRef.current = model
+            const sessionId = historyRef.current?.sessionId
+            if (!sessionStartedMetricSentRef.current && sessionId) {
+                sessionStartedMetricSentRef.current = true
+                // Web reconnects reuse this logical session and restore context
+                // from history; there is no live resume handle to classify yet.
+                void recordAgentSessionStarted(convex, {
+                    sessionId,
+                    model,
+                    resumed: false,
+                })
+            }
             recordHistory('system', 'local', { message: tokenNotice })
 
             const playbackCtx = new AudioContext({
@@ -1244,6 +1257,7 @@ export function useVoice(opts: UseVoiceOpts) {
             audioPlaybackEnabledRef.current =
                 mode === 'audio' ? true : RESPOND_TO_TEXT_WITH_AUDIO
             modelRef.current = null
+            sessionStartedMetricSentRef.current = false
             latestUsageMetadataRef.current = null
             sessionCostMetricSentRef.current = false
             interactionCostTrackerRef.current =
