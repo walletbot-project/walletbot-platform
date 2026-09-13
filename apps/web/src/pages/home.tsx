@@ -195,6 +195,8 @@ function AccountMenu({
     const auth = useAuth()
     const user = useUser()
     const isAdmin = useQuery(api.v1.featureFlags.queries.getMyAdminStatus)
+    // Same subscription the home screen holds; Convex dedupes it.
+    const flags = useQuery(api.v1.featureFlags.queries.getMyFlags)
 
     const initials = (user.name || user.email)
         .split(' ')
@@ -216,6 +218,19 @@ function AccountMenu({
             label: t.settings.title,
             onClick: () => go('/settings'),
         },
+        // Only for accounts in the WhatsApp rollout. The route itself stays
+        // open either way, so a number linked before the flag was switched off
+        // can still be disconnected.
+        ...(flags?.whatsapp
+            ? [
+                  {
+                      key: 'whatsapp',
+                      icon: 'chat',
+                      label: t.whatsapp.title,
+                      onClick: () => go('/whatsapp'),
+                  },
+              ]
+            : []),
         ...(isAdmin
             ? [
                   {

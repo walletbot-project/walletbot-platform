@@ -9,6 +9,8 @@ served from `app.walletbot.live` (its own Pages project).
 | Route (per locale) | Source | Content |
 |---|---|---|
 | `/{en,es}/` | `src/components/home-page.astro` | Hero, feature grid, get-the-app links |
+| `/{en,es}/beta` | `src/components/beta-page.astro` | Beta access request — a card out to the Google Form |
+| `/{en,es}/support` | `src/components/support-page.astro` | Support mailbox: one `mailto:` card, nothing else |
 | `/{en,es}/privacy` | `src/components/legal-page.astro` | Renders `docs/legal/privacy-policy.{locale}.md` |
 | `/{en,es}/terms` | `src/components/legal-page.astro` | Renders `docs/legal/terms-and-conditions.{locale}.md` |
 
@@ -18,11 +20,28 @@ features that don't exist — the saved-filters card is commented out until that
 feature ships — and keep local-only wording scoped to *financial records*, per
 `docs/legal/README.md`.
 
-Store links are the primary CTA (hero badges, header button, closing section):
-Google Play points at the real `live.walletbot.app` listing URL (a placeholder
-until the listing goes live) and the App Store badge is "coming soon" (no
-link). The web app is deliberately downplayed — a single quiet footer link to
-`app.walletbot.live`. URLs live in `src/lib/links.ts`.
+The one card describing something unbuilt is WhatsApp, and it says so: dashed
+border, no brand color, a "coming soon" chip (`soonCard` / `soonIconChip` in
+`home-page.astro`). A roadmap item earns a place on the page only with that
+treatment. When it ships, move it onto `card` / `iconChip` and drop the chip.
+
+## Getting the app
+
+`src/components/store-badges.astro` renders the three ways in as one row of
+equal badges, in the hero and again, larger, in the closing section. Only the
+web app is actually open: it links straight to `app.walletbot.live`. Both store
+badges point at `/{locale}/beta` instead of a store, because the Android build
+is a **closed** test (access runs through the tester list) and iOS is not
+submitted yet. The header button asks for access too. URLs live in
+`src/lib/links.ts` — `PLAY_STORE_URL` is kept there, unlinked, for when the
+test opens.
+
+`/{locale}/beta` collects tester requests through a **Google Form**
+(`BETA_FORM_URL`), not a form of our own — the page is one big card out to it,
+plus the web app underneath as the way in that needs no waiting. Nothing on
+this site posts anything anywhere, which is why it can stay a plain static
+build. Unlike `/privacy` and `/terms` the page has no unprefixed alias, so
+anything linking to it has to carry a locale.
 
 ## Legal documents
 
@@ -110,10 +129,19 @@ retired `@astrojs/tailwind` integration. There is no `tailwind.config.js` —
 tokens go in the `@theme` block in `src/styles/global.css`, which
 `base-layout.astro` imports.
 
-- Dark theme (`bg-slate-950`), Linear-style: white/slate type, hairline
-  `white/10` borders, `--color-brand` (the native app's Material seed color)
-  reserved for glows, icons and tinted chips. It is too light for text — never
-  use it as a text color.
+- Light theme built on the app's own Material scheme, copied token for token
+  from `apps/web/src/styles/m3-theme.css` (light) into the `@theme` block —
+  the site and the app are one palette, not two. Surfaces are `bg-surface` /
+  `bg-panel` / `bg-panel-alt`, type is `text-ink` / `text-ink-soft`, borders
+  are `border-line` / `border-line-strong`.
+- Two brand tokens, and the distinction matters: `--color-brand` (#6de7d8,
+  Material's `primaryContainer`) is the bright turquoise and is **fill only** —
+  it sits at 1.5:1 on `--color-surface`, so it can never carry text. Anything
+  readable uses `--color-brand-ink` (#006a61, `primary`) at 6.2:1. `--color-amber`
+  (`tertiaryContainer`) is the palette's second accent, used for the eyebrow
+  rule and the "zero spinners" chip.
+- Contrast floor is WCAG AA (4.5:1). `--color-ink-soft` is the lightest text
+  token at 7.4:1; there is deliberately nothing between it and the surface.
 - Font: Inter Variable, self-hosted via `@fontsource-variable/inter`.
 - Icons are inline SVGs in `src/components/icon.astro` — Lucide outlines plus
   the Apple and Google Play brand glyphs (Simple Icons paths). No icon font, no
@@ -121,7 +149,16 @@ tokens go in the `@theme` block in `src/styles/global.css`, which
 - The hero phone mockup (`src/components/phone-mockup.astro`) is a CSS-only
   illustration of the native voice screen; its copy lives in the `demo` catalog
   section.
-- Legal pages use `@tailwindcss/typography` (`prose prose-invert`), loaded with
+- The band closing the hero (`src/components/live-ledger.astro`) is a tape of
+  quotes about why people stop tracking their expenses, from the
+  `hero.quoteTape` catalog section. The fixed chip beside it is load-bearing,
+  not decoration: unattributed quotes next to a product read as reviews *of
+  that product*, and these are complaints about the status quo — the chip is
+  what frames them as the problem. There is no mic or waveform here on purpose;
+  a listening indicator next to complaints about manual entry reads as the app
+  recording complaints. Below `sm` the tape holds one quote still, since a
+  single line scrolling past a phone-width viewport is mostly empty tape.
+- Legal pages use `@tailwindcss/typography` (`prose prose-slate`), loaded with
   `@plugin` in `global.css`.
 
 ## Markdown

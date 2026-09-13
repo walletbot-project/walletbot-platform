@@ -583,7 +583,7 @@ transacciones reales. En web las crea el workflow en lotes de 50 (unos 174
 pasos); en nativo es un solo `db.transaction` con esas 8.700 inserciones, que en
 un teléfono se va a notar. Es lo pedido, y el corte de ocurrencia las mantiene
 fuera de Actividad, del saldo y de los contadores, pero es la razón por la que
-R-039 sigue pidiendo un tope antes de sacar el feature flag.
+R-049 sigue pidiendo un tope antes de sacar el feature flag.
 
 ### 5.5. La misma fila en el detalle de Actividad
 

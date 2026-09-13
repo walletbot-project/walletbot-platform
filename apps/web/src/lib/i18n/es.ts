@@ -58,6 +58,39 @@ export const es = {
         language: 'Idioma',
     },
 
+    whatsapp: {
+        title: 'WhatsApp',
+        subtitle: 'Registrá gastos chateando con Gaston',
+        loadFailed: 'No pudimos cargar el estado de WhatsApp',
+        retry: 'Tocá para reintentar',
+        unavailableTitle: 'Todavía no está disponible',
+        unavailableBody:
+            'WhatsApp no está habilitado para tu cuenta. Te avisamos cuando se active.',
+        notConnectedTitle: 'Sin conectar',
+        notConnectedBody:
+            'Vinculá tu número para registrar gastos chateando con Gaston por WhatsApp.',
+        connect: 'Conectar WhatsApp',
+        codeLabel: 'Tu código de vinculación',
+        codeExpiryHint: 'Vale 10 minutos y se usa una sola vez.',
+        openWhatsapp: 'Abrir WhatsApp',
+        copyCode: 'Copiar código',
+        codeCopied: 'Código copiado',
+        copyFailed:
+            'No pudimos copiar el código. Seleccionalo y copialo a mano.',
+        codeFailed: 'No pudimos crear el código',
+        openFailed:
+            'No pudimos abrir WhatsApp. Copiá el código y mandalo a mano.',
+        connectedTitle: 'Conectado',
+        connectedBody:
+            'Escribile a Gaston por WhatsApp y va a registrar tus movimientos.',
+        linkedOn: (p: { date: string }) => `Vinculado el ${p.date}`,
+        disconnect: 'Desconectar',
+        disconnectConfirm:
+            'Gaston va a dejar de responderle a este número hasta que lo vincules de nuevo.',
+        disconnectFailed: 'No pudimos desconectar el número',
+        disconnected: 'Número desconectado',
+    },
+
     feedback: {
         title: 'Enviar comentarios',
         subtitle:

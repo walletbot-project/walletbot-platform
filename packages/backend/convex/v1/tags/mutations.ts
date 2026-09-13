@@ -8,7 +8,7 @@ import { requireAuth } from '../../users/helpers'
 // Business rule: a tag always has a color. Convex has no column-level
 // defaults, so we fill it here when a writer omits it. Mirrors the native
 // default in apps/native/lib/database.dart.
-const DEFAULT_TAG_COLOR = '#69F0AE'
+export const DEFAULT_TAG_COLOR = '#69F0AE'
 
 async function getTagById(
     ctx: MutationCtx,

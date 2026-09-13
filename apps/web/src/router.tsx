@@ -287,6 +287,15 @@ export const router = createBrowserRouter([
                                             ),
                                     },
                                     {
+                                        path: '/whatsapp',
+                                        lazy: () =>
+                                            import('@/pages/whatsapp').then(
+                                                (m) => ({
+                                                    Component: m.Whatsapp,
+                                                }),
+                                            ),
+                                    },
+                                    {
                                         path: '/admin/feature-flags',
                                         lazy: () =>
                                             import(

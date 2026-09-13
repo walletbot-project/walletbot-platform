@@ -8,6 +8,14 @@
  * @module
  */
 
+import type * as agent_idempotency from "../agent/idempotency.js";
+import type * as agent_internal from "../agent/internal.js";
+import type * as agent_prompt from "../agent/prompt.js";
+import type * as agent_resolve from "../agent/resolve.js";
+import type * as agent_runner from "../agent/runner.js";
+import type * as agent_time from "../agent/time.js";
+import type * as agent_tools from "../agent/tools.js";
+import type * as agent_toolset from "../agent/toolset.js";
 import type * as agentReports_helpers from "../agentReports/helpers.js";
 import type * as agentReports_internal from "../agentReports/internal.js";
 import type * as agentReports_rateLimits from "../agentReports/rateLimits.js";
@@ -74,6 +82,7 @@ import type * as schema_transactions from "../schema/transactions.js";
 import type * as schema_userDeletion from "../schema/userDeletion.js";
 import type * as schema_userSettings from "../schema/userSettings.js";
 import type * as schema_voice from "../schema/voice.js";
+import type * as schema_whatsapp from "../schema/whatsapp.js";
 import type * as support_actions from "../support/actions.js";
 import type * as support_http from "../support/http.js";
 import type * as support_internal from "../support/internal.js";
@@ -131,6 +140,16 @@ import type * as v1_users_queries from "../v1/users/queries.js";
 import type * as v1_users_utils from "../v1/users/utils.js";
 import type * as v1_voice_sessions from "../v1/voice/sessions.js";
 import type * as v1_voice_utils from "../v1/voice/utils.js";
+import type * as v1_whatsapp_mutations from "../v1/whatsapp/mutations.js";
+import type * as v1_whatsapp_queries from "../v1/whatsapp/queries.js";
+import type * as voice_internal from "../voice/internal.js";
+import type * as voice_utils from "../voice/utils.js";
+import type * as whatsapp_helpers from "../whatsapp/helpers.js";
+import type * as whatsapp_http from "../whatsapp/http.js";
+import type * as whatsapp_internal from "../whatsapp/internal.js";
+import type * as whatsapp_linking from "../whatsapp/linking.js";
+import type * as whatsapp_nodeActions from "../whatsapp/nodeActions.js";
+import type * as whatsapp_utils from "../whatsapp/utils.js";
 
 import type {
   ApiFromModules,
@@ -139,6 +158,14 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  "agent/idempotency": typeof agent_idempotency;
+  "agent/internal": typeof agent_internal;
+  "agent/prompt": typeof agent_prompt;
+  "agent/resolve": typeof agent_resolve;
+  "agent/runner": typeof agent_runner;
+  "agent/time": typeof agent_time;
+  "agent/tools": typeof agent_tools;
+  "agent/toolset": typeof agent_toolset;
   "agentReports/helpers": typeof agentReports_helpers;
   "agentReports/internal": typeof agentReports_internal;
   "agentReports/rateLimits": typeof agentReports_rateLimits;
@@ -205,6 +232,7 @@ declare const fullApi: ApiFromModules<{
   "schema/userDeletion": typeof schema_userDeletion;
   "schema/userSettings": typeof schema_userSettings;
   "schema/voice": typeof schema_voice;
+  "schema/whatsapp": typeof schema_whatsapp;
   "support/actions": typeof support_actions;
   "support/http": typeof support_http;
   "support/internal": typeof support_internal;
@@ -262,6 +290,16 @@ declare const fullApi: ApiFromModules<{
   "v1/users/utils": typeof v1_users_utils;
   "v1/voice/sessions": typeof v1_voice_sessions;
   "v1/voice/utils": typeof v1_voice_utils;
+  "v1/whatsapp/mutations": typeof v1_whatsapp_mutations;
+  "v1/whatsapp/queries": typeof v1_whatsapp_queries;
+  "voice/internal": typeof voice_internal;
+  "voice/utils": typeof voice_utils;
+  "whatsapp/helpers": typeof whatsapp_helpers;
+  "whatsapp/http": typeof whatsapp_http;
+  "whatsapp/internal": typeof whatsapp_internal;
+  "whatsapp/linking": typeof whatsapp_linking;
+  "whatsapp/nodeActions": typeof whatsapp_nodeActions;
+  "whatsapp/utils": typeof whatsapp_utils;
 }>;
 
 /**
