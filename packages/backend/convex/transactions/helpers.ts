@@ -1,12 +1,7 @@
-import { pastCutoffBigInt } from '@wallet-bot/shared'
 import { v } from 'convex/values'
 import type { Doc, Id } from '../_generated/dataModel'
 import type { MutationCtx } from '../_generated/server'
 import { inflowsByAccount, outflowsByAccount } from '../aggregates'
-import {
-    republishTransactionTags,
-    trackFutureOccurrence,
-} from '../occurrences/helpers'
 import { nextSeq, writeTombstone } from '../sync/helpers'
 
 /** The value fields a recurring edit can carry to later occurrences. */
@@ -31,7 +26,6 @@ export async function aggregateInsert(
 ): Promise<void> {
     const doc = await ctx.db.get(id)
     if (!doc) return
-    await trackFutureOccurrence(ctx, doc)
     await outflowsByAccount.insert(ctx, doc)
     await inflowsByAccount.insert(ctx, doc)
 }
@@ -43,11 +37,6 @@ export async function aggregateReplace(
 ): Promise<void> {
     const newDoc = await ctx.db.get(id)
     if (!newDoc) return
-    await trackFutureOccurrence(ctx, newDoc)
-    const cutoff = pastCutoffBigInt()
-    if (oldDoc.date >= cutoff && newDoc.date < cutoff && !newDoc.isArchived) {
-        await republishTransactionTags(ctx, newDoc)
-    }
     await outflowsByAccount.replace(ctx, oldDoc, newDoc)
     await inflowsByAccount.replace(ctx, oldDoc, newDoc)
 }

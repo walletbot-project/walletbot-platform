@@ -1,4 +1,3 @@
-import { pastCutoffBigInt } from '@wallet-bot/shared'
 import { v } from 'convex/values'
 import type { Doc } from '../../_generated/dataModel'
 import type { QueryCtx } from '../../_generated/server'
@@ -351,7 +350,6 @@ export const pull = query({
         const pageItems = buffer.slice(0, cutoff)
         const taken: PullItem[] = []
         const modern = supportsRecurrences(args.platform, args.appVersion)
-        const asOfMs = pastCutoffBigInt()
         for (const item of pageItems) {
             if (modern) {
                 if (
@@ -377,38 +375,11 @@ export const pull = query({
                 taken.push(item)
                 continue
             }
-            let hidden =
-                item.tableName === 'transactions' &&
-                typeof item.row.date === 'bigint' &&
-                item.row.date >= asOfMs
-            if (item.tableName === 'transactionTags') {
-                const txn = await ctx.db
-                    .query('transactions')
-                    .withIndex('by_user_id', (q) =>
-                        q
-                            .eq('userId', userId)
-                            .eq('id', String(item.row.transactionId)),
-                    )
-                    .unique()
-                hidden = !txn || txn.date >= asOfMs
-            }
-            if (hidden) {
-                // Remove a previously visible row after it moves into the
-                // future, without changing canonical data. One millisecond
-                // below updatedAt lets the original row supersede this local
-                // tombstone when due, with no artificial LWW business edit.
-                taken.push({
-                    kind: 'tombstone',
-                    seq: item.seq,
-                    sortKey: item.sortKey,
-                    tableName: item.tableName,
-                    entityId: String(item.row.id),
-                    deletedAt: BigInt(String(item.row.updatedAt)) - 1n,
-                })
-            } else {
-                const { recurrenceId, recurrenceIndex, ...row } = item.row
-                taken.push({ ...item, row })
-            }
+            // Old native clients can store ordinary future movements, but
+            // cannot interpret series metadata. Their totals may include
+            // future amounts; no timed publication is needed.
+            const { recurrenceId, recurrenceIndex, ...row } = item.row
+            taken.push({ ...item, row })
         }
         const rows = taken
             .filter((i): i is PullRowItem => i.kind === 'row')

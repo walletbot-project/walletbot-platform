@@ -161,6 +161,10 @@ version gating is handled.
   the backend provides a tested legacy projection, preserves fields older
   writers omit, and hydrates newly supported data when a device upgrades.
   Recurrences use this path: 0.3.x remains supported; 0.4.0 adds the capability.
+  For WAL-174, older clients intentionally receive future movements as ordinary
+  rows and may count them early. This accepted limitation needs no publication
+  cron or scheduled delivery; the compatibility guarantee is continued sync
+  without a forced update, not occurrence-aware totals on old binaries.
   Only genuinely incompatible changes require a coordinated minimum-version
   bump; those clients must fail closed on sync while retaining offline data.
   The version floor is enforced on both sides: the client won't start sync

@@ -1,7 +1,8 @@
 import { defineTable } from 'convex/server'
 import { v } from 'convex/values'
 
-// A reactive fallback for v1 web clients that do not send asOfMs.
+// Retired clock, retained only to accept already-deployed development data.
+// No code reads or updates it.
 export const occurrenceClock = defineTable({
     key: v.literal('singleton'),
     cutoff: v.int64(),

@@ -69,7 +69,7 @@ export const stat = query({
     },
     handler: async (ctx, args) => {
         const userId = await requireAuth(ctx)
-        const asOfMs = await resolveOccurrenceCutoff(ctx, args.asOfMs)
+        const asOfMs = resolveOccurrenceCutoff(args.asOfMs)
         const { rows, truncated } = await evaluateConfig(
             ctx,
             userId,
@@ -99,7 +99,7 @@ export const transactions = query({
     },
     handler: async (ctx, args) => {
         const userId = await requireAuth(ctx)
-        const asOfMs = await resolveOccurrenceCutoff(ctx, args.asOfMs)
+        const asOfMs = resolveOccurrenceCutoff(args.asOfMs)
         const limit = Math.min(
             Math.max(Math.trunc(args.limit ?? 5), 1),
             MAX_LIST_LIMIT,
@@ -134,7 +134,7 @@ export const currencyBalance = query({
     },
     handler: async (ctx, args) => {
         const userId = await requireAuth(ctx)
-        const asOfMs = await resolveOccurrenceCutoff(ctx, args.asOfMs)
+        const asOfMs = resolveOccurrenceCutoff(args.asOfMs)
         const accounts = await ctx.db
             .query('accounts')
             .withIndex('by_user_archived', (q) =>
@@ -175,7 +175,7 @@ export const breakdown = query({
     },
     handler: async (ctx, args) => {
         const userId = await requireAuth(ctx)
-        const asOfMs = await resolveOccurrenceCutoff(ctx, args.asOfMs)
+        const asOfMs = resolveOccurrenceCutoff(args.asOfMs)
         const { rows, truncated } = await evaluateConfig(
             ctx,
             userId,

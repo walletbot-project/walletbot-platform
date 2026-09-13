@@ -21,12 +21,13 @@ import {
     frequencyLabel,
     frequencyOptionLabel,
     inputToCents,
-    localDateTimeEpoch,
     normalizeAmount,
     seriesReachLabel,
     signedAmountCents,
     timeInputValue,
 } from '../activity/helpers'
+
+import { resolveMovementDateEdit } from './helpers'
 
 const FREQUENCIES: RecurrenceFrequency[] = [
     'daily',
@@ -135,7 +136,8 @@ export function FutureMovementDetail({
           )
         : null
 
-    const editedDate = localDateTimeEpoch(date, time)
+    const temporalEdit = resolveMovementDateEdit(movement, date, time)
+    const editedDate = temporalEdit.date
     // A cadence change cannot be confined to one occurrence: every later date
     // is projected from the anchor, so "from here on, weekly" is two rules.
     const cadenceChanged = series
@@ -206,9 +208,7 @@ export function FutureMovementDetail({
                           frequency === 'customDays'
                               ? BigInt(dayInterval)
                               : undefined,
-                      date: editedDate,
-                      dateConfirmed: true,
-                      timeStatus: 'confirmed',
+                      ...temporalEdit,
                       patch,
                   })
                 : scope === 'all-future'
@@ -220,9 +220,7 @@ export function FutureMovementDetail({
                         amount: patch.amount,
                         accountId: patch.accountId,
                         categoryId: patch.categoryId,
-                        date: editedDate,
-                        dateConfirmed: true,
-                        timeStatus: 'confirmed',
+                        ...(anchorChanged ? temporalEdit : {}),
                     })
 
         void run(

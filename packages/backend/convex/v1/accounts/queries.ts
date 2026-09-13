@@ -58,7 +58,7 @@ export const recentTransactions = query({
     },
     handler: async (ctx, args) => {
         const userId = await requireAuth(ctx)
-        const asOfMs = await resolveOccurrenceCutoff(ctx, args.asOfMs)
+        const asOfMs = resolveOccurrenceCutoff(args.asOfMs)
         const limit = Math.min(args.limit ?? 5, 50)
         return await ctx.db
             .query('transactions')

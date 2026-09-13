@@ -57,7 +57,6 @@ import type * as live_internal from "../live/internal.js";
 import type * as live_rateLimits from "../live/rateLimits.js";
 import type * as migrations from "../migrations.js";
 import type * as occurrences_helpers from "../occurrences/helpers.js";
-import type * as occurrences_internal from "../occurrences/internal.js";
 import type * as recurrences_internal from "../recurrences/internal.js";
 import type * as recurrences_workflow from "../recurrences/workflow.js";
 import type * as schema_accounts from "../schema/accounts.js";
@@ -207,7 +206,6 @@ declare const fullApi: ApiFromModules<{
   "live/rateLimits": typeof live_rateLimits;
   migrations: typeof migrations;
   "occurrences/helpers": typeof occurrences_helpers;
-  "occurrences/internal": typeof occurrences_internal;
   "recurrences/internal": typeof recurrences_internal;
   "recurrences/workflow": typeof recurrences_workflow;
   "schema/accounts": typeof schema_accounts;

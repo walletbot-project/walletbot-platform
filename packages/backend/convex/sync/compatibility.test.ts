@@ -1,7 +1,6 @@
 // @vitest-environment edge-runtime
 /// <reference types="vite/client" />
 import aggregate from '@convex-dev/aggregate/test'
-import migrationsTest from '@convex-dev/migrations/test'
 import { convexTest } from 'convex-test'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { api, internal } from '../_generated/api'
@@ -123,7 +122,7 @@ describe('legacy recurrence compatibility', { timeout: 30000 }, () => {
         }
     })
 
-    it('projects future rows away without changing canonical data', async () => {
+    it('sends future movements and tags in the legacy shape without exposing series metadata', async () => {
         const { authed } = await fixture()
         const old = await authed.query(api.v1.sync.queries.pull, {
             ...legacy,
@@ -134,15 +133,12 @@ describe('legacy recurrence compatibility', { timeout: 30000 }, () => {
             old.rows
                 .filter((r) => r.tableName === 'transactions')
                 .map((r) => r.row.id),
-        ).toEqual(['t0'])
+        ).toEqual(['t0', 't1'])
         expect(old.rows.some((r) => r.tableName === 'recurrences')).toBe(false)
         expect(old.rows.some((r) => r.tableName === 'transactionTags')).toBe(
-            false,
+            true,
         )
-        expect(old.tombstones.map((t) => t.entityId).sort()).toEqual([
-            't1',
-            't1__tag',
-        ])
+        expect(old.tombstones).toEqual([])
         expect(
             old.rows.find((r) => r.tableName === 'transactions')?.row,
         ).not.toHaveProperty('recurrenceId')
@@ -181,25 +177,26 @@ describe('legacy recurrence compatibility', { timeout: 30000 }, () => {
             expect(page.nextCursor).toBeGreaterThan(since)
             since = page.nextCursor ?? since
         }
-        expect(seen).toEqual(['a', 'c', 't0', 'tag'])
+        expect(seen).toEqual(['a', 'c', 't0', 't1', 'tag', 't1__tag'])
     })
 
-    it('publishes due occurrences and tags after the old cursor, preserving edit timestamps', async () => {
+    it('needs no scheduled work or extra sync writes when movements become due', async () => {
         const { t, authed } = await fixture()
-        vi.setSystemTime(now + 3600000)
-        await t.mutation(internal.occurrences.internal.publishDue, {})
-        const page = await authed.query(api.v1.sync.queries.pull, {
+        const initial = await authed.query(api.v1.sync.queries.pull, {
             ...legacy,
-            since: 7n,
+            since: 0n,
         })
-        if ('error' in page) throw new Error(page.error)
-        expect(page.rows.map((r) => r.row.id)).toEqual(['t1', 't1__tag'])
-        expect(page.rows[0].row.updatedAt).toBe(10n)
-        expect(page.rows[1].row.updatedAt).toBe(2n)
-        await t.mutation(internal.occurrences.internal.publishDue, {})
-        expect(await authed.query(api.v1.sync.queries.getCounter, {})).toBe(
-            page.currentCounter,
-        )
+        if ('error' in initial) throw new Error(initial.error)
+        expect(
+            initial.rows.filter((r) => r.tableName === 'transactions'),
+        ).toHaveLength(2)
+        vi.setSystemTime(now + 3600000)
+        expect(await authed.query(api.v1.sync.queries.getCounter, {})).toBe(7n)
+        expect(
+            await t.run((ctx) =>
+                ctx.db.system.query('_scheduled_functions').take(1),
+            ),
+        ).toEqual([])
     })
 
     it('preserves series metadata on legacy edit and delete, without requiring new fields', async () => {
@@ -317,8 +314,14 @@ describe('legacy recurrence compatibility', { timeout: 30000 }, () => {
         ).toMatchObject({ balance: 50000n })
     })
 
-    it('rehydrates tags when an occurrence is moved from future to past', async () => {
+    it('keeps already-delivered tags when a future occurrence is moved into the past', async () => {
         const { authed } = await fixture()
+        const initial = await authed.query(api.v1.sync.queries.pull, {
+            ...legacy,
+            since: 0n,
+        })
+        if ('error' in initial) throw new Error(initial.error)
+        expect(initial.rows.some((r) => r.row.id === 't1__tag')).toBe(true)
         await authed.mutation(api.v1.transactions.mutations.update, {
             id: 't1',
             date: BigInt(now - 100),
@@ -328,9 +331,10 @@ describe('legacy recurrence compatibility', { timeout: 30000 }, () => {
             since: 7n,
         })
         if ('error' in page) throw new Error(page.error)
-        expect(page.rows.map((r) => r.row.id)).toEqual(['t1', 't1__tag'])
+        expect(page.rows.map((r) => r.row.id)).toEqual(['t1'])
+        expect(page.tombstones).toEqual([])
     })
-    it('reprojects a legacy future write after its own push acknowledgement', async () => {
+    it('acknowledges legacy future writes without scheduling a projection', async () => {
         const { t, authed } = await fixture()
         const result = await authed.mutation(api.v1.sync.mutations.push, {
             ...legacy,
@@ -361,41 +365,20 @@ describe('legacy recurrence compatibility', { timeout: 30000 }, () => {
             since: result.newSeq,
         })
         if ('error' in page) throw new Error(page.error)
-        expect(page.tombstones.map((x) => x.entityId)).toContain('t0')
+        expect(page.tombstones).toEqual([])
+        expect(page.currentCounter).toBe(result.newSeq)
+        expect(
+            await t.run((ctx) =>
+                ctx.db.system.query('_scheduled_functions').take(1),
+            ),
+        ).toEqual([])
         expect(
             page.rows.filter((x) => x.tableName === 'transactions'),
         ).toHaveLength(0)
     })
 
-    it('does not publish a rescheduled or archived occurrence at its previous due date', async () => {
+    it('accepts retired development metadata without leaking it to clients or using its clock', async () => {
         const { t, authed } = await fixture()
-        await authed.mutation(api.v1.transactions.mutations.update, {
-            id: 't1',
-            date: BigInt(now + 7200000),
-        })
-        const cursor = await authed.query(api.v1.sync.queries.getCounter, {})
-        vi.setSystemTime(now + 3600000)
-        await t.mutation(internal.occurrences.internal.publishDue, {})
-        expect(await authed.query(api.v1.sync.queries.getCounter, {})).toBe(
-            cursor,
-        )
-        await authed.mutation(api.v1.transactions.mutations.archive, {
-            id: 't1',
-        })
-        const afterDelete = await authed.query(
-            api.v1.sync.queries.getCounter,
-            {},
-        )
-        vi.setSystemTime(now + 7200000)
-        await t.mutation(internal.occurrences.internal.publishDue, {})
-        expect(await authed.query(api.v1.sync.queries.getCounter, {})).toBe(
-            afterDelete,
-        )
-    })
-
-    it('queues pre-deploy future rows and updates the legacy web clock idempotently', async () => {
-        const { t, authed } = await fixture()
-        migrationsTest.register(t)
         await t.run(async (ctx) => {
             const row = await ctx.db
                 .query('transactions')
@@ -404,20 +387,26 @@ describe('legacy recurrence compatibility', { timeout: 30000 }, () => {
                 )
                 .unique()
             if (!row) throw new Error('missing fixture')
-            await ctx.db.patch(row._id, { legacyPendingDate: undefined })
+            await ctx.db.patch(row._id, { legacyPendingDate: row.date })
+            await ctx.db.insert('occurrenceClock', {
+                key: 'singleton',
+                cutoff: 1n,
+            })
         })
-        await t.mutation(internal.occurrences.internal.tick, {})
-        await t.finishAllScheduledFunctions(() => vi.runAllTimers())
-        const cursor = await authed.query(api.v1.sync.queries.getCounter, {})
-        expect(cursor).toBeGreaterThan(7n)
-        await t.mutation(internal.occurrences.internal.tick, {})
-        await t.finishAllScheduledFunctions(() => vi.runAllTimers())
-        expect(await authed.query(api.v1.sync.queries.getCounter, {})).toBe(
-            cursor,
-        )
+        for (const client of [legacy, modern]) {
+            const page = await authed.query(api.v1.sync.queries.pull, {
+                ...client,
+                since: 0n,
+            })
+            if ('error' in page) throw new Error(page.error)
+            expect(
+                page.rows.every((r) => !('legacyPendingDate' in r.row)),
+            ).toBe(true)
+        }
+        expect(
+            await authed.query(api.v1.transactions.queries.recent, {}),
+        ).toHaveLength(1)
         vi.setSystemTime(now + 3600000)
-        await t.mutation(internal.occurrences.internal.tick, {})
-        await t.finishAllScheduledFunctions(() => vi.runAllTimers())
         expect(
             await authed.query(api.v1.transactions.queries.recent, {}),
         ).toHaveLength(2)
@@ -453,58 +442,45 @@ describe('WhatsApp with recurrence-aware and legacy clients', {
         )
     }
 
-    it('publishes a future WhatsApp write and its tags to an already-synced legacy device when due', async () => {
+    it('syncs future WhatsApp writes and tags immediately to legacy clients without jobs', async () => {
         const { t, authed } = await fixture()
-        const result = await execute(t, 'addExpense', {
-            amount: 12,
-            dateConfirmed: true,
-            timeStatus: 'none',
-            accountIdOrName: 'a',
-            categoryIdOrName: 'c',
-            name: 'Future WhatsApp',
-            date: '2026-09-14',
-            tagIdsOrNames: ['tag'],
+        for (const name of ['Future WhatsApp 1', 'Future WhatsApp 2']) {
+            expect(
+                await execute(t, 'addExpense', {
+                    amount: 12,
+                    dateConfirmed: true,
+                    timeStatus: 'none',
+                    accountIdOrName: 'a',
+                    categoryIdOrName: 'c',
+                    name,
+                    date: '2026-09-14',
+                    tagIdsOrNames: ['tag'],
+                }),
+            ).toMatchObject({ ok: true })
+        }
+        const page = await authed.query(api.v1.sync.queries.pull, {
+            ...legacy,
+            since: 7n,
         })
-        expect(result.ok).toBe(true)
-        const id = result.id
-        if (typeof id !== 'string') throw new Error('missing movement id')
-        const row = await t.run((ctx) =>
-            ctx.db
-                .query('transactions')
-                .withIndex('by_user_id', (q) =>
-                    q.eq('userId', userId).eq('id', id),
-                )
-                .unique(),
+        if ('error' in page) throw new Error(page.error)
+        expect(
+            page.rows.filter((r) => r.tableName === 'transactions'),
+        ).toHaveLength(2)
+        expect(
+            page.rows.filter((r) => r.tableName === 'transactionTags'),
+        ).toHaveLength(2)
+        expect(page.tombstones).toEqual([])
+        const scheduled = await t.run((ctx) =>
+            ctx.db.system.query('_scheduled_functions').take(10),
         )
-        expect(row?.legacyPendingDate).toBe(row?.date)
-        const before = await authed.query(api.v1.sync.queries.pull, {
-            ...legacy,
-            since: 0n,
-        })
-        if ('error' in before) throw new Error(before.error)
-        expect(before.tombstones.some((r) => r.entityId === id)).toBe(true)
-        vi.setSystemTime(now + 3 * 86400000)
-        await t.mutation(internal.occurrences.internal.publishDue, {})
-        const after = await authed.query(api.v1.sync.queries.pull, {
-            ...legacy,
-            since: before.currentCounter,
-        })
-        if ('error' in after) throw new Error(after.error)
         expect(
-            after.rows.some(
-                (r) => r.tableName === 'transactions' && r.row.id === id,
-            ),
-        ).toBe(true)
-        expect(
-            after.rows.some(
-                (r) =>
-                    r.tableName === 'transactionTags' &&
-                    r.row.transactionId === id,
+            scheduled.every(
+                (job) => job.name === 'telemetry/actions:exportPendingMetrics',
             ),
         ).toBe(true)
     })
 
-    it('republishes hidden tags when WhatsApp moves an occurrence into the past', async () => {
+    it('retains tags already on legacy clients when WhatsApp moves an occurrence into the past', async () => {
         const { t, authed } = await fixture()
         const result = await execute(t, 'updateTransaction', {
             id: 't1',
@@ -517,12 +493,13 @@ describe('WhatsApp with recurrence-aware and legacy clients', {
             since: 7n,
         })
         if ('error' in page) throw new Error(page.error)
-        expect(
-            page.rows.some(
-                (r) =>
-                    r.tableName === 'transactionTags' && r.row.id === 't1__tag',
-            ),
-        ).toBe(true)
+        const full = await authed.query(api.v1.sync.queries.pull, {
+            ...legacy,
+            since: 0n,
+        })
+        if ('error' in full) throw new Error(full.error)
+        expect(full.rows.some((r) => r.row.id === 't1__tag')).toBe(true)
+        expect(page.tombstones).toEqual([])
         expect(
             page.rows.some(
                 (r) => r.tableName === 'transactions' && r.row.id === 't1',

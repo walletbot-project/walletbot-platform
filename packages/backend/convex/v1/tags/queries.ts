@@ -39,7 +39,7 @@ export const listActiveWithCounts = query({
     args: { asOfMs: v.optional(v.int64()) },
     handler: async (ctx, args) => {
         const userId = await requireAuth(ctx)
-        const asOfMs = await resolveOccurrenceCutoff(ctx, args.asOfMs)
+        const asOfMs = resolveOccurrenceCutoff(args.asOfMs)
         const tags = await ctx.db
             .query('tags')
             .withIndex('by_user_archived', (q) =>
@@ -114,7 +114,7 @@ export const spendByCurrency = query({
     },
     handler: async (ctx, args) => {
         const userId = await requireAuth(ctx)
-        const asOfMs = await resolveOccurrenceCutoff(ctx, args.asOfMs)
+        const asOfMs = resolveOccurrenceCutoff(args.asOfMs)
         const joins = await ctx.db
             .query('transactionTags')
             .withIndex('by_user_tag', (q) =>
@@ -152,7 +152,7 @@ export const recentTransactions = query({
     },
     handler: async (ctx, args) => {
         const userId = await requireAuth(ctx)
-        const asOfMs = await resolveOccurrenceCutoff(ctx, args.asOfMs)
+        const asOfMs = resolveOccurrenceCutoff(args.asOfMs)
         const limit = Math.min(args.limit ?? 5, 50)
         const joins = await ctx.db
             .query('transactionTags')

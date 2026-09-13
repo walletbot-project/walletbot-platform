@@ -1,8 +1,11 @@
 import type { Messages } from '@/lib/i18n'
 import {
     type ActivityTransaction,
+    dateInputValue,
+    localDateTimeEpoch,
     sectionLabel,
     signedAmountCents,
+    timeInputValue,
 } from '../activity/helpers'
 import type { TransactionRowIdentity } from '../activity/transaction-row'
 
@@ -107,4 +110,27 @@ export function buildFutureEntries(
         })
     }
     return entries
+}
+
+/** Preserve sub-minute precision and confidence unless the form changes them. */
+export function resolveMovementDateEdit(
+    original: Pick<
+        ActivityTransaction,
+        'date' | 'dateConfirmed' | 'timeStatus'
+    >,
+    date: string,
+    time: string,
+) {
+    const dateChanged = date !== dateInputValue(original.date)
+    const timeChanged = time !== timeInputValue(original.date)
+    return {
+        date:
+            dateChanged || timeChanged
+                ? localDateTimeEpoch(date, time)
+                : original.date,
+        dateConfirmed: dateChanged ? true : original.dateConfirmed,
+        timeStatus: timeChanged
+            ? ('confirmed' as const)
+            : (original.timeStatus ?? 'none'),
+    }
 }

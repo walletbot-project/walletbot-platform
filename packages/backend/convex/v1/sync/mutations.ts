@@ -1,13 +1,10 @@
-import { pastCutoffBigInt } from '@wallet-bot/shared'
 import { v } from 'convex/values'
-import { internal } from '../../_generated/api'
 import type { Doc } from '../../_generated/dataModel'
 import type { MutationCtx } from '../../_generated/server'
 import { mutation } from '../../_generated/server'
 import { inflowsByAccount, outflowsByAccount } from '../../aggregates'
 import { CLIENT_OUTDATED, isClientSupported } from '../../config/helpers'
 import { syncedTable } from '../../schema/sync'
-import { supportsRecurrences } from '../../sync/compatibility'
 import { aggregateInsert, aggregateReplace } from '../../transactions/helpers'
 import { requireAuth } from '../../users/helpers'
 import {
@@ -1018,17 +1015,6 @@ export const push = mutation({
             await applyTombstone(ctx, userId, newSeq, t)
         }
 
-        if (!supportsRecurrences(args.platform, args.appVersion)) {
-            const ids = (args.upserts.transactions ?? [])
-                .filter((t) => !t.isArchived && t.date >= pastCutoffBigInt())
-                .map((t) => t.id)
-            if (ids.length)
-                await ctx.scheduler.runAfter(
-                    0,
-                    internal.occurrences.internal.refreshLegacyWrites,
-                    { userId, ids },
-                )
-        }
         return { ok: true as const, newSeq }
     },
 })

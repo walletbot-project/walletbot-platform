@@ -310,7 +310,7 @@ export const createBalanceAdjustment = mutation({
     },
     handler: async (ctx, args) => {
         const userId = await requireAuth(ctx)
-        const asOfMs = await resolveOccurrenceCutoff(ctx, args.asOfMs)
+        const asOfMs = resolveOccurrenceCutoff(args.asOfMs)
         await assertNoExistingId(ctx, userId, args.id)
 
         const account = await getAccount(ctx, userId, args.accountId)

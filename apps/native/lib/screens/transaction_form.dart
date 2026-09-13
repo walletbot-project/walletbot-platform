@@ -209,7 +209,13 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
       confirmText: context.l10n.accept,
     );
     if (picked == null || !mounted) return;
-    setState(() => _recurrenceEndDate = picked);
+    // The picker returns midnight, but this is an inclusive calendar day.
+    final endOfDay = DateTime(
+      picked.year,
+      picked.month,
+      picked.day + 1,
+    ).subtract(const Duration(milliseconds: 1));
+    setState(() => _recurrenceEndDate = endOfDay);
   }
 
   Future<void> _pickTime() async {
@@ -1412,8 +1418,20 @@ class _RecurrencePanelState extends State<_RecurrencePanel> {
                 const SizedBox(width: 12),
                 SizedBox(
                   width: 72,
-                  child: TextField(
+                  child: TextFormField(
+                    key: const ValueKey('recurrence-day-interval'),
                     controller: _dayIntervalController,
+                    autovalidateMode: AutovalidateMode.onUserInteraction,
+                    validator: (raw) {
+                      if (raw == null || raw.isEmpty) {
+                        return context.l10n.required;
+                      }
+                      final parsed = int.tryParse(raw);
+                      if (parsed == null || parsed < 1) {
+                        return context.l10n.greaterThanZero;
+                      }
+                      return null;
+                    },
                     enabled: widget.enabled,
                     keyboardType: TextInputType.number,
                     textAlign: TextAlign.center,

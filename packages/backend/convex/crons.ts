@@ -7,13 +7,6 @@ import { VOICE_RETENTION_MS } from './voice/utils'
 const crons = cronJobs()
 
 crons.interval(
-    'publish occurred movements to legacy clients',
-    { minutes: 1 },
-    internal.occurrences.internal.tick,
-    {},
-)
-
-crons.interval(
     'cleanup resend emails',
     { hours: 24 },
     internal.emails.internal.cleanupResendEmails,

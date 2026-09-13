@@ -65,7 +65,7 @@ export const recent = query({
     args: { limit: v.optional(v.number()), asOfMs: v.optional(v.int64()) },
     handler: async (ctx, args) => {
         const userId = await requireAuth(ctx)
-        const asOfMs = await resolveOccurrenceCutoff(ctx, args.asOfMs)
+        const asOfMs = resolveOccurrenceCutoff(args.asOfMs)
         const limit = Math.min(args.limit ?? 10, MAX_RECENT)
         return await ctx.db
             .query('transactions')
@@ -104,7 +104,7 @@ export const listPaginated = query({
     },
     handler: async (ctx, args) => {
         const userId = await requireAuth(ctx)
-        const asOfMs = await resolveOccurrenceCutoff(ctx, args.asOfMs)
+        const asOfMs = resolveOccurrenceCutoff(args.asOfMs)
         // The occurrence cutoff is just a tighter `dateTo`, so it rides the
         // same index range the caller's own date filter already uses.
         const { dateFrom } = args
@@ -240,7 +240,7 @@ export const listUpcoming = query({
         args,
     ): Promise<PaginationResult<Doc<'transactions'>>> => {
         const userId = await requireAuth(ctx)
-        const asOfMs = await resolveOccurrenceCutoff(ctx, args.asOfMs)
+        const asOfMs = resolveOccurrenceCutoff(args.asOfMs)
         return await ctx.db
             .query('transactions')
             .withIndex('by_user_archived_date', (q) =>
@@ -279,7 +279,7 @@ export const listByFilter = query({
         args,
     ): Promise<PaginationResult<Doc<'transactions'>>> => {
         const userId = await requireAuth(ctx)
-        const asOfMs = await resolveOccurrenceCutoff(ctx, args.asOfMs)
+        const asOfMs = resolveOccurrenceCutoff(args.asOfMs)
         const { filter, root } = filterFromConfig(args.config)
         const now = new Date()
         const evaluation = await buildEvaluationContext(
@@ -499,7 +499,7 @@ export const summarize = query({
     },
     handler: async (ctx, args) => {
         const userId = await requireAuth(ctx)
-        const asOfMs = await resolveOccurrenceCutoff(ctx, args.asOfMs)
+        const asOfMs = resolveOccurrenceCutoff(args.asOfMs)
 
         const lastOccurred = asOfMs - 1n
         const dateTo = args.dateTo < lastOccurred ? args.dateTo : lastOccurred
@@ -635,7 +635,7 @@ export const balance = query({
     args: { accountId: v.string(), asOfMs: v.optional(v.int64()) },
     handler: async (ctx, args) => {
         const userId = await requireAuth(ctx)
-        const asOfMs = await resolveOccurrenceCutoff(ctx, args.asOfMs)
+        const asOfMs = resolveOccurrenceCutoff(args.asOfMs)
         const account = await ctx.db
             .query('accounts')
             .withIndex('by_user_id', (q) =>
