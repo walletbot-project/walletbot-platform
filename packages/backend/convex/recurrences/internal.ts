@@ -3,9 +3,9 @@ import { v } from 'convex/values'
 import type { Doc } from '../_generated/dataModel'
 import type { MutationCtx, QueryCtx } from '../_generated/server'
 import { internalMutation } from '../_generated/server'
-import { inflowsByAccount, outflowsByAccount } from '../aggregates'
 import { nextSeq } from '../sync/helpers'
 import {
+    aggregateInsert,
     aggregateReplace,
     archiveTransactionRow,
     occurrencePatch,
@@ -121,11 +121,7 @@ export const materializeBatch = internalMutation({
                 seq,
             }
             const inserted = await ctx.db.insert('transactions', doc)
-            const row = await ctx.db.get(inserted)
-            if (row) {
-                await outflowsByAccount.insert(ctx, row)
-                await inflowsByAccount.insert(ctx, row)
-            }
+            await aggregateInsert(ctx, inserted)
         }
 
         return { done: to >= args.to, next: to }

@@ -47,7 +47,9 @@ class PullPageMerger {
             ))
             .getSingleOrNull();
     if (tomb != null) {
-      if (tomb.deletedAt >= remoteUpdatedAt) {
+      final archivedSeriesTemplate =
+          !tomb.dirty && tableName == 'transactions' && _isArchivedSeriesRow(r);
+      if (!archivedSeriesTemplate && tomb.deletedAt >= remoteUpdatedAt) {
         // Local delete is newer; keep tombstone (it'll push and revoke).
         return;
       }
@@ -92,6 +94,9 @@ class PullPageMerger {
         break;
     }
   }
+
+  bool _isArchivedSeriesRow(Map<String, Object?> row) =>
+      row['isArchived'] == true && row['recurrenceId'] is String;
 
   Future<void> _applyAccount(
     String id,
@@ -178,7 +183,22 @@ class PullPageMerger {
       db.transactions,
     )..where((t) => t.id.equals(id))).getSingleOrNull();
     if (existing != null && existing.dirty) {
-      if (existing.updatedAt >= remoteUpdatedAt) return;
+      if (existing.updatedAt >= remoteUpdatedAt) {
+        // An upgrading v4 client may have an offline edit but no columns for
+        // the series it belongs to. Keep that edit while hydrating metadata
+        // which the old binary could not have changed.
+        if (existing.recurrenceId == null && r['recurrenceId'] is String) {
+          await (db.update(
+            db.transactions,
+          )..where((t) => t.id.equals(id))).write(
+            TransactionsCompanion(
+              recurrenceId: Value(r['recurrenceId'] as String),
+              recurrenceIndex: Value(_asIntOrNull(r['recurrenceIndex'])),
+            ),
+          );
+        }
+        return;
+      }
     }
     final companion = TransactionsCompanion(
       id: Value(id),

@@ -10,6 +10,7 @@ import {
 } from '@wallet-bot/shared'
 import { compareVersions } from '../config/utils'
 import type { FlagKey } from '../featureFlags/utils'
+import { supportsRecurrences } from '../sync/compatibility'
 
 // Deliberately NOT 'use node': minting is one HTTPS call, kept in Convex's
 // default runtime so token requests never pay a Node cold start.
@@ -126,7 +127,8 @@ export function declarationsFor(
 ): FunctionDeclaration[] {
     const version = appVersion ?? '0.0.0'
     const declarations =
-        flags.recurringExpense === true
+        flags.recurringExpense === true &&
+        supportsRecurrences(platform, appVersion)
             ? TOOL_DECLARATIONS
             : TOOL_DECLARATIONS_WITHOUT_RECURRENCE
     return declarations.filter((declaration) => {
@@ -170,7 +172,7 @@ You manage four kinds of movements:
 
 You can also list, search, update, archive, or delete movements; manage accounts, categories, and tags (including attaching/detaching tags through updateTransaction); produce summaries by category or account over a date range (summarizeTransactions); and manage the home dashboard's saved filters and widgets.
 
-Movements can also be dated in the FUTURE. Those exist but have not happened yet, so they are deliberately absent from Activity, balances, summaries and widgets until their date arrives — listTransactions and summarizeTransactions never show them. Use listUpcomingTransactions to see what is coming.`
+Movements can also be dated in the FUTURE. On clients with upcoming-movement support they are absent from Activity, balances, summaries and widgets until their date arrives. Only use listUpcomingTransactions when it is declared in this session.`
 
 const DASHBOARD_GUIDE = `# Home dashboard and filters
 - The home dashboard is made of saved filters plus widgets. It is the same dashboard on every one of the user's devices.
@@ -262,9 +264,13 @@ Your long-term memory is the Memories list in the data snapshot (shared across t
 - Forget on request: when the user says to forget something, call forgetMemory and confirm.
 - Consolidate: when the Memories list contains duplicates, contradictions, or entries made obsolete by newer ones, merge or rewrite them (updateMemory) and delete the leftovers (forgetMemory). Keep the set small, current, and non-overlapping. When addMemory reports the set is full, consolidate first.`
 
-const SKILLS_INDEX = `# Skills
+const skillsIndex = (recurrences: boolean) => `# Skills
 Reference documents you can read with readSkill(slug). Call readSkill BEFORE answering questions about how the app itself behaves — policies, sync, data handling — instead of guessing:
-${AGENT_SKILLS.map((skill) => `- ${skill.slug}: ${skill.oneLiner}`).join('\n')}`
+${AGENT_SKILLS.filter(
+    (skill) => recurrences || skill.slug !== 'recurring-movements',
+)
+    .map((skill) => `- ${skill.slug}: ${skill.oneLiner}`)
+    .join('\n')}`
 
 // ─── USER_CONTEXT rendering ──────────────────────────────────────────────────
 
@@ -431,7 +437,7 @@ export function buildSystemInstruction(
         declared.has('listRecurrences') ? RECURRENCE_GUIDE : null,
         FEATURE_DISCOVERY,
         MEMORY_RULES,
-        SKILLS_INDEX,
+        skillsIndex(declared.has('listRecurrences')),
         userContext,
         buildDateLine(options),
     ]

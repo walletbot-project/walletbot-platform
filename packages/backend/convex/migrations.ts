@@ -1,5 +1,5 @@
 import { Migrations } from '@convex-dev/migrations'
-import { computeExchangeRate } from '@wallet-bot/shared'
+import { computeExchangeRate, pastCutoffBigInt } from '@wallet-bot/shared'
 import { paginationOptsValidator } from 'convex/server'
 import { components } from './_generated/api'
 import type { DataModel } from './_generated/dataModel'
@@ -7,6 +7,25 @@ import { internalQuery } from './_generated/server'
 import { nextSeq } from './sync/helpers'
 
 export const migrations = new Migrations<DataModel>(components.migrations)
+
+// Widen-only rollout: queue already-materialized future movements, and issue
+// a fresh seq so legacy devices which cached them receive their projection.
+export const backfillLegacyOccurrences = migrations.define({
+    table: 'transactions',
+    batchSize: 50,
+    migrateOne: async (ctx, row) => {
+        if (
+            row.isArchived ||
+            row.date < pastCutoffBigInt() ||
+            row.legacyPendingDate !== undefined
+        )
+            return
+        return {
+            legacyPendingDate: row.date,
+            seq: await nextSeq(ctx, row.userId),
+        }
+    },
+})
 
 // Deploy 1 (widen): timeStatus is optional so old rows remain valid while new
 // writes always include it. Historical rows have no persisted evidence that

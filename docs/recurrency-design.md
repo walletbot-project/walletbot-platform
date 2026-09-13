@@ -187,8 +187,8 @@ nativo** (ver `CLAUDE.md` § Client–server contract y `docs/schema/README.md`)
    - Definir cómo se guarda una "regla de recurrencia" (frecuencia, ancla, fecha
      de fin, flag de "último día del mes").
    - Relación entre la regla y los movimientos generados.
-   - Coordinar bump de `schemaVersion` y `minSupportedVersion` si toca el
-     formato de sync.
+   - Incrementar `schemaVersion` y conservar el contrato de clientes publicados;
+     subir `minSupportedVersion` sólo si no existe una ruta compatible.
 
 2. **Motor de próximas ocurrencias** (idealmente en `packages/shared` para
    compartir entre web y native, y evitar divergencias):
@@ -422,12 +422,32 @@ conteo, y hasta cuándo está cubierta es la fecha máxima. Guardar cualquiera d
 las dos sería una segunda fuente de verdad capaz de contradecir a las filas
 después de una edición.
 
-Es un cambio de wire, así que es un bump coordinado, como pide CLAUDE.md:
-drift `schemaVersion` 4 → 5 (tabla nueva + dos columnas nullable, sin backfill:
-una transacción anterior a la recurrencia **es** un movimiento suelto),
-`minSupportedVersion` 0.3.0 → 0.4.0 y `pubspec` 0.4.0+7. Un cliente pre-v5
-falla cerrado en sync en vez de round-tripear una ocurrencia sin sus campos y
-dejar que LWW le borre el vínculo con la serie.
+Drift pasa de `schemaVersion` 4 a 5 y `pubspec` a 0.4.0+7, pero
+`minSupportedVersion` **permanece en 0.3.0**: el despliegue no obliga a actualizar.
+La capacidad de recurrencias se negocia por versión, separada del soporte de sync.
+
+- Un cliente 0.3.x recibe los movimientos ocurridos como movimientos normales,
+  sin reglas ni campos de recurrencia. Los futuros se proyectan como tombstones
+  **sólo en la respuesta**: también desaparece un movimiento que se reprograma
+  hacia el futuro, sin borrar el dato canónico.
+- La proyección ocurre después de calcular la página y su cursor, por lo que
+  una página sin filas visibles sigue avanzando. Los joins futuros se ocultan
+  también; los contadores y saldos del binario viejo no necesitan código nuevo.
+- Cada escritura mantiene `legacyPendingDate`, un campo exclusivo del servidor
+  e indexado. Un cron por minuto publica las ocurrencias vencidas con nuevos
+  `seq` y sus joins, por lotes; no cambia `updatedAt`, para respetar ediciones
+  offline. La cola sobrevive retrasos y reinicios. La migración
+  `backfillLegacyOccurrences` encola las filas futuras que ya existían.
+- Un push sin `recurrenceId`/`recurrenceIndex` conserva los valores canónicos.
+  Una edición o eliminación antigua afecta sólo ese movimiento.
+- Al actualizar v4→v5 se reinicia el cursor de sync, sin borrar datos ni writes
+  pendientes. El replay trae reglas y futuros; si hay una edición offline,
+  se conservan sus campos y se hidrata sólo el vínculo con la serie que v4 no
+  podía almacenar.
+- `asOfMs` es opcional en las APIs v1 existentes. Para clientes web anteriores,
+  el fallback lee un reloj persistido que el cron invalida al cambiar de bloque.
+- `recurrence` y `scope` en las tools requieren flag **y** versión nativa 0.4.0,
+  igual que las tools nuevas; un ejecutor viejo nunca los recibe.
 
 #### Quién materializa: cada origen el suyo, exactamente una vez
 

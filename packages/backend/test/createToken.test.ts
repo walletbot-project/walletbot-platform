@@ -79,6 +79,40 @@ describe('declarationsFor (compatibility gating)', () => {
 })
 
 describe('declarationsFor (the recurrence flag reaches inside a tool)', () => {
+    it('also strips recurrence arguments on older native executors with the flag on', () => {
+        for (const version of ['0.3.0', '0.3.2', '0.0.0']) {
+            for (const platform of ['android', 'ios', 'macos']) {
+                const declarations = declarationsFor(
+                    platform,
+                    version,
+                    ALL_FLAGS,
+                )
+                expect(
+                    buildSystemInstruction({
+                        platform,
+                        appVersion: version,
+                        flags: ALL_FLAGS,
+                    }),
+                ).not.toContain('- recurring-movements:')
+
+                for (const name of [
+                    'addExpense',
+                    'addIncome',
+                    'updateTransaction',
+                    'deleteTransaction',
+                ]) {
+                    const tool = declarations.find((d) => d.name === name)
+                    expect(tool?.parameters.properties).not.toHaveProperty(
+                        'recurrence',
+                    )
+                    expect(tool?.parameters.properties).not.toHaveProperty(
+                        'scope',
+                    )
+                    expect(tool?.description).not.toContain('scope')
+                }
+            }
+        }
+    })
     // `web` + a high version isolates the flag gate from the version gate.
     const argsOf = (name: string, flags?: typeof ALL_FLAGS) =>
         Object.keys(

@@ -1,5 +1,6 @@
 import { v } from 'convex/values'
 import { query } from '../../_generated/server'
+import { resolveOccurrenceCutoff } from '../../occurrences/helpers'
 import { requireAuth } from '../../users/helpers'
 
 export const listActive = query({
@@ -53,10 +54,11 @@ export const recentTransactions = query({
     args: {
         id: v.string(),
         limit: v.optional(v.number()),
-        asOfMs: v.int64(),
+        asOfMs: v.optional(v.int64()),
     },
     handler: async (ctx, args) => {
         const userId = await requireAuth(ctx)
+        const asOfMs = await resolveOccurrenceCutoff(ctx, args.asOfMs)
         const limit = Math.min(args.limit ?? 5, 50)
         return await ctx.db
             .query('transactions')
@@ -64,7 +66,7 @@ export const recentTransactions = query({
                 q
                     .eq('userId', userId)
                     .eq('accountId', args.id)
-                    .lt('date', args.asOfMs),
+                    .lt('date', asOfMs),
             )
             .order('desc')
             .filter((q) => q.eq(q.field('isArchived'), false))

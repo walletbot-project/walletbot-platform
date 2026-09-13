@@ -570,9 +570,9 @@ class AppDatabase extends _$AppDatabase {
       // v5: recurring movements. A new table for the rules, plus the two
       // nullable columns that tie an occurrence back to its rule. Existing
       // transactions keep NULL in both, which is exactly what a one-off is —
-      // no backfill needed, no rows touched. Coordinated with the backend:
-      // `minSupportedVersion` moves in the same change, so a pre-v5 client
-      // fails closed on sync rather than dropping the new fields under LWW.
+      // No business data backfill is needed. A v4 device previously received
+      // only the legacy projection, so replay server history to hydrate rules
+      // and future occurrences when it gains this capability.
       if (from < 5) {
         await m.createTable(recurrences);
         await m.create(recurrencesArchived);
@@ -582,6 +582,7 @@ class AppDatabase extends _$AppDatabase {
         await m.addColumn(transactions, transactions.recurrenceIndex);
         await m.create(transactionsRecurrenceIdDate);
         await m.create(transactionsRecurrenceIdRecurrenceIndex);
+        await customStatement('UPDATE sync_state SET last_server_seq = 0');
       }
     },
     beforeOpen: (details) async {

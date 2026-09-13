@@ -1,10 +1,14 @@
+import { pastCutoffBigInt } from '@wallet-bot/shared'
 import { v } from 'convex/values'
+import { internal } from '../../_generated/api'
 import type { Doc } from '../../_generated/dataModel'
 import type { MutationCtx } from '../../_generated/server'
 import { mutation } from '../../_generated/server'
 import { inflowsByAccount, outflowsByAccount } from '../../aggregates'
 import { CLIENT_OUTDATED, isClientSupported } from '../../config/helpers'
 import { syncedTable } from '../../schema/sync'
+import { supportsRecurrences } from '../../sync/compatibility'
+import { aggregateInsert, aggregateReplace } from '../../transactions/helpers'
 import { requireAuth } from '../../users/helpers'
 import {
     reconcileAccountDuplicates,
@@ -78,7 +82,7 @@ const transactionUpsert = v.object({
     balanceAfter: v.optional(v.int64()),
     // Set on an occurrence of a recurring rule; absent on a one-off. Optional
     // for backward-compat, like `dateConfirmed` above: a client from before
-    // the v5 coordinated bump simply never sends them.
+    // v5 simply never sends them; replacement preserves the stored link.
     recurrenceId: v.optional(v.string()),
     recurrenceIndex: v.optional(v.int64()),
     isArchived: v.boolean(),
@@ -531,8 +535,8 @@ async function applyTransactionUpsert(
         toCurrency: payload.toCurrency,
         exchangeRate: payload.exchangeRate,
         balanceAfter: payload.balanceAfter,
-        recurrenceId: payload.recurrenceId,
-        recurrenceIndex: payload.recurrenceIndex,
+        recurrenceId: payload.recurrenceId ?? existing?.recurrenceId,
+        recurrenceIndex: payload.recurrenceIndex ?? existing?.recurrenceIndex,
         isArchived: payload.isArchived,
         createdAt: payload.createdAt,
         updatedAt: payload.updatedAt,
@@ -542,18 +546,10 @@ async function applyTransactionUpsert(
     if (existing) {
         const oldDoc = existing
         await ctx.db.replace(existing._id, doc)
-        const newDoc = await ctx.db.get(existing._id)
-        if (newDoc) {
-            await outflowsByAccount.replace(ctx, oldDoc, newDoc)
-            await inflowsByAccount.replace(ctx, oldDoc, newDoc)
-        }
+        await aggregateReplace(ctx, oldDoc, existing._id)
     } else {
         const newId = await ctx.db.insert('transactions', doc)
-        const newDoc = await ctx.db.get(newId)
-        if (newDoc) {
-            await outflowsByAccount.insert(ctx, newDoc)
-            await inflowsByAccount.insert(ctx, newDoc)
-        }
+        await aggregateInsert(ctx, newId)
     }
     await clearTombstone(ctx, userId, 'transactions', payload.id)
 }
@@ -796,9 +792,21 @@ async function applyTombstone(
                 )
                 .unique()
             if (row) {
-                await outflowsByAccount.deleteIfExists(ctx, row)
-                await inflowsByAccount.deleteIfExists(ctx, row)
-                await ctx.db.delete(row._id)
+                if (row.recurrenceId !== undefined) {
+                    // The archived anchor is still the series template. A
+                    // legacy delete means this occurrence, not the rule or
+                    // the ability to extend its remaining occurrences.
+                    await ctx.db.patch(row._id, {
+                        isArchived: true,
+                        updatedAt: args.deletedAt,
+                        seq,
+                    })
+                    await aggregateReplace(ctx, row, row._id)
+                } else {
+                    await outflowsByAccount.deleteIfExists(ctx, row)
+                    await inflowsByAccount.deleteIfExists(ctx, row)
+                    await ctx.db.delete(row._id)
+                }
             }
             break
         }
@@ -1010,6 +1018,17 @@ export const push = mutation({
             await applyTombstone(ctx, userId, newSeq, t)
         }
 
+        if (!supportsRecurrences(args.platform, args.appVersion)) {
+            const ids = (args.upserts.transactions ?? [])
+                .filter((t) => !t.isArchived && t.date >= pastCutoffBigInt())
+                .map((t) => t.id)
+            if (ids.length)
+                await ctx.scheduler.runAfter(
+                    0,
+                    internal.occurrences.internal.refreshLegacyWrites,
+                    { userId, ids },
+                )
+        }
         return { ok: true as const, newSeq }
     },
 })

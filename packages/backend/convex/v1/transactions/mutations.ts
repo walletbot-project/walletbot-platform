@@ -3,6 +3,7 @@ import { v } from 'convex/values'
 import type { Doc } from '../../_generated/dataModel'
 import type { MutationCtx } from '../../_generated/server'
 import { mutation } from '../../_generated/server'
+import { resolveOccurrenceCutoff } from '../../occurrences/helpers'
 import { nextSeq, writeTombstone } from '../../sync/helpers'
 import {
     recordMovementCreated,
@@ -305,10 +306,11 @@ export const createBalanceAdjustment = mutation({
         dateConfirmed: v.boolean(),
         timeStatus: v.optional(transactionTimeStatus),
         createdBy: createdByArg,
-        asOfMs: v.int64(),
+        asOfMs: v.optional(v.int64()),
     },
     handler: async (ctx, args) => {
         const userId = await requireAuth(ctx)
+        const asOfMs = await resolveOccurrenceCutoff(ctx, args.asOfMs)
         await assertNoExistingId(ctx, userId, args.id)
 
         const account = await getAccount(ctx, userId, args.accountId)
@@ -326,7 +328,7 @@ export const createBalanceAdjustment = mutation({
             ctx,
             userId,
             args.accountId,
-            args.asOfMs,
+            asOfMs,
         )
         const amount = args.balanceAfter - currentBalance
 

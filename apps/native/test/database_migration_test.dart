@@ -273,6 +273,10 @@ void main() {
       addTearDown(schema.close);
 
       schema.rawDatabase.execute(
+        "INSERT INTO sync_state (id, last_server_seq) VALUES ('singleton', 999)",
+      );
+
+      schema.rawDatabase.execute(
         'INSERT INTO transactions '
         '(id, type, name, status, date, time_status, account_id, category_id, '
         'amount, currency, balance_after, created_at, updated_at) '
@@ -295,6 +299,10 @@ void main() {
       await verifier.migrateAndValidate(db, 5);
 
       // Values are preserved, not just the columns.
+      expect(
+        (await db.select(db.syncState).get()).single.lastServerSeq,
+        BigInt.zero,
+      );
       final transactions = await db
           .customSelect(
             'SELECT id, name, amount, balance_after, time_status, '

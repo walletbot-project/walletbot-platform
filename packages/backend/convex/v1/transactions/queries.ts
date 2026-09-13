@@ -11,6 +11,7 @@ import {
     inflowsByAccount,
     outflowsByAccount,
 } from '../../aggregates'
+import { resolveOccurrenceCutoff } from '../../occurrences/helpers'
 import schema from '../../schema'
 import { requireAuth } from '../../users/helpers'
 import {
@@ -61,9 +62,10 @@ export const get = query({
 // excluded by the index prefix, not by a predicate: a deleted movement the
 // agent still describes back to the user reads as the delete having failed.
 export const recent = query({
-    args: { limit: v.optional(v.number()), asOfMs: v.int64() },
+    args: { limit: v.optional(v.number()), asOfMs: v.optional(v.int64()) },
     handler: async (ctx, args) => {
         const userId = await requireAuth(ctx)
+        const asOfMs = await resolveOccurrenceCutoff(ctx, args.asOfMs)
         const limit = Math.min(args.limit ?? 10, MAX_RECENT)
         return await ctx.db
             .query('transactions')
@@ -71,7 +73,7 @@ export const recent = query({
                 q
                     .eq('userId', userId)
                     .eq('isArchived', false)
-                    .lt('date', args.asOfMs),
+                    .lt('date', asOfMs),
             )
             .order('desc')
             .take(limit)
@@ -98,14 +100,15 @@ export const listPaginated = query({
         // (one indexed read per row). Off by default so the agent's list calls
         // stay cheap — only the activity view, which filters by tag, opts in.
         includeTags: v.optional(v.boolean()),
-        asOfMs: v.int64(),
+        asOfMs: v.optional(v.int64()),
     },
     handler: async (ctx, args) => {
         const userId = await requireAuth(ctx)
+        const asOfMs = await resolveOccurrenceCutoff(ctx, args.asOfMs)
         // The occurrence cutoff is just a tighter `dateTo`, so it rides the
         // same index range the caller's own date filter already uses.
         const { dateFrom } = args
-        const lastOccurred = args.asOfMs - 1n
+        const lastOccurred = asOfMs - 1n
         const dateTo =
             args.dateTo === undefined
                 ? lastOccurred
@@ -230,20 +233,21 @@ export const listPaginated = query({
 export const listUpcoming = query({
     args: {
         paginationOpts: paginationOptsValidator,
-        asOfMs: v.int64(),
+        asOfMs: v.optional(v.int64()),
     },
     handler: async (
         ctx,
         args,
     ): Promise<PaginationResult<Doc<'transactions'>>> => {
         const userId = await requireAuth(ctx)
+        const asOfMs = await resolveOccurrenceCutoff(ctx, args.asOfMs)
         return await ctx.db
             .query('transactions')
             .withIndex('by_user_archived_date', (q) =>
                 q
                     .eq('userId', userId)
                     .eq('isArchived', false)
-                    .gte('date', args.asOfMs),
+                    .gte('date', asOfMs),
             )
             .order('asc')
             .paginate(args.paginationOpts)
@@ -268,13 +272,14 @@ export const listByFilter = query({
         paginationOpts: paginationOptsValidator,
         /** Canonical filter JSON, i.e. `filterConfigToJson(filter)`. */
         config: v.string(),
-        asOfMs: v.int64(),
+        asOfMs: v.optional(v.int64()),
     },
     handler: async (
         ctx,
         args,
     ): Promise<PaginationResult<Doc<'transactions'>>> => {
         const userId = await requireAuth(ctx)
+        const asOfMs = await resolveOccurrenceCutoff(ctx, args.asOfMs)
         const { filter, root } = filterFromConfig(args.config)
         const now = new Date()
         const evaluation = await buildEvaluationContext(
@@ -282,14 +287,14 @@ export const listByFilter = query({
             userId,
             root,
             now,
-            args.asOfMs,
+            asOfMs,
         )
         const matches = async (txn: Doc<'transactions'>) =>
             !txn.isArchived && matchesNode(txn, root, evaluation)
 
         const window = occurredWindow(
             indexDateWindow(filter, root, now),
-            args.asOfMs,
+            asOfMs,
         )
         const anchorAccount =
             filter.accountIds.length === 1 ? filter.accountIds[0] : null
@@ -490,12 +495,13 @@ export const summarize = query({
             ),
         ),
         currency: v.optional(v.string()),
-        asOfMs: v.int64(),
+        asOfMs: v.optional(v.int64()),
     },
     handler: async (ctx, args) => {
         const userId = await requireAuth(ctx)
+        const asOfMs = await resolveOccurrenceCutoff(ctx, args.asOfMs)
 
-        const lastOccurred = args.asOfMs - 1n
+        const lastOccurred = asOfMs - 1n
         const dateTo = args.dateTo < lastOccurred ? args.dateTo : lastOccurred
 
         const stream = ctx.db
@@ -626,9 +632,10 @@ export async function computeAccountBalance(
 }
 
 export const balance = query({
-    args: { accountId: v.string(), asOfMs: v.int64() },
+    args: { accountId: v.string(), asOfMs: v.optional(v.int64()) },
     handler: async (ctx, args) => {
         const userId = await requireAuth(ctx)
+        const asOfMs = await resolveOccurrenceCutoff(ctx, args.asOfMs)
         const account = await ctx.db
             .query('accounts')
             .withIndex('by_user_id', (q) =>
@@ -640,7 +647,7 @@ export const balance = query({
             ctx,
             userId,
             args.accountId,
-            args.asOfMs,
+            asOfMs,
         )
         return { balance: balanceCents, currency: account.currency }
     },

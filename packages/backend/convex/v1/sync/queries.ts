@@ -1,9 +1,11 @@
+import { pastCutoffBigInt } from '@wallet-bot/shared'
 import { v } from 'convex/values'
 import type { Doc } from '../../_generated/dataModel'
 import type { QueryCtx } from '../../_generated/server'
 import { query } from '../../_generated/server'
 import { CLIENT_OUTDATED, isClientSupported } from '../../config/helpers'
 import { syncedTable } from '../../schema/sync'
+import { supportsRecurrences } from '../../sync/compatibility'
 import { requireAuth } from '../../users/helpers'
 
 // Default page size if the caller doesn't override. Calibrated below the
@@ -89,6 +91,7 @@ function stripSystemFields<T extends { _id: unknown; _creationTime: unknown }>(
     void _id
     void _creationTime
     if ('userId' in rest) delete (rest as { userId?: string }).userId
+    if ('legacyPendingDate' in rest) delete rest.legacyPendingDate
     return rest as Omit<T, '_id' | '_creationTime' | 'userId'>
 }
 
@@ -345,7 +348,68 @@ export const pull = query({
             }
         }
 
-        const taken = buffer.slice(0, cutoff)
+        const pageItems = buffer.slice(0, cutoff)
+        const taken: PullItem[] = []
+        const modern = supportsRecurrences(args.platform, args.appVersion)
+        const asOfMs = pastCutoffBigInt()
+        for (const item of pageItems) {
+            if (modern) {
+                if (
+                    item.kind === 'tombstone' &&
+                    item.tableName === 'transactions'
+                ) {
+                    const txn = await ctx.db
+                        .query('transactions')
+                        .withIndex('by_user_id', (q) =>
+                            q.eq('userId', userId).eq('id', item.entityId),
+                        )
+                        .unique()
+                    // Recurrence-aware clients retain archived templates;
+                    // legacy clients still receive the ordinary deletion.
+                    if (txn?.isArchived && txn.recurrenceId !== undefined)
+                        continue
+                }
+                taken.push(item)
+                continue
+            }
+            if (item.tableName === 'recurrences') continue
+            if (item.kind === 'tombstone') {
+                taken.push(item)
+                continue
+            }
+            let hidden =
+                item.tableName === 'transactions' &&
+                typeof item.row.date === 'bigint' &&
+                item.row.date >= asOfMs
+            if (item.tableName === 'transactionTags') {
+                const txn = await ctx.db
+                    .query('transactions')
+                    .withIndex('by_user_id', (q) =>
+                        q
+                            .eq('userId', userId)
+                            .eq('id', String(item.row.transactionId)),
+                    )
+                    .unique()
+                hidden = !txn || txn.date >= asOfMs
+            }
+            if (hidden) {
+                // Remove a previously visible row after it moves into the
+                // future, without changing canonical data. One millisecond
+                // below updatedAt lets the original row supersede this local
+                // tombstone when due, with no artificial LWW business edit.
+                taken.push({
+                    kind: 'tombstone',
+                    seq: item.seq,
+                    sortKey: item.sortKey,
+                    tableName: item.tableName,
+                    entityId: String(item.row.id),
+                    deletedAt: BigInt(String(item.row.updatedAt)) - 1n,
+                })
+            } else {
+                const { recurrenceId, recurrenceIndex, ...row } = item.row
+                taken.push({ ...item, row })
+            }
+        }
         const rows = taken
             .filter((i): i is PullRowItem => i.kind === 'row')
             .map((i) => ({ tableName: i.tableName, row: i.row }))
@@ -359,7 +423,7 @@ export const pull = query({
             }))
 
         const hasMore = buffer.length > cutoff
-        const lastSeq = taken[taken.length - 1].seq
+        const lastSeq = pageItems[pageItems.length - 1].seq
         const nextCursor = hasMore ? lastSeq : null
 
         return {

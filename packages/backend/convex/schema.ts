@@ -17,6 +17,7 @@ import {
     feedbackSweepState,
 } from './schema/feedback'
 import { legalAcceptances } from './schema/legal'
+import { occurrenceClock } from './schema/occurrenceClock'
 import { recurrences } from './schema/recurrences'
 import { refreshTokens } from './schema/refreshTokens'
 import { supportEmails } from './schema/supportEmails'
@@ -34,6 +35,7 @@ import { userSettings } from './schema/userSettings'
 import { voiceSessionEvents, voiceSessions } from './schema/voice'
 
 export default defineSchema({
+    occurrenceClock,
     accounts,
     agentUsageMonthly,
     agentUsageSamples,

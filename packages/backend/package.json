@@ -31,9 +31,12 @@
         "zod": "^3.25.76"
     },
     "devDependencies": {
+        "@edge-runtime/vm": "^5.0.0",
         "@types/node": "^24.12.2",
         "@types/react": "^19.2.14",
+        "convex-test": "^0.0.54",
         "typescript": "catalog:",
+        "vite": "7.3.6",
         "vitest": "^3.2.4"
     }
 }

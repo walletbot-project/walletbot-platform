@@ -4,7 +4,6 @@ import { internal } from '../../_generated/api'
 import type { Doc } from '../../_generated/dataModel'
 import type { MutationCtx } from '../../_generated/server'
 import { mutation } from '../../_generated/server'
-import { inflowsByAccount, outflowsByAccount } from '../../aggregates'
 import { applyOccurrencePatch } from '../../recurrences/internal'
 import { workflow } from '../../recurrences/workflow'
 import { nextSeq, writeTombstone } from '../../sync/helpers'
@@ -155,11 +154,7 @@ export const create = mutation({
             seq: await nextSeq(ctx, userId),
         }
         const inserted = await ctx.db.insert('transactions', doc)
-        const row = await ctx.db.get(inserted)
-        if (row) {
-            await outflowsByAccount.insert(ctx, row)
-            await inflowsByAccount.insert(ctx, row)
-        }
+        await aggregateInsert(ctx, inserted)
         await recordMovementCreated(ctx, {
             userId,
             movementType: args.type,

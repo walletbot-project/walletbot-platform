@@ -1,5 +1,6 @@
 import { v } from 'convex/values'
 import { query } from '../../_generated/server'
+import { resolveOccurrenceCutoff } from '../../occurrences/helpers'
 import { requireAuth } from '../../users/helpers'
 
 export const listActive = query({
@@ -35,9 +36,10 @@ export const list = query({
 })
 
 export const listActiveWithCounts = query({
-    args: { asOfMs: v.int64() },
+    args: { asOfMs: v.optional(v.int64()) },
     handler: async (ctx, args) => {
         const userId = await requireAuth(ctx)
+        const asOfMs = await resolveOccurrenceCutoff(ctx, args.asOfMs)
         const categories = await ctx.db
             .query('categories')
             .withIndex('by_user_archived', (q) =>
@@ -55,7 +57,7 @@ export const listActiveWithCounts = query({
                         q
                             .eq('userId', userId)
                             .eq('categoryId', category.id)
-                            .lt('date', args.asOfMs),
+                            .lt('date', asOfMs),
                     )
                     .collect()
                 return {
@@ -93,10 +95,11 @@ export const spendByCurrency = query({
         id: v.string(),
         fromMs: v.int64(),
         toExclusiveMs: v.int64(),
-        asOfMs: v.int64(),
+        asOfMs: v.optional(v.int64()),
     },
     handler: async (ctx, args) => {
         const userId = await requireAuth(ctx)
+        const asOfMs = await resolveOccurrenceCutoff(ctx, args.asOfMs)
         const txns = await ctx.db
             .query('transactions')
             .withIndex('by_user_category_date', (q) =>
@@ -106,9 +109,9 @@ export const spendByCurrency = query({
                     .gte('date', args.fromMs)
                     .lt(
                         'date',
-                        args.toExclusiveMs < args.asOfMs
+                        args.toExclusiveMs < asOfMs
                             ? args.toExclusiveMs
-                            : args.asOfMs,
+                            : asOfMs,
                     ),
             )
             .collect()
@@ -131,10 +134,11 @@ export const recentTransactions = query({
     args: {
         id: v.string(),
         limit: v.optional(v.number()),
-        asOfMs: v.int64(),
+        asOfMs: v.optional(v.int64()),
     },
     handler: async (ctx, args) => {
         const userId = await requireAuth(ctx)
+        const asOfMs = await resolveOccurrenceCutoff(ctx, args.asOfMs)
         const limit = Math.min(args.limit ?? 5, 50)
         return await ctx.db
             .query('transactions')
@@ -142,7 +146,7 @@ export const recentTransactions = query({
                 q
                     .eq('userId', userId)
                     .eq('categoryId', args.id)
-                    .lt('date', args.asOfMs),
+                    .lt('date', asOfMs),
             )
             .order('desc')
             .filter((q) => q.eq(q.field('isArchived'), false))

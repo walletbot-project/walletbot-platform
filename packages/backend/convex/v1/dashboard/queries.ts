@@ -1,6 +1,7 @@
 import { v } from 'convex/values'
 import type { QueryCtx } from '../../_generated/server'
 import { query } from '../../_generated/server'
+import { resolveOccurrenceCutoff } from '../../occurrences/helpers'
 import { requireAuth } from '../../users/helpers'
 import { computeAccountBalance } from '../transactions/queries'
 import {
@@ -59,7 +60,7 @@ export const layout = query({
 export const stat = query({
     args: {
         config: v.string(),
-        asOfMs: v.int64(),
+        asOfMs: v.optional(v.int64()),
         aggregation: v.union(
             v.literal('sum'),
             v.literal('net'),
@@ -68,12 +69,13 @@ export const stat = query({
     },
     handler: async (ctx, args) => {
         const userId = await requireAuth(ctx)
+        const asOfMs = await resolveOccurrenceCutoff(ctx, args.asOfMs)
         const { rows, truncated } = await evaluateConfig(
             ctx,
             userId,
             args.config,
             null,
-            args.asOfMs,
+            asOfMs,
         )
 
         let amount = 0n
@@ -93,10 +95,11 @@ export const transactions = query({
     args: {
         config: v.string(),
         limit: v.optional(v.number()),
-        asOfMs: v.int64(),
+        asOfMs: v.optional(v.int64()),
     },
     handler: async (ctx, args) => {
         const userId = await requireAuth(ctx)
+        const asOfMs = await resolveOccurrenceCutoff(ctx, args.asOfMs)
         const limit = Math.min(
             Math.max(Math.trunc(args.limit ?? 5), 1),
             MAX_LIST_LIMIT,
@@ -106,7 +109,7 @@ export const transactions = query({
             userId,
             args.config,
             limit,
-            args.asOfMs,
+            asOfMs,
         )
         return rows
     },
@@ -127,10 +130,11 @@ export const currencyBalance = query({
     args: {
         currency: v.string(),
         accountIds: v.optional(v.array(v.string())),
-        asOfMs: v.int64(),
+        asOfMs: v.optional(v.int64()),
     },
     handler: async (ctx, args) => {
         const userId = await requireAuth(ctx)
+        const asOfMs = await resolveOccurrenceCutoff(ctx, args.asOfMs)
         const accounts = await ctx.db
             .query('accounts')
             .withIndex('by_user_archived', (q) =>
@@ -149,7 +153,7 @@ export const currencyBalance = query({
 
         const balances = await Promise.all(
             matching.map((account) =>
-                computeAccountBalance(ctx, userId, account.id, args.asOfMs),
+                computeAccountBalance(ctx, userId, account.id, asOfMs),
             ),
         )
         return {
@@ -162,7 +166,7 @@ export const currencyBalance = query({
 export const breakdown = query({
     args: {
         config: v.string(),
-        asOfMs: v.int64(),
+        asOfMs: v.optional(v.int64()),
         groupBy: v.union(
             v.literal('category'),
             v.literal('account'),
@@ -171,12 +175,13 @@ export const breakdown = query({
     },
     handler: async (ctx, args) => {
         const userId = await requireAuth(ctx)
+        const asOfMs = await resolveOccurrenceCutoff(ctx, args.asOfMs)
         const { rows, truncated } = await evaluateConfig(
             ctx,
             userId,
             args.config,
             null,
-            args.asOfMs,
+            asOfMs,
         )
 
         // Transfers move money between the user's own accounts; counting them

@@ -45,6 +45,8 @@ export const transactions = defineTable({
     recurrenceId: v.optional(v.string()),
     recurrenceIndex: v.optional(v.int64()),
 
+    // Server-only queue key; never sent to a native database.
+    legacyPendingDate: v.optional(v.int64()),
     isArchived: v.boolean(),
     createdAt: v.int64(),
     updatedAt: v.int64(),
@@ -53,6 +55,7 @@ export const transactions = defineTable({
 })
     .index('by_user_seq', ['userId', 'seq'])
     .index('by_user_id', ['userId', 'id'])
+    .index('by_legacyPendingDate', ['legacyPendingDate'])
     .index('by_user_date', ['userId', 'date'])
     .index('by_user_status', ['userId', 'status'])
     .index('by_user_type', ['userId', 'type'])
