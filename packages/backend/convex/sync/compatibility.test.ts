@@ -423,3 +423,186 @@ describe('legacy recurrence compatibility', { timeout: 30000 }, () => {
         ).toHaveLength(2)
     })
 })
+
+describe('WhatsApp with recurrence-aware and legacy clients', {
+    timeout: 60000,
+}, () => {
+    beforeEach(() => {
+        vi.useFakeTimers()
+        vi.setSystemTime(now)
+        vi.stubEnv('CONVEX_SITE_URL', 'https://test.convex.site')
+    })
+    afterEach(() => {
+        vi.useRealTimers()
+        vi.unstubAllEnvs()
+    })
+
+    async function execute(
+        t: Awaited<ReturnType<typeof fixture>>['t'],
+        name: string,
+        args: Record<string, unknown>,
+    ): Promise<Record<string, unknown>> {
+        return JSON.parse(
+            await t.mutation(internal.agent.tools.execute, {
+                userId,
+                name,
+                argsJson: JSON.stringify(args),
+                nowMs: now,
+                utcOffsetMinutes: 0,
+            }),
+        )
+    }
+
+    it('publishes a future WhatsApp write and its tags to an already-synced legacy device when due', async () => {
+        const { t, authed } = await fixture()
+        const result = await execute(t, 'addExpense', {
+            amount: 12,
+            dateConfirmed: true,
+            timeStatus: 'none',
+            accountIdOrName: 'a',
+            categoryIdOrName: 'c',
+            name: 'Future WhatsApp',
+            date: '2026-09-14',
+            tagIdsOrNames: ['tag'],
+        })
+        expect(result.ok).toBe(true)
+        const id = result.id
+        if (typeof id !== 'string') throw new Error('missing movement id')
+        const row = await t.run((ctx) =>
+            ctx.db
+                .query('transactions')
+                .withIndex('by_user_id', (q) =>
+                    q.eq('userId', userId).eq('id', id),
+                )
+                .unique(),
+        )
+        expect(row?.legacyPendingDate).toBe(row?.date)
+        const before = await authed.query(api.v1.sync.queries.pull, {
+            ...legacy,
+            since: 0n,
+        })
+        if ('error' in before) throw new Error(before.error)
+        expect(before.tombstones.some((r) => r.entityId === id)).toBe(true)
+        vi.setSystemTime(now + 3 * 86400000)
+        await t.mutation(internal.occurrences.internal.publishDue, {})
+        const after = await authed.query(api.v1.sync.queries.pull, {
+            ...legacy,
+            since: before.currentCounter,
+        })
+        if ('error' in after) throw new Error(after.error)
+        expect(
+            after.rows.some(
+                (r) => r.tableName === 'transactions' && r.row.id === id,
+            ),
+        ).toBe(true)
+        expect(
+            after.rows.some(
+                (r) =>
+                    r.tableName === 'transactionTags' &&
+                    r.row.transactionId === id,
+            ),
+        ).toBe(true)
+    })
+
+    it('republishes hidden tags when WhatsApp moves an occurrence into the past', async () => {
+        const { t, authed } = await fixture()
+        const result = await execute(t, 'updateTransaction', {
+            id: 't1',
+            date: '2026-09-12',
+            timeStatus: 'none',
+        })
+        expect(result.ok).toBe(true)
+        const page = await authed.query(api.v1.sync.queries.pull, {
+            ...legacy,
+            since: 7n,
+        })
+        if ('error' in page) throw new Error(page.error)
+        expect(
+            page.rows.some(
+                (r) =>
+                    r.tableName === 'transactionTags' && r.row.id === 't1__tag',
+            ),
+        ).toBe(true)
+        expect(
+            page.rows.some(
+                (r) => r.tableName === 'transactions' && r.row.id === 't1',
+            ),
+        ).toBe(true)
+    })
+
+    it('rejects unsupported series writes before modifying financial data', async () => {
+        const { t, authed } = await fixture()
+        for (const name of [
+            'addExpense',
+            'addIncome',
+            'updateTransaction',
+            'deleteTransaction',
+        ]) {
+            const result = await execute(t, name, {
+                id: 't0',
+                recurrence: { frequency: 'monthly' },
+                scope: 'all-future',
+            })
+            expect(result.ok, name).toBe(false)
+        }
+        expect(await authed.query(api.v1.sync.queries.getCounter, {})).toBe(7n)
+        const skill = await execute(t, 'readSkill', {
+            slug: 'recurring-movements',
+        })
+        expect(skill.ok).toBe(false)
+        expect(skill.availableSlugs).not.toContain('recurring-movements')
+    })
+
+    it('excludes future occurrences from every WhatsApp activity filter and summaries', async () => {
+        const { t } = await fixture()
+        for (const filter of [
+            {},
+            { accountIdOrName: 'a' },
+            { categoryIdOrName: 'c' },
+            { type: 'expense' },
+            { status: 'cleared' },
+        ]) {
+            const result = await execute(t, 'listTransactions', {
+                ...filter,
+                dateTo: '2026-09-30',
+            })
+            expect(result.ok).toBe(true)
+            expect(result.items).toMatchObject([{ id: 't0' }])
+            expect(result.items).toHaveLength(1)
+        }
+        const tagged = await execute(t, 'listTransactions', {
+            tagIdOrName: 'tag',
+        })
+        expect(tagged.items).toEqual([])
+        const summary = await execute(t, 'summarizeTransactions', {
+            dateFrom: '2026-09-01',
+            dateTo: '2026-09-30',
+            groupBy: 'category',
+        })
+        expect(summary.rows).toMatchObject([{ total: 100 }])
+        const futureOnly = await execute(t, 'summarizeTransactions', {
+            dateFrom: '2026-09-14',
+            dateTo: '2026-09-30',
+            groupBy: 'category',
+        })
+        expect(futureOnly.rows).toEqual([])
+    })
+
+    it('uses the occurred balance for WhatsApp reads and balance adjustments', async () => {
+        const { t } = await fixture()
+        expect(
+            await execute(t, 'getAccountBalance', { idOrName: 'a' }),
+        ).toMatchObject({ ok: true, balance: -100 })
+        expect(
+            await execute(t, 'addBalanceAdjustment', {
+                accountIdOrName: 'a',
+                balanceAfter: 50,
+                dateConfirmed: false,
+                timeStatus: 'none',
+            }),
+        ).toMatchObject({ ok: true, previousBalance: -100, balanceAfter: 50 })
+        expect(
+            await execute(t, 'getAccountBalance', { idOrName: 'a' }),
+        ).toMatchObject({ ok: true, balance: 50 })
+    })
+})

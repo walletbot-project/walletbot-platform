@@ -20,7 +20,6 @@ import type {
     Part,
 } from '@google/genai'
 import { GoogleGenAI, ThinkingLevel } from '@google/genai'
-import { TOOL_MAP } from '@wallet-bot/shared'
 import { v } from 'convex/values'
 import { internal } from '../_generated/api'
 import type { ActionCtx } from '../_generated/server'
@@ -29,7 +28,7 @@ import type { FlagKey } from '../featureFlags/utils'
 import { writeKeyFor } from './idempotency'
 import { buildTextSystemInstruction } from './prompt'
 import { toFunctionDeclarations } from './schema'
-import { AGENT_TOOL_NAMES, flagForTool } from './toolset'
+import { toolDefinitionsFor } from './toolset'
 
 // Overridable so a model can be rolled forward without a code change, which
 // matters when a preview model is retired at Google's pace rather than ours.
@@ -51,13 +50,7 @@ const MAX_TOOL_CALLS = 24
 // it on execution rather than trusting this list.
 const declarationsFor = (
     flags: Partial<Record<FlagKey, boolean>>,
-): FunctionDeclaration[] =>
-    toFunctionDeclarations(
-        AGENT_TOOL_NAMES.filter((name) => {
-            const flag = flagForTool(name)
-            return flag === undefined || flags[flag] === true
-        }).map((name) => TOOL_MAP[name]),
-    )
+): FunctionDeclaration[] => toFunctionDeclarations(toolDefinitionsFor(flags))
 
 export type AgentMessage = {
     role: 'user' | 'model'

@@ -9,6 +9,7 @@ import {
     AGENT_TOOL_NAMES,
     flagForTool,
     isAgentToolName,
+    toolDefinitionsFor,
 } from '../convex/agent/toolset'
 
 const NOW = Date.UTC(2026, 7, 30, 15, 0)
@@ -43,22 +44,47 @@ describe('AGENT_TOOL_NAMES', () => {
         expect(new Set(AGENT_TOOL_NAMES).size).toBe(AGENT_TOOL_NAMES.length)
     })
 
-    it('withholds exactly the dashboard, saved-filter and settings tools', () => {
+    it('withholds dashboard, saved-filter, settings and recurrence tools', () => {
         const missing = TOOL_NAMES.filter(
             (name) => !isAgentToolName(name),
         ).sort()
         expect(missing).toEqual([
+            'addRecurrenceOccurrences',
             'archiveDashboardWidget',
             'archiveSavedFilter',
             'createDashboardWidget',
             'createSavedFilter',
             'listDashboardWidgets',
+            'listRecurrences',
             'listSavedFilters',
+            'listUpcomingTransactions',
             'reorderDashboardWidgets',
             'updateDashboardWidget',
             'updateSavedFilter',
             'updateSettings',
         ])
+    })
+
+    it('never offers unsupported series arguments, even with the feature flag on', () => {
+        for (const recurringExpense of [false, true]) {
+            const defs = toolDefinitionsFor({ recurringExpense })
+            for (const name of [
+                'addExpense',
+                'addIncome',
+                'updateTransaction',
+                'deleteTransaction',
+            ]) {
+                const definition = defs.find((d) => d.name === name)
+                expect(definition).toBeDefined()
+                expect(definition?.parameters.properties).not.toHaveProperty(
+                    'recurrence',
+                )
+                expect(definition?.parameters.properties).not.toHaveProperty(
+                    'scope',
+                )
+            }
+        }
+        expect(prompt()).not.toContain('recurring-movements:')
     })
 
     it('gates getExchangeRate behind the exchangeRates flag and nothing else', () => {

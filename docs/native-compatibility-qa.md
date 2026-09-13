@@ -57,3 +57,43 @@ Integration cases include hidden-only pagination, due publication and tag
 rehydration, rescheduling, deletion, legacy push acknowledgement, migration
 idempotence, old web argument shapes, and preservation of business timestamps
 so publication does not overwrite newer offline edits.
+
+## Review after merging main (2026-09-13)
+
+Main was merged at `e0dfac7`. The native version is now `0.4.0+9` and the
+minimum supported version remains `0.3.0`. The merge brought in the WhatsApp
+agent, which required integration with the recurrence contract:
+
+- WhatsApp transaction writes now use the shared aggregate helpers, maintaining
+  the legacy publication queue and republishing tags after date edits.
+- Balances, adjustments, activity and summaries apply the occurrence cutoff.
+- The WhatsApp executor does not implement series operations. Its declarations
+  omit recurrence/scope arguments, its skill index omits the recurrence guide,
+  and execution rejects unsupported series arguments before writing.
+
+Workspace typechecks, web lint, 684 native tests, 153 shared tests and 9 web
+tests passed. Backend: **118 passed, 1 failed**. The remaining failure is a
+new regression test exposing an existing publication defect, not a passing
+compatibility verdict:
+
+**Approval blocker:** `occurrences/internal.ts:publishDue` calls
+`republishTransactionTags` for every due transaction. That helper calls native
+Convex `.paginate()`, which may run only once per function execution. With two
+queued transactions due together, the second call throws and rolls back the
+whole publication batch, including its sync-counter changes. Old native
+clients can therefore stop receiving due movements. Both calls already exist
+in `cb39ea7`, before the merge. This issue was reported without changing the
+publication implementation, in accordance with the requested merge-only scope.
+
+Other existing findings remain outside the merge fixes:
+
+- Native recurrence end dates are stored at midnight while occurrences can
+  retain a later time. January 31 at noon through May 31 produces four monthly
+  occurrences instead of five. Reproduced directly with the Dart calendar code.
+- Native custom-day input permits visible `0`/`00` while retaining the last
+  valid interval internally, so the displayed interval can differ from the
+  saved one.
+- Web amount-only edits with “this and future” reconstruct the date to minute
+  precision. Existing seconds/milliseconds trigger a series split; the prior
+  QA reproduced an extended monthly series shrinking from 96 to 48. The
+  responsible date comparison and split path are unchanged.
