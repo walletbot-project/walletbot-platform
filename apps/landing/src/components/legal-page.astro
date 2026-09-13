@@ -28,14 +28,14 @@ const meta = doc === 'privacy-policy' ? t.legal.privacy : t.legal.terms
     <div class="mx-auto w-full max-w-3xl px-6 py-16">
         <a
             href={getRelativeLocaleUrl(locale)}
-            class="text-sm text-slate-400 underline-offset-4 hover:text-white hover:underline"
+            class="text-sm text-ink-soft underline-offset-4 hover:text-ink hover:underline"
         >
             ← {t.legal.backHome}
         </a>
 
         {/* The documents bring their own H1, so none is added here. */}
         <article
-            class="prose prose-invert mt-8 max-w-none prose-headings:tracking-tight"
+            class="prose prose-slate mt-8 max-w-none prose-headings:tracking-tight"
         >
             <Content />
         </article>

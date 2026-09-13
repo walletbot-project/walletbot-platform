@@ -3,13 +3,12 @@ import Icon from '@/components/icon.astro'
 import LiveLedger from '@/components/live-ledger.astro'
 import PhoneMockup from '@/components/phone-mockup.astro'
 import StoreBadges from '@/components/store-badges.astro'
-import { LOCALE_LABELS, useTranslations } from '@/i18n'
+import { useTranslations } from '@/i18n'
 import BaseLayout from '@/layouts/base-layout.astro'
 
 const { t } = useTranslations(Astro.currentLocale)
 
 const voiceTypes = Object.values(t.features.items.voice.types)
-const stats = Object.values(t.stats)
 
 // Decorative bar heights (%) for the dashboard card's mini chart; bars grow a
 // little on hover, staggered left to right.
@@ -24,32 +23,32 @@ const VOICE_WAVE = [14, 30, 22, 44, 28, 52, 36, 48, 24, 40, 18, 32]
 const HERO_GLYPHS = [
     {
         glyph: '$',
-        class: 'top-[7%] left-[3%] text-7xl text-white/[0.07] sm:text-8xl',
+        class: 'top-[7%] left-[3%] text-7xl text-ink/[0.07] sm:text-8xl',
         style: 'animation-duration:11s;animation-delay:-2s',
     },
     {
         glyph: '€',
-        class: 'top-[40%] -left-2 hidden text-6xl text-brand/15 md:block',
+        class: 'top-[40%] -left-2 hidden text-6xl text-brand-ink/20 md:block',
         style: 'animation-duration:13s;animation-delay:-7s',
     },
     {
         glyph: '¥',
-        class: 'top-[10%] right-[5%] text-5xl text-white/[0.06]',
+        class: 'top-[10%] right-[5%] text-5xl text-ink/[0.06]',
         style: 'animation-duration:9s;animation-delay:-4s',
     },
     {
         glyph: '£',
-        class: 'top-[50%] left-[40%] hidden text-4xl text-white/[0.07] lg:block',
+        class: 'top-[50%] left-[40%] hidden text-4xl text-ink/[0.07] lg:block',
         style: 'animation-duration:12s;animation-delay:-9s',
     },
     {
         glyph: 'R$',
-        class: 'top-[28%] right-[2%] hidden text-3xl tracking-tight text-brand/15 lg:block',
+        class: 'top-[28%] right-[2%] hidden text-3xl tracking-tight text-brand-ink/20 lg:block',
         style: 'animation-duration:10s;animation-delay:-1s',
     },
     {
         glyph: '₩',
-        class: 'top-[54%] right-[16%] hidden text-4xl text-white/[0.07] md:block',
+        class: 'top-[54%] right-[16%] hidden text-4xl text-ink/[0.07] md:block',
         style: 'animation-duration:14s;animation-delay:-5s',
     },
 ]
@@ -59,10 +58,6 @@ const HERO_GLYPHS = [
 // with dasharray 1 and the default dashoffset 0 is a complete stroke.
 const BALANCE_LINE =
     'M0 340 C 90 336, 150 300, 240 292 S 400 262 480 240 S 640 176 720 168 S 900 118 990 92 S 1140 30 1200 22'
-
-// The four "most used" shortcuts from the app's account-creation screen; the
-// catalog has 52 currencies in total, hence the +48 chip.
-const SUGGESTED_CURRENCIES = ['ARS', 'USD', 'EUR', 'BRL']
 
 // Filter-slider dot positions for the hidden filters card below: resting and
 // on-hover (all literal classes so Tailwind picks them up). Commented out with
@@ -74,17 +69,17 @@ const SUGGESTED_CURRENCIES = ['ARS', 'USD', 'EUR', 'BRL']
 // ]
 
 const card =
-    'group rounded-2xl border border-white/10 bg-white/5 p-6 transition-all hover:-translate-y-1 hover:border-white/20 hover:bg-white/[0.07] hover:shadow-[0_12px_40px_rgb(109_231_216/0.07)]'
+    'group rounded-2xl border border-line bg-panel p-6 transition-all hover:-translate-y-1 hover:border-brand-line hover:bg-panel-alt hover:shadow-[0_12px_40px_rgb(0_106_97/0.08)]'
 const iconChip =
-    'flex size-10 items-center justify-center rounded-lg bg-brand/15 ring-1 ring-brand/25'
+    'flex size-10 items-center justify-center rounded-lg bg-brand-tint ring-1 ring-brand-line'
 
 // Same shape as `card`/`iconChip` but dashed and drained of brand color, for a
 // feature that isn't shipped. Spelled out rather than layered on top of `card`
 // so the two never fight over `bg-*` in the generated stylesheet.
 const soonCard =
-    'group rounded-2xl border border-dashed border-white/15 bg-white/[0.02] p-6 transition-all hover:-translate-y-1 hover:border-white/30 hover:bg-white/[0.04]'
+    'group rounded-2xl border border-dashed border-line-strong bg-panel-alt p-6 transition-all hover:-translate-y-1 hover:border-ink-soft/40 hover:bg-panel'
 const soonIconChip =
-    'flex size-10 items-center justify-center rounded-lg bg-white/5 ring-1 ring-white/10'
+    'flex size-10 items-center justify-center rounded-lg bg-panel ring-1 ring-line'
 ---
 
 <BaseLayout>
@@ -92,17 +87,17 @@ const soonIconChip =
     <section class="relative overflow-hidden">
         {/* Faded grid + ambient glows. */}
         <div
-            class="absolute inset-0 -z-20 bg-[linear-gradient(to_right,rgb(255_255_255/0.045)_1px,transparent_1px),linear-gradient(to_bottom,rgb(255_255_255/0.045)_1px,transparent_1px)] bg-[size:56px_56px] [mask-image:radial-gradient(ellipse_75%_65%_at_50%_0%,black,transparent)]"
+            class="absolute inset-0 -z-20 bg-[linear-gradient(to_right,rgb(0_106_97/0.06)_1px,transparent_1px),linear-gradient(to_bottom,rgb(0_106_97/0.06)_1px,transparent_1px)] bg-[size:56px_56px] [mask-image:radial-gradient(ellipse_75%_65%_at_50%_0%,black,transparent)]"
             aria-hidden="true"
         >
         </div>
         <div
-            class="pointer-events-none absolute -top-40 left-1/2 -z-10 size-[42rem] -translate-x-1/2 rounded-full bg-brand/15 blur-3xl"
+            class="pointer-events-none absolute -top-40 left-1/2 -z-10 size-[42rem] -translate-x-1/2 rounded-full bg-brand/35 blur-3xl"
             aria-hidden="true"
         >
         </div>
         <div
-            class="pointer-events-none absolute top-40 -right-40 -z-10 size-[30rem] rounded-full bg-teal-500/10 blur-3xl"
+            class="pointer-events-none absolute top-40 -right-40 -z-10 size-[30rem] rounded-full bg-amber/30 blur-3xl"
             aria-hidden="true"
         >
         </div>
@@ -114,14 +109,14 @@ const soonIconChip =
             aria-hidden="true"
         >
             <svg
-                class="absolute inset-x-0 top-[14%] h-[58%] w-full text-brand"
+                class="absolute inset-x-0 top-[14%] h-[58%] w-full text-brand-ink"
                 viewBox="0 0 1200 400"
                 preserveAspectRatio="none"
                 fill="none"
             >
                 <defs>
                     <linearGradient id="hero-balance-fill" x1="0" x2="0" y1="0" y2="1">
-                        <stop offset="0" stop-color="currentColor" stop-opacity="0.09" />
+                        <stop offset="0" stop-color="currentColor" stop-opacity="0.10" />
                         <stop offset="1" stop-color="currentColor" stop-opacity="0" />
                     </linearGradient>
                 </defs>
@@ -135,7 +130,7 @@ const soonIconChip =
                     pathLength="1"
                     stroke-dasharray="1"
                     stroke="currentColor"
-                    stroke-opacity="0.35"
+                    stroke-opacity="0.30"
                     stroke-width="1.5"
                     stroke-linecap="round"
                     vector-effect="non-scaling-stroke"
@@ -144,20 +139,20 @@ const soonIconChip =
             </svg>
 
             <div
-                class="absolute -top-20 -left-20 size-64 rounded-full border border-white/[0.07] sm:size-80"
+                class="absolute -top-20 -left-20 size-64 rounded-full border border-ink/[0.07] sm:size-80"
             >
                 <div
-                    class="absolute inset-5 rounded-full border border-dashed border-white/[0.06] motion-safe:animate-[spin_120s_linear_infinite]"
+                    class="absolute inset-5 rounded-full border border-dashed border-ink/[0.06] motion-safe:animate-[spin_120s_linear_infinite]"
                 >
                 </div>
-                <div class="absolute inset-12 rounded-full border border-white/[0.04]">
+                <div class="absolute inset-12 rounded-full border border-ink/[0.05]">
                 </div>
             </div>
             <div
-                class="absolute top-[48%] right-[5%] hidden size-28 rounded-full border border-brand/15 lg:block"
+                class="absolute top-[48%] right-[5%] hidden size-28 rounded-full border border-brand-ink/20 lg:block"
             >
                 <div
-                    class="absolute inset-2.5 rounded-full border border-dashed border-brand/10 motion-safe:animate-[spin_80s_linear_infinite_reverse]"
+                    class="absolute inset-2.5 rounded-full border border-dashed border-brand-ink/15 motion-safe:animate-[spin_80s_linear_infinite_reverse]"
                 >
                 </div>
             </div>
@@ -184,14 +179,14 @@ const soonIconChip =
                 class="flex flex-col items-center gap-7 text-center lg:items-start lg:text-left"
             >
                 <h1
-                    class="max-w-2xl bg-gradient-to-b from-white via-white to-slate-400 bg-clip-text text-5xl font-semibold tracking-tighter text-balance text-transparent sm:text-7xl lg:text-8xl"
+                    class="max-w-2xl bg-gradient-to-b from-ink via-ink to-ink-soft bg-clip-text text-5xl font-semibold tracking-tighter text-balance text-transparent sm:text-7xl lg:text-8xl"
                 >
                     {t.hero.headline}
                 </h1>
 
-                <p class="max-w-xl text-lg text-pretty text-slate-400 sm:text-xl">
+                <p class="max-w-xl text-lg text-pretty text-ink-soft sm:text-xl">
                     {t.hero.subheadline.lead}{' '}
-                    <strong class="font-semibold text-slate-200"
+                    <strong class="font-semibold text-ink"
                         >{t.hero.subheadline.highlight}</strong
                     >{t.hero.subheadline.rest}
                 </p>
@@ -200,7 +195,7 @@ const soonIconChip =
 
                 <a
                     href="#features"
-                    class="group text-sm text-slate-400 transition-colors hover:text-white"
+                    class="group text-sm text-ink-soft transition-colors hover:text-ink"
                 >
                     {t.hero.ctaFeatures}
                     <span
@@ -215,52 +210,49 @@ const soonIconChip =
             <PhoneMockup />
         </div>
 
-        {/* Live ledger tape, then the stats strip. */}
+        {/* The quote tape closes the hero. What used to sit below it — four
+            spec counters — is now the problem section, which argues instead of
+            describing. */}
         <LiveLedger />
+    </section>
 
-        {/* Stats strip. */}
-        <div class="border-t border-white/10 bg-white/[0.02]">
-            <dl
-                class="mx-auto grid w-full max-w-6xl grid-cols-2 gap-x-6 gap-y-8 px-6 py-10 text-center lg:grid-cols-4"
+    {/* ── Problem ──────────────────────────────────────────────────────── */}
+    <section class="border-t border-line">
+        <div class="mx-auto w-full max-w-4xl px-6 py-20 lg:py-28">
+            <h2
+                class="text-3xl font-semibold tracking-tight text-balance text-ink sm:text-4xl"
             >
-                {
-                    stats.map((stat) => (
-                        <div>
-                            <dd
-                                class="text-4xl font-semibold tracking-tight text-white sm:text-5xl"
-                            >
-                                {stat.value}
-                            </dd>
-                            <dt
-                                class="mt-2 text-xs font-medium tracking-widest text-slate-500 uppercase"
-                            >
-                                {stat.label}
-                            </dt>
-                        </div>
-                    ))
-                }
-            </dl>
+                {t.problem.title}
+            </h2>
+            <p class="mt-6 max-w-2xl text-lg text-pretty text-ink-soft">
+                {t.problem.body}
+            </p>
+            <p
+                class="mt-4 max-w-2xl text-lg font-medium text-pretty text-ink"
+            >
+                {t.problem.close}
+            </p>
         </div>
     </section>
 
     {/* ── Features (bento) ─────────────────────────────────────────────── */}
     <section
         id="features"
-        class="scroll-mt-20 border-t border-white/10"
+        class="scroll-mt-20 border-t border-line"
     >
         <div class="mx-auto w-full max-w-6xl px-6 py-20 lg:py-28">
             <p
-                class="flex items-center gap-3 text-xs font-semibold tracking-widest text-slate-400 uppercase"
+                class="flex items-center gap-3 text-xs font-semibold tracking-widest text-ink-soft uppercase"
             >
-                <span class="h-px w-8 bg-brand" aria-hidden="true"></span>
+                <span class="h-0.5 w-8 rounded-full bg-amber" aria-hidden="true"></span>
                 {t.nav.features}
             </p>
             <h2
-                class="mt-3 text-3xl font-semibold tracking-tight text-white sm:text-5xl"
+                class="mt-3 text-3xl font-semibold tracking-tight text-ink sm:text-5xl"
             >
                 {t.features.title}
             </h2>
-            <p class="mt-4 max-w-xl text-lg text-slate-400">
+            <p class="mt-4 max-w-xl text-lg text-ink-soft">
                 {t.features.subtitle}
             </p>
 
@@ -269,26 +261,26 @@ const soonIconChip =
                 <div
                     class:list={[
                         card,
-                        'border-brand/20 bg-gradient-to-br from-brand/10 via-white/5 to-white/5 sm:col-span-2',
+                        'border-brand-line bg-gradient-to-br from-brand-tint via-panel to-panel sm:col-span-2',
                     ]}
                 >
                     <div class="flex flex-wrap items-center gap-8">
                         <div class="max-w-md">
                             <div class={iconChip}>
-                                <Icon name="mic" class="size-5 text-brand" />
+                                <Icon name="mic" class="size-5 text-brand-ink" />
                             </div>
-                            <h3 class="mt-4 font-medium text-white">
+                            <h3 class="mt-4 font-medium text-ink">
                                 {t.features.items.voice.title}
                             </h3>
                             <p
-                                class="mt-2 text-sm leading-relaxed text-slate-400"
+                                class="mt-2 text-sm leading-relaxed text-ink-soft"
                             >
                                 {t.features.items.voice.body}
                             </p>
                             <ul class="mt-4 flex flex-wrap gap-2">
                                 {
                                     voiceTypes.map((type) => (
-                                        <li class="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-slate-300">
+                                        <li class="rounded-full border border-line bg-panel-alt px-3 py-1 text-xs text-ink-soft">
                                             {type}
                                         </li>
                                     ))
@@ -303,8 +295,46 @@ const soonIconChip =
                             {
                                 VOICE_WAVE.map((height, index) => (
                                     <span
-                                        class="w-1 animate-pulse rounded-full bg-brand/70"
+                                        class="w-1 animate-pulse rounded-full bg-brand"
                                         style={`height:${height}px;animation-delay:${index * 110}ms`}
+                                    />
+                                ))
+                            }
+                        </div>
+                    </div>
+                </div>
+
+                {/* Dashboard — the card that closes the hero's promise: it is where
+                    "understand where it goes" actually happens, so it sits second
+                    and keeps the double width. */}
+                <div class:list={[card, 'sm:col-span-2']}>
+                    <div class="flex flex-wrap items-start justify-between gap-6">
+                        <div class="max-w-sm">
+                            <div class={iconChip}>
+                                <Icon
+                                    name="layout-dashboard"
+                                    class="size-5 text-brand-ink"
+                                />
+                            </div>
+                            <h3 class="mt-4 font-medium text-ink">
+                                {t.features.items.dashboard.title}
+                            </h3>
+                            <p
+                                class="mt-2 text-sm leading-relaxed text-ink-soft"
+                            >
+                                {t.features.items.dashboard.body}
+                            </p>
+                        </div>
+
+                        <div
+                            class="flex h-24 min-w-40 flex-1 items-end gap-2 self-end border-b border-line pb-px"
+                            aria-hidden="true"
+                        >
+                            {
+                                CHART_BARS.map((height, index) => (
+                                    <div
+                                        class="flex-1 origin-bottom scale-y-[0.8] rounded-t bg-brand transition-transform duration-500 group-hover:scale-y-100 group-hover:bg-brand-ink/70"
+                                        style={`height:${height}%;transition-delay:${index * 45}ms`}
                                     />
                                 ))
                             }
@@ -315,21 +345,21 @@ const soonIconChip =
                 {/* Offline — phone syncing to cloud over a dashed link. */}
                 <div class={card}>
                     <div class={iconChip}>
-                        <Icon name="cloud-off" class="size-5 text-brand" />
+                        <Icon name="cloud-off" class="size-5 text-brand-ink" />
                     </div>
-                    <h3 class="mt-4 font-medium text-white">
+                    <h3 class="mt-4 font-medium text-ink">
                         {t.features.items.offline.title}
                     </h3>
-                    <p class="mt-2 text-sm leading-relaxed text-slate-400">
+                    <p class="mt-2 text-sm leading-relaxed text-ink-soft">
                         {t.features.items.offline.body}
                     </p>
                     <div
-                        class="mt-6 flex items-center gap-3 text-slate-500"
+                        class="mt-6 flex items-center gap-3 text-ink-soft"
                         aria-hidden="true"
                     >
                         <Icon name="smartphone" class="size-4 shrink-0" />
                         <span
-                            class="relative flex-1 border-t border-dashed border-white/20"
+                            class="relative flex-1 border-t border-dashed border-line-strong"
                         >
                             <span
                                 class="absolute top-1/2 left-1/2 size-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-brand"
@@ -347,17 +377,17 @@ const soonIconChip =
                 {/* Local mode — an "on" toggle, no account attached. */}
                 <div class={card}>
                     <div class={iconChip}>
-                        <Icon name="lock" class="size-5 text-brand" />
+                        <Icon name="lock" class="size-5 text-brand-ink" />
                     </div>
-                    <h3 class="mt-4 font-medium text-white">
+                    <h3 class="mt-4 font-medium text-ink">
                         {t.features.items.local.title}
                     </h3>
-                    <p class="mt-2 text-sm leading-relaxed text-slate-400">
+                    <p class="mt-2 text-sm leading-relaxed text-ink-soft">
                         {t.features.items.local.body}
                     </p>
                     <div class="mt-6" aria-hidden="true">
                         <span
-                            class="relative block h-6 w-11 rounded-full bg-brand/25 ring-1 ring-brand/40 ring-inset"
+                            class="relative block h-6 w-11 rounded-full bg-brand-tint ring-1 ring-brand-line ring-inset"
                         >
                             <span
                                 class="absolute top-0.5 right-0.5 size-5 rounded-full bg-brand transition-transform duration-300 group-hover:-translate-x-[1px]"
@@ -370,82 +400,42 @@ const soonIconChip =
                 {/* Fast — cheeky chip instead of a fake benchmark. */}
                 <div class={card}>
                     <div class={iconChip}>
-                        <Icon name="zap" class="size-5 text-brand" />
+                        <Icon name="zap" class="size-5 text-brand-ink" />
                     </div>
-                    <h3 class="mt-4 font-medium text-white">
+                    <h3 class="mt-4 font-medium text-ink">
                         {t.features.items.fast.title}
                     </h3>
-                    <p class="mt-2 text-sm leading-relaxed text-slate-400">
+                    <p class="mt-2 text-sm leading-relaxed text-ink-soft">
                         {t.features.items.fast.body}
                     </p>
                     <p
-                        class="mt-6 inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-slate-300"
+                        class="mt-6 inline-flex items-center gap-1.5 rounded-full bg-amber px-3 py-1 text-xs font-semibold text-ink"
                     >
-                        <Icon name="check" class="size-3.5 text-brand" />
+                        <Icon name="check" class="size-3.5 text-amber-ink" />
                         {t.features.items.fast.chip}
                     </p>
                 </div>
 
-                {/* Currencies — the app's real "most used" shortcuts. */}
+                {/* Cross-device — the phone and the desktop, side by side. */}
                 <div class={card}>
                     <div class={iconChip}>
-                        <Icon name="coins" class="size-5 text-brand" />
+                        <Icon name="monitor" class="size-5 text-brand-ink" />
                     </div>
-                    <h3 class="mt-4 font-medium text-white">
-                        {t.features.items.currencies.title}
+                    <h3 class="mt-4 font-medium text-ink">
+                        {t.features.items.crossDevice.title}
                     </h3>
-                    <p class="mt-2 text-sm leading-relaxed text-slate-400">
-                        {t.features.items.currencies.body}
+                    <p class="mt-2 text-sm leading-relaxed text-ink-soft">
+                        {t.features.items.crossDevice.body}
                     </p>
-                    <ul class="mt-6 flex flex-wrap gap-2 font-mono text-xs">
-                        {
-                            SUGGESTED_CURRENCIES.map((code) => (
-                                <li class="rounded-md border border-white/10 bg-white/5 px-2.5 py-1 text-slate-300">
-                                    {code}
-                                </li>
-                            ))
-                        }
-                        <li
-                            class="rounded-md border border-brand/25 bg-brand/10 px-2.5 py-1 text-slate-200"
-                        >
-                            +48
-                        </li>
-                    </ul>
-                </div>
-
-                {/* Dashboard — double width with a decorative mini chart. */}
-                <div class:list={[card, 'sm:col-span-2']}>
-                    <div class="flex flex-wrap items-start justify-between gap-6">
-                        <div class="max-w-sm">
-                            <div class={iconChip}>
-                                <Icon
-                                    name="layout-dashboard"
-                                    class="size-5 text-brand"
-                                />
-                            </div>
-                            <h3 class="mt-4 font-medium text-white">
-                                {t.features.items.dashboard.title}
-                            </h3>
-                            <p
-                                class="mt-2 text-sm leading-relaxed text-slate-400"
-                            >
-                                {t.features.items.dashboard.body}
-                            </p>
-                        </div>
-
-                        <div
-                            class="flex h-24 min-w-40 flex-1 items-end gap-2 self-end border-b border-white/10 pb-px"
-                            aria-hidden="true"
-                        >
-                            {
-                                CHART_BARS.map((height, index) => (
-                                    <div
-                                        class="flex-1 origin-bottom scale-y-[0.8] rounded-t bg-brand/50 transition-transform duration-500 group-hover:scale-y-100 group-hover:bg-brand/70"
-                                        style={`height:${height}%;transition-delay:${index * 45}ms`}
-                                    />
-                                ))
-                            }
-                        </div>
+                    <div
+                        class="mt-6 flex items-end gap-2 text-ink-soft"
+                        aria-hidden="true"
+                    >
+                        <Icon name="smartphone" class="size-5 shrink-0" />
+                        <span class="h-px flex-1 self-center bg-line-strong"></span>
+                        <span class="size-1.5 self-center rounded-full bg-brand"></span>
+                        <span class="h-px flex-1 self-center bg-line-strong"></span>
+                        <Icon name="monitor" class="size-6 shrink-0" />
                     </div>
                 </div>
 
@@ -458,16 +448,16 @@ const soonIconChip =
                     ]}
                 >
                     <div class={soonIconChip}>
-                        <Icon name="whatsapp" class="size-5 text-slate-400" />
+                        <Icon name="whatsapp" class="size-5 text-ink-soft" />
                     </div>
-                    <h3 class="mt-4 font-medium text-slate-200">
+                    <h3 class="mt-4 font-medium text-ink">
                         {t.features.items.whatsapp.title}
                     </h3>
-                    <p class="mt-2 text-sm leading-relaxed text-slate-400">
+                    <p class="mt-2 text-sm leading-relaxed text-ink-soft">
                         {t.features.items.whatsapp.body}
                     </p>
                     <p
-                        class="mt-6 inline-flex items-center gap-1.5 rounded-full border border-white/10 border-dashed bg-white/[0.02] px-3 py-1 text-xs text-slate-400"
+                        class="mt-6 inline-flex items-center gap-1.5 rounded-full border border-dashed border-line-strong bg-panel px-3 py-1 text-xs text-ink-soft"
                     >
                         {t.features.items.whatsapp.chip}
                     </p>
@@ -482,21 +472,21 @@ const soonIconChip =
 
                     <div class={card}>
                         <div class={iconChip}>
-                            <Icon name="filter" class="size-5 text-brand" />
+                            <Icon name="filter" class="size-5 text-brand-ink-ink" />
                         </div>
-                        <h3 class="mt-4 font-medium text-white">
+                        <h3 class="mt-4 font-medium text-ink">
                             {t.features.items.filters.title}
                         </h3>
-                        <p class="mt-2 text-sm leading-relaxed text-slate-400">
+                        <p class="mt-2 text-sm leading-relaxed text-ink-soft">
                             {t.features.items.filters.body}
                         </p>
                         <div class="mt-7 space-y-4" aria-hidden="true">
                             {
                                 FILTER_SLIDERS.map(([rest, hover]) => (
-                                    <div class="relative h-px bg-white/15">
+                                    <div class="relative h-px bg-line-strong">
                                         <span
                                             class:list={[
-                                                'absolute -top-[3px] size-[7px] -translate-x-1/2 rounded-full bg-brand ring-4 ring-slate-950/80 transition-all duration-500',
+                                                'absolute -top-[3px] size-[7px] -translate-x-1/2 rounded-full bg-brand ring-4 ring-surface transition-all duration-500',
                                                 rest,
                                                 hover,
                                             ]}
@@ -509,66 +499,17 @@ const soonIconChip =
                     */
                 }
 
-                {/* Languages — full-width slim banner. */}
-                <div
-                    class:list={[
-                        card,
-                        'flex flex-wrap items-center justify-between gap-6 sm:col-span-2 lg:col-span-3',
-                    ]}
-                >
-                    <div class="flex items-start gap-4">
-                        <div class:list={[iconChip, 'shrink-0']}>
-                            <Icon name="globe" class="size-5 text-brand" />
-                        </div>
-                        <div class="max-w-xl">
-                            <h3 class="font-medium text-white">
-                                {t.features.items.bilingual.title}
-                            </h3>
-                            <p
-                                class="mt-1 text-sm leading-relaxed text-slate-400"
-                            >
-                                {t.features.items.bilingual.body}
-                            </p>
-                        </div>
-                    </div>
-
-                    <p
-                        class="flex items-center gap-2 text-sm font-medium text-slate-300"
-                        aria-hidden="true"
-                    >
-                        <span
-                            class="rounded-full border border-white/10 bg-white/5 px-3 py-1"
-                        >
-                            {LOCALE_LABELS.es}
-                        </span>
-                        <span
-                            class="inline-block transition-transform duration-500 group-hover:rotate-180"
-                        >
-                            ⇄
-                        </span>
-                        <span
-                            class="rounded-full border border-white/10 bg-white/5 px-3 py-1"
-                        >
-                            {LOCALE_LABELS.en}
-                        </span>
-                        <span
-                            class="rounded-full border border-brand/25 bg-brand/10 px-3 py-1 text-slate-200"
-                        >
-                            {t.features.items.bilingual.chipMore}
-                        </span>
-                    </p>
-                </div>
-            </div>
+                            </div>
         </div>
     </section>
 
     {/* ── Download CTA ─────────────────────────────────────────────────── */}
     <section
         id="download"
-        class="relative scroll-mt-20 overflow-hidden border-t border-white/10"
+        class="relative scroll-mt-20 overflow-hidden border-t border-line"
     >
         <div
-            class="pointer-events-none absolute -bottom-52 left-1/2 -z-10 size-[36rem] -translate-x-1/2 rounded-full bg-brand/15 blur-3xl"
+            class="pointer-events-none absolute -bottom-52 left-1/2 -z-10 size-[36rem] -translate-x-1/2 rounded-full bg-brand/35 blur-3xl"
             aria-hidden="true"
         >
         </div>
@@ -577,11 +518,11 @@ const soonIconChip =
             class="mx-auto flex w-full max-w-3xl flex-col items-center gap-8 px-6 py-24 text-center lg:py-32"
         >
             <h2
-                class="bg-gradient-to-b from-white via-white to-slate-400 bg-clip-text text-4xl font-semibold tracking-tighter text-transparent sm:text-6xl"
+                class="bg-gradient-to-b from-ink via-ink to-ink-soft bg-clip-text text-4xl font-semibold tracking-tighter text-transparent sm:text-6xl"
             >
                 {t.download.title}
             </h2>
-            <p class="text-lg text-slate-400 sm:text-xl">
+            <p class="text-lg text-ink-soft sm:text-xl">
                 {t.download.subtitle}
             </p>
 

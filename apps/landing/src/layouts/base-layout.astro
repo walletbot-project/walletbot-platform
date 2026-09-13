@@ -53,16 +53,16 @@ const path = Astro.url.pathname.split('/').filter(Boolean).slice(1).join('/')
             href={getAbsoluteLocaleUrl(DEFAULT_LOCALE, path)}
         />
 
-        <meta name="theme-color" content="#020617" />
+        <meta name="theme-color" content="#f5fbf8" />
         <meta name="generator" content={Astro.generator} />
     </head>
 
     <body
-        class="flex min-h-dvh flex-col bg-slate-950 text-slate-100 antialiased"
+        class="flex min-h-dvh flex-col bg-surface text-ink antialiased"
     >
         <a
             href="#main"
-            class="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-50 focus:rounded focus:bg-white focus:px-3 focus:py-2 focus:text-slate-950"
+            class="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-50 focus:rounded focus:bg-ink focus:px-3 focus:py-2 focus:text-surface"
         >
             {t.nav.skipToContent}
         </a>

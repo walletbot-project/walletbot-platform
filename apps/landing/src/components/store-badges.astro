@@ -10,7 +10,9 @@ import Icon from './icon.astro'
  *
  * Both store badges route to the beta form rather than a store: Android is a
  * closed test (access runs through the tester list) and iOS is not submitted
- * yet. Only the web app is open to anyone, so it links straight out.
+ * yet. Only the web app is open to anyone, so it links straight out — and
+ * since it is the only one that works today, it leads and carries the brand
+ * fill. The two stores follow, muted.
  */
 type Props = {
     /** `hero`: left-aligned on desktop. `cta`: centered and larger. */
@@ -24,35 +26,33 @@ const { locale, t } = useTranslations(Astro.currentLocale)
 
 const beta = getRelativeLocaleUrl(locale, 'beta')
 
-// Android leads (brand tint), iOS is muted and dashed because there is nothing
-// to install yet, the web app sits between the two.
 const badges = [
+    {
+        href: WEB_APP_URL,
+        icon: 'monitor',
+        copy: t.download.web,
+        tone: 'border-brand-line bg-brand hover:brightness-105 hover:shadow-[0_8px_30px_rgb(109_231_216/0.45)]',
+        iconTone: 'text-brand-on',
+        leadTone: 'text-brand-on/80',
+        nameTone: 'text-brand-on',
+    },
     {
         href: beta,
         icon: 'google-play',
         copy: t.download.android,
-        tone: 'border-brand/40 bg-brand/10 hover:border-brand/70 hover:bg-brand/15 hover:shadow-[0_8px_30px_rgb(109_231_216/0.25)]',
-        iconTone: 'text-white',
-        leadTone: 'text-slate-300',
-        nameTone: 'text-white',
+        tone: 'border-line-strong bg-panel hover:border-brand-line hover:bg-brand-tint',
+        iconTone: 'text-ink',
+        leadTone: 'text-ink-soft',
+        nameTone: 'text-ink',
     },
     {
         href: beta,
         icon: 'apple',
         copy: t.download.ios,
-        tone: 'border-dashed border-white/15 bg-white/[0.02] hover:border-white/30 hover:bg-white/5',
-        iconTone: 'text-slate-400',
-        leadTone: 'text-slate-500',
-        nameTone: 'text-slate-300',
-    },
-    {
-        href: WEB_APP_URL,
-        icon: 'monitor',
-        copy: t.download.web,
-        tone: 'border-white/15 bg-white/5 hover:border-white/30 hover:bg-white/[0.09]',
-        iconTone: 'text-white',
-        leadTone: 'text-slate-300',
-        nameTone: 'text-white',
+        tone: 'border-dashed border-line-strong bg-panel-alt hover:border-ink-soft/40 hover:bg-panel',
+        iconTone: 'text-ink-soft',
+        leadTone: 'text-ink-soft',
+        nameTone: 'text-ink-soft',
     },
 ] as const
 ---
