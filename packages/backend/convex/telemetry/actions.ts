@@ -10,6 +10,15 @@ const defaultServiceName = 'walletbot-backend'
 const exportBatchSize = 50
 const maxErrorBodyLength = 512
 
+/**
+ * Pause between the batches of one drain. A full batch means there is probably
+ * more behind it, so the export reschedules itself instead of leaving the rest
+ * for whatever runs next — which, since the export crons became one nightly
+ * pass, would be a day away. The pause keeps a long backlog from landing as one
+ * burst of requests on the OTLP endpoint.
+ */
+const exportChainDelayMs = 5 * 1000
+
 type ReservedMetricExport = Doc<'telemetryMetrics'> & {
     cumulativeValue: number
     cumulativeStartTime: number
@@ -501,6 +510,16 @@ export const exportPending = internalAction({
             await ctx.runMutation(internal.telemetry.mutations.markExported, {
                 ids,
             })
+            // Only after a clean batch: a failure means the endpoint is having
+            // a bad time, and the rows just went to `failed` for the next
+            // pass's retry sweep, so there is nothing to chain toward.
+            if (events.length === exportBatchSize) {
+                await ctx.scheduler.runAfter(
+                    exportChainDelayMs,
+                    internal.telemetry.actions.exportPending,
+                    {},
+                )
+            }
             return { exported: events.length }
         } catch (err) {
             const message = err instanceof Error ? err.message : String(err)
@@ -563,6 +582,13 @@ export const exportPendingMetrics = internalAction({
                 internal.telemetry.mutations.markMetricsExported,
                 { ids: reservedMetrics.map((metric) => metric._id) },
             )
+            if (reservedMetrics.length === exportBatchSize) {
+                await ctx.scheduler.runAfter(
+                    exportChainDelayMs,
+                    internal.telemetry.actions.exportPendingMetrics,
+                    {},
+                )
+            }
             return { exported: reservedMetrics.length }
         } catch (err) {
             const message = err instanceof Error ? err.message : String(err)

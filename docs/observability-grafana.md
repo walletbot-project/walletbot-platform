@@ -133,7 +133,7 @@ sum by (ingest_path) (increase(business_movements_created_count[1d]))
 Registered users total:
 
 ```promql
-last_over_time(business_users_registered_total[24h])
+last_over_time(business_users_registered_total[25h])
 ```
 
 Sign-ins by auth method and client:
@@ -151,7 +151,7 @@ quantile_over_time(0.95, agent_session_cost_usd[1d])
 Monthly AI cost by user:
 
 ```promql
-sum by (user_hash, month) (last_over_time(agent_user_monthly_cost_usd[7h]))
+sum by (user_hash, month) (last_over_time(agent_user_monthly_cost_usd[25h]))
 ```
 
 Agent interactions by type:
@@ -168,13 +168,20 @@ sum by (cost_bucket) (increase(agent_session_cost_bucket_count[1d]))
 
 ## Scheduled Business Gauges
 
-`business.users.registered_total` is emitted every 6 hours by the Convex cron
-`record registered users total`. It counts Better Auth users and exports a
-gauge with the latest total registered accounts.
+Both gauges are emitted **once a day**, by the `daily telemetry maintenance`
+cron (06:00 UTC), which schedules them as the first steps of its pass. Because
+a gauge is a snapshot and there is now one snapshot a day, every panel reading
+them has to wrap the selector in `last_over_time(...[25h])` — a raw selector
+only resolves within Prometheus' 5-minute staleness window, so it would read as
+"No data" for most of the day.
 
-`agent.user.monthly_cost_usd` is emitted every 6 hours by the Convex cron
-`record agent monthly usage`. It reads the current `agentUsageMonthly` rollup
-and exports one gauge for each of the top 20 `user_hash + month + model + mode`
+`business.users.registered_total` is emitted by the step running
+`recordRegisteredUsersTotal`. It counts Better Auth users and exports a gauge
+with the latest total registered accounts.
+
+`agent.user.monthly_cost_usd` is emitted by the step running
+`recordAgentMonthlyUsage`. It reads the current `agentUsageMonthly` rollup and
+exports one gauge for each of the top 20 `user_hash + month + model + mode`
 rows by monthly estimated cost.
 
 To force a refresh while testing, run the internal action from the Convex CLI:
@@ -206,9 +213,12 @@ pnpm -C packages/backend exec convex run --prod telemetry/actions:recordRegister
 `telemetryMetrics` remains a temporary buffer:
 
 - business writes do not depend on Grafana availability;
-- failed exports are retried every 15 minutes, up to 6 attempts;
-- pending exports are retried every 5 minutes;
-- exported metrics are deleted after 24 hours;
+- every insert schedules its own export, and an export that fills its batch of
+  50 reschedules itself until the queue is empty;
+- failed exports are retried by the nightly `daily telemetry maintenance` pass,
+  up to 6 attempts — so roughly one attempt a day for six days;
+- rows still pending are swept by the same nightly pass;
+- exported metrics are deleted after 90 days, failed ones after 14;
 - dashboards should read from Grafana, not Convex.
 
 If volume grows, move the buffer/export pipeline to Grafana Alloy or another
@@ -219,8 +229,8 @@ collector.
 If `/telemetry/metrics` returns `{"ok":true,"accepted":1}` but nothing appears
 in Grafana, check the latest `telemetryMetrics` row in Convex:
 
-- `exportStatus = pending`: wait for `exportPendingMetrics` or the 5-minute
-  cron.
+- `exportStatus = pending`: run `exportPendingMetrics` by hand, or wait for the
+  nightly maintenance pass.
 - `exportStatus = exported`: the payload reached Grafana; search for the
   Prometheus-normalized metric name with underscores.
 - `exportStatus = failed`: inspect `lastExportError`.

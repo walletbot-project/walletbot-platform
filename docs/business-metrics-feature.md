@@ -81,7 +81,8 @@ Attributes: none.
 
 Sources:
 
-- Backend Convex cron `record registered users total`, every 6 hours.
+- Backend Convex cron `daily telemetry maintenance`, once a day, which
+  schedules `record registered users total` as one of its steps.
 - Manual backend action `telemetry/actions:recordRegisteredUsersTotalNow` for
   tests and dashboard backfill checks.
 

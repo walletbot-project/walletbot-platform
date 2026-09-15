@@ -49,8 +49,8 @@
                                             "kind": "DataQuery",
                                             "spec": {
                                                 "alias": "Visits",
-                                                "editorMode": "builder",
-                                                "expr": "business_users_registered_total_count",
+                                                "editorMode": "code",
+                                                "expr": "last_over_time(business_users_registered_total_count[25h])",
                                                 "instant": false,
                                                 "legendFormat": "__auto",
                                                 "max": 28000,
@@ -156,8 +156,8 @@
                                             "group": "prometheus",
                                             "kind": "DataQuery",
                                             "spec": {
-                                                "editorMode": "builder",
-                                                "expr": "max by(__name__) (agent_user_monthly_cost_usd)",
+                                                "editorMode": "code",
+                                                "expr": "max by(__name__) (last_over_time(agent_user_monthly_cost_usd[25h]))",
                                                 "legendFormat": "__auto",
                                                 "range": true
                                             },
@@ -927,8 +927,8 @@
                                             "group": "prometheus",
                                             "kind": "DataQuery",
                                             "spec": {
-                                                "editorMode": "builder",
-                                                "expr": "max by(__name__) (agent_user_monthly_cost_usd)",
+                                                "editorMode": "code",
+                                                "expr": "max by(__name__) (last_over_time(agent_user_monthly_cost_usd[25h]))",
                                                 "legendFormat": "__auto",
                                                 "range": true
                                             },

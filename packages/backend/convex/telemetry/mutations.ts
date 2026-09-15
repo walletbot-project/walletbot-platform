@@ -19,6 +19,15 @@ const signInAuthMethod = v.union(
 
 const clientPlatform = v.union(v.literal('native'), v.literal('web'))
 
+/**
+ * Pause between the batches of one cleanup. Every `deleteOld*` below reschedules
+ * itself while its batch comes back full, so the batch size is a transaction
+ * size and not a daily ceiling — which matters now that they run once a day
+ * instead of every six hours. The pause is what keeps a large purge from
+ * arriving as one long run of back-to-back writes.
+ */
+const cleanupChainDelayMs = 10 * 1000
+
 const metricSeriesKey = (metric: {
     name: string
     source: string
@@ -437,15 +446,23 @@ export const deleteOldExportedTelemetryMetrics = internalMutation({
     },
     handler: async (ctx, args) => {
         const cutoff = Date.now() - args.olderThanMs
+        const limit = Math.min(Math.max(args.limit, 1), 1000)
         const rows = await ctx.db
             .query('telemetryMetrics')
             .withIndex('by_exportStatus_and_receivedAt', (q) =>
                 q.eq('exportStatus', 'exported').lt('receivedAt', cutoff),
             )
-            .take(Math.min(Math.max(args.limit, 1), 1000))
+            .take(limit)
 
         for (const row of rows) {
             await ctx.db.delete(row._id)
+        }
+        if (rows.length === limit) {
+            await ctx.scheduler.runAfter(
+                cleanupChainDelayMs,
+                internal.telemetry.mutations.deleteOldExportedTelemetryMetrics,
+                args,
+            )
         }
         return { deleted: rows.length }
     },
@@ -458,15 +475,23 @@ export const deleteOldExportedTelemetryEvents = internalMutation({
     },
     handler: async (ctx, args) => {
         const cutoff = Date.now() - args.olderThanMs
+        const limit = Math.min(Math.max(args.limit, 1), 100)
         const rows = await ctx.db
             .query('telemetryEvents')
             .withIndex('by_exportStatus_and_receivedAt', (q) =>
                 q.eq('exportStatus', 'exported').lt('receivedAt', cutoff),
             )
-            .take(Math.min(Math.max(args.limit, 1), 100))
+            .take(limit)
 
         for (const row of rows) {
             await ctx.db.delete(row._id)
+        }
+        if (rows.length === limit) {
+            await ctx.scheduler.runAfter(
+                cleanupChainDelayMs,
+                internal.telemetry.mutations.deleteOldExportedTelemetryEvents,
+                args,
+            )
         }
         return { deleted: rows.length }
     },
@@ -479,15 +504,23 @@ export const deleteOldFailedTelemetryMetrics = internalMutation({
     },
     handler: async (ctx, args) => {
         const cutoff = Date.now() - args.olderThanMs
+        const limit = Math.min(Math.max(args.limit, 1), 100)
         const rows = await ctx.db
             .query('telemetryMetrics')
             .withIndex('by_exportStatus_and_receivedAt', (q) =>
                 q.eq('exportStatus', 'failed').lt('receivedAt', cutoff),
             )
-            .take(Math.min(Math.max(args.limit, 1), 100))
+            .take(limit)
 
         for (const row of rows) {
             await ctx.db.delete(row._id)
+        }
+        if (rows.length === limit) {
+            await ctx.scheduler.runAfter(
+                cleanupChainDelayMs,
+                internal.telemetry.mutations.deleteOldFailedTelemetryMetrics,
+                args,
+            )
         }
         return { deleted: rows.length }
     },
@@ -500,15 +533,23 @@ export const deleteOldFailedTelemetryEvents = internalMutation({
     },
     handler: async (ctx, args) => {
         const cutoff = Date.now() - args.olderThanMs
+        const limit = Math.min(Math.max(args.limit, 1), 100)
         const rows = await ctx.db
             .query('telemetryEvents')
             .withIndex('by_exportStatus_and_receivedAt', (q) =>
                 q.eq('exportStatus', 'failed').lt('receivedAt', cutoff),
             )
-            .take(Math.min(Math.max(args.limit, 1), 100))
+            .take(limit)
 
         for (const row of rows) {
             await ctx.db.delete(row._id)
+        }
+        if (rows.length === limit) {
+            await ctx.scheduler.runAfter(
+                cleanupChainDelayMs,
+                internal.telemetry.mutations.deleteOldFailedTelemetryEvents,
+                args,
+            )
         }
         return { deleted: rows.length }
     },
@@ -521,13 +562,21 @@ export const deleteOldAgentUsageSamples = internalMutation({
     },
     handler: async (ctx, args) => {
         const cutoff = Date.now() - args.olderThanMs
+        const limit = Math.min(Math.max(args.limit, 1), 100)
         const rows = await ctx.db
             .query('agentUsageSamples')
             .withIndex('by_createdAt', (q) => q.lt('createdAt', cutoff))
-            .take(Math.min(Math.max(args.limit, 1), 100))
+            .take(limit)
 
         for (const row of rows) {
             await ctx.db.delete(row._id)
+        }
+        if (rows.length === limit) {
+            await ctx.scheduler.runAfter(
+                cleanupChainDelayMs,
+                internal.telemetry.mutations.deleteOldAgentUsageSamples,
+                args,
+            )
         }
         return { deleted: rows.length }
     },

@@ -13,103 +13,15 @@ crons.interval(
     {},
 )
 
-crons.interval(
-    'export pending telemetry events',
-    { minutes: 5 },
-    internal.telemetry.actions.exportPending,
-    {},
-)
-
-crons.interval(
-    'export pending telemetry metrics',
-    { minutes: 5 },
-    internal.telemetry.actions.exportPendingMetrics,
-    {},
-)
-
-crons.interval(
-    'retry failed telemetry event exports',
-    { minutes: 15 },
-    internal.telemetry.mutations.resetRetryableFailedEvents,
-    {
-        olderThanMs: 5 * 60 * 1000,
-        maxAttempts: 6,
-        limit: 100,
-    },
-)
-
-crons.interval(
-    'retry failed telemetry metrics exports',
-    { minutes: 15 },
-    internal.telemetry.mutations.resetRetryableFailedMetrics,
-    {
-        olderThanMs: 5 * 60 * 1000,
-        maxAttempts: 6,
-        limit: 100,
-    },
-)
-
-crons.interval(
-    'delete exported telemetry metrics',
-    { hours: 6 },
-    internal.telemetry.mutations.deleteOldExportedTelemetryMetrics,
-    {
-        olderThanMs: 90 * 24 * 60 * 60 * 1000,
-        limit: 1000,
-    },
-)
-
-crons.interval(
-    'delete exported telemetry events',
-    { hours: 6 },
-    internal.telemetry.mutations.deleteOldExportedTelemetryEvents,
-    {
-        olderThanMs: 90 * 24 * 60 * 60 * 1000,
-        limit: 1000,
-    },
-)
-
-crons.interval(
-    'delete failed telemetry metrics',
-    { hours: 6 },
-    internal.telemetry.mutations.deleteOldFailedTelemetryMetrics,
-    {
-        olderThanMs: 14 * 24 * 60 * 60 * 1000,
-        limit: 1000,
-    },
-)
-
-crons.interval(
-    'delete failed telemetry events',
-    { hours: 6 },
-    internal.telemetry.mutations.deleteOldFailedTelemetryEvents,
-    {
-        olderThanMs: 14 * 24 * 60 * 60 * 1000,
-        limit: 1000,
-    },
-)
-
-crons.interval(
-    'delete old agent usage samples',
-    { hours: 6 },
-    internal.telemetry.mutations.deleteOldAgentUsageSamples,
-    {
-        olderThanMs: 90 * 24 * 60 * 60 * 1000,
-        limit: 1000,
-    },
-)
-
-crons.interval(
-    'record registered users total',
-    { hours: 6 },
-    internal.telemetry.actions.recordRegisteredUsersTotal,
-    {},
-)
-
-crons.interval(
-    'record agent monthly usage',
-    { hours: 6 },
-    internal.telemetry.actions.recordAgentMonthlyUsage,
+// Everything telemetry and metrics used to be eleven crons on their own clocks,
+// waking the deployment about 800 times a day between them. They are now one
+// nightly pass that schedules its steps a few seconds apart and takes about five
+// minutes: see `telemetry/internal.ts` for what runs, in what order, and why.
+// 06:00 UTC is 03:00 in Buenos Aires — cron times are always UTC.
+crons.cron(
+    'daily telemetry maintenance',
+    '0 6 * * *',
+    internal.telemetry.internal.runDailyMaintenance,
     {},
 )
 
