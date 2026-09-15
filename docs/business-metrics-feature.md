@@ -163,7 +163,8 @@ Attributes:
 
 Sources:
 
-- Backend Convex cron `record agent monthly usage`, reading
+- Backend Convex cron `daily telemetry maintenance`, once a day, which
+  schedules `record agent monthly usage` as one of its steps, reading
   `agentUsageMonthly`.
 - Manual backend action `telemetry/actions:recordAgentMonthlyUsageNow` for
   tests and dashboard refresh checks.
