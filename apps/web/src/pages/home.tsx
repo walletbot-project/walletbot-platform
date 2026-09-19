@@ -117,13 +117,11 @@ export default function Home() {
                                 onClick={() => setFeedbackOpen(true)}
                             />
                         ) : null}
-                        {flags?.recurringExpense ? (
-                            <HomeActionCard
-                                label={t.nav.futureMovements}
-                                icon="event_repeat"
-                                onClick={() => navigate('/future-movements')}
-                            />
-                        ) : null}
+                        <HomeActionCard
+                            label={t.nav.futureMovements}
+                            icon="event_repeat"
+                            onClick={() => navigate('/future-movements')}
+                        />
                     </div>
                 </div>
             </div>

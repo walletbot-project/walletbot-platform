@@ -1,6 +1,5 @@
 import 'dart:async';
 
-import 'package:app/app_config/app_config_controller.dart';
 import 'package:app/components/account_icons.dart';
 import 'package:app/components/category_icons.dart';
 import 'package:app/components/color_utils.dart';
@@ -399,17 +398,13 @@ class _ActivityScreenState extends State<ActivityScreen> {
       actions: [
         // The way across to the upcoming side, which Activity otherwise gives
         // no hint of — the two lists are one timeline split at the occurrence
-        // cutoff, and the home card was the only door. Same icon and flag as
-        // that card, so both read as the same feature and neither shows up
-        // before the rollout does.
-        if (context.watch<AppConfigController>().isFlagEnabled(
-          'recurringExpense',
-        ))
-          IconButton(
-            tooltip: context.l10n.viewFutureMovements,
-            onPressed: _openFutureMovements,
-            icon: const Icon(Icons.event_repeat_rounded),
-          ),
+        // cutoff. Not behind `recurringExpense`: the cutoff applies to every
+        // future-dated movement, series or not.
+        IconButton(
+          tooltip: context.l10n.viewFutureMovements,
+          onPressed: _openFutureMovements,
+          icon: const Icon(Icons.event_repeat_rounded),
+        ),
         IconButton(
           tooltip: context.l10n.addTransaction,
           onPressed: _openTransactionForm,

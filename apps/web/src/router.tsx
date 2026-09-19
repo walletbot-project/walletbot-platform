@@ -4,7 +4,6 @@ import { AuthGuard } from '@/components/layout/auth-guard'
 import { GlobalErrorBoundary } from '@/components/layout/error-boundary'
 import { LegalGuard } from '@/components/layout/legal-guard'
 import { PublicGuard } from '@/components/layout/public-guard'
-import { RecurringExpenseGuard } from '@/components/layout/recurring-expense-guard'
 import { AuthLayout } from '@/layouts/auth-layout'
 import { RootLayout } from '@/layouts/root-layout'
 import Home from './pages/home'
@@ -249,31 +248,29 @@ export const router = createBrowserRouter([
                                             })),
                                     },
                                     {
-                                        // Behind the same flag as the home
-                                        // card that links here.
-                                        element: <RecurringExpenseGuard />,
+                                        // Not behind `recurringExpense`: the
+                                        // occurrence cutoff hides any
+                                        // future-dated movement from Activity
+                                        // whether or not the user can create
+                                        // series, so this is the only place
+                                        // such a movement can be found.
+                                        path: '/future-movements',
+                                        lazy: () =>
+                                            import(
+                                                '@/pages/future-movements'
+                                            ).then((m) => ({
+                                                Component: m.FutureMovements,
+                                            })),
                                         children: [
                                             {
-                                                path: '/future-movements',
+                                                path: ':movementId',
                                                 lazy: () =>
                                                     import(
                                                         '@/pages/future-movements'
                                                     ).then((m) => ({
                                                         Component:
-                                                            m.FutureMovements,
+                                                            m.FutureMovementDetailRoute,
                                                     })),
-                                                children: [
-                                                    {
-                                                        path: ':movementId',
-                                                        lazy: () =>
-                                                            import(
-                                                                '@/pages/future-movements'
-                                                            ).then((m) => ({
-                                                                Component:
-                                                                    m.FutureMovementDetailRoute,
-                                                            })),
-                                                    },
-                                                ],
                                             },
                                         ],
                                     },

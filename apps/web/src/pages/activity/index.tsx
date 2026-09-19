@@ -72,7 +72,6 @@ export function Activity() {
         includeArchived: true,
     })
     const categories = useQuery(api.v1.categories.queries.listActive)
-    const flags = useQuery(api.v1.featureFlags.queries.getMyFlags)
 
     const accountsById = useMemo(
         () => new Map((accounts ?? []).map((account) => [account.id, account])),
@@ -131,22 +130,17 @@ export function Activity() {
                         {/*
                          * The way across to the upcoming side, which Activity
                          * otherwise gives no hint of — the two lists are one
-                         * timeline split at the occurrence cutoff, and the home
-                         * card was the only door. Same icon as that card so
-                         * both read as the same feature, and behind the same
-                         * flag: with `recurringExpense` off the route itself
-                         * renders NotFound (see `RecurringExpenseGuard`), so an
-                         * ungated button here would be a dead end.
+                         * timeline split at the occurrence cutoff. Not behind
+                         * the `recurringExpense` flag: the cutoff applies to
+                         * every future-dated movement, series or not.
                          */}
-                        {flags?.recurringExpense ? (
-                            <IconButton
-                                aria-label={t.activity.viewFutureMovements}
-                                onPress={() => navigate('/future-movements')}
-                                className="text-on-surface-variant"
-                            >
-                                <Icon name="event_repeat" />
-                            </IconButton>
-                        ) : null}
+                        <IconButton
+                            aria-label={t.activity.viewFutureMovements}
+                            onPress={() => navigate('/future-movements')}
+                            className="text-on-surface-variant"
+                        >
+                            <Icon name="event_repeat" />
+                        </IconButton>
                         <IconButton
                             aria-label={t.activity.addTransaction}
                             onPress={openCreate}

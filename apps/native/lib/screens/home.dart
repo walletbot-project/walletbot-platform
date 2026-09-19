@@ -228,14 +228,14 @@ class _HomeScreenState extends State<HomeScreen> {
                   icon: Icons.feedback_rounded,
                   onTap: _openFeedback,
                 ),
-              if (context.watch<AppConfigController>().isFlagEnabled(
-                'recurringExpense',
-              ))
-                _HomeActionCard(
-                  label: context.l10n.futureMovements,
-                  icon: Icons.event_repeat_rounded,
-                  onTap: _openFutureMovements,
-                ),
+              // Not behind `recurringExpense`: the occurrence cutoff hides
+              // any future-dated movement from Activity whether or not the
+              // user can create series, so this door always exists.
+              _HomeActionCard(
+                label: context.l10n.futureMovements,
+                icon: Icons.event_repeat_rounded,
+                onTap: _openFutureMovements,
+              ),
             ],
           ),
         ],
