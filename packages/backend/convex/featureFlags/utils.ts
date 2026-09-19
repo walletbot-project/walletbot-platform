@@ -1,5 +1,6 @@
 export type FlagKey =
     | 'agentLocalAccounts'
+    | 'aiConsent'
     | 'agentReportButton'
     | 'debugToolCalls'
     | 'exchangeRates'
@@ -16,6 +17,12 @@ export const KNOWN_FLAGS: {
         key: 'agentLocalAccounts',
         description:
             'Let native LOCAL accounts (no sign-in) mint a Gasti live token, so the agent works without an account. Off makes the agent sign-in only and local accounts are told to sign in.',
+        enabledByDefault: true,
+    },
+    {
+        key: 'aiConsent',
+        description:
+            'Ask for consent before the first agent session on iOS, naming the AI providers and the data sent to them (App Store guideline 5.1.2(i)). On by default; off skips the sheet and the server-side check. iOS only — Android and web never show it.',
         enabledByDefault: true,
     },
     {

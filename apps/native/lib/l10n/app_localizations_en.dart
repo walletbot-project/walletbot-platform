@@ -2060,4 +2060,55 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get whatsappDisconnectFailed => 'Could not disconnect the number';
+
+  @override
+  String get aiConsentTitle => 'Before you use the assistant';
+
+  @override
+  String get aiConsentIntro =>
+      'The assistant sends what you say and part of your Wallet Bot data to our AI providers, Google LLC (Gemini) and OpenAI, LLC, in the United States.';
+
+  @override
+  String get aiConsentMicTitle => 'We\'ll ask for the microphone';
+
+  @override
+  String get aiConsentMicBody =>
+      'iOS asks when you start a voice conversation. Typing to the assistant needs no microphone.';
+
+  @override
+  String get aiConsentWhatWeSend => 'What gets sent';
+
+  @override
+  String get aiConsentItemAudio =>
+      'Your voice while a conversation is open, and what you type.';
+
+  @override
+  String get aiConsentItemProfile => 'Your name and email.';
+
+  @override
+  String get aiConsentItemFinancial =>
+      'Your accounts, categories, tags and recent transactions.';
+
+  @override
+  String get aiConsentItemMemories => 'Notes the assistant saved about you.';
+
+  @override
+  String get aiConsentItemActions => 'Records it creates or changes.';
+
+  @override
+  String get aiConsentReadPolicy => 'Read the Privacy Policy';
+
+  @override
+  String get aiConsentDecline => 'Not now';
+
+  @override
+  String get aiConsentAccept => 'Agree and continue';
+
+  @override
+  String get aiConsentFailed =>
+      'We could not record your permission. Check your connection and try again.';
+
+  @override
+  String get aiConsentDeclined =>
+      'You need to agree before the assistant can run.';
 }

@@ -1,6 +1,6 @@
 import { v } from 'convex/values'
 import { mutation } from '../../_generated/server'
-import { recordAcceptances } from '../../legal/helpers'
+import { recordAcceptances, recordAiConsent } from '../../legal/helpers'
 import { legalDocumentValidator } from '../../legal/validators'
 import { requireAuth } from '../../users/helpers'
 
@@ -25,5 +25,25 @@ export const accept = mutation({
     handler: async (ctx, args) => {
         const userId = await requireAuth(ctx)
         await recordAcceptances(ctx, { userId, ...args })
+    },
+})
+
+/**
+ * Records the user's consent to send their data to the AI providers, as shown
+ * by the disclosure sheet before the first agent session.
+ *
+ * No `version` arg, same rule as `accept`: the server stamps its own
+ * `AI_CONSENT_VERSION`, so a client cannot claim consent to a disclosure it
+ * never rendered.
+ */
+export const acceptAiConsent = mutation({
+    args: {
+        platform: v.string(),
+        appVersion: v.optional(v.string()),
+        locale: v.optional(v.string()),
+    },
+    handler: async (ctx, args) => {
+        const userId = await requireAuth(ctx)
+        await recordAiConsent(ctx, { userId, ...args })
     },
 })

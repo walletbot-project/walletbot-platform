@@ -17,7 +17,17 @@ import { v } from 'convex/values'
  */
 export const legalAcceptances = defineTable({
     userId: v.string(),
-    document: v.union(v.literal('terms'), v.literal('privacy')),
+    /**
+     * 'terms' | 'privacy' are the gated documents; 'ai' is the point-of-use
+     * consent to send data to the AI providers. `resolveAcceptanceStatus`
+     * loops `LEGAL_DOCUMENTS` and therefore never sees an 'ai' row, so the
+     * launch gate is unaffected by it.
+     */
+    document: v.union(
+        v.literal('terms'),
+        v.literal('privacy'),
+        v.literal('ai'),
+    ),
     version: v.string(),
     acceptedAt: v.int64(),
     /** The 18+ representation the user made alongside this acceptance. */

@@ -1,10 +1,13 @@
 import 'dart:async';
 
+import 'package:app/app_config/client_info.dart';
 import 'package:app/convex/convex_client.dart';
 import 'package:app/l10n/l10n.dart';
+import 'package:app/legal/ai_consent_controller.dart';
 import 'package:app/screens/whatsapp_link.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 /// `ConvexClient` is a concrete class with a live transport, so tests stub the
@@ -65,7 +68,11 @@ class _HangingClient implements ConvexClient {
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
-Widget _app({required bool isRemote, ConvexClient? client}) => MaterialApp(
+Widget _app({
+  required bool isRemote,
+  ConvexClient? client,
+  AiConsentController? aiConsent,
+}) => MaterialApp(
   locale: const Locale('en'),
   localizationsDelegates: const [
     AppLocalizations.delegate,
@@ -74,8 +81,26 @@ Widget _app({required bool isRemote, ConvexClient? client}) => MaterialApp(
     GlobalCupertinoLocalizations.delegate,
   ],
   supportedLocales: AppLocalizations.supportedLocales,
-  home: WhatsappLinkScreen(isRemote: isRemote, client: client),
+  home: WhatsappLinkScreen(
+    isRemote: isRemote,
+    client: client,
+    aiConsent: aiConsent,
+  ),
 );
+
+/// An iOS consent controller for an account that has not consented yet.
+AiConsentController _pendingIosConsent(ConvexClient? client) =>
+    AiConsentController(
+      accountId: 'account-1',
+      isRemote: true,
+      clientInfo: const ClientInfo(
+        platform: 'ios',
+        appVersion: '0.3.2',
+        deviceId: 'device-1',
+      ),
+      locale: 'en',
+      client: client,
+    );
 
 Map<String, Object?> _status({
   bool available = true,
@@ -87,6 +112,60 @@ Map<String, Object?> _status({
 };
 
 void main() {
+  setUp(() {
+    FlutterSecureStorage.setMockInitialValues({});
+  });
+
+  testWidgets('linking on iOS asks for AI consent first', (tester) async {
+    final client = _StubClient(
+      status: _status(),
+      code: {'code': 'A1B2-C3D4', 'expiresAt': 9999999999999},
+    );
+    final consent = _pendingIosConsent(client);
+    addTearDown(consent.dispose);
+    await tester.pumpWidget(
+      _app(isRemote: true, client: client, aiConsent: consent),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Connect WhatsApp'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Before you use the assistant'), findsOne);
+    // Nothing was minted while the sheet is still open.
+    expect(client.mutationCalls, 0);
+
+    await tester.tap(find.text('Agree and continue'));
+    await tester.pumpAndSettle();
+
+    // The consent write and the link code, in that order.
+    expect(client.mutationCalls, 2);
+    expect(consent.accepted, isTrue);
+    expect(find.text('A1B2-C3D4'), findsOne);
+  });
+
+  testWidgets('declining the AI consent mints no link code', (tester) async {
+    final client = _StubClient(
+      status: _status(),
+      code: {'code': 'A1B2-C3D4', 'expiresAt': 9999999999999},
+    );
+    final consent = _pendingIosConsent(client);
+    addTearDown(consent.dispose);
+    await tester.pumpWidget(
+      _app(isRemote: true, client: client, aiConsent: consent),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Connect WhatsApp'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Not now'));
+    await tester.pumpAndSettle();
+
+    expect(client.mutationCalls, 0);
+    expect(consent.accepted, isFalse);
+    expect(find.text('A1B2-C3D4'), findsNothing);
+  });
+
   testWidgets('a local account is told why it cannot link', (tester) async {
     final client = _StubClient(status: _status());
     await tester.pumpWidget(_app(isRemote: false, client: client));

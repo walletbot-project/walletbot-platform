@@ -14,6 +14,7 @@ import 'package:app/data/data.dart';
 import 'package:app/fx/fx_rates_controller.dart';
 import 'package:app/database.dart';
 import 'package:app/l10n/l10n.dart';
+import 'package:app/legal/ai_consent_controller.dart';
 import 'package:app/legal/legal_acceptance_controller.dart';
 import 'package:app/screens/account_switcher.dart';
 import 'package:app/screens/accounts.dart';
@@ -406,6 +407,23 @@ class _AuthGate extends StatelessWidget {
             return controller;
           },
         ),
+        // Permission to send this account's data to the AI providers, asked
+        // for before the first agent session (iOS only, see the controller).
+        // Account-scoped like the acceptance gate above: the record is per
+        // account and per device.
+        ChangeNotifierProvider<AiConsentController>(
+          create: (ctx) {
+            final controller = AiConsentController(
+              accountId: active.id,
+              isRemote: active.type == AccountType.remote,
+              clientInfo: ctx.read<ClientInfo>(),
+              locale: ctx.read<DisplaySettingsController>().localeTag,
+              client: ctx.read<ConvexClient?>(),
+            );
+            unawaited(controller.load());
+            return controller;
+          },
+        ),
         // The app-facing data layer: all reads/writes from screens and the
         // voice agent go through this. Scoped to the account subtree so it is
         // recreated together with the database on account switch.
@@ -638,10 +656,18 @@ class _AppMainState extends State<AppMain> {
     final repositories = context.read<AppRepositories>();
     final commandFactory = context.read<GeminiVoiceExpenseCommandFactory>();
     final accountId = context.read<AuthController>().activeAccount?.id;
+    // The AI-consent gate is account-scoped too, so it has to travel with the
+    // route for the same reason: read from inside VoiceScreen it would resolve
+    // to nothing and the gate would silently pass. `.value` because the
+    // account subtree owns it and disposes it.
+    final aiConsent = context.read<AiConsentController>();
     Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) => Provider<AppRepositories>.value(
-          value: repositories,
+        builder: (_) => MultiProvider(
+          providers: [
+            Provider<AppRepositories>.value(value: repositories),
+            ChangeNotifierProvider<AiConsentController>.value(value: aiConsent),
+          ],
           child: PopOnAccountSwitch(
             accountId: accountId,
             child: VoiceScreen(commandFactory: commandFactory),

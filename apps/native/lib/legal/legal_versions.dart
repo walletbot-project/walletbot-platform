@@ -120,6 +120,15 @@ LegalDocumentAcceptanceStatus legalDocumentAcceptanceStatus({
       : LegalDocumentAcceptanceStatus.missing;
 }
 
+/// Version of the AI disclosure the consent sheet shows, and what an
+/// acceptance records.
+///
+/// KEEP IN LOCKSTEP with `AI_CONSENT_VERSION` in
+/// `packages/shared/src/legal.ts`. Unlike the two documents this one is not
+/// served by `/v1/config`: it is not a launch gate, so a device that has never
+/// reached the backend still asks with the version it shipped with.
+const String aiConsentVersion = '2026-09-19';
+
 const String _legalSiteUrl = 'https://www.walletbot.live';
 
 /// Public URL of a document, as routed by `apps/landing`

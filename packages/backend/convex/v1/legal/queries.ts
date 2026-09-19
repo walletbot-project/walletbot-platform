@@ -1,5 +1,5 @@
 import { query } from '../../_generated/server'
-import { resolveAcceptanceStatus } from '../../legal/helpers'
+import { resolveAcceptanceStatus, resolveAiConsent } from '../../legal/helpers'
 import { requireAuth } from '../../users/helpers'
 
 /**
@@ -15,5 +15,20 @@ export const acceptanceStatus = query({
     handler: async (ctx) => {
         const userId = await requireAuth(ctx)
         return await resolveAcceptanceStatus(ctx, userId)
+    },
+})
+
+/**
+ * Whether the signed-in user has consented to sending their data to the AI
+ * providers, at the current disclosure version.
+ *
+ * Separate from `acceptanceStatus` on purpose: this consent is asked for at
+ * the point of use (before the first agent session), not at the launch gate.
+ */
+export const aiConsentStatus = query({
+    args: {},
+    handler: async (ctx) => {
+        const userId = await requireAuth(ctx)
+        return await resolveAiConsent(ctx, userId)
     },
 })

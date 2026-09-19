@@ -63,7 +63,7 @@ export function Whatsapp() {
     const handleCreate = async () => {
         setBusy(true)
         try {
-            const minted = await createLinkCode()
+            const minted = await createLinkCode({})
             setCode({
                 code: minted.code,
                 expiresAt: minted.expiresAt,

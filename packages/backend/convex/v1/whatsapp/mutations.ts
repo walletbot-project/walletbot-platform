@@ -1,6 +1,7 @@
 import { v } from 'convex/values'
 import { mutation } from '../../_generated/server'
 import { resolveFlagsForUser } from '../../featureFlags/helpers'
+import { resolveAiConsent } from '../../legal/helpers'
 import { requireAuth } from '../../users/helpers'
 import {
     buildLinkDeepLink,
@@ -28,8 +29,15 @@ const REUSE_MIN_REMAINING_MS = 60 * 1000
 // webhook — which has no authentication of its own — that the person messaging
 // the business number owns this account.
 export const createLinkCode = mutation({
-    args: {},
-    handler: async (ctx) => {
+    args: {
+        /**
+         * The calling client's platform, for the iOS AI-consent check below.
+         * Optional: builds that predate the check send nothing, and web never
+         * sends 'ios'.
+         */
+        platform: v.optional(v.string()),
+    },
+    handler: async (ctx, args) => {
         const userId = await requireAuth(ctx)
         // The rollout gate, enforced where it matters: a code is the thing
         // that grants a phone number access to this account, so an account
@@ -38,6 +46,16 @@ export const createLinkCode = mutation({
         const flags = await resolveFlagsForUser(ctx, userId)
         if (!flags.whatsapp) {
             throw new Error('WhatsApp is not available for this account')
+        }
+        // Backstop for the client-side sheet, same as the live mint. Linking
+        // is the last authenticated step before inbound messages start running
+        // the agent server-side, where there is no device left to ask. iOS
+        // only, by product decision.
+        if (args.platform === 'ios' && flags.aiConsent === true) {
+            const consent = await resolveAiConsent(ctx, userId)
+            if (!consent.accepted) {
+                throw new Error('AI consent is required before linking')
+            }
         }
         const now = Date.now()
 
