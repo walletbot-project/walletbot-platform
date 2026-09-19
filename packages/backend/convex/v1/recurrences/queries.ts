@@ -11,11 +11,10 @@ import { requireAuth } from '../../users/helpers'
  * movement that references a rule the user has since deleted resolves to
  * `null` instead of throwing — the movement itself is still perfectly valid.
  *
- * `count` and `coveredThroughMs` are read off the last occurrence, in one
- * document read: indices run contiguously from 0, so the highest index *is*
- * the count, and no row has to be counted. Neither is stored on the rule, on
- * purpose — the rows are the truth about how far a series got
- * (docs/recurrency-design.md §5.2).
+ * `total`, `position` and `coveredThroughMs` are derived from the occurrence
+ * rows (at most `SERIES_COUNT_CAP + 1` reads, `null` beyond the cap). None is
+ * stored on the rule, on purpose — the rows are the truth about how far a
+ * series got (docs/recurrency-design.md §5.2).
  */
 export const get = query({
     args: {

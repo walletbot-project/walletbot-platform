@@ -52,7 +52,7 @@ export const KNOWN_FLAGS: {
     {
         key: 'recurringExpense',
         description:
-            'Show the "is this recurring?" toggle when logging a manual expense (feature not built yet).',
+            'Enable recurring movements: the recurrence controls in the manual form, the future movements screen, series editing and the agent recurrence tools (native + web).',
         enabledByDefault: false,
     },
     {

@@ -181,8 +181,8 @@ export type DateRangeBuilder = {
  * the user's own date filter — it costs nothing and, crucially, it cannot be
  * forgotten by a caller that already bounds by date.
  *
- * `asOfMs` is the exclusive upper bound (the start of the viewer's next local
- * day); see `pastCutoffMs` in `@wallet-bot/shared` for why it travels as an
+ * `asOfMs` is the exclusive upper bound (the end of the current occurrence
+ * block); see `pastCutoffMs` in `@wallet-bot/shared` for why it travels as an
  * argument instead of being read off the server clock.
  */
 export function occurredWindow(

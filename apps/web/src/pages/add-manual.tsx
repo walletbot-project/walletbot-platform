@@ -302,9 +302,6 @@ export function TransactionForm({
     const [pendingTagColor, setPendingTagColor] = useState<string>(
         TAG_COLOR_OPTIONS[0],
     )
-    // Display-only, exactly as on native: the recurring-expense feature isn't
-    // built yet, so the toggle is never read on save and never persisted
-    // (`_isRecurring` in apps/native/lib/screens/transaction_form.dart).
     const [isSaving, setIsSaving] = useState(false)
     const [isRecurring, setIsRecurring] = useState(false)
     const [recurrenceFrequency, setRecurrenceFrequency] =
@@ -1126,9 +1123,6 @@ function SectionLabel({ children }: { children: ReactNode }) {
  * The `recurringExpense` flag's toggle, porting native's
  * `_RecurringExpenseControl`: a centred label over a switch, capped narrow so
  * it never crowds the account picker beside it.
- *
- * The flag is registered as "feature not built yet", so this records nothing —
- * flipping it changes no saved transaction, on either client.
  */
 function RecurringToggle({
     label,
@@ -1160,9 +1154,6 @@ function RecurringToggle({
  * The recurrence detail panel, porting native's `_RecurrencePanel`: the
  * cadence as choice chips, the day interval when the cadence is "every X
  * days", and an optional end date.
- *
- * Like the toggle above it, the flag is registered as "feature not built
- * yet", so nothing here is persisted on either client.
  */
 function RecurrencePanel({
     frequency,
