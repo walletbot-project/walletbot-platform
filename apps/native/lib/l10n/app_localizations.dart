@@ -3371,8 +3371,20 @@ abstract class AppLocalizations {
   /// No description provided for @aiConsentIntro.
   ///
   /// In en, this message translates to:
-  /// **'To answer you, the assistant sends what you say and part of your Wallet Bot data to our AI providers, Google LLC (Gemini) and OpenAI, L.L.C., which process it in the United States.'**
+  /// **'The assistant sends what you say and part of your Wallet Bot data to our AI providers, Google LLC (Gemini) and OpenAI, LLC, in the United States.'**
   String get aiConsentIntro;
+
+  /// No description provided for @aiConsentMicTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'We\'ll ask for the microphone'**
+  String get aiConsentMicTitle;
+
+  /// No description provided for @aiConsentMicBody.
+  ///
+  /// In en, this message translates to:
+  /// **'iOS asks when you start a voice conversation. Typing to the assistant needs no microphone.'**
+  String get aiConsentMicBody;
 
   /// No description provided for @aiConsentWhatWeSend.
   ///
@@ -3383,31 +3395,31 @@ abstract class AppLocalizations {
   /// No description provided for @aiConsentItemAudio.
   ///
   /// In en, this message translates to:
-  /// **'Your microphone audio and the messages you type, streamed from this device straight to the provider.'**
+  /// **'Your voice while a conversation is open, and what you type.'**
   String get aiConsentItemAudio;
 
   /// No description provided for @aiConsentItemProfile.
   ///
   /// In en, this message translates to:
-  /// **'Your name and your email address.'**
+  /// **'Your name and email.'**
   String get aiConsentItemProfile;
 
   /// No description provided for @aiConsentItemFinancial.
   ///
   /// In en, this message translates to:
-  /// **'Your accounts, categories and tags, and your most recent transactions.'**
+  /// **'Your accounts, categories, tags and recent transactions.'**
   String get aiConsentItemFinancial;
 
   /// No description provided for @aiConsentItemMemories.
   ///
   /// In en, this message translates to:
-  /// **'The notes the assistant has saved about you.'**
+  /// **'Notes the assistant saved about you.'**
   String get aiConsentItemMemories;
 
   /// No description provided for @aiConsentItemActions.
   ///
   /// In en, this message translates to:
-  /// **'The records it creates or changes while you talk to it.'**
+  /// **'Records it creates or changes.'**
   String get aiConsentItemActions;
 
   /// No description provided for @aiConsentReadPolicy.

@@ -125,12 +125,12 @@ class AiConsentSheet extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = context.l10n;
     final theme = Theme.of(context);
-    final items = <String>[
-      l10n.aiConsentItemAudio,
-      l10n.aiConsentItemProfile,
-      l10n.aiConsentItemFinancial,
-      l10n.aiConsentItemMemories,
-      l10n.aiConsentItemActions,
+    final items = <(IconData, String)>[
+      (Icons.mic_none_outlined, l10n.aiConsentItemAudio),
+      (Icons.person_outline, l10n.aiConsentItemProfile),
+      (Icons.account_balance_wallet_outlined, l10n.aiConsentItemFinancial),
+      (Icons.bookmark_border, l10n.aiConsentItemMemories),
+      (Icons.edit_note_outlined, l10n.aiConsentItemActions),
     ];
 
     // The actions stay pinned below the scroll area: a consent gate whose
@@ -161,6 +161,8 @@ class AiConsentSheet extends StatelessWidget {
                       l10n.aiConsentIntro,
                       style: theme.textTheme.bodyMedium,
                     ),
+                    const SizedBox(height: 16),
+                    const _MicNotice(),
                     const SizedBox(height: 20),
                     Text(
                       l10n.aiConsentWhatWeSend,
@@ -169,7 +171,8 @@ class AiConsentSheet extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 8),
-                    for (final item in items) _Bullet(text: item),
+                    for (final (icon, text) in items)
+                      _Item(icon: icon, text: text),
                     Align(
                       alignment: AlignmentDirectional.centerStart,
                       child: TextButton(
@@ -206,24 +209,78 @@ class AiConsentSheet extends StatelessWidget {
   }
 }
 
-class _Bullet extends StatelessWidget {
-  const _Bullet({required this.text});
-
-  final String text;
+/// The microphone is the one thing the sheet cannot grant on its own: iOS asks
+/// separately, and text-only use never needs it. Both facts get their own
+/// block so neither is lost inside the list.
+class _MicNotice extends StatelessWidget {
+  const _MicNotice();
 
   @override
   Widget build(BuildContext context) {
-    final style = Theme.of(context).textTheme.bodyMedium;
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
+    final l10n = context.l10n;
+    final theme = Theme.of(context);
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(14),
+      ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Padding(
-            padding: const EdgeInsets.only(top: 2, right: 10),
-            child: Text('•', style: style),
+            padding: const EdgeInsetsDirectional.only(top: 2, end: 12),
+            child: Icon(
+              Icons.mic_none_outlined,
+              size: 20,
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
           ),
-          Expanded(child: Text(text, style: style)),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  l10n.aiConsentMicTitle,
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(l10n.aiConsentMicBody, style: theme.textTheme.bodyMedium),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _Item extends StatelessWidget {
+  const _Item({required this.icon, required this.text});
+
+  final IconData icon;
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsetsDirectional.only(top: 2, end: 12),
+            child: Icon(
+              icon,
+              size: 20,
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+          Expanded(child: Text(text, style: theme.textTheme.bodyMedium)),
         ],
       ),
     );

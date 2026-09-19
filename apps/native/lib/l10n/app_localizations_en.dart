@@ -1844,29 +1844,34 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get aiConsentIntro =>
-      'To answer you, the assistant sends what you say and part of your Wallet Bot data to our AI providers, Google LLC (Gemini) and OpenAI, L.L.C., which process it in the United States.';
+      'The assistant sends what you say and part of your Wallet Bot data to our AI providers, Google LLC (Gemini) and OpenAI, LLC, in the United States.';
+
+  @override
+  String get aiConsentMicTitle => 'We\'ll ask for the microphone';
+
+  @override
+  String get aiConsentMicBody =>
+      'iOS asks when you start a voice conversation. Typing to the assistant needs no microphone.';
 
   @override
   String get aiConsentWhatWeSend => 'What gets sent';
 
   @override
   String get aiConsentItemAudio =>
-      'Your microphone audio and the messages you type, streamed from this device straight to the provider.';
+      'Your voice while a conversation is open, and what you type.';
 
   @override
-  String get aiConsentItemProfile => 'Your name and your email address.';
+  String get aiConsentItemProfile => 'Your name and email.';
 
   @override
   String get aiConsentItemFinancial =>
-      'Your accounts, categories and tags, and your most recent transactions.';
+      'Your accounts, categories, tags and recent transactions.';
 
   @override
-  String get aiConsentItemMemories =>
-      'The notes the assistant has saved about you.';
+  String get aiConsentItemMemories => 'Notes the assistant saved about you.';
 
   @override
-  String get aiConsentItemActions =>
-      'The records it creates or changes while you talk to it.';
+  String get aiConsentItemActions => 'Records it creates or changes.';
 
   @override
   String get aiConsentReadPolicy => 'Read the Privacy Policy';
