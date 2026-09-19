@@ -1,3 +1,4 @@
+import 'package:clock/clock.dart';
 import 'package:drift/drift.dart';
 
 import '../database.dart';
@@ -36,15 +37,29 @@ BigInt pastCutoffMs([DateTime? now]) {
   return BigInt.from((ms ~/ bucketMs + 1) * bucketMs);
 }
 
+/// How long until the next block boundary has passed, measured from [now].
+///
+/// One second past the boundary, not on it: a timer that wakes a hair early
+/// would compute the same cutoff and re-arm in a tight loop. Never negative,
+/// so a boundary that went by while the process was suspended fires at once.
+Duration occurrenceTickDelay([DateTime? now]) {
+  final at = now ?? clock.now();
+  final boundary = pastCutoffMs(at).toInt();
+  final ms = boundary - at.millisecondsSinceEpoch;
+  return Duration(milliseconds: ms < 0 ? 0 : ms) + const Duration(seconds: 1);
+}
+
 /// The cutoff as SQL, evaluated when the statement runs.
 ///
 /// Not a bound Dart value, on purpose. Drift bakes a value into the statement
 /// it builds and re-runs *that* statement when the tables change, so a
 /// constant would freeze the cutoff for as long as the screen holding the
-/// stream lives. With a day boundary that was a once-a-day staleness nobody
-/// hit; at twenty minutes it would be the common case. Computed in SQL, every
-/// re-run of the query — including the one a write triggers — asks the clock
-/// again.
+/// stream lives. Computed in SQL, every re-run of the query asks the clock
+/// again — but drift only re-runs a stream when one of its tables changes, so
+/// a screen left open with no writes would still sit on the old side of the
+/// boundary. [AppDatabase.startOccurrenceClock] closes that gap: it marks
+/// `transactions` updated one second past each boundary, which re-runs every
+/// open stream against this expression.
 ///
 /// `strftime('%s')` rather than `unixepoch()`: the latter needs SQLite 3.38,
 /// and this has to hold on whatever the device ships.

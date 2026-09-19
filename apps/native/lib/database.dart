@@ -1,10 +1,14 @@
+import 'dart:async';
 import 'dart:io';
 
+import 'package:clock/clock.dart';
 import 'package:drift/drift.dart';
 import 'package:drift_flutter/drift_flutter.dart';
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
+
+import 'data/occurrence.dart';
 
 part 'database.g.dart';
 
@@ -524,6 +528,36 @@ class AppDatabase extends _$AppDatabase {
   /// Test-only constructor backed by an arbitrary executor (e.g.
   /// `NativeDatabase.memory()`). Production code must use [AppDatabase.forUser].
   AppDatabase.forTesting(super.executor);
+
+  Timer? _occurrenceTick;
+
+  /// Re-runs every open `transactions` stream one second past each occurrence
+  /// block boundary (`occurrenceTickDelay`), so a movement that comes due
+  /// while a screen is open crosses from upcoming to occurred without waiting
+  /// for a write. Idempotent; stopped by [close].
+  void startOccurrenceClock() {
+    if (_occurrenceTick != null) return;
+    _armOccurrenceTick();
+  }
+
+  void _armOccurrenceTick() {
+    _occurrenceTick = Timer(occurrenceTickDelay(clock.now()), () {
+      _occurrenceTick = null;
+      markTablesUpdated({transactions});
+      _armOccurrenceTick();
+    });
+  }
+
+  /// Whether the occurrence clock is armed. For tests.
+  @visibleForTesting
+  bool get occurrenceClockRunning => _occurrenceTick != null;
+
+  @override
+  Future<void> close() {
+    _occurrenceTick?.cancel();
+    _occurrenceTick = null;
+    return super.close();
+  }
 
   @override
   int get schemaVersion => 5;

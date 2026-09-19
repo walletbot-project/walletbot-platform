@@ -115,4 +115,45 @@ void main() {
       expect(await repos.accounts.getBalanceCents(cashId), BigInt.zero);
     });
   });
+
+  group('occurrence clock', () {
+    DateTime utc(String iso) => DateTime.parse(iso);
+
+    test('fires one second past the next block boundary', () {
+      expect(
+        occurrenceTickDelay(utc('2026-09-03T14:07:31.500Z')),
+        const Duration(minutes: 12, seconds: 29, milliseconds: 500),
+      );
+      // On the boundary the next block is a whole one away, like the cutoff.
+      expect(
+        occurrenceTickDelay(utc('2026-09-03T14:20:00.000Z')),
+        const Duration(minutes: 20, seconds: 1),
+      );
+    });
+
+    test('is armed once and stops with the database', () async {
+      final db = AppDatabase.forTesting(NativeDatabase.memory());
+      expect(db.occurrenceClockRunning, isFalse);
+      db.startOccurrenceClock();
+      db.startOccurrenceClock();
+      expect(db.occurrenceClockRunning, isTrue);
+      await db.close();
+      expect(db.occurrenceClockRunning, isFalse);
+    });
+
+    test('a table update re-runs an open transactions stream', () async {
+      final db = AppDatabase.forTesting(NativeDatabase.memory());
+      addTearDown(db.close);
+      var emissions = 0;
+      final sub = db.select(db.transactions).watch().listen((_) {
+        emissions++;
+      });
+      addTearDown(sub.cancel);
+      await pumpEventQueue();
+      expect(emissions, 1);
+      db.markTablesUpdated({db.transactions});
+      await pumpEventQueue();
+      expect(emissions, 2);
+    });
+  });
 }
