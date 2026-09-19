@@ -28,7 +28,12 @@ class VoiceDisconnectedEvent extends VoiceEvent {
 }
 
 class VoiceErrorEvent extends VoiceEvent {
-  VoiceErrorEvent(this.message, {this.isTransient = false, this.code, super.at});
+  VoiceErrorEvent(
+    this.message, {
+    this.isTransient = false,
+    this.code,
+    super.at,
+  });
   final String message;
 
   /// Whether the operation can recover without user action. Transient errors

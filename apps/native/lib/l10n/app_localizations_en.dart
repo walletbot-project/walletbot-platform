@@ -1838,4 +1838,50 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get whatsappDisconnectFailed => 'Could not disconnect the number';
+
+  @override
+  String get aiConsentTitle => 'Before you use the assistant';
+
+  @override
+  String get aiConsentIntro =>
+      'To answer you, the assistant sends what you say and part of your Wallet Bot data to our AI providers, Google LLC (Gemini) and OpenAI, L.L.C., which process it in the United States.';
+
+  @override
+  String get aiConsentWhatWeSend => 'What gets sent';
+
+  @override
+  String get aiConsentItemAudio =>
+      'Your microphone audio and the messages you type, streamed from this device straight to the provider.';
+
+  @override
+  String get aiConsentItemProfile => 'Your name and your email address.';
+
+  @override
+  String get aiConsentItemFinancial =>
+      'Your accounts, categories and tags, and your most recent transactions.';
+
+  @override
+  String get aiConsentItemMemories =>
+      'The notes the assistant has saved about you.';
+
+  @override
+  String get aiConsentItemActions =>
+      'The records it creates or changes while you talk to it.';
+
+  @override
+  String get aiConsentReadPolicy => 'Read the Privacy Policy';
+
+  @override
+  String get aiConsentDecline => 'Not now';
+
+  @override
+  String get aiConsentAccept => 'Agree and continue';
+
+  @override
+  String get aiConsentFailed =>
+      'We could not record your permission. Check your connection and try again.';
+
+  @override
+  String get aiConsentDeclined =>
+      'You need to agree before the assistant can run.';
 }

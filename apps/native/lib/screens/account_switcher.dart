@@ -1,4 +1,5 @@
 import 'package:app/app_config/app_config_controller.dart';
+import 'package:app/app_config/client_info.dart';
 import 'package:app/auth/account.dart';
 import 'package:app/auth/auth_controller.dart';
 import 'package:app/auth/pop_on_account_switch.dart';
@@ -6,9 +7,11 @@ import 'package:app/components/grouped_card.dart';
 import 'package:app/convex/convex_client.dart';
 import 'package:app/database.dart';
 import 'package:app/l10n/l10n.dart';
+import 'package:app/legal/ai_consent_controller.dart';
 import 'package:app/screens/login.dart';
 import 'package:app/screens/settings.dart';
 import 'package:app/screens/whatsapp_link.dart';
+import 'package:app/settings/display_settings.dart';
 import 'package:app/sync/unsynced.dart';
 import 'package:app/whatsapp/whatsapp_link_controller.dart' show kWhatsappFlag;
 import 'package:app/user_settings/default_currency_controller.dart';
@@ -207,17 +210,38 @@ class AccountSwitcherView extends StatelessWidget {
     // A local account has no backend user, and the screen says so instead of
     // offering a button that would fail.
     final client = context.read<ConvexClient?>();
-    Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        builder: (_) => PopOnAccountSwitch(
-          accountId: account.id,
-          child: WhatsappLinkScreen(
+    // Built here rather than read from the tree: the AI-consent controller is
+    // account-scoped and lives below this route, while everything it needs
+    // (ClientInfo, DisplaySettingsController, ConvexClient) is provided above
+    // the MaterialApp. Both reads are nullable only for widget tests that
+    // mount the switcher on a bare harness; in the app they always resolve,
+    // and a null one means the screen runs without the gate exactly as a
+    // non-iOS build does.
+    final clientInfo = context.read<ClientInfo?>();
+    final displaySettings = context.read<DisplaySettingsController?>();
+    final aiConsent = clientInfo == null || displaySettings == null
+        ? null
+        : AiConsentController(
+            accountId: account.id,
             isRemote: account.type == AccountType.remote,
+            clientInfo: clientInfo,
+            locale: displaySettings.localeTag,
             client: client,
+          );
+    Navigator.of(context)
+        .push(
+          MaterialPageRoute<void>(
+            builder: (_) => PopOnAccountSwitch(
+              accountId: account.id,
+              child: WhatsappLinkScreen(
+                isRemote: account.type == AccountType.remote,
+                client: client,
+                aiConsent: aiConsent,
+              ),
+            ),
           ),
-        ),
-      ),
-    );
+        )
+        .whenComplete(() => aiConsent?.dispose());
   }
 
   void _openAddAccount(BuildContext context, String? activeId) {

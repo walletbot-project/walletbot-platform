@@ -16,6 +16,8 @@ export type LiveTokenError =
     | 'rate_limited'
     | 'unidentified_client'
     | 'local_accounts_disabled'
+    /** iOS only: the AI disclosure has not been consented to yet. */
+    | 'ai_consent_required'
 
 export type LiveMintGate =
     | { ok: true }

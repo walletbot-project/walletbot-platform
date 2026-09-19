@@ -7,8 +7,10 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:app/app_config/app_config_controller.dart';
 import 'package:app/app_config/client_info.dart';
+import 'package:app/components/voice/ai_consent_sheet.dart';
 import 'package:app/components/voice/report_response_sheet.dart';
 import 'package:app/l10n/l10n.dart';
+import 'package:app/legal/ai_consent_controller.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:provider/provider.dart';
 
@@ -64,6 +66,7 @@ class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
   bool _userMicOn = false;
   bool _isBrowsingHistory = false;
   bool _conversationRestored = false;
+  bool _aiConsentAsked = false;
   double _level = 0;
 
   bool get _isTextComposing => _textController.text.trim().isNotEmpty;
@@ -100,6 +103,12 @@ class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
     // localized strings. `events` is live-only and no async gap exists
     // between the initState subscription and this snapshot, so the history
     // batch and the live stream can neither overlap nor miss events.
+    if (!_aiConsentAsked) {
+      _aiConsentAsked = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) unawaited(_showAiConsentIfNeeded());
+      });
+    }
     if (!_conversationRestored) {
       _conversationRestored = true;
       final active = _command;
@@ -370,6 +379,26 @@ class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
   }
 
   // -- Session lifecycle ----------------------------------------------------
+
+  /// Shows the AI disclosure the first time this account opens the screen.
+  ///
+  /// On open, not on the mic: tapping the mic means "let me talk", and
+  /// answering that with a legal wall — stacked in front of the iOS microphone
+  /// permission dialog — is the wrong place for it. Declining leaves the
+  /// screen, which is the only honest outcome when the assistant is the whole
+  /// point of it.
+  Future<void> _showAiConsentIfNeeded() async {
+    final outcome = await ensureAiConsent(
+      context,
+      context.read<AiConsentController?>(),
+    );
+    if (outcome == AiConsentOutcome.granted || !mounted) return;
+    if (outcome == AiConsentOutcome.failed) {
+      _addSystemSetState(context.l10n.aiConsentFailed, kind: _SystemKind.error);
+      return;
+    }
+    Navigator.of(context).maybePop();
+  }
 
   Future<void> _startSession({required _SessionMode mode}) async {
     if (_isStarting || _isConnected) return;

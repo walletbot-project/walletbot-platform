@@ -598,5 +598,18 @@
   "@whatsappLinkedOn": {"placeholders": {"date": {"type": "String"}}},
   "whatsappDisconnect": "Disconnect",
   "whatsappDisconnectConfirm": "Gaston will stop answering this number until you link it again.",
-  "whatsappDisconnectFailed": "Could not disconnect the number"
+  "whatsappDisconnectFailed": "Could not disconnect the number",
+  "aiConsentTitle": "Before you use the assistant",
+  "aiConsentIntro": "To answer you, the assistant sends what you say and part of your Wallet Bot data to our AI providers, Google LLC (Gemini) and OpenAI, L.L.C., which process it in the United States.",
+  "aiConsentWhatWeSend": "What gets sent",
+  "aiConsentItemAudio": "Your microphone audio and the messages you type, streamed from this device straight to the provider.",
+  "aiConsentItemProfile": "Your name and your email address.",
+  "aiConsentItemFinancial": "Your accounts, categories and tags, and your most recent transactions.",
+  "aiConsentItemMemories": "The notes the assistant has saved about you.",
+  "aiConsentItemActions": "The records it creates or changes while you talk to it.",
+  "aiConsentReadPolicy": "Read the Privacy Policy",
+  "aiConsentDecline": "Not now",
+  "aiConsentAccept": "Agree and continue",
+  "aiConsentFailed": "We could not record your permission. Check your connection and try again.",
+  "aiConsentDeclined": "You need to agree before the assistant can run."
 }

@@ -115,6 +115,8 @@ export {
     FEEDBACK_MAX_MESSAGE_LENGTH,
 } from './feedback'
 export {
+    AI_CONSENT_DOCUMENT,
+    AI_CONSENT_VERSION,
     isLegalDocument,
     isLegalVersionAtLeast,
     LEGAL_DOCUMENTS,

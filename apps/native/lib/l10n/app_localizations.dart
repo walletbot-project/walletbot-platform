@@ -3361,6 +3361,84 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Could not disconnect the number'**
   String get whatsappDisconnectFailed;
+
+  /// No description provided for @aiConsentTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Before you use the assistant'**
+  String get aiConsentTitle;
+
+  /// No description provided for @aiConsentIntro.
+  ///
+  /// In en, this message translates to:
+  /// **'To answer you, the assistant sends what you say and part of your Wallet Bot data to our AI providers, Google LLC (Gemini) and OpenAI, L.L.C., which process it in the United States.'**
+  String get aiConsentIntro;
+
+  /// No description provided for @aiConsentWhatWeSend.
+  ///
+  /// In en, this message translates to:
+  /// **'What gets sent'**
+  String get aiConsentWhatWeSend;
+
+  /// No description provided for @aiConsentItemAudio.
+  ///
+  /// In en, this message translates to:
+  /// **'Your microphone audio and the messages you type, streamed from this device straight to the provider.'**
+  String get aiConsentItemAudio;
+
+  /// No description provided for @aiConsentItemProfile.
+  ///
+  /// In en, this message translates to:
+  /// **'Your name and your email address.'**
+  String get aiConsentItemProfile;
+
+  /// No description provided for @aiConsentItemFinancial.
+  ///
+  /// In en, this message translates to:
+  /// **'Your accounts, categories and tags, and your most recent transactions.'**
+  String get aiConsentItemFinancial;
+
+  /// No description provided for @aiConsentItemMemories.
+  ///
+  /// In en, this message translates to:
+  /// **'The notes the assistant has saved about you.'**
+  String get aiConsentItemMemories;
+
+  /// No description provided for @aiConsentItemActions.
+  ///
+  /// In en, this message translates to:
+  /// **'The records it creates or changes while you talk to it.'**
+  String get aiConsentItemActions;
+
+  /// No description provided for @aiConsentReadPolicy.
+  ///
+  /// In en, this message translates to:
+  /// **'Read the Privacy Policy'**
+  String get aiConsentReadPolicy;
+
+  /// No description provided for @aiConsentDecline.
+  ///
+  /// In en, this message translates to:
+  /// **'Not now'**
+  String get aiConsentDecline;
+
+  /// No description provided for @aiConsentAccept.
+  ///
+  /// In en, this message translates to:
+  /// **'Agree and continue'**
+  String get aiConsentAccept;
+
+  /// No description provided for @aiConsentFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'We could not record your permission. Check your connection and try again.'**
+  String get aiConsentFailed;
+
+  /// No description provided for @aiConsentDeclined.
+  ///
+  /// In en, this message translates to:
+  /// **'You need to agree before the assistant can run.'**
+  String get aiConsentDeclined;
 }
 
 class _AppLocalizationsDelegate

@@ -85,9 +85,7 @@ Object _httpFailure(int statusCode, String rawBody) {
     // Not JSON (a proxy error page, an empty body): fall through to the raw
     // status, which is more useful than hiding it behind a parse failure.
   }
-  return StateError(
-    'Convex live token request failed: $statusCode $rawBody',
-  );
+  return StateError('Convex live token request failed: $statusCode $rawBody');
 }
 
 Future<String> _fetchLiveToken({
@@ -1374,11 +1372,11 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
       {'code': ?code, 'reason': ?reason},
     ),
     VoiceErrorEvent(:final message, :final isTransient, :final code) =>
-        _VoiceEventRecord(
-      'error',
-      'local',
-      {'message': message, 'isTransient': isTransient, 'code': ?code},
-    ),
+      _VoiceEventRecord('error', 'local', {
+        'message': message,
+        'isTransient': isTransient,
+        'code': ?code,
+      }),
     VoiceSystemEvent(:final message) => _VoiceEventRecord('system', 'local', {
       'message': message,
     }),

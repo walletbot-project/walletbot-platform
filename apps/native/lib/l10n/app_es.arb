@@ -549,5 +549,18 @@
   "@whatsappLinkedOn": {"placeholders": {"date": {"type": "String"}}},
   "whatsappDisconnect": "Desconectar",
   "whatsappDisconnectConfirm": "Gaston va a dejar de responderle a este número hasta que lo vincules de nuevo.",
-  "whatsappDisconnectFailed": "No se pudo desconectar el número"
+  "whatsappDisconnectFailed": "No se pudo desconectar el número",
+  "aiConsentTitle": "Antes de usar el asistente",
+  "aiConsentIntro": "Para responderte, el asistente envía lo que decís y parte de tus datos de Wallet Bot a nuestros proveedores de IA, Google LLC (Gemini) y OpenAI, L.L.C., que los procesan en Estados Unidos.",
+  "aiConsentWhatWeSend": "Qué se envía",
+  "aiConsentItemAudio": "El audio de tu micrófono y los mensajes que escribís, que salen desde este dispositivo directo al proveedor.",
+  "aiConsentItemProfile": "Tu nombre y tu dirección de correo.",
+  "aiConsentItemFinancial": "Tus cuentas, categorías y etiquetas, y tus movimientos más recientes.",
+  "aiConsentItemMemories": "Las notas que el asistente guardó sobre vos.",
+  "aiConsentItemActions": "Los registros que crea o modifica mientras hablás con él.",
+  "aiConsentReadPolicy": "Leer la Política de Privacidad",
+  "aiConsentDecline": "Ahora no",
+  "aiConsentAccept": "Aceptar y continuar",
+  "aiConsentFailed": "No se pudo registrar tu permiso. Revisá tu conexión y probá de nuevo.",
+  "aiConsentDeclined": "Necesitás aceptar para que el asistente funcione."
 }
