@@ -9,7 +9,7 @@ served from `app.walletbot.live` (its own Pages project).
 | Route (per locale) | Source | Content |
 |---|---|---|
 | `/{en,es}/` | `src/components/home-page.astro` | Hero, feature grid, get-the-app links |
-| `/{en,es}/beta` | `src/components/beta-page.astro` | Beta access request — a card out to the Google Form |
+| `/{en,es}/beta` | `src/components/beta-page.astro` | Beta access request — a card out to the Google Form. Also answered unprefixed at `/beta` |
 | `/{en,es}/support` | `src/components/support-page.astro` | Support mailbox: one `mailto:` card, nothing else. Also answered unprefixed at `/support` (§ The only server code) — that is the link on the store listings |
 | `/{en,es}/privacy` | `src/components/legal-page.astro` | Renders `docs/legal/privacy-policy.{locale}.md` |
 | `/{en,es}/terms` | `src/components/legal-page.astro` | Renders `docs/legal/terms-and-conditions.{locale}.md` |
@@ -40,8 +40,8 @@ test opens.
 (`BETA_FORM_URL`), not a form of our own — the page is one big card out to it,
 plus the web app underneath as the way in that needs no waiting. Nothing on
 this site posts anything anywhere, which is why it can stay a plain static
-build. Unlike `/privacy` and `/terms` the page has no unprefixed alias, so
-anything linking to it has to carry a locale.
+build. Like the other handed-out URLs it is also answered unprefixed at
+`/beta` (§ The only server code).
 
 ## Legal documents
 
@@ -90,8 +90,8 @@ Astro's built-in i18n routing owns the URLs; `src/i18n/` owns the copy.
 - `i18n.routing.prefixDefaultLocale: true` — every URL carries its language, so
   pages live under `src/pages/en/` and `src/pages/es/`. There is no unprefixed
   content.
-- The unprefixed paths `/`, `/privacy`, `/terms` and `/support` have no page in
-  the build. A Pages Function owns each one and 302s to the same page under the
+- The unprefixed paths `/`, `/privacy`, `/terms`, `/support` and `/beta` have
+  no page in the build. A Pages Function owns each one and 302s to the same page under the
   language the browser asked for — see § Deploying. Neither Astro mechanism can do this:
   `redirects` in `astro.config.mjs` only emits a meta-refresh page without an
   adapter, and `i18n.routing.redirectToDefaultLocale` demands a root
@@ -183,20 +183,20 @@ the production domain (`www.walletbot.live`).
 
 ### The only server code
 
-Four Pages Functions, one per unprefixed path, and they exist solely because
+Five Pages Functions, one per unprefixed path, and they exist solely because
 picking a language from the `Accept-Language` header has to happen per request —
-a static redirect rule has no access to request headers. All four are one-liners
+a static redirect rule has no access to request headers. All five are one-liners
 over `localeRedirect` in `src/lib/locale-redirect.ts`, which parses the header's
 weighted language ranges (honouring `q=` ordering and `q=0` rejections, matching
 on the primary subtag so `es-419` and `es-AR` both resolve to `es`), then 302s to
 the same page under that locale, carrying the query string over so campaign
 parameters survive.
 
-`/privacy`, `/terms` and `/support` are covered because those URLs get handed
-out without a locale prefix — Google Play and Apple each want one public
-privacy-policy link and one support link (`docs/legal/README.md`), and whoever
-pastes them cannot know the reader's language. Trailing slashes are optional in
-Pages' routing, so `/privacy/` hits the same function.
+`/privacy`, `/terms`, `/support` and `/beta` are covered because those URLs
+get handed out without a locale prefix — Google Play and Apple each want one
+public privacy-policy link and one support link (`docs/legal/README.md`), and
+whoever pastes any of them cannot know the reader's language. Trailing slashes
+are optional in Pages' routing, so `/privacy/` hits the same function.
 
 A page reachable only at `/en/…` and `/es/…` is not reachable at the URL a store
 listing carries. Adding a locale-prefixed page and stopping there is how
@@ -211,8 +211,8 @@ Three conventions keep this cheap:
 
 | File | Role |
 |---|---|
-| `functions/{index,privacy,terms,support}.ts` | Pages' file-based routing maps these to exactly `/`, `/privacy`, `/terms` and `/support` |
-| `public/_routes.json` | `include` lists those four paths (plus the trailing-slash spellings) — everything else, the six prerendered pages and every asset, stays a free static request and never starts a Worker |
+| `functions/{index,privacy,terms,support,beta}.ts` | Pages' file-based routing maps these to exactly `/`, `/privacy`, `/terms`, `/support` and `/beta` |
+| `public/_routes.json` | `include` lists those five paths (plus the trailing-slash spellings) — everything else, the six prerendered pages and every asset, stays a free static request and never starts a Worker |
 | `public/_headers` | Immutable caching for `/_astro/*`, which Astro fingerprints; replaces what the Vercel adapter used to emit |
 
 `_routes.json` and `_headers` live in `public/` because Astro copies that
