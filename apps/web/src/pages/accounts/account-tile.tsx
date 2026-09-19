@@ -3,6 +3,7 @@ import { useQuery } from 'convex/react'
 import type { CSSProperties } from 'react'
 import { AccountIcon } from '@/components/account-icon'
 import { EntityAvatar, EntityListTile } from '@/components/m3/entity-list-tile'
+import { useOccurrenceCutoff } from '@/hooks/use-occurrence-cutoff'
 import { ACCOUNT_DEFAULT_COLOR, normalizeColor } from '@/lib/entity-colors'
 import { useFormatLocale } from '@/lib/i18n'
 import { formatMoney } from '@/lib/money'
@@ -32,8 +33,10 @@ export function AccountTile({
     onClick,
 }: AccountTileProps) {
     const formatLocale = useFormatLocale()
+    const asOfMs = useOccurrenceCutoff()
     const balance = useQuery(api.v1.transactions.queries.balance, {
         accountId: id,
+        asOfMs,
     })
     const accent = normalizeColor(color, ACCOUNT_DEFAULT_COLOR)
 

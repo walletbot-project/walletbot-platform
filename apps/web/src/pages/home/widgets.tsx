@@ -20,6 +20,7 @@ import {
     XAxis,
 } from 'recharts'
 import { Skeleton } from '@/components/ui/skeleton'
+import { useOccurrenceCutoff } from '@/hooks/use-occurrence-cutoff'
 import { COLOR_OPTIONS } from '@/lib/entity-colors'
 import {
     dashboardTitle,
@@ -58,6 +59,7 @@ export function StatWidget({ spec }: { spec: WidgetSpec }) {
     const result = useQuery(api.v1.dashboard.queries.stat, {
         config: spec.config || MATCH_ALL,
         aggregation: spec.options.aggregation,
+        asOfMs: useOccurrenceCutoff(),
     })
 
     const displayValue =
@@ -126,6 +128,7 @@ export function BalanceCardWidget({ spec }: { spec: WidgetSpec }) {
     const result = useQuery(api.v1.dashboard.queries.currencyBalance, {
         currency,
         accountIds: spec.options.accountIds,
+        asOfMs: useOccurrenceCutoff(),
     })
 
     return (
@@ -166,6 +169,7 @@ export function TransactionListWidget({ spec }: { spec: WidgetSpec }) {
     const rows = useQuery(api.v1.dashboard.queries.transactions, {
         config: spec.config || MATCH_ALL,
         limit: spec.options.limit,
+        asOfMs: useOccurrenceCutoff(),
     })
 
     return (
@@ -244,6 +248,7 @@ export function BreakdownChartWidget({ spec }: { spec: WidgetSpec }) {
     const result = useQuery(api.v1.dashboard.queries.breakdown, {
         config: spec.config || MATCH_ALL,
         groupBy: spec.options.groupBy,
+        asOfMs: useOccurrenceCutoff(),
     })
 
     const slices = (result?.slices ?? []).map((slice, index) => ({

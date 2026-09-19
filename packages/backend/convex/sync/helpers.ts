@@ -1,4 +1,6 @@
+import type { Infer } from 'convex/values'
 import type { MutationCtx } from '../_generated/server'
+import type { syncedTable } from '../schema/sync'
 
 export async function nextSeq(
     ctx: MutationCtx,
@@ -22,15 +24,11 @@ export async function writeTombstone(
     ctx: MutationCtx,
     args: {
         userId: string
-        tableName:
-            | 'accounts'
-            | 'categories'
-            | 'transactions'
-            | 'tags'
-            | 'transactionTags'
-            | 'savedFilters'
-            | 'dashboardWidgets'
-            | 'agentMemories'
+        // Derived from the schema's own union rather than restated: this
+        // list was hand-maintained and had already fallen behind
+        // `recurrences`, which meant the backend could not tombstone a
+        // recurring rule at all.
+        tableName: Infer<typeof syncedTable>
         entityId: string
         seq: bigint
         // Only meaningful for `tableName: 'accounts'` — see schema/sync.ts.

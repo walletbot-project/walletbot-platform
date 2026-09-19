@@ -1,4 +1,4 @@
-import { TableAggregate } from '@convex-dev/aggregate'
+import { DirectAggregate, TableAggregate } from '@convex-dev/aggregate'
 import { components } from './_generated/api'
 import type { DataModel, Doc } from './_generated/dataModel'
 
@@ -76,3 +76,17 @@ export const inflowsByAccount = new TableAggregate<{
 export function accountNamespace(userId: string, accountId: string): string {
     return ns(userId, accountId)
 }
+
+// Tag usage. The join row carries no date, so this is a DirectAggregate fed
+// by the join and transaction write paths (see tags/helpers.ts): an entry
+// exists for a join exactly while its transaction exists and is not archived,
+// keyed by that transaction's date. Namespace `${userId}:${tagId}`.
+export function tagNamespace(userId: string, tagId: string): string {
+    return ns(userId, tagId)
+}
+
+export const transactionsByTag = new DirectAggregate<{
+    Namespace: string
+    Key: bigint
+    Id: string
+}>(components.transactionsByTag)

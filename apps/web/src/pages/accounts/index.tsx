@@ -10,6 +10,7 @@ import { Icon } from '@/components/m3/icon'
 import { ListDetailLayout } from '@/components/m3/list-detail-layout'
 import { StateMessage } from '@/components/m3/state-message'
 import { Skeleton } from '@/components/ui/skeleton'
+import { useOccurrenceCutoff } from '@/hooks/use-occurrence-cutoff'
 import { GROUP_SPACING, groupedRadius } from '@/lib/grouped-list'
 import { type Messages, useT } from '@/lib/i18n'
 import { newId } from '@/lib/new-id'
@@ -104,6 +105,7 @@ export function AccountCreateRoute() {
     const createBalanceAdjustment = useMutation(
         api.v1.transactions.mutations.createBalanceAdjustment,
     )
+    const asOfMs = useOccurrenceCutoff()
 
     const close = () => navigate('/accounts')
 
@@ -123,6 +125,7 @@ export function AccountCreateRoute() {
                     accountId: id,
                     balanceAfter: BigInt(value.initialBalanceCents),
                     dateConfirmed: true,
+                    asOfMs,
                     // The canonical name native writes for an opening balance
                     // (apps/native/lib/data/repositories/account_repository.dart).
                     // Omitting it took the backend's `Ajuste de saldo` default,

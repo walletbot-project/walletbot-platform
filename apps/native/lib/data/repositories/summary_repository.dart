@@ -1,6 +1,7 @@
 import 'package:drift/drift.dart';
 
 import '../../database.dart';
+import '../occurrence.dart';
 import '../models/summaries.dart';
 import '../models/transaction_filter.dart';
 import '../queries/stream_utils.dart';
@@ -99,6 +100,7 @@ class SummaryRepository extends RepositoryBase {
   }) async {
     final query = db.select(db.transactions)
       ..where((t) => t.archived.equals(false))
+      ..where((t) => t.date.isSmallerThan(pastCutoffExpression()))
       ..where((t) => t.date.isBiggerOrEqualValue(fromMs))
       ..where((t) => t.date.isSmallerOrEqualValue(toMs));
     if (type != null) {
@@ -138,6 +140,7 @@ class SummaryRepository extends RepositoryBase {
     final items =
         await (db.select(db.transactions)
               ..where((t) => t.archived.equals(false))
+              ..where((t) => t.date.isSmallerThan(pastCutoffExpression()))
               ..where((t) => t.date.isBiggerOrEqualValue(fromMs))
               ..where((t) => t.date.isSmallerOrEqualValue(toMs)))
             .get();

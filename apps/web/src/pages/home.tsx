@@ -117,6 +117,11 @@ export default function Home() {
                                 onClick={() => setFeedbackOpen(true)}
                             />
                         ) : null}
+                        <HomeActionCard
+                            label={t.nav.futureMovements}
+                            icon="event_repeat"
+                            onClick={() => navigate('/future-movements')}
+                        />
                     </div>
                 </div>
             </div>

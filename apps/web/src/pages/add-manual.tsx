@@ -1,8 +1,12 @@
 import { api } from '@wallet-bot/backend/api'
+import type { RecurrenceSpan } from '@wallet-bot/shared'
 import {
     computeExchangeRate,
+    maxOccurrenceCount,
+    occurrenceCount,
     parseAmountToCents,
     parseTransactionDate,
+    recurrenceHorizon,
 } from '@wallet-bot/shared'
 import {
     Button,
@@ -23,6 +27,7 @@ import {
 } from 'react'
 import { toast } from 'sonner'
 import { ColorSwatches } from '@/components/color-swatches'
+import { ChoiceChip } from '@/components/m3/chip'
 import { DateField } from '@/components/m3/date-field'
 import { DialogAction, M3Dialog } from '@/components/m3/dialog'
 import { FormScreen } from '@/components/m3/form-screen'
@@ -42,6 +47,41 @@ import { newId } from '@/lib/new-id'
 import { TAG_COLOR_OPTIONS } from '@/lib/tag-colors'
 
 type MovementType = 'income' | 'expense' | 'transfer'
+
+type RecurrenceFrequency =
+    | 'daily'
+    | 'weekly'
+    | 'monthly'
+    | 'yearly'
+    | 'customDays'
+
+const DEFAULT_RECURRENCE_DAY_INTERVAL = 15
+
+const RECURRENCE_FREQUENCIES: readonly RecurrenceFrequency[] = [
+    'daily',
+    'weekly',
+    'monthly',
+    'yearly',
+    'customDays',
+]
+
+function recurrenceFrequencyLabel(
+    frequency: RecurrenceFrequency,
+    t: Messages,
+): string {
+    switch (frequency) {
+        case 'daily':
+            return t.addManual.recurrenceDaily
+        case 'weekly':
+            return t.addManual.recurrenceWeekly
+        case 'monthly':
+            return t.addManual.recurrenceMonthly
+        case 'yearly':
+            return t.addManual.recurrenceYearly
+        case 'customDays':
+            return t.addManual.recurrenceCustomDays
+    }
+}
 
 type AccountOption = {
     id: string
@@ -199,6 +239,7 @@ export function TransactionForm({
     const flags = useQuery(api.v1.featureFlags.queries.getMyFlags)
 
     const createIncome = useMutation(api.v1.transactions.mutations.createIncome)
+    const createRecurrence = useMutation(api.v1.recurrences.mutations.create)
     const createExpense = useMutation(
         api.v1.transactions.mutations.createExpense,
     )
@@ -263,11 +304,19 @@ export function TransactionForm({
     const [pendingTagColor, setPendingTagColor] = useState<string>(
         TAG_COLOR_OPTIONS[0],
     )
-    // Display-only, exactly as on native: the recurring-expense feature isn't
-    // built yet, so the toggle is never read on save and never persisted
-    // (`_isRecurringExpense` in apps/native/lib/screens/transaction_form.dart).
-    const [isRecurringExpense, setIsRecurringExpense] = useState(false)
     const [isSaving, setIsSaving] = useState(false)
+    const [isRecurring, setIsRecurring] = useState(false)
+    const [recurrenceFrequency, setRecurrenceFrequency] =
+        useState<RecurrenceFrequency>('monthly')
+    const [recurrenceDayInterval, setRecurrenceDayInterval] = useState(
+        DEFAULT_RECURRENCE_DAY_INTERVAL,
+    )
+    const [recurrenceEndDate, setRecurrenceEndDate] = useState('')
+
+    // Same gate as native's transaction form: behind the `recurringExpense`
+    // flag, and off for transfers (`_type != TransactionFormType.transfer`).
+    const showRecurrence =
+        type !== 'transfer' && flags?.recurringExpense === true
 
     useEffect(() => {
         setAccountId((current) => {
@@ -334,7 +383,10 @@ export function TransactionForm({
         setTags([])
         setPendingTagName(null)
         setPendingTagColor(TAG_COLOR_OPTIONS[0])
-        setIsRecurringExpense(false)
+        setIsRecurring(false)
+        setRecurrenceFrequency('monthly')
+        setRecurrenceDayInterval(DEFAULT_RECURRENCE_DAY_INTERVAL)
+        setRecurrenceEndDate('')
     }
 
     const changeType = (nextType: MovementType) => {
@@ -559,7 +611,49 @@ export function TransactionForm({
             }
 
             const transactionId = newId()
-            if (type === 'income') {
+            if (showRecurrence && isRecurring) {
+                const dayInterval =
+                    recurrenceFrequency === 'customDays'
+                        ? recurrenceDayInterval
+                        : 1
+                const endDateMs =
+                    recurrenceEndDate === ''
+                        ? null
+                        : new Date(`${recurrenceEndDate}T23:59:59`).getTime()
+                const max = maxOccurrenceCount(recurrenceFrequency, dayInterval)
+                const total = occurrenceCount(
+                    Number(sourceDate),
+                    recurrenceFrequency,
+                    endDateMs,
+                    dayInterval,
+                )
+                if (total > max) {
+                    toast.error(t.addManual.recurrenceTooLong(max))
+                    return
+                }
+                // One call creates the rule and this movement as occurrence 0;
+                // the rest of the series is materialised by a workflow, so the
+                // form returns as soon as the first one exists.
+                await createRecurrence({
+                    recurrenceId: newId(),
+                    frequency: recurrenceFrequency,
+                    dayInterval:
+                        recurrenceFrequency === 'customDays'
+                            ? BigInt(dayInterval)
+                            : undefined,
+                    endDate: endDateMs === null ? undefined : BigInt(endDateMs),
+                    transactionId,
+                    type: type === 'income' ? 'income' : 'expense',
+                    name: trimmedTitle,
+                    description: trimmedDescription,
+                    amount: parseAmountToCents(parsedAmount),
+                    accountId,
+                    categoryId,
+                    date: sourceDate,
+                    dateConfirmed: true,
+                    timeStatus,
+                })
+            } else if (type === 'income') {
                 await createIncome({
                     id: transactionId,
                     name: trimmedTitle,
@@ -787,16 +881,35 @@ export function TransactionForm({
                                     label={t.addManual.account}
                                 />
                             </div>
-                            {type === 'expense' && flags?.recurringExpense ? (
-                                <RecurringExpenseToggle
-                                    value={isRecurringExpense}
-                                    onChange={setIsRecurringExpense}
+                            {showRecurrence ? (
+                                <RecurringToggle
+                                    label={
+                                        type === 'income'
+                                            ? t.addManual.recurringIncome
+                                            : t.addManual.recurringExpense
+                                    }
+                                    value={isRecurring}
+                                    onChange={setIsRecurring}
                                     isDisabled={isSaving}
                                 />
                             ) : null}
                         </div>
                     )}
                 </div>
+
+                {showRecurrence && isRecurring ? (
+                    <div className="mt-5">
+                        <RecurrencePanel
+                            frequency={recurrenceFrequency}
+                            onFrequencyChange={setRecurrenceFrequency}
+                            dayInterval={recurrenceDayInterval}
+                            onDayIntervalChange={setRecurrenceDayInterval}
+                            endDate={recurrenceEndDate}
+                            onEndDateChange={setRecurrenceEndDate}
+                            isDisabled={isSaving}
+                        />
+                    </div>
+                ) : null}
 
                 <div className="mt-6">
                     <DateInput value={date} onChange={setDate} />
@@ -1024,33 +1137,139 @@ function SectionLabel({ children }: { children: ReactNode }) {
  * The `recurringExpense` flag's toggle, porting native's
  * `_RecurringExpenseControl`: a centred label over a switch, capped narrow so
  * it never crowds the account picker beside it.
- *
- * The flag is registered as "feature not built yet", so this records nothing —
- * flipping it changes no saved transaction, on either client.
  */
-function RecurringExpenseToggle({
+function RecurringToggle({
+    label,
     value,
     onChange,
     isDisabled,
 }: {
+    label: string
     value: boolean
     onChange: (value: boolean) => void
     isDisabled: boolean
 }) {
-    const t = useT()
     return (
         <div className="flex max-w-33 shrink-0 flex-col items-center gap-1.5">
             <span className="m3-body-medium text-center font-extrabold text-on-surface">
-                {t.addManual.recurringExpense}
+                {label}
             </span>
             <Switch
-                aria-label={t.addManual.recurringExpense}
+                aria-label={label}
                 isSelected={value}
                 onChange={onChange}
                 isDisabled={isDisabled}
             />
         </div>
     )
+}
+
+/**
+ * The recurrence detail panel, porting native's `_RecurrencePanel`: the
+ * cadence as choice chips, the day interval when the cadence is "every X
+ * days", and an optional end date.
+ */
+function RecurrencePanel({
+    frequency,
+    onFrequencyChange,
+    dayInterval,
+    onDayIntervalChange,
+    endDate,
+    onEndDateChange,
+    isDisabled,
+}: {
+    frequency: RecurrenceFrequency
+    onFrequencyChange: (value: RecurrenceFrequency) => void
+    dayInterval: number
+    onDayIntervalChange: (value: number) => void
+    endDate: string
+    onEndDateChange: (value: string) => void
+    isDisabled: boolean
+}) {
+    const t = useT()
+    const horizon = recurrenceHorizon(frequency, dayInterval)
+    return (
+        <div className="rounded-xl border border-outline-variant bg-surface-container-low p-4">
+            <span className="m3-title-small text-on-surface">
+                {t.addManual.frequency}
+            </span>
+            <div className="mt-2.5 flex flex-wrap gap-2">
+                {RECURRENCE_FREQUENCIES.map((value) => (
+                    <ChoiceChip
+                        key={value}
+                        label={recurrenceFrequencyLabel(value, t)}
+                        selected={frequency === value}
+                        onSelect={() => {
+                            if (isDisabled) return
+                            onFrequencyChange(value)
+                        }}
+                    />
+                ))}
+            </div>
+
+            {frequency === 'customDays' ? (
+                <div className="mt-4 flex items-center gap-3">
+                    <span className="m3-body-large text-on-surface">
+                        {t.addManual.recurrenceRepeatEvery}
+                    </span>
+                    <TextField
+                        className="w-20"
+                        aria-label={t.addManual.recurrenceRepeatEvery}
+                        variant="outlined"
+                        inputMode="numeric"
+                        value={dayInterval.toString()}
+                        isDisabled={isDisabled}
+                        onChange={(next: string) => {
+                            const parsed = Number.parseInt(next, 10)
+                            if (!Number.isFinite(parsed) || parsed < 1) return
+                            onDayIntervalChange(parsed)
+                        }}
+                    />
+                    <span className="m3-body-large text-on-surface">
+                        {t.addManual.recurrenceDaysUnit}
+                    </span>
+                </div>
+            ) : null}
+
+            <div className="mt-4">
+                <DateField
+                    id="recurrence-end-date"
+                    value={endDate}
+                    onChange={onEndDateChange}
+                    label={t.addManual.recurrenceEndDateOptional}
+                    // The asterisk marks the placeholder, not the label: it is
+                    // the *absence* of an end date that the note below
+                    // qualifies, so it belongs on the words that say so.
+                    placeholder={`${t.addManual.recurrenceNoEndDate}*`}
+                    icon="event_repeat"
+                    isDisabled={isDisabled}
+                    onClear={() => onEndDateChange('')}
+                />
+            </div>
+
+            {endDate === '' ? (
+                <p className="m3-body-small mt-2 text-on-surface-variant">
+                    <span aria-hidden>* </span>
+                    {t.addManual.recurrenceOpenEndedNote(
+                        horizon.count,
+                        spanLabel(horizon.span, t),
+                    )}
+                </p>
+            ) : null}
+        </div>
+    )
+}
+
+/** Renders a horizon's reach in the unit the policy chose for it. */
+function spanLabel(span: RecurrenceSpan, t: Messages): string {
+    switch (span.unit) {
+        case 'days':
+            return t.addManual.recurrenceSpanDays(span.value)
+        case 'months':
+            return t.addManual.recurrenceSpanMonths(span.value)
+        case 'years':
+            return t.addManual.recurrenceSpanYears(span.value)
+    }
 }
 
 function TransferAmounts({

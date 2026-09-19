@@ -137,6 +137,25 @@ export {
     MAX_LOCALE_TAG_LENGTH,
     resolveLocale,
 } from './locale'
+export {
+    OCCURRENCE_BUCKET_MS,
+    pastCutoffBigInt,
+    pastCutoffMs,
+} from './occurrence'
+export type {
+    RecurrenceFrequency,
+    RecurrenceHorizon,
+    RecurrenceSpan,
+} from './recurrence'
+export {
+    customDaysCount,
+    maxOccurrenceCount,
+    OCCURRENCE_CAP_MULTIPLIER,
+    occurrenceCount,
+    occurrenceDateMs,
+    recurrenceHorizon,
+    SERIES_COUNT_CAP,
+} from './recurrence'
 export type { ToolArgs, ToolName } from './tools'
 export {
     AGENT_MODEL,
@@ -145,6 +164,7 @@ export {
     TOOL_MAP,
     TOOL_NAMES,
     toolSchemas,
+    withoutRecurrence,
 } from './tools'
 export type { CalcStep, CalcStepResult } from './tools/calc'
 export {

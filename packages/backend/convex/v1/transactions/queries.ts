@@ -11,6 +11,7 @@ import {
     inflowsByAccount,
     outflowsByAccount,
 } from '../../aggregates'
+import { resolveOccurrenceCutoff } from '../../occurrences/helpers'
 import schema from '../../schema'
 import { requireAuth } from '../../users/helpers'
 import {
@@ -20,6 +21,7 @@ import {
     indexDateWindow,
     MAX_SCAN,
     matchesNode,
+    occurredWindow,
 } from '../dashboard/helpers'
 
 // Bounded read so we never accidentally collect an unbounded set. Callers that
@@ -56,14 +58,23 @@ export const get = query({
     },
 })
 
+// Backs the agent's session snapshot of recent movements. Archived rows are
+// excluded by the index prefix, not by a predicate: a deleted movement the
+// agent still describes back to the user reads as the delete having failed.
 export const recent = query({
-    args: { limit: v.optional(v.number()) },
+    args: { limit: v.optional(v.number()), asOfMs: v.optional(v.int64()) },
     handler: async (ctx, args) => {
         const userId = await requireAuth(ctx)
+        const asOfMs = resolveOccurrenceCutoff(args.asOfMs)
         const limit = Math.min(args.limit ?? 10, MAX_RECENT)
         return await ctx.db
             .query('transactions')
-            .withIndex('by_user_date', (q) => q.eq('userId', userId))
+            .withIndex('by_user_archived_date', (q) =>
+                q
+                    .eq('userId', userId)
+                    .eq('isArchived', false)
+                    .lt('date', asOfMs),
+            )
             .order('desc')
             .take(limit)
     },
@@ -89,107 +100,99 @@ export const listPaginated = query({
         // (one indexed read per row). Off by default so the agent's list calls
         // stay cheap — only the activity view, which filters by tag, opts in.
         includeTags: v.optional(v.boolean()),
+        asOfMs: v.optional(v.int64()),
     },
     handler: async (ctx, args) => {
         const userId = await requireAuth(ctx)
-        const { dateFrom, dateTo } = args
+        const asOfMs = resolveOccurrenceCutoff(args.asOfMs)
+        // The occurrence cutoff is just a tighter `dateTo`, so it rides the
+        // same index range the caller's own date filter already uses.
+        const { dateFrom } = args
+        const lastOccurred = asOfMs - 1n
+        const dateTo =
+            args.dateTo === undefined
+                ? lastOccurred
+                : args.dateTo < lastOccurred
+                  ? args.dateTo
+                  : lastOccurred
+
+        // What every branch below has to agree on, whatever index it picked:
+        // an archived movement is never listed (it is a soft delete — the
+        // agent describing one back to the user reads as the delete having
+        // failed), and nothing at or past the occurrence cutoff has happened
+        // yet. It is a predicate rather than an index range because none of
+        // the five indexes carries `isArchived`, and two of them
+        // (`by_user_type`, `by_user_status`) carry no `date` either, so those
+        // branches have no way to bound either dimension. `maximumRowsRead`
+        // below is what keeps a predicate-driven read bounded.
+        const visible = async (txn: Doc<'transactions'>) =>
+            !txn.isArchived &&
+            txn.date <= dateTo &&
+            (dateFrom === undefined || txn.date >= dateFrom)
+
+        const table = stream(ctx.db, schema).query('transactions')
 
         // Pick the narrowest index available given the filters. The date range
         // is folded into the index range wherever the chosen index carries the
         // `date` column (account, category, and the default date index) so
         // filtering by date stays index-backed — never a scan.
-        const result = await (async () => {
+        const scoped = (() => {
             if (args.accountId) {
                 const accId = args.accountId
-                return await ctx.db
-                    .query('transactions')
-                    .withIndex('by_user_account_date', (q) => {
-                        const base = q
-                            .eq('userId', userId)
-                            .eq('accountId', accId)
-                        if (dateFrom !== undefined && dateTo !== undefined) {
-                            return base
-                                .gte('date', dateFrom)
-                                .lte('date', dateTo)
-                        }
-                        if (dateFrom !== undefined) {
-                            return base.gte('date', dateFrom)
-                        }
-                        if (dateTo !== undefined) {
-                            return base.lte('date', dateTo)
-                        }
-                        return base
-                    })
-                    .order('desc')
-                    .paginate(args.paginationOpts)
+                return table.withIndex('by_user_account_date', (q) => {
+                    const base = q.eq('userId', userId).eq('accountId', accId)
+                    return dateFrom === undefined
+                        ? base.lte('date', dateTo)
+                        : base.gte('date', dateFrom).lte('date', dateTo)
+                })
             }
             if (args.categoryId) {
                 const catId = args.categoryId
-                return await ctx.db
-                    .query('transactions')
-                    .withIndex('by_user_category_date', (q) => {
-                        const base = q
-                            .eq('userId', userId)
-                            .eq('categoryId', catId)
-                        if (dateFrom !== undefined && dateTo !== undefined) {
-                            return base
-                                .gte('date', dateFrom)
-                                .lte('date', dateTo)
-                        }
-                        if (dateFrom !== undefined) {
-                            return base.gte('date', dateFrom)
-                        }
-                        if (dateTo !== undefined) {
-                            return base.lte('date', dateTo)
-                        }
-                        return base
-                    })
-                    .order('desc')
-                    .paginate(args.paginationOpts)
+                return table.withIndex('by_user_category_date', (q) => {
+                    const base = q.eq('userId', userId).eq('categoryId', catId)
+                    return dateFrom === undefined
+                        ? base.lte('date', dateTo)
+                        : base.gte('date', dateFrom).lte('date', dateTo)
+                })
             }
+            // Neither of the next two indexes carries `date`, so these are the
+            // branches whose date bounds — the caller's and the occurrence
+            // cutoff alike — exist only in `visible`.
             if (args.type) {
-                return await ctx.db
-                    .query('transactions')
-                    .withIndex('by_user_type', (q) =>
-                        q
-                            .eq('userId', userId)
-                            .eq(
-                                'type',
-                                args.type as Doc<'transactions'>['type'],
-                            ),
-                    )
-                    .order('desc')
-                    .paginate(args.paginationOpts)
+                return table.withIndex('by_user_type', (q) =>
+                    q
+                        .eq('userId', userId)
+                        .eq('type', args.type as Doc<'transactions'>['type']),
+                )
             }
             if (args.status) {
-                return await ctx.db
-                    .query('transactions')
-                    .withIndex('by_user_status', (q) =>
-                        q
-                            .eq('userId', userId)
-                            .eq('status', args.status as 'pending' | 'cleared'),
-                    )
-                    .order('desc')
-                    .paginate(args.paginationOpts)
+                return table.withIndex('by_user_status', (q) =>
+                    q
+                        .eq('userId', userId)
+                        .eq('status', args.status as 'pending' | 'cleared'),
+                )
             }
-            return await ctx.db
-                .query('transactions')
-                .withIndex('by_user_date', (q) => {
-                    const base = q.eq('userId', userId)
-                    if (dateFrom !== undefined && dateTo !== undefined) {
-                        return base.gte('date', dateFrom).lte('date', dateTo)
-                    }
-                    if (dateFrom !== undefined) {
-                        return base.gte('date', dateFrom)
-                    }
-                    if (dateTo !== undefined) {
-                        return base.lte('date', dateTo)
-                    }
-                    return base
-                })
-                .order('desc')
-                .paginate(args.paginationOpts)
+            // The unfiltered call, and the one the agent makes most. The only
+            // branch whose index can pin `isArchived` outright, so every row
+            // it yields is already a match.
+            return table.withIndex('by_user_archived_date', (q) => {
+                const base = q.eq('userId', userId).eq('isArchived', false)
+                return dateFrom === undefined
+                    ? base.lte('date', dateTo)
+                    : base.gte('date', dateFrom).lte('date', dateTo)
+            })
         })()
+
+        const result = await scoped
+            .order('desc')
+            .filterWith(visible)
+            // Pre-filter pagination reads until the page is full, so a page is
+            // a page of matches rather than of candidates. Filtering the page
+            // *after* `paginate` returned would be the other bug — pages that
+            // arrive mostly empty while still promising more. The cap is what
+            // stops a long run of archived rows from walking the whole range
+            // in one call.
+            .paginate({ ...args.paginationOpts, maximumRowsRead: MAX_SCAN })
 
         // Uniform return shape (page items carry an optional `tagIds`) so the
         // type doesn't fork on `includeTags`. Tag joins run only when opted in.
@@ -214,6 +217,44 @@ export const listPaginated = query({
 })
 
 /**
+ * The other side of the occurrence cutoff: the movements a recurring rule has
+ * already materialised that have not happened yet.
+ *
+ * Ascending, unlike every other transaction list — these are upcoming, so the
+ * nearest one belongs first. The rows are ordinary transactions; nothing about
+ * them is a different kind of record, which is exactly why every read on the
+ * other side of the cutoff has to exclude them.
+ *
+ * Archived rows are excluded by the index, not by a predicate over the page:
+ * deleting the tail of a series archives hundreds of rows that keep their
+ * dates, so filtering afterwards handed back pages that were mostly — or
+ * entirely — empty while still reporting more to come.
+ */
+export const listUpcoming = query({
+    args: {
+        paginationOpts: paginationOptsValidator,
+        asOfMs: v.optional(v.int64()),
+    },
+    handler: async (
+        ctx,
+        args,
+    ): Promise<PaginationResult<Doc<'transactions'>>> => {
+        const userId = await requireAuth(ctx)
+        const asOfMs = resolveOccurrenceCutoff(args.asOfMs)
+        return await ctx.db
+            .query('transactions')
+            .withIndex('by_user_archived_date', (q) =>
+                q
+                    .eq('userId', userId)
+                    .eq('isArchived', false)
+                    .gte('date', asOfMs),
+            )
+            .order('asc')
+            .paginate(args.paginationOpts)
+    },
+})
+
+/**
  * The activity list, filtered by a canonical filter tree
  * (`packages/shared/src/dashboard/filter.ts`) instead of the handful of
  * dimensions `listPaginated` can express.
@@ -231,19 +272,30 @@ export const listByFilter = query({
         paginationOpts: paginationOptsValidator,
         /** Canonical filter JSON, i.e. `filterConfigToJson(filter)`. */
         config: v.string(),
+        asOfMs: v.optional(v.int64()),
     },
     handler: async (
         ctx,
         args,
     ): Promise<PaginationResult<Doc<'transactions'>>> => {
         const userId = await requireAuth(ctx)
+        const asOfMs = resolveOccurrenceCutoff(args.asOfMs)
         const { filter, root } = filterFromConfig(args.config)
         const now = new Date()
-        const evaluation = await buildEvaluationContext(ctx, userId, root, now)
+        const evaluation = await buildEvaluationContext(
+            ctx,
+            userId,
+            root,
+            now,
+            asOfMs,
+        )
         const matches = async (txn: Doc<'transactions'>) =>
             !txn.isArchived && matchesNode(txn, root, evaluation)
 
-        const window = indexDateWindow(filter, root, now)
+        const window = occurredWindow(
+            indexDateWindow(filter, root, now),
+            asOfMs,
+        )
         const anchorAccount =
             filter.accountIds.length === 1 ? filter.accountIds[0] : null
         const anchorCategory =
@@ -443,9 +495,14 @@ export const summarize = query({
             ),
         ),
         currency: v.optional(v.string()),
+        asOfMs: v.optional(v.int64()),
     },
     handler: async (ctx, args) => {
         const userId = await requireAuth(ctx)
+        const asOfMs = resolveOccurrenceCutoff(args.asOfMs)
+
+        const lastOccurred = asOfMs - 1n
+        const dateTo = args.dateTo < lastOccurred ? args.dateTo : lastOccurred
 
         const stream = ctx.db
             .query('transactions')
@@ -453,7 +510,7 @@ export const summarize = query({
                 q
                     .eq('userId', userId)
                     .gte('date', args.dateFrom)
-                    .lte('date', args.dateTo),
+                    .lte('date', dateTo),
             )
             .order('desc')
 
@@ -555,23 +612,30 @@ export const summarize = query({
 
 // O(log n) balance read backed by two TableAggregates over `transactions`.
 // See aggregates.ts for the namespace/sumValue contracts.
+//
+// Both aggregates are sorted by `date`, so excluding the movements that have
+// not happened yet is an upper bound on the sum — still O(log n), with no rows
+// read. A balance is always "as of" a moment; `asOfMs` says which one.
 export async function computeAccountBalance(
     ctx: QueryCtx,
     userId: string,
     accountId: string,
+    asOfMs: bigint,
 ): Promise<bigint> {
     const namespace = accountNamespace(userId, accountId)
+    const bounds = { upper: { key: asOfMs, inclusive: false } } as const
     const [outflows, inflows] = await Promise.all([
-        outflowsByAccount.sum(ctx, { namespace }),
-        inflowsByAccount.sum(ctx, { namespace }),
+        outflowsByAccount.sum(ctx, { namespace, bounds }),
+        inflowsByAccount.sum(ctx, { namespace, bounds }),
     ])
     return BigInt(Math.round(outflows + inflows))
 }
 
 export const balance = query({
-    args: { accountId: v.string() },
+    args: { accountId: v.string(), asOfMs: v.optional(v.int64()) },
     handler: async (ctx, args) => {
         const userId = await requireAuth(ctx)
+        const asOfMs = resolveOccurrenceCutoff(args.asOfMs)
         const account = await ctx.db
             .query('accounts')
             .withIndex('by_user_id', (q) =>
@@ -583,6 +647,7 @@ export const balance = query({
             ctx,
             userId,
             args.accountId,
+            asOfMs,
         )
         return { balance: balanceCents, currency: account.currency }
     },

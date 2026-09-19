@@ -12,6 +12,7 @@ import { EntityRecentTransactions } from '@/components/entity-recent-transaction
 import { DetailPaneHeader } from '@/components/m3/detail-pane-header'
 import { DialogAction, M3Dialog } from '@/components/m3/dialog'
 import { Input } from '@/components/ui/input'
+import { useOccurrenceCutoff } from '@/hooks/use-occurrence-cutoff'
 import { useSeededEntity } from '@/hooks/use-seeded-entity'
 import { useToastMutation } from '@/hooks/use-toast-mutation'
 import { groupedRadius } from '@/lib/grouped-list'
@@ -50,13 +51,16 @@ export function TagDetail({
     const updateTag = useMutation(api.v1.tags.mutations.update)
     const archiveTag = useMutation(api.v1.tags.mutations.archive)
 
+    const asOfMs = useOccurrenceCutoff()
     const spend = useQuery(api.v1.tags.queries.spendByCurrency, {
         id: tag.id,
         ...currentMonthWindow(),
+        asOfMs,
     })
     const recent = useQuery(api.v1.tags.queries.recentTransactions, {
         id: tag.id,
         limit: 5,
+        asOfMs,
     })
 
     const { fields, setFields, editing, setEditing } = useSeededEntity(

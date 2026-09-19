@@ -20,6 +20,8 @@ type DateFieldProps = {
     className?: string
     /** Material Symbols ligature for the field's prefix glyph. */
     icon?: string
+    /** Empty-state text; defaults to the generic "date" label. */
+    placeholder?: string
     /** Clear affordance, matching native's `_ReadonlyField` suffix. */
     onClear?: () => void
 }
@@ -54,6 +56,7 @@ export function DateField({
     compact = false,
     className,
     icon,
+    placeholder,
     onClear,
 }: DateFieldProps) {
     const t = useT()
@@ -77,7 +80,7 @@ export function DateField({
                                   })
                                 : ''
                         }
-                        placeholder={t.common.date}
+                        placeholder={placeholder ?? t.common.date}
                         icon={icon ?? 'calendar_month'}
                         onClear={onClear}
                         clearLabel={t.common.clear}

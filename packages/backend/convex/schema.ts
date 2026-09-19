@@ -17,6 +17,8 @@ import {
     feedbackSweepState,
 } from './schema/feedback'
 import { legalAcceptances } from './schema/legal'
+import { occurrenceClock } from './schema/occurrenceClock'
+import { recurrences } from './schema/recurrences'
 import { refreshTokens } from './schema/refreshTokens'
 import { supportEmails } from './schema/supportEmails'
 import { syncCounters, tombstones } from './schema/sync'
@@ -40,6 +42,7 @@ import {
 } from './schema/whatsapp'
 
 export default defineSchema({
+    occurrenceClock,
     accounts,
     agentUsageMonthly,
     agentUsageSamples,
@@ -56,6 +59,7 @@ export default defineSchema({
     feedbackAttachments,
     feedbackSweepState,
     legalAcceptances,
+    recurrences,
     refreshTokens,
     savedFilters,
     supportEmails,

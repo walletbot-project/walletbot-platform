@@ -14,6 +14,7 @@ import 'package:app/shared/app_navigation.dart';
 import 'package:app/shared/breakpoints.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:app/screens/future_movements.dart';
 import 'package:app/screens/transaction_form.dart';
 import 'package:app/screens/transaction_details_sheet.dart';
 
@@ -82,6 +83,21 @@ class _ActivityScreenState extends State<ActivityScreen> {
     if (windowSizeClassOf(context) != WindowSizeClass.expanded) {
       _pushFormRoute(instant: false);
     }
+  }
+
+  void _openFutureMovements() {
+    // Same shape as the home card's push: the pushed route sits above the
+    // account-scoped providers, so the screen's data layer has to be
+    // re-provided into it.
+    final repos = context.read<AppRepositories>();
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => Provider<AppRepositories>.value(
+          value: repos,
+          child: const FutureMovementsScreen(),
+        ),
+      ),
+    );
   }
 
   /// Presents the form as a real route (the original mobile behavior),
@@ -380,6 +396,15 @@ class _ActivityScreenState extends State<ActivityScreen> {
     final appBar = AppBar(
       title: Text(context.l10n.activity),
       actions: [
+        // The way across to the upcoming side, which Activity otherwise gives
+        // no hint of — the two lists are one timeline split at the occurrence
+        // cutoff. Not behind `recurringExpense`: the cutoff applies to every
+        // future-dated movement, series or not.
+        IconButton(
+          tooltip: context.l10n.viewFutureMovements,
+          onPressed: _openFutureMovements,
+          icon: const Icon(Icons.event_repeat_rounded),
+        ),
         IconButton(
           tooltip: context.l10n.addTransaction,
           onPressed: _openTransactionForm,
@@ -786,7 +811,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
       identities.add(
         TransactionRowVisualIdentity(
           type: TransactionRowVisualIdentityType.account,
-          label: 'Cuenta: ${account.name}',
+          label: context.l10n.accountIdentity(account.name),
           icon: accountIconFromName(account.icon),
           color: colorFromHex(account.color, fallback: accountDefaultColor),
         ),
@@ -800,7 +825,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
         identities.add(
           TransactionRowVisualIdentity(
             type: TransactionRowVisualIdentityType.category,
-            label: 'Categoria: ${category.name}',
+            label: context.l10n.categoryIdentity(category.name),
             icon: categoryIconFromName(category.icon),
             color: colorFromHex(category.color, fallback: categoryDefaultColor),
           ),

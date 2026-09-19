@@ -354,7 +354,7 @@ class _AuthGate extends StatelessWidget {
       key: ValueKey(active.id),
       providers: [
         Provider<AppDatabase>(
-          create: (_) => AppDatabase.forUser(active.id),
+          create: (_) => AppDatabase.forUser(active.id)..startOccurrenceClock(),
           dispose: (_, db) => db.close(),
         ),
         // The user's default currency. Scoped to the account subtree (like

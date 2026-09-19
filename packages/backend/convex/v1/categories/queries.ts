@@ -1,5 +1,6 @@
 import { v } from 'convex/values'
 import { query } from '../../_generated/server'
+import { resolveOccurrenceCutoff } from '../../occurrences/helpers'
 import { requireAuth } from '../../users/helpers'
 
 export const listActive = query({
@@ -35,9 +36,10 @@ export const list = query({
 })
 
 export const listActiveWithCounts = query({
-    args: {},
-    handler: async (ctx) => {
+    args: { asOfMs: v.optional(v.int64()) },
+    handler: async (ctx, args) => {
         const userId = await requireAuth(ctx)
+        const asOfMs = resolveOccurrenceCutoff(args.asOfMs)
         const categories = await ctx.db
             .query('categories')
             .withIndex('by_user_archived', (q) =>
@@ -47,10 +49,15 @@ export const listActiveWithCounts = query({
 
         const withCounts = await Promise.all(
             categories.map(async (category) => {
+                // A movement that has not happened yet does not count
+                // towards the category — the same cutoff Activity reads at.
                 const txns = await ctx.db
                     .query('transactions')
                     .withIndex('by_user_category_date', (q) =>
-                        q.eq('userId', userId).eq('categoryId', category.id),
+                        q
+                            .eq('userId', userId)
+                            .eq('categoryId', category.id)
+                            .lt('date', asOfMs),
                     )
                     .collect()
                 return {
@@ -88,9 +95,11 @@ export const spendByCurrency = query({
         id: v.string(),
         fromMs: v.int64(),
         toExclusiveMs: v.int64(),
+        asOfMs: v.optional(v.int64()),
     },
     handler: async (ctx, args) => {
         const userId = await requireAuth(ctx)
+        const asOfMs = resolveOccurrenceCutoff(args.asOfMs)
         const txns = await ctx.db
             .query('transactions')
             .withIndex('by_user_category_date', (q) =>
@@ -98,7 +107,12 @@ export const spendByCurrency = query({
                     .eq('userId', userId)
                     .eq('categoryId', args.id)
                     .gte('date', args.fromMs)
-                    .lt('date', args.toExclusiveMs),
+                    .lt(
+                        'date',
+                        args.toExclusiveMs < asOfMs
+                            ? args.toExclusiveMs
+                            : asOfMs,
+                    ),
             )
             .collect()
 
@@ -117,14 +131,22 @@ export const spendByCurrency = query({
 // The most recent (non-archived) transactions in a category, newest first.
 // Backs the "últimos movimientos" section of the category details sheet.
 export const recentTransactions = query({
-    args: { id: v.string(), limit: v.optional(v.number()) },
+    args: {
+        id: v.string(),
+        limit: v.optional(v.number()),
+        asOfMs: v.optional(v.int64()),
+    },
     handler: async (ctx, args) => {
         const userId = await requireAuth(ctx)
+        const asOfMs = resolveOccurrenceCutoff(args.asOfMs)
         const limit = Math.min(args.limit ?? 5, 50)
         return await ctx.db
             .query('transactions')
             .withIndex('by_user_category_date', (q) =>
-                q.eq('userId', userId).eq('categoryId', args.id),
+                q
+                    .eq('userId', userId)
+                    .eq('categoryId', args.id)
+                    .lt('date', asOfMs),
             )
             .order('desc')
             .filter((q) => q.eq(q.field('isArchived'), false))

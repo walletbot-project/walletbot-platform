@@ -10,7 +10,7 @@ import {
 } from '../convex/live/createToken'
 
 // Every flag-gated tool switched on, i.e. what a fully rolled-out user gets.
-const ALL_FLAGS = { exchangeRates: true } as const
+const ALL_FLAGS = { exchangeRates: true, recurringExpense: true } as const
 
 describe('declarationsFor (compatibility gating)', () => {
     it('web is unrestricted by version', () => {
@@ -27,8 +27,19 @@ describe('declarationsFor (compatibility gating)', () => {
 
     it('a current native build sees the full set', () => {
         expect(
-            declarationsFor('android', '0.3.1', ALL_FLAGS).map((d) => d.name),
+            declarationsFor('android', '0.4.0', ALL_FLAGS).map((d) => d.name),
         ).toEqual(TOOL_NAMES)
+    })
+
+    it('a 0.3.x native build never sees the recurrence tools', () => {
+        // The executors need the v5 local schema, which is the 0.4.0 bump.
+        const names = declarationsFor('android', '0.3.1', ALL_FLAGS).map(
+            (d) => d.name,
+        )
+        expect(names).not.toContain('listUpcomingTransactions')
+        expect(names).not.toContain('listRecurrences')
+        expect(names).not.toContain('addRecurrenceOccurrences')
+        expect(names).toContain('getExchangeRate')
     })
 
     it('a 0.3.0 native build never sees the calculator tools', () => {
@@ -64,6 +75,102 @@ describe('declarationsFor (compatibility gating)', () => {
         expect(
             declarationsFor('android', '0.3.0', ALL_FLAGS).map((d) => d.name),
         ).not.toContain('getExchangeRate')
+    })
+})
+
+describe('declarationsFor (the recurrence flag reaches inside a tool)', () => {
+    it('also strips recurrence arguments on older native executors with the flag on', () => {
+        for (const version of ['0.3.0', '0.3.2', '0.0.0']) {
+            for (const platform of ['android', 'ios', 'macos']) {
+                const declarations = declarationsFor(
+                    platform,
+                    version,
+                    ALL_FLAGS,
+                )
+                expect(
+                    buildSystemInstruction({
+                        platform,
+                        appVersion: version,
+                        flags: ALL_FLAGS,
+                    }),
+                ).not.toContain('- recurring-movements:')
+
+                for (const name of [
+                    'addExpense',
+                    'addIncome',
+                    'updateTransaction',
+                    'deleteTransaction',
+                ]) {
+                    const tool = declarations.find((d) => d.name === name)
+                    expect(tool?.parameters.properties).not.toHaveProperty(
+                        'recurrence',
+                    )
+                    expect(tool?.parameters.properties).not.toHaveProperty(
+                        'scope',
+                    )
+                    expect(tool?.description).not.toContain('scope')
+                }
+            }
+        }
+    })
+    // `web` + a high version isolates the flag gate from the version gate.
+    const argsOf = (name: string, flags?: typeof ALL_FLAGS) =>
+        Object.keys(
+            declarationsFor('web', '9.9.9', flags).find((d) => d.name === name)
+                ?.parameters.properties ?? {},
+        )
+    const descriptionOf = (name: string, flags?: typeof ALL_FLAGS) =>
+        declarationsFor('web', '9.9.9', flags).find((d) => d.name === name)
+            ?.description ?? ''
+
+    const STRIPPED = [
+        'addExpense',
+        'addIncome',
+        'updateTransaction',
+        'deleteTransaction',
+    ] as const
+
+    it('withholds the recurrence args from tools that stay declared', () => {
+        expect(argsOf('addExpense')).not.toContain('recurrence')
+        expect(argsOf('addIncome')).not.toContain('recurrence')
+        expect(argsOf('updateTransaction')).not.toContain('recurrence')
+        expect(argsOf('updateTransaction')).not.toContain('scope')
+        expect(argsOf('deleteTransaction')).not.toContain('scope')
+    })
+
+    it('keeps everything else about those tools intact', () => {
+        // The feature is off, not the tool: recording an expense still works.
+        for (const name of STRIPPED) {
+            expect(
+                declarationsFor('web', '9.9.9').map((d) => d.name),
+            ).toContain(name)
+            expect(descriptionOf(name).length).toBeGreaterThan(0)
+        }
+        expect(argsOf('addExpense')).toContain('amount')
+        expect(argsOf('addExpense')).toContain('accountIdOrName')
+        expect(argsOf('updateTransaction')).toContain('addTagIdsOrNames')
+        expect(argsOf('deleteTransaction')).toContain('id')
+    })
+
+    it('stops documenting recurrence in those descriptions', () => {
+        // Guards the drift the composed suffixes exist to prevent: re-inlining
+        // the sentence into the literal would leave the model told about an
+        // argument it was never given.
+        for (const name of STRIPPED) {
+            expect(descriptionOf(name)).not.toMatch(/recurr/i)
+            expect(descriptionOf(name)).not.toContain('scope')
+        }
+    })
+
+    it('hands both back when the flag is on', () => {
+        expect(argsOf('addExpense', ALL_FLAGS)).toContain('recurrence')
+        expect(argsOf('addIncome', ALL_FLAGS)).toContain('recurrence')
+        expect(argsOf('updateTransaction', ALL_FLAGS)).toContain('recurrence')
+        expect(argsOf('updateTransaction', ALL_FLAGS)).toContain('scope')
+        expect(argsOf('deleteTransaction', ALL_FLAGS)).toContain('scope')
+        for (const name of STRIPPED) {
+            expect(descriptionOf(name, ALL_FLAGS)).toMatch(/recurr/i)
+        }
     })
 })
 

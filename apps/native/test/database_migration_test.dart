@@ -14,13 +14,13 @@ void main() {
     verifier = SchemaVerifier(GeneratedHelper());
   });
 
-  test('fresh database matches the versioned v4 schema snapshot', () async {
+  test('fresh database matches the versioned v5 schema snapshot', () async {
     final db = AppDatabase.forTesting(NativeDatabase.memory());
     addTearDown(db.close);
 
     await verifier.migrateAndValidate(
       db,
-      4,
+      5,
       options: const ValidationOptions(validateDropped: true),
     );
   });
@@ -52,7 +52,7 @@ void main() {
   );
 
   test(
-    'v1 rows survive the upgrade to v2 and default time_status to none',
+    'v1 rows survive the upgrade to the current schema, defaulting time_status',
     () async {
       final schema = await verifier.schemaAt(1);
       addTearDown(schema.close);
@@ -69,7 +69,7 @@ void main() {
 
       final db = AppDatabase.forTesting(schema.newConnection());
       addTearDown(db.close);
-      await verifier.migrateAndValidate(db, 2);
+      await verifier.migrateAndValidate(db, 5);
 
       final rows = await db
           .customSelect(
@@ -90,7 +90,7 @@ void main() {
   );
 
   test(
-    'v2 rows survive the upgrade to v3, which only adds legal_acceptances',
+    'v2 rows survive the upgrade to the current schema, gaining legal_acceptances',
     () async {
       final schema = await verifier.schemaAt(2);
       addTearDown(schema.close);
@@ -110,7 +110,7 @@ void main() {
 
       final db = AppDatabase.forTesting(schema.newConnection());
       addTearDown(db.close);
-      await verifier.migrateAndValidate(db, 3);
+      await verifier.migrateAndValidate(db, 5);
 
       final transactions = await db
           .customSelect(
@@ -137,7 +137,7 @@ void main() {
   );
 
   test(
-    'v3 rows survive the upgrade to v4, which only adds agent_memories',
+    'v3 rows survive the upgrade to the current schema, gaining agent_memories',
     () async {
       final schema = await verifier.schemaAt(3);
       addTearDown(schema.close);
@@ -162,7 +162,7 @@ void main() {
 
       final db = AppDatabase.forTesting(schema.newConnection());
       addTearDown(db.close);
-      await verifier.migrateAndValidate(db, 4);
+      await verifier.migrateAndValidate(db, 5);
 
       final transactions = await db
           .customSelect(
@@ -188,7 +188,7 @@ void main() {
     },
   );
 
-  test('a v1 database upgrades all the way to v4 in one open', () async {
+  test('a v1 database upgrades all the way to v5 in one open', () async {
     final schema = await verifier.schemaAt(1);
     addTearDown(schema.close);
 
@@ -202,16 +202,18 @@ void main() {
 
     final db = AppDatabase.forTesting(schema.newConnection());
     addTearDown(db.close);
-    await verifier.migrateAndValidate(db, 4);
+    await verifier.migrateAndValidate(db, 5);
 
-    // Every step ran: the v2 column is there with its default AND the v3
-    // and v4 tables exist. A step chain that returned early would fail here.
+    // Every step ran: the v2 column is there with its default AND the v3,
+    // v4 and v5 tables exist. A chain that returned early would fail here.
     final rows = await db
-        .customSelect('SELECT id, time_status FROM transactions')
+        .customSelect('SELECT id, time_status, recurrence_id FROM transactions')
         .get();
     expect(rows.single.read<String>('time_status'), 'none');
+    expect(rows.single.read<String?>('recurrence_id'), isNull);
     expect(await db.select(db.legalAcceptances).get(), isEmpty);
     expect(await db.select(db.agentMemories).get(), isEmpty);
+    expect(await db.select(db.recurrences).get(), isEmpty);
   });
 
   test(
@@ -264,10 +266,74 @@ void main() {
     },
   );
 
+  test(
+    'v4 rows survive the upgrade to the current schema, gaining recurrences',
+    () async {
+      final schema = await verifier.schemaAt(4);
+      addTearDown(schema.close);
+
+      schema.rawDatabase.execute(
+        "INSERT INTO sync_state (id, last_server_seq) VALUES ('singleton', 999)",
+      );
+
+      schema.rawDatabase.execute(
+        'INSERT INTO transactions '
+        '(id, type, name, status, date, time_status, account_id, category_id, '
+        'amount, currency, balance_after, created_at, updated_at) '
+        "VALUES ('t4', 'expense', 'Alquiler', 'cleared', 1000, "
+        "'confirmed', 'a1', 'c1', 90000, 'ARS', 5000, 10, 20)",
+      );
+      schema.rawDatabase.execute(
+        'INSERT INTO accounts '
+        '(id, name, currency, created_at, updated_at) '
+        "VALUES ('a1', 'Cuenta', 'ARS', 10, 20)",
+      );
+      schema.rawDatabase.execute(
+        'INSERT INTO agent_memories '
+        '(id, content, created_at, updated_at) '
+        "VALUES ('m1', 'usa Galicia', 10, 20)",
+      );
+
+      final db = AppDatabase.forTesting(schema.newConnection());
+      addTearDown(db.close);
+      await verifier.migrateAndValidate(db, 5);
+
+      // Values are preserved, not just the columns.
+      expect(
+        (await db.select(db.syncState).get()).single.lastServerSeq,
+        BigInt.zero,
+      );
+      final transactions = await db
+          .customSelect(
+            'SELECT id, name, amount, balance_after, time_status, '
+            'recurrence_id, recurrence_index FROM transactions',
+          )
+          .get();
+      expect(transactions, hasLength(1));
+      final row = transactions.single;
+      expect(row.read<String>('name'), 'Alquiler');
+      expect(row.read<int>('amount'), 90000);
+      expect(row.read<int>('balance_after'), 5000);
+      expect(row.read<String>('time_status'), 'confirmed');
+
+      // A transaction that predates recurrence IS a one-off, so both new
+      // columns must come out NULL rather than backfilled with anything.
+      expect(row.read<String?>('recurrence_id'), isNull);
+      expect(row.read<int?>('recurrence_index'), isNull);
+
+      final memories = await db.select(db.agentMemories).get();
+      expect(memories.single.content, 'usa Galicia');
+
+      // The new table exists and starts empty: an upgrade must never invent
+      // rules the user never created.
+      expect(await db.select(db.recurrences).get(), isEmpty);
+    },
+  );
+
   test('future databases fail instead of being silently downgraded', () async {
     final db = AppDatabase.forTesting(
       NativeDatabase.memory(
-        setup: (database) => database.execute('PRAGMA user_version = 5'),
+        setup: (database) => database.execute('PRAGMA user_version = 6'),
       ),
     );
     addTearDown(db.close);
@@ -278,7 +344,7 @@ void main() {
         isA<UnsupportedError>().having(
           (error) => error.message,
           'message',
-          contains('Unhandled SQLite migration path: v5 -> v4'),
+          contains('Unhandled SQLite migration path: v6 -> v5'),
         ),
       ),
     );

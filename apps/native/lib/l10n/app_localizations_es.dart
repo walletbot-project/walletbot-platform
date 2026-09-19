@@ -120,6 +120,9 @@ class AppLocalizationsEs extends AppLocalizations {
   String get amount => 'Monto';
 
   @override
+  String get time => 'Horario';
+
+  @override
   String get date => 'Fecha';
 
   @override
@@ -130,6 +133,76 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get exchangeRate => 'Tipo de cambio';
+
+  @override
+  String accountIdentity(String name) {
+    return 'Cuenta: $name';
+  }
+
+  @override
+  String categoryIdentity(String name) {
+    return 'Categoría: $name';
+  }
+
+  @override
+  String get detail => 'Detalle';
+
+  @override
+  String get editActivity => 'Editar actividad';
+
+  @override
+  String get activityGone => 'La actividad ya no existe';
+
+  @override
+  String get estimatedDate => 'Fecha estimada';
+
+  @override
+  String get estimatedTime => 'Horario estimado';
+
+  @override
+  String get sourceAccount => 'Cuenta origen';
+
+  @override
+  String get destinationAccount => 'Cuenta destino';
+
+  @override
+  String get noTags => 'Sin etiquetas';
+
+  @override
+  String get noCategory => 'Sin categoría';
+
+  @override
+  String get balanceUnavailable => 'Saldo no disponible';
+
+  @override
+  String get sameAccounts => 'La cuenta origen y destino deben ser distintas';
+
+  @override
+  String get invalidAmount => 'El monto no es válido';
+
+  @override
+  String get noOtherAccount => 'No hay otra cuenta disponible';
+
+  @override
+  String get amountNotEditable =>
+      'El monto de ajustes de saldo y balances iniciales no son editables.';
+
+  @override
+  String get change => 'Cambiar';
+
+  @override
+  String get activityUpdateFailed => 'No se pudo guardar la actividad';
+
+  @override
+  String get activityDeleteTitle => 'Eliminar actividad';
+
+  @override
+  String activityDeleteConfirm(String name) {
+    return '¿Seguro que querés eliminar “$name”?';
+  }
+
+  @override
+  String get activityDeleteFailed => 'No se pudo eliminar la actividad';
 
   @override
   String get status => 'Estado';
@@ -528,6 +601,9 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get addTransaction => 'Añadir movimiento';
+
+  @override
+  String get viewFutureMovements => 'Ver movimientos futuros';
 
   @override
   String transactionsLoadFailed(Object error) {
@@ -1046,6 +1122,155 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get recurringExpense => 'Gasto recurrente';
+
+  @override
+  String get recurringIncome => 'Ingreso recurrente';
+
+  @override
+  String get frequency => 'Frecuencia';
+
+  @override
+  String get recurrenceDaily => 'Diario';
+
+  @override
+  String get recurrenceWeekly => 'Semanal';
+
+  @override
+  String get recurrenceMonthly => 'Mensual';
+
+  @override
+  String get recurrenceYearly => 'Anual';
+
+  @override
+  String get recurrenceEndDateOptional => 'Fecha de fin (opcional)';
+
+  @override
+  String get recurrenceNoEndDate => 'Sin fecha de fin';
+
+  @override
+  String recurrenceSpanDays(int value) {
+    return '$value días';
+  }
+
+  @override
+  String recurrenceSpanMonths(int value) {
+    return '$value meses';
+  }
+
+  @override
+  String recurrenceSpanYears(int value) {
+    return '$value años';
+  }
+
+  @override
+  String recurrenceOpenEndedNote(int count, String span) {
+    return 'Sin fecha de fin no es para siempre: se crean $count movimientos, que cubren unos $span. Podés agregar más cuando quieras.';
+  }
+
+  @override
+  String recurrenceTooLong(int max) {
+    return 'Esa fecha de fin crearía demasiados movimientos. El máximo para esta frecuencia es $max.';
+  }
+
+  @override
+  String get recurrenceCustomDays => 'Cada X días';
+
+  @override
+  String get recurrenceRepeatEvery => 'Repetir cada';
+
+  @override
+  String get recurrenceDaysUnit => 'días';
+
+  @override
+  String recurrenceEveryNDays(int days) {
+    return 'Cada $days días';
+  }
+
+  @override
+  String get futureMovements => 'Movimientos futuros';
+
+  @override
+  String get futureMovementsInfo =>
+      'Estos son tus movimientos futuros: los que todavía no ocurrieron. No aparecen en Actividad hasta que suceden.';
+
+  @override
+  String get noFutureMovements => 'No tenés movimientos futuros programados';
+
+  @override
+  String seriesPosition(int index, int total) {
+    return '$index/$total';
+  }
+
+  @override
+  String coveredThrough(String date) {
+    return 'hasta $date';
+  }
+
+  @override
+  String addMoreMovements(int count) {
+    return 'Añadir $count más';
+  }
+
+  @override
+  String get addMoreMovementsHint =>
+      'Los nuevos movimientos continúan a partir del último de la serie, no de este.';
+
+  @override
+  String get addingMoreMovements => 'Añadiendo movimientos…';
+
+  @override
+  String addedMoreMovements(int count) {
+    return 'Se añadieron $count movimientos';
+  }
+
+  @override
+  String get addMoreMovementsFailed => 'No se pudieron añadir los movimientos';
+
+  @override
+  String get editMovement => 'Editar movimiento';
+
+  @override
+  String get titlePlaceholder => 'Título';
+
+  @override
+  String get descriptionPlaceholder => 'Detalle opcional';
+
+  @override
+  String get saveChanges => 'Guardar cambios';
+
+  @override
+  String get deleteRecurring => 'Eliminar movimiento recurrente';
+
+  @override
+  String get savedOnlyThis => 'Cambios aplicados a este movimiento';
+
+  @override
+  String get savedAllFuture => 'Cambios aplicados a este y los futuros';
+
+  @override
+  String get deletedOnlyThis => 'Movimiento eliminado';
+
+  @override
+  String get deletedAllFuture => 'Movimiento y sus futuros eliminados';
+
+  @override
+  String get scopeEditDescription =>
+      '¿Aplicar los cambios solo a este movimiento o también a los futuros?';
+
+  @override
+  String scopeDeleteDescription(String name) {
+    return '¿Querés eliminar “$name” solo esta vez o también los futuros?';
+  }
+
+  @override
+  String get scopeOnlyThis => 'Solo este movimiento';
+
+  @override
+  String get scopeAllFuture => 'Este y los futuros';
+
+  @override
+  String get scopeOnlyThisUnavailable =>
+      'Cambiar la frecuencia siempre afecta a los movimientos futuros.';
 
   @override
   String get leaves => 'Sale';

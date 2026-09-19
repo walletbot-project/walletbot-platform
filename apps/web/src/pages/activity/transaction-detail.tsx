@@ -28,7 +28,20 @@ import { useFormatLocale, useT } from '@/lib/i18n'
 import { formatMoney } from '@/lib/money'
 import { normalizeTagColor } from '@/lib/tag-colors'
 import { cn } from '@/lib/utils'
-import type { TransactionTimeStatus, TransactionTransferSide } from './helpers'
+import {
+    centsToInput,
+    dateInputValue,
+    formatDate,
+    formatTime,
+    frequencyLabel,
+    inputToCents,
+    localDateTimeEpoch,
+    normalizeAmount,
+    seriesReachLabel,
+    type TransactionTimeStatus,
+    type TransactionTransferSide,
+    timeInputValue,
+} from './helpers'
 
 type Transaction = NonNullable<
     FunctionReturnType<typeof api.v1.transactions.queries.get>
@@ -142,6 +155,24 @@ function TransactionDetailsContent({
     const navigate = useNavigate()
     const t = useT()
     const formatLocale = useFormatLocale()
+
+    // The recurring series this movement belongs to, if any. A movement that
+    // has already happened is still an occurrence of its rule, and "the 3rd of
+    // 12" is as useful looking back as looking ahead — so Activity shows the
+    // same cadence row the future-movements detail does.
+    const series = useQuery(api.v1.recurrences.queries.get, {
+        recurrenceId: transaction.recurrenceId,
+        occurrenceIndex: transaction.recurrenceIndex,
+    })
+    const seriesReach = series
+        ? seriesReachLabel(
+              series,
+              t,
+              // This file's own date formatter, so the covered-through date
+              // reads exactly like the date row below it. It takes an epoch.
+              (date) => formatDate(BigInt(date.getTime()), formatLocale),
+          )
+        : null
 
     // Running balance of each involved account before/after this transaction.
     // Keyed off the saved account ids (not the edit-mode selection) since it
@@ -477,6 +508,30 @@ function TransactionDetailsContent({
                                 <span>{transaction.description}</span>
                             ) : null}
                         </ReceiptRow>
+
+                        {series ? (
+                            <ReceiptRow
+                                icon={<Icon name="repeat" />}
+                                label={t.futureMovements.frequency}
+                            >
+                                <span className="flex items-center justify-end gap-2">
+                                    <span>
+                                        {frequencyLabel(
+                                            series.frequency,
+                                            series.dayInterval === undefined
+                                                ? 1
+                                                : Number(series.dayInterval),
+                                            t,
+                                        )}
+                                    </span>
+                                    {seriesReach ? (
+                                        <span className="font-normal text-muted-foreground">
+                                            {seriesReach}
+                                        </span>
+                                    ) : null}
+                                </span>
+                            </ReceiptRow>
+                        ) : null}
 
                         <ReceiptRow
                             icon={
@@ -1026,47 +1081,4 @@ function displaySignedAmount(
         case 'balance_adjustment':
             return amount
     }
-}
-
-function centsToInput(cents: bigint): string {
-    return (Number(cents < 0n ? -cents : cents) / 100).toFixed(2)
-}
-
-function normalizeAmount(value: string): string {
-    const normalized = value.replace(',', '.')
-    return normalized.replace(/[^\d.]/g, '').replace(/(\..*)\./g, '$1')
-}
-
-function inputToCents(value: string): bigint | null {
-    const parsed = Number(value.replace(',', '.'))
-    if (!Number.isFinite(parsed)) return null
-    return BigInt(Math.round(Math.abs(parsed) * 100))
-}
-
-function dateInputValue(epoch: bigint): string {
-    const date = new Date(Number(epoch))
-    return `${date.getFullYear().toString().padStart(4, '0')}-${(date.getMonth() + 1).toString().padStart(2, '0')}-${date.getDate().toString().padStart(2, '0')}`
-}
-
-function timeInputValue(epoch: bigint): string {
-    const date = new Date(Number(epoch))
-    return `${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`
-}
-
-function localDateTimeEpoch(dateValue: string, timeValue: string): bigint {
-    const [year, month, day] = dateValue.split('-').map(Number)
-    const [hour, minute] = timeValue.split(':').map(Number)
-    return BigInt(new Date(year, month - 1, day, hour, minute, 0, 0).getTime())
-}
-
-function formatDate(epoch: bigint, locale: string): string {
-    return new Intl.DateTimeFormat(locale).format(new Date(Number(epoch)))
-}
-
-function formatTime(epoch: bigint, locale: string): string {
-    return new Intl.DateTimeFormat(locale, {
-        hour: '2-digit',
-        minute: '2-digit',
-        hour12: false,
-    }).format(new Date(Number(epoch)))
 }

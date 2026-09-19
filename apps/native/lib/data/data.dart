@@ -7,6 +7,7 @@ export 'app_repositories.dart';
 export 'entity_resolver.dart';
 export 'ids.dart';
 export 'models/entity_counts.dart';
+export 'models/recurrence_series.dart';
 export 'models/summaries.dart';
 export 'models/transaction_filter.dart';
 export 'queries/account_balance.dart';
