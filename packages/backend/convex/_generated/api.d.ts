@@ -88,6 +88,8 @@ import type * as support_internal from "../support/internal.js";
 import type * as support_utils from "../support/utils.js";
 import type * as sync_compatibility from "../sync/compatibility.js";
 import type * as sync_helpers from "../sync/helpers.js";
+import type * as tags_backfill from "../tags/backfill.js";
+import type * as tags_helpers from "../tags/helpers.js";
 import type * as telemetry_actions from "../telemetry/actions.js";
 import type * as telemetry_agentPricing from "../telemetry/agentPricing.js";
 import type * as telemetry_catalog from "../telemetry/catalog.js";
@@ -237,6 +239,8 @@ declare const fullApi: ApiFromModules<{
   "support/utils": typeof support_utils;
   "sync/compatibility": typeof sync_compatibility;
   "sync/helpers": typeof sync_helpers;
+  "tags/backfill": typeof tags_backfill;
+  "tags/helpers": typeof tags_helpers;
   "telemetry/actions": typeof telemetry_actions;
   "telemetry/agentPricing": typeof telemetry_agentPricing;
   "telemetry/catalog": typeof telemetry_catalog;
@@ -334,4 +338,5 @@ export declare const components: {
   workflow: import("@convex-dev/workflow/_generated/component.js").ComponentApi<"workflow">;
   outflowsByAccount: import("@convex-dev/aggregate/_generated/component.js").ComponentApi<"outflowsByAccount">;
   inflowsByAccount: import("@convex-dev/aggregate/_generated/component.js").ComponentApi<"inflowsByAccount">;
+  transactionsByTag: import("@convex-dev/aggregate/_generated/component.js").ComponentApi<"transactionsByTag">;
 };

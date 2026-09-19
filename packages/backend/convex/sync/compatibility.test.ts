@@ -18,6 +18,7 @@ async function fixture() {
     const t = convexTest(schema, modules)
     aggregate.register(t, 'outflowsByAccount')
     aggregate.register(t, 'inflowsByAccount')
+    aggregate.register(t, 'transactionsByTag')
     const authed = t.withIdentity({
         subject: userId,
         issuer: 'https://test.convex.site/native-auth',

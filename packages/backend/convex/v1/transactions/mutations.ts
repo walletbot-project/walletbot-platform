@@ -5,6 +5,7 @@ import type { MutationCtx } from '../../_generated/server'
 import { mutation } from '../../_generated/server'
 import { resolveOccurrenceCutoff } from '../../occurrences/helpers'
 import { nextSeq, writeTombstone } from '../../sync/helpers'
+import { tagAggregateAttach, tagAggregateDetach } from '../../tags/helpers'
 import {
     recordMovementCreated,
     recordTransferCreated,
@@ -565,7 +566,7 @@ export async function attachTags(
 
         const seq = await nextSeq(ctx, userId)
         const now = BigInt(Date.now())
-        await ctx.db.insert('transactionTags', {
+        const join = {
             userId,
             id: crypto.randomUUID(),
             transactionId,
@@ -573,7 +574,9 @@ export async function attachTags(
             createdAt: now,
             updatedAt: now,
             seq,
-        })
+        }
+        await ctx.db.insert('transactionTags', join)
+        await tagAggregateAttach(ctx, join)
         added += 1
     }
     return added
@@ -599,6 +602,7 @@ export async function detachTags(
         if (!join) continue
 
         const seq = await nextSeq(ctx, userId)
+        await tagAggregateDetach(ctx, join)
         await ctx.db.delete(join._id)
         await writeTombstone(ctx, {
             userId,

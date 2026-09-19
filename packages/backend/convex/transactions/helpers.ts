@@ -3,6 +3,11 @@ import type { Doc, Id } from '../_generated/dataModel'
 import type { MutationCtx } from '../_generated/server'
 import { inflowsByAccount, outflowsByAccount } from '../aggregates'
 import { nextSeq, writeTombstone } from '../sync/helpers'
+import {
+    tagAggregateDetach,
+    tagAggregateInsertTransaction,
+    tagAggregateReplaceTransaction,
+} from '../tags/helpers'
 
 /** The value fields a recurring edit can carry to later occurrences. */
 export const occurrencePatch = v.object({
@@ -28,6 +33,7 @@ export async function aggregateInsert(
     if (!doc) return
     await outflowsByAccount.insert(ctx, doc)
     await inflowsByAccount.insert(ctx, doc)
+    await tagAggregateInsertTransaction(ctx, doc)
 }
 
 export async function aggregateReplace(
@@ -39,6 +45,7 @@ export async function aggregateReplace(
     if (!newDoc) return
     await outflowsByAccount.replace(ctx, oldDoc, newDoc)
     await inflowsByAccount.replace(ctx, oldDoc, newDoc)
+    await tagAggregateReplaceTransaction(ctx, oldDoc, newDoc)
 }
 
 /**
@@ -63,6 +70,7 @@ export async function archiveTransactionRow(
         .collect()
     for (const j of joins) {
         const jSeq = await nextSeq(ctx, userId)
+        await tagAggregateDetach(ctx, j, row)
         await ctx.db.delete(j._id)
         await writeTombstone(ctx, {
             userId,

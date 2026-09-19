@@ -5,6 +5,11 @@ import { mutation } from '../../_generated/server'
 import { inflowsByAccount, outflowsByAccount } from '../../aggregates'
 import { CLIENT_OUTDATED, isClientSupported } from '../../config/helpers'
 import { syncedTable } from '../../schema/sync'
+import {
+    tagAggregateAttach,
+    tagAggregateDeleteTransaction,
+    tagAggregateDetach,
+} from '../../tags/helpers'
 import { aggregateInsert, aggregateReplace } from '../../transactions/helpers'
 import { requireAuth } from '../../users/helpers'
 import {
@@ -609,6 +614,7 @@ async function applyTransactionTagUpsert(
     } else {
         await ctx.db.insert('transactionTags', doc)
     }
+    await tagAggregateAttach(ctx, doc, txn)
     await clearTombstone(ctx, userId, 'transactionTags', payload.id)
 }
 
@@ -802,6 +808,7 @@ async function applyTombstone(
                 } else {
                     await outflowsByAccount.deleteIfExists(ctx, row)
                     await inflowsByAccount.deleteIfExists(ctx, row)
+                    await tagAggregateDeleteTransaction(ctx, row)
                     await ctx.db.delete(row._id)
                 }
             }
@@ -814,7 +821,10 @@ async function applyTombstone(
                     q.eq('userId', userId).eq('id', args.entityId),
                 )
                 .unique()
-            if (row) await ctx.db.delete(row._id)
+            if (row) {
+                await tagAggregateDetach(ctx, row)
+                await ctx.db.delete(row._id)
+            }
             break
         }
         case 'savedFilters': {

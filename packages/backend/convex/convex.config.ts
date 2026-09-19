@@ -21,5 +21,9 @@ app.use(aggregate, { name: 'outflowsByAccount' })
 // Inflows: positive credit to the destination account for transfers
 //   transfer: +toAmount, everything else: 0 (stored under '__none__' namespace)
 app.use(aggregate, { name: 'inflowsByAccount' })
+// One entry per (transaction, tag) join whose transaction is live, keyed by
+// the transaction's date: a tag's count up to the occurrence cutoff is one
+// O(log n) read instead of one document read per join.
+app.use(aggregate, { name: 'transactionsByTag' })
 
 export default app

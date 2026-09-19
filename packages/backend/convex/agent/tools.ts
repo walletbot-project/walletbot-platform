@@ -44,6 +44,7 @@ import { internalMutation } from '../_generated/server'
 import { readSnapshot } from '../exchangeRates/helpers'
 import { resolveFlagsForUser } from '../featureFlags/helpers'
 import { nextSeq, writeTombstone } from '../sync/helpers'
+import { tagAggregateDetach } from '../tags/helpers'
 import {
     recordFinancialAccountCreated,
     recordMovementCreated,
@@ -1203,6 +1204,7 @@ const deleteTransactionTool = async (
         .collect()
     for (const join of joins) {
         const joinSeq = await nextSeq(ctx, userId)
+        await tagAggregateDetach(ctx, join, row)
         await ctx.db.delete(join._id)
         await writeTombstone(ctx, {
             userId,

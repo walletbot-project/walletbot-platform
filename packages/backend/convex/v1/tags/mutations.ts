@@ -3,6 +3,7 @@ import type { Doc } from '../../_generated/dataModel'
 import type { MutationCtx } from '../../_generated/server'
 import { mutation } from '../../_generated/server'
 import { nextSeq, writeTombstone } from '../../sync/helpers'
+import { tagAggregateAttach } from '../../tags/helpers'
 import { requireAuth } from '../../users/helpers'
 
 // Business rule: a tag always has a color. Convex has no column-level
@@ -88,7 +89,7 @@ async function ensureTransactionTag(
 
     const seq = await nextSeq(ctx, userId)
     const now = BigInt(Date.now())
-    await ctx.db.insert('transactionTags', {
+    const join = {
         userId,
         id: crypto.randomUUID(),
         transactionId,
@@ -96,7 +97,9 @@ async function ensureTransactionTag(
         createdAt: now,
         updatedAt: now,
         seq,
-    })
+    }
+    await ctx.db.insert('transactionTags', join)
+    await tagAggregateAttach(ctx, join)
 }
 
 // Writes a tag row, omitting `parentId` entirely when newParentId is null so

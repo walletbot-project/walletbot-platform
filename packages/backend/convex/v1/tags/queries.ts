@@ -1,6 +1,7 @@
 import { v } from 'convex/values'
 import { query } from '../../_generated/server'
 import { resolveOccurrenceCutoff } from '../../occurrences/helpers'
+import { countTaggedBefore } from '../../tags/helpers'
 import { requireAuth } from '../../users/helpers'
 
 export const listActive = query({
@@ -48,38 +49,15 @@ export const listActiveWithCounts = query({
             .collect()
 
         const withCounts = await Promise.all(
-            tags.map(async (tag) => {
-                const joins = await ctx.db
-                    .query('transactionTags')
-                    .withIndex('by_user_tag', (q) =>
-                        q.eq('userId', userId).eq('tagId', tag.id),
-                    )
-                    .collect()
-                // Unlike the category count, a tag count cannot be bounded by
-                // an index: the join row carries no date, so the transaction
-                // behind each one has to be read to know whether it has
-                // happened. Bounded by the tag's own usage, which is what
-                // `.collect()` here already assumes.
-                const counted = await Promise.all(
-                    joins.map(async (join) => {
-                        const txn = await ctx.db
-                            .query('transactions')
-                            .withIndex('by_user_id', (q) =>
-                                q
-                                    .eq('userId', userId)
-                                    .eq('id', join.transactionId),
-                            )
-                            .unique()
-                        return (
-                            txn !== null && !txn.isArchived && txn.date < asOfMs
-                        )
-                    }),
-                )
-                return {
-                    ...tag,
-                    transactionCount: counted.filter(Boolean).length,
-                }
-            }),
+            tags.map(async (tag) => ({
+                ...tag,
+                transactionCount: await countTaggedBefore(
+                    ctx,
+                    userId,
+                    tag.id,
+                    asOfMs,
+                ),
+            })),
         )
 
         return withCounts.sort((a, b) =>
