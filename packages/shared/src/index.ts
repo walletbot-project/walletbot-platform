@@ -149,6 +149,8 @@ export type {
 } from './recurrence'
 export {
     customDaysCount,
+    maxOccurrenceCount,
+    OCCURRENCE_CAP_MULTIPLIER,
     occurrenceCount,
     occurrenceDateMs,
     recurrenceHorizon,

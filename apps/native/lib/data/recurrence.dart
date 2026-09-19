@@ -197,6 +197,21 @@ DateTime occurrenceDate(
   }
 }
 
+/// How many occurrences one create or split may materialise, as a multiple of
+/// the frequency's open-ended batch. Mirror of `OCCURRENCE_CAP_MULTIPLIER` in
+/// `packages/shared/src/recurrence.ts`.
+///
+/// An end date makes the count the user's choice, and "daily until 2050" is
+/// some 8,700 rows in a single Drift transaction that then sync one by one.
+/// Checked by the repository before it writes anything, so the form cannot be
+/// the only guard.
+const int occurrenceCapMultiplier = 5;
+
+int maxOccurrenceCount(RecurrenceFrequency frequency, {int dayInterval = 1}) {
+  return recurrenceHorizon(frequency, dayInterval: dayInterval).count *
+      occurrenceCapMultiplier;
+}
+
 /// How many occurrences a rule produces. Mirror of `occurrenceCount` in
 /// `packages/shared/src/recurrence.ts`.
 ///

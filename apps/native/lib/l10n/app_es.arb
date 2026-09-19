@@ -354,6 +354,8 @@
   "@recurrenceSpanYears": {"placeholders": {"value": {"type": "int"}}},
   "recurrenceOpenEndedNote": "Sin fecha de fin no es para siempre: se crean {count} movimientos, que cubren unos {span}. Podés agregar más cuando quieras.",
   "@recurrenceOpenEndedNote": {"placeholders": {"count": {"type": "int"}, "span": {"type": "String"}}},
+  "recurrenceTooLong": "Esa fecha de fin crearía demasiados movimientos. El máximo para esta frecuencia es {max}.",
+  "@recurrenceTooLong": {"placeholders": {"max": {"type": "int"}}},
   "recurrenceCustomDays": "Cada X días",
   "recurrenceRepeatEvery": "Repetir cada",
   "recurrenceDaysUnit": "días",

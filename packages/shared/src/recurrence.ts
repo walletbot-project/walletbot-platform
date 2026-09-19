@@ -98,6 +98,29 @@ export function recurrenceHorizon(
     }
 }
 
+/**
+ * How many occurrences one `create` or `splitSeries` may materialise, as a
+ * multiple of the frequency's open-ended batch.
+ *
+ * An end date makes the count the user's choice, and "daily until 2050" is
+ * some 8,700 real rows: on the web a workflow of 175 batches, on the phone a
+ * single Drift transaction that then syncs every row. Five batches is far past
+ * any real series and still bounded. The client is not trusted, so the
+ * mutation and the native repository check it, not only the forms. Topping a
+ * series up later is a separate call and is not capped here.
+ */
+export const OCCURRENCE_CAP_MULTIPLIER = 5
+
+export function maxOccurrenceCount(
+    frequency: RecurrenceFrequency,
+    dayInterval?: number,
+): number {
+    return (
+        recurrenceHorizon(frequency, dayInterval).count *
+        OCCURRENCE_CAP_MULTIPLIER
+    )
+}
+
 /** Days in a given local month. Day 0 of the next month is the last of this. */
 function daysInMonth(year: number, monthIndex: number): number {
     return new Date(year, monthIndex + 1, 0).getDate()

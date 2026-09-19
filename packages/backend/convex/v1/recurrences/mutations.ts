@@ -1,4 +1,8 @@
-import { occurrenceCount, recurrenceHorizon } from '@wallet-bot/shared'
+import {
+    maxOccurrenceCount,
+    occurrenceCount,
+    recurrenceHorizon,
+} from '@wallet-bot/shared'
 import { v } from 'convex/values'
 import { internal } from '../../_generated/api'
 import type { Doc } from '../../_generated/dataModel'
@@ -52,6 +56,35 @@ async function requireUnusedRecurrenceId(
 }
 
 /**
+ * The size of the series a rule describes, refused past the per-call cap.
+ *
+ * Resolved before the first write of `create` and `splitSeries`, so a rejected
+ * series leaves nothing behind — not the rule, not the anchor, not a truncated
+ * predecessor.
+ */
+function requireBoundedSeries(
+    anchorMs: bigint,
+    frequency: Doc<'recurrences'>['frequency'],
+    endDate: bigint | undefined,
+    dayInterval: bigint | undefined,
+): number {
+    const interval = dayInterval === undefined ? 1 : Number(dayInterval)
+    const total = occurrenceCount(
+        Number(anchorMs),
+        frequency,
+        endDate === undefined ? null : Number(endDate),
+        interval,
+    )
+    const max = maxOccurrenceCount(frequency, interval)
+    if (total > max) {
+        throw new Error(
+            `Recurrence would create ${total} movements; the maximum is ${max}`,
+        )
+    }
+    return total
+}
+
+/**
  * Creates a recurring rule together with its first occurrence, then hands the
  * rest to the workflow.
  *
@@ -92,6 +125,12 @@ export const create = mutation({
     handler: async (ctx, args) => {
         const userId = await requireAuth(ctx)
         if (args.amount <= 0n) throw new Error('Amount must be positive')
+        const total = requireBoundedSeries(
+            args.date,
+            args.frequency,
+            args.endDate,
+            args.dayInterval,
+        )
 
         const account = await ctx.db
             .query('accounts')
@@ -162,14 +201,9 @@ export const create = mutation({
             ingestPath: 'direct_mutation',
         })
 
-        // The range is resolved here, not inside the materialiser, so retries
-        // fill the same window instead of re-reading a growing series.
-        const total = occurrenceCount(
-            Number(args.date),
-            args.frequency,
-            args.endDate === undefined ? null : Number(args.endDate),
-            args.dayInterval === undefined ? 1 : Number(args.dayInterval),
-        )
+        // The range is resolved before the writes, not inside the
+        // materialiser, so retries fill the same window instead of re-reading
+        // a growing series.
         await workflow.start(
             ctx,
             internal.recurrences.workflow.materializeRecurrence,
@@ -438,6 +472,12 @@ export const splitSeries = mutation({
         if (!oldRule) {
             throw new Error('Transaction is not part of a recurring series')
         }
+        const total = requireBoundedSeries(
+            args.date,
+            args.frequency,
+            oldRule.endDate,
+            args.dayInterval,
+        )
 
         await truncateRuleBefore(ctx, userId, oldRule, index)
 
@@ -499,12 +539,6 @@ export const splitSeries = mutation({
         const inserted = await ctx.db.insert('transactions', doc)
         await aggregateInsert(ctx, inserted)
 
-        const total = occurrenceCount(
-            Number(args.date),
-            args.frequency,
-            oldRule.endDate === undefined ? null : Number(oldRule.endDate),
-            args.dayInterval === undefined ? 1 : Number(args.dayInterval),
-        )
         await workflow.start(
             ctx,
             internal.recurrences.workflow.materializeRecurrence,

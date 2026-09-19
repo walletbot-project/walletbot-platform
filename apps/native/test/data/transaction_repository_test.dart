@@ -609,6 +609,18 @@ void main() {
       );
     });
 
+    test('refuses a series past the per-call cap and writes nothing', () async {
+      // Monthly from January 2026 to January 2050 is 289 occurrences, past
+      // the 240 the cap allows for one create. The check runs before the
+      // first insert, so a rejected series leaves no rule and no anchor.
+      await expectLater(
+        createMonthlySeries(endDate: DateTime(2050, 1, 31)),
+        throwsA(isA<ArgumentError>()),
+      );
+      expect(await db.select(db.recurrences).get(), isEmpty);
+      expect(await db.select(db.transactions).get(), isEmpty);
+    });
+
     test('addOccurrences refuses a rule with an end date', () async {
       // Ends inside the horizon, so the series is shorter than 48 and, by the
       // user's own choice, complete.

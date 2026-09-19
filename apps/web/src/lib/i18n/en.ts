@@ -815,6 +815,8 @@ export const en: Messages = {
         recurrenceSpanYears: (value: number) => `${value} years`,
         recurrenceOpenEndedNote: (count: number, span: string) =>
             `No end date does not mean forever: ${count} movements are created, covering about ${span}. You can add more whenever you want.`,
+        recurrenceTooLong: (max: number) =>
+            `That end date would create too many movements. The maximum for this frequency is ${max}.`,
         newTransaction: 'Add transaction',
         select: 'Select',
         newAccount: 'New account',

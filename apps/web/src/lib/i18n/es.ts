@@ -859,6 +859,8 @@ export const es = {
         recurrenceSpanYears: (value: number) => `${value} años`,
         recurrenceOpenEndedNote: (count: number, span: string) =>
             `Sin fecha de fin no es para siempre: se crean ${count} movimientos, que cubren unos ${span}. Podés agregar más cuando quieras.`,
+        recurrenceTooLong: (max: number) =>
+            `Esa fecha de fin crearía demasiados movimientos. El máximo para esta frecuencia es ${max}.`,
         newTransaction: 'Añadir movimiento',
         select: 'Seleccionar',
         newAccount: 'Nueva cuenta',

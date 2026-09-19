@@ -342,6 +342,23 @@ class TransactionRepository extends RepositoryBase {
     );
     final recurrenceId = recurrence == null ? null : newUuid();
     final anchor = DateTime.fromMillisecondsSinceEpoch(date.toInt());
+    if (recurrence != null) {
+      final total = occurrenceCount(
+        anchor,
+        recurrence.frequency,
+        recurrence.endDate,
+        dayInterval: recurrence.dayInterval,
+      );
+      final max = maxOccurrenceCount(
+        recurrence.frequency,
+        dayInterval: recurrence.dayInterval,
+      );
+      if (total > max) {
+        throw ArgumentError(
+          'Recurrence would create $total movements; the maximum is $max',
+        );
+      }
+    }
     await db.transaction(() async {
       if (recurrence != null && recurrenceId != null) {
         await db

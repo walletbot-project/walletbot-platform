@@ -2150,6 +2150,12 @@ abstract class AppLocalizations {
   /// **'No end date does not mean forever: {count} movements are created, covering about {span}. You can add more whenever you want.'**
   String recurrenceOpenEndedNote(int count, String span);
 
+  /// No description provided for @recurrenceTooLong.
+  ///
+  /// In en, this message translates to:
+  /// **'That end date would create too many movements. The maximum for this frequency is {max}.'**
+  String recurrenceTooLong(int max);
+
   /// No description provided for @recurrenceCustomDays.
   ///
   /// In en, this message translates to:

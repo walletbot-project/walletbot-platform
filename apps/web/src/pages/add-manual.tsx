@@ -2,6 +2,8 @@ import { api } from '@wallet-bot/backend/api'
 import type { RecurrenceSpan } from '@wallet-bot/shared'
 import {
     computeExchangeRate,
+    maxOccurrenceCount,
+    occurrenceCount,
     parseAmountToCents,
     parseTransactionDate,
     recurrenceHorizon,
@@ -610,6 +612,25 @@ export function TransactionForm({
 
             const transactionId = newId()
             if (showRecurrence && isRecurring) {
+                const dayInterval =
+                    recurrenceFrequency === 'customDays'
+                        ? recurrenceDayInterval
+                        : 1
+                const endDateMs =
+                    recurrenceEndDate === ''
+                        ? null
+                        : new Date(`${recurrenceEndDate}T23:59:59`).getTime()
+                const max = maxOccurrenceCount(recurrenceFrequency, dayInterval)
+                const total = occurrenceCount(
+                    Number(sourceDate),
+                    recurrenceFrequency,
+                    endDateMs,
+                    dayInterval,
+                )
+                if (total > max) {
+                    toast.error(t.addManual.recurrenceTooLong(max))
+                    return
+                }
                 // One call creates the rule and this movement as occurrence 0;
                 // the rest of the series is materialised by a workflow, so the
                 // form returns as soon as the first one exists.
@@ -618,16 +639,9 @@ export function TransactionForm({
                     frequency: recurrenceFrequency,
                     dayInterval:
                         recurrenceFrequency === 'customDays'
-                            ? BigInt(recurrenceDayInterval)
+                            ? BigInt(dayInterval)
                             : undefined,
-                    endDate:
-                        recurrenceEndDate === ''
-                            ? undefined
-                            : BigInt(
-                                  new Date(
-                                      `${recurrenceEndDate}T23:59:59`,
-                                  ).getTime(),
-                              ),
+                    endDate: endDateMs === null ? undefined : BigInt(endDateMs),
                     transactionId,
                     type: type === 'income' ? 'income' : 'expense',
                     name: trimmedTitle,

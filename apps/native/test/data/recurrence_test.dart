@@ -164,6 +164,29 @@ void main() {
     });
   });
 
+  group('per-call cap', () {
+    test('is five open-ended batches of the frequency', () {
+      expect(occurrenceCapMultiplier, 5);
+      expect(maxOccurrenceCount(RecurrenceFrequency.daily), 2500);
+      expect(maxOccurrenceCount(RecurrenceFrequency.weekly), 500);
+      expect(maxOccurrenceCount(RecurrenceFrequency.monthly), 240);
+      expect(maxOccurrenceCount(RecurrenceFrequency.yearly), 100);
+      expect(
+        maxOccurrenceCount(RecurrenceFrequency.customDays, dayInterval: 10),
+        500,
+      );
+    });
+
+    test('is what "daily until 2050" runs into', () {
+      final total = occurrenceCount(
+        DateTime(2026, 1, 1),
+        RecurrenceFrequency.daily,
+        DateTime(2050, 1, 1),
+      );
+      expect(total, greaterThan(maxOccurrenceCount(RecurrenceFrequency.daily)));
+    });
+  });
+
   group('occurrence count', () {
     test('is the horizon when the rule is open-ended', () {
       expect(

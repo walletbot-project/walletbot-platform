@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
     customDaysCount,
+    maxOccurrenceCount,
+    OCCURRENCE_CAP_MULTIPLIER,
     occurrenceCount,
     occurrenceDateMs,
     recurrenceHorizon,
@@ -220,5 +222,25 @@ describe('occurrence count', () => {
         expect(
             occurrenceCount(at(2026, 1, 15), 'monthly', at(2025, 12, 1)),
         ).toBe(0)
+    })
+})
+
+describe('per-call cap', () => {
+    it('is five open-ended batches of the frequency', () => {
+        expect(OCCURRENCE_CAP_MULTIPLIER).toBe(5)
+        expect(maxOccurrenceCount('daily')).toBe(2500)
+        expect(maxOccurrenceCount('weekly')).toBe(500)
+        expect(maxOccurrenceCount('monthly')).toBe(240)
+        expect(maxOccurrenceCount('yearly')).toBe(100)
+        expect(maxOccurrenceCount('customDays', 10)).toBe(500)
+    })
+
+    it('is what "daily until 2050" runs into', () => {
+        const total = occurrenceCount(at(2026, 1, 1), 'daily', at(2050, 1, 1))
+        expect(total).toBeGreaterThan(maxOccurrenceCount('daily'))
+        // A bounded series inside the cap is untouched by it.
+        expect(
+            occurrenceCount(at(2026, 1, 15), 'monthly', at(2035, 12, 31)),
+        ).toBeLessThanOrEqual(maxOccurrenceCount('monthly'))
     })
 })

@@ -383,6 +383,8 @@
   "@recurrenceSpanYears": {"placeholders": {"value": {"type": "int"}}},
   "recurrenceOpenEndedNote": "No end date does not mean forever: {count} movements are created, covering about {span}. You can add more whenever you want.",
   "@recurrenceOpenEndedNote": {"placeholders": {"count": {"type": "int"}, "span": {"type": "String"}}},
+  "recurrenceTooLong": "That end date would create too many movements. The maximum for this frequency is {max}.",
+  "@recurrenceTooLong": {"placeholders": {"max": {"type": "int"}}},
   "recurrenceCustomDays": "Every X days",
   "recurrenceRepeatEvery": "Repeat every",
   "recurrenceDaysUnit": "days",

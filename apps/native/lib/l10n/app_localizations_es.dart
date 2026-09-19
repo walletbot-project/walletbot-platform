@@ -1168,6 +1168,11 @@ class AppLocalizationsEs extends AppLocalizations {
   }
 
   @override
+  String recurrenceTooLong(int max) {
+    return 'Esa fecha de fin crearía demasiados movimientos. El máximo para esta frecuencia es $max.';
+  }
+
+  @override
   String get recurrenceCustomDays => 'Cada X días';
 
   @override

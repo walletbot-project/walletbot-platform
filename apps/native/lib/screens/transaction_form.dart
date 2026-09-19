@@ -547,6 +547,25 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
               endDate: _recurrenceEndDate,
             )
           : null;
+      if (recurrence != null) {
+        final total = occurrenceCount(
+          transactionDate,
+          recurrence.frequency,
+          recurrence.endDate,
+          dayInterval: recurrence.dayInterval,
+        );
+        final max = maxOccurrenceCount(
+          recurrence.frequency,
+          dayInterval: recurrence.dayInterval,
+        );
+        if (total > max) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(context.l10n.recurrenceTooLong(max))),
+          );
+          setState(() => _isSaving = false);
+          return;
+        }
+      }
       switch (_type) {
         case TransactionFormType.income:
           await repos.transactions.addIncome(

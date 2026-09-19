@@ -580,12 +580,16 @@ Está arreglado en §5.2: el lote es sólo para reglas abiertas. Con eso el gate
 del botón vuelve a ser exacto — una regla con fecha de fin **sí** está completa
 — y `X/N` es el total de verdad.
 
-El costo es que el usuario ahora manda: "diario hasta 2050" son unas 8.700
-transacciones reales. En web las crea el workflow en lotes de 50 (unos 174
-pasos); en nativo es un solo `db.transaction` con esas 8.700 inserciones, que en
-un teléfono se va a notar. Es lo pedido, y el corte de ocurrencia las mantiene
-fuera de Actividad, del saldo y de los contadores, pero es la razón por la que
-R-050 sigue pidiendo un tope antes de sacar el feature flag.
+El costo es que el usuario ahora manda: "diario hasta 2050" serían unas 8.700
+transacciones reales. En web las crearía el workflow en lotes de 50 (unos 174
+pasos); en nativo sería un solo `db.transaction` con esas 8.700 inserciones, que
+en un teléfono se nota. Por eso una sola llamada a `create` o `splitSeries`
+tiene un techo: `maxOccurrenceCount` en `@wallet-bot/shared` y en
+`data/recurrence.dart`, cinco lotes abiertos de la frecuencia (2.500 diarios,
+500 semanales, 240 mensuales, 100 anuales). Lo chequean la mutation y el
+repositorio nativo **antes de la primera escritura**, y los formularios avisan
+con `recurrenceTooLong` antes de mandar. "Añadir N más" no está topeado: es una
+llamada aparte, y el usuario decide cuántas veces la hace (R-050).
 
 ### 5.5. La misma fila en el detalle de Actividad
 
@@ -849,9 +853,12 @@ Dos refusals en vez de adivinar:
   regla, y el mint nunca debe declarar una tool que el cliente no puede
   ejecutar.
 - **Feature flag `recurringExpense`** para `listRecurrences` y
-  `addRecurrenceOccurrences`, el mismo que gatea la UI: con el flag apagado el
-  usuario no tiene forma de ver ni administrar una regla, así que el agente no
-  debe poder crear una.
+  `addRecurrenceOccurrences`, el mismo que gatea la creación de reglas en la
+  UI: con el flag apagado el usuario no tiene forma de crear ni administrar
+  una regla, así que el agente no debe poder crear una. La pantalla de
+  movimientos futuros **no** está detrás del flag: el corte de ocurrencia
+  aplica a cualquier movimiento con fecha futura, sea o no de una serie, y
+  esa pantalla es el único lugar donde aparece.
 - **`listUpcomingTransactions` NO está gateada.** Un movimiento suelto con
   fecha futura existe con el flag apagado, y es invisible en todo el resto de
   la app, así que el agente tiene que poder verlo de cualquier manera.
