@@ -19,7 +19,14 @@ import { supportsRecurrences } from '../sync/compatibility'
 // source the native setup frame derives from (via the generated
 // apps/native/lib/voice/agent_generated.dart), so a bump here can never
 // silently desync the two sides.
-const MODEL = AGENT_MODEL
+// Old mobile binaries send their compiled model in setup. Keep their token
+// constraints compatible while the 0.5 native rebuild rolls out independently.
+export function liveModelFor(platform?: string, appVersion?: string): string {
+    return (platform === 'android' || platform === 'ios' || platform === 'macos') &&
+        compareVersions(appVersion ?? '0.0.0', '0.5.0') >= 0
+        ? AGENT_MODEL
+        : 'gemini-3.1-flash-live-preview'
+}
 // The clients open the Live constrained WebSocket against v1alpha; mint the
 // token against the same API version.
 const AUTH_TOKENS_URL =
@@ -458,6 +465,7 @@ type GoogleSchema = {
 }
 
 type FunctionDeclaration = {
+    behavior: 'BLOCKING' | 'NON_BLOCKING'
     name: string
     description: string
     parameters: GoogleSchema
@@ -492,6 +500,10 @@ function toFunctionDeclarations(
     }[],
 ): FunctionDeclaration[] {
     return defs.map((d) => ({
+        // Keep local financial operations ordered and wait for committed
+        // results before confirming them. Opt reads into async separately
+        // once the conversation UX represents outstanding work explicitly.
+        behavior: 'BLOCKING',
         name: d.name,
         description: d.description,
         parameters: toGoogleSchema(d.parameters),
@@ -521,6 +533,7 @@ export async function createLiveToken(
     timings: { googleMs: number; mintMs: number; moduleAgeMs: number }
 }> {
     const startedAt = Date.now()
+    const model = liveModelFor(options.platform, options.appVersion)
     const apiKey = process.env.GEMINI_API_KEY
     if (!apiKey) {
         throw new Error('GEMINI_API_KEY environment variable is not set')
@@ -541,7 +554,7 @@ export async function createLiveToken(
             Date.now() + NEW_SESSION_WINDOW_MS,
         ).toISOString(),
         bidiGenerateContentSetup: {
-            model: `models/${MODEL}`,
+            model: `models/${model}`,
             generationConfig: {
                 responseModalities: ['AUDIO'],
                 speechConfig: {
@@ -560,7 +573,11 @@ export async function createLiveToken(
                         options.platform,
                         options.appVersion,
                         options.flags,
-                    ),
+                    ).map((declaration) => {
+                        if (model === AGENT_MODEL) return declaration
+                        const { behavior: _behavior, ...legacy } = declaration
+                        return legacy
+                    }),
                 },
             ],
             inputAudioTranscription: {},
@@ -603,7 +620,7 @@ export async function createLiveToken(
     return {
         token: token.name,
         expireTime,
-        model: MODEL,
+        model,
         timings,
     }
 }

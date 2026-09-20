@@ -2,36 +2,10 @@ import AVFAudio
 import Flutter
 import Foundation
 
-/// The native half of the iOS voice session: ONE AVAudioEngine doing both
-/// the agent-audio playback and the mic capture, with Apple's
-/// voice-processing I/O (echo cancellation) enabled on it.
-///
-/// Why one engine: voice processing requires both I/O nodes of the SAME
-/// engine (AVAudioIONode.h), and the far-end reference for the echo
-/// canceller is that engine's own output. Split-engine topologies were
-/// tried and failed both ways on hardware — see AUDIO.md § iOS.
-///
-/// The call sequence below follows Apple's "Using voice processing" sample
-/// (AVEchoTouch) with the guards production stacks add around it (WebRTC's
-/// iOS ADM, LiveKit's AVAudioEngine ADM):
-/// session configured+activated first → setVoiceProcessingEnabled on a
-/// fresh, stopped engine before any wiring → formats read AFTER the VP
-/// switch (it changes them) → mixer→output connected explicitly → input
-/// tap installed BEFORE engine.start() → start retried (VPIO can fail
-/// transiently with undocumented -66635/-66637) → engine restarted on
-/// AVAudioEngineConfigurationChange.
-///
-/// AGC is deliberately left at its default (enabled): WebRTC's
-/// voice_processing_audio_unit.mm force-enables it, citing devices where
-/// "only zeros are recorded and a disabled AGC could be one of the reasons".
-///
-/// Playback: `live.walletbot.app/pcm_audio` method channel
-/// (start/enqueue/interrupt/stop), 24 kHz mono PCM16 in, mirroring
-/// Android's MainActivity.kt. `start` returns a diagnostics map that the
-/// Dart side persists into the voice-session event log.
-/// Capture: `live.walletbot.app/pcm_audio/capture` event channel emitting
-/// 16 kHz mono PCM16 chunks (the Gemini Live wire format). The tap lives
-/// for the whole engine lifetime; listen/cancel only gates delivery.
+/// One native owner for playback, microphone capture and AVAudioSession.
+/// Playback starts without requesting microphone access. The capture listener
+/// upgrades to a single voice-processing engine after permission is granted.
+/// Both directions then share the same echo-cancellation reference.
 final class PcmAudioPlayer: NSObject {
   static let channelName = "live.walletbot.app/pcm_audio"
   static let captureChannelName = "live.walletbot.app/pcm_audio/capture"
@@ -49,6 +23,11 @@ final class PcmAudioPlayer: NSObject {
   private var vpFallbackReason: String?
   private var configChangeObserver: NSObjectProtocol?
   private var enqueueCount = 0
+  private var queuedFrames: AVAudioFrameCount = 0
+  private var playbackGeneration = 0
+  private var captureEnabled = false
+  private var captureGeneration = 0
+  private var interruptionObserver: NSObjectProtocol?
 
   private var captureSink: FlutterEventSink?
   private var captureConverter: AVAudioConverter?
@@ -99,7 +78,7 @@ final class PcmAudioPlayer: NSObject {
 
   private func handleStart(_ call: FlutterMethodCall, result: FlutterResult) {
     do {
-      try startEngine()
+      try startEngine(capture: false)
       result(diagnostics())
     } catch {
       NSLog("[PcmAudio] start FAILED: \(error)")
@@ -125,6 +104,12 @@ final class PcmAudioPlayer: NSObject {
       )
       return
     }
+    if engine == nil {
+      do { try startEngine(capture: false) } catch {
+        result(FlutterError(code: "pcm_restart_failed", message: error.localizedDescription, details: nil))
+        return
+      }
+    }
     guard let engine, let playerNode, let playbackFormat else {
       result(
         FlutterError(
@@ -145,15 +130,32 @@ final class PcmAudioPlayer: NSObject {
         playerNode.play()
         NSLog("[PcmAudio] enqueue: engine restarted OK")
       } catch {
-        NSLog("[PcmAudio] enqueue: engine restart FAILED: \(error)")
+        result(FlutterError(code: "pcm_restart_failed", message: error.localizedDescription, details: nil))
+        return
       }
     }
 
+    guard bytes.data.count % 2 == 0 else {
+      result(FlutterError(code: "pcm_bad_args", message: "Unaligned PCM16", details: nil))
+      return
+    }
     if let buffer = makeBuffer(from: bytes.data, format: playbackFormat) {
+      guard queuedFrames + buffer.frameLength <= AVAudioFrameCount(Self.voiceIORate * 20) else {
+        result(FlutterError(code: "pcm_queue_full", message: "Playback queue full", details: nil))
+        return
+      }
       // Non-blocking: appends to the node's schedule queue. Unlike Android's
       // AudioTrack.write there is no blocking write loop, so no generation
       // counter is needed — interrupt()'s stop() clears the whole queue.
-      playerNode.scheduleBuffer(buffer, completionHandler: nil)
+      queuedFrames += buffer.frameLength
+      let generation = playbackGeneration
+      let frames = buffer.frameLength
+      playerNode.scheduleBuffer(buffer, completionCallbackType: .dataPlayedBack) { [weak self] _ in
+        DispatchQueue.main.async {
+          guard let self, self.playbackGeneration == generation else { return }
+          self.queuedFrames -= min(self.queuedFrames, frames)
+        }
+      }
       enqueueCount += 1
       if enqueueCount == 1 || enqueueCount % 50 == 0 {
         let session = AVAudioSession.sharedInstance()
@@ -180,6 +182,8 @@ final class PcmAudioPlayer: NSObject {
     // one mid-play (AVAudioPlayerNode.h) — the exact flush semantics
     // interrupt needs. Restart so later enqueues are audible.
     NSLog("[PcmAudio] interrupt after %d chunks", enqueueCount)
+    playbackGeneration += 1
+    queuedFrames = 0
     playerNode?.stop()
     playerNode?.play()
     result(nil)
@@ -192,11 +196,12 @@ final class PcmAudioPlayer: NSObject {
 
   // MARK: - Engine lifecycle
 
-  private func startEngine() throws {
+  private func startEngine(capture: Bool) throws {
     NSLog("[PcmAudio] start requested")
     stopEngine()
 
-    try configureVoiceSession()
+    captureEnabled = capture
+    try configureVoiceSession(capture: capture)
 
     guard
       let voiceIOFormat = AVAudioFormat(
@@ -216,45 +221,19 @@ final class PcmAudioPlayer: NSObject {
     // Fresh engine every time: voice processing defaults to off on a new
     // engine and LiveKit's ADM rebuilds rather than reuse for that reason.
     let engine = AVAudioEngine()
+    self.engine = engine
 
-    // Voice processing must be flipped while the engine is stopped, before
-    // any wiring; enabling it on the input node enables it on the output
-    // node too (AVAudioIONode.h). This makes our own playback the echo
-    // canceller's far-end reference.
     voiceProcessingActive = false
     vpFallbackReason = nil
-    do {
+    if capture {
+      // Never silently fall back to an echo-prone duplex session.
       try engine.inputNode.setVoiceProcessingEnabled(true)
       voiceProcessingActive = true
-      NSLog("[PcmAudio] voice processing ENABLED")
-    } catch {
-      vpFallbackReason = "enable_failed: \(error)"
-      NSLog("[PcmAudio] setVoiceProcessingEnabled FAILED: \(error)")
-    }
-
-    // Formats must be read AFTER the VP switch — it changes them. A zero
-    // sample rate/channel count here means input is not actually available
-    // and the engine would throw or run dead (Apple's documented check,
-    // enforced the way LiveKit's ADM does).
-    var inputFormat = engine.inputNode.outputFormat(forBus: 0)
-    logFormats(engine: engine, label: "post-vp")
-    if voiceProcessingActive && !isUsable(inputFormat) {
-      vpFallbackReason = "zero_input_format: \(inputFormat)"
-      NSLog("[PcmAudio] input format unusable with VP, disabling VP")
-      try engine.inputNode.setVoiceProcessingEnabled(false)
-      voiceProcessingActive = false
-      inputFormat = engine.inputNode.outputFormat(forBus: 0)
-      logFormats(engine: engine, label: "post-vp-fallback")
-    }
-    guard isUsable(inputFormat) else {
-      throw NSError(
-        domain: "PcmAudioPlayer",
-        code: 2,
-        userInfo: [
-          NSLocalizedDescriptionKey:
-            "Microphone input unavailable (format: \(inputFormat))"
-        ]
-      )
+      let inputFormat = engine.inputNode.outputFormat(forBus: 0)
+      guard isUsable(inputFormat) else {
+        throw NSError(domain: "PcmAudioPlayer", code: 2,
+          userInfo: [NSLocalizedDescriptionKey: "Microphone input unavailable"])
+      }
     }
 
     let node = AVAudioPlayerNode()
@@ -269,21 +248,29 @@ final class PcmAudioPlayer: NSObject {
     // the latter is the sequence proven to capture on this hardware), with
     // the node's actual post-VP format; conversion to the 16 kHz wire
     // format happens in emitCapturedBuffer.
-    try installCaptureTap(engine: engine, srcFormat: inputFormat)
+    if capture {
+      try installCaptureTap(engine: engine, srcFormat: engine.inputNode.outputFormat(forBus: 0))
+    }
 
     engine.prepare()
     try startWithRetry(engine)
     node.play()
 
-    // The engine stops itself when the session's I/O configuration changes
-    // (route change, VP renegotiation). Restart it eagerly — a naive engine
-    // stays silently stopped after this notification.
     configChangeObserver = NotificationCenter.default.addObserver(
-      forName: .AVAudioEngineConfigurationChange,
-      object: engine,
-      queue: .main
-    ) { [weak self] _ in
-      self?.handleConfigurationChange()
+      forName: .AVAudioEngineConfigurationChange, object: engine, queue: .main
+    ) { [weak self] _ in self?.handleConfigurationChange() }
+    interruptionObserver = NotificationCenter.default.addObserver(
+      forName: AVAudioSession.interruptionNotification, object: nil, queue: .main
+    ) { [weak self] notification in
+      guard let self,
+        let value = notification.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt,
+        let type = AVAudioSession.InterruptionType(rawValue: value) else { return }
+      if type == .began {
+        let sink = self.captureSink
+        self.captureSink = nil
+        self.stopEngine()
+        sink?(FlutterError(code: "audio_interrupted", message: "Audio session interrupted", details: nil))
+      }
     }
 
     self.engine = engine
@@ -336,26 +323,26 @@ final class PcmAudioPlayer: NSObject {
   }
 
   private func handleConfigurationChange() {
-    guard let engine, let playerNode else { return }
-    let session = AVAudioSession.sharedInstance()
-    NSLog(
-      "[PcmAudio] engine configuration change: running=%d hwRate=%.0f route=[%@]",
-      engine.isRunning ? 1 : 0,
-      session.sampleRate,
-      routeDescription()
-    )
-    logFormats(engine: engine, label: "config-change")
-    guard !engine.isRunning else { return }
+    guard let engine, !engine.isRunning else { return }
+    // Route changes can change the tap's format. Rebuild the converter and
+    // graph together instead of restarting an engine with stale formats.
+    let capture = captureEnabled
     do {
-      try startWithRetry(engine, attempts: 3)
-      playerNode.play()
-      NSLog("[PcmAudio] engine restarted after configuration change")
+      try startEngine(capture: capture)
     } catch {
-      NSLog("[PcmAudio] restart after configuration change FAILED: \(error)")
+      let sink = captureSink
+      captureSink = nil
+      stopEngine()
+      sink?(FlutterError(code: "audio_route_failed", message: error.localizedDescription, details: nil))
     }
   }
 
   private func stopEngine() {
+    captureGeneration += 1
+    if let observer = interruptionObserver {
+      NotificationCenter.default.removeObserver(observer)
+      interruptionObserver = nil
+    }
     if let observer = configChangeObserver {
       NotificationCenter.default.removeObserver(observer)
       configChangeObserver = nil
@@ -368,6 +355,8 @@ final class PcmAudioPlayer: NSObject {
       )
     }
     removeCaptureTap()
+    playbackGeneration += 1
+    queuedFrames = 0
     playerNode?.stop()
     engine?.stop()
     playerNode = nil
@@ -384,15 +373,16 @@ final class PcmAudioPlayer: NSObject {
   /// (playAndRecord + voiceChat + Bluetooth), plus `.defaultToSpeaker`.
   /// The preferred rate matches the graph's voiceIO format (Apple's sample
   /// does the same with its rate) and the 20 ms buffer follows WebRTC.
-  private func configureVoiceSession() throws {
+  private func configureVoiceSession(capture: Bool) throws {
     let session = AVAudioSession.sharedInstance()
     previousCategory = session.category
     previousMode = session.mode
     previousOptions = session.categoryOptions
+    sessionConfigured = true
     try session.setCategory(
-      .playAndRecord,
-      mode: .voiceChat,
-      options: [.defaultToSpeaker, .allowBluetoothHFP, .allowBluetoothA2DP]
+      capture ? .playAndRecord : .playback,
+      mode: capture ? .voiceChat : .default,
+      options: capture ? [.defaultToSpeaker, .allowBluetoothHFP] : []
     )
     try? session.setPreferredSampleRate(Self.voiceIORate)
     try? session.setPreferredIOBufferDuration(0.02)
@@ -453,12 +443,13 @@ final class PcmAudioPlayer: NSObject {
     captureChunkCount = 0
     // ~100 ms per tap buffer, in source-format frames.
     let bufferSize = AVAudioFrameCount(max(srcFormat.sampleRate / 10, 1024))
+    let generation = captureGeneration
     engine.inputNode.installTap(
       onBus: 0,
       bufferSize: bufferSize,
       format: srcFormat
     ) { [weak self] buffer, _ in
-      self?.emitCapturedBuffer(buffer)
+      self?.emitCapturedBuffer(buffer, converter: converter, generation: generation)
     }
     captureTapInstalled = true
     NSLog(
@@ -478,8 +469,7 @@ final class PcmAudioPlayer: NSObject {
 
   /// Runs on the tap's realtime-adjacent thread; converts to the wire format
   /// and hands the bytes to Flutter on the main thread.
-  private func emitCapturedBuffer(_ buffer: AVAudioPCMBuffer) {
-    guard let converter = captureConverter else { return }
+  private func emitCapturedBuffer(_ buffer: AVAudioPCMBuffer, converter: AVAudioConverter, generation: Int) {
 
     let ratio = Self.captureRate / buffer.format.sampleRate
     let capacity =
@@ -529,7 +519,8 @@ final class PcmAudioPlayer: NSObject {
       )
     }
     DispatchQueue.main.async { [weak self] in
-      self?.captureSink?(FlutterStandardTypedData(bytes: data))
+      guard let self, self.captureGeneration == generation else { return }
+      self.captureSink?(FlutterStandardTypedData(bytes: data))
     }
   }
 
@@ -537,7 +528,7 @@ final class PcmAudioPlayer: NSObject {
 
   private func diagnostics() -> [String: Any] {
     let session = AVAudioSession.sharedInstance()
-    let input = engine?.inputNode
+    let input = captureEnabled ? engine?.inputNode : nil
     var map: [String: Any] = [
       "voiceProcessing": voiceProcessingActive,
       "engineRunning": engine?.isRunning ?? false,
@@ -610,12 +601,11 @@ extension PcmAudioPlayer: FlutterStreamHandler {
     withArguments arguments: Any?,
     eventSink events: @escaping FlutterEventSink
   ) -> FlutterError? {
-    guard engine != nil, captureTapInstalled else {
-      return FlutterError(
-        code: "pcm_not_started",
-        message: "Voice engine is not running; start playback first",
-        details: nil
-      )
+    do {
+      try startEngine(capture: true)
+    } catch {
+      stopEngine()
+      return FlutterError(code: "pcm_capture_failed", message: error.localizedDescription, details: nil)
     }
     NSLog("[PcmAudio] capture sink attached")
     captureSink = events
@@ -625,6 +615,9 @@ extension PcmAudioPlayer: FlutterStreamHandler {
   func onCancel(withArguments arguments: Any?) -> FlutterError? {
     NSLog("[PcmAudio] capture sink detached after %d chunks", captureChunkCount)
     captureSink = nil
+    if engine != nil && captureEnabled {
+      do { try startEngine(capture: false) } catch { stopEngine() }
+    }
     return nil
   }
 }

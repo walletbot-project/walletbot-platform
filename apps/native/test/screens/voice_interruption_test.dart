@@ -9,6 +9,26 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  testWidgets(
+    'hidden and paused release audio once without ending the conversation',
+    (tester) async {
+      final command = _ActiveVoiceCommand();
+      await tester.pumpWidget(_voiceApp(command));
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
+      await tester.pump();
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+      await tester.pump();
+      expect(command.interruptionReasons, ['app_backgrounded']);
+      expect(command.audioStreamEnded, true);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await tester.pump();
+      expect(command.isActive, true);
+      await tester.pumpWidget(const MaterialApp(home: SizedBox()));
+    },
+  );
+
   testWidgets('leaving voice screen interrupts the current agent response', (
     tester,
   ) async {
@@ -215,6 +235,9 @@ class _ActiveVoiceCommand implements VoiceExpenseCommand {
 
   @override
   bool get isConnected => connected;
+
+  @override
+  Future<void> prepareAudio() async {}
 
   @override
   Future<void> ensureConnected() async {

@@ -63,6 +63,11 @@ class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
   bool _isConnected = false;
   bool _isReconnecting = false;
   bool _micActive = false;
+  bool _micStarting = false;
+  Future<void>? _micStopping;
+  int _micGeneration = 0;
+  bool _resumeMicrophone = false;
+  Future<void>? _backgroundAudioStop;
   bool _userMicOn = false;
   bool _isBrowsingHistory = false;
   bool _conversationRestored = false;
@@ -123,13 +128,34 @@ class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.hidden) {
+      _resumeMicrophone = _resumeMicrophone || _userMicOn;
+      _backgroundAudioStop ??= _suspendAudioForBackground();
+      return;
+    }
     if (state != AppLifecycleState.resumed) return;
+    unawaited(_resumeAudioAfterBackground());
     final command = _command;
     // The OS may have killed the socket and suspended the reconnect timer
     // while backgrounded — reconnect immediately on return.
     if (command != null && command.isActive && !command.isConnected) {
       unawaited(command.ensureConnected());
     }
+  }
+
+  Future<void> _suspendAudioForBackground() async {
+    await _stopMicCapture();
+    await _command?.interruptAgentResponse(reason: 'app_backgrounded');
+  }
+
+  Future<void> _resumeAudioAfterBackground() async {
+    await _backgroundAudioStop;
+    _backgroundAudioStop = null;
+    if (!mounted || !_resumeMicrophone || _command?.isActive != true) return;
+    _resumeMicrophone = false;
+    _command?.setAudioPlaybackEnabled(true);
+    await _startMicCapture(turnOn: true);
   }
 
   /// Rebuilds the visible conversation from already-emitted session events in
@@ -239,6 +265,7 @@ class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
 
   @override
   void dispose() {
+    ++_micGeneration;
     WidgetsBinding.instance.removeObserver(this);
     _command?.recordClientEvent('screen_detached', {
       'micMuted': true,
@@ -300,9 +327,7 @@ class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
     });
     _recordMuteEvent(wasOn ? 'tap_mute' : 'tap_unmute');
     if (wasOn) {
-      // Mic just went from on → off mid-turn: flush whatever the server
-      // has buffered so the next utterance starts clean.
-      unawaited(_command?.endAudioStream());
+      unawaited(_stopMicCapture());
     }
   }
 
@@ -330,8 +355,8 @@ class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
       _level = 0;
     });
     _recordMuteEvent('long_press_end');
-    if (wasOn) {
-      unawaited(_command?.endAudioStream());
+    if (wasOn || _micStarting) {
+      unawaited(_stopMicCapture());
     }
   }
 
@@ -449,7 +474,7 @@ class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
       return;
     }
 
-    if (mode == _SessionMode.audio) {
+    if (mounted && _command?.isActive == true && mode == _SessionMode.audio) {
       await _startMicCapture(turnOn: true);
     }
 
@@ -461,6 +486,12 @@ class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
   }
 
   Future<void> _startMicCapture({required bool turnOn}) async {
+    if (_micStarting || !mounted) return;
+    final stopping = _micStopping;
+    if (stopping != null) {
+      await stopping;
+      if (!mounted || _micStarting) return;
+    }
     if (_micActive) {
       if (turnOn && mounted) {
         setState(() => _userMicOn = true);
@@ -468,9 +499,13 @@ class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
       return;
     }
     final l10n = context.l10n;
+    final generation = ++_micGeneration;
+    _micStarting = true;
+    bool current() => mounted && generation == _micGeneration;
 
     try {
       final permission = await Permission.microphone.request();
+      if (!current()) return;
       if (!permission.isGranted) {
         _addSystemSetState(
           l10n.microphonePermissionDenied,
@@ -480,6 +515,7 @@ class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
       }
 
       final issue = await _mic.checkAvailability();
+      if (!current()) return;
       if (issue == MicCaptureIssue.permissionDenied) {
         _addSystemSetState(
           l10n.recorderPermissionFailed,
@@ -492,14 +528,17 @@ class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
         return;
       }
 
-      // On iOS this streams from the native voice engine's echo-cancelled
-      // input tap (PcmAudioPlayer.swift), which requires the engine to be
-      // running — guaranteed because _command.start() precedes mic capture.
-      // Elsewhere it streams from the `record` plugin. See mic_capture.dart.
+      await _command?.prepareAudio();
+      if (!current()) return;
       final audioStream = await _mic.start();
+      if (!current()) {
+        await _mic.stop();
+        return;
+      }
       _audioSubscription = audioStream.listen(
         _handleAudioChunk,
         onError: (Object error) {
+          if (!current()) return;
           _addSystemSetState(
             l10n.audioStreamFailed(error),
             kind: _SystemKind.error,
@@ -510,12 +549,17 @@ class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
 
       _amplitudeSubscription = _mic
           .onAmplitudeDbfs(const Duration(milliseconds: 100))
-          .listen((dbfs) {
-            if (!mounted) return;
-            setState(() {
-              _level = _dbfsToLevel(dbfs);
-            });
-          });
+          .listen(
+            (dbfs) {
+              if (!mounted) return;
+              setState(() {
+                _level = _dbfsToLevel(dbfs);
+              });
+            },
+            onError: (Object _) {
+              /* Audio subscription reports capture errors. */
+            },
+          );
 
       if (mounted) {
         setState(() {
@@ -525,19 +569,36 @@ class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
         _recordMuteEvent('mic_capture_started');
       }
     } catch (error) {
+      if (!current()) return;
       _addSystemSetState(
         l10n.microphoneOpenFailed(error),
         kind: _SystemKind.error,
       );
       await _stopMicCapture();
+    } finally {
+      _micStarting = false;
     }
   }
 
-  Future<void> _stopMicCapture() async {
-    await _audioSubscription?.cancel();
-    await _amplitudeSubscription?.cancel();
+  Future<void> _stopMicCapture() {
+    final existing = _micStopping;
+    if (existing != null) return existing;
+    final operation = _stopMicCaptureOnce();
+    _micStopping = operation;
+    return operation.whenComplete(() {
+      if (identical(_micStopping, operation)) _micStopping = null;
+    });
+  }
+
+  Future<void> _stopMicCaptureOnce() async {
+    ++_micGeneration;
+    final audio = _audioSubscription;
+    final amplitude = _amplitudeSubscription;
     _audioSubscription = null;
     _amplitudeSubscription = null;
+    _micActive = false;
+    await audio?.cancel();
+    await amplitude?.cancel();
 
     try {
       await _mic.stop();

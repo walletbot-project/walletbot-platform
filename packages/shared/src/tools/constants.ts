@@ -6,6 +6,6 @@
 // Bumping the model or voice here propagates to both sides in one change,
 // instead of silently desyncing the backend mint from native's setup frame.
 
-export const AGENT_MODEL = 'gemini-3.1-flash-live-preview'
+export const AGENT_MODEL = 'gemini-3.8-live'
 
 export const AGENT_VOICE_NAME = 'Rasalgethi' // Enceladus

@@ -142,6 +142,9 @@ class _RecordingCommand implements VoiceExpenseCommand {
   }
 
   @override
+  Future<void> prepareAudio() async {}
+
+  @override
   Future<void> ensureConnected() async {}
 
   @override
