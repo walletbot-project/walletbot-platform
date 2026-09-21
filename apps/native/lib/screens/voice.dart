@@ -66,6 +66,10 @@ class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
   bool _micStarting = false;
   Future<void>? _micStopping;
   int _micGeneration = 0;
+  // Only the initial, user-requested connection may buffer microphone audio.
+  static const _startupAudioLimit = MicCapture.sampleRate * 2 * 5;
+  List<Uint8List>? _startupAudio;
+  int _startupAudioBytes = 0;
   bool _resumeMicrophone = false;
   Future<void>? _backgroundAudioStop;
   bool _userMicOn = false;
@@ -266,6 +270,7 @@ class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
   @override
   void dispose() {
     ++_micGeneration;
+    _startupAudio = null;
     WidgetsBinding.instance.removeObserver(this);
     _command?.recordClientEvent('screen_detached', {
       'micMuted': true,
@@ -298,6 +303,9 @@ class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
     final startedComposing = isComposing && !_wasTextComposing;
     _wasTextComposing = isComposing;
     setState(() {});
+    if (startedComposing && _startupAudio != null) {
+      unawaited(_stopMicCapture());
+    }
     if (startedComposing && _isConnected && _micActive) {
       // User started typing while the mic was open: we already stop
       // forwarding audio chunks via _isMicEffectivelyMuted, but the
@@ -311,7 +319,11 @@ class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
   // -- Voice button gestures ------------------------------------------------
 
   void _handleVoiceTap() {
-    if (_isStarting || _isTextComposing) return;
+    if (_isStarting) {
+      unawaited(_stopMicCapture());
+      return;
+    }
+    if (_isTextComposing) return;
     if (!_isConnected) {
       unawaited(_startSession(mode: _SessionMode.audio));
       return;
@@ -428,6 +440,7 @@ class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
   Future<void> _startSession({required _SessionMode mode}) async {
     if (_isStarting || _isConnected) return;
     final l10n = context.l10n;
+    final micGeneration = _micGeneration;
 
     setState(() {
       _isStarting = true;
@@ -447,8 +460,20 @@ class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
         _command = command;
         _commandEventsSubscription = command.events.listen(_onVoiceEvent);
       }
-      await _command?.start(respondWithAudio: respondWithAudio);
-      _command?.recordClientEvent('screen_attached', {'startMode': mode.name});
+      if (!mounted) return;
+      if (micGeneration != _micGeneration) {
+        setState(() => _isStarting = false);
+        return;
+      }
+      final connecting = command.start(respondWithAudio: respondWithAudio);
+      if (mode == _SessionMode.audio) {
+        _startupAudio = [];
+        _startupAudioBytes = 0;
+        await Future.wait([connecting, _startMicCapture(turnOn: true)]);
+      } else {
+        await connecting;
+      }
+      command.recordClientEvent('screen_attached', {'startMode': mode.name});
     } catch (error) {
       // Unexpected startup failure (connect errors retry inside the command
       // and never surface here). Release the command without ending the
@@ -456,6 +481,7 @@ class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
       // queued text is kept for the next attempt. Raw errors never reach the
       // chat — details go to the debug console and the session log.
       debugPrint('[voice] start failed: $error');
+      await _stopMicCapture();
       final failedSubscription = _commandEventsSubscription;
       final failedCommand = _command;
       _commandEventsSubscription = null;
@@ -472,10 +498,6 @@ class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
       await failedSubscription?.cancel();
       await failedCommand?.dispose();
       return;
-    }
-
-    if (mounted && _command?.isActive == true && mode == _SessionMode.audio) {
-      await _startMicCapture(turnOn: true);
     }
 
     if (mounted) {
@@ -591,6 +613,7 @@ class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
   }
 
   Future<void> _stopMicCaptureOnce() async {
+    _startupAudio = null;
     ++_micGeneration;
     final audio = _audioSubscription;
     final amplitude = _amplitudeSubscription;
@@ -678,7 +701,23 @@ class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
   void _handleAudioChunk(Uint8List chunk) {
     if (!mounted) return;
     if (!_isMicEffectivelyMuted) {
-      unawaited(_command?.addAudioChunk(chunk));
+      final pending = _startupAudio;
+      if (pending != null) {
+        if (_startupAudioBytes + chunk.length > _startupAudioLimit) {
+          // Keep the beginning intact or discard the whole attempt. Never
+          // silently send a truncated utterance after a slow connection.
+          unawaited(_stopMicCapture());
+          _addSystemSetState(
+            context.l10n.voiceStartFailed,
+            kind: _SystemKind.error,
+          );
+          return;
+        }
+        pending.add(Uint8List.fromList(chunk));
+        _startupAudioBytes += chunk.length;
+      } else {
+        unawaited(_command?.addAudioChunk(chunk));
+      }
     }
     if (_level == 0 && !_isMicEffectivelyMuted) {
       setState(() {
@@ -705,8 +744,16 @@ class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
           _isReconnecting = false;
           conversationChanged = _connectionNotice != null;
           _clearConnectionNotice();
+          final pending = _startupAudio;
+          _startupAudio = null;
+          if (!_isMicEffectivelyMuted && _command?.isConnected == true) {
+            for (final chunk in pending ?? <Uint8List>[]) {
+              unawaited(_command?.addAudioChunk(chunk));
+            }
+          }
           _flushPendingTexts();
         case VoiceDisconnectedEvent():
+          if (_startupAudio != null) unawaited(_stopMicCapture());
           conversationChanged = true;
           _isConnected = false;
           _isReconnecting = _command?.isActive ?? false;
@@ -720,6 +767,7 @@ class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
             _clearConnectionNotice();
           }
         case VoiceErrorEvent(:final message, :final isTransient, :final code):
+          if (_startupAudio != null) unawaited(_stopMicCapture());
           // Raw error text never reaches the chat; details are persisted in
           // the session log. Most errors leave the session running (and
           // reconnecting) — the End button is the explicit way out. Only a
@@ -2113,7 +2161,7 @@ class _PrimaryActionButton extends StatelessWidget {
         shape: CircleBorder(side: border),
         elevation: elevation,
         child: Center(
-          child: isStarting && !hasText
+          child: isStarting && !isMicActive && !hasText
               ? SizedBox(
                   width: 26,
                   height: 26,

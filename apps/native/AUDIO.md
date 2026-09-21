@@ -26,6 +26,14 @@ A connection waits for both WebSocket readiness and Gemini `setupComplete`.
 Each attempt has an epoch, invalidated immediately by disconnect or close.
 Late credential completions and tool results cannot resurrect a closed socket.
 
+On an explicit microphone start, the voice screen captures while the first
+connection opens and keeps up to five seconds (160 KB) of PCM16 in memory.
+After setup completes it sends those chunks in order before live audio.
+Cancellation, backgrounding, text entry, startup errors, or exceeding the limit
+discard the buffer; overflow also stops capture and shows the startup-failure
+notice. The level meter appears as soon as capture starts, and another tap
+cancels capture while connecting. No native or transport queue is involved.
+
 Only bounded intentional text input waits through reconnects. Microphone chunks
 and old tool responses are discarded when disconnected. Replaying several
 seconds of stale speech can create unintended turns; replaying tool responses
