@@ -688,6 +688,8 @@ export const en: Messages = {
         systemDisconnected: 'Disconnected',
         systemConnected: 'Connected. Start speaking.',
         systemConnectedTyping: 'Connected. Sending your message…',
+        startupAudioTimeout:
+            'Connection took too long. Tap the microphone to try again.',
         systemConnectionFailed: (p) => `Connection failed: ${p.error}`,
         systemUnavailable:
             'Gastón is not available right now. Please try again in a few minutes.',

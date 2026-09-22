@@ -14,7 +14,6 @@ import 'package:app/legal/ai_consent_controller.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:provider/provider.dart';
 
-import '../voice/agent_generated.dart';
 import '../voice/mic_capture.dart';
 import '../voice/voice_event.dart';
 import '../voice/voice_expense_command.dart';
@@ -71,6 +70,9 @@ class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
   List<Uint8List>? _startupAudio;
   int _startupAudioBytes = 0;
   bool _resumeMicrophone = false;
+  bool _foreground = true;
+  int _lifecycleGeneration = 0;
+  bool _playbackEnabled = true;
   Future<void>? _backgroundAudioStop;
   bool _userMicOn = false;
   bool _isBrowsingHistory = false;
@@ -134,11 +136,16 @@ class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.paused ||
         state == AppLifecycleState.hidden) {
-      _resumeMicrophone = _resumeMicrophone || _userMicOn;
-      _backgroundAudioStop ??= _suspendAudioForBackground();
+      if (!_foreground) return;
+      _foreground = false;
+      ++_lifecycleGeneration;
+      _resumeMicrophone = _resumeMicrophone || _userMicOn || _micStarting;
+      _backgroundAudioStop = _suspendAudioForBackground();
       return;
     }
     if (state != AppLifecycleState.resumed) return;
+    _foreground = true;
+    ++_lifecycleGeneration;
     unawaited(_resumeAudioAfterBackground());
     final command = _command;
     // The OS may have killed the socket and suspended the reconnect timer
@@ -150,16 +157,31 @@ class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
 
   Future<void> _suspendAudioForBackground() async {
     await _stopMicCapture();
-    await _command?.interruptAgentResponse(reason: 'app_backgrounded');
+    try {
+      await _command?.interruptAgentResponse(reason: 'app_backgrounded');
+    } catch (error) {
+      debugPrint('[voice] background audio cleanup failed: $error');
+    }
   }
 
   Future<void> _resumeAudioAfterBackground() async {
-    await _backgroundAudioStop;
-    _backgroundAudioStop = null;
-    if (!mounted || !_resumeMicrophone || _command?.isActive != true) return;
+    final generation = _lifecycleGeneration;
+    final stopping = _backgroundAudioStop;
+    await stopping;
+    if (!mounted || !_foreground || generation != _lifecycleGeneration) return;
+    if (identical(_backgroundAudioStop, stopping)) _backgroundAudioStop = null;
+    if (_command?.isActive != true) return;
+    // Playback intent is independent of the microphone's mute state.
+    _command?.setAudioPlaybackEnabled(_playbackEnabled);
+    // A pending permission dialog will retry here from its finally block.
+    if (!_resumeMicrophone || _micStarting) return;
     _resumeMicrophone = false;
-    _command?.setAudioPlaybackEnabled(true);
     await _startMicCapture(turnOn: true);
+  }
+
+  void _setAudioPlaybackEnabled(bool enabled) {
+    _playbackEnabled = enabled;
+    _command?.setAudioPlaybackEnabled(enabled);
   }
 
   /// Rebuilds the visible conversation from already-emitted session events in
@@ -253,7 +275,9 @@ class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
       reportedText: reportedText,
       precedingUserText: precedingUserText,
       sessionId: sessionId,
-      model: kAgentModel,
+      // The session/setup log identifies the actual model, including switches.
+      // A compiled default would mislabel reports from rollback sessions.
+      model: null,
       occurredAt: occurredAt,
     );
   }
@@ -319,6 +343,7 @@ class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
   // -- Voice button gestures ------------------------------------------------
 
   void _handleVoiceTap() {
+    _resumeMicrophone = false;
     if (_isStarting) {
       unawaited(_stopMicCapture());
       return;
@@ -394,7 +419,7 @@ class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
     if (wasConnected) {
       // Text send → expect a silent (text-only) reply, even mid-session.
       // sendText() also flushes any open audio turn server-side.
-      _command?.setAudioPlaybackEnabled(false);
+      _setAudioPlaybackEnabled(false);
       unawaited(_command?.sendText(text));
     } else if (startingFresh) {
       unawaited(_startSession(mode: _SessionMode.text));
@@ -409,7 +434,7 @@ class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
     final pending = List<String>.of(_pendingTexts);
     _pendingTexts.clear();
     // Same semantics as a live typed send: expect a silent text-only reply.
-    _command?.setAudioPlaybackEnabled(false);
+    _setAudioPlaybackEnabled(false);
     for (final text in pending) {
       unawaited(_command?.sendText(text));
     }
@@ -453,6 +478,7 @@ class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
       _SessionMode.text => _kRespondToTextWithAudio,
     };
 
+    _playbackEnabled = respondWithAudio;
     try {
       final command = widget.commandFactory.create();
       if (!identical(_command, command)) {
@@ -481,7 +507,13 @@ class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
       // queued text is kept for the next attempt. Raw errors never reach the
       // chat — details go to the debug console and the session log.
       debugPrint('[voice] start failed: $error');
-      await _stopMicCapture();
+      try {
+        await _stopMicCapture();
+      } catch (cleanupError) {
+        debugPrint('[voice] startup cleanup failed: $cleanupError');
+      } finally {
+        if (mounted) setState(() => _isStarting = false);
+      }
       final failedSubscription = _commandEventsSubscription;
       final failedCommand = _command;
       _commandEventsSubscription = null;
@@ -495,8 +527,16 @@ class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
         });
         _scrollToBottom();
       }
-      await failedSubscription?.cancel();
-      await failedCommand?.dispose();
+      try {
+        await failedSubscription?.cancel();
+      } catch (cleanupError) {
+        debugPrint('[voice] subscription cleanup failed: $cleanupError');
+      }
+      try {
+        await failedCommand?.dispose();
+      } catch (cleanupError) {
+        debugPrint('[voice] command cleanup failed: $cleanupError');
+      }
       return;
     }
 
@@ -508,7 +548,7 @@ class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
   }
 
   Future<void> _startMicCapture({required bool turnOn}) async {
-    if (_micStarting || !mounted) return;
+    if (_micStarting || !mounted || !_foreground) return;
     final stopping = _micStopping;
     if (stopping != null) {
       await stopping;
@@ -523,10 +563,11 @@ class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
     final l10n = context.l10n;
     final generation = ++_micGeneration;
     _micStarting = true;
-    bool current() => mounted && generation == _micGeneration;
+    bool current() => mounted && _foreground && generation == _micGeneration;
 
     try {
       final permission = await Permission.microphone.request();
+      if (!permission.isGranted) _resumeMicrophone = false;
       if (!current()) return;
       if (!permission.isGranted) {
         _addSystemSetState(
@@ -599,6 +640,9 @@ class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
       await _stopMicCapture();
     } finally {
       _micStarting = false;
+      if (mounted && _foreground && _resumeMicrophone) {
+        unawaited(_resumeAudioAfterBackground());
+      }
     }
   }
 
@@ -620,8 +664,13 @@ class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
     _audioSubscription = null;
     _amplitudeSubscription = null;
     _micActive = false;
-    await audio?.cancel();
-    await amplitude?.cancel();
+    for (final subscription in [audio, amplitude]) {
+      try {
+        await subscription?.cancel();
+      } catch (error) {
+        debugPrint('[voice] capture subscription cleanup failed: $error');
+      }
+    }
 
     try {
       await _mic.stop();
@@ -630,8 +679,12 @@ class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
     }
 
     // Mic is going away entirely — flush any buffered audio on the server.
-    await _command?.endAudioStream();
-    _command?.recordClientEvent('mic_capture_stopped', {'muted': true});
+    try {
+      await _command?.endAudioStream();
+      _command?.recordClientEvent('mic_capture_stopped', {'muted': true});
+    } catch (error) {
+      debugPrint('[voice] audio stream cleanup failed: $error');
+    }
 
     if (!mounted) return;
     setState(() {
@@ -662,6 +715,7 @@ class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
   }
 
   Future<void> _stop() async {
+    _resumeMicrophone = false;
     await _stopMicCapture();
 
     try {
@@ -800,7 +854,7 @@ class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
         case VoiceUserTranscriptDelta():
           // A typed turn disables playback for its reply. Voice input starts a
           // new audio turn, so subsequent agent audio must be audible again.
-          _command?.setAudioPlaybackEnabled(true);
+          _setAudioPlaybackEnabled(true);
           conversationChanged = _applyConversationEvent(event, replay: false);
         case VoiceAgentTranscriptDelta():
         case VoiceAgentTurnComplete():

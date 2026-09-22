@@ -20,7 +20,6 @@ final class PcmAudioPlayer: NSObject {
   private var playerNode: AVAudioPlayerNode?
   private var playbackFormat: AVAudioFormat?
   private var voiceProcessingActive = false
-  private var vpFallbackReason: String?
   private var configChangeObserver: NSObjectProtocol?
   private var enqueueCount = 0
   private var queuedFrames: AVAudioFrameCount = 0
@@ -224,7 +223,6 @@ final class PcmAudioPlayer: NSObject {
     self.engine = engine
 
     voiceProcessingActive = false
-    vpFallbackReason = nil
     if capture {
       // Never silently fall back to an echo-prone duplex session.
       try engine.inputNode.setVoiceProcessingEnabled(true)
@@ -258,7 +256,10 @@ final class PcmAudioPlayer: NSObject {
 
     configChangeObserver = NotificationCenter.default.addObserver(
       forName: .AVAudioEngineConfigurationChange, object: engine, queue: .main
-    ) { [weak self] _ in self?.handleConfigurationChange() }
+    ) { [weak self] notification in
+      guard let changedEngine = notification.object as? AVAudioEngine else { return }
+      self?.handleConfigurationChange(changedEngine)
+    }
     interruptionObserver = NotificationCenter.default.addObserver(
       forName: AVAudioSession.interruptionNotification, object: nil, queue: .main
     ) { [weak self] notification in
@@ -322,8 +323,8 @@ final class PcmAudioPlayer: NSObject {
       )
   }
 
-  private func handleConfigurationChange() {
-    guard let engine, !engine.isRunning else { return }
+  private func handleConfigurationChange(_ changedEngine: AVAudioEngine) {
+    guard let engine, engine === changedEngine else { return }
     // Route changes can change the tap's format. Rebuild the converter and
     // graph together instead of restarting an engine with stale formats.
     let capture = captureEnabled
@@ -529,7 +530,7 @@ final class PcmAudioPlayer: NSObject {
   private func diagnostics() -> [String: Any] {
     let session = AVAudioSession.sharedInstance()
     let input = captureEnabled ? engine?.inputNode : nil
-    var map: [String: Any] = [
+    let map: [String: Any] = [
       "voiceProcessing": voiceProcessingActive,
       "engineRunning": engine?.isRunning ?? false,
       "sessionCategory": session.category.rawValue,
@@ -540,22 +541,7 @@ final class PcmAudioPlayer: NSObject {
       "inputFormat": input.map { "\($0.outputFormat(forBus: 0))" } ?? "none",
       "inputHwFormat": input.map { "\($0.inputFormat(forBus: 0))" } ?? "none",
     ]
-    if let vpFallbackReason {
-      map["vpFallback"] = vpFallbackReason
-    }
     return map
-  }
-
-  private func logFormats(engine: AVAudioEngine, label: String) {
-    let input = engine.inputNode
-    let output = engine.outputNode
-    NSLog(
-      "[PcmAudio] formats(%@): input.out=%@ input.hw=%@ output.out=%@",
-      label,
-      String(describing: input.outputFormat(forBus: 0)),
-      String(describing: input.inputFormat(forBus: 0)),
-      String(describing: output.outputFormat(forBus: 0))
-    )
   }
 
   private func isUsable(_ format: AVAudioFormat) -> Bool {

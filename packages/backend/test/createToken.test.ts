@@ -332,12 +332,15 @@ describe('buildSystemInstruction', () => {
     })
 })
 
-
 describe('Gemini 3.8 native rollout', () => {
     it('keeps old installed clients compatible with their compiled setup', () => {
-        expect(liveModelFor('android', '0.4.0')).toBe('gemini-3.1-flash-live-preview')
+        expect(liveModelFor('android', '0.4.0')).toBe(
+            'gemini-3.1-flash-live-preview',
+        )
         expect(liveModelFor('ios')).toBe('gemini-3.1-flash-live-preview')
-        expect(liveModelFor('web', '1.0.0')).toBe('gemini-3.1-flash-live-preview')
+        expect(liveModelFor('web', '0.0.0')).toBe(
+            'gemini-3.1-flash-live-preview',
+        )
     })
     it('enables 3.8 for the rebuilt native app', () => {
         for (const platform of ['android', 'ios', 'macos']) {
@@ -345,7 +348,10 @@ describe('Gemini 3.8 native rollout', () => {
         }
     })
     it('waits for financial operations before confirming their outcomes', () => {
-        expect(declarationsFor('android', '0.5.0', ALL_FLAGS)
-            .every((tool) => tool.behavior === 'BLOCKING')).toBe(true)
+        expect(
+            declarationsFor('android', '0.5.0', ALL_FLAGS).every(
+                (tool) => tool.behavior === 'BLOCKING',
+            ),
+        ).toBe(true)
     })
 })

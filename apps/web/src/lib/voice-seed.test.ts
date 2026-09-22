@@ -148,3 +148,23 @@ describe('parseGoogleDuration', () => {
         expect(parseGoogleDuration('abc')).toBeNull()
     })
 })
+
+it('preserves committed tool results in reconnect context', () => {
+    const seed = buildConversationSeed([
+        {
+            type: 'tool_call',
+            id: 'a',
+            name: 'addExpense',
+            args: { amount: 3000 },
+        },
+        {
+            type: 'tool_result',
+            id: 'a',
+            name: 'addExpense',
+            result: { ok: true, id: 'saved-id' },
+        },
+    ])
+    expect(seed).toContain('"amount":3000')
+    expect(seed).toContain('"id":"saved-id"')
+    expect(seed).toContain('do not repeat a successful write')
+})

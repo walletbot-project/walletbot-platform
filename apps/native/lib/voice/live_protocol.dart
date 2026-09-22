@@ -3,6 +3,16 @@ import 'dart:typed_data';
 
 import 'agent_generated.dart';
 
+/// Keep each single-use token paired with the model it authorizes.
+class LiveToken {
+  const LiveToken(this.token, {this.model = kAgentModel});
+  static const legacyModel = 'gemini-3.1-flash-live-preview';
+  final String token;
+  final String model;
+  bool get isEmpty => token.isEmpty;
+  bool get isNotEmpty => token.isNotEmpty;
+}
+
 /// Wire details live here, independently of widgets, persistence and audio I/O.
 abstract final class LiveProtocol {
   static const inputRate = 16000;
@@ -16,9 +26,9 @@ abstract final class LiveProtocol {
     queryParameters: {'access_token': token},
   );
 
-  static Map<String, dynamic> setup() => {
+  static Map<String, dynamic> setup({String model = kAgentModel}) => {
     'setup': {
-      'model': 'models/$kAgentModel',
+      'model': 'models/$model',
       'generationConfig': {
         'responseModalities': ['AUDIO'],
         'speechConfig': {

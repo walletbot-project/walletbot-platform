@@ -19,14 +19,18 @@ class LiveConnection {
     required this.onError,
     required this.beforeReady,
     this.onSend,
+    this.onMessageError,
     WebSocketChannel Function(Uri)? connectSocket,
     this.setupTimeout = const Duration(seconds: 20),
   }) : _connectSocket = connectSocket ?? WebSocketChannel.connect;
 
-  final Future<Uri> Function() credentials;
+  final Future<LiveToken> Function() credentials;
+  String? _model;
+  String? get model => _model;
   final void Function(Map<String, dynamic>, int) onMessage;
   final void Function(LiveConnectionState) onState;
   final void Function(Object) onError;
+  final void Function(Object)? onMessageError;
   final Future<String?> Function() beforeReady;
   final void Function(Map<String, dynamic>)? onSend;
   final WebSocketChannel Function(Uri) _connectSocket;
@@ -62,9 +66,10 @@ class LiveConnection {
     _setState(LiveConnectionState.connecting);
     try {
       await _release();
-      final uri = await credentials();
+      final token = await credentials();
       if (!isCurrent(current)) return;
-      final socket = _connectSocket(uri);
+      _model = token.model;
+      final socket = _connectSocket(LiveProtocol.endpoint(token: token.token));
       _socket = socket;
       final setup = Completer<void>();
       _setup = setup;
@@ -73,8 +78,9 @@ class LiveConnection {
       _subscription = socket.stream.listen(
         (raw) {
           if (!isCurrent(current)) return;
+          late final Map<String, dynamic> message;
           try {
-            final message = LiveProtocol.decode(raw);
+            message = LiveProtocol.decode(raw);
             if (message.containsKey('setupComplete') && !setup.isCompleted) {
               setup.complete();
             }
@@ -82,9 +88,15 @@ class LiveConnection {
             if (error != null) {
               throw StateError('Gemini rejected the session: $error');
             }
-            onMessage(message, current);
           } catch (error) {
             _failed(error, current);
+            return;
+          }
+          try {
+            onMessage(message, current);
+          } catch (error) {
+            // An application parser/handler failure is not a broken socket.
+            onMessageError?.call(error);
           }
         },
         onError: (Object error) => _failed(error, current),
@@ -99,7 +111,7 @@ class LiveConnection {
       );
       await socket.ready.timeout(setupTimeout);
       if (!isCurrent(current)) return;
-      _write(LiveProtocol.setup());
+      _write(LiveProtocol.setup(model: token.model));
       await setup.future.timeout(setupTimeout);
       if (!isCurrent(current)) return;
       final seed = await beforeReady();

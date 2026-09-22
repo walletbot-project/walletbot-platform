@@ -3,8 +3,9 @@
 // setup frame (via the generated apps/native/lib/voice/agent_generated.dart —
 // run `pnpm run generate:agent` after changing these).
 //
-// Bumping the model or voice here propagates to both sides in one change,
-// instead of silently desyncing the backend mint from native's setup frame.
+// This is the default for capable clients. The token mint also preserves
+// older client compatibility and applies the server-side 3.1 rollback flag.
+// Current clients use the model returned with their token for setup.
 
 export const AGENT_MODEL = 'gemini-3.8-live'
 

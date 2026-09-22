@@ -16,6 +16,8 @@ class _Command extends DebugVoiceExpenseCommand {
   final audio = <List<int>>[];
   bool connected = false;
   @override
+  bool get isActive => true;
+  @override
   bool get isConnected => connected;
   @override
   Stream<VoiceEvent> get events => controller.stream;
@@ -126,6 +128,53 @@ void main() {
     },
     variant: TargetPlatformVariant.only(TargetPlatform.android),
   );
+  testWidgets(
+    'permission pause and rapid resume-pause never strand or restart capture in background',
+    (tester) async {
+      final permission = Completer<Map<int, int>>();
+      messenger.setMockMethodCallHandler(_permission, (_) => permission.future);
+      final command = _Command();
+      await tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: VoiceScreen(commandFactory: _Factory(command)),
+        ),
+      );
+      await tester.pump();
+      await tester.tap(find.byIcon(Icons.mic_rounded));
+      await tester.pump();
+      binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+      binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
+      binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+      await tester.pump();
+      binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
+      binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+      binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+      binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
+      binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+      permission.complete({7: 1});
+      await tester.pump();
+      await tester.pump();
+      expect(captureCalls, isEmpty);
+      binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
+      binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+      binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await tester.pump();
+      await tester.pump();
+      expect(captureCalls, ['listen']);
+      command.ready();
+      await tester.pump();
+      await chunk(tester, [7, 0]);
+      expect(command.audio, [
+        [7, 0],
+      ]);
+      await tester.pumpWidget(const SizedBox());
+    },
+    variant: TargetPlatformVariant.only(TargetPlatform.android),
+  );
+
   for (final cancel in [
     'tap',
     'background',

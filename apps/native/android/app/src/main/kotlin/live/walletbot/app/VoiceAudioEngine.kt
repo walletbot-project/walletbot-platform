@@ -37,12 +37,35 @@ class VoiceAudioEngine(private val context: Context, messenger: BinaryMessenger)
     private var previousDevice: AudioDeviceInfo? = null
     private var ownsSession = false
     private var focusRequest: AudioFocusRequest? = null
+    private var focusPaused = false
+    private var focusLost = false
     private val focusListener = AudioManager.OnAudioFocusChangeListener { change ->
-        if (change < 0) {
-            interrupt()
-            val listener = sink
-            stopCapture()
-            listener?.error("audio_interrupted", "Microphone interrupted by another audio session", null)
+        when (change) {
+            AudioManager.AUDIOFOCUS_LOSS_TRANSIENT,
+            AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK -> {
+                focusPaused = true
+                interrupt()
+                val listener = sink
+                stopCapture()
+                // Preserve the subscription, not a running recorder. A later mute
+                // cancels this sink, so GAIN cannot restart unwanted capture.
+                sink = listener
+            }
+            AudioManager.AUDIOFOCUS_GAIN -> {
+                if (focusPaused && ownsSession) {
+                    focusPaused = false
+                    track?.play()
+                    sink?.let { onListen(null, it) }
+                }
+            }
+            AudioManager.AUDIOFOCUS_LOSS -> {
+                focusLost = true
+                focusPaused = true
+                interrupt()
+                val listener = sink
+                stopCapture()
+                listener?.error("audio_interrupted", "Audio focus lost; tap the microphone to resume", null)
+            }
         }
     }
 
@@ -71,6 +94,8 @@ class VoiceAudioEngine(private val context: Context, messenger: BinaryMessenger)
 
     private fun start() {
         if (track != null) return
+        focusPaused = false
+        focusLost = false
         previousMode = manager.mode
         @Suppress("DEPRECATION")
         previousSpeaker = manager.isSpeakerphoneOn
@@ -94,7 +119,8 @@ class VoiceAudioEngine(private val context: Context, messenger: BinaryMessenger)
             .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH).build()
         val focus = if (Build.VERSION.SDK_INT >= 26) {
             val request = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT)
-                .setAudioAttributes(attributes).setOnAudioFocusChangeListener(focusListener, main).build()
+                .setAudioAttributes(attributes).setWillPauseWhenDucked(true)
+                .setOnAudioFocusChangeListener(focusListener, main).build()
             focusRequest = request
             manager.requestAudioFocus(request)
         } else {
@@ -118,7 +144,7 @@ class VoiceAudioEngine(private val context: Context, messenger: BinaryMessenger)
         require(bytes.size % 2 == 0) { "Unaligned PCM16" }
         val output = checkNotNull(track) { "Playback not started" }
         val handler = checkNotNull(playback)
-        if (bytes.isEmpty()) return
+        if (bytes.isEmpty() || focusPaused) return
         // At most 20 seconds of generated speech; overflow is visible to Dart.
         if (queuedBytes.addAndGet(bytes.size) > 24000 * 2 * 20) {
             queuedBytes.addAndGet(-bytes.size)
@@ -145,7 +171,7 @@ class VoiceAudioEngine(private val context: Context, messenger: BinaryMessenger)
         queuedBytes.set(0)
         track?.pause() // Unblocks a writer immediately.
         track?.flush()
-        track?.play()
+        if (!focusPaused) track?.play()
     }
 
     override fun onListen(arguments: Any?, events: EventChannel.EventSink) {
@@ -156,6 +182,19 @@ class VoiceAudioEngine(private val context: Context, messenger: BinaryMessenger)
             check(track != null) { "Audio session not started" }
             stopCapture()
             sink = events
+            if (focusLost) {
+                val focus = if (Build.VERSION.SDK_INT >= 26) {
+                    manager.requestAudioFocus(checkNotNull(focusRequest))
+                } else {
+                    @Suppress("DEPRECATION")
+                    manager.requestAudioFocus(focusListener, AudioManager.STREAM_VOICE_CALL, AudioManager.AUDIOFOCUS_GAIN_TRANSIENT)
+                }
+                check(focus == AudioManager.AUDIOFOCUS_REQUEST_GRANTED) { "Audio focus unavailable" }
+                focusLost = false
+                focusPaused = false
+                track?.play()
+            }
+            if (focusPaused) return
             val minimum = AudioRecord.getMinBufferSize(16000, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT)
             check(minimum > 0) { "PCM capture unsupported" }
             val input = AudioRecord.Builder().setAudioSource(MediaRecorder.AudioSource.VOICE_COMMUNICATION)
@@ -206,25 +245,37 @@ class VoiceAudioEngine(private val context: Context, messenger: BinaryMessenger)
         val input = recorder
         recorder = null
         try { input?.stop() } catch (_: Exception) {}
-        // stop() releases READ_BLOCKING. Join before releasing its native handle.
-        captureThread?.join(500)
+        // stop() unblocks read. Wait for the reader off the UI thread before
+        // releasing its handles; the generation fences all queued deliveries.
+        val reader = captureThread
+        val oldEchoCanceler = echoCanceler
+        val oldSuppressor = suppressor
         captureThread = null
-        echoCanceler?.release(); echoCanceler = null
-        suppressor?.release(); suppressor = null
-        input?.release()
+        echoCanceler = null
+        suppressor = null
+        if (input != null) Thread({
+            reader?.join()
+            oldEchoCanceler?.release()
+            oldSuppressor?.release()
+            input.release()
+        }, "walletbot-capture-release").start()
     }
 
     fun stop() {
+        focusPaused = true
         stopCapture()
         interrupt()
         val output = track
         track = null
         output?.pause()
-        playbackThread?.quitSafely()
-        playbackThread?.join(500)
+        val worker = playbackThread
+        worker?.quitSafely()
         playbackThread = null
         playback = null
-        output?.release()
+        if (output != null) Thread({
+            worker?.join()
+            output.release()
+        }, "walletbot-playback-release").start()
         if (ownsSession) {
             if (Build.VERSION.SDK_INT >= 26) focusRequest?.let { manager.abandonAudioFocusRequest(it) }
             else { @Suppress("DEPRECATION") manager.abandonAudioFocus(focusListener) }

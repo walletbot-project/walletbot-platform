@@ -50,12 +50,44 @@ Future<void> tick() => Future<void>.delayed(Duration.zero);
 
 void main() {
   test(
+    'application message failures do not reconnect a healthy socket',
+    () async {
+      final socket = FakeSocket()..handshake.complete();
+      final errors = <Object>[];
+      final connection = LiveConnection(
+        credentials: () async => const LiveToken('token'),
+        onMessage: (message, _) {
+          if (!message.containsKey('setupComplete')) {
+            throw const FormatException('bad audio');
+          }
+        },
+        onMessageError: errors.add,
+        onState: (_) {},
+        onError: (error) => fail('$error'),
+        beforeReady: () async => null,
+        connectSocket: (_) => socket,
+      );
+      final opening = connection.connect();
+      await tick();
+      socket.receive({'setupComplete': {}});
+      await opening;
+      final epoch = connection.epoch;
+      socket.receive({'serverContent': {}});
+      await tick();
+      expect(errors.single, isA<FormatException>());
+      expect(connection.ready, true);
+      expect(connection.epoch, epoch);
+      await connection.close();
+      await socket.incoming.close();
+    },
+  );
+  test(
     'waits for socket and setup, then seeds context before admitting input',
     () async {
       final socket = FakeSocket();
       final states = <LiveConnectionState>[];
       final connection = LiveConnection(
-        credentials: () async => Uri.parse('ws://test'),
+        credentials: () async => const LiveToken('test-token'),
         onMessage: (_, _) {},
         onState: states.add,
         onError: (error) => fail('$error'),
@@ -80,8 +112,46 @@ void main() {
     },
   );
 
+  test(
+    'uses the model paired with each token, including after reconnect',
+    () async {
+      final sockets = <FakeSocket>[];
+      var model = LiveToken.legacyModel;
+      final connection = LiveConnection(
+        credentials: () async => LiveToken('test-token', model: model),
+        onMessage: (_, _) {},
+        onState: (_) {},
+        onError: (error) => fail('$error'),
+        beforeReady: () async => null,
+        connectSocket: (_) {
+          final socket = FakeSocket()..handshake.complete();
+          sockets.add(socket);
+          return socket;
+        },
+      );
+      for (final selected in [LiveToken.legacyModel, 'gemini-3.8-live']) {
+        model = selected;
+        final opening = sockets.isEmpty
+            ? connection.connect()
+            : connection.reconnect();
+        await tick();
+        expect(
+          sockets.last.outgoing.single['setup']['model'],
+          'models/$selected',
+        );
+        sockets.last.receive({'setupComplete': {}});
+        await opening;
+        expect(connection.model, selected);
+      }
+      await connection.close();
+      for (final socket in sockets) {
+        await socket.incoming.close();
+      }
+    },
+  );
+
   test('stop during token fetch cannot create a late socket', () async {
-    final token = Completer<Uri>();
+    final token = Completer<LiveToken>();
     var opens = 0;
     final connection = LiveConnection(
       credentials: () => token.future,
@@ -97,7 +167,7 @@ void main() {
     final opening = connection.connect();
     await tick();
     await connection.close();
-    token.complete(Uri.parse('ws://test'));
+    token.complete(const LiveToken('test-token'));
     await opening;
     expect(opens, 0);
     expect(connection.state, LiveConnectionState.closed);
@@ -109,7 +179,7 @@ void main() {
       final sockets = <FakeSocket>[];
       final received = <Map<String, dynamic>>[];
       final connection = LiveConnection(
-        credentials: () async => Uri.parse('ws://test'),
+        credentials: () async => const LiveToken('test-token'),
         onMessage: (message, _) => received.add(message),
         onState: (_) {},
         onError: (_) {},
@@ -150,7 +220,7 @@ void main() {
     final socket = FakeSocket()..handshake.complete();
     final errors = <Object>[];
     final connection = LiveConnection(
-      credentials: () async => Uri.parse('ws://test'),
+      credentials: () async => const LiveToken('test-token'),
       onMessage: (_, _) {},
       onState: (_) {},
       onError: errors.add,

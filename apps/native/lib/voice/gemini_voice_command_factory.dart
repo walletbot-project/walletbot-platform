@@ -10,6 +10,7 @@ import '../settings/display_settings.dart';
 import '../telemetry/agent_metrics.dart';
 import '../user_settings/default_currency_controller.dart';
 import 'live_token_provider.dart';
+import 'live_protocol.dart';
 import 'voice_expense_command.dart';
 import 'voice_event.dart';
 import 'voice_session_repository.dart';
@@ -72,7 +73,7 @@ class GeminiVoiceExpenseCommandFactory implements VoiceExpenseCommandFactory {
   // packages/backend/convex/live/createToken.ts). The freshness bound stays
   // well inside that window so a consumed prefetch is always startable.
   static const _prefetchFreshness = Duration(seconds: 60);
-  Future<String>? _prefetchedToken;
+  Future<LiveToken>? _prefetchedToken;
   DateTime? _prefetchedAt;
 
   @override
@@ -90,7 +91,7 @@ class GeminiVoiceExpenseCommandFactory implements VoiceExpenseCommandFactory {
         DateTime.now().difference(startedAt) < _prefetchFreshness) {
       return;
     }
-    late final Future<String> future;
+    late final Future<LiveToken> future;
     future = fetchLiveToken(
       useAuthenticatedTokenAction: useAuthenticatedTokenAction,
       convexClient: convexClient,
@@ -126,7 +127,7 @@ class GeminiVoiceExpenseCommandFactory implements VoiceExpenseCommandFactory {
   /// Hands a still-fresh prefetched token fetch to a connecting command,
   /// consuming it. Null when none was started or it aged out of the token's
   /// new-session window.
-  Future<String>? takeFreshPrefetch() {
+  Future<LiveToken>? takeFreshPrefetch() {
     final future = _prefetchedToken;
     final startedAt = _prefetchedAt;
     _prefetchedToken = null;

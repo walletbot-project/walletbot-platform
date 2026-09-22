@@ -25,6 +25,7 @@ void main() {
       tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
       await tester.pump();
       expect(command.isActive, true);
+      expect(command.audioPlaybackStates, [true]);
       await tester.pumpWidget(const MaterialApp(home: SizedBox()));
     },
   );

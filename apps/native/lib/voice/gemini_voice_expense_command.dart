@@ -51,11 +51,7 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
          fxQuotes: fxRates == null ? null : () => fxRates.quotes,
        );
 
-  // Model + voice come from the generated shared constants
-  // (agent_generated.dart ← packages/shared/src/tools/constants.ts), the same
-  // source the backend mint uses — a bump there can no longer desync native's
-  // setup frame from the token's constraints (defect D4).
-  static const _model = kAgentModel;
+  String get _model => _connection.model ?? kAgentModel;
   static const _maxQueuedMessages = 20;
 
   final AppRepositories repositories;
@@ -75,7 +71,7 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
 
   /// Consumes the factory's screen-open token prefetch, when one is still
   /// inside the token's new-session window. Null result → fetch fresh.
-  final Future<String>? Function()? takePrefetchedToken;
+  final Future<LiveToken>? Function()? takePrefetchedToken;
   final ToolExecutors _executors;
   final _audioPlayer = PcmAudioPlayer();
   final _events = StreamController<VoiceEvent>.broadcast();
@@ -89,16 +85,20 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
       if (token.isEmpty) {
         throw const MissingLiveCredentialsException();
       }
-      return LiveProtocol.endpoint(token: token);
+      return token;
     },
     beforeReady: () async {
       // A write that already started can finish after a disconnect. Seed its
       // committed result before admitting new work on the replacement socket.
       await _tools.settled;
       await sessionRepository.flush();
+      final id = _sessionId;
+      if (id != null) await sessionRepository.updateModel(id, _model);
       return _buildContextSeed();
     },
     onMessage: _handleServerMessage,
+    onMessageError: (error) =>
+        _emit(VoiceErrorEvent('Live message handling failed: $error')),
     onSend: (message) => _persistProtocolEvent(
       type: 'client_message',
       direction: 'client',
@@ -147,7 +147,7 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
   );
 
   String? _sessionId;
-  Future<String>? _prefetchedToken;
+  Future<LiveToken>? _prefetchedToken;
   Future<void>? _starting;
   bool _active = false;
   bool _disposed = false;
@@ -165,7 +165,6 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
   bool _sessionCostMetricSent = false;
   final AgentInteractionCostTracker _interactionCostTracker =
       AgentInteractionCostTracker();
-  Map<String, Object?>? _latestUsageMetadata;
 
   @override
   String get label => 'Gemini Live voice expense command';
@@ -299,8 +298,8 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
   /// `uses: 1` and a short new-session window, so a token can never be
   /// reused across connection attempts — every (re)connect resolves a new
   /// one, and nothing is cached.
-  Future<String> _resolveLiveToken() async {
-    if (liveToken.isNotEmpty) return liveToken;
+  Future<LiveToken> _resolveLiveToken() async {
+    if (liveToken.isNotEmpty) return LiveToken(liveToken);
     _emit(VoiceSystemEvent('Requesting live token from Convex'));
     final token = await fetchLiveToken(
       useAuthenticatedTokenAction: useAuthenticatedTokenAction,
@@ -505,7 +504,6 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
     final usage = message['usageMetadata'];
     if (usage is Map) {
       final metadata = usage.cast<String, Object?>();
-      _latestUsageMetadata = metadata;
       _recordInteractionCostMetric(metadata);
       _emit(VoiceUsageMetadataEvent(metadata));
     }
@@ -616,7 +614,13 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
               outputTranscription is! Map) {
             _emit(VoiceAgentTranscriptDelta(text));
           }
-          final pcmBytes = LiveProtocol.pcm(part);
+          final Uint8List? pcmBytes;
+          try {
+            pcmBytes = LiveProtocol.pcm(part);
+          } on FormatException catch (error) {
+            _emit(VoiceErrorEvent('Ignored malformed audio: $error'));
+            continue;
+          }
           if (pcmBytes == null) continue;
           _outputAudioChunks += 1;
           _outputAudioBytes += pcmBytes.length;
@@ -687,16 +691,18 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
 
   void _recordSessionCostMetric() {
     if (_sessionCostMetricSent) return;
-    final usage = _latestUsageMetadata;
     final sessionId = _sessionId;
-    if (usage == null || sessionId == null) return;
+    if (sessionId == null) return;
     _sessionCostMetricSent = true;
-    agentMetrics?.recordSessionCostFromUsageBestEffort(
-      sessionId: sessionId,
-      model: _model,
-      mode: _sessionMode(),
-      usage: usage,
-    );
+    for (final entry in _interactionCostTracker.totalsByModel.entries) {
+      agentMetrics?.recordSessionCostBestEffort(
+        sessionId: sessionId,
+        model: entry.key,
+        mode: _sessionMode(),
+        costUsd: entry.value.costUsd,
+        tokenAttributes: entry.value.tokens,
+      );
+    }
   }
 
   void _recordInteractionCostMetric(Map<String, Object?> usage) {
@@ -704,11 +710,12 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
     if (sessionId == null) return;
     final metrics = agentMetrics;
     if (metrics == null) return;
-    final totalCostUsd = metrics.estimateSessionCostUsd(usage);
-    if (totalCostUsd == null) return;
+    final generationCostUsd = metrics.estimateSessionCostUsd(usage);
+    if (generationCostUsd == null) return;
     final sample = _interactionCostTracker.nextSample(
       sessionId: sessionId,
-      totalCostUsd: totalCostUsd,
+      model: _model,
+      generationCostUsd: generationCostUsd,
       fallbackInteractionType: _sessionMode(),
       tokenAttributes: AgentMetrics.usageTokenAttributes(usage),
     );

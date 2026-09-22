@@ -22,6 +22,12 @@ credential, tool-dispatch and audio responsibilities have separate owners.
 
 ## Connection rules
 
+The backend's `agentGemini31` flag selects the model for native 0.5.1+.
+It defaults off (3.8); on selects 3.1 with the same audio architecture. Each
+credential carries its model into setup, including prefetched and reconnect
+tokens. The backend and client therefore cannot select different models.
+See [rollback/testing instructions](../../docs/gemini-3.8-native.md#model-rollback--comparison-flag).
+
 A connection waits for both WebSocket readiness and Gemini `setupComplete`.
 Each attempt has an epoch, invalidated immediately by disconnect or close.
 Late credential completions and tool results cannot resurrect a closed socket.
@@ -102,7 +108,9 @@ The session category and mode are restored on teardown.
 
 `packages/shared/src/tools/constants.ts` generates the native model constant.
 Native version 0.5.0+ is minted `gemini-3.8-live`; older native versions and the
-existing web integration retain `gemini-3.1-flash-live-preview`. Deploy the backend
+cached web clients below capability version 0.5.1 retain
+`gemini-3.1-flash-live-preview`. Updated web clients use 3.8 by default and
+honor `agentGemini31`; see [the web notes](../../docs/gemini-3.8-web.md). Deploy the backend
 before distributing the new native build. A mismatched token model fails clearly
 instead of retrying a permanently incompatible setup.
 
@@ -112,3 +120,19 @@ with the app's instructions and tools.
 
 See [the research and migration notes](../../docs/gemini-3.8-native.md) for model
 choices, primary sources, verification and remaining device coverage.
+
+
+### Interruptions and route changes (PR review)
+
+Android pauses for transient focus loss (including notification duck requests)
+and resumes on focus gain while the capture subscription is still wanted. Mute,
+screen detach and background cleanup cancel that subscription, so focus gain
+cannot restart it. Permanent focus loss requires a fresh microphone tap. Reader
+and writer teardown joins run off the UI thread before native handles release.
+
+On iOS, a configuration notification rebuilds the current engine's graph, input
+tap and converter even if the engine reports running; stale-engine notifications
+are ignored. Phone-call interruptions deliberately stop the engine and report an
+interruption to Dart. A new microphone tap resumes after the call; automatic
+resume on `.ended` is not implemented. Mute/unmute still rebuilds the duplex
+engine, so physical-device listening and route testing remain release checks.

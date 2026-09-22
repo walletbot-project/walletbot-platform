@@ -727,6 +727,8 @@ export const es = {
         systemDisconnected: 'Desconectado',
         systemConnected: 'Conectado. Podés hablar.',
         systemConnectedTyping: 'Conectado. Enviando tu mensaje…',
+        startupAudioTimeout:
+            'La conexión tardó demasiado. Tocá el micrófono para volver a intentar.',
         systemConnectionFailed: (p: { error: string }) =>
             `Falló la conexión: ${p.error}`,
         systemUnavailable:

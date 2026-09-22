@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../convex/convex_client.dart';
 import 'agent_generated.dart';
+import 'live_protocol.dart';
 
 /// One-shot fetch of a constrained Gemini Live token from the backend,
 /// shared by the command's connect path and the factory's prefetch.
@@ -70,7 +71,7 @@ Object _httpFailure(int statusCode, String rawBody) {
   return StateError('Convex live token request failed: $statusCode $rawBody');
 }
 
-Future<String> fetchLiveToken({
+Future<LiveToken> fetchLiveToken({
   required bool useAuthenticatedTokenAction,
   required ConvexClient? convexClient,
   required String? sessionToken,
@@ -131,7 +132,7 @@ Future<String> fetchLiveToken({
         'elapsedMs': fetchStopwatch.elapsedMilliseconds,
         'reason': 'no_site_url',
       });
-      return '';
+      return const LiveToken('');
     }
     // The endpoint takes either identity. A local account has no session and
     // mints against its device id instead, which is the whole reason the agent
@@ -144,7 +145,7 @@ Future<String> fetchLiveToken({
         'elapsedMs': fetchStopwatch.elapsedMilliseconds,
         'reason': 'unidentified_client',
       });
-      return '';
+      return const LiveToken('');
     }
     final base = Uri.parse(convexSiteUrl);
     final response = await http
@@ -173,7 +174,7 @@ Future<String> fetchLiveToken({
   if (refusal != null) throw refusal;
 
   final model = body['model'];
-  if (model != null && model != kAgentModel) {
+  if (model != kAgentModel && model != LiveToken.legacyModel) {
     throw const LiveTokenRefusedException('model_mismatch');
   }
   final token = body['token'];
@@ -192,5 +193,5 @@ Future<String> fetchLiveToken({
     // network + Convex routing.
     if (body['timings'] is Map) 'server': body['timings'],
   });
-  return token;
+  return LiveToken(token, model: model as String);
 }

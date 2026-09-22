@@ -5,7 +5,7 @@ import 'telemetry_client.dart';
 class AgentMetrics {
   const AgentMetrics(this._telemetry);
 
-  // Local estimate only used for client-side delta detection. Backend pricing
+  // Local estimate for generation/session samples. Backend pricing
   // recalculates USD from token attributes before storing/exporting metrics.
   static const _geminiLiveInputTextUsdPerMillion = 0.75;
   static const _geminiLiveInputAudioUsdPerMillion = 3.00;
@@ -96,6 +96,27 @@ class AgentMetrics {
         sessionId: sessionId,
       ),
     ]);
+  }
+
+  void recordSessionCostBestEffort({
+    required String sessionId,
+    required String model,
+    required String mode,
+    required double costUsd,
+    required Map<String, int> tokenAttributes,
+  }) {
+    unawaited(
+      _telemetry?.sendMetricBatch([
+        _costGaugeMetric(
+          name: 'agent.session.cost_usd',
+          sessionId: sessionId,
+          model: model,
+          mode: _normalizeMode(mode),
+          costUsd: costUsd,
+          tokenAttributes: tokenAttributes,
+        ),
+      ]),
+    );
   }
 
   void recordSessionCostFromUsageBestEffort({
@@ -223,10 +244,7 @@ class AgentMetrics {
 
     if (estimatedInputUsd == null && estimatedOutputUsd == null) {
       if (totalTokens == null) return null;
-      return _tokensToUsd(
-        totalTokens,
-        _geminiLiveOutputTextUsdPerMillion,
-      );
+      return _tokensToUsd(totalTokens, _geminiLiveOutputTextUsdPerMillion);
     }
     return (estimatedInputUsd ?? 0) + (estimatedOutputUsd ?? 0);
   }
