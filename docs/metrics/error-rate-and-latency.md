@@ -71,33 +71,37 @@ latency p50/p95/p99 — and recommends a path forward.
   native already has (`apps/native/lib/telemetry/telemetry_client.dart`)
   ported over. That's its own task, not something this spike's POC should
   absorb.
-- **Convex Log Streams** (Pro plan, **$25/developer/month**) stream every
-  function execution to Datadog/Axiom/PostHog/a custom webhook, and the event
-  already includes `execution_time_ms`, `status: success|failure`,
-  `error_message`, `function.path`, `request_id`, DB/storage/network I/O, and
-  retry counts — i.e., exactly backend error-rate + latency-by-function, with
-  **zero application code changes**, because Convex is already computing this
-  for every call. Delivery is best-effort (buffered, can drop under load) —
-  fine for a dashboard, not for billing. The free built-in **Health** page
-  only shows deployment-wide failure % and cache hit rate, no per-function
-  breakdown, so it doesn't answer "which function" on its own.
+- **Convex Log Streams** (Pro plan, **$25/developer/month**) would stream
+  every function execution to Datadog/Axiom/PostHog/a custom webhook, with an
+  event that already includes `execution_time_ms`, `status: success|failure`,
+  `error_message`, `function.path`, `request_id`, and a DB/storage/network I/O
+  breakdown per call — i.e., free per-function traces, essentially. **We're
+  not paying for Pro**, so this is ruled out; noted here only because it's the
+  reason a per-function *breakdown* (not just a total) is expensive to get any
+  other way — see "Traces without Log Streams" below. The free built-in
+  **Health** page only shows deployment-wide failure % and cache hit rate, no
+  per-function breakdown; the free **Logs** page in the dashboard shows
+  execution time and status per call in real time as you watch it, but
+  nothing is retained, aggregated, or exportable — it answers "what's
+  happening right now if I'm staring at the screen," not "what's our p95".
   [Docs](https://docs.convex.dev/production/integrations/log-streams/).
 
 ## Options
 
 | # | Approach | What it covers | Extra DB writes | Engineering cost | Cash cost |
 |---|---|---|---|---|---|
-| A | Hand-rolled: extend `telemetryMetrics` with an error counter + bucketed-counter latency (reusing `cost_bucket_count`'s pattern), called explicitly from the ~10 places that matter (sync push/pull catch blocks, agent tool-call catch blocks) — **not** a blanket wrapper over all 98 functions | Whatever we instrument, at our label granularity | 1-2 extra rows per instrumented call (same order as today's business metrics) | Low-medium: no wrapper needed, no OTLP histogram engineering, but *does* need an error-code prerequisite at each site we touch | $0 |
-| B | Convex Log Streams → Datadog/Axiom (or a small webhook forwarder reshaping into OTLP for Grafana) | Every function, error rate + p50/p95/p99 latency, automatically, deployment-wide | 0 (platform-level, not app data) | Low if we accept a second dashboard (Datadog/Axiom's own); medium if we insist on one pane of glass in Grafana (needs a forwarder) | $25/dev/month |
-| C | Blanket `customQuery`/`customMutation`/`customAction` wrapper instrumenting all ~98 handlers, with true histogram export built into the OTLP exporter | Everything, uniformly | Highest — every single call gets extra writes | High: new wrapper pattern + migrate 98 handlers + build histogram bucket math the exporter doesn't have today | $0 |
+| A | Hand-rolled: extend `telemetryMetrics` with an error counter + bucketed-counter **total** latency (reusing `cost_bucket_count`'s pattern), called explicitly from a chosen set of call sites | Whatever we instrument, at our label granularity — **total** duration per call, not a DB/external-API breakdown | 1-2 extra rows per instrumented call (same order as today's business metrics) | Low-medium: no OTLP histogram engineering needed (bucketed counters reuse the existing counter path), but errors *do* need a coded-reason prerequisite at each site we touch | $0 |
+| B | ~~Convex Log Streams → Datadog/Axiom~~ | Every function, error rate + p50/p95/p99 latency + I/O breakdown, automatically | 0 | — | **$25/dev/month — ruled out, not pursuing** |
+| C | Blanket `customQuery`/`customMutation`/`customAction` wrapper instrumenting all ~98 handlers | Everything, uniformly, total duration only (still no DB/API breakdown without hand-rolled spans — see E) | Highest — every single call gets extra writes | High: new wrapper pattern + migrate 98 handlers | $0 |
 | D | `@convex-dev/aggregate` (already used in `aggregates.ts` for `outflowsByAccount`/`inflowsByAccount`/`transactionsByTag`) keyed by `duration_ms` per function+window, queried with `.at(rank)` for exact percentiles | Exact p50/p95/p99 for whatever we insert into it, queryable from an internal dashboard/query — no Grafana export required | 1 write per sampled call | Medium — no export/outbox overhead, but percentiles live in Convex, not Grafana, so it doesn't fold into the existing "one Grafana dashboard" workflow | $0 |
+| E | Hand-rolled minimal spans: wrap only the specific sub-operations we suspect are slow (the Gemini Live call, the exchange-rate fetch, the WhatsApp webhook round-trip, a handful of known-heavy DB reads) with manual start/end timers, batch-export as OTLP traces through a **new** exporter added next to the existing logs/metrics ones in `telemetry/actions.ts`, into Grafana Tempo | DB-call/external-API-level breakdown, but only for the sites we chose to wrap — never automatic like Log Streams | 1 extra row per wrapped sub-operation (only where we added a timer) | Medium-high: new outbox table + OTLP traces payload shape (span id/parent id/trace id) + manual wrapping at each site of interest, no help from the platform | $0 — Grafana Cloud's free tier includes 50GB traces/month, 14-day retention ([source](https://grafana.com/docs/grafana-cloud/platform/pricing-and-usage/usage-limits/)) |
 
 ## Recommendation
 
-Do **not** try to instrument all 98 functions uniformly right now (Option C):
-there's no wrapper today, errors aren't coded, and the exporter can't emit
-real histograms — that's three prerequisites stacked on top of each other for
-a spike whose deliverable is a direction, not a rewrite. Instead:
+We're not paying for Convex Pro, so Option B is off the table, and Option C
+(instrument all 98 functions uniformly) is too much lift for a first
+iteration. First iteration is **total latency only** — no DB/external-API
+breakdown yet:
 
 1. **Errors, targeted (Option A).** Add one new counter,
    `system.errors.count`, called explicitly at the handful of catch sites that
@@ -108,15 +112,18 @@ a spike whose deliverable is a direction, not a rewrite. Instead:
    stays low-cardinality instead of being free text. This directly answers
    "is Sync healthy?", which today it's impossible to answer without asking a
    user to reproduce the issue and read `debugPrint` output off their device.
-2. **Backend latency: trial Convex Log Streams (Option B)** rather than build
-   bucket-counter latency by hand for every function. It's $25/month for
-   something we'd otherwise spend real engineering time approximating, it
-   requires no code changes, and it already gives per-function p50/p95/p99 and
-   error rate together. If routing it into Grafana (single pane of glass)
-   turns out to need more forwarder glue than it's worth, fall back to
-   Datadog/Axiom's own free dashboard as the "ops" view and keep Grafana for
-   business metrics — two panes is an acceptable MVP tradeoff (we already
-   accept a similar one for R-011).
+2. **Backend total latency, also Option A.** Time the same call sites we're
+   already adding error counters to (sync `push`/`pull`, agent turn
+   processing) end-to-end — one `Date.now()` at entry, one at the
+   `try`/`catch`/`finally` exit — and bucket the elapsed ms into
+   `system.function.duration_bucket_count` the same way
+   `agent.session.cost_bucket_count` already buckets cost. This is a handful
+   of call sites, not all 98 functions, and needs no exporter changes at all
+   (it's a counter, like everything else in the outbox today). It answers
+   "how slow is a sync round / an agent turn," which is most of what the
+   ticket actually needs for v1 — it does **not** tell us whether a slow call
+   was slow in the DB, in a `fetch` to Gemini, or in our own code, and that's
+   an explicit, accepted gap for this iteration.
 3. **Client latency, native only for now.** Redirect the `Stopwatch` values
    `gemini_voice_expense_command.dart` already computes
    (`setup_complete`) into `trackMetric(..., type: 'histogram', unit: 'ms')`,
@@ -124,10 +131,38 @@ a spike whose deliverable is a direction, not a rewrite. Instead:
    its own telemetry client built first — track that as a separate ticket, it
    shouldn't block this spike's POC.
 4. **Keep the bucketed-counter pattern** (`agent.session.cost_bucket_count`
-   precedent) for any latency we *do* choose to hand-roll (e.g. the client
-   metrics above, which never touch Convex Log Streams since that's
-   backend-only) — it needs no exporter changes and is already proven in
-   production.
+   precedent) for every latency metric above — it needs no exporter changes
+   and is already proven in production.
+
+### Traces, eventually, without paying for Log Streams
+
+Log Streams would have given us this for free (per-call DB/storage/network
+I/O breakdown, no code changes). Without it, the only way to see *why* a call
+was slow — not just that it was — is to hand-roll minimal spans (Option E)
+around the specific sub-operations we come to suspect, once total-latency
+metrics from this iteration point at a slow call site:
+
+- Reuse the outbox pattern that already exists for events/metrics
+  (`telemetry/actions.ts`): a `telemetrySpans` table, a batch exporter posting
+  OTLP `resourceSpans` to Grafana Tempo's OTLP endpoint (same Grafana Cloud
+  stack, different signal — `/v1/traces` instead of `/v1/metrics`), same
+  retry/outbox/cleanup cron shape as `exportPendingMetrics`.
+- Instrument narrowly, not broadly: wrap the 2-3 external calls we already
+  suspect are the tail (the Gemini Live round-trip, the exchange-rate fetch,
+  the WhatsApp webhook turn) plus any DB read the total-latency metrics above
+  flag as consistently slow. This is deliberately the opposite of automatic
+  instrumentation — every span is a line we chose to add, so cardinality and
+  cost stay bounded and visible.
+- Grafana Cloud's **free tier includes 50GB of traces/month with 14-day
+  retention** ([usage limits](https://grafana.com/docs/grafana-cloud/platform/pricing-and-usage/usage-limits/)),
+  so this path doesn't reintroduce a cash cost — the cost is entirely
+  engineering time to build a second exporter and thread trace/span ids
+  through the call chain (a `traceId` would need to travel from the HTTP
+  request or client call down through any nested `ctx.runAction`/`runQuery`
+  calls, which nothing in the codebase does today).
+- Treat this as explicitly out of scope for v1: only worth building once the
+  total-latency counters above show us we actually have a "why is this slow"
+  problem, not a "how slow is this" problem.
 
 ## Proposed metrics
 
@@ -139,11 +174,13 @@ existing metric.
 |---|---|---|---|---|
 | `sync.errors.count` | counter | count | `direction` (`push`\|`pull`), `reason` (`client_outdated`\|`cursor_mismatch`\|`auth_failure`\|`validation`\|`unknown`), `platform` | backend |
 | `agent.tool.errors.count` | counter | count | `tool_name` (bounded — existing tool registry), `reason` (`invalid_args`\|`not_found`\|`provider_error`\|`unknown`) | backend |
+| `system.function.duration_bucket_count` | counter | count | `function` (`sync_push`\|`sync_pull`\|`agent_turn` — the handful we instrument, not all 98), `bucket` (`0-100`\|`100-250`\|`250-500`\|`500-1000`\|`1000-2500`\|`2500-5000`\|`5000+`), `status` (`ok`\|`error`) | backend |
 | `voice.connect.setup_complete_bucket_count` | counter | count | `bucket` (`0-250`\|`250-500`\|`500-1000`\|`1000-2500`\|`2500-5000`\|`5000+`), `platform`, `resumed` | native (later: web) |
 | `agent.response.first_token_bucket_count` | counter | count | `bucket` (same shape as above), `mode` (`voice`\|`text`), `platform` | native (later: web) |
 
-(If Option B is adopted, backend function latency/error-rate does **not**
-need a `telemetryMetrics` entry at all — it comes from Log Streams directly.)
+All four are total-duration/count signals — none of them break a call down
+into DB time vs. external-API time vs. our own code. That breakdown is
+explicitly deferred (see "Traces, eventually" above).
 
 ### Starter PromQL
 
@@ -153,9 +190,9 @@ Sync error rate by reason (last 5 min):
 sum by (direction, reason) (increase(sync_errors_count[5m]))
 ```
 
-Sync push/pull "is it healthy" single-stat (errors vs. attempts — pair with a
-`sync.attempts.count` counter, or use Log Streams'
-`convex.function.path="v1/sync/mutations:push"` if Option B is in place):
+Sync push/pull "is it healthy" single-stat (errors vs. attempts — would need
+a companion `sync.attempts.count` counter alongside `sync.errors.count` to
+turn this into a rate rather than a raw error count):
 
 ```promql
 sum(rate(sync_errors_count{reason!="cursor_mismatch"}[15m]))
@@ -174,30 +211,42 @@ limitation above):
 sum by (bucket) (increase(voice_connect_setup_complete_bucket_count[1d]))
 ```
 
-If Log Streams land in a Prometheus-compatible destination, per-function
-p95 looks like the standard Convex/Datadog pattern:
+Backend total-latency distribution per instrumented function, and its error
+overlay:
 
 ```promql
-histogram_quantile(0.95, sum by (le, function_path) (
-  rate(convex_function_execution_time_ms_bucket[5m])
-))
+sum by (function, bucket) (increase(system_function_duration_bucket_count[1d]))
 ```
 
-(exact metric name depends on the chosen forwarder/integration — confirm once
-Option B is trialed.)
+```promql
+sum by (function) (increase(system_function_duration_bucket_count{status="error"}[1d]))
+/ sum by (function) (increase(system_function_duration_bucket_count[1d]))
+```
+
+Note these bucketed counters are a distribution shape, not a true cumulative
+Prometheus histogram — `histogram_quantile()` doesn't apply to them. If an
+exact p95 is needed before the Option E traces work lands, use Option D
+(`@convex-dev/aggregate` keyed by `duration_ms`, queried with `.at(rank)`)
+instead, which gives an exact percentile from inside Convex without going
+through Grafana at all.
 
 ## Answering the ticket's open questions directly
 
-- **Traces (DB calls, external API calls, not just total time)?** Not with
-  our hand-rolled outbox — that would need real distributed tracing
-  (spans/OTLP traces), which is a different signal from metrics and a bigger
-  lift. Convex Log Streams' function-execution event *does* already break out
-  DB/storage/network I/O per call, which gets us partway there without
-  building tracing ourselves. Recommend revisiting real traces only if Log
-  Streams' breakdown proves insufficient.
-- **Discriminate by endpoint?** Yes, `function.path` is intrinsic to Log
-  Streams (Option B); for the hand-rolled counters above, `direction`/
-  `tool_name` already scope by call site.
+- **Traces (DB calls, external API calls, not just total time)?** Not in this
+  iteration. We're not paying for Log Streams, which is the only way Convex
+  gives that breakdown for free/automatically. Getting it any other way means
+  hand-rolling spans (Option E, see above) around the specific sub-operations
+  we suspect are slow, exported to Grafana Tempo's free tier (50GB/month).
+  That's real engineering work (new outbox table, new OTLP payload shape,
+  trace/span id propagation through nested `ctx.run*` calls — none of which
+  exists today), so v1 ships **total** latency per instrumented call only,
+  and we build spans later, targeted at whatever the total-latency numbers
+  point at.
+- **Discriminate by endpoint?** Yes, at the granularity we choose to
+  instrument: the `function`/`direction`/`tool_name` labels above scope every
+  metric by call site, same principle Log Streams' `function.path` would have
+  given us for free — we just have to name each site by hand instead of
+  getting all ~98 automatically.
 - **Is Sync healthy?** Unknown today, and it can't become known without at
   least the `sync.errors.count` counter above — currently a permanent bug and
   a Wi-Fi blip are indistinguishable both to us and to the user.
@@ -208,13 +257,18 @@ Option B is trialed.)
    places) and agent tool-call catch sites — prerequisite for #2.
 2. `sync.errors.count` + `agent.tool.errors.count` counters, wired at those
    sites, plus catalog/validator entries.
-3. Trial Convex Log Streams on a dev deployment; decide Grafana-forwarder vs.
-   second-dashboard based on how much glue the forwarder actually needs.
+3. `system.function.duration_bucket_count`: time sync `push`/`pull` and agent
+   turn processing end-to-end (entry `Date.now()` to `try`/`catch`/`finally`
+   exit) and bucket the result, reusing the `cost_bucket_count` pattern —
+   total latency only, no DB/API breakdown.
 4. Redirect native's existing connect-phase `Stopwatch` into
    `trackMetric` (`voice.connect.setup_complete_bucket_count`); add a
    time-to-first-response timer.
 5. Build a web telemetry client (parity with native) — prerequisite for any
    web-side latency metric.
+6. **Deferred, not this iteration:** hand-rolled OTLP traces (Option E) —
+   new `telemetrySpans` outbox + exporter, targeted at whatever #3 points at
+   as slow. Revisit once total-latency data exists to point at something.
 
 I haven't created these in Linear yet — want me to file them once you've
 reviewed the recommendation, or adjust scope first?
