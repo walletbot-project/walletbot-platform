@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { COLOR_OPTIONS, readableAccent } from './entity-colors'
+import { COLOR_OPTIONS, foregroundOn, readableAccent } from './entity-colors'
 
 describe('readableAccent', () => {
     it('returns every stored accent unchanged in light mode', () => {
@@ -23,5 +23,21 @@ describe('readableAccent', () => {
 
     it('passes non-hex colors through unchanged', () => {
         expect(readableAccent('var(--x)', 'dark')).toBe('var(--x)')
+    })
+})
+
+describe('foregroundOn', () => {
+    // Expected values computed with the native `foregroundOn`
+    // (apps/native/lib/components/color_utils.dart), so both platforms agree.
+    it('picks black on saturated mid-light accents like native', () => {
+        expect(foregroundOn('#D946EF')).toBe('#000000')
+        expect(foregroundOn('#FFCA28')).toBe('#000000')
+        expect(foregroundOn('#EF4444')).toBe('#000000')
+        expect(foregroundOn('#6366F1')).toBe('#000000')
+    })
+
+    it('picks white on dark accents', () => {
+        expect(foregroundOn('#000000')).toBe('#ffffff')
+        expect(foregroundOn('#3B3B3B')).toBe('#ffffff')
     })
 })

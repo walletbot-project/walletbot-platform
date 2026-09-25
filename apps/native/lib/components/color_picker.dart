@@ -5,17 +5,23 @@ import 'package:app/l10n/l10n.dart';
 /// A reusable swatch grid for picking an accent color. Renders the options from
 /// [color_utils] (or a custom [options] palette) and highlights the [selected]
 /// one. Stateless: the caller owns the selected value and reacts to [onChanged].
+///
+/// With [themed], each swatch previews the accent as accounts and categories
+/// paint it in the current theme (see [readableAccent]); tags paint their raw
+/// color, so their pickers leave it off.
 class ColorPicker extends StatelessWidget {
   const ColorPicker({
     super.key,
     required this.selected,
     required this.onChanged,
     this.options = colorOptions,
+    this.themed = false,
   });
 
   final Color selected;
   final ValueChanged<Color> onChanged;
   final List<Color> options;
+  final bool themed;
 
   @override
   Widget build(BuildContext context) {
@@ -25,9 +31,8 @@ class ColorPicker extends StatelessWidget {
       runSpacing: 10,
       children: options.map((color) {
         final isSelected = color == selected;
-        // Preview the accent as entities paint it in this theme (see
-        // [readableAccent]); selection still compares the stored option.
-        final fill = readableAccent(color, brightness);
+        // Selection still compares the stored option, never the preview.
+        final fill = themed ? readableAccent(color, brightness) : color;
 
         return InkWell(
           borderRadius: BorderRadius.circular(18),
@@ -50,7 +55,7 @@ class ColorPicker extends StatelessWidget {
                 ? Icon(
                     Icons.check,
                     size: 18,
-                    color: brightness == Brightness.dark
+                    color: themed && brightness == Brightness.dark
                         ? foregroundOn(fill)
                         : null,
                   )
@@ -68,6 +73,7 @@ Future<Color?> showColorPickerDialog(
   BuildContext context, {
   required Color selected,
   List<Color> options = colorOptions,
+  bool themed = false,
 }) {
   return showDialog<Color>(
     context: context,
@@ -77,6 +83,7 @@ Future<Color?> showColorPickerDialog(
         content: ColorPicker(
           selected: selected,
           options: options,
+          themed: themed,
           onChanged: (color) => Navigator.of(dialogContext).pop(color),
         ),
       );

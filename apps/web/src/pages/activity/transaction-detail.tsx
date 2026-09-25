@@ -861,10 +861,8 @@ function TransactionDetailsContent({
                                                             selected
                                                                 ? {
                                                                       backgroundColor:
-                                                                          paint(
-                                                                              normalizeTagColor(
-                                                                                  tag.color,
-                                                                              ),
+                                                                          normalizeTagColor(
+                                                                              tag.color,
                                                                           ),
                                                                       color: '#111',
                                                                   }

@@ -1,13 +1,12 @@
 import type { ReactNode } from 'react'
-import { foregroundOn, readableAccent } from '@/lib/entity-colors'
+import { foregroundOn } from '@/lib/entity-colors'
 import { useTheme } from '@/lib/theme'
 import { cn } from '@/lib/utils'
 
 /**
  * A tag rendered as a Material 3 chip, matching the native `tagChipStyle`
- * helper: the fill is the tag's own identity color, painted through
- * `readableAccent` so it softens in dark mode like every entity accent, while
- * the avatar dot and label adapt per theme so they stay legible on any fill.
+ * helper: the fill is always the tag's own identity color, while the avatar
+ * dot and label adapt per theme so they stay legible on any fill.
  */
 export function TagChip({
     name,
@@ -24,8 +23,7 @@ export function TagChip({
 }) {
     const { brightness } = useTheme()
     const isDark = brightness === 'dark'
-    const fill = readableAccent(color, brightness)
-    const contrast = foregroundOn(fill)
+    const contrast = foregroundOn(color)
 
     const content = (
         <>
@@ -44,7 +42,7 @@ export function TagChip({
         className,
     )
     const style = {
-        backgroundColor: fill,
+        backgroundColor: color,
         color: isDark ? contrast : 'var(--md-sys-color-on-surface-variant)',
     }
 

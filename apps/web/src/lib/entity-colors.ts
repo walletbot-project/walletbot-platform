@@ -43,8 +43,8 @@ export function normalizeColor(
 }
 
 /**
- * Adapts a stored entity accent (account, category, tag) to how it is painted
- * in the current theme — the web port of the native `readableAccent`
+ * Adapts a stored account or category accent to how it is painted in the
+ * current theme (tags are not adapted: they keep their raw color) — the web port of the native `readableAccent`
  * (apps/native/lib/components/color_utils.dart). Saturated accents suit light
  * surfaces but glare on dark ones, so light returns the stored color as-is and
  * dark rebuilds it as a softer, lighter tone of the same hue. Idempotent, and
@@ -66,16 +66,22 @@ export function useReadableAccent(): (hex: string) => string {
 }
 
 /**
- * Whether black or white reads better on `color` — the web counterpart of the
- * native `foregroundOn` helper.
+ * Whether black or white reads better on `color` — a port of the native
+ * `foregroundOn` helper (apps/native/lib/components/color_utils.dart): picks
+ * whichever yields the higher WCAG contrast ratio.
  */
 export function foregroundOn(color: string): string {
     const hex = color.replace('#', '')
     if (hex.length !== 6) return '#000000'
-    const r = Number.parseInt(hex.slice(0, 2), 16)
-    const g = Number.parseInt(hex.slice(2, 4), 16)
-    const b = Number.parseInt(hex.slice(4, 6), 16)
-    // Relative luminance, matching Flutter's `Color.computeLuminance` weights.
-    const luminance = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255
-    return luminance > 0.5 ? '#000000' : '#ffffff'
+    // Relative luminance of linearized sRGB, as Flutter's
+    // `Color.computeLuminance` computes it.
+    const channel = (offset: number) => {
+        const c = Number.parseInt(hex.slice(offset, offset + 2), 16) / 255
+        return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4
+    }
+    const luminance =
+        0.2126 * channel(0) + 0.7152 * channel(2) + 0.0722 * channel(4)
+    const contrastWithWhite = 1.05 / (luminance + 0.05)
+    const contrastWithBlack = (luminance + 0.05) / 0.05
+    return contrastWithWhite >= contrastWithBlack ? '#ffffff' : '#000000'
 }

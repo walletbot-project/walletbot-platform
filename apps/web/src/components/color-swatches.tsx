@@ -14,10 +14,14 @@ type ColorSwatchesProps = {
      * the real thing: a dashboard widget background is adapted per theme (see
      * `readableWidgetBackground`), which is exactly what native's
      * `_ColorSwatches` previews. Selection still compares the stored option.
-     * Defaults to `readableAccent`, how entity accents (accounts, categories,
-     * tags) are painted in the current theme.
      */
     previewColor?: (option: string) => string
+    /**
+     * Previews each option as accounts and categories paint it in the current
+     * theme (`readableAccent`), like native's `ColorPicker(themed: true)`.
+     * Tags paint their raw color, so their pickers leave it off.
+     */
+    themed?: boolean
 }
 
 /** Inline grid of selectable color swatches, mirroring the native ColorPicker. */
@@ -26,6 +30,7 @@ export function ColorSwatches({
     onChange,
     options,
     previewColor,
+    themed = false,
 }: ColorSwatchesProps) {
     const t = useT()
     const { brightness } = useTheme()
@@ -36,7 +41,10 @@ export function ColorSwatches({
                 const isSelected = option.toUpperCase() === selectedColor
                 const fill = previewColor
                     ? previewColor(option)
-                    : readableAccent(option, brightness)
+                    : themed
+                      ? readableAccent(option, brightness)
+                      : option
+                const darkAccent = themed && brightness === 'dark'
                 return (
                     <button
                         type="button"
@@ -57,19 +65,19 @@ export function ColorSwatches({
                                 name="check"
                                 size={16}
                                 // A widget background preview is adapted so the
-                                // theme's own on-surface reads against it. An
-                                // entity accent is saturated enough in light
-                                // that white reads best; in dark it is softened
-                                // and lightened, so the check contrasts with it.
+                                // theme's own on-surface reads against it. A raw
+                                // accent is saturated enough that white reads
+                                // best; a themed one in dark is softened and
+                                // lightened, so the check contrasts with it.
                                 className={
                                     previewColor
                                         ? 'text-on-surface'
-                                        : brightness === 'dark'
+                                        : darkAccent
                                           ? undefined
                                           : 'text-white drop-shadow-sm'
                                 }
                                 style={
-                                    !previewColor && brightness === 'dark'
+                                    !previewColor && darkAccent
                                         ? { color: foregroundOn(fill) }
                                         : undefined
                                 }

@@ -560,7 +560,11 @@ class _AccountEditSheetState extends State<_AccountEditSheet> {
   }
 
   Future<void> _pickColor() async {
-    final picked = await showColorPickerDialog(context, selected: _color);
+    final picked = await showColorPickerDialog(
+      context,
+      selected: _color,
+      themed: true,
+    );
     if (picked != null && mounted) setState(() => _color = picked);
   }
 
@@ -786,7 +790,11 @@ class _CategoryEditSheetState extends State<_CategoryEditSheet> {
   }
 
   Future<void> _pickColor() async {
-    final picked = await showColorPickerDialog(context, selected: _color);
+    final picked = await showColorPickerDialog(
+      context,
+      selected: _color,
+      themed: true,
+    );
     if (picked != null && mounted) setState(() => _color = picked);
   }
 
@@ -946,10 +954,7 @@ class _TagActionWidgetState extends State<_TagActionWidget> {
     if (_failed) return _ActionErrorCard(onRetry: _load);
     final tag = _tag;
     if (tag == null) return const SizedBox.shrink();
-    final accent = readableAccent(
-      colorFromHex(tag.color),
-      Theme.of(context).brightness,
-    );
+    final accent = colorFromHex(tag.color);
     final parentName = _tags
         .where((candidate) => candidate.id == tag.parentId)
         .map((candidate) => candidate.name)
@@ -991,11 +996,6 @@ class _TagEditSheetState extends State<_TagEditSheet> {
   late final TextEditingController _nameController;
   late final TextEditingController _descriptionController;
   late Color _color;
-
-  /// [_color] as painted in the current theme (see [readableAccent]); the
-  /// stored value stays the raw pick.
-  Color get _paintedColor =>
-      readableAccent(_color, Theme.of(context).brightness);
   late String? _parentId;
   bool _saving = false;
 
@@ -1108,7 +1108,7 @@ class _TagEditSheetState extends State<_TagEditSheet> {
         const SizedBox(height: 12),
         _AppearanceTile(
           label: context.l10n.color,
-          leading: CircleAvatar(backgroundColor: _paintedColor, radius: 12),
+          leading: CircleAvatar(backgroundColor: _color, radius: 12),
           onTap: _pickColor,
         ),
       ],

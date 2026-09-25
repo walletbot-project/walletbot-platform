@@ -395,10 +395,7 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
               for (final tag in availableTags)
                 ListTile(
                   leading: CircleAvatar(
-                    backgroundColor: readableAccent(
-                      tag.color,
-                      Theme.of(context).brightness,
-                    ),
+                    backgroundColor: tag.color,
                     radius: 12,
                     child: const SizedBox.shrink(),
                   ),
@@ -896,14 +893,14 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
                         labelStyle:
                             Theme.of(context).brightness == Brightness.dark
                             ? Theme.of(context).textTheme.labelLarge?.copyWith(
-                                color: foregroundOn(tag.paintedColor(context)),
+                                color: foregroundOn(tag.color),
                               )
                             : null,
-                        backgroundColor: tag.paintedColor(context),
-                        side: BorderSide(color: tag.paintedColor(context)),
+                        backgroundColor: tag.color,
+                        side: BorderSide(color: tag.color),
                         deleteIconColor:
                             Theme.of(context).brightness == Brightness.dark
-                            ? foregroundOn(tag.paintedColor(context))
+                            ? foregroundOn(tag.color)
                             : null,
                         onDeleted: _isSaving
                             ? null
@@ -1730,7 +1727,6 @@ class _TagColorPicker extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final brightness = Theme.of(context).brightness;
     return Wrap(
       spacing: 12,
       runSpacing: 12,
@@ -1743,9 +1739,7 @@ class _TagColorPicker extends StatelessWidget {
               width: 42,
               height: 42,
               decoration: BoxDecoration(
-                // Preview the accent as tags paint it in this theme (see
-                // [readableAccent]); selection still compares the stored one.
-                color: readableAccent(color, brightness),
+                color: color,
                 shape: BoxShape.circle,
                 border: Border.all(
                   color: color == selected
@@ -1755,13 +1749,7 @@ class _TagColorPicker extends StatelessWidget {
                 ),
               ),
               child: color == selected
-                  ? Icon(
-                      Icons.check_rounded,
-                      size: 20,
-                      color: brightness == Brightness.dark
-                          ? foregroundOn(readableAccent(color, brightness))
-                          : null,
-                    )
+                  ? const Icon(Icons.check_rounded, size: 20)
                   : null,
             ),
           ),
@@ -1924,10 +1912,6 @@ class _FormTag {
   final String? id;
   final String name;
   final Color color;
-
-  /// [color] as painted in the current theme (see [readableAccent]).
-  Color paintedColor(BuildContext context) =>
-      readableAccent(color, Theme.of(context).brightness);
 }
 
 double? _parseAmount(String value) {

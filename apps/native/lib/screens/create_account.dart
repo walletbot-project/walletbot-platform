@@ -207,6 +207,7 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                   child: ColorPicker(
                     selected: _color,
                     options: colorOptions,
+                    themed: true,
                     onChanged: (color) => setState(() => _color = color),
                   ),
                 ),

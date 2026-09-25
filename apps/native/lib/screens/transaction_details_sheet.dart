@@ -553,10 +553,7 @@ class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
                 ListTile(
                   leading: CircleAvatar(
                     radius: 12,
-                    backgroundColor: readableAccent(
-                      colorFromHex(tag.color),
-                      Theme.of(context).brightness,
-                    ),
+                    backgroundColor: colorFromHex(tag.color),
                   ),
                   title: Text(tag.name),
                   onTap: () => Navigator.of(context).pop(tag),

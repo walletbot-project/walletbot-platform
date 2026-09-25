@@ -240,6 +240,7 @@ export function AccountDetail({
                     onChange={(color) =>
                         setFields((current) => ({ ...current, color }))
                     }
+                    themed
                 />
 
                 {/* Balance hero — the focal number; currency rides along as a pill. */}

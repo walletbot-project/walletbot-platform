@@ -189,6 +189,7 @@ class _CreateCategoryScreenState extends State<CreateCategoryScreen> {
                   child: ColorPicker(
                     selected: _color,
                     options: colorOptions,
+                    themed: true,
                     onChanged: (color) => setState(() => _color = color),
                   ),
                 ),

@@ -42,7 +42,6 @@ import {
     DEFAULT_CURRENCY,
     SUGGESTED_CURRENCIES,
 } from '@/lib/currencies'
-import { useReadableAccent } from '@/lib/entity-colors'
 import { type Messages, useFormatLocale, useT } from '@/lib/i18n'
 import { newId } from '@/lib/new-id'
 import { TAG_COLOR_OPTIONS } from '@/lib/tag-colors'
@@ -1400,7 +1399,6 @@ function TagsField({
     onRemoveTag: (name: string) => void
 }) {
     const t = useT()
-    const paint = useReadableAccent()
     const [pickerOpen, setPickerOpen] = useState(false)
     const [creating, setCreating] = useState(false)
 
@@ -1453,7 +1451,7 @@ function TagsField({
                         <span
                             aria-hidden
                             className="size-6 shrink-0 rounded-full"
-                            style={{ backgroundColor: paint(tag.color) }}
+                            style={{ backgroundColor: tag.color }}
                         />
                     ),
                 }))}

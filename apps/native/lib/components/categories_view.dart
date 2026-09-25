@@ -186,6 +186,7 @@ class _CategoryDetailsSheetState extends State<CategoryDetailsSheet> {
       context,
       selected: _color,
       options: colorOptions,
+      themed: true,
     );
     if (picked != null) setState(() => _color = picked);
   }

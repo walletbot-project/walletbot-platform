@@ -205,6 +205,7 @@ export function CategoryDetail({
                     onChange={(color) =>
                         setFields((current) => ({ ...current, color }))
                     }
+                    themed
                 />
 
                 <MonthlySpendHero

@@ -159,11 +159,6 @@ class TagDetailsSheet extends StatefulWidget {
 
 class _TagDetailsSheetState extends State<TagDetailsSheet> {
   late Color _color = colorFromHex(widget.tag.color);
-
-  /// [_color] as painted in the current theme (see [readableAccent]); the
-  /// stored value stays the raw pick.
-  Color get _paintedColor =>
-      readableAccent(_color, Theme.of(context).brightness);
   late final TextEditingController _nameController = TextEditingController(
     text: widget.tag.name,
   );
@@ -411,7 +406,7 @@ class _TagDetailsSheetState extends State<TagDetailsSheet> {
     return Column(
       children: [
         Material(
-          color: _paintedColor.withValues(alpha: 0.14),
+          color: _color.withValues(alpha: 0.14),
           borderRadius: const BorderRadius.vertical(
             top: Radius.circular(kGroupOuterRadius),
             bottom: Radius.circular(kGroupInnerRadius),
@@ -433,7 +428,7 @@ class _TagDetailsSheetState extends State<TagDetailsSheet> {
                       width: 28,
                       height: 28,
                       decoration: BoxDecoration(
-                        color: _paintedColor,
+                        color: _color,
                         borderRadius: BorderRadius.circular(9),
                         border: Border.all(
                           color: colors.outlineVariant.withValues(alpha: 0.5),
@@ -813,15 +808,11 @@ class _ColorPicker extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final brightness = Theme.of(context).brightness;
     return Wrap(
       spacing: 10,
       runSpacing: 10,
       children: colorOptions.map((color) {
         final isSelected = color == selected;
-        // Preview the accent as entities paint it in this theme (see
-        // [readableAccent]); selection still compares the stored option.
-        final fill = readableAccent(color, brightness);
 
         return InkWell(
           borderRadius: BorderRadius.circular(18),
@@ -831,7 +822,7 @@ class _ColorPicker extends StatelessWidget {
             width: 36,
             height: 36,
             decoration: BoxDecoration(
-              color: fill,
+              color: color,
               shape: BoxShape.circle,
               border: Border.all(
                 color: isSelected
@@ -840,15 +831,7 @@ class _ColorPicker extends StatelessWidget {
                 width: 2,
               ),
             ),
-            child: isSelected
-                ? Icon(
-                    Icons.check,
-                    size: 18,
-                    color: brightness == Brightness.dark
-                        ? foregroundOn(fill)
-                        : null,
-                  )
-                : null,
+            child: isSelected ? const Icon(Icons.check, size: 18) : null,
           ),
         );
       }).toList(),

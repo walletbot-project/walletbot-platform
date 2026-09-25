@@ -194,13 +194,14 @@ function AccountActionWidget({
     wasUpdated: boolean
 }) {
     const t = useT()
+    const paint = useReadableAccent()
     const account = useQuery(api.v1.accounts.queries.get, { id: entityId })
     const updateAccount = useMutation(api.v1.accounts.mutations.update)
     const [editOpen, setEditOpen] = useState(false)
     if (account === undefined) return <ActionSkeleton />
     if (account === null) return null
 
-    const accent = normalizeColor(account.color, ACCOUNT_DEFAULT_COLOR)
+    const accent = paint(normalizeColor(account.color, ACCOUNT_DEFAULT_COLOR))
     return (
         <>
             <ActionCard>
@@ -253,13 +254,14 @@ function CategoryActionWidget({
     wasUpdated: boolean
 }) {
     const t = useT()
+    const paint = useReadableAccent()
     const category = useQuery(api.v1.categories.queries.get, { id: entityId })
     const updateCategory = useMutation(api.v1.categories.mutations.update)
     const [editOpen, setEditOpen] = useState(false)
     if (category === undefined) return <ActionSkeleton />
     if (category === null) return null
 
-    const accent = normalizeColor(category.color, CATEGORY_DEFAULT_COLOR)
+    const accent = paint(normalizeColor(category.color, CATEGORY_DEFAULT_COLOR))
     return (
         <>
             <ActionCard>
@@ -436,7 +438,6 @@ function TagActionWidget({
     wasUpdated: boolean
 }) {
     const t = useT()
-    const paint = useReadableAccent()
     const tag = useQuery(api.v1.tags.queries.get, { id: entityId })
     const [editOpen, setEditOpen] = useState(false)
     if (tag === undefined) return <ActionSkeleton />
@@ -451,7 +452,7 @@ function TagActionWidget({
                         name="sell"
                         filled
                         size={16}
-                        style={{ color: paint(accent) }}
+                        style={{ color: accent }}
                     />
                 </EntityIcon>
                 <ActionCopy
@@ -686,11 +687,10 @@ function EntityIcon({
     color: string
     children: ReactNode
 }) {
-    const paint = useReadableAccent()
     return (
         <span
             className="flex size-7 shrink-0 items-center justify-center rounded-full"
-            style={{ backgroundColor: `${paint(color)}24` }}
+            style={{ backgroundColor: `${color}24` }}
         >
             {children}
         </span>
@@ -750,6 +750,7 @@ function VisualIdentityFields({
                     value={color}
                     onChange={onColorChange}
                     options={COLOR_OPTIONS}
+                    themed
                 />
             </div>
             <div className="flex flex-col gap-2">

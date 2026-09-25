@@ -65,8 +65,9 @@ Color readableWidgetBackground(Color background, Brightness brightness) {
       .toColor();
 }
 
-/// Adapts a stored entity accent (account, category, tag — any [colorOptions]
-/// pick) to how it is painted in the current theme. Accents are persisted as
+/// Adapts a stored account or category accent (any [colorOptions] pick) to
+/// how it is painted in the current theme. Tags are not adapted: they keep
+/// their raw color in both themes (see `tagChipStyle`). Accents are persisted as
 /// saturated colors, which suit light surfaces but glare on dark ones, where
 /// an accent drawn as an icon over its own translucent tile also loses
 /// contrast. In light themes the accent is returned as-is; in dark themes it is
