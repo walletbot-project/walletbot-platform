@@ -19,11 +19,15 @@ class ColorPicker extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final brightness = Theme.of(context).brightness;
     return Wrap(
       spacing: 10,
       runSpacing: 10,
       children: options.map((color) {
         final isSelected = color == selected;
+        // Preview the accent as entities paint it in this theme (see
+        // [readableAccent]); selection still compares the stored option.
+        final fill = readableAccent(color, brightness);
 
         return InkWell(
           borderRadius: BorderRadius.circular(18),
@@ -33,7 +37,7 @@ class ColorPicker extends StatelessWidget {
             width: 36,
             height: 36,
             decoration: BoxDecoration(
-              color: color,
+              color: fill,
               shape: BoxShape.circle,
               border: Border.all(
                 color: isSelected
@@ -42,7 +46,15 @@ class ColorPicker extends StatelessWidget {
                 width: 2,
               ),
             ),
-            child: isSelected ? const Icon(Icons.check, size: 18) : null,
+            child: isSelected
+                ? Icon(
+                    Icons.check,
+                    size: 18,
+                    color: brightness == Brightness.dark
+                        ? foregroundOn(fill)
+                        : null,
+                  )
+                : null,
           ),
         );
       }).toList(),

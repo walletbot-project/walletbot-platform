@@ -4,8 +4,9 @@ import 'package:flutter/material.dart';
 /// Visual styling shared by every tag chip (the Insights tag list and the
 /// transaction detail receipt) so they read identically in both themes.
 ///
-/// The fill is always the tag's own identity color. The avatar and label adapt
-/// per theme:
+/// The fill is the tag's own identity color, painted through [readableAccent]
+/// so it softens in dark mode like every other entity accent. The avatar and
+/// label adapt per theme:
 /// - Dark: a contrasting [foregroundOn] color, so text/icon stay legible on any
 ///   fill without changing the fill itself.
 /// - Light: a white avatar with muted `onSurfaceVariant` label text.
@@ -23,12 +24,13 @@ typedef TagChipStyle = ({
 TagChipStyle tagChipStyle(BuildContext context, Color color) {
   final theme = Theme.of(context);
   final isDark = theme.brightness == Brightness.dark;
+  final fill = readableAccent(color, theme.brightness);
   final labelColor = isDark
-      ? foregroundOn(color)
+      ? foregroundOn(fill)
       : theme.colorScheme.onSurfaceVariant;
   return (
-    background: color,
-    avatarColor: isDark ? foregroundOn(color) : Colors.white,
+    background: fill,
+    avatarColor: isDark ? foregroundOn(fill) : Colors.white,
     labelStyle: theme.textTheme.labelLarge?.copyWith(color: labelColor),
   );
 }

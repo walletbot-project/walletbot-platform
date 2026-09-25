@@ -18,11 +18,16 @@ import { useOccurrenceCutoff } from '@/hooks/use-occurrence-cutoff'
 import { useSeededEntity } from '@/hooks/use-seeded-entity'
 import { useToastMutation } from '@/hooks/use-toast-mutation'
 import { ACCOUNT_ICONS } from '@/lib/account-icons'
-import { ACCOUNT_DEFAULT_COLOR, normalizeColor } from '@/lib/entity-colors'
+import {
+    ACCOUNT_DEFAULT_COLOR,
+    normalizeColor,
+    readableAccent,
+} from '@/lib/entity-colors'
 import { GROUP_SPACING, groupedRadius } from '@/lib/grouped-list'
 import { useFormatLocale, useT } from '@/lib/i18n'
 import { formatMoney } from '@/lib/money'
 import { newId } from '@/lib/new-id'
+import { useTheme } from '@/lib/theme'
 import { cn } from '@/lib/utils'
 import { accountErrorMessage } from '@/pages/accounts/account-errors'
 import type { ActivityFilterSeed } from '@/pages/activity/helpers'
@@ -84,9 +89,15 @@ export function AccountDetail({
     const [adjustValue, setAdjustValue] = useState('')
     const [deleteOpen, setDeleteOpen] = useState(false)
 
-    const accent = editing
-        ? fields.color
-        : normalizeColor(account.color, ACCOUNT_DEFAULT_COLOR)
+    const { brightness } = useTheme()
+    // The hero paints the accent as it reads in this theme; the stored color
+    // (and what the pickers select) stays the raw pick.
+    const accent = readableAccent(
+        editing
+            ? fields.color
+            : normalizeColor(account.color, ACCOUNT_DEFAULT_COLOR),
+        brightness,
+    )
     const cents = balance ? Number(balance.balance) : null
 
     const handleToggleEditing = () => {

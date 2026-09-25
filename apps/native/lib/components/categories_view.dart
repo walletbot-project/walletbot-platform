@@ -160,6 +160,11 @@ class _CategoryDetailsSheetState extends State<CategoryDetailsSheet> {
     widget.category.color,
     fallback: categoryDefaultColor,
   );
+
+  /// [_color] as painted in the current theme (see [readableAccent]); the
+  /// stored value stays the raw pick.
+  Color get _paintedColor =>
+      readableAccent(_color, Theme.of(context).brightness);
   late IconData _icon = categoryIconFromName(widget.category.icon);
   late final TextEditingController _nameController = TextEditingController(
     text: widget.category.name,
@@ -372,7 +377,7 @@ class _CategoryDetailsSheetState extends State<CategoryDetailsSheet> {
     return Column(
       children: [
         Material(
-          color: _color.withValues(alpha: 0.14),
+          color: _paintedColor.withValues(alpha: 0.14),
           borderRadius: const BorderRadius.vertical(
             top: Radius.circular(kGroupOuterRadius),
             bottom: Radius.circular(kGroupInnerRadius),
@@ -391,11 +396,11 @@ class _CategoryDetailsSheetState extends State<CategoryDetailsSheet> {
                     width: 60,
                     height: 60,
                     decoration: BoxDecoration(
-                      color: _color.withValues(alpha: 0.28),
+                      color: _paintedColor.withValues(alpha: 0.28),
                       borderRadius: BorderRadius.circular(20),
                     ),
                     alignment: Alignment.center,
-                    child: Icon(_icon, size: 30, color: _color),
+                    child: Icon(_icon, size: 30, color: _paintedColor),
                   ),
                 ),
                 const SizedBox(width: 16),
@@ -429,7 +434,7 @@ class _CategoryDetailsSheetState extends State<CategoryDetailsSheet> {
                       width: 28,
                       height: 28,
                       decoration: BoxDecoration(
-                        color: _color,
+                        color: _paintedColor,
                         borderRadius: BorderRadius.circular(9),
                         border: Border.all(
                           color: colors.outlineVariant.withValues(alpha: 0.5),

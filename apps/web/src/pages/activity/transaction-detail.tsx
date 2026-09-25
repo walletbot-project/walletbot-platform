@@ -23,6 +23,7 @@ import {
     ACCOUNT_DEFAULT_COLOR,
     CATEGORY_DEFAULT_COLOR,
     normalizeColor,
+    useReadableAccent,
 } from '@/lib/entity-colors'
 import { useFormatLocale, useT } from '@/lib/i18n'
 import { formatMoney } from '@/lib/money'
@@ -155,6 +156,7 @@ function TransactionDetailsContent({
     const navigate = useNavigate()
     const t = useT()
     const formatLocale = useFormatLocale()
+    const paint = useReadableAccent()
 
     // The recurring series this movement belongs to, if any. A movement that
     // has already happened is still an occurrence of its rule, and "the 3rd of
@@ -238,9 +240,8 @@ function TransactionDetailsContent({
     const account = accounts.find((item) => item.id === accountId)
     const destinationAccount = accounts.find((item) => item.id === toAccountId)
     const category = categories.find((item) => item.id === categoryId)
-    const categoryColor = normalizeColor(
-        category?.color,
-        CATEGORY_DEFAULT_COLOR,
+    const categoryColor = paint(
+        normalizeColor(category?.color, CATEGORY_DEFAULT_COLOR),
     )
     const canEditAmount =
         transaction.type === 'income' ||
@@ -860,8 +861,10 @@ function TransactionDetailsContent({
                                                             selected
                                                                 ? {
                                                                       backgroundColor:
-                                                                          normalizeTagColor(
-                                                                              tag.color,
+                                                                          paint(
+                                                                              normalizeTagColor(
+                                                                                  tag.color,
+                                                                              ),
                                                                           ),
                                                                       color: '#111',
                                                                   }

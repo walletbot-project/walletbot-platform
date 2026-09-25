@@ -15,10 +15,12 @@ import { Input } from '@/components/ui/input'
 import { useOccurrenceCutoff } from '@/hooks/use-occurrence-cutoff'
 import { useSeededEntity } from '@/hooks/use-seeded-entity'
 import { useToastMutation } from '@/hooks/use-toast-mutation'
+import { readableAccent } from '@/lib/entity-colors'
 import { groupedRadius } from '@/lib/grouped-list'
 import { useT } from '@/lib/i18n'
 import { currentMonthWindow } from '@/lib/month-window'
 import { normalizeTagColor } from '@/lib/tag-colors'
+import { useTheme } from '@/lib/theme'
 import type { ActivityFilterSeed } from '@/pages/activity/helpers'
 
 export type TagSummary = {
@@ -73,7 +75,13 @@ export function TagDetail({
     const { pending: saving, run } = useToastMutation()
     const [deleteOpen, setDeleteOpen] = useState(false)
 
-    const accent = editing ? fields.color : normalizeTagColor(tag.color)
+    const { brightness } = useTheme()
+    // The hero paints the accent as it reads in this theme; the stored color
+    // (and what the pickers select) stays the raw pick.
+    const accent = readableAccent(
+        editing ? fields.color : normalizeTagColor(tag.color),
+        brightness,
+    )
 
     const handleToggleEditing = () => {
         if (!editing) {

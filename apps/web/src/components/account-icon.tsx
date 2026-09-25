@@ -1,5 +1,6 @@
 import { Icon } from '@/components/m3/icon'
 import { accountIcon } from '@/lib/account-icons'
+import { useReadableAccent } from '@/lib/entity-colors'
 
 /** Renders an account's glyph by its stored name, falling back to the default. */
 export function AccountIcon({
@@ -13,6 +14,7 @@ export function AccountIcon({
     color?: string
     className?: string
 }) {
+    const paint = useReadableAccent()
     const option = accountIcon(name)
     return (
         <Icon
@@ -20,7 +22,7 @@ export function AccountIcon({
             filled={option.filled}
             size={size}
             className={className}
-            style={color ? { color } : undefined}
+            style={color ? { color: paint(color) } : undefined}
         />
     )
 }

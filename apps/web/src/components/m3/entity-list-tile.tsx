@@ -1,4 +1,5 @@
 import type { CSSProperties, ReactNode } from 'react'
+import { useReadableAccent } from '@/lib/entity-colors'
 import { cn } from '@/lib/utils'
 import { GroupedCard } from './grouped-card'
 import { Icon } from './icon'
@@ -75,6 +76,7 @@ export function EntityAvatar({
     size?: number
     className?: string
 }) {
+    const paint = useReadableAccent()
     return (
         <span
             className={cn(
@@ -82,7 +84,7 @@ export function EntityAvatar({
                 className,
             )}
             style={{
-                backgroundColor: `${color}2E`,
+                backgroundColor: `${paint(color)}2E`,
                 width: size,
                 height: size,
             }}

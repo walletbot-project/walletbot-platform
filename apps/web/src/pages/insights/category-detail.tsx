@@ -18,10 +18,15 @@ import { useOccurrenceCutoff } from '@/hooks/use-occurrence-cutoff'
 import { useSeededEntity } from '@/hooks/use-seeded-entity'
 import { useToastMutation } from '@/hooks/use-toast-mutation'
 import { CATEGORY_ICONS } from '@/lib/category-icons'
-import { CATEGORY_DEFAULT_COLOR, normalizeColor } from '@/lib/entity-colors'
+import {
+    CATEGORY_DEFAULT_COLOR,
+    normalizeColor,
+    readableAccent,
+} from '@/lib/entity-colors'
 import { groupedRadius } from '@/lib/grouped-list'
 import { useT } from '@/lib/i18n'
 import { currentMonthWindow } from '@/lib/month-window'
+import { useTheme } from '@/lib/theme'
 import type { ActivityFilterSeed } from '@/pages/activity/helpers'
 
 export type CategorySummary = {
@@ -75,9 +80,15 @@ export function CategoryDetail({
     const { pending: saving, run } = useToastMutation()
     const [deleteOpen, setDeleteOpen] = useState(false)
 
-    const accent = editing
-        ? fields.color
-        : normalizeColor(category.color, CATEGORY_DEFAULT_COLOR)
+    const { brightness } = useTheme()
+    // The hero paints the accent as it reads in this theme; the stored color
+    // (and what the pickers select) stays the raw pick.
+    const accent = readableAccent(
+        editing
+            ? fields.color
+            : normalizeColor(category.color, CATEGORY_DEFAULT_COLOR),
+        brightness,
+    )
 
     const handleToggleEditing = () => {
         if (!editing) {

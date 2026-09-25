@@ -23,6 +23,7 @@ import {
     CATEGORY_DEFAULT_COLOR,
     COLOR_OPTIONS,
     normalizeColor,
+    useReadableAccent,
 } from '@/lib/entity-colors'
 import {
     type Messages,
@@ -435,6 +436,7 @@ function TagActionWidget({
     wasUpdated: boolean
 }) {
     const t = useT()
+    const paint = useReadableAccent()
     const tag = useQuery(api.v1.tags.queries.get, { id: entityId })
     const [editOpen, setEditOpen] = useState(false)
     if (tag === undefined) return <ActionSkeleton />
@@ -449,7 +451,7 @@ function TagActionWidget({
                         name="sell"
                         filled
                         size={16}
-                        style={{ color: accent }}
+                        style={{ color: paint(accent) }}
                     />
                 </EntityIcon>
                 <ActionCopy
@@ -684,10 +686,11 @@ function EntityIcon({
     color: string
     children: ReactNode
 }) {
+    const paint = useReadableAccent()
     return (
         <span
             className="flex size-7 shrink-0 items-center justify-center rounded-full"
-            style={{ backgroundColor: `${color}24` }}
+            style={{ backgroundColor: `${paint(color)}24` }}
         >
             {children}
         </span>

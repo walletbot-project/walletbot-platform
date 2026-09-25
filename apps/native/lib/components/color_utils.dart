@@ -65,6 +65,24 @@ Color readableWidgetBackground(Color background, Brightness brightness) {
       .toColor();
 }
 
+/// Adapts a stored entity accent (account, category, tag — any [colorOptions]
+/// pick) to how it is painted in the current theme. Accents are persisted as
+/// saturated colors, which suit light surfaces but glare on dark ones, where
+/// an accent drawn as an icon over its own translucent tile also loses
+/// contrast. In light themes the accent is returned as-is; in dark themes it is
+/// rebuilt as a softer, lighter tone of the same hue (capped saturation, fixed
+/// lightness). Idempotent, so an already adapted accent passes through
+/// unchanged. The stored value never changes — only what gets painted, the
+/// same way [readableWidgetBackground] adapts widget backgrounds.
+Color readableAccent(Color accent, Brightness brightness) {
+  if (brightness == Brightness.light) return accent;
+  final hsl = HSLColor.fromColor(accent);
+  return hsl
+      .withSaturation(hsl.saturation.clamp(0.0, 0.65))
+      .withLightness(0.72)
+      .toColor();
+}
+
 /// Picks a legible foreground (near-black or near-white) for text/icons drawn
 /// on top of [background], choosing whichever yields the higher contrast ratio.
 /// Used for tag chips whose fill is the tag's own identity color: the fill must
