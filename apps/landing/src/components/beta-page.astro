@@ -6,10 +6,11 @@ import BaseLayout from '@/layouts/base-layout.astro'
 import { BETA_FORM_URL, WEB_APP_URL } from '@/lib/links'
 
 /**
- * Where both store badges land. The signup itself is a Google Form, so the
- * hero holds one filled card and nothing that competes with it. The web app
- * gets its own quieter section further down, for readers who don't want to
- * wait for a tester slot.
+ * Where both store badges land. Both apps are public, but the way in is the
+ * Google Form: its confirmation message carries the Play and App Store links.
+ * So the hero holds one filled card and nothing that competes with it. The web
+ * app gets its own quieter section further down, for readers who would rather
+ * not install anything.
  */
 const { locale, t } = useTranslations(Astro.currentLocale)
 ---
@@ -35,9 +36,9 @@ const { locale, t } = useTranslations(Astro.currentLocale)
                     {t.beta.chip.android}
                 </p>
                 <p
-                    class="flex items-center gap-2 rounded-full border border-line border-dashed bg-panel-alt px-3.5 py-1.5 text-xs font-medium text-ink-soft"
+                    class="flex items-center gap-2 rounded-full border border-brand/30 bg-brand/10 px-3.5 py-1.5 text-xs font-medium text-ink"
                 >
-                    <Icon name="apple" class="size-3.5 text-ink-soft" />
+                    <Icon name="apple" class="size-3.5 text-brand-ink" />
                     {t.beta.chip.ios}
                 </p>
             </div>
@@ -50,53 +51,38 @@ const { locale, t } = useTranslations(Astro.currentLocale)
 
             <p class="text-lg text-balance text-ink-soft">{t.beta.body}</p>
 
-            {/* The card and its iOS note read as one unit, hence the tighter
-                gap than the section's. */}
-            <div class="flex w-full flex-col gap-4">
-                <a
-                    href={BETA_FORM_URL}
-                    class="group flex w-full items-center gap-5 rounded-2xl bg-brand px-6 py-7 text-left shadow-[0_18px_50px_-12px_rgb(109_231_216/0.45)] ring-1 ring-brand/60 transition-all hover:-translate-y-0.5 hover:brightness-105 hover:shadow-[0_24px_60px_-10px_rgb(109_231_216/0.6)] sm:px-8"
-                >
-                    <span
-                        class="flex size-12 shrink-0 items-center justify-center rounded-xl bg-ink/10 ring-1 ring-ink/10"
-                    >
-                        <Icon
-                            name="clipboard-list"
-                            class="size-6 text-surface"
-                        />
-                    </span>
-
-                    <span class="flex-1">
-                        <span class="block text-lg font-semibold text-surface">
-                            {t.beta.formCta.title}
-                        </span>
-                        <span class="mt-1 block text-sm text-ink-soft">
-                            {t.beta.formCta.body}
-                        </span>
-                    </span>
-
-                    <Icon
-                        name="arrow-right"
-                        class="size-5 shrink-0 text-ink-soft transition-all group-hover:translate-x-1 group-hover:text-surface"
-                    />
-                </a>
-
-                <p
-                    class="flex items-start gap-2.5 px-1 text-left text-sm text-ink-soft"
+            <a
+                href={BETA_FORM_URL}
+                class="group flex w-full items-center gap-5 rounded-2xl bg-brand px-6 py-7 text-left shadow-[0_18px_50px_-12px_rgb(109_231_216/0.45)] ring-1 ring-brand/60 transition-all hover:-translate-y-0.5 hover:brightness-105 hover:shadow-[0_24px_60px_-10px_rgb(109_231_216/0.6)] sm:px-8"
+            >
+                <span
+                    class="flex size-12 shrink-0 items-center justify-center rounded-xl bg-ink/10 ring-1 ring-ink/10"
                 >
                     <Icon
-                        name="apple"
-                        class="mt-0.5 size-4 shrink-0 text-ink-soft"
+                        name="clipboard-list"
+                        class="size-6 text-surface"
                     />
-                    <span>{t.beta.iosNote}</span>
-                </p>
-            </div>
+                </span>
 
+                <span class="flex-1">
+                    <span class="block text-lg font-semibold text-surface">
+                        {t.beta.formCta.title}
+                    </span>
+                    <span class="mt-1 block text-sm text-ink-soft">
+                        {t.beta.formCta.body}
+                    </span>
+                </span>
+
+                <Icon
+                    name="arrow-right"
+                    class="size-5 shrink-0 text-ink-soft transition-all group-hover:translate-x-1 group-hover:text-surface"
+                />
+            </a>
         </div>
     </section>
 
     {/* Deliberately quieter than the form card above: a plain outlined button,
-        so the beta signup stays the loudest thing on the page. */}
+        so the form stays the loudest thing on the page. */}
     <section class="border-t border-line bg-panel-alt">
         <div
             class="mx-auto flex w-full max-w-2xl flex-col items-center gap-3 px-6 py-16 text-center"
