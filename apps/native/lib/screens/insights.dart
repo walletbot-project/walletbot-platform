@@ -206,12 +206,16 @@ class _InsightsScreenState extends State<InsightsScreen>
             ],
           ),
         ),
-        body: TabBarView(
-          controller: _tabController,
-          children: [
-            CategoriesView(onSelect: _openCategoryDetails),
-            TagsView(onSelect: _openTagDetails),
-          ],
+        body: SafeArea(
+          top: false,
+          bottom: false,
+          child: TabBarView(
+            controller: _tabController,
+            children: [
+              CategoriesView(onSelect: _openCategoryDetails),
+              TagsView(onSelect: _openTagDetails),
+            ],
+          ),
         ),
       ),
     );

@@ -196,49 +196,53 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ],
       ),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          const AppConfigBannerList(placement: 'home', bottomSpacing: 16),
-          DashboardSection(
-            editing: _editing,
-            onStartEditing: () => setState(() => _editing = true),
-            onOpenFilter: widget.onOpenActivity,
-          ),
-          const SizedBox(height: 24),
-          Text(
-            context.l10n.actions,
-            style: Theme.of(context).textTheme.titleMedium,
-          ),
-          const SizedBox(height: 12),
-          Wrap(
-            spacing: 12,
-            runSpacing: 12,
-            children: [
-              _HomeActionCard(
-                label: context.l10n.addManually,
-                icon: Icons.add_rounded,
-                onTap: _openManualAdd,
-              ),
-              if (context.watch<AppConfigController>().isFlagEnabled(
-                'feedback',
-              ))
+      body: SafeArea(
+        top: false,
+        bottom: false,
+        child: ListView(
+          padding: const EdgeInsets.all(16),
+          children: [
+            const AppConfigBannerList(placement: 'home', bottomSpacing: 16),
+            DashboardSection(
+              editing: _editing,
+              onStartEditing: () => setState(() => _editing = true),
+              onOpenFilter: widget.onOpenActivity,
+            ),
+            const SizedBox(height: 24),
+            Text(
+              context.l10n.actions,
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              children: [
                 _HomeActionCard(
-                  label: context.l10n.sendFeedback,
-                  icon: Icons.feedback_rounded,
-                  onTap: _openFeedback,
+                  label: context.l10n.addManually,
+                  icon: Icons.add_rounded,
+                  onTap: _openManualAdd,
                 ),
-              // Not behind `recurringExpense`: the occurrence cutoff hides
-              // any future-dated movement from Activity whether or not the
-              // user can create series, so this door always exists.
-              _HomeActionCard(
-                label: context.l10n.futureMovements,
-                icon: Icons.event_repeat_rounded,
-                onTap: _openFutureMovements,
-              ),
-            ],
-          ),
-        ],
+                if (context.watch<AppConfigController>().isFlagEnabled(
+                  'feedback',
+                ))
+                  _HomeActionCard(
+                    label: context.l10n.sendFeedback,
+                    icon: Icons.feedback_rounded,
+                    onTap: _openFeedback,
+                  ),
+                // Not behind `recurringExpense`: the occurrence cutoff hides
+                // any future-dated movement from Activity whether or not the
+                // user can create series, so this door always exists.
+                _HomeActionCard(
+                  label: context.l10n.futureMovements,
+                  icon: Icons.event_repeat_rounded,
+                  onTap: _openFutureMovements,
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }

@@ -63,9 +63,13 @@ class _WhatsappLinkView extends StatelessWidget {
 
     return Scaffold(
       appBar: AppBar(title: Text(context.l10n.whatsappTitle)),
-      body: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
-        children: [_body(context, controller)],
+      body: SafeArea(
+        top: false,
+        bottom: false,
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
+          children: [_body(context, controller)],
+        ),
       ),
     );
   }

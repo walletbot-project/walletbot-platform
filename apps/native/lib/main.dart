@@ -690,6 +690,7 @@ class _AppMainState extends State<AppMain> {
     );
     final selectedIndex = context.watch<AppNavigation>().index;
     final useRail = windowSizeClassOf(context) != WindowSizeClass.compact;
+    final railOnLeft = Directionality.of(context) == TextDirection.ltr;
 
     // Built once per build and placed in exactly one branch below — never
     // both, or the GlobalKey would be duplicated within a single frame.
@@ -721,14 +722,30 @@ class _AppMainState extends State<AppMain> {
       body: useRail
           ? Row(
               children: [
-                _AgentCenteredRail(
-                  selectedIndex: selectedIndex,
-                  onDestinationSelected: (value) =>
-                      context.read<AppNavigation>().index = value,
-                  onOpenVoice: _openVoice,
+                // The rail sits on the leading edge, so it alone takes that
+                // edge's inset (a landscape nav bar or camera cutout), with
+                // the status bar above it. Its halves and the voice button
+                // then share one inset instead of each rail half applying it
+                // on its own, and the tabs beside it don't apply it again.
+                SafeArea(
+                  left: railOnLeft,
+                  right: !railOnLeft,
+                  child: _AgentCenteredRail(
+                    selectedIndex: selectedIndex,
+                    onDestinationSelected: (value) =>
+                        context.read<AppNavigation>().index = value,
+                    onOpenVoice: _openVoice,
+                  ),
                 ),
                 const VerticalDivider(width: 1, thickness: 1),
-                Expanded(child: tabs),
+                Expanded(
+                  child: MediaQuery.removePadding(
+                    context: context,
+                    removeLeft: railOnLeft,
+                    removeRight: !railOnLeft,
+                    child: tabs,
+                  ),
+                ),
               ],
             )
           : tabs,

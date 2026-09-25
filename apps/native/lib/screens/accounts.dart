@@ -148,34 +148,39 @@ class _AccountsScreenState extends State<AccountsScreen> {
             ),
           ],
         ),
-        body: StreamBuilder<List<Account>>(
-          stream: repos.accounts.watchActive(),
-          builder: (context, snapshot) {
-            if (snapshot.hasError) {
-              return _ErrorBody(error: snapshot.error.toString());
-            }
-            if (snapshot.connectionState == ConnectionState.waiting &&
-                !snapshot.hasData) {
-              return const Center(child: CircularProgressIndicator());
-            }
-            final accounts = snapshot.data ?? const <Account>[];
-            if (accounts.isEmpty) {
-              return _EmptyBody(onCreateTap: () => _openCreate(context));
-            }
-            return ListView.separated(
-              padding: const EdgeInsets.only(left: 16, right: 16, bottom: 96),
-              itemCount: accounts.length,
-              separatorBuilder: (_, _) => const SizedBox(height: kGroupSpacing),
-              itemBuilder: (context, index) {
-                final account = accounts[index];
-                return _AccountTile(
-                  account: account,
-                  borderRadius: groupedRadius(index, accounts.length),
-                  onTap: () => _openAccountDetails(account),
-                );
-              },
-            );
-          },
+        body: SafeArea(
+          top: false,
+          bottom: false,
+          child: StreamBuilder<List<Account>>(
+            stream: repos.accounts.watchActive(),
+            builder: (context, snapshot) {
+              if (snapshot.hasError) {
+                return _ErrorBody(error: snapshot.error.toString());
+              }
+              if (snapshot.connectionState == ConnectionState.waiting &&
+                  !snapshot.hasData) {
+                return const Center(child: CircularProgressIndicator());
+              }
+              final accounts = snapshot.data ?? const <Account>[];
+              if (accounts.isEmpty) {
+                return _EmptyBody(onCreateTap: () => _openCreate(context));
+              }
+              return ListView.separated(
+                padding: const EdgeInsets.only(left: 16, right: 16, bottom: 96),
+                itemCount: accounts.length,
+                separatorBuilder: (_, _) =>
+                    const SizedBox(height: kGroupSpacing),
+                itemBuilder: (context, index) {
+                  final account = accounts[index];
+                  return _AccountTile(
+                    account: account,
+                    borderRadius: groupedRadius(index, accounts.length),
+                    onTap: () => _openAccountDetails(account),
+                  );
+                },
+              );
+            },
+          ),
         ),
       ),
     );
