@@ -18,6 +18,7 @@ import {
 import { useNavigate } from 'react-router-dom'
 import { AppBar } from '@/components/m3/app-bar'
 import { Icon } from '@/components/m3/icon'
+import { useEnterSends } from '@/hooks/use-enter-sends'
 import type { ChatMessage } from '@/hooks/use-voice'
 import { useVoiceSession } from '@/hooks/use-voice-session'
 import { useFormatLocale, useT } from '@/lib/i18n'
@@ -492,7 +493,8 @@ function EmptyState({ isConnecting }: { isConnecting: boolean }) {
 
 /**
  * The text field of the control bar, porting `_TextComposer`: a single line
- * that grows to four before it scrolls. Enter sends, Shift+Enter breaks.
+ * that grows to four before it scrolls. See `useEnterSends` for which Enter
+ * sends and which breaks the line.
  */
 function Composer({
     value,
@@ -505,6 +507,7 @@ function Composer({
 }) {
     const t = useT()
     const ref = useRef<HTMLTextAreaElement>(null)
+    const enterSends = useEnterSends()
 
     useEffect(() => {
         const el = ref.current
@@ -517,7 +520,7 @@ function Composer({
     }, [value])
 
     const handleKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
-        if (event.key !== 'Enter' || event.shiftKey) return
+        if (!enterSends(event)) return
         event.preventDefault()
         onSend()
     }

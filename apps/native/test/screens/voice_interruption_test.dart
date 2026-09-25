@@ -1,11 +1,11 @@
 import 'dart:async';
-import 'dart:typed_data';
 
 import 'package:app/l10n/l10n.dart';
 import 'package:app/screens/voice.dart';
 import 'package:app/voice/voice_event.dart';
 import 'package:app/voice/voice_expense_command.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -93,7 +93,7 @@ void main() {
     await tester.pumpWidget(_voiceApp(command));
 
     await tester.enterText(find.byType(TextField), 'typed message');
-    await tester.testTextInput.receiveAction(TextInputAction.send);
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
     await tester.pump();
     expect(command.audioPlaybackStates, [false]);
 

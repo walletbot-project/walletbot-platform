@@ -1962,6 +1962,24 @@ class _TextComposer extends StatelessWidget {
   final FocusNode focusNode;
   final VoidCallback onSend;
 
+  /// A physical keyboard's Enter sends and Shift+Enter breaks the line. An
+  /// on-screen keyboard types its Enter as text instead of a key event, so it
+  /// never reaches here: the multiline field breaks the line and the send
+  /// button sends.
+  KeyEventResult _handleKey(FocusNode node, KeyEvent event) {
+    final isEnter =
+        event.logicalKey == LogicalKeyboardKey.enter ||
+        event.logicalKey == LogicalKeyboardKey.numpadEnter;
+    if (!isEnter || event is KeyUpEvent) return KeyEventResult.ignored;
+    if (HardwareKeyboard.instance.isShiftPressed) {
+      return KeyEventResult.ignored;
+    }
+    // An input method composing from a physical keyboard commits on Enter.
+    if (controller.value.isComposingRangeValid) return KeyEventResult.ignored;
+    if (event is KeyDownEvent && controller.text.trim().isNotEmpty) onSend();
+    return KeyEventResult.handled;
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -1972,20 +1990,23 @@ class _TextComposer extends StatelessWidget {
         border: Border.all(color: theme.colorScheme.outlineVariant),
       ),
       padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: TextField(
-        controller: controller,
-        focusNode: focusNode,
-        maxLines: 4,
-        minLines: 1,
-        textInputAction: TextInputAction.send,
-        onSubmitted: (_) {
-          if (controller.text.trim().isNotEmpty) onSend();
-        },
-        decoration: InputDecoration(
-          hintText: context.l10n.typeMessage,
-          border: InputBorder.none,
-          isDense: true,
-          contentPadding: const EdgeInsets.symmetric(vertical: 12),
+      child: Focus(
+        canRequestFocus: false,
+        skipTraversal: true,
+        onKeyEvent: _handleKey,
+        child: TextField(
+          controller: controller,
+          focusNode: focusNode,
+          maxLines: 4,
+          minLines: 1,
+          keyboardType: TextInputType.multiline,
+          textInputAction: TextInputAction.newline,
+          decoration: InputDecoration(
+            hintText: context.l10n.typeMessage,
+            border: InputBorder.none,
+            isDense: true,
+            contentPadding: const EdgeInsets.symmetric(vertical: 12),
+          ),
         ),
       ),
     );

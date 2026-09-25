@@ -1,11 +1,11 @@
 import 'dart:async';
-import 'dart:typed_data';
 
 import 'package:app/l10n/l10n.dart';
 import 'package:app/screens/voice.dart';
 import 'package:app/voice/voice_event.dart';
 import 'package:app/voice/voice_expense_command.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -70,7 +70,7 @@ void main() {
 
 Future<void> _sendText(WidgetTester tester, String text) async {
   await tester.enterText(find.byType(TextField), text);
-  await tester.testTextInput.receiveAction(TextInputAction.send);
+  await tester.sendKeyEvent(LogicalKeyboardKey.enter);
   await tester.pump();
 }
 
