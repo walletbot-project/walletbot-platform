@@ -1743,6 +1743,76 @@ class AppLocalizationsEs extends AppLocalizations {
   String get typeMessage => 'Escribí un mensaje…';
 
   @override
+  String get attachFile => 'Adjuntar';
+
+  @override
+  String get attachTakePhoto => 'Sacar foto';
+
+  @override
+  String get attachPhotoLibrary => 'Galería de fotos';
+
+  @override
+  String get attachChooseFile => 'Elegir archivo';
+
+  @override
+  String get attachPasteFile => 'Pegar archivo';
+
+  @override
+  String get attachmentRemove => 'Quitar adjunto';
+
+  @override
+  String get attachmentDropHere => 'Soltá los archivos para adjuntarlos';
+
+  @override
+  String get attachmentUploading => 'Subiendo';
+
+  @override
+  String get attachmentUploadFailed => 'No se pudo subir';
+
+  @override
+  String get attachmentPastedName => 'Archivo pegado';
+
+  @override
+  String attachmentsTooMany(int max) {
+    return 'Podés adjuntar hasta $max archivos por mensaje';
+  }
+
+  @override
+  String attachmentUnsupported(String name) {
+    return '“$name” no es un tipo de archivo soportado';
+  }
+
+  @override
+  String attachmentTooLarge(String name, String max_size) {
+    return '“$name” supera el límite de $max_size';
+  }
+
+  @override
+  String attachmentFailed(String name) {
+    return 'No se pudo adjuntar “$name”';
+  }
+
+  @override
+  String get attachmentsRateLimited =>
+      'Ya adjuntaste muchos archivos. Probá de nuevo más tarde.';
+
+  @override
+  String get attachmentsUnavailable =>
+      'Los adjuntos no están disponibles en este momento';
+
+  @override
+  String get attachmentsOffline =>
+      'Sin conexión. Revisá tu internet y probá de nuevo.';
+
+  @override
+  String get attachmentsWaitUpload =>
+      'Esperá a que terminen de subir los archivos';
+
+  @override
+  String get attachmentsNothingToPaste =>
+      'No hay ningún archivo ni imagen para pegar';
+
+  @override
   String get microphonePermissionDenied => 'Se denegó el permiso del micrófono';
 
   @override

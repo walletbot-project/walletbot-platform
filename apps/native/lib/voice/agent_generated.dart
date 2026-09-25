@@ -57,6 +57,7 @@ const List<String> kAgentToolNames = [
   'calculate',
   'calculateDate',
   'getExchangeRate',
+  'readAttachment',
   'readSkill',
 ];
 
@@ -67,6 +68,115 @@ const int kAgentContextCategoriesCap = 200;
 const int kAgentContextTagsCap = 200;
 const int kAgentContextRecentTransactionsCap = 50;
 const int kAgentContextMemoriesCap = 200;
+
+/// Files the agent chat accepts (packages/shared/src/attachments.ts).
+/// The server enforces the same limits on the stored file.
+const int kAttachmentMaxPerMessage = 5;
+const int kAttachmentImageMaxDimension = 2048;
+const int kAttachmentMaxNameLength = 256;
+
+class AttachmentType {
+  const AttachmentType({
+    required this.mimeType,
+    required this.kind,
+    required this.extensions,
+    required this.maxBytes,
+  });
+
+  final String mimeType;
+  final String kind;
+  final List<String> extensions;
+  final int maxBytes;
+}
+
+const List<AttachmentType> kAttachmentTypes = [
+  AttachmentType(
+    mimeType: 'image/jpeg',
+    kind: 'image',
+    extensions: ['jpg', 'jpeg'],
+    maxBytes: 20971520,
+  ),
+  AttachmentType(
+    mimeType: 'image/png',
+    kind: 'image',
+    extensions: ['png'],
+    maxBytes: 20971520,
+  ),
+  AttachmentType(
+    mimeType: 'image/webp',
+    kind: 'image',
+    extensions: ['webp'],
+    maxBytes: 20971520,
+  ),
+  AttachmentType(
+    mimeType: 'image/gif',
+    kind: 'image',
+    extensions: ['gif'],
+    maxBytes: 20971520,
+  ),
+  AttachmentType(
+    mimeType: 'application/pdf',
+    kind: 'pdf',
+    extensions: ['pdf'],
+    maxBytes: 20971520,
+  ),
+  AttachmentType(
+    mimeType:
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    kind: 'document',
+    extensions: ['docx'],
+    maxBytes: 20971520,
+  ),
+  AttachmentType(
+    mimeType:
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    kind: 'spreadsheet',
+    extensions: ['xlsx'],
+    maxBytes: 2097152,
+  ),
+  AttachmentType(
+    mimeType: 'text/plain',
+    kind: 'text',
+    extensions: ['txt', 'log'],
+    maxBytes: 2097152,
+  ),
+  AttachmentType(
+    mimeType: 'text/csv',
+    kind: 'text',
+    extensions: ['csv'],
+    maxBytes: 2097152,
+  ),
+  AttachmentType(
+    mimeType: 'text/tab-separated-values',
+    kind: 'text',
+    extensions: ['tsv'],
+    maxBytes: 2097152,
+  ),
+  AttachmentType(
+    mimeType: 'text/markdown',
+    kind: 'text',
+    extensions: ['md', 'markdown'],
+    maxBytes: 2097152,
+  ),
+  AttachmentType(
+    mimeType: 'application/json',
+    kind: 'text',
+    extensions: ['json'],
+    maxBytes: 2097152,
+  ),
+  AttachmentType(
+    mimeType: 'application/x-ofx',
+    kind: 'text',
+    extensions: ['ofx', 'qfx'],
+    maxBytes: 2097152,
+  ),
+  AttachmentType(
+    mimeType: 'application/qif',
+    kind: 'text',
+    extensions: ['qif'],
+    maxBytes: 2097152,
+  ),
+];
 
 /// A bundled agent skill — see packages/shared/src/agent-skills.
 class AgentSkill {

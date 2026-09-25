@@ -247,6 +247,26 @@ export const purgeUserData = internalMutation({
                         .withIndex('by_userId', (q) => q.eq('userId', userId))
                         .take(n),
                 ),
+            // Files the user attached to the agent chat, with their bytes.
+            // Device-owned attachments expire on their own within a day.
+            async (n) => {
+                const attachments = await ctx.db
+                    .query('agentAttachments')
+                    .withIndex('by_userId', (q) => q.eq('userId', userId))
+                    .take(n)
+                for (const attachment of attachments) {
+                    if (
+                        await ctx.db.system.get(
+                            '_storage',
+                            attachment.storageId,
+                        )
+                    ) {
+                        await ctx.storage.delete(attachment.storageId)
+                    }
+                    await ctx.db.delete(attachment._id)
+                }
+                return attachments.length
+            },
             async (n) => {
                 const joins = await ctx.db
                     .query('transactionTags')

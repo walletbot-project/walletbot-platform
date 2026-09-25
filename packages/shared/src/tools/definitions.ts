@@ -571,6 +571,20 @@ export const toolSchemas = {
             ),
     }),
 
+    // ───── Attachments ─────
+    readAttachment: z.object({
+        attachmentId: z
+            .string()
+            .describe(
+                'The id of a file listed in the user message as [Attachment id=... ].',
+            ),
+        question: z
+            .string()
+            .describe(
+                'What you need from the file, as one specific question: the total, the line items, the date and merchant, whether a charge appears.',
+            ),
+    }),
+
     // ───── Skills ─────
     readSkill: z.object({
         slug: z

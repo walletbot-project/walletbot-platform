@@ -3176,6 +3176,120 @@ abstract class AppLocalizations {
   /// **'Type a message…'**
   String get typeMessage;
 
+  /// No description provided for @attachFile.
+  ///
+  /// In en, this message translates to:
+  /// **'Attach'**
+  String get attachFile;
+
+  /// No description provided for @attachTakePhoto.
+  ///
+  /// In en, this message translates to:
+  /// **'Take photo'**
+  String get attachTakePhoto;
+
+  /// No description provided for @attachPhotoLibrary.
+  ///
+  /// In en, this message translates to:
+  /// **'Photo library'**
+  String get attachPhotoLibrary;
+
+  /// No description provided for @attachChooseFile.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose file'**
+  String get attachChooseFile;
+
+  /// No description provided for @attachPasteFile.
+  ///
+  /// In en, this message translates to:
+  /// **'Paste file'**
+  String get attachPasteFile;
+
+  /// No description provided for @attachmentRemove.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove attachment'**
+  String get attachmentRemove;
+
+  /// No description provided for @attachmentDropHere.
+  ///
+  /// In en, this message translates to:
+  /// **'Drop files to attach them'**
+  String get attachmentDropHere;
+
+  /// No description provided for @attachmentUploading.
+  ///
+  /// In en, this message translates to:
+  /// **'Uploading'**
+  String get attachmentUploading;
+
+  /// No description provided for @attachmentUploadFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not upload'**
+  String get attachmentUploadFailed;
+
+  /// No description provided for @attachmentPastedName.
+  ///
+  /// In en, this message translates to:
+  /// **'Pasted file'**
+  String get attachmentPastedName;
+
+  /// No description provided for @attachmentsTooMany.
+  ///
+  /// In en, this message translates to:
+  /// **'You can attach up to {max} files per message'**
+  String attachmentsTooMany(int max);
+
+  /// No description provided for @attachmentUnsupported.
+  ///
+  /// In en, this message translates to:
+  /// **'“{name}” is not a supported file type'**
+  String attachmentUnsupported(String name);
+
+  /// No description provided for @attachmentTooLarge.
+  ///
+  /// In en, this message translates to:
+  /// **'“{name}” is larger than the {max_size} limit'**
+  String attachmentTooLarge(String name, String max_size);
+
+  /// No description provided for @attachmentFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not attach “{name}”'**
+  String attachmentFailed(String name);
+
+  /// No description provided for @attachmentsRateLimited.
+  ///
+  /// In en, this message translates to:
+  /// **'You have attached many files already. Try again later.'**
+  String get attachmentsRateLimited;
+
+  /// No description provided for @attachmentsUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Attachments are not available right now'**
+  String get attachmentsUnavailable;
+
+  /// No description provided for @attachmentsOffline.
+  ///
+  /// In en, this message translates to:
+  /// **'No connection. Check your internet and try again.'**
+  String get attachmentsOffline;
+
+  /// No description provided for @attachmentsWaitUpload.
+  ///
+  /// In en, this message translates to:
+  /// **'Wait for the files to finish uploading'**
+  String get attachmentsWaitUpload;
+
+  /// No description provided for @attachmentsNothingToPaste.
+  ///
+  /// In en, this message translates to:
+  /// **'There is no file or image to paste'**
+  String get attachmentsNothingToPaste;
+
   /// No description provided for @microphonePermissionDenied.
   ///
   /// In en, this message translates to:

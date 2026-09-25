@@ -2,6 +2,7 @@ import { api } from '@wallet-bot/backend/api'
 import { normalizeName, TOOL_DEFINITIONS } from '@wallet-bot/shared'
 import type { ConvexReactClient } from 'convex/react'
 import type { z } from 'zod'
+import type { ConversationTurn } from '@/lib/voice-seed'
 
 // Tool declarations (derived from shared)
 
@@ -23,6 +24,13 @@ export type AgentToolContext = {
         setLanguage: (value: 'system' | 'es' | 'en') => void
         setTheme: (value: 'system' | 'light' | 'dark') => void
     }
+    /** BCP 47 tag of the UI, for tools whose answer is phrased by a model. */
+    locale?: string
+    /**
+     * The last turns of the running conversation. Only `readAttachment` gets
+     * it, from `useVoice`, as context for the reader model.
+     */
+    recentConversation?: () => ConversationTurn[]
 }
 
 // Tool executors

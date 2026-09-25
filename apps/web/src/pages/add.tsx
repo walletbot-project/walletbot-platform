@@ -1,5 +1,9 @@
 import { api } from '@wallet-bot/backend/api'
 import {
+    ATTACHMENT_MAX_PER_MESSAGE,
+    type AttachmentKind,
+} from '@wallet-bot/shared'
+import {
     Button,
     CircularProgress,
     IconButton,
@@ -8,18 +12,26 @@ import {
 } from 'actify'
 import { useQuery } from 'convex/react'
 import {
+    type ClipboardEvent,
     type KeyboardEvent,
     type PointerEvent,
+    type DragEvent as ReactDragEvent,
     useCallback,
     useEffect,
     useRef,
     useState,
 } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { toast } from 'sonner'
 import { AppBar } from '@/components/m3/app-bar'
 import { Icon } from '@/components/m3/icon'
+import {
+    type PendingAttachment,
+    useChatAttachments,
+} from '@/hooks/use-chat-attachments'
 import type { ChatMessage } from '@/hooks/use-voice'
 import { useVoiceSession } from '@/hooks/use-voice-session'
+import { ATTACHMENT_ACCEPT } from '@/lib/chat-attachments'
 import { useFormatLocale, useT } from '@/lib/i18n'
 import { cn } from '@/lib/utils'
 import {
@@ -35,6 +47,14 @@ const LONG_PRESS_MS = 500
 
 /** Four lines of the composer at `text-sm`, plus its vertical padding. */
 const COMPOSER_MAX_HEIGHT = 104
+
+const KIND_ICONS: Record<AttachmentKind, string> = {
+    image: 'image',
+    pdf: 'picture_as_pdf',
+    document: 'description',
+    spreadsheet: 'table_chart',
+    text: 'article',
+}
 
 // Helpers
 
@@ -182,6 +202,29 @@ function UserBubble({
                         <p className="whitespace-pre-wrap text-sm leading-snug">
                             {text}
                         </p>
+                    )}
+                    {message.attachments && message.attachments.length > 0 && (
+                        <ul
+                            className={cn(
+                                'flex flex-wrap justify-end gap-1.5',
+                                text && 'mt-2',
+                            )}
+                        >
+                            {message.attachments.map((attachment) => (
+                                <li
+                                    key={attachment.id}
+                                    className="flex max-w-full items-center gap-1 rounded-md bg-on-primary-container/10 px-2 py-1 text-xs"
+                                >
+                                    <Icon
+                                        name={KIND_ICONS[attachment.kind]}
+                                        size={14}
+                                    />
+                                    <span className="truncate">
+                                        {attachment.name}
+                                    </span>
+                                </li>
+                            ))}
+                        </ul>
                     )}
                     {!message.isFinal && (
                         <div
@@ -488,20 +531,100 @@ function EmptyState({ isConnecting }: { isConnecting: boolean }) {
     )
 }
 
+// Attachments
+
+function PendingAttachmentChip({
+    item,
+    onRemove,
+}: {
+    item: PendingAttachment
+    onRemove: () => void
+}) {
+    const t = useT()
+    return (
+        <div
+            className={cn(
+                'flex max-w-56 items-center gap-2 rounded-lg border bg-surface py-0.5 pr-0.5 pl-1.5',
+                item.status === 'failed'
+                    ? 'border-error'
+                    : 'border-outline-variant',
+            )}
+        >
+            {item.previewUrl ? (
+                <img
+                    src={item.previewUrl}
+                    alt=""
+                    className="size-8 shrink-0 rounded object-cover"
+                />
+            ) : (
+                <Icon
+                    name={item.kind ? KIND_ICONS[item.kind] : 'draft'}
+                    size={20}
+                    className="text-on-surface-variant"
+                />
+            )}
+            <span className="min-w-0 flex-1 truncate text-xs text-on-surface">
+                {item.name}
+            </span>
+            {item.status === 'uploading' && (
+                <span role="status" aria-label={t.voice.attachmentUploading}>
+                    <CircularProgress isIndeterminate size="xs" />
+                </span>
+            )}
+            {item.status === 'failed' && (
+                <span role="img" aria-label={t.voice.attachmentUploadFailed}>
+                    <Icon
+                        name="error"
+                        filled
+                        size={18}
+                        className="text-error"
+                    />
+                </span>
+            )}
+            <IconButton
+                aria-label={t.voice.removeAttachment}
+                onPress={onRemove}
+                className="text-on-surface-variant"
+            >
+                <Icon name="close" size={18} />
+            </IconButton>
+        </div>
+    )
+}
+
+function DropOverlay() {
+    const t = useT()
+    return (
+        <div className="pointer-events-none absolute inset-2 z-10 flex items-center justify-center rounded-2xl border-2 border-dashed border-primary bg-surface/85">
+            <div className="flex flex-col items-center gap-2 text-on-surface">
+                <Icon name="upload_file" size={40} />
+                <span className="m3-title-medium">{t.voice.dropToAttach}</span>
+            </div>
+        </div>
+    )
+}
+
+function hasFiles(event: ReactDragEvent) {
+    return Array.from(event.dataTransfer.types).includes('Files')
+}
+
 // Composer
 
 /**
  * The text field of the control bar, porting `_TextComposer`: a single line
  * that grows to four before it scrolls. Enter sends, Shift+Enter breaks.
+ * Pasting files hands them to `onPasteFiles` when attachments are on.
  */
 function Composer({
     value,
     onChange,
     onSend,
+    onPasteFiles,
 }: {
     value: string
     onChange: (value: string) => void
     onSend: () => void
+    onPasteFiles?: (files: File[]) => void
 }) {
     const t = useT()
     const ref = useRef<HTMLTextAreaElement>(null)
@@ -522,6 +645,13 @@ function Composer({
         onSend()
     }
 
+    const handlePaste = (event: ClipboardEvent<HTMLTextAreaElement>) => {
+        const files = Array.from(event.clipboardData.files)
+        if (!onPasteFiles || files.length === 0) return
+        event.preventDefault()
+        onPasteFiles(files)
+    }
+
     return (
         <div className="min-w-0 flex-1 rounded-3xl border border-outline-variant bg-surface px-4">
             <textarea
@@ -530,6 +660,7 @@ function Composer({
                 value={value}
                 onChange={(event) => onChange(event.target.value)}
                 onKeyDown={handleKeyDown}
+                onPaste={handlePaste}
                 placeholder={t.voice.typeMessage}
                 aria-label={t.voice.typeMessage}
                 className="block w-full resize-none bg-transparent py-3 text-sm leading-snug text-on-surface outline-none placeholder:text-muted-foreground"
@@ -691,6 +822,13 @@ export function Add() {
     const [text, setText] = useState('')
     const isComposing = text.trim().length > 0
 
+    const attachmentsEnabled = flags?.agentAttachments === true
+    const attachments = useChatAttachments()
+    const canSend = isComposing || attachments.items.length > 0
+    const fileInputRef = useRef<HTMLInputElement>(null)
+    const dragDepthRef = useRef(0)
+    const [isDragging, setIsDragging] = useState(false)
+
     // Native's `screen_attached` / `screen_detached`, with the same effects:
     // leaving mutes the mic and interrupts the answer in flight, and keeps
     // everything else running. The composer draft stays page-local, as
@@ -728,10 +866,42 @@ export function Add() {
     }
 
     const handleSend = () => {
-        if (!isComposing) return
-        voice.sendText(text)
+        if (!canSend) return
+        if (attachments.isUploading) {
+            toast.error(t.voice.attachmentsWaitUpload)
+            return
+        }
+        const sent = attachments.take()
+        if (!isComposing && sent.length === 0) return
+        voice.sendText(text, sent)
         setText('')
         voice.setComposing(false)
+    }
+
+    // Files dragged from outside the browser, anywhere over the chat. The depth
+    // counter keeps the overlay up while the pointer crosses child elements.
+    const handleDragEnter = (event: ReactDragEvent) => {
+        if (!attachmentsEnabled || !hasFiles(event)) return
+        event.preventDefault()
+        dragDepthRef.current += 1
+        setIsDragging(true)
+    }
+    const handleDragOver = (event: ReactDragEvent) => {
+        if (!attachmentsEnabled || !hasFiles(event)) return
+        event.preventDefault()
+        event.dataTransfer.dropEffect = 'copy'
+    }
+    const handleDragLeave = (event: ReactDragEvent) => {
+        if (!attachmentsEnabled || !hasFiles(event)) return
+        dragDepthRef.current = Math.max(0, dragDepthRef.current - 1)
+        if (dragDepthRef.current === 0) setIsDragging(false)
+    }
+    const handleDrop = (event: ReactDragEvent) => {
+        if (!attachmentsEnabled || !hasFiles(event)) return
+        event.preventDefault()
+        dragDepthRef.current = 0
+        setIsDragging(false)
+        attachments.add(Array.from(event.dataTransfer.files))
     }
 
     /**
@@ -891,57 +1061,119 @@ export function Add() {
                 onReported={voice.markReported}
             />
 
-            <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-4 py-6">
-                {voice.messages.length === 0 ? (
-                    <EmptyState isConnecting={voice.isConnecting} />
-                ) : (
-                    voice.messages.map((m) => (
-                        <MessageView
-                            key={m.id}
-                            message={m}
-                            debugEnabled={debugEnabled}
-                            onReport={reportResponse}
-                            showReportButton={showReportButton}
-                        />
-                    ))
-                )}
-                <div ref={bottomRef} aria-hidden className="h-0" />
-            </div>
+            <section
+                aria-label={t.voice.title}
+                className="relative flex min-h-0 flex-1 flex-col"
+                onDragEnter={handleDragEnter}
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
+                onDrop={handleDrop}
+            >
+                {isDragging && <DropOverlay />}
+                <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-4 py-6">
+                    {voice.messages.length === 0 ? (
+                        <EmptyState isConnecting={voice.isConnecting} />
+                    ) : (
+                        voice.messages.map((m) => (
+                            <MessageView
+                                key={m.id}
+                                message={m}
+                                debugEnabled={debugEnabled}
+                                onReport={reportResponse}
+                                showReportButton={showReportButton}
+                            />
+                        ))
+                    )}
+                    <div ref={bottomRef} aria-hidden className="h-0" />
+                </div>
 
-            {/* Control bar — composer plus one primary action, as on native */}
-            <div className="shrink-0 bg-surface-container px-3 pt-2 pb-3">
-                <div className="mx-auto flex max-w-2xl flex-col gap-2.5">
-                    {showLevel && (
-                        <div className="h-1 overflow-hidden rounded-full bg-surface-container-highest">
-                            <div
-                                className="h-full bg-primary transition-all duration-75"
-                                style={{
-                                    width: `${Math.round(voice.micLevel * 100)}%`,
-                                }}
+                {/* Control bar — composer plus one primary action, as on native */}
+                <div className="shrink-0 bg-surface-container px-3 pt-2 pb-3">
+                    <div className="mx-auto flex max-w-2xl flex-col gap-2.5">
+                        {showLevel && (
+                            <div className="h-1 overflow-hidden rounded-full bg-surface-container-highest">
+                                <div
+                                    className="h-full bg-primary transition-all duration-75"
+                                    style={{
+                                        width: `${Math.round(voice.micLevel * 100)}%`,
+                                    }}
+                                />
+                            </div>
+                        )}
+
+                        {attachmentsEnabled && attachments.items.length > 0 && (
+                            <div className="flex flex-wrap gap-2">
+                                {attachments.items.map((item) => (
+                                    <PendingAttachmentChip
+                                        key={item.localId}
+                                        item={item}
+                                        onRemove={() =>
+                                            attachments.remove(item.localId)
+                                        }
+                                    />
+                                ))}
+                            </div>
+                        )}
+
+                        <div className="flex items-end gap-2">
+                            {attachmentsEnabled && (
+                                <>
+                                    <IconButton
+                                        aria-label={t.voice.attach}
+                                        onPress={() =>
+                                            fileInputRef.current?.click()
+                                        }
+                                        isDisabled={
+                                            attachments.items.length >=
+                                            ATTACHMENT_MAX_PER_MESSAGE
+                                        }
+                                        className="mb-2 text-on-surface-variant"
+                                    >
+                                        <Icon name="attach_file" />
+                                    </IconButton>
+                                    <input
+                                        ref={fileInputRef}
+                                        type="file"
+                                        multiple
+                                        hidden
+                                        accept={ATTACHMENT_ACCEPT}
+                                        onChange={(event) => {
+                                            attachments.add(
+                                                Array.from(
+                                                    event.target.files ?? [],
+                                                ),
+                                            )
+                                            // Re-picking the same file must fire again.
+                                            event.target.value = ''
+                                        }}
+                                    />
+                                </>
+                            )}
+                            <Composer
+                                value={text}
+                                onChange={handleTextChange}
+                                onSend={handleSend}
+                                onPasteFiles={
+                                    attachmentsEnabled
+                                        ? attachments.add
+                                        : undefined
+                                }
+                            />
+                            <PrimaryActionButton
+                                isConnecting={voice.isConnecting}
+                                isMicCaptureActive={voice.isMicCaptureActive}
+                                isMicMuted={isMicMuted}
+                                hasText={canSend}
+                                micLabel={micLabel}
+                                onTap={handleTap}
+                                onLongPressStart={handleLongPressStart}
+                                onLongPressEnd={handleLongPressEnd}
+                                onSend={handleSend}
                             />
                         </div>
-                    )}
-
-                    <div className="flex items-end gap-2">
-                        <Composer
-                            value={text}
-                            onChange={handleTextChange}
-                            onSend={handleSend}
-                        />
-                        <PrimaryActionButton
-                            isConnecting={voice.isConnecting}
-                            isMicCaptureActive={voice.isMicCaptureActive}
-                            isMicMuted={isMicMuted}
-                            hasText={isComposing}
-                            micLabel={micLabel}
-                            onTap={handleTap}
-                            onLongPressStart={handleLongPressStart}
-                            onLongPressEnd={handleLongPressEnd}
-                            onSend={handleSend}
-                        />
                     </div>
                 </div>
-            </div>
+            </section>
         </>
     )
 }

@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 
+import '../attachments/attachment_reader.dart';
 import '../convex/convex_client.dart';
 import '../data/data.dart';
 import '../fx/fx_rates_controller.dart';
@@ -44,12 +45,9 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
     DisplaySettingsController? displaySettings,
     DefaultCurrencyController? defaultCurrency,
     FxRatesController? fxRates,
-  }) : _executors = ToolExecutors(
-         repositories,
-         displaySettings: displaySettings,
-         defaultCurrency: defaultCurrency,
-         fxQuotes: fxRates == null ? null : () => fxRates.quotes,
-       );
+  }) : _displaySettings = displaySettings,
+       _defaultCurrency = defaultCurrency,
+       _fxRates = fxRates;
 
   String get _model => _connection.model ?? kAgentModel;
   static const _maxQueuedMessages = 20;
@@ -72,7 +70,29 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
   /// Consumes the factory's screen-open token prefetch, when one is still
   /// inside the token's new-session window. Null result → fetch fresh.
   final Future<LiveToken>? Function()? takePrefetchedToken;
-  final ToolExecutors _executors;
+  final DisplaySettingsController? _displaySettings;
+  final DefaultCurrencyController? _defaultCurrency;
+  final FxRatesController? _fxRates;
+  late final ToolExecutors _executors = ToolExecutors(
+    repositories,
+    displaySettings: _displaySettings,
+    defaultCurrency: _defaultCurrency,
+    fxQuotes: _fxRates == null ? null : () => _fxRates.quotes,
+    readAttachment: convexClient == null ? null : _attachmentReader.read,
+  );
+
+  /// Luna reads take seconds (a long PDF can pass the client's default 30 s
+  /// operation timeout), so the read gets its own bound.
+  static const _attachmentReadTimeout = Duration(seconds: 100);
+  late final AttachmentReader _attachmentReader = AttachmentReader(
+    action: (name, args) => convexClient!.action<Object?>(
+      name,
+      args,
+      options: const CallOptions(operationTimeout: _attachmentReadTimeout),
+    ),
+    deviceId: deviceId,
+    buildContext: _buildAttachmentReadContext,
+  );
   final _audioPlayer = PcmAudioPlayer();
   final _events = StreamController<VoiceEvent>.broadcast();
   final List<VoiceEvent> _history = [];
@@ -133,6 +153,7 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
     },
   );
   late final LiveToolDispatcher _tools = LiveToolDispatcher(
+    backgroundTools: const {'readAttachment'},
     execute: _executors.execute,
     isCurrent: (epoch) =>
         isActive && _connection.ready && _connection.isCurrent(epoch),
@@ -292,6 +313,21 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
       debugPrint('[voice] context seed failed: $error');
       return null;
     }
+  }
+
+  /// What the attachment reader gets besides the file and Gemini's question.
+  Future<Map<String, Object?>> _buildAttachmentReadContext() async {
+    final categories = await repositories.categories.listActive();
+    return {
+      'locale': ?_displaySettings?.localeTag,
+      'timezoneOffsetMinutes': DateTime.now().timeZoneOffset.inMinutes,
+      'defaultCurrency': ?_defaultCurrency?.value,
+      'categories': [for (final category in categories) category.name],
+      'conversation': [
+        for (final turn in recentConversationTurns(_history, 12))
+          {'role': turn.role, 'text': turn.text},
+      ],
+    };
   }
 
   /// Fetches a fresh single-use token. The backend mints tokens with

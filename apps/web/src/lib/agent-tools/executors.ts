@@ -1199,6 +1199,30 @@ export const toolExecutors = {
         },
     ),
 
+    // ───── Attachments ─────
+    // The server returns a tool-ready result (reading or model-facing error),
+    // so it goes back to Gemini untouched.
+    readAttachment: defineTool(
+        toolSchemas.readAttachment,
+        async (ctx, args) => {
+            const [settings, categories] = await Promise.all([
+                ctx.client.query(api.v1.users.queries.getSettings, {}),
+                ctx.client.query(api.v1.categories.queries.listActive),
+            ])
+            return await ctx.client.action(api.v1.attachments.actions.read, {
+                attachmentId: args.attachmentId,
+                question: args.question,
+                context: {
+                    locale: ctx.locale,
+                    timezoneOffsetMinutes: -new Date().getTimezoneOffset(),
+                    defaultCurrency: settings.defaultCurrency,
+                    categories: categories.map((category) => category.name),
+                    conversation: ctx.recentConversation?.(),
+                },
+            })
+        },
+    ),
+
     // ───── Skills ─────
     readSkill: defineTool(toolSchemas.readSkill, async (_ctx, args) => {
         const skill = AGENT_SKILLS_BY_SLUG.get(args.slug)

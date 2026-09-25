@@ -3,6 +3,10 @@ import 'dart:async';
 /// Serializes local operations without blocking the socket receive loop.
 /// IDs are scoped to a connection; duplicates execute once. Cancellation can
 /// prevent a queued operation, but cannot undo a write already committed.
+///
+/// [backgroundTools] are the ones the mint declares NON_BLOCKING
+/// (live/createToken.ts): slow remote reads that run beside the queue, so they
+/// never hold up a write, and answer with WHEN_IDLE scheduling.
 class LiveToolDispatcher {
   LiveToolDispatcher({
     required this.execute,
@@ -10,6 +14,7 @@ class LiveToolDispatcher {
     required this.onCall,
     required this.onResult,
     required this.respond,
+    this.backgroundTools = const {},
   });
 
   final Future<Map<String, dynamic>> Function(String, Map<String, dynamic>)
@@ -18,6 +23,7 @@ class LiveToolDispatcher {
   final void Function(String, String, Map<String, dynamic>) onCall;
   final void Function(String, String, Map<String, dynamic>) onResult;
   final void Function(Map<String, dynamic>, int) respond;
+  final Set<String> backgroundTools;
   final Set<String> _seen = {};
   final Set<String> _cancelled = {};
   Future<void> _tail = Future.value();
@@ -51,7 +57,8 @@ class LiveToolDispatcher {
       final args = rawArgs is Map
           ? rawArgs.cast<String, dynamic>()
           : <String, dynamic>{};
-      _tail = _tail.then((_) async {
+      final background = backgroundTools.contains(name);
+      Future<void> run() async {
         if (!isCurrent(epoch) || _cancelled.contains(id)) return;
         onCall(id, name, args);
         Map<String, dynamic> result;
@@ -71,11 +78,18 @@ class LiveToolDispatcher {
                 'id': id,
                 'name': name,
                 'response': {'result': result},
+                if (background) 'scheduling': 'WHEN_IDLE',
               },
             ],
           },
         }, epoch);
-      });
+      }
+
+      if (background) {
+        unawaited(run());
+      } else {
+        _tail = _tail.then((_) => run());
+      }
     }
     return _tail;
   }

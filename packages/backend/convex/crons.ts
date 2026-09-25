@@ -143,6 +143,13 @@ crons.interval(
     },
 )
 
+crons.interval(
+    'delete expired agent attachments',
+    { hours: 1 },
+    internal.attachments.internal.deleteExpired,
+    { limit: 100 },
+)
+
 // Reported agent responses hold conversation excerpts, so they expire on the
 // same twelve-month clock as the voice history they were cut from.
 crons.interval(

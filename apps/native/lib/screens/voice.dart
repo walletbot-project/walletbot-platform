@@ -7,13 +7,24 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:app/app_config/app_config_controller.dart';
 import 'package:app/app_config/client_info.dart';
+import 'package:app/attachments/attachment_preparer.dart';
+import 'package:app/attachments/attachment_sources.dart';
+import 'package:app/attachments/attachment_types.dart';
+import 'package:app/attachments/attachment_uploader.dart';
+import 'package:app/attachments/chat_attachments_controller.dart';
+import 'package:app/components/feedback/feedback_sheet.dart'
+    show formatFileSize;
 import 'package:app/components/voice/ai_consent_sheet.dart';
+import 'package:app/components/voice/chat_attachments.dart';
 import 'package:app/components/voice/report_response_sheet.dart';
+import 'package:app/convex/convex_client.dart';
 import 'package:app/l10n/l10n.dart';
 import 'package:app/legal/ai_consent_controller.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:provider/provider.dart';
+import 'package:super_drag_and_drop/super_drag_and_drop.dart';
 
+import '../voice/agent_generated.dart';
 import '../voice/mic_capture.dart';
 import '../voice/voice_event.dart';
 import '../voice/voice_expense_command.dart';
@@ -80,7 +91,19 @@ class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
   bool _aiConsentAsked = false;
   double _level = 0;
 
+  /// Null when the screen runs without a Convex client (widget tests).
+  ChatAttachmentsController? _attachments;
+  bool _isDraggingFiles = false;
+
   bool get _isTextComposing => _textController.text.trim().isNotEmpty;
+  bool get _hasAttachments => _attachments?.items.isNotEmpty ?? false;
+  bool get _attachmentsEnabled =>
+      _attachments != null &&
+      (context.read<AppConfigController?>()?.isFlagEnabled(
+            'agentAttachments',
+            orElse: false,
+          ) ??
+          false);
   bool get _isMicEffectivelyMuted =>
       !_micActive || !_userMicOn || _isTextComposing;
 
@@ -89,6 +112,17 @@ class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _textController.addListener(_onTextChanged);
+    final convex = context.read<ConvexClient?>();
+    final clientInfo = context.read<ClientInfo?>();
+    if (convex != null && clientInfo != null) {
+      _attachments = ChatAttachmentsController(
+        uploader: AttachmentUploader(
+          deviceId: clientInfo.deviceId,
+          client: convex,
+        ),
+        onFailure: _onAttachmentFailure,
+      )..addListener(_onAttachmentsChanged);
+    }
     final active = widget.commandFactory.activeCommand;
     if (active != null && active.isActive) {
       _command = active;
@@ -316,7 +350,14 @@ class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
     _textController.removeListener(_onTextChanged);
     _textController.dispose();
     _textFocusNode.dispose();
+    _attachments
+      ?..removeListener(_onAttachmentsChanged)
+      ..dispose();
     super.dispose();
+  }
+
+  void _onAttachmentsChanged() {
+    if (mounted) setState(() {});
   }
 
   bool _wasTextComposing = false;
@@ -401,7 +442,17 @@ class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
 
   void _handleSendText() {
     final text = _textController.text.trim();
-    if (text.isEmpty) return;
+    if (text.isEmpty && !_hasAttachments) return;
+    final attachments = _attachments;
+    if (attachments != null && attachments.isUploading) {
+      _showSnackBar(context.l10n.attachmentsWaitUpload);
+      return;
+    }
+    final sent = attachments?.take() ?? const <SentAttachment>[];
+    if (text.isEmpty && sent.isEmpty) return;
+    // The bubble shows the text and the files; the model gets the text plus
+    // one line per file, and so do the log and the reconnect seed.
+    final message = composeMessageText(text, sent);
 
     final startingFresh = !_isConnected && !_isStarting;
     final wasConnected = _isConnected;
@@ -409,10 +460,15 @@ class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
     setState(() {
       _finalisePending();
       _items.add(
-        _UserBubbleItem(at: DateTime.now(), text: text, isFinal: true),
+        _UserBubbleItem(
+          at: DateTime.now(),
+          text: text,
+          attachments: sent,
+          isFinal: true,
+        ),
       );
       if (!wasConnected) {
-        _pendingTexts.add(text);
+        _pendingTexts.add(message);
       }
     });
 
@@ -420,13 +476,136 @@ class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
       // Text send → expect a silent (text-only) reply, even mid-session.
       // sendText() also flushes any open audio turn server-side.
       _setAudioPlaybackEnabled(false);
-      unawaited(_command?.sendText(text));
+      unawaited(_command?.sendText(message));
     } else if (startingFresh) {
       unawaited(_startSession(mode: _SessionMode.text));
     }
 
     _textController.clear();
     _scrollToBottom(force: true);
+  }
+
+  // -- Attachments ----------------------------------------------------------
+
+  void _showSnackBar(String message) {
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  void _addAttachments(List<PickedAttachment> files) {
+    final attachments = _attachments;
+    if (attachments == null || files.isEmpty || !_attachmentsEnabled) return;
+    final accepted = attachments.add(files);
+    if (accepted < files.length) {
+      _showSnackBar(context.l10n.attachmentsTooMany(kAttachmentMaxPerMessage));
+    }
+  }
+
+  Future<void> _pickAttachments(AttachSource source) async {
+    final remaining =
+        kAttachmentMaxPerMessage - (_attachments?.items.length ?? 0);
+    try {
+      final files = switch (source) {
+        AttachSource.camera => [?await takePhotoAttachment()],
+        AttachSource.photos => await pickPhotoAttachments(limit: remaining),
+        AttachSource.files => await pickFileAttachments(),
+      };
+      if (!mounted) return;
+      _addAttachments(files);
+    } catch (error) {
+      // A denied camera or photos permission lands here.
+      debugPrint('[attachments] picking failed: $error');
+      if (mounted) _showSnackBar(context.l10n.attachmentsUnavailable);
+    }
+  }
+
+  /// Files and images on the clipboard, from the composer's context menu.
+  Future<void> _pasteAttachments() async {
+    final l10n = context.l10n;
+    List<PickedAttachment> files;
+    try {
+      files = await readClipboardAttachments(
+        fallbackName: l10n.attachmentPastedName,
+      );
+    } catch (error) {
+      debugPrint('[attachments] reading the clipboard failed: $error');
+      files = const [];
+    }
+    if (!mounted) return;
+    if (files.isEmpty) {
+      _showSnackBar(l10n.attachmentsNothingToPaste);
+      return;
+    }
+    _addAttachments(files);
+  }
+
+  /// A keyboard paste (Cmd/Ctrl+V): files win, otherwise the composer pastes
+  /// text as usual. Returns whether files were taken.
+  Future<bool> _pasteAttachmentsFromShortcut() async {
+    final fallbackName = context.l10n.attachmentPastedName;
+    try {
+      final files = await readClipboardAttachments(fallbackName: fallbackName);
+      if (!mounted || files.isEmpty) return false;
+      _addAttachments(files);
+      return true;
+    } catch (error) {
+      debugPrint('[attachments] reading the clipboard failed: $error');
+      return false;
+    }
+  }
+
+  void _insertKeyboardContent(KeyboardInsertedContent content) {
+    final file = insertedContentAttachment(
+      content,
+      fallbackName: context.l10n.attachmentPastedName,
+    );
+    if (file != null) _addAttachments([file]);
+  }
+
+  Future<void> _performDrop(PerformDropEvent event) async {
+    final fallbackName = context.l10n.attachmentPastedName;
+    // Requested before the first await: mobile platforms only hand out the
+    // data while the drop is being performed.
+    final requests = [
+      for (final item in event.session.items)
+        if (item.dataReader case final reader?)
+          requestAttachment(reader, fallbackName: fallbackName),
+    ];
+    final files = (await Future.wait(requests)).nonNulls.toList();
+    if (mounted) _addAttachments(files);
+  }
+
+  DropOperation _onDropOver(DropOverEvent event) {
+    final accepts =
+        _attachmentsEnabled &&
+        event.session.allowedOperations.contains(DropOperation.copy) &&
+        event.session.items.any(
+          (item) => attachmentDataFormats.any(item.canProvide),
+        );
+    return accepts ? DropOperation.copy : DropOperation.none;
+  }
+
+  void _onAttachmentFailure(AttachmentFailure failure, String name) {
+    if (!mounted) return;
+    final l10n = context.l10n;
+    _showSnackBar(switch (failure) {
+      AttachmentFailure.unsupportedType => l10n.attachmentUnsupported(name),
+      AttachmentFailure.tooLarge => l10n.attachmentTooLarge(
+        name,
+        formatFileSize(
+          (isConvertibleImage(null, name)
+                      ? pngAttachmentType
+                      : resolveAttachmentType(null, name))
+                  ?.maxBytes ??
+              pngAttachmentType.maxBytes,
+        ),
+      ),
+      AttachmentFailure.rateLimited => l10n.attachmentsRateLimited,
+      AttachmentFailure.unavailable => l10n.attachmentsUnavailable,
+      AttachmentFailure.offline => l10n.attachmentsOffline,
+      AttachmentFailure.failed => l10n.attachmentFailed(name),
+    });
   }
 
   void _flushPendingTexts() {
@@ -902,9 +1081,15 @@ class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
         if (replay && action == 'send_message') {
           final text = details['text'];
           if (text is String && text.isNotEmpty) {
+            final message = splitAttachmentLines(text);
             _finalisePending();
             _items.add(
-              _UserBubbleItem(at: event.at, text: text, isFinal: true),
+              _UserBubbleItem(
+                at: event.at,
+                text: message.text,
+                attachments: message.attachments,
+                isFinal: true,
+              ),
             );
             return true;
           }
@@ -1133,6 +1318,13 @@ class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
           orElse: true,
         ) ??
         true;
+    final attachmentsEnabled =
+        _attachments != null &&
+        (context.watch<AppConfigController?>()?.isFlagEnabled(
+              'agentAttachments',
+              orElse: false,
+            ) ??
+            false);
 
     // Anything to end? A live/reconnecting session, or a restored
     // transcript whose logged session is still resumable.
@@ -1175,51 +1367,78 @@ class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
           ),
         ],
       ),
-      body: Column(
-        children: [
-          Expanded(
-            child: _items.isEmpty
-                ? _EmptyState(isStarting: _isStarting)
-                : NotificationListener<UserScrollNotification>(
-                    onNotification: _handleUserScroll,
-                    child: ListView.builder(
-                      controller: _scrollController,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 16,
-                      ),
-                      itemCount: _items.length,
-                      itemBuilder: (context, i) {
-                        final item = _items[i];
-                        return Padding(
-                          // The report icon's fade keeps state, so its element
-                          // has to track the item and not the row index.
-                          key: ObjectKey(item),
-                          padding: const EdgeInsets.symmetric(vertical: 6),
-                          child: _ChatItemView(
-                            item: item,
-                            onReport: _reportAgentBubble,
-                            showReportButton: showReportButton,
+      // Always wrapped, so the flag never changes the tree shape under the
+      // composer; the region simply refuses drops while it is off.
+      body: DropRegion(
+        formats: attachmentDataFormats,
+        hitTestBehavior: HitTestBehavior.translucent,
+        onDropOver: _onDropOver,
+        onDropEnter: (_) => setState(() => _isDraggingFiles = true),
+        onDropLeave: (_) => setState(() => _isDraggingFiles = false),
+        onPerformDrop: _performDrop,
+        child: Stack(
+          children: [
+            Column(
+              children: [
+                Expanded(
+                  child: _items.isEmpty
+                      ? _EmptyState(isStarting: _isStarting)
+                      : NotificationListener<UserScrollNotification>(
+                          onNotification: _handleUserScroll,
+                          child: ListView.builder(
+                            controller: _scrollController,
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 16,
+                            ),
+                            itemCount: _items.length,
+                            itemBuilder: (context, i) {
+                              final item = _items[i];
+                              return Padding(
+                                // The report icon's fade keeps state, so its element
+                                // has to track the item and not the row index.
+                                key: ObjectKey(item),
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 6,
+                                ),
+                                child: _ChatItemView(
+                                  item: item,
+                                  onReport: _reportAgentBubble,
+                                  showReportButton: showReportButton,
+                                ),
+                              );
+                            },
                           ),
-                        );
-                      },
-                    ),
-                  ),
-          ),
-          _ControlBar(
-            isStarting: _isStarting,
-            isMicActive: _micActive,
-            isMicMuted: _isMicEffectivelyMuted,
-            isTextComposing: _isTextComposing,
-            level: _level,
-            textController: _textController,
-            textFocusNode: _textFocusNode,
-            onSendText: _handleSendText,
-            onTap: _handleVoiceTap,
-            onLongPressStart: _handleVoiceLongPressStart,
-            onLongPressEnd: _handleVoiceLongPressEnd,
-          ),
-        ],
+                        ),
+                ),
+                _ControlBar(
+                  isStarting: _isStarting,
+                  isMicActive: _micActive,
+                  isMicMuted: _isMicEffectivelyMuted,
+                  canSend: _isTextComposing || _hasAttachments,
+                  level: _level,
+                  textController: _textController,
+                  textFocusNode: _textFocusNode,
+                  onSendText: _handleSendText,
+                  onTap: _handleVoiceTap,
+                  onLongPressStart: _handleVoiceLongPressStart,
+                  onLongPressEnd: _handleVoiceLongPressEnd,
+                  attachmentsEnabled: attachmentsEnabled,
+                  attachments: _attachments?.items ?? const [],
+                  attachmentsFull: _attachments?.isFull ?? true,
+                  onAttach: (source) => unawaited(_pickAttachments(source)),
+                  onRemoveAttachment: (localId) =>
+                      _attachments?.remove(localId),
+                  onPasteFiles: () => unawaited(_pasteAttachments()),
+                  onPasteShortcut: _pasteAttachmentsFromShortcut,
+                  onInsertContent: _insertKeyboardContent,
+                ),
+              ],
+            ),
+            if (_isDraggingFiles)
+              const Positioned.fill(child: AttachmentDropOverlay()),
+          ],
+        ),
       ),
       backgroundColor: theme.colorScheme.surface,
     );
@@ -1240,9 +1459,11 @@ class _UserBubbleItem extends _ChatItem {
     required super.at,
     required this.text,
     required this.isFinal,
+    this.attachments = const [],
   });
   String text;
   bool isFinal;
+  final List<SentAttachment> attachments;
 }
 
 class _AgentBubbleItem extends _ChatItem {
@@ -1375,6 +1596,10 @@ class _UserBubble extends StatelessWidget {
                         fontSize: 15,
                       ),
                     ),
+                  if (item.attachments.isNotEmpty) ...[
+                    if (text.isNotEmpty) const SizedBox(height: 8),
+                    SentAttachmentChips(attachments: item.attachments),
+                  ],
                   if (!item.isFinal) ...[
                     if (text.isNotEmpty) const SizedBox(height: 6),
                     _SpeakingDots(
@@ -2037,7 +2262,7 @@ class _ControlBar extends StatelessWidget {
     required this.isStarting,
     required this.isMicActive,
     required this.isMicMuted,
-    required this.isTextComposing,
+    required this.canSend,
     required this.level,
     required this.textController,
     required this.textFocusNode,
@@ -2045,12 +2270,22 @@ class _ControlBar extends StatelessWidget {
     required this.onTap,
     required this.onLongPressStart,
     required this.onLongPressEnd,
+    required this.attachmentsEnabled,
+    required this.attachments,
+    required this.attachmentsFull,
+    required this.onAttach,
+    required this.onRemoveAttachment,
+    required this.onPasteFiles,
+    required this.onPasteShortcut,
+    required this.onInsertContent,
   });
 
   final bool isStarting;
   final bool isMicActive;
   final bool isMicMuted;
-  final bool isTextComposing;
+
+  /// The composer holds text or attachments: the primary button sends.
+  final bool canSend;
   final double level;
   final TextEditingController textController;
   final FocusNode textFocusNode;
@@ -2058,6 +2293,14 @@ class _ControlBar extends StatelessWidget {
   final VoidCallback onTap;
   final VoidCallback onLongPressStart;
   final VoidCallback onLongPressEnd;
+  final bool attachmentsEnabled;
+  final List<PendingAttachment> attachments;
+  final bool attachmentsFull;
+  final ValueChanged<AttachSource> onAttach;
+  final ValueChanged<String> onRemoveAttachment;
+  final VoidCallback onPasteFiles;
+  final Future<bool> Function() onPasteShortcut;
+  final ValueChanged<KeyboardInsertedContent> onInsertContent;
 
   @override
   Widget build(BuildContext context) {
@@ -2083,14 +2326,38 @@ class _ControlBar extends StatelessWidget {
                 ),
                 const SizedBox(height: 10),
               ],
+              if (attachmentsEnabled && attachments.isNotEmpty) ...[
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: PendingAttachmentChips(
+                    items: attachments,
+                    onRemove: onRemoveAttachment,
+                  ),
+                ),
+                const SizedBox(height: 10),
+              ],
               Row(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
+                  // A fixed slot, so the flag never shifts the composer.
+                  attachmentsEnabled
+                      ? Padding(
+                          padding: const EdgeInsets.only(bottom: 4),
+                          child: AttachButton(
+                            enabled: !attachmentsFull,
+                            onSelected: onAttach,
+                          ),
+                        )
+                      : const SizedBox.shrink(),
                   Expanded(
                     child: _TextComposer(
                       controller: textController,
                       focusNode: textFocusNode,
                       onSend: onSendText,
+                      attachmentsEnabled: attachmentsEnabled,
+                      onPasteFiles: onPasteFiles,
+                      onPasteShortcut: onPasteShortcut,
+                      onInsertContent: onInsertContent,
                     ),
                   ),
                   const SizedBox(width: 8),
@@ -2098,7 +2365,7 @@ class _ControlBar extends StatelessWidget {
                     isStarting: isStarting,
                     isMicActive: isMicActive,
                     isMicMuted: isMicMuted,
-                    hasText: isTextComposing,
+                    hasText: canSend,
                     onTap: onTap,
                     onLongPressStart: onLongPressStart,
                     onLongPressEnd: onLongPressEnd,
@@ -2119,15 +2386,24 @@ class _TextComposer extends StatelessWidget {
     required this.controller,
     required this.focusNode,
     required this.onSend,
+    required this.attachmentsEnabled,
+    required this.onPasteFiles,
+    required this.onPasteShortcut,
+    required this.onInsertContent,
   });
 
   final TextEditingController controller;
   final FocusNode focusNode;
   final VoidCallback onSend;
+  final bool attachmentsEnabled;
+  final VoidCallback onPasteFiles;
+  final Future<bool> Function() onPasteShortcut;
+  final ValueChanged<KeyboardInsertedContent> onInsertContent;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = context.l10n;
     return Container(
       decoration: BoxDecoration(
         color: theme.colorScheme.surface,
@@ -2135,23 +2411,72 @@ class _TextComposer extends StatelessWidget {
         border: Border.all(color: theme.colorScheme.outlineVariant),
       ),
       padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: TextField(
-        controller: controller,
-        focusNode: focusNode,
-        maxLines: 4,
-        minLines: 1,
-        textInputAction: TextInputAction.send,
-        onSubmitted: (_) {
-          if (controller.text.trim().isNotEmpty) onSend();
+      child: Actions(
+        actions: {
+          if (attachmentsEnabled)
+            PasteTextIntent: _PasteFilesAction(onPasteShortcut),
         },
-        decoration: InputDecoration(
-          hintText: context.l10n.typeMessage,
-          border: InputBorder.none,
-          isDense: true,
-          contentPadding: const EdgeInsets.symmetric(vertical: 12),
+        child: TextField(
+          controller: controller,
+          focusNode: focusNode,
+          maxLines: 4,
+          minLines: 1,
+          textInputAction: TextInputAction.send,
+          onSubmitted: (_) {
+            if (controller.text.trim().isNotEmpty) onSend();
+          },
+          // The system menu only pastes text; files get their own item.
+          contextMenuBuilder: (context, state) => attachmentsEnabled
+              ? AdaptiveTextSelectionToolbar.buttonItems(
+                  anchors: state.contextMenuAnchors,
+                  buttonItems: [
+                    ...state.contextMenuButtonItems,
+                    ContextMenuButtonItem(
+                      label: l10n.attachPasteFile,
+                      onPressed: () {
+                        state.hideToolbar();
+                        onPasteFiles();
+                      },
+                    ),
+                  ],
+                )
+              : AdaptiveTextSelectionToolbar.editableText(
+                  editableTextState: state,
+                ),
+          contentInsertionConfiguration: attachmentsEnabled
+              ? ContentInsertionConfiguration(
+                  allowedMimeTypes: insertableImageMimeTypes,
+                  onContentInserted: onInsertContent,
+                )
+              : null,
+          decoration: InputDecoration(
+            hintText: l10n.typeMessage,
+            border: InputBorder.none,
+            isDense: true,
+            contentPadding: const EdgeInsets.symmetric(vertical: 12),
+          ),
         ),
       ),
     );
+  }
+}
+
+/// Cmd/Ctrl+V in the composer: files on the clipboard become attachments,
+/// anything else falls through to the text field's own paste.
+class _PasteFilesAction extends ContextAction<PasteTextIntent> {
+  _PasteFilesAction(this.pasteFiles);
+
+  final Future<bool> Function() pasteFiles;
+
+  @override
+  Object? invoke(PasteTextIntent intent, [BuildContext? context]) {
+    // Only set while this call runs, so it is captured before the await.
+    final textPaste = callingAction;
+    unawaited(() async {
+      if (await pasteFiles()) return;
+      textPaste?.invoke(intent);
+    }());
+    return null;
   }
 }
 

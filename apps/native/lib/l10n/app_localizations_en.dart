@@ -1739,6 +1739,74 @@ class AppLocalizationsEn extends AppLocalizations {
   String get typeMessage => 'Type a message…';
 
   @override
+  String get attachFile => 'Attach';
+
+  @override
+  String get attachTakePhoto => 'Take photo';
+
+  @override
+  String get attachPhotoLibrary => 'Photo library';
+
+  @override
+  String get attachChooseFile => 'Choose file';
+
+  @override
+  String get attachPasteFile => 'Paste file';
+
+  @override
+  String get attachmentRemove => 'Remove attachment';
+
+  @override
+  String get attachmentDropHere => 'Drop files to attach them';
+
+  @override
+  String get attachmentUploading => 'Uploading';
+
+  @override
+  String get attachmentUploadFailed => 'Could not upload';
+
+  @override
+  String get attachmentPastedName => 'Pasted file';
+
+  @override
+  String attachmentsTooMany(int max) {
+    return 'You can attach up to $max files per message';
+  }
+
+  @override
+  String attachmentUnsupported(String name) {
+    return '“$name” is not a supported file type';
+  }
+
+  @override
+  String attachmentTooLarge(String name, String max_size) {
+    return '“$name” is larger than the $max_size limit';
+  }
+
+  @override
+  String attachmentFailed(String name) {
+    return 'Could not attach “$name”';
+  }
+
+  @override
+  String get attachmentsRateLimited =>
+      'You have attached many files already. Try again later.';
+
+  @override
+  String get attachmentsUnavailable =>
+      'Attachments are not available right now';
+
+  @override
+  String get attachmentsOffline =>
+      'No connection. Check your internet and try again.';
+
+  @override
+  String get attachmentsWaitUpload => 'Wait for the files to finish uploading';
+
+  @override
+  String get attachmentsNothingToPaste => 'There is no file or image to paste';
+
+  @override
   String get microphonePermissionDenied => 'Microphone permission denied';
 
   @override

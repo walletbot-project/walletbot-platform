@@ -19,7 +19,8 @@ import 'tool_parsing.dart';
 // Native tool executors. All operations run against the local database via
 // the repository layer (lib/data/); the sync layer pushes dirty rows to
 // Convex. NEVER call the Convex backend directly from here — native must work
-// offline.
+// offline. The one exception, `readAttachment`, is injected by the Live
+// command that owns the Convex client, and only reads.
 //
 // This class owns the agent *protocol*: argument coercion (Gemini's loosely
 // typed function-call args) and the `{'ok': bool, ...}` JSON envelopes the
@@ -31,6 +32,7 @@ class ToolExecutors {
     this.displaySettings,
     this.defaultCurrency,
     this.fxQuotes,
+    this.readAttachment,
   });
 
   final AppRepositories repos;
@@ -52,6 +54,12 @@ class ToolExecutors {
   /// have no cache; `getExchangeRate` then reports the rates as unavailable
   /// instead of crashing.
   final List<FxQuote> Function()? fxQuotes;
+
+  /// Reads an uploaded attachment through the backend (`AttachmentReader`).
+  /// Null without a Convex client; the tool then reports attachments as
+  /// unavailable.
+  final Future<Map<String, dynamic>> Function(Map<String, dynamic> args)?
+  readAttachment;
 
   Future<Map<String, dynamic>> execute(
     String name,
@@ -159,6 +167,16 @@ class ToolExecutors {
         // Exchange rates
         case 'getExchangeRate':
           return _getExchangeRate(args);
+        // Attachments
+        case 'readAttachment':
+          final read = readAttachment;
+          if (read == null) {
+            return {
+              'ok': false,
+              'error': 'Attachments are unavailable right now',
+            };
+          }
+          return await read(args);
         // Skills
         case 'readSkill':
           return _readSkill(args);

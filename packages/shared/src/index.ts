@@ -15,7 +15,20 @@ export {
 } from './agent-reports'
 export type { AgentSkill } from './agent-skills'
 export { AGENT_SKILLS, AGENT_SKILLS_BY_SLUG } from './agent-skills'
-export { MAX_DEVICE_ID_LENGTH } from './client'
+export type { AttachmentKind, AttachmentType } from './attachments'
+export {
+    ATTACHMENT_IMAGE_MAX_DIMENSION,
+    ATTACHMENT_MAX_BYTES,
+    ATTACHMENT_MAX_NAME_LENGTH,
+    ATTACHMENT_MAX_PER_MESSAGE,
+    ATTACHMENT_MAX_QUESTION_LENGTH,
+    ATTACHMENT_TTL_MS,
+    ATTACHMENT_TYPES,
+    attachmentTypeForMime,
+    JPEG_ATTACHMENT_TYPE,
+    resolveAttachmentType,
+} from './attachments'
+export { isDeviceUuid, MAX_DEVICE_ID_LENGTH } from './client'
 export {
     CURRENCIES,
     DEFAULT_CURRENCY,

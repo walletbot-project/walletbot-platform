@@ -44,7 +44,7 @@ describe('AGENT_TOOL_NAMES', () => {
         expect(new Set(AGENT_TOOL_NAMES).size).toBe(AGENT_TOOL_NAMES.length)
     })
 
-    it('withholds dashboard, saved-filter, settings and recurrence tools', () => {
+    it('withholds dashboard, saved-filter, settings, recurrence and attachment tools', () => {
         const missing = TOOL_NAMES.filter(
             (name) => !isAgentToolName(name),
         ).sort()
@@ -58,6 +58,7 @@ describe('AGENT_TOOL_NAMES', () => {
             'listRecurrences',
             'listSavedFilters',
             'listUpcomingTransactions',
+            'readAttachment',
             'reorderDashboardWidgets',
             'updateDashboardWidget',
             'updateSavedFilter',

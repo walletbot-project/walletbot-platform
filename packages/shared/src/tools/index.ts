@@ -144,6 +144,10 @@ const toolDescriptions = {
     getExchangeRate:
         'Look up a market exchange rate between two currencies, and optionally convert an amount at it. Quotes come from the app backend, refreshed periodically; this NEVER converts stored money — balances, summaries and movements always stay in their own account currency. Defaults to the official market; ARS pairs also return `alternatives` with the other Argentine quotes so you can name them without asking again. Always carries `asOf` (and `stale: true` past three days) — mention the date when a quote is stale. Errors: "Unknown currency code: X", "from and to are the same currency", "No exchange rate available for X→Y", and "Exchange rates are unavailable right now" when the device has no snapshot cached. A market quote is never the user\'s own transaction rate: for a real cross-currency transfer, ask what actually arrived.',
 
+    // Attachments
+    readAttachment:
+        'Read a file the user attached (photo, PDF, Word document, spreadsheet or text file) and answer a question about it. You never see attachments yourself; each one appears in the user message as [Attachment id=... name="..." type=...]. Reading takes several seconds and runs in the background: say you are reading it and keep talking if the user says something else, the result arrives on its own. Returns `answer` (plain text), `transactions` found in the file (date, description, amount, currency, direction, suggestedCategory) and `warnings` about unreadable parts. Never record those transactions without confirming them with the user. Errors: "Attachment not found", "Attachment expired" (files stay readable for 24 hours), "Attachments are unavailable right now", "Too many attachment reads, try again later", "The file could not be read", "Reading the attachment failed".',
+
     // Skills
     readSkill:
         'Read one of your reference skills by slug (the index is in your instructions). Call it BEFORE answering questions about sync/offline behavior, currencies, filter JSON recipes, date semantics, or privacy/data handling. Unknown slug → { ok: false, availableSlugs }.',

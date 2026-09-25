@@ -39,24 +39,16 @@ export type ConversationEvent =
 
 const DEFAULT_MAX_CHARS = 6000
 
-/**
- * Builds the transcript seed a (re)connect sends to the model as its first
- * client message, restoring conversation context from the session's event
- * log.
- *
- * `pendingTexts` are typed messages still queued for live delivery after the
- * seed — their trailing `send_message` entries are excluded so the model
- * doesn't see them twice. Returns null when there is nothing to restore.
- */
-export function buildConversationSeed(
+type ConversationLine = {
+    role: 'User' | 'Assistant' | 'Recorded tool outcome'
+    text: string
+}
+
+/** Folds the event log into whole turns, the shape both helpers below read. */
+function foldConversation(
     events: readonly ConversationEvent[],
-    opts: { pendingTexts?: readonly string[]; maxChars?: number } = {},
-): string | null {
-    const maxChars = opts.maxChars ?? DEFAULT_MAX_CHARS
-    const lines: {
-        role: 'User' | 'Assistant' | 'Recorded tool outcome'
-        text: string
-    }[] = []
+): ConversationLine[] {
+    const lines: ConversationLine[] = []
     let user = ''
     let agent = ''
     const calls = new Map<
@@ -122,6 +114,24 @@ export function buildConversationSeed(
     }
     flushUser()
     flushAgent()
+    return lines
+}
+
+/**
+ * Builds the transcript seed a (re)connect sends to the model as its first
+ * client message, restoring conversation context from the session's event
+ * log.
+ *
+ * `pendingTexts` are typed messages still queued for live delivery after the
+ * seed — their trailing `send_message` entries are excluded so the model
+ * doesn't see them twice. Returns null when there is nothing to restore.
+ */
+export function buildConversationSeed(
+    events: readonly ConversationEvent[],
+    opts: { pendingTexts?: readonly string[]; maxChars?: number } = {},
+): string | null {
+    const maxChars = opts.maxChars ?? DEFAULT_MAX_CHARS
+    const lines = foldConversation(events)
 
     // Trailing user messages that are still queued for live delivery would
     // otherwise appear twice: once in the seed, once when the queue flushes.
@@ -157,6 +167,25 @@ export function buildConversationSeed(
         `[End of transcript. Continue this conversation naturally in the same ` +
         `language. Do not greet again and do not mention the reconnection.]`
     )
+}
+
+export type ConversationTurn = { role: 'user' | 'agent'; text: string }
+
+/**
+ * The last spoken or typed turns, oldest first, without tool outcomes. What the
+ * attachment reader gets as context for Gemini's question.
+ */
+export function recentConversationTurns(
+    events: readonly ConversationEvent[],
+    maxTurns: number,
+): ConversationTurn[] {
+    return foldConversation(events)
+        .filter((line) => line.role !== 'Recorded tool outcome')
+        .slice(-maxTurns)
+        .map((line) => ({
+            role: line.role === 'User' ? 'user' : 'agent',
+            text: line.text,
+        }))
 }
 
 /**

@@ -235,6 +235,81 @@ it('deduplicates tools, cancels queued work, and records committed results witho
         'tool',
     )
 })
+it('reads attachments beside the queue and answers them when idle', async () => {
+    await start('text')
+    await establish()
+    let finishWrite!: (result: object) => void
+    f.execute.mockImplementation((_context, name) =>
+        name === 'readAttachment'
+            ? Promise.resolve({ ok: true, answer: 'Total 18.870' })
+            : new Promise((resolve) => {
+                  finishWrite = resolve
+              }),
+    )
+    await act(async () => {
+        onmessage({
+            toolCall: {
+                functionCalls: [
+                    { id: 'w', name: 'addExpense', args: {} },
+                    { id: 'r', name: 'readAttachment', args: {} },
+                ],
+            },
+        })
+        await tick()
+    })
+    expect(session.sendToolResponse).toHaveBeenCalledOnce()
+    expect(session.sendToolResponse).toHaveBeenCalledWith({
+        functionResponses: [
+            {
+                id: 'r',
+                name: 'readAttachment',
+                response: { result: { ok: true, answer: 'Total 18.870' } },
+                scheduling: 'WHEN_IDLE',
+            },
+        ],
+    })
+    const readContext = f.execute.mock.calls.find(
+        ([, name]) => name === 'readAttachment',
+    )?.[0]
+    expect(readContext?.recentConversation).toBeTypeOf('function')
+    await act(async () => {
+        finishWrite({ ok: true })
+        await tick()
+    })
+    expect(session.sendToolResponse).toHaveBeenLastCalledWith({
+        functionResponses: [
+            { id: 'w', name: 'addExpense', response: { result: { ok: true } } },
+        ],
+    })
+})
+it('sends attachment lines to the model and shows the files on the bubble', async () => {
+    await start('text')
+    await establish()
+    const attachment = {
+        id: 'att1',
+        name: 'ticket.jpg',
+        kind: 'image' as const,
+    }
+    await act(async () => {
+        voice.sendText('  ', [attachment])
+    })
+    expect(session.sendClientContent).toHaveBeenLastCalledWith({
+        turns: [
+            {
+                role: 'user',
+                parts: [
+                    {
+                        text: '[Attachment id=att1 name="ticket.jpg" type=image]',
+                    },
+                ],
+            },
+        ],
+        turnComplete: true,
+    })
+    expect(voice.messages.filter((m) => m.kind === 'user')).toMatchObject([
+        { text: '', attachments: [attachment] },
+    ])
+})
 it('bounds startup audio and never sends a truncated buffer after overflow', async () => {
     await start()
     await act(async () => {

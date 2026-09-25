@@ -119,6 +119,9 @@ const NATIVE_TOOL_MIN_VERSION: Readonly<Record<string, string>> = {
     listUpcomingTransactions: '0.4.0',
     listRecurrences: '0.4.0',
     addRecurrenceOccurrences: '0.4.0',
+    // Attach controls and the online executor that calls
+    // v1/attachments/actions:read ship in 0.6.0.
+    readAttachment: '0.6.0',
 }
 
 // Tools behind a feature flag, on every platform. Unlike the version gate
@@ -127,6 +130,7 @@ const NATIVE_TOOL_MIN_VERSION: Readonly<Record<string, string>> = {
 // model cannot call something the rollout has not reached yet.
 const FLAG_GATED_TOOLS: Readonly<Record<string, FlagKey>> = {
     getExchangeRate: 'exchangeRates',
+    readAttachment: 'agentAttachments',
     // Same flag that gates the UI. With it off the user has no way to see or
     // manage a recurring rule, so the agent must not be able to create one.
     listRecurrences: 'recurringExpense',
@@ -268,6 +272,15 @@ const RECURRENCE_GUIDE = `# Recurring movements
 - Occurrences before the one you are editing are never affected by either scope.
 - Changing the cadence needs scope all-future and splits the rule in two: the old one ends at the previous occurrence, a new one starts at this one. Say so — the earlier movements keep their old spacing.
 - Read the recurring-movements skill before explaining any of this in depth.`
+
+// Only included when the connecting client declares `readAttachment`
+// (feature flag + native version).
+const ATTACHMENTS_GUIDE = `# Attachments
+- The user can attach photos, PDFs, Word documents, spreadsheets and text files. You never see their content. Each one appears in their message as a line like [Attachment id=abc123 name="ticket.jpg" type=image].
+- To use one, call readAttachment with its id and one specific question. It runs in the background and takes a few seconds: say in a few words that you are reading it, then stay available. If the user says something meanwhile, answer normally; the result arrives by itself.
+- Ask for what the conversation needs (the total, the line items, the date and merchant, whether a charge appears). Call it again with a new question instead of guessing.
+- Movements found in a file are proposals. Read them back briefly and confirm before recording them; for many rows, confirm the whole set once instead of one by one. Map suggestedCategory to the user's existing categories.
+- Attachments stay readable for 24 hours. If one has expired, ask the user to attach it again.`
 
 const FEATURE_DISCOVERY = `# Suggesting features (gently)
 The user may not know everything the app can do. When a feature clearly fits what they are doing, offer it in ONE short sentence AFTER completing their request — never instead of it, and never as a lecture:
@@ -458,6 +471,7 @@ export function buildSystemInstruction(
         declared.has('calculate') ? MATH_GUIDE : null,
         declared.has('getExchangeRate') ? FX_GUIDE : null,
         declared.has('listRecurrences') ? RECURRENCE_GUIDE : null,
+        declared.has('readAttachment') ? ATTACHMENTS_GUIDE : null,
         FEATURE_DISCOVERY,
         MEMORY_RULES,
         skillsIndex(declared.has('listRecurrences')),
@@ -508,6 +522,10 @@ function toGoogleSchema(schema: ToolSchema): GoogleSchema {
     return result
 }
 
+// A blocking call interrupted by the user is dropped and re-issued by the
+// model; non-blocking keeps one call alive while the conversation continues.
+const NON_BLOCKING_TOOLS: ReadonlySet<string> = new Set(['readAttachment'])
+
 function toFunctionDeclarations(
     defs: readonly {
         name: string
@@ -517,9 +535,9 @@ function toFunctionDeclarations(
 ): FunctionDeclaration[] {
     return defs.map((d) => ({
         // Keep local financial operations ordered and wait for committed
-        // results before confirming them. Opt reads into async separately
-        // once the conversation UX represents outstanding work explicitly.
-        behavior: 'BLOCKING',
+        // results before confirming them. Only slow remote reads opt into
+        // async, answered with WHEN_IDLE scheduling by the clients.
+        behavior: NON_BLOCKING_TOOLS.has(d.name) ? 'NON_BLOCKING' : 'BLOCKING',
         name: d.name,
         description: d.description,
         parameters: toGoogleSchema(d.parameters),

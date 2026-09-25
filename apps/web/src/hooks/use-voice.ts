@@ -1,4 +1,7 @@
-import type { LiveServerMessage } from '@google/genai'
+import {
+    FunctionResponseScheduling,
+    type LiveServerMessage,
+} from '@google/genai'
 import { api } from '@wallet-bot/backend/api'
 import type { ToolName } from '@wallet-bot/shared'
 import { useConvex, useQuery } from 'convex/react'
@@ -6,6 +9,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { LiveTokenMintArgs } from '@/lib/agent-context'
 import { executeToolCall } from '@/lib/agent-tools'
 import type { AgentToolContext } from '@/lib/agent-tools/helpers'
+import { composeMessageText, type SentAttachment } from '@/lib/chat-attachments'
 import {
     connectGeminiLive,
     type LiveSession,
@@ -31,6 +35,7 @@ import {
     buildConversationSeed,
     type ConversationEvent,
     parseGoogleDuration,
+    recentConversationTurns,
 } from '@/lib/voice-seed'
 
 // Constants
@@ -56,6 +61,18 @@ const RESPOND_TO_TEXT_WITH_AUDIO = false
 
 /** Which interaction opened the session — it decides the reply modality. */
 export type SessionMode = 'audio' | 'text'
+
+/**
+ * Tools the mint declares NON_BLOCKING (live/createToken.ts). They run outside
+ * the one-at-a-time queue, so a slow remote read never holds up a write, and
+ * answer with WHEN_IDLE so the model speaks the result once it is free.
+ */
+const BACKGROUND_TOOLS: ReadonlySet<string> = new Set<ToolName>([
+    'readAttachment',
+])
+
+/** Turns of conversation the attachment reader gets with the question. */
+const READER_CONTEXT_TURNS = 12
 
 // Chat message model
 
@@ -92,6 +109,7 @@ export type ChatMessage =
           at: Date
           text: string
           isFinal: boolean
+          attachments?: SentAttachment[]
       }
     | {
           kind: 'agent'
@@ -414,7 +432,7 @@ export function useVoice(opts: UseVoiceOpts) {
 
     /** A typed turn has no input transcription — echo it locally instead. */
     const appendTypedUser = useCallback(
-        (text: string) => {
+        (text: string, attachments: readonly SentAttachment[]) => {
             finalisePendingUser()
             finalisePendingAgent()
             setMessages((prev) => [
@@ -425,6 +443,9 @@ export function useVoice(opts: UseVoiceOpts) {
                     at: new Date(),
                     text,
                     isFinal: true,
+                    ...(attachments.length > 0
+                        ? { attachments: [...attachments] }
+                        : {}),
                 },
             ])
         },
@@ -813,55 +834,78 @@ export function useVoice(opts: UseVoiceOpts) {
                                 { id, name, args },
                                 'tool',
                             )
-                            toolsSettledRef.current = toolsSettledRef.current
-                                .then(async () => {
-                                    if (!current() || cancelledCalls.has(id))
-                                        return
-                                    let result: Record<string, unknown>
-                                    try {
-                                        result = await executeToolCall(
-                                            toolContext,
-                                            name,
-                                            args,
-                                        )
-                                    } catch {
-                                        result = {
-                                            error: 'Tool execution failed',
-                                        }
-                                    }
-                                    // A committed write stays in its original conversation even if
-                                    // cancellation or a disconnect arrived while it was executing.
-                                    conversation.push({
-                                        type: 'tool_result',
-                                        id,
+                            const background = BACKGROUND_TOOLS.has(name)
+                            const settle = async () => {
+                                if (!current() || cancelledCalls.has(id)) return
+                                let result: Record<string, unknown>
+                                try {
+                                    result = await executeToolCall(
+                                        background
+                                            ? {
+                                                  ...toolContext,
+                                                  recentConversation: () =>
+                                                      recentConversationTurns(
+                                                          conversation,
+                                                          READER_CONTEXT_TURNS,
+                                                      ),
+                                              }
+                                            : toolContext,
                                         name,
-                                        result,
-                                    })
-                                    recorder?.record(
-                                        'tool_result',
-                                        'client',
-                                        { id, name, result },
-                                        'tool',
+                                        args,
                                     )
-                                    if (
-                                        historyRef.current === recorder &&
-                                        !cancelledCalls.has(id)
-                                    )
-                                        completeToolCall(id, result)
-                                    if (!current() || cancelledCalls.has(id))
-                                        return
-                                    session.sendToolResponse({
-                                        functionResponses: [
-                                            { id, name, response: { result } },
-                                        ],
-                                    })
+                                } catch {
+                                    result = {
+                                        error: 'Tool execution failed',
+                                    }
+                                }
+                                // A committed write stays in its original conversation even if
+                                // cancellation or a disconnect arrived while it was executing.
+                                conversation.push({
+                                    type: 'tool_result',
+                                    id,
+                                    name,
+                                    result,
                                 })
-                                .catch((error) =>
-                                    console.warn(
-                                        'Live tool response failed',
-                                        error,
-                                    ),
+                                recorder?.record(
+                                    'tool_result',
+                                    'client',
+                                    { id, name, result },
+                                    'tool',
                                 )
+                                if (
+                                    historyRef.current === recorder &&
+                                    !cancelledCalls.has(id)
+                                )
+                                    completeToolCall(id, result)
+                                if (!current() || cancelledCalls.has(id)) return
+                                session.sendToolResponse({
+                                    functionResponses: [
+                                        background
+                                            ? {
+                                                  id,
+                                                  name,
+                                                  response: { result },
+                                                  scheduling:
+                                                      FunctionResponseScheduling.WHEN_IDLE,
+                                              }
+                                            : {
+                                                  id,
+                                                  name,
+                                                  response: { result },
+                                              },
+                                    ],
+                                })
+                            }
+                            const warn = (error: unknown) =>
+                                console.warn('Live tool response failed', error)
+                            if (background) {
+                                void settle().catch(warn)
+                            } else {
+                                toolsSettledRef.current =
+                                    toolsSettledRef.current
+                                        .then(settle)
+                                        .catch(warn)
+                            }
                         }
 
                         if (msg.toolCallCancellation) {
@@ -1200,41 +1244,44 @@ export function useVoice(opts: UseVoiceOpts) {
      * audio turn first, exactly like native's `sendText`.
      */
     const sendText = useCallback(
-        (raw: string) => {
+        (raw: string, attachments: readonly SentAttachment[] = []) => {
             const text = raw.trim()
-            if (!text) return
+            if (!text && attachments.length === 0) return
             const status = statusRef.current
             if (status !== 'connected' && pendingTextRef.current.length >= 20) {
                 addSystem(catalog.voice.systemUnavailable, 'error')
                 return
             }
+            // The bubble shows the text and the files; the model gets the text
+            // plus one line per file, and so do the seed and the history.
+            const modelText = composeMessageText(text, attachments)
 
             if (status === 'connected') {
-                appendTypedUser(text)
-                recordSendMessage(text)
+                appendTypedUser(text, attachments)
+                recordSendMessage(modelText)
                 audioPlaybackEnabledRef.current = RESPOND_TO_TEXT_WITH_AUDIO
                 endAudioStream()
                 sessionRef.current?.sendClientContent({
-                    turns: [{ role: 'user', parts: [{ text }] }],
+                    turns: [{ role: 'user', parts: [{ text: modelText }] }],
                     turnComplete: true,
                 })
                 return
             }
 
             if (status === 'disconnected') {
-                appendTypedUser(text)
-                pendingTextRef.current = [...pendingTextRef.current, text]
+                appendTypedUser(text, attachments)
+                pendingTextRef.current = [...pendingTextRef.current, modelText]
                 // `connect` runs synchronously until its first await, so the
                 // recorder exists by the time it returns and the turn is
                 // recorded after the `connecting` notice, in the right order.
                 void connect('text')
-                recordSendMessage(text)
+                recordSendMessage(modelText)
                 return
             }
 
-            appendTypedUser(text)
-            pendingTextRef.current = [...pendingTextRef.current, text]
-            recordSendMessage(text)
+            appendTypedUser(text, attachments)
+            pendingTextRef.current = [...pendingTextRef.current, modelText]
+            recordSendMessage(modelText)
         },
         [
             appendTypedUser,

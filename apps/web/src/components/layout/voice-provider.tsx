@@ -60,7 +60,11 @@ export function VoiceProvider({ children }: { children: React.ReactNode }) {
         [setLanguage, setTheme],
     )
 
-    const voice = useVoice({ context: { client, settings }, buildMintArgs })
+    const context = useMemo(
+        () => ({ client, settings, locale: formatLocale }),
+        [client, settings, formatLocale],
+    )
+    const voice = useVoice({ context, buildMintArgs })
 
     return (
         <VoiceSessionContext.Provider value={voice}>

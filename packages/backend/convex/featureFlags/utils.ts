@@ -1,4 +1,5 @@
 export type FlagKey =
+    | 'agentAttachments'
     | 'agentGemini31'
     | 'agentLocalAccounts'
     | 'aiConsent'
@@ -14,6 +15,12 @@ export const KNOWN_FLAGS: {
     description: string
     enabledByDefault: boolean
 }[] = [
+    {
+        key: 'agentAttachments',
+        description:
+            'Let users attach photos, PDFs, Word documents, spreadsheets and text files in the Gasti chat (native 0.6.0+ and web). Files are read server-side by OpenAI (gpt-6-luna) through the readAttachment tool. Local accounts follow the global default. Off hides the attach controls, withholds the tool and refuses uploads and reads.',
+        enabledByDefault: false,
+    },
     {
         key: 'agentGemini31',
         description:

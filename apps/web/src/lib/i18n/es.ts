@@ -720,6 +720,34 @@ export const es = {
         endSession: 'Finalizar sesión',
         typeMessage: 'Escribí un mensaje…',
         send: 'Enviar',
+        attach: 'Adjuntar archivos',
+        removeAttachment: 'Quitar adjunto',
+        dropToAttach: 'Soltá los archivos para adjuntarlos',
+        attachmentUploading: 'Subiendo',
+        attachmentUploadFailed: 'No se pudo subir',
+        attachmentsUploading: (p: { count: number }) =>
+            p.count === 1
+                ? 'Subiendo 1 archivo'
+                : `Subiendo ${p.count} archivos`,
+        attachmentsReady: (p: { count: number }) =>
+            p.count === 1
+                ? 'Archivo adjuntado'
+                : `${p.count} archivos adjuntados`,
+        attachmentsTooMany: (p: { max: number }) =>
+            `Podés adjuntar hasta ${p.max} archivos por mensaje`,
+        attachmentUnsupported: (p: { name: string }) =>
+            `"${p.name}" no es un tipo de archivo soportado`,
+        attachmentTooLarge: (p: { name: string; max: string }) =>
+            `"${p.name}" supera el límite de ${p.max}`,
+        attachmentFailed: (p: { name: string }) =>
+            `No se pudo adjuntar "${p.name}"`,
+        attachmentsRateLimited:
+            'Ya adjuntaste muchos archivos. Probá de nuevo más tarde.',
+        attachmentsUnavailable:
+            'Los adjuntos no están disponibles en este momento',
+        attachmentsOffline:
+            'Sin conexión. Revisá tu internet y probá de nuevo.',
+        attachmentsWaitUpload: 'Esperá a que terminen de subir los archivos',
         systemConnecting: 'Conectando…',
         systemTokenReceived: (p: { model: string }) =>
             `Token recibido para ${p.model}`,

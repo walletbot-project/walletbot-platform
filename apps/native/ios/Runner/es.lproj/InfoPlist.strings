@@ -1,4 +1,4 @@
 "CFBundleDisplayName" = "Wallet Bot";
 "NSMicrophoneUsageDescription" = "Wallet Bot usa el micrófono para registrar movimientos por voz.";
-"NSPhotoLibraryUsageDescription" = "Wallet Bot usa tus fotos para adjuntar una imagen a un mensaje de soporte.";
-"NSCameraUsageDescription" = "Wallet Bot usa la cámara para adjuntar una foto a un mensaje de soporte.";
+"NSPhotoLibraryUsageDescription" = "Wallet Bot usa tus fotos para adjuntar una imagen a un mensaje para el asistente o a un mensaje de soporte.";
+"NSCameraUsageDescription" = "Wallet Bot usa la cámara para sacar una foto de un ticket o documento para el asistente, o para adjuntarla a un mensaje de soporte.";

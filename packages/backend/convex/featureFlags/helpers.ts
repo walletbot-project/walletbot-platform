@@ -20,6 +20,22 @@ export async function isFlagEnabledGlobally(
     )
 }
 
+/** One flag for one user, with the same precedence as [resolveFlagsForUser]. */
+export async function isFlagEnabledForUser(
+    ctx: QueryCtx | MutationCtx,
+    key: FlagKey,
+    userId: string,
+): Promise<boolean> {
+    const override = await ctx.db
+        .query('featureFlagOverrides')
+        .withIndex('by_flag_user', (q) =>
+            q.eq('flagKey', key).eq('userId', userId),
+        )
+        .unique()
+    if (override) return override.enabled
+    return isFlagEnabledGlobally(ctx, key)
+}
+
 export async function requireAdmin(
     ctx: QueryCtx | MutationCtx,
     userId: string,

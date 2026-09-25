@@ -11,7 +11,11 @@ import {
 } from '../convex/live/createToken'
 
 // Every flag-gated tool switched on, i.e. what a fully rolled-out user gets.
-const ALL_FLAGS = { exchangeRates: true, recurringExpense: true } as const
+const ALL_FLAGS = {
+    agentAttachments: true,
+    exchangeRates: true,
+    recurringExpense: true,
+} as const
 
 describe('declarationsFor (compatibility gating)', () => {
     it('web is unrestricted by version', () => {
@@ -28,8 +32,36 @@ describe('declarationsFor (compatibility gating)', () => {
 
     it('a current native build sees the full set', () => {
         expect(
-            declarationsFor('android', '0.4.0', ALL_FLAGS).map((d) => d.name),
+            declarationsFor('android', '0.6.0', ALL_FLAGS).map((d) => d.name),
         ).toEqual(TOOL_NAMES)
+    })
+
+    it('a pre-0.6.0 native build never sees readAttachment', () => {
+        const names = declarationsFor('android', '0.5.1', ALL_FLAGS).map(
+            (d) => d.name,
+        )
+        expect(names).not.toContain('readAttachment')
+        expect(names).toContain('listRecurrences')
+    })
+
+    it('readAttachment follows the agentAttachments flag on every platform', () => {
+        for (const [platform, version] of [
+            ['web', '9.9.9'],
+            ['android', '0.6.0'],
+            ['ios', '0.6.0'],
+        ] as const) {
+            expect(
+                declarationsFor(platform, version, {
+                    ...ALL_FLAGS,
+                    agentAttachments: false,
+                }).map((d) => d.name),
+            ).not.toContain('readAttachment')
+            expect(
+                declarationsFor(platform, version, ALL_FLAGS).map(
+                    (d) => d.name,
+                ),
+            ).toContain('readAttachment')
+        }
     })
 
     it('a 0.3.x native build never sees the recurrence tools', () => {
@@ -348,10 +380,34 @@ describe('Gemini 3.8 native rollout', () => {
         }
     })
     it('waits for financial operations before confirming their outcomes', () => {
+        const declarations = declarationsFor('android', '0.6.0', ALL_FLAGS)
         expect(
-            declarationsFor('android', '0.5.0', ALL_FLAGS).every(
-                (tool) => tool.behavior === 'BLOCKING',
-            ),
+            declarations
+                .filter((tool) => tool.name !== 'readAttachment')
+                .every((tool) => tool.behavior === 'BLOCKING'),
         ).toBe(true)
+    })
+    it('reads attachments in the background', () => {
+        expect(
+            declarationsFor('android', '0.6.0', ALL_FLAGS).find(
+                (tool) => tool.name === 'readAttachment',
+            )?.behavior,
+        ).toBe('NON_BLOCKING')
+    })
+    it('documents attachments only when the tool is declared', () => {
+        expect(
+            buildSystemInstruction({
+                platform: 'web',
+                appVersion: '9.9.9',
+                flags: ALL_FLAGS,
+            }),
+        ).toContain('# Attachments')
+        expect(
+            buildSystemInstruction({
+                platform: 'android',
+                appVersion: '0.5.1',
+                flags: ALL_FLAGS,
+            }),
+        ).not.toContain('# Attachments')
     })
 })

@@ -14,3 +14,16 @@
  * space.
  */
 export const MAX_DEVICE_ID_LENGTH = 128
+
+const UUID_PATTERN =
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+/**
+ * Whether a device id is a real generated uuid. Native reports the literal
+ * `'unknown'` when secure storage fails, which rate limits tolerate but
+ * anything that scopes data ownership to the device must refuse: every broken
+ * device would share one owner.
+ */
+export function isDeviceUuid(deviceId: string): boolean {
+    return UUID_PATTERN.test(deviceId)
+}

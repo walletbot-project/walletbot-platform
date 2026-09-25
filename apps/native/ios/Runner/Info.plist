@@ -44,9 +44,9 @@
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Wallet Bot uses the microphone to record transactions by voice.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>Wallet Bot uses your photos to attach an image to a support request.</string>
+	<string>Wallet Bot uses your photos to attach an image to a message for the assistant or to a support request.</string>
 	<key>NSCameraUsageDescription</key>
-	<string>Wallet Bot uses the camera to attach a photo to a support request.</string>
+	<string>Wallet Bot uses the camera to take a photo of a receipt or document for the assistant, or to attach one to a support request.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

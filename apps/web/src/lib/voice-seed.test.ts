@@ -6,6 +6,7 @@ import {
     buildConversationSeed,
     type ConversationEvent,
     parseGoogleDuration,
+    recentConversationTurns,
 } from './voice-seed'
 
 describe('buildConversationSeed', () => {
@@ -167,4 +168,27 @@ it('preserves committed tool results in reconnect context', () => {
     expect(seed).toContain('"amount":3000')
     expect(seed).toContain('"id":"saved-id"')
     expect(seed).toContain('do not repeat a successful write')
+})
+
+describe('recentConversationTurns', () => {
+    it('folds deltas into turns, drops tool outcomes, and keeps the latest', () => {
+        const events: ConversationEvent[] = [
+            { type: 'user_transcript_delta', text: 'Hola ' },
+            { type: 'user_transcript_delta', text: 'Gasti' },
+            { type: 'agent_transcript_delta', text: 'Hola, ¿qué necesitás?' },
+            { type: 'agent_turn_complete' },
+            { type: 'send_message', text: 'Mirá este ticket' },
+            { type: 'tool_call', id: 't', name: 'readAttachment', args: {} },
+            {
+                type: 'tool_result',
+                id: 't',
+                name: 'readAttachment',
+                result: { ok: true },
+            },
+        ]
+        expect(recentConversationTurns(events, 2)).toEqual([
+            { role: 'agent', text: 'Hola, ¿qué necesitás?' },
+            { role: 'user', text: 'Mirá este ticket' },
+        ])
+    })
 })

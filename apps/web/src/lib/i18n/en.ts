@@ -682,6 +682,27 @@ export const en: Messages = {
         endSession: 'End session',
         typeMessage: 'Type a message…',
         send: 'Send',
+        attach: 'Attach files',
+        removeAttachment: 'Remove attachment',
+        dropToAttach: 'Drop files to attach them',
+        attachmentUploading: 'Uploading',
+        attachmentUploadFailed: 'Could not upload',
+        attachmentsUploading: (p) =>
+            p.count === 1 ? 'Uploading 1 file' : `Uploading ${p.count} files`,
+        attachmentsReady: (p) =>
+            p.count === 1 ? 'File attached' : `${p.count} files attached`,
+        attachmentsTooMany: (p) =>
+            `You can attach up to ${p.max} files per message`,
+        attachmentUnsupported: (p) =>
+            `"${p.name}" is not a supported file type`,
+        attachmentTooLarge: (p) =>
+            `"${p.name}" is larger than the ${p.max} limit`,
+        attachmentFailed: (p) => `Could not attach "${p.name}"`,
+        attachmentsRateLimited:
+            'You have attached many files already. Try again later.',
+        attachmentsUnavailable: 'Attachments are not available right now',
+        attachmentsOffline: 'No connection. Check your internet and try again.',
+        attachmentsWaitUpload: 'Wait for the files to finish uploading',
         systemConnecting: 'Connecting…',
         systemTokenReceived: (p) => `Token received for ${p.model}`,
         systemSocketError: 'WebSocket error',

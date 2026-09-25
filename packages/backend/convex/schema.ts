@@ -3,6 +3,7 @@ import { accounts } from './schema/accounts'
 import { agentMemories } from './schema/agentMemories'
 import { agentReports } from './schema/agentReports'
 import { agentUsageMonthly, agentUsageSamples } from './schema/agentUsage'
+import { agentAttachments } from './schema/attachments'
 import { categories } from './schema/categories'
 import { dashboardWidgets, savedFilters } from './schema/dashboard'
 import { exchangeRates } from './schema/exchangeRates'
@@ -47,6 +48,7 @@ export default defineSchema({
     agentUsageMonthly,
     agentUsageSamples,
     admins,
+    agentAttachments,
     agentMemories,
     agentReports,
     categories,

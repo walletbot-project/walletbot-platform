@@ -90,4 +90,50 @@ void main() {
       );
     },
   );
+
+  test('background tools run beside the queue and answer when idle', () async {
+    final write = Completer<Map<String, dynamic>>();
+    final responses = <Map<String, dynamic>>[];
+    final dispatcher = LiveToolDispatcher(
+      backgroundTools: const {'readAttachment'},
+      execute: (name, _) => name == 'readAttachment'
+          ? Future.value({'ok': true, 'answer': 'Total'})
+          : write.future,
+      isCurrent: (_) => true,
+      onCall: (_, _, _) {},
+      onResult: (_, _, _) {},
+      respond: (response, _) => responses.add(response),
+    );
+    unawaited(dispatcher.dispatch(call('w'), 1));
+    unawaited(
+      dispatcher.dispatch({
+        'functionCalls': [
+          {'id': 'r', 'name': 'readAttachment', 'args': <String, dynamic>{}},
+        ],
+      }, 1),
+    );
+    await Future<void>.delayed(Duration.zero);
+    expect(responses, [
+      {
+        'toolResponse': {
+          'functionResponses': [
+            {
+              'id': 'r',
+              'name': 'readAttachment',
+              'response': {
+                'result': {'ok': true, 'answer': 'Total'},
+              },
+              'scheduling': 'WHEN_IDLE',
+            },
+          ],
+        },
+      },
+    ]);
+    write.complete({'ok': true});
+    await dispatcher.settled;
+    expect(responses, hasLength(2));
+    final last =
+        (responses.last['toolResponse'] as Map)['functionResponses'] as List;
+    expect((last.single as Map).containsKey('scheduling'), isFalse);
+  });
 }

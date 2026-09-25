@@ -124,4 +124,27 @@ void main() {
     expect(seed, contains('Respuesta número 199'));
     expect(seed, isNot(contains('Mensaje número 0 ')));
   });
+
+  test('recent turns fold deltas, drop tool outcomes and keep the latest', () {
+    final events = <VoiceEvent>[
+      VoiceUserTranscriptDelta('Hola '),
+      VoiceUserTranscriptDelta('Gasti'),
+      VoiceAgentTranscriptDelta('Hola, ¿qué necesitás?'),
+      VoiceAgentTurnComplete(),
+      VoiceClientActionEvent(
+        'send_message',
+        details: {'text': 'Mirá este ticket'},
+      ),
+      VoiceToolCallEvent(id: 't', name: 'readAttachment', args: const {}),
+      VoiceToolResultEvent(
+        id: 't',
+        name: 'readAttachment',
+        result: const {'ok': true},
+      ),
+    ];
+    expect(recentConversationTurns(events, 2), [
+      (role: 'agent', text: 'Hola, ¿qué necesitás?'),
+      (role: 'user', text: 'Mirá este ticket'),
+    ]);
+  });
 }

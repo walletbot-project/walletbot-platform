@@ -5,13 +5,21 @@
 //   2. kAgentModel / kAgentVoiceName — the Live session constants,
 //   3. kAgentContext*Cap — the mint context payload caps (native builds the
 //      same payload the server validates),
-//   4. kAgentSkills — the bundled skill bodies `readSkill` serves offline.
+//   4. kAgentSkills — the bundled skill bodies `readSkill` serves offline,
+//   5. kAttachment*, the attachment types and limits the chat accepts.
 //
 // Run `pnpm run generate:agent` (in packages/shared) after changing any of
 // the imported sources. `test/agent-codegen.test.ts` fails when the generated
 // file on disk is stale.
 
 import { AGENT_SKILLS } from '../src/agent-skills'
+import {
+    ATTACHMENT_IMAGE_MAX_DIMENSION,
+    ATTACHMENT_MAX_BYTES,
+    ATTACHMENT_MAX_NAME_LENGTH,
+    ATTACHMENT_MAX_PER_MESSAGE,
+    ATTACHMENT_TYPES,
+} from '../src/attachments'
 import { AGENT_MODEL, AGENT_VOICE_NAME, TOOL_NAMES } from '../src/tools'
 import { AGENT_CONTEXT_CAPS } from '../src/tools/context'
 
@@ -73,6 +81,53 @@ export function renderAgentGeneratedDart(): string {
     lines.push(
         `const int kAgentContextMemoriesCap = ${AGENT_CONTEXT_CAPS.memories};`,
     )
+    lines.push('')
+    lines.push(
+        '/// Files the agent chat accepts (packages/shared/src/attachments.ts).',
+    )
+    lines.push('/// The server enforces the same limits on the stored file.')
+    lines.push(
+        `const int kAttachmentMaxPerMessage = ${ATTACHMENT_MAX_PER_MESSAGE};`,
+    )
+    lines.push(
+        `const int kAttachmentImageMaxDimension = ${ATTACHMENT_IMAGE_MAX_DIMENSION};`,
+    )
+    lines.push(
+        `const int kAttachmentMaxNameLength = ${ATTACHMENT_MAX_NAME_LENGTH};`,
+    )
+    lines.push('')
+    lines.push('class AttachmentType {')
+    lines.push('  const AttachmentType({')
+    lines.push('    required this.mimeType,')
+    lines.push('    required this.kind,')
+    lines.push('    required this.extensions,')
+    lines.push('    required this.maxBytes,')
+    lines.push('  });')
+    lines.push('')
+    lines.push('  final String mimeType;')
+    lines.push('  final String kind;')
+    lines.push('  final List<String> extensions;')
+    lines.push('  final int maxBytes;')
+    lines.push('}')
+    lines.push('')
+    lines.push('const List<AttachmentType> kAttachmentTypes = [')
+    for (const type of ATTACHMENT_TYPES) {
+        const mimeLine = `    mimeType: ${dartString(type.mimeType)},`
+        lines.push('  AttachmentType(')
+        if (mimeLine.length > 80) {
+            lines.push('    mimeType:')
+            lines.push(`        ${dartString(type.mimeType)},`)
+        } else {
+            lines.push(mimeLine)
+        }
+        lines.push(`    kind: ${dartString(type.kind)},`)
+        lines.push(
+            `    extensions: [${type.extensions.map(dartString).join(', ')}],`,
+        )
+        lines.push(`    maxBytes: ${ATTACHMENT_MAX_BYTES[type.kind]},`)
+        lines.push('  ),')
+    }
+    lines.push('];')
     lines.push('')
     lines.push(
         '/// A bundled agent skill — see packages/shared/src/agent-skills.',
