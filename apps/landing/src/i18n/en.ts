@@ -17,7 +17,7 @@ export const en: Messages = {
         languageLabel: 'Language',
         features: 'Features',
         download: 'Download',
-        requestAccess: 'Request access',
+        getTheApp: 'Get the app',
     },
 
     hero: {
@@ -116,14 +116,13 @@ export const en: Messages = {
 
     download: {
         title: 'Try it free',
-        subtitle:
-            'The web app is open now. Android is in closed beta and iPhone is coming soon.',
+        subtitle: 'Now on Android, iPhone and the web.',
         android: {
-            lead: 'Closed beta on',
+            lead: 'Get it on',
             name: 'Google Play',
         },
         ios: {
-            lead: 'Coming soon on',
+            lead: 'Download on the',
             name: 'App Store',
         },
         web: {
@@ -134,24 +133,22 @@ export const en: Messages = {
 
     beta: {
         meta: {
-            title: 'Wallet Bot — Request beta access',
+            title: 'Wallet Bot — Get the app',
             description:
-                'Join the Wallet Bot closed beta on Android and be the first to know when the iPhone app lands.',
+                'Wallet Bot is out on Android and iPhone. Fill out a short form to get the download links.',
         },
         chip: {
-            android: 'Android in closed beta',
-            ios: 'iPhone coming soon',
+            android: 'Available on Android',
+            ios: 'Available on iPhone',
         },
-        heading: 'Request beta access',
-        body: 'Android is in closed beta: leave us your email and we’ll add you to the tester list.',
+        heading: 'Get the app',
+        body: 'It’s on Google Play and the App Store. To get it, fill out this short form. The download links are at the end.',
         formCta: {
             title: 'Fill out the form',
-            body: 'It’s a couple of questions. We’ll email you once you’re on the list.',
+            body: 'It’s a couple of questions. Send it and you’ll see the links for Android and iPhone.',
         },
-        iosNote:
-            'On iPhone? Fill it out anyway. We use the same list to let you know the moment the app lands on the App Store.',
         webHeading: 'Or use it right now in your browser',
-        webNotice: 'No need to wait: the web app is open to anyone.',
+        webNotice: 'Nothing to install. The web app is open to anyone.',
         webCta: 'Open the web app',
         backHome: 'Back to home',
     },
