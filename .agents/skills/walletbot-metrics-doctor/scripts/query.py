@@ -10,6 +10,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from pathlib import Path
+from time import time
 
 
 def local_values(path: Path, names: tuple[str, ...]) -> dict[str, str]:
@@ -32,12 +33,21 @@ def main() -> int:
     parser.add_argument("promql", help="Instant PromQL expression")
     parser.add_argument("--at", help="Optional evaluation time (RFC3339 or Unix seconds)")
     parser.add_argument(
+        "--series-days",
+        type=int,
+        help="Treat the expression as a series selector and list metric names/scopes seen in the last N days",
+    )
+    parser.add_argument(
         "--env-file",
         type=Path,
         default=Path(__file__).resolve().parents[4] / "packages/backend/.env.local",
         help="Local ignored env file (default: packages/backend/.env.local)",
     )
     args = parser.parse_args()
+    if args.series_days is not None and args.series_days < 1:
+        parser.error("--series-days must be positive")
+    if args.series_days is not None and args.at:
+        parser.error("--at cannot be used with --series-days")
 
     names = (
         "GRAFANA_METRICS_QUERY_URL",
@@ -55,10 +65,17 @@ def main() -> int:
     if parsed.scheme != "https" or not parsed.netloc or parsed.username or parsed.query or parsed.fragment:
         parser.error("GRAFANA_METRICS_QUERY_URL must be an HTTPS query endpoint")
 
-    params = {"query": args.promql}
-    if args.at:
-        params["time"] = args.at
-    url = endpoint + "/api/v1/query?" + urllib.parse.urlencode(params)
+    if args.series_days is None:
+        params = {"query": args.promql}
+        if args.at:
+            params["time"] = args.at
+        url = endpoint + "/api/v1/query?" + urllib.parse.urlencode(params)
+    else:
+        params = {
+            "match[]": args.promql,
+            "start": str(int(time() - args.series_days * 86400)),
+        }
+        url = endpoint + "/api/v1/series?" + urllib.parse.urlencode(params)
     credentials = f"{config[names[1]]}:{config[names[2]]}".encode()
     request = urllib.request.Request(
         url,
@@ -74,8 +91,20 @@ def main() -> int:
         print(f"Grafana query failed ({type(exc).__name__})", file=sys.stderr)
         return 1
 
-    print(json.dumps(payload, indent=2, ensure_ascii=False))
-    return 0 if payload.get("status") == "success" else 1
+    if payload.get("status") != "success":
+        print("Grafana query returned an error", file=sys.stderr)
+        return 1
+    if args.series_days is not None:
+        series = sorted(
+            {
+                (item.get("__name__", ""), item.get("deployment_environment", ""))
+                for item in payload.get("data", [])
+            }
+        )
+        print(json.dumps([{"name": name, "scope": scope} for name, scope in series], indent=2))
+    else:
+        print(json.dumps(payload, indent=2, ensure_ascii=False))
+    return 0
 
 
 if __name__ == "__main__":

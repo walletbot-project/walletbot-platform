@@ -1585,7 +1585,7 @@
                                             "kind": "DataQuery",
                                             "spec": {
                                                 "editorMode": "code",
-                                                "expr": "sum(count_over_time(agent_sessions_started_count_total{deployment_environment=\"$Scope\"}[$__range])) - sum(count_over_time(agent_session_cost_bucket_count{deployment_environment=\"$Scope\"}[$__range]))",
+                                                "expr": "sum(count_over_time(agent_sessions_started_count_total{deployment_environment=\"$Scope\"}[$__range])) - (sum(count_over_time(agent_session_cost_bucket_count_total{deployment_environment=\"$Scope\"}[$__range])) or vector(0))",
                                                 "instant": true,
                                                 "legendFormat": "Sin costo reportado",
                                                 "range": false
