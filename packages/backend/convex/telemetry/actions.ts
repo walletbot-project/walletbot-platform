@@ -13,8 +13,8 @@ const maxErrorBodyLength = 512
 /**
  * Pause between the batches of one drain. A full batch means there is probably
  * more behind it, so the export reschedules itself instead of leaving the rest
- * for whatever runs next — which, since the export crons became one nightly
- * pass, would be a day away. The pause keeps a long backlog from landing as one
+ * for whatever runs next — the nightly pending sweep. The pause keeps a long
+ * backlog from landing as one
  * burst of requests on the OTLP endpoint.
  */
 const exportChainDelayMs = 5 * 1000

@@ -13,16 +13,32 @@ crons.interval(
     {},
 )
 
-// Everything telemetry and metrics used to be eleven crons on their own clocks,
-// waking the deployment about 800 times a day between them. They are now one
-// nightly pass that schedules its steps a few seconds apart and takes about five
-// minutes: see `telemetry/internal.ts` for what runs, in what order, and why.
+// The daily pass groups gauges, pending exports and cleanup. Failed exports
+// need shorter retry intervals to stay within Grafana's timestamp windows.
 // 06:00 UTC is 03:00 in Buenos Aires — cron times are always UTC.
 crons.cron(
     'daily telemetry maintenance',
     '0 6 * * *',
     internal.telemetry.internal.runDailyMaintenance,
     {},
+)
+
+// Loki normally accepts entries up to one hour behind the newest in a stream.
+// A 45-minute retry leaves some room for scheduling and client timestamp lag.
+crons.interval(
+    'retry failed telemetry event exports',
+    { minutes: 45 },
+    internal.telemetry.mutations.resetRetryableFailedEvents,
+    { olderThanMs: 5 * 60 * 1000, maxAttempts: 6, limit: 100 },
+)
+
+// Grafana Cloud Metrics normally accepts samples up to two hours behind the
+// newest in a series. Retry sooner than that without 15-minute idle ticks.
+crons.interval(
+    'retry failed telemetry metrics exports',
+    { minutes: 90 },
+    internal.telemetry.mutations.resetRetryableFailedMetrics,
+    { olderThanMs: 5 * 60 * 1000, maxAttempts: 6, limit: 100 },
 )
 
 // Market exchange rates for the agent's getExchangeRate tool. The Argentine

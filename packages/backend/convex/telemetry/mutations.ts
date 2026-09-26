@@ -435,6 +435,13 @@ export const resetRetryableFailedMetrics = internalMutation({
                 reset += 1
             }
         }
+        if (reset > 0) {
+            await ctx.scheduler.runAfter(
+                0,
+                internal.telemetry.actions.exportPendingMetrics,
+                {},
+            )
+        }
         return { reset, discarded }
     },
 })

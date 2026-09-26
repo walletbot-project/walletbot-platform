@@ -215,8 +215,8 @@ pnpm -C packages/backend exec convex run --prod telemetry/actions:recordRegister
 - business writes do not depend on Grafana availability;
 - every insert schedules its own export, and an export that fills its batch of
   50 reschedules itself until the queue is empty;
-- failed exports are retried by the nightly `daily telemetry maintenance` pass,
-  up to 6 attempts — so roughly one attempt a day for six days;
+- failed event exports are retried every 45 minutes and failed metric exports
+  every 90 minutes, up to 6 attempts; a retry immediately drains recovered rows;
 - rows still pending are swept by the same nightly pass;
 - exported metrics are deleted after 90 days, failed ones after 14;
 - dashboards should read from Grafana, not Convex.

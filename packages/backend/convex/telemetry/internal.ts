@@ -1,8 +1,9 @@
 import { internal } from '../_generated/api'
 import { internalMutation } from '../_generated/server'
 
-// The nightly telemetry pass: everything the eleven telemetry and metrics crons
-// used to do on their own clocks, in one window.
+// The nightly telemetry pass groups gauges, pending-export sweeps and cleanup.
+// Failed-export retries have separate 45/90-minute crons so old timestamps
+// reach Grafana before its out-of-order windows close.
 //
 // Convex counts function calls, and a cron tick that finds nothing to do counts
 // like any other. The five-minute export cron alone was 288 ticks a day (576
@@ -14,13 +15,10 @@ import { internalMutation } from '../_generated/server'
 // its own offset, in a single transaction. A step that throws takes nothing else
 // down with it (the scheduler does not retry a failed run, so a chain would lose
 // everything behind the failure), and Convex keeps one Schedules row per step.
-// The offsets are what makes the pass take minutes instead of firing eleven jobs
+// The offsets are what makes the pass take minutes instead of firing nine jobs
 // at the same instant.
 //
-// Order matters twice:
-//   - the gauges go first, so the snapshots they insert leave with this run;
-//   - the retry sweeps run before the export drain, so a row that failed
-//     yesterday goes out tonight instead of waiting another day.
+// The gauges go first, so the snapshots they insert leave with this run.
 // The deletes go last: they only touch rows that aged out weeks ago, so nothing
 // waits on them.
 
@@ -34,15 +32,6 @@ const EXPORTED_RETENTION_MS = 90 * DAY
 const FAILED_RETENTION_MS = 14 * DAY
 /** Backend agent usage samples follow the exported-telemetry retention. */
 const AGENT_USAGE_SAMPLE_RETENTION_MS = 90 * DAY
-
-/**
- * How long a row has to sit in `failed` before the sweep retries it. Kept from
- * the old fifteen-minute retry cron: it only exists so a row that failed
- * seconds ago is not retried inside the same pass that failed it.
- */
-const RETRY_FAILED_OLDER_THAN_MS = 5 * MINUTE
-const MAX_EXPORT_ATTEMPTS = 6
-const RETRY_BATCH = 100
 
 /**
  * Rows per delete batch. `deleteOld*` clamps this internally (1000 for
@@ -63,25 +52,6 @@ export const runDailyMaintenance = internalMutation({
             30 * SECOND,
             internal.telemetry.actions.recordAgentMonthlyUsage,
             {},
-        )
-
-        await ctx.scheduler.runAfter(
-            MINUTE,
-            internal.telemetry.mutations.resetRetryableFailedEvents,
-            {
-                olderThanMs: RETRY_FAILED_OLDER_THAN_MS,
-                maxAttempts: MAX_EXPORT_ATTEMPTS,
-                limit: RETRY_BATCH,
-            },
-        )
-        await ctx.scheduler.runAfter(
-            75 * SECOND,
-            internal.telemetry.mutations.resetRetryableFailedMetrics,
-            {
-                olderThanMs: RETRY_FAILED_OLDER_THAN_MS,
-                maxAttempts: MAX_EXPORT_ATTEMPTS,
-                limit: RETRY_BATCH,
-            },
         )
 
         // Both drain themselves batch by batch while rows keep coming back.
