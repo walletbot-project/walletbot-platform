@@ -1144,7 +1144,7 @@
                                             "kind": "DataQuery",
                                             "spec": {
                                                 "editorMode": "code",
-                                                "expr": "sum(count_over_time(business_movements_created_count_total{deployment_environment=\"$Scope\",created_by=\"agent\"}[$__range])) / sum(count_over_time(business_movements_created_count_total{deployment_environment=\"$Scope\"}[$__range]))",
+                                                "expr": "(sum(count_over_time(business_movements_created_count_total{deployment_environment=\"$Scope\",created_by=\"agent\"}[$__range])) or vector(0)) / sum(count_over_time(business_movements_created_count_total{deployment_environment=\"$Scope\"}[$__range]))",
                                                 "instant": true,
                                                 "legendFormat": "% agente",
                                                 "range": false

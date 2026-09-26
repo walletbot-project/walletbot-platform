@@ -60,7 +60,7 @@ hay que darle timestamps distintos a cada fila en el exporter.
 ### Total acumulado, y gauges → `last_over_time`
 
 ```promql
-last_over_time(business_users_registered_total{deployment_environment="$Scope"}[$__range])
+last_over_time(business_users_registered_total_count{deployment_environment="$Scope"}[$__range])
 ```
 
 Lee el último valor dentro de la ventana. Exacto y entero, pero responde
