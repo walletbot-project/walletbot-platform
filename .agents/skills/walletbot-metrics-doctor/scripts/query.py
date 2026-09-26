@@ -9,12 +9,34 @@ import sys
 import urllib.error
 import urllib.parse
 import urllib.request
+from pathlib import Path
+
+
+def local_values(path: Path, names: tuple[str, ...]) -> dict[str, str]:
+    if not path.is_file():
+        return {}
+    values = {}
+    for line in path.read_text().splitlines():
+        key, separator, value = line.partition("=")
+        if not separator or key.strip() not in names:
+            continue
+        value = value.strip()
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in "\"'":
+            value = value[1:-1]
+        values[key.strip()] = value
+    return values
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("promql", help="Instant PromQL expression")
     parser.add_argument("--at", help="Optional evaluation time (RFC3339 or Unix seconds)")
+    parser.add_argument(
+        "--env-file",
+        type=Path,
+        default=Path(__file__).resolve().parents[4] / "packages/backend/.env.local",
+        help="Local ignored env file (default: packages/backend/.env.local)",
+    )
     args = parser.parse_args()
 
     names = (
@@ -22,11 +44,13 @@ def main() -> int:
         "GRAFANA_METRICS_INSTANCE_ID",
         "GRAFANA_METRICS_READ_TOKEN",
     )
-    missing = [name for name in names if not os.environ.get(name)]
+    config = local_values(args.env_file, names)
+    config.update({name: os.environ[name] for name in names if os.environ.get(name)})
+    missing = [name for name in names if not config.get(name)]
     if missing:
         parser.error("Missing environment variables: " + ", ".join(missing))
 
-    endpoint = os.environ[names[0]].rstrip("/")
+    endpoint = config[names[0]].rstrip("/")
     parsed = urllib.parse.urlparse(endpoint)
     if parsed.scheme != "https" or not parsed.netloc or parsed.username or parsed.query or parsed.fragment:
         parser.error("GRAFANA_METRICS_QUERY_URL must be an HTTPS query endpoint")
@@ -35,7 +59,7 @@ def main() -> int:
     if args.at:
         params["time"] = args.at
     url = endpoint + "/api/v1/query?" + urllib.parse.urlencode(params)
-    credentials = f"{os.environ[names[1]]}:{os.environ[names[2]]}".encode()
+    credentials = f"{config[names[1]]}:{config[names[2]]}".encode()
     request = urllib.request.Request(
         url,
         headers={"Authorization": "Basic " + base64.b64encode(credentials).decode()},
