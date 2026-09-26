@@ -18,7 +18,7 @@ Lo primero que hay que entender, porque casi todos los errores salen de acá:
 
 ```
 cliente nativo ─┐
-                ├─→ telemetryMetrics ──→ exportPendingMetrics ──→ Grafana/Mimir
+cliente web ────┼─→ telemetryMetrics ──→ exportPendingMetrics ──→ Grafana/Mimir
 mutación backend┘   (outbox efímero)      (OTLP HTTP JSON)         (la fuente
                                                                     de los
                                                                     dashboards)

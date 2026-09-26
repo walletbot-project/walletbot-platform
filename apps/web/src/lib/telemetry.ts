@@ -1,5 +1,6 @@
 import { api } from '@wallet-bot/backend/api'
 import type { ConvexReactClient } from 'convex/react'
+import { appVersion } from '@/lib/app-version'
 
 type MetricType = 'counter' | 'gauge' | 'histogram'
 type MetricUnit = 'count' | 'ms' | 'usd'
@@ -22,7 +23,6 @@ export type TelemetryMetric = {
 }
 
 const installationIdKey = 'telemetry_installation_id'
-const appVersion = '0.0.0'
 
 const installationId = (): string => {
     const existing = localStorage.getItem(installationIdKey)
@@ -39,7 +39,7 @@ export const recordWebMetricBatch = async (
     if (metrics.length === 0) return
 
     try {
-        await client.mutation(api.telemetry.mutations.recordWebMetricBatch, {
+        await client.mutation(api.v1.telemetry.mutations.recordWebMetricBatch, {
             metrics: metrics.map((metric) => ({
                 name: metric.name,
                 timestamp: metric.timestamp ?? Date.now(),

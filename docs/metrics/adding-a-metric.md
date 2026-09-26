@@ -53,8 +53,10 @@ nunca puede voltear la escritura de negocio que la originó.
 su variante `...BestEffort` que hace `unawaited(...)`. Nunca pongas un hop de
 red de telemetría en el camino crítico de una interacción.
 
-`apps/web` **todavía no tiene `TelemetryClient`**: una métrica emitida solo
-desde el cliente subcuenta la web. Decilo en la descripción del panel.
+**Desde web**, `apps/web/src/lib/telemetry.ts` envía métricas del agente por
+`v1/telemetry/mutations:recordWebMetricBatch`. Esa mutación exige autenticación
+y acepta solo las métricas del agente enumeradas allí. Una métrica implementada
+solo en nativo sigue subcontando la web; indicá esa limitación en el panel.
 
 ## 3. Elegir dónde medir
 

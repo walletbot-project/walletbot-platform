@@ -2,6 +2,7 @@ import {
     GoogleGenAI,
     type LiveServerMessage,
     type Session,
+    type UsageMetadata,
 } from '@google/genai'
 import { api } from '@wallet-bot/backend/api'
 import type { ToolName } from '@wallet-bot/shared'
@@ -12,8 +13,8 @@ import {
     AgentInteractionCostTracker,
     estimateSessionCostUsd,
     recordAgentInteractionCost,
-    recordAgentSessionStarted,
     recordAgentSessionCostFromUsage,
+    recordAgentSessionStarted,
     usageTokenAttributes,
 } from '@/lib/agent-metrics'
 import { executeToolCall } from '@/lib/agent-tools'
@@ -269,7 +270,7 @@ export function useVoice(opts: UseVoiceOpts) {
     /** The model the current token was minted for, once it is known. */
     const modelRef = useRef<string | null>(null)
     const sessionStartedMetricSentRef = useRef(false)
-    const latestUsageMetadataRef = useRef<Record<string, unknown> | null>(null)
+    const latestUsageMetadataRef = useRef<UsageMetadata | null>(null)
     const sessionCostMetricSentRef = useRef(false)
     const interactionCostTrackerRef = useRef(new AgentInteractionCostTracker())
     const inputChunksRef = useRef(0)
@@ -315,7 +316,7 @@ export function useVoice(opts: UseVoiceOpts) {
     }, [convex, currentSessionMode])
 
     const recordInteractionCostMetric = useCallback(
-        (usage: Record<string, unknown>) => {
+        (usage: UsageMetadata) => {
             const sessionId = historyRef.current?.sessionId
             const model = modelRef.current
             if (!sessionId || !model) return
@@ -917,10 +918,7 @@ export function useVoice(opts: UseVoiceOpts) {
                     onmessage: async (msg: LiveServerMessage) => {
                         if (generation !== generationRef.current) return
                         if (msg.usageMetadata) {
-                            const usage = msg.usageMetadata as Record<
-                                string,
-                                unknown
-                            >
+                            const usage = msg.usageMetadata
                             latestUsageMetadataRef.current = usage
                             recordInteractionCostMetric(usage)
                             recordHistory('usage_metadata', 'server', {

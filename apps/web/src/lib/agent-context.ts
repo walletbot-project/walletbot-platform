@@ -2,6 +2,7 @@ import { api } from '@wallet-bot/backend/api'
 import type { AgentUserContext } from '@wallet-bot/shared'
 import { AGENT_CONTEXT_CAPS } from '@wallet-bot/shared'
 import type { ConvexReactClient } from 'convex/react'
+import { appVersion } from '@/lib/app-version'
 import { readLanguagePreference } from '@/lib/i18n'
 import { readThemePreference } from '@/lib/theme/preference'
 
@@ -129,7 +130,7 @@ export async function buildLiveTokenMintArgs(opts: {
         platform: 'web',
         // The web client ships with the backend, so it carries no meaningful
         // version; the mint treats platform 'web' as unrestricted.
-        appVersion: '0.0.0',
+        appVersion,
         locale,
         ...(timezone ? { timezone } : {}),
         timezoneOffsetMinutes: -new Date().getTimezoneOffset(),

@@ -1,10 +1,10 @@
+import type { UsageMetadata } from '@google/genai'
 import type { ConvexReactClient } from 'convex/react'
 import { newId } from '@/lib/new-id'
 import { recordWebMetricBatch, type TelemetryMetric } from '@/lib/telemetry'
 
 type SessionMode = 'voice' | 'text' | 'mixed'
 type InteractionType = SessionMode | 'tool'
-type UsageMetadata = Record<string, unknown>
 
 // Local estimate used only to detect cumulative usage changes. The backend
 // recalculates accepted costs from token attributes and its pricing catalog.
@@ -79,15 +79,11 @@ export const usageTokenAttributes = (
     usage: UsageMetadata,
 ): Record<string, number> => {
     const promptTokens = intValue(usage.promptTokenCount)
-    const responseTokens =
-        intValue(usage.responseTokenCount) ??
-        intValue(usage.candidatesTokenCount)
+    const responseTokens = intValue(usage.responseTokenCount)
     const totalTokens = intValue(usage.totalTokenCount)
 
     const promptDetails = tokenDetails(usage.promptTokensDetails)
-    const responseDetails =
-        tokenDetails(usage.responseTokensDetails) ??
-        tokenDetails(usage.candidatesTokensDetails)
+    const responseDetails = tokenDetails(usage.responseTokensDetails)
 
     const attributes: Record<string, number> = {}
     addTokenDetails(attributes, {
@@ -100,7 +96,11 @@ export const usageTokenAttributes = (
         totalTokens: responseTokens,
         details: responseDetails,
     })
-    addPositive(attributes, 'token_thinking', intValue(usage.thoughtsTokenCount))
+    addPositive(
+        attributes,
+        'token_thinking',
+        intValue(usage.thoughtsTokenCount),
+    )
     addPositive(
         attributes,
         'token_tool_use_prompt',
@@ -115,19 +115,13 @@ export const usageTokenAttributes = (
     return attributes
 }
 
-export const estimateSessionCostUsd = (
-    usage: UsageMetadata,
-): number | null => {
+export const estimateSessionCostUsd = (usage: UsageMetadata): number | null => {
     const promptTokens = intValue(usage.promptTokenCount)
-    const responseTokens =
-        intValue(usage.responseTokenCount) ??
-        intValue(usage.candidatesTokenCount)
+    const responseTokens = intValue(usage.responseTokenCount)
     const totalTokens = intValue(usage.totalTokenCount)
 
     const promptDetails = tokenDetails(usage.promptTokensDetails)
-    const responseDetails =
-        tokenDetails(usage.responseTokensDetails) ??
-        tokenDetails(usage.candidatesTokensDetails)
+    const responseDetails = tokenDetails(usage.responseTokensDetails)
 
     const estimatedInputUsd = estimateCost({
         totalTokens: promptTokens,

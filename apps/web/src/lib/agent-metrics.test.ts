@@ -1,3 +1,4 @@
+import { MediaModality, type UsageMetadata } from '@google/genai'
 import type { ConvexReactClient } from 'convex/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
@@ -62,16 +63,16 @@ describe('agent web metrics', () => {
         const usage = {
             promptTokenCount: 1000,
             promptTokensDetails: [
-                { modality: 'audio', tokenCount: 100 },
-                { modality: 'text', tokenCount: 400 },
+                { modality: MediaModality.AUDIO, tokenCount: 100 },
+                { modality: MediaModality.TEXT, tokenCount: 400 },
             ],
             responseTokenCount: 200,
             responseTokensDetails: [
-                { modality: 'TEXT', tokenCount: 150 },
-                { modalityType: 'audio', tokenCount: 50 },
+                { modality: MediaModality.TEXT, tokenCount: 150 },
+                { modality: MediaModality.AUDIO, tokenCount: 50 },
             ],
             totalTokenCount: 1200,
-        }
+        } satisfies UsageMetadata
 
         expect(estimateSessionCostUsd(usage)).toBeCloseTo(0.00225)
         expect(usageTokenAttributes(usage)).toEqual({
@@ -92,11 +93,11 @@ describe('agent web metrics', () => {
         })
     })
 
-    it('matches native integer parsing for malformed numeric strings', () => {
+    it('ignores non-finite token counts', () => {
         expect(
             usageTokenAttributes({
-                promptTokenCount: '100invalid',
-                responseTokenCount: '25',
+                promptTokenCount: Number.NaN,
+                responseTokenCount: 25,
             }),
         ).toEqual({ token_output_text: 25 })
     })
