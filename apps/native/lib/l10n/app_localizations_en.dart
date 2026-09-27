@@ -673,6 +673,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get transfers => 'Transfers';
 
   @override
+  String get chooseTransactionType => 'What do you want to record?';
+
+  @override
   String get balanceAdjustment => 'Balance adjustment';
 
   @override

@@ -1292,6 +1292,12 @@ abstract class AppLocalizations {
   /// **'Transfers'**
   String get transfers;
 
+  /// No description provided for @chooseTransactionType.
+  ///
+  /// In en, this message translates to:
+  /// **'What do you want to record?'**
+  String get chooseTransactionType;
+
   /// Transaction type label. Also the display name of an auto-generated balance-adjustment transaction (stored canonically as 'Ajuste de saldo').
   ///
   /// In en, this message translates to:

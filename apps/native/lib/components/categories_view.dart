@@ -8,6 +8,7 @@ import 'package:app/components/transaction_row.dart';
 import 'package:app/data/data.dart';
 import 'package:app/database.dart';
 import 'package:app/l10n/l10n.dart';
+import 'package:app/screens/transaction_form.dart';
 import 'package:app/shared/app_navigation.dart';
 import 'package:app/shared/money.dart';
 import 'package:drift/drift.dart' show Value;
@@ -271,6 +272,19 @@ class _CategoryDetailsSheetState extends State<CategoryDetailsSheet> {
     }
   }
 
+  /// Asks for the movement kind first, then opens the manual form with this
+  /// category preselected.
+  Future<void> _chooseTransactionType() async {
+    final type = await showTransactionTypeChooser(context);
+    if (type == null || !mounted) return;
+    await pushTransactionForm(
+      context,
+      repos: widget.repos,
+      type: type,
+      categoryId: _categoryId,
+    );
+  }
+
   void _openAllTransactions() {
     _close(); // close the sheet before switching tabs
     widget.nav.openActivityForCategory(_categoryId);
@@ -329,6 +343,13 @@ class _CategoryDetailsSheetState extends State<CategoryDetailsSheet> {
         _buildIdentityGroup(context),
         const SizedBox(height: 12),
         _buildActions(context),
+        const SizedBox(height: 8),
+        M3EFilledButton.tonalIcon(
+          onPressed: _saving ? null : _chooseTransactionType,
+          size: M3EButtonSize.md,
+          icon: const Icon(Icons.add_rounded),
+          label: Text(context.l10n.addTransaction),
+        ),
         const SizedBox(height: 28),
         _buildTransactionsHeader(context),
         const SizedBox(height: 8),

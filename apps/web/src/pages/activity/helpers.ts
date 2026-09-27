@@ -71,6 +71,43 @@ export type ActivityFilterSeed = Partial<
     >
 >
 
+/**
+ * What an entity detail hands `/activity/new` through router state: the form's
+ * prefills plus where to go back to once it closes.
+ */
+export type TransactionFormSeed = {
+    type?: 'income' | 'expense'
+    accountId?: string
+    categoryId?: string
+    returnTo?: string
+}
+
+/**
+ * Reads a {@link TransactionFormSeed} off `location.state` — untyped by React
+ * Router, so every field is checked rather than asserted. `returnTo` must be
+ * an in-app path.
+ */
+export function readTransactionFormSeed(state: unknown): TransactionFormSeed {
+    if (typeof state !== 'object' || state === null) return {}
+    const seed: Record<string, unknown> = { ...state }
+    return {
+        type:
+            seed.type === 'income' || seed.type === 'expense'
+                ? seed.type
+                : undefined,
+        accountId:
+            typeof seed.accountId === 'string' ? seed.accountId : undefined,
+        categoryId:
+            typeof seed.categoryId === 'string' ? seed.categoryId : undefined,
+        returnTo:
+            typeof seed.returnTo === 'string' &&
+            seed.returnTo.startsWith('/') &&
+            !seed.returnTo.startsWith('//')
+                ? seed.returnTo
+                : undefined,
+    }
+}
+
 function stringList(value: unknown): string[] | null {
     if (!Array.isArray(value)) return null
     const items = value.filter(

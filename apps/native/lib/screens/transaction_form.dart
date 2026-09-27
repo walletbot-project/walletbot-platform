@@ -21,13 +21,79 @@ const _defaultRecurrenceDayInterval = 15;
 
 enum _TransferAmountField { source, destination }
 
+/// Pushes [TransactionFormScreen] as a full-screen route prefilled with
+/// [type] and, optionally, an account/category. Resolves to whether a
+/// transaction was saved.
+Future<bool?> pushTransactionForm(
+  BuildContext context, {
+  required AppRepositories repos,
+  required TransactionFormType type,
+  String? accountId,
+  String? categoryId,
+}) {
+  // Pushed routes sit above the account-scoped providers; re-provide them
+  // so the new route keeps using the active account's data layer.
+  return Navigator.of(context).push<bool>(
+    MaterialPageRoute(
+      builder: (_) => Provider<AppRepositories>.value(
+        value: repos,
+        child: TransactionFormScreen(
+          initialType: type,
+          initialAccountId: accountId,
+          initialCategoryId: categoryId,
+        ),
+      ),
+    ),
+  );
+}
+
+/// The "what do you want to record?" step an entity detail shows before the
+/// manual form: a floating dialog on every window size, matching the web
+/// chooser. Resolves to null when dismissed.
+Future<TransactionFormType?> showTransactionTypeChooser(BuildContext context) {
+  return showDialog<TransactionFormType>(
+    context: context,
+    builder: (dialogContext) => SimpleDialog(
+      title: Text(dialogContext.l10n.chooseTransactionType),
+      contentPadding: const EdgeInsets.fromLTRB(0, 8, 0, 16),
+      children: [
+        ListTile(
+          contentPadding: const EdgeInsets.symmetric(horizontal: 24),
+          leading: const Icon(Icons.add_rounded),
+          title: Text(dialogContext.l10n.income),
+          onTap: () => Navigator.pop(dialogContext, TransactionFormType.income),
+        ),
+        ListTile(
+          contentPadding: const EdgeInsets.symmetric(horizontal: 24),
+          leading: const Icon(Icons.remove_rounded),
+          title: Text(dialogContext.l10n.expense),
+          onTap: () =>
+              Navigator.pop(dialogContext, TransactionFormType.expense),
+        ),
+      ],
+    ),
+  );
+}
+
 class TransactionFormScreen extends StatefulWidget {
-  const TransactionFormScreen({super.key, this.onResult});
+  const TransactionFormScreen({
+    super.key,
+    this.onResult,
+    this.initialType = TransactionFormType.income,
+    this.initialAccountId,
+    this.initialCategoryId,
+  });
 
   /// Embedded (split pane) mode: when set, the screen never pops its route —
   /// save/cancel report here instead ([saved] tells whether a transaction
   /// was recorded).
   final void Function(bool saved)? onResult;
+
+  /// Prefills opened from an entity detail (account or category sheet).
+  /// Ids that are not among the active accounts/categories are ignored.
+  final TransactionFormType initialType;
+  final String? initialAccountId;
+  final String? initialCategoryId;
 
   @override
   State<TransactionFormScreen> createState() => _TransactionFormScreenState();
@@ -40,7 +106,7 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
   TextEditingController _titleController = TextEditingController();
   TextEditingController _descriptionController = TextEditingController();
 
-  TransactionFormType _type = TransactionFormType.income;
+  late TransactionFormType _type = widget.initialType;
   AppRepositories? _repos;
   List<Account> _accounts = const [];
   List<Category> _categories = const [];
@@ -108,7 +174,9 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
           )
           .toList();
       _selectedAccount = _resolveSelectedAccount(
-        current: _selectedAccount,
+        current:
+            _selectedAccount ??
+            _findById(accounts, widget.initialAccountId, (a) => a.id),
         accounts: accounts,
       );
       _selectedDestinationAccount = _resolveDestinationAccount(
@@ -117,12 +185,22 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
         source: _selectedAccount,
       );
       _selectedCategory = _resolveSelectedCategory(
-        current: _selectedCategory,
+        current:
+            _selectedCategory ??
+            _findById(categories, widget.initialCategoryId, (c) => c.id),
         categories: categories,
         type: _type,
       );
       _isLoading = false;
     });
+  }
+
+  T? _findById<T>(List<T> items, String? id, String Function(T) idOf) {
+    if (id == null) return null;
+    for (final item in items) {
+      if (idOf(item) == id) return item;
+    }
+    return null;
   }
 
   Account? _resolveSelectedAccount({

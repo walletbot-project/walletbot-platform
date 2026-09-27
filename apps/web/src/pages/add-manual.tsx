@@ -226,9 +226,16 @@ function mergeTags(base: FormTag[], extra: FormTag[]): FormTag[] {
 export function TransactionForm({
     onClose,
     onSaved,
+    initialType = 'income',
+    initialAccountId = '',
+    initialCategoryId = '',
 }: {
     onClose: () => void
     onSaved: () => void
+    /** Prefills from an entity detail (an account's or category's sheet). */
+    initialType?: MovementType
+    initialAccountId?: string
+    initialCategoryId?: string
 }) {
     const t = useT()
 
@@ -285,7 +292,7 @@ export function TransactionForm({
         createdTags,
     )
 
-    const [type, setType] = useState<MovementType>('income')
+    const [type, setType] = useState<MovementType>(initialType)
     const [amount, setAmount] = useState('0')
     const [destinationAmount, setDestinationAmount] = useState('0')
     const [sourceAmountTouched, setSourceAmountTouched] = useState(false)
@@ -295,9 +302,9 @@ export function TransactionForm({
     const [description, setDescription] = useState('')
     const [date, setDate] = useState(today)
     const [time, setTime] = useState('')
-    const [accountId, setAccountId] = useState('')
+    const [accountId, setAccountId] = useState(initialAccountId)
     const [destinationAccountId, setDestinationAccountId] = useState('')
-    const [categoryId, setCategoryId] = useState('')
+    const [categoryId, setCategoryId] = useState(initialCategoryId)
     const [tagInput, setTagInput] = useState('')
     const [tags, setTags] = useState<FormTag[]>([])
     const [pendingTagName, setPendingTagName] = useState<string | null>(null)
@@ -319,6 +326,8 @@ export function TransactionForm({
         type !== 'transfer' && flags?.recurringExpense === true
 
     useEffect(() => {
+        // Still loading: keep a preset id until the options can vouch for it.
+        if (accounts === undefined) return
         setAccountId((current) => {
             if (
                 current &&
@@ -328,7 +337,7 @@ export function TransactionForm({
             }
             return ''
         })
-    }, [accountOptions])
+    }, [accounts, accountOptions])
 
     useEffect(() => {
         setDestinationAccountId((current) => {
@@ -348,6 +357,7 @@ export function TransactionForm({
     }, [accountId, accountOptions])
 
     useEffect(() => {
+        if (categories === undefined) return
         setCategoryId((current) => {
             if (
                 current &&
@@ -357,7 +367,7 @@ export function TransactionForm({
             }
             return ''
         })
-    }, [categoryOptions])
+    }, [categories, categoryOptions])
 
     const selectedAccount = accountOptions.find(
         (account) => account.id === accountId,
