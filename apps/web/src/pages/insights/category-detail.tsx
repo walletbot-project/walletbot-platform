@@ -81,14 +81,13 @@ export function CategoryDetail({
     const [deleteOpen, setDeleteOpen] = useState(false)
 
     const { brightness } = useTheme()
+    const color = editing
+        ? fields.color
+        : normalizeColor(category.color, CATEGORY_DEFAULT_COLOR)
     // The hero paints the accent as it reads in this theme; the stored color
-    // (and what the pickers select) stays the raw pick.
-    const accent = readableAccent(
-        editing
-            ? fields.color
-            : normalizeColor(category.color, CATEGORY_DEFAULT_COLOR),
-        brightness,
-    )
+    // (and what the pickers select) stays the raw pick. `CategoryIcon` adapts on
+    // its own, so it gets the stored color: adapting twice shifts it again.
+    const accent = readableAccent(color, brightness)
 
     const handleToggleEditing = () => {
         if (!editing) {
@@ -169,7 +168,7 @@ export function CategoryDetail({
                             <CategoryIcon
                                 name={category.icon}
                                 size={30}
-                                color={accent}
+                                color={color}
                             />
                         </span>
                     )}

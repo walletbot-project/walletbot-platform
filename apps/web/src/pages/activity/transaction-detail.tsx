@@ -240,9 +240,13 @@ function TransactionDetailsContent({
     const account = accounts.find((item) => item.id === accountId)
     const destinationAccount = accounts.find((item) => item.id === toAccountId)
     const category = categories.find((item) => item.id === categoryId)
-    const categoryColor = paint(
-        normalizeColor(category?.color, CATEGORY_DEFAULT_COLOR),
+    const categoryColor = normalizeColor(
+        category?.color,
+        CATEGORY_DEFAULT_COLOR,
     )
+    // `CategoryIcon` adapts the stored color itself; only the tile behind it is
+    // painted here, so it is the one place that adapts (never twice).
+    const categoryTint = paint(categoryColor)
     const canEditAmount =
         transaction.type === 'income' ||
         transaction.type === 'expense' ||
@@ -433,7 +437,7 @@ function TransactionDetailsContent({
                     <div className="flex flex-col items-center px-6 py-7 text-center">
                         <span
                             className="flex size-16 items-center justify-center rounded-full"
-                            style={{ backgroundColor: `${categoryColor}29` }}
+                            style={{ backgroundColor: `${categoryTint}29` }}
                         >
                             <CategoryIcon
                                 name={category?.icon}

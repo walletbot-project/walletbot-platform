@@ -1,6 +1,6 @@
-// HSL conversions for stored hex colors, shared by the theme adapters in
-// entity-colors.ts and pages/home/dashboard-colors.ts. Mirrors Flutter's
-// `HSLColor`, which the native adapters use.
+// HSL conversions for stored hex colors, used by the widget background adapter
+// in pages/home/dashboard-colors.ts. Mirrors Flutter's `HSLColor`, which the
+// native adapter uses.
 
 export type Hsl = { h: number; s: number; l: number }
 
@@ -37,22 +37,6 @@ function rgbToHsl(r: number, g: number, b: number): Hsl {
 export function hexToHsl(hex: string): Hsl | null {
     const rgb = hexToRgb(hex)
     return rgb ? rgbToHsl(rgb.r, rgb.g, rgb.b) : null
-}
-
-/**
- * Formats an HSL color as upper-case `#RRGGBB`, so callers can keep appending
- * a hex alpha suffix (e.g. `${color}2E`) the way they do for stored colors.
- */
-export function hslToHex({ h, s, l }: Hsl): string {
-    const channel = (n: number) => {
-        const k = (n + h * 12) % 12
-        const a = s * Math.min(l, 1 - l)
-        const value = l - a * Math.max(-1, Math.min(k - 3, 9 - k, 1))
-        return Math.round(value * 255)
-            .toString(16)
-            .padStart(2, '0')
-    }
-    return `#${channel(0)}${channel(8)}${channel(4)}`.toUpperCase()
 }
 
 /** Formats an HSL color as a CSS `hsl()` string. */

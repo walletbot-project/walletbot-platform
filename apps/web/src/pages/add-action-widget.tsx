@@ -201,11 +201,11 @@ function AccountActionWidget({
     if (account === undefined) return <ActionSkeleton />
     if (account === null) return null
 
-    const accent = paint(normalizeColor(account.color, ACCOUNT_DEFAULT_COLOR))
+    const accent = normalizeColor(account.color, ACCOUNT_DEFAULT_COLOR)
     return (
         <>
             <ActionCard>
-                <EntityIcon color={accent}>
+                <EntityIcon color={paint(accent)}>
                     <AccountIcon name={account.icon} size={16} color={accent} />
                 </EntityIcon>
                 <ActionCopy
@@ -261,11 +261,11 @@ function CategoryActionWidget({
     if (category === undefined) return <ActionSkeleton />
     if (category === null) return null
 
-    const accent = paint(normalizeColor(category.color, CATEGORY_DEFAULT_COLOR))
+    const accent = normalizeColor(category.color, CATEGORY_DEFAULT_COLOR)
     return (
         <>
             <ActionCard>
-                <EntityIcon color={accent}>
+                <EntityIcon color={paint(accent)}>
                     <CategoryIcon
                         name={category.icon}
                         size={16}
@@ -680,6 +680,11 @@ function EditButton({ onClick }: { onClick: () => void }) {
     )
 }
 
+/**
+ * Tinted circle behind an action card's glyph. Paints `color` as given: tags
+ * pass their raw color, accounts and categories pass it already adapted by
+ * `readableAccent` (their glyphs adapt the stored color on their own).
+ */
 function EntityIcon({
     color,
     children,

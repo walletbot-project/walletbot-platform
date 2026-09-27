@@ -90,14 +90,13 @@ export function AccountDetail({
     const [deleteOpen, setDeleteOpen] = useState(false)
 
     const { brightness } = useTheme()
+    const color = editing
+        ? fields.color
+        : normalizeColor(account.color, ACCOUNT_DEFAULT_COLOR)
     // The hero paints the accent as it reads in this theme; the stored color
-    // (and what the pickers select) stays the raw pick.
-    const accent = readableAccent(
-        editing
-            ? fields.color
-            : normalizeColor(account.color, ACCOUNT_DEFAULT_COLOR),
-        brightness,
-    )
+    // (and what the pickers select) stays the raw pick. `AccountIcon` adapts on
+    // its own, so it gets the stored color: adapting twice shifts it again.
+    const accent = readableAccent(color, brightness)
     const cents = balance ? Number(balance.balance) : null
 
     const handleToggleEditing = () => {
@@ -212,7 +211,7 @@ export function AccountDetail({
                             <AccountIcon
                                 name={account.icon}
                                 size={30}
-                                color={accent}
+                                color={color}
                             />
                         </span>
                     )}

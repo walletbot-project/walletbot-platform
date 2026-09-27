@@ -1,4 +1,9 @@
-import { clamp, hexToHsl, hslToHex } from '@/lib/color-hsl'
+import {
+    hexToOklab,
+    inSrgbGamut,
+    linearRgbToHex,
+    oklabToLinearRgb,
+} from '@/lib/color-oklab'
 import { type Brightness, useTheme } from '@/lib/theme'
 
 // Single accent palette shared by every entity picker (accounts, categories,
@@ -42,21 +47,46 @@ export function normalizeColor(
     return color.toUpperCase()
 }
 
+/** OKLCH lightness every dark-mode accent gains (see `readableAccent`). */
+const DARK_ACCENT_LIFT = 0.06
+
+/** Share of its OKLCH chroma a dark-mode accent keeps (see `readableAccent`). */
+const DARK_ACCENT_CHROMA = 0.8
+
 /**
  * Adapts a stored account or category accent to how it is painted in the
- * current theme (tags are not adapted: they keep their raw color) — the web port of the native `readableAccent`
+ * current theme (tags are not adapted: they keep their raw color) — the web
+ * port of the native `readableAccent`
  * (apps/native/lib/components/color_utils.dart). Saturated accents suit light
  * surfaces but glare on dark ones, so light returns the stored color as-is and
- * dark rebuilds it as a softer, lighter tone of the same hue. Idempotent, and
- * always `#RRGGBB` so callers can keep appending hex alpha suffixes. Anything
- * that is not a hex color passes through unchanged. The stored value never
- * changes — only what gets painted.
+ * dark lifts and softens it in OKLCH, a perceptual space: every accent gains
+ * the same lightness and keeps the same share of its chroma, with the hue
+ * untouched. Shifting them all alike keeps the gaps between palette colors, so
+ * the dark palette stays as varied as the light one. Not idempotent: adapt the
+ * stored color exactly once. Always `#RRGGBB` so callers can keep appending hex
+ * alpha suffixes; anything that is not a hex color passes through unchanged.
+ * The stored value never changes — only what gets painted.
  */
 export function readableAccent(hex: string, brightness: Brightness): string {
     if (brightness === 'light') return hex
-    const hsl = hexToHsl(hex)
-    if (!hsl) return hex
-    return hslToHex({ h: hsl.h, s: clamp(hsl.s, 0, 0.65), l: 0.72 })
+    const lab = hexToOklab(hex)
+    if (!lab) return hex
+    const hue = Math.atan2(lab.b, lab.a)
+    const lightness = Math.min(lab.l + DARK_ACCENT_LIFT, 1)
+    let chroma = Math.hypot(lab.a, lab.b) * DARK_ACCENT_CHROMA
+    const toRgb = () =>
+        oklabToLinearRgb({
+            l: lightness,
+            a: chroma * Math.cos(hue),
+            b: chroma * Math.sin(hue),
+        })
+    let rgb = toRgb()
+    // Out-of-gamut tones lose chroma until they fit in sRGB, keeping the hue.
+    for (let i = 0; i < 60 && !inSrgbGamut(rgb); i++) {
+        chroma *= 0.97
+        rgb = toRgb()
+    }
+    return linearRgbToHex(rgb)
 }
 
 /** [readableAccent] bound to the current theme. */
