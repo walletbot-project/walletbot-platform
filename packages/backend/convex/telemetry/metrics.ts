@@ -11,6 +11,33 @@ type CreatedBy = 'form' | 'agent'
 type IngestPath = 'direct_mutation' | 'whatsapp'
 type AuthMethod = 'email_password' | 'google' | 'apple' | 'local'
 
+export type SyncErrorReason =
+    | 'client_outdated'
+    | 'cursor_mismatch'
+    | 'auth_failure'
+    | 'validation'
+    | 'unknown'
+export type AgentToolErrorReason =
+    | 'invalid_args'
+    | 'not_found'
+    | 'provider_error'
+    | 'unknown'
+export type InstrumentedFunction = 'sync_push' | 'sync_pull' | 'agent_turn'
+type FunctionStatus = 'ok' | 'error'
+
+// Mirrors `agentPricing.ts:costBucket` for a plain duration in ms, at the
+// bucket boundaries `system.function.duration_bucket_count` uses (a wider,
+// coarser scale than the client-side voice-latency buckets).
+const functionDurationBucket = (durationMs: number): string => {
+    if (durationMs < 100) return '0-100'
+    if (durationMs < 250) return '100-250'
+    if (durationMs < 500) return '250-500'
+    if (durationMs < 1000) return '500-1000'
+    if (durationMs < 2500) return '1000-2500'
+    if (durationMs < 5000) return '2500-5000'
+    return '5000+'
+}
+
 const monthFromTimestamp = (timestamp: number): string => {
     const date = new Date(timestamp)
     const month = `${date.getUTCMonth() + 1}`.padStart(2, '0')
@@ -219,6 +246,61 @@ export const recordAgentReportSubmitted = (
             reason: args.reason,
             scope: args.scope,
             client_platform: args.clientPlatform,
+        },
+    })
+
+/**
+ * `push` is a mutation and can call this directly. `pull` is a query and
+ * structurally cannot (no `ctx.db`/`ctx.scheduler`) — pull's errors are
+ * instead reported from the native client with the same metric name/
+ * attributes and `source: 'native'` (see `apps/native/lib/sync/sync_engine.dart`).
+ */
+export const recordSyncError = (
+    ctx: MutationCtx,
+    args: {
+        direction: 'push' | 'pull'
+        reason: SyncErrorReason
+        platform: string
+    },
+): Promise<void> =>
+    recordMetricSafely(ctx, {
+        name: 'sync.errors.count',
+        attributes: {
+            direction: args.direction,
+            reason: args.reason,
+            platform: args.platform,
+        },
+    })
+
+export const recordAgentToolError = (
+    ctx: MutationCtx,
+    args: { toolName: string; reason: AgentToolErrorReason },
+): Promise<void> =>
+    recordMetricSafely(ctx, {
+        name: 'agent.tool.errors.count',
+        attributes: { tool_name: args.toolName, reason: args.reason },
+    })
+
+/**
+ * Total call duration only — no DB/external-API breakdown (see
+ * docs/metrics/error-rate-and-latency.md, "Traces, eventually"). Reuses the
+ * bucket-then-increment-counter shape `insertMetricBatch` already uses for
+ * `agent.session.cost_bucket_count` below.
+ */
+export const recordFunctionDuration = (
+    ctx: MutationCtx,
+    args: {
+        function: InstrumentedFunction
+        durationMs: number
+        status: FunctionStatus
+    },
+): Promise<void> =>
+    recordMetricSafely(ctx, {
+        name: 'system.function.duration_bucket_count',
+        attributes: {
+            function: args.function,
+            bucket: functionDurationBucket(args.durationMs),
+            status: args.status,
         },
     })
 

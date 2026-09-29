@@ -46,6 +46,8 @@ import { resolveFlagsForUser } from '../featureFlags/helpers'
 import { nextSeq, writeTombstone } from '../sync/helpers'
 import { tagAggregateDetach } from '../tags/helpers'
 import {
+    type AgentToolErrorReason,
+    recordAgentToolError,
     recordFinancialAccountCreated,
     recordMovementCreated,
     recordTransferCreated,
@@ -97,9 +99,17 @@ const MAX_MEMORY_CHARS = 500
 type ToolResult = Record<string, unknown>
 
 const ok = (data: ToolResult = {}): ToolResult => ({ ok: true, ...data })
-const fail = (error: string, data: ToolResult = {}): ToolResult => ({
+// `reason` is consumed by `execute` for `agent.tool.errors.count` and
+// stripped before the result reaches the model — it's telemetry-only, not
+// part of the tool-call wire contract.
+const fail = (
+    error: string,
+    data: ToolResult = {},
+    reason: AgentToolErrorReason = 'invalid_args',
+): ToolResult => ({
     ok: false,
     error,
+    reason,
     ...data,
 })
 
@@ -112,8 +122,12 @@ const unresolved = <T>(
     resolution: Exclude<Resolution<T>, { kind: 'resolved' }>,
 ): ToolResult =>
     resolution.kind === 'ambiguous'
-        ? fail(`${label} is ambiguous`, { candidates: resolution.candidates })
-        : fail(`${label} not found`)
+        ? fail(
+              `${label} is ambiguous`,
+              { candidates: resolution.candidates },
+              'not_found',
+          )
+        : fail(`${label} not found`, {}, 'not_found')
 
 type Ctx = MutationCtx
 
@@ -1817,7 +1831,7 @@ const dispatch = async (
             )
 
         default:
-            return fail(`Unknown tool: ${name}`)
+            return fail(`Unknown tool: ${name}`, {}, 'unknown')
     }
 }
 
@@ -1849,8 +1863,27 @@ export const execute = internalMutation({
         writeKey: v.optional(v.string()),
     },
     handler: async (ctx, args): Promise<string> => {
+        // Records `agent.tool.errors.count` for a failed result, then strips
+        // the telemetry-only `reason` field before the envelope reaches the
+        // model.
+        const finish = async (result: ToolResult): Promise<string> => {
+            if (result.ok === false) {
+                await recordAgentToolError(ctx, {
+                    toolName: args.name,
+                    reason:
+                        (result.reason as AgentToolErrorReason | undefined) ??
+                        'invalid_args',
+                })
+            }
+            const { reason, ...publicResult } = result
+            void reason
+            return JSON.stringify(publicResult)
+        }
+
         if (!isAgentToolName(args.name)) {
-            return JSON.stringify(fail(`Unknown tool: ${args.name}`))
+            return await finish(
+                fail(`Unknown tool: ${args.name}`, {}, 'unknown'),
+            )
         }
         // A flag-gated tool is already filtered out of the declarations the
         // model is given (`agent/runner.ts`), so this is not a duplicate check
@@ -1860,25 +1893,41 @@ export const execute = internalMutation({
         if (flag !== undefined) {
             const flags = await resolveFlagsForUser(ctx, args.userId)
             if (!flags[flag]) {
-                return JSON.stringify(fail(`Unknown tool: ${args.name}`))
+                return await finish(
+                    fail(`Unknown tool: ${args.name}`, {}, 'unknown'),
+                )
             }
         }
         const raw: unknown = JSON.parse(args.argsJson)
         if (hasUnsupportedRecurrenceArguments(args.name, raw)) {
-            return JSON.stringify(
+            return await finish(
                 fail(
                     'Recurring movements and series-wide changes must be managed in the app.',
                 ),
             )
         }
-        const result = await dispatch(
-            ctx,
-            args.userId,
-            args.name,
-            raw,
-            { nowMs: args.nowMs, offsetMinutes: args.utcOffsetMinutes },
-            args.writeKey,
-        )
-        return JSON.stringify(result)
+        try {
+            const result = await dispatch(
+                ctx,
+                args.userId,
+                args.name,
+                raw,
+                { nowMs: args.nowMs, offsetMinutes: args.utcOffsetMinutes },
+                args.writeKey,
+            )
+            return await finish(result)
+        } catch (error) {
+            // Unexpected throws (a malformed argument via zod's `.parse`, a
+            // failed aggregate write) still roll the transaction back per the
+            // comment above — this only adds telemetry before rethrowing.
+            await recordAgentToolError(ctx, {
+                toolName: args.name,
+                reason:
+                    error instanceof Error && error.name === 'ZodError'
+                        ? 'invalid_args'
+                        : 'unknown',
+            })
+            throw error
+        }
     },
 })

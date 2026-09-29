@@ -275,13 +275,40 @@ export const runAgentTurn = internalAction({
                     continue
                 }
 
-                const reply = await generateReply(ctx, {
-                    conversationId,
-                    userId: claim.userId,
-                    waId: claim.waId,
-                    messages: claim.messages,
-                    messageIds,
-                })
+                // Total time for the model+tools loop only — not the queue
+                // wait, the window/identity/rollout gates above, or the reply
+                // send below (docs/metrics/error-rate-and-latency.md,
+                // `system.function.duration_bucket_count`).
+                const turnStartedAt = Date.now()
+                let reply: string
+                try {
+                    reply = await generateReply(ctx, {
+                        conversationId,
+                        userId: claim.userId,
+                        waId: claim.waId,
+                        messages: claim.messages,
+                        messageIds,
+                    })
+                } catch (error) {
+                    await ctx.runMutation(
+                        internal.telemetry.mutations
+                            .recordFunctionDurationInternal,
+                        {
+                            function: 'agent_turn',
+                            durationMs: Date.now() - turnStartedAt,
+                            status: 'error',
+                        },
+                    )
+                    throw error
+                }
+                await ctx.runMutation(
+                    internal.telemetry.mutations.recordFunctionDurationInternal,
+                    {
+                        function: 'agent_turn',
+                        durationMs: Date.now() - turnStartedAt,
+                        status: 'ok',
+                    },
+                )
 
                 await sendReply(ctx, {
                     conversationId,

@@ -10,12 +10,24 @@ import {
     tagAggregateDeleteTransaction,
     tagAggregateDetach,
 } from '../../tags/helpers'
+import {
+    recordFunctionDuration,
+    recordSyncError,
+    type SyncErrorReason,
+} from '../../telemetry/metrics'
 import { aggregateInsert, aggregateReplace } from '../../transactions/helpers'
 import { requireAuth } from '../../users/helpers'
 import {
     reconcileAccountDuplicates,
     resolveAccountId,
 } from '../accounts/helpers'
+
+// Marks the ~15 sync validation throws below (bad currency change, tag
+// self-parent, missing account/category, transfer/balance_adjustment
+// validation, join-row mismatches) so push's top-level catch can classify
+// them as `reason: 'validation'` for `sync.errors.count` without having to
+// touch every throw site's message.
+class SyncValidationError extends Error {}
 
 const accountUpsert = v.object({
     id: v.string(),
@@ -333,7 +345,7 @@ async function applyAccountUpsert(
     }
     if (existing) {
         if (existing.currency !== payload.currency) {
-            throw new Error(
+            throw new SyncValidationError(
                 `account ${payload.id}: currency cannot change once set`,
             )
         }
@@ -391,7 +403,9 @@ async function applyTagUpsert(
     payload: TagUpsert,
 ): Promise<void> {
     if (payload.parentId === payload.id) {
-        throw new Error(`tag ${payload.id}: cannot be its own parent`)
+        throw new SyncValidationError(
+            `tag ${payload.id}: cannot be its own parent`,
+        )
     }
     if (payload.parentId) {
         // Parent must exist and belong to the user. We don't fail if the
@@ -404,7 +418,7 @@ async function applyTagUpsert(
             )
             .unique()
         if (!parent) {
-            throw new Error(
+            throw new SyncValidationError(
                 `tag ${payload.id}: parent ${payload.parentId} not found`,
             )
         }
@@ -462,12 +476,12 @@ async function applyTransactionUpsert(
         )
         .unique()
     if (!account) {
-        throw new Error(
+        throw new SyncValidationError(
             `transaction ${payload.id}: accountId ${payload.accountId} not found`,
         )
     }
     if (account.currency !== payload.currency) {
-        throw new Error(
+        throw new SyncValidationError(
             `transaction ${payload.id}: currency ${payload.currency} does not match account ${payload.accountId} currency ${account.currency}`,
         )
     }
@@ -480,7 +494,7 @@ async function applyTransactionUpsert(
             )
             .unique()
         if (!cat) {
-            throw new Error(
+            throw new SyncValidationError(
                 `transaction ${payload.id}: categoryId ${payload.categoryId} not found`,
             )
         }
@@ -489,13 +503,13 @@ async function applyTransactionUpsert(
     let toAccountId: string | undefined
     if (payload.type === 'transfer') {
         if (!payload.toAccountId) {
-            throw new Error(
+            throw new SyncValidationError(
                 `transaction ${payload.id}: transfer requires toAccountId`,
             )
         }
         toAccountId = await resolveAccountId(ctx, userId, payload.toAccountId)
         if (toAccountId === accountId) {
-            throw new Error(
+            throw new SyncValidationError(
                 `transaction ${payload.id}: source and destination accounts must differ`,
             )
         }
@@ -506,17 +520,17 @@ async function applyTransactionUpsert(
             )
             .unique()
         if (!toAcc) {
-            throw new Error(
+            throw new SyncValidationError(
                 `transaction ${payload.id}: toAccountId ${payload.toAccountId} not found`,
             )
         }
         if (payload.toCurrency && payload.toCurrency !== toAcc.currency) {
-            throw new Error(
+            throw new SyncValidationError(
                 `transaction ${payload.id}: toCurrency ${payload.toCurrency} does not match account ${payload.toAccountId} currency ${toAcc.currency}`,
             )
         }
         if (payload.toAmount === undefined) {
-            throw new Error(
+            throw new SyncValidationError(
                 `transaction ${payload.id}: transfer requires toAmount`,
             )
         }
@@ -524,7 +538,7 @@ async function applyTransactionUpsert(
 
     if (payload.type === 'balance_adjustment') {
         if (payload.balanceAfter === undefined) {
-            throw new Error(
+            throw new SyncValidationError(
                 `transaction ${payload.id}: balance_adjustment requires balanceAfter`,
             )
         }
@@ -584,7 +598,7 @@ async function applyTransactionTagUpsert(
     // Defensive ID format check (spec §"Safeguards contra joins duplicados").
     const expected = `${payload.transactionId}__${payload.tagId}`
     if (payload.id !== expected) {
-        throw new Error(
+        throw new SyncValidationError(
             `invalid_join_id: transactionTags.id must equal "<transactionId>__<tagId>" (expected ${expected}, got ${payload.id})`,
         )
     }
@@ -596,7 +610,7 @@ async function applyTransactionTagUpsert(
         )
         .unique()
     if (!txn) {
-        throw new Error(
+        throw new SyncValidationError(
             `transactionTag ${payload.id}: transactionId ${payload.transactionId} not found`,
         )
     }
@@ -607,7 +621,7 @@ async function applyTransactionTagUpsert(
         )
         .unique()
     if (!tag) {
-        throw new Error(
+        throw new SyncValidationError(
             `transactionTag ${payload.id}: tagId ${payload.tagId} not found`,
         )
     }
@@ -933,117 +947,154 @@ export const push = mutation({
         appVersion: v.string(),
     },
     handler: async (ctx, args) => {
-        const userId = await requireAuth(ctx)
+        const startedAt = Date.now()
+        let status: 'ok' | 'error' = 'ok'
+        try {
+            const userId = await requireAuth(ctx)
 
-        // Reject clients below the platform floor before touching any data —
-        // this is the write path that would otherwise diverge an incompatible
-        // client's rows under LWW (docs/riesgos.md R-008). Fails open for a
-        // client that can't report its version (unknown → supported).
-        if (!isClientSupported(args.platform, args.appVersion)) {
-            return { ok: false as const, error: CLIENT_OUTDATED }
-        }
-
-        // 1) CAS
-        const counterRow = await ctx.db
-            .query('syncCounters')
-            .withIndex('by_user', (q) => q.eq('userId', userId))
-            .unique()
-        const currentCounter = counterRow?.value ?? 0n
-        if (currentCounter !== args.expectedServerSeq) {
-            return {
-                ok: false as const,
-                error: 'cursor_mismatch' as const,
-                currentCounter,
+            // Reject clients below the platform floor before touching any
+            // data — this is the write path that would otherwise diverge an
+            // incompatible client's rows under LWW (docs/riesgos.md R-008).
+            // Fails open for a client that can't report its version
+            // (unknown → supported).
+            if (!isClientSupported(args.platform, args.appVersion)) {
+                status = 'error'
+                await recordSyncError(ctx, {
+                    direction: 'push',
+                    reason: 'client_outdated',
+                    platform: args.platform,
+                })
+                return { ok: false as const, error: CLIENT_OUTDATED }
             }
-        }
 
-        // 2) Bump counter.
-        const newSeq = currentCounter + 1n
-        if (counterRow) {
-            await ctx.db.patch(counterRow._id, { value: newSeq })
-        } else {
-            await ctx.db.insert('syncCounters', { userId, value: newSeq })
-        }
+            // 1) CAS
+            const counterRow = await ctx.db
+                .query('syncCounters')
+                .withIndex('by_user', (q) => q.eq('userId', userId))
+                .unique()
+            const currentCounter = counterRow?.value ?? 0n
+            if (currentCounter !== args.expectedServerSeq) {
+                status = 'error'
+                await recordSyncError(ctx, {
+                    direction: 'push',
+                    reason: 'cursor_mismatch',
+                    platform: args.platform,
+                })
+                return {
+                    ok: false as const,
+                    error: 'cursor_mismatch' as const,
+                    currentCounter,
+                }
+            }
 
-        // 3) Apply upserts in catalog-first order. transactionTags depends on
-        //    both transactions and tags, so it goes last.
-        //
-        // Duplicate-name reconciliation (WAL-148) runs once per unique
-        // (currency, name) *after* every account upsert in this push has
-        // been written — not inline per-upsert — so an in-batch rename swap
-        // never sees a transient collision with a sibling row that hasn't
-        // reached its final name yet.
-        const dirtyAccountKeys = new Map<string, AccountReconcileKey>()
-        for (const u of args.upserts.accounts ?? []) {
-            const key = await applyAccountUpsert(ctx, userId, newSeq, u)
-            if (key) {
-                dirtyAccountKeys.set(
-                    `${key.currency}\u0000${key.name.trim().toLowerCase()}`,
-                    key,
+            // 2) Bump counter.
+            const newSeq = currentCounter + 1n
+            if (counterRow) {
+                await ctx.db.patch(counterRow._id, { value: newSeq })
+            } else {
+                await ctx.db.insert('syncCounters', { userId, value: newSeq })
+            }
+
+            // 3) Apply upserts in catalog-first order. transactionTags depends
+            //    on both transactions and tags, so it goes last.
+            //
+            // Duplicate-name reconciliation (WAL-148) runs once per unique
+            // (currency, name) *after* every account upsert in this push has
+            // been written — not inline per-upsert — so an in-batch rename
+            // swap never sees a transient collision with a sibling row that
+            // hasn't reached its final name yet.
+            const dirtyAccountKeys = new Map<string, AccountReconcileKey>()
+            for (const u of args.upserts.accounts ?? []) {
+                const key = await applyAccountUpsert(ctx, userId, newSeq, u)
+                if (key) {
+                    dirtyAccountKeys.set(
+                        `${key.currency}\u0000${key.name.trim().toLowerCase()}`,
+                        key,
+                    )
+                }
+            }
+            for (const key of dirtyAccountKeys.values()) {
+                await reconcileAccountDuplicates(
+                    ctx,
+                    userId,
+                    newSeq,
+                    key.currency,
+                    key.name,
                 )
             }
-        }
-        for (const key of dirtyAccountKeys.values()) {
-            await reconcileAccountDuplicates(
-                ctx,
-                userId,
-                newSeq,
-                key.currency,
-                key.name,
+            for (const u of args.upserts.categories ?? []) {
+                await applyCategoryUpsert(ctx, userId, newSeq, u)
+            }
+            for (const u of args.upserts.tags ?? []) {
+                await applyTagUpsert(ctx, userId, newSeq, u)
+            }
+            // Rules before their occurrences: a transaction carries `recurrenceId`.
+            for (const u of args.upserts.recurrences ?? []) {
+                await applyRecurrenceUpsert(ctx, userId, newSeq, u)
+            }
+            for (const u of args.upserts.transactions ?? []) {
+                await applyTransactionUpsert(ctx, userId, newSeq, u)
+            }
+            for (const u of args.upserts.transactionTags ?? []) {
+                await applyTransactionTagUpsert(ctx, userId, newSeq, u)
+            }
+            // Saved filters before widgets (a widget's filterId soft-references
+            // a saved filter).
+            for (const u of args.upserts.savedFilters ?? []) {
+                await applySavedFilterUpsert(ctx, userId, newSeq, u)
+            }
+            for (const u of args.upserts.dashboardWidgets ?? []) {
+                await applyDashboardWidgetUpsert(ctx, userId, newSeq, u)
+            }
+            for (const u of args.upserts.agentMemories ?? []) {
+                await applyAgentMemoryUpsert(ctx, userId, newSeq, u)
+            }
+
+            // 4) Apply tombstones. transactionTags first so transactions can
+            //    be safely deleted without orphaning joins.
+            const tombs = args.tombstones ?? []
+            const order: Record<(typeof tombs)[number]['tableName'], number> = {
+                transactionTags: 0,
+                transactions: 1,
+                tags: 2,
+                categories: 3,
+                accounts: 4,
+                // Widgets before their saved filters (reverse of upsert order).
+                dashboardWidgets: 5,
+                savedFilters: 6,
+                agentMemories: 7,
+                // After transactions: an occurrence still points at the rule,
+                // so the rule outlives the rows it owns.
+                recurrences: 8,
+            }
+            const sortedTombs = [...tombs].sort(
+                (a, b) => order[a.tableName] - order[b.tableName],
             )
-        }
-        for (const u of args.upserts.categories ?? []) {
-            await applyCategoryUpsert(ctx, userId, newSeq, u)
-        }
-        for (const u of args.upserts.tags ?? []) {
-            await applyTagUpsert(ctx, userId, newSeq, u)
-        }
-        // Rules before their occurrences: a transaction carries `recurrenceId`.
-        for (const u of args.upserts.recurrences ?? []) {
-            await applyRecurrenceUpsert(ctx, userId, newSeq, u)
-        }
-        for (const u of args.upserts.transactions ?? []) {
-            await applyTransactionUpsert(ctx, userId, newSeq, u)
-        }
-        for (const u of args.upserts.transactionTags ?? []) {
-            await applyTransactionTagUpsert(ctx, userId, newSeq, u)
-        }
-        // Saved filters before widgets (a widget's filterId soft-references a
-        // saved filter).
-        for (const u of args.upserts.savedFilters ?? []) {
-            await applySavedFilterUpsert(ctx, userId, newSeq, u)
-        }
-        for (const u of args.upserts.dashboardWidgets ?? []) {
-            await applyDashboardWidgetUpsert(ctx, userId, newSeq, u)
-        }
-        for (const u of args.upserts.agentMemories ?? []) {
-            await applyAgentMemoryUpsert(ctx, userId, newSeq, u)
-        }
+            for (const t of sortedTombs) {
+                await applyTombstone(ctx, userId, newSeq, t)
+            }
 
-        // 4) Apply tombstones. transactionTags first so transactions can be
-        //    safely deleted without orphaning joins.
-        const tombs = args.tombstones ?? []
-        const order: Record<(typeof tombs)[number]['tableName'], number> = {
-            transactionTags: 0,
-            transactions: 1,
-            tags: 2,
-            categories: 3,
-            accounts: 4,
-            // Widgets before their saved filters (reverse of upsert order).
-            dashboardWidgets: 5,
-            savedFilters: 6,
-            agentMemories: 7,
-            // After transactions: an occurrence still points at the rule, so
-            // the rule outlives the rows it owns.
-            recurrences: 8,
+            return { ok: true as const, newSeq }
+        } catch (error) {
+            status = 'error'
+            const reason: SyncErrorReason =
+                error instanceof Error && error.message === 'Unauthenticated'
+                    ? 'auth_failure'
+                    : error instanceof SyncValidationError
+                      ? 'validation'
+                      : 'unknown'
+            await recordSyncError(ctx, {
+                direction: 'push',
+                reason,
+                platform: args.platform,
+            })
+            throw error
+        } finally {
+            await recordFunctionDuration(ctx, {
+                function: 'sync_push',
+                durationMs: Date.now() - startedAt,
+                status,
+            })
         }
-        const sortedTombs = [...tombs].sort(
-            (a, b) => order[a.tableName] - order[b.tableName],
-        )
-        for (const t of sortedTombs) {
-            await applyTombstone(ctx, userId, newSeq, t)
-        }
-
-        return { ok: true as const, newSeq }
     },
 })

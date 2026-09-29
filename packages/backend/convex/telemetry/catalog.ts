@@ -1,3 +1,4 @@
+import { AGENT_TOOL_NAMES } from '../agent/toolset'
 import { agentPricingAttributeSpec } from './agentPricing'
 import type {
     MetricAttributeValue,
@@ -6,6 +7,34 @@ import type {
     MetricType,
     MetricUnit,
 } from './types'
+
+const DURATION_BUCKETS = [
+    '0-100',
+    '100-250',
+    '250-500',
+    '500-1000',
+    '1000-2500',
+    '2500-5000',
+    '5000+',
+] as const
+
+const CLIENT_DURATION_BUCKETS = [
+    '0-250',
+    '250-500',
+    '500-1000',
+    '1000-2500',
+    '2500-5000',
+    '5000+',
+] as const
+
+const TELEMETRY_PLATFORMS = [
+    'ios',
+    'android',
+    'web',
+    'macos',
+    'windows',
+    'linux',
+] as const
 
 export const metricNames = new Set<MetricName>([
     'business.user_accounts.created_count',
@@ -21,6 +50,11 @@ export const metricNames = new Set<MetricName>([
     'agent.interactions.completed_count',
     'agent.session.cost_bucket_count',
     'agent.reports.submitted_count',
+    'sync.errors.count',
+    'agent.tool.errors.count',
+    'system.function.duration_bucket_count',
+    'voice.connect.setup_complete_bucket_count',
+    'agent.response.first_token_bucket_count',
 ])
 
 export const metricSources = new Set<MetricSource>(['web', 'native', 'backend'])
@@ -183,6 +217,61 @@ export const metricCatalog: Record<
             ]),
             scope: new Set(['response', 'session']),
             client_platform: 'string',
+        },
+    },
+    'sync.errors.count': {
+        type: 'counter',
+        unit: 'count',
+        attributes: {
+            direction: new Set(['push', 'pull']),
+            reason: new Set([
+                'client_outdated',
+                'cursor_mismatch',
+                'auth_failure',
+                'validation',
+                'unknown',
+            ]),
+            platform: new Set(TELEMETRY_PLATFORMS),
+        },
+    },
+    'agent.tool.errors.count': {
+        type: 'counter',
+        unit: 'count',
+        attributes: {
+            tool_name: new Set(AGENT_TOOL_NAMES),
+            reason: new Set([
+                'invalid_args',
+                'not_found',
+                'provider_error',
+                'unknown',
+            ]),
+        },
+    },
+    'system.function.duration_bucket_count': {
+        type: 'counter',
+        unit: 'count',
+        attributes: {
+            function: new Set(['sync_push', 'sync_pull', 'agent_turn']),
+            bucket: new Set(DURATION_BUCKETS),
+            status: new Set(['ok', 'error']),
+        },
+    },
+    'voice.connect.setup_complete_bucket_count': {
+        type: 'counter',
+        unit: 'count',
+        attributes: {
+            bucket: new Set(CLIENT_DURATION_BUCKETS),
+            platform: new Set(TELEMETRY_PLATFORMS),
+            resumed: new Set([true, false]),
+        },
+    },
+    'agent.response.first_token_bucket_count': {
+        type: 'counter',
+        unit: 'count',
+        attributes: {
+            bucket: new Set(CLIENT_DURATION_BUCKETS),
+            mode: new Set(['voice', 'text']),
+            platform: new Set(TELEMETRY_PLATFORMS),
         },
     },
 }
