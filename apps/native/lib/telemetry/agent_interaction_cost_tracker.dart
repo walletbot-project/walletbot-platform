@@ -14,18 +14,22 @@ class AgentInteractionCostSample {
   final Map<String, int> tokenAttributes;
 }
 
+class AgentUsageTotal {
+  double costUsd = 0;
+  final Map<String, int> tokens = {};
+}
+
 class AgentInteractionCostTracker {
-  double? _lastTotalCostUsd;
-  Map<String, int>? _lastTokenAttributes;
+  final Map<String, AgentUsageTotal> totalsByModel = {};
   bool _toolCallSinceLastUsage = false;
 
-  void markToolCall() {
-    _toolCallSinceLastUsage = true;
-  }
+  void markToolCall() => _toolCallSinceLastUsage = true;
 
+  /// Live usage describes one generation, not cumulative session totals.
   AgentInteractionCostSample? nextSample({
     required String sessionId,
-    required double totalCostUsd,
+    required String model,
+    required double generationCostUsd,
     required String fallbackInteractionType,
     required Map<String, int> tokenAttributes,
   }) {
@@ -33,40 +37,21 @@ class AgentInteractionCostTracker {
         ? 'tool'
         : fallbackInteractionType;
     _toolCallSinceLastUsage = false;
-
-    final previousTotalCostUsd = _lastTotalCostUsd;
-    if (totalCostUsd == previousTotalCostUsd) return null;
-
-    final previousTokenAttributes = _lastTokenAttributes;
-    final interactionCostUsd =
-        previousTotalCostUsd == null || totalCostUsd < previousTotalCostUsd
-        ? totalCostUsd
-        : totalCostUsd - previousTotalCostUsd;
-    _lastTotalCostUsd = totalCostUsd;
-    _lastTokenAttributes = tokenAttributes;
-    if (interactionCostUsd <= 0) return null;
-
+    if (!generationCostUsd.isFinite || generationCostUsd <= 0) return null;
+    final total = totalsByModel.putIfAbsent(model, AgentUsageTotal.new);
+    total.costUsd += generationCostUsd;
+    for (final entry in tokenAttributes.entries) {
+      total.tokens.update(
+        entry.key,
+        (value) => value + entry.value,
+        ifAbsent: () => entry.value,
+      );
+    }
     return AgentInteractionCostSample(
       sampleId: '$sessionId:${newUuid()}',
       interactionType: interactionType,
-      costUsd: interactionCostUsd,
-      tokenAttributes: _deltaTokenAttributes(
-        tokenAttributes,
-        previousTokenAttributes,
-      ),
+      costUsd: generationCostUsd,
+      tokenAttributes: Map.of(tokenAttributes),
     );
-  }
-
-  Map<String, int> _deltaTokenAttributes(
-    Map<String, int> current,
-    Map<String, int>? previous,
-  ) {
-    if (previous == null) return current;
-    final delta = <String, int>{};
-    for (final entry in current.entries) {
-      final value = entry.value - (previous[entry.key] ?? 0);
-      if (value > 0) delta[entry.key] = value;
-    }
-    return delta;
   }
 }

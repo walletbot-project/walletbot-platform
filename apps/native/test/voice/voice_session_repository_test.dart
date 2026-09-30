@@ -16,6 +16,26 @@ void main() {
   tearDown(() => db.close());
 
   test(
+    'records the selected connection model without replacing history',
+    () async {
+      final repository = VoiceSessionRepository(db, remoteEnabled: true);
+      final session = await repository.openOrCreate(model: 'gemini-3.8-live');
+      await repository.appendEvent(
+        sessionId: session.id,
+        occurredAt: DateTime.now(),
+        type: 'test',
+        direction: 'client',
+      );
+      await repository.updateModel(session.id, 'gemini-3.1-flash-live-preview');
+      final saved = await db.select(db.voiceSessions).getSingle();
+      expect(saved.id, session.id);
+      expect(saved.model, 'gemini-3.1-flash-live-preview');
+      expect(saved.remoteSynced, false);
+      expect(await db.select(db.voiceSessionEvents).get(), hasLength(1));
+    },
+  );
+
+  test(
     'exports ordered, timestamped semantic events and lossless PCM',
     () async {
       final repository = VoiceSessionRepository(db);

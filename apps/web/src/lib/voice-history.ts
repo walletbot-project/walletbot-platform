@@ -21,7 +21,7 @@ import { newId } from '@/lib/new-id'
  * `audio_output_chunk`). Those are thousands of rows per minute, which a local
  * SQLite file absorbs and a browser round-trip does not, so web records the
  * semantic log only: lifecycle, transcript, tools and server signals. Audio
- * bytes never leave either client.
+ * bytes are not included in history uploads (live audio goes to Gemini).
  */
 
 /** Where the event came from, mirroring native's `direction` column. */
@@ -62,8 +62,7 @@ export type VoiceHistoryRecorder = {
     /**
      * Bind the session to the model the token was minted for. Events recorded
      * before this point keep their sequence and upload with the first batch —
-     * web only learns the model from `requestLiveToken`, while native knows it
-     * up front.
+     * the model comes from `requestLiveToken` on both clients.
      */
     open: (model: string) => void
     /** Append one event to the outbox and schedule a flush. */
@@ -154,6 +153,7 @@ export function createVoiceHistoryRecorder(
             const snapshot = sessionPayload(model)
             await client.mutation(api.v1.voice.sessions.appendEvents, {
                 ownerId,
+                source: 'web',
                 session: snapshot,
                 events: batch,
             })

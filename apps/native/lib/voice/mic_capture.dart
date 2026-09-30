@@ -5,29 +5,18 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:record/record.dart';
 
-/// Why the mic capture path is per-platform.
-///
-/// On Android (and every other platform) capture goes through the `record`
-/// plugin. On iOS it must NOT: echo cancellation there is Apple's
-/// voice-processing I/O unit, and it only works when capture and playback
-/// run inside the SAME AVAudioEngine — the far-end audio played through the
-/// engine's output is the AEC reference. `record` runs its own engine, so
-/// with `echoCancel: true` its voice-processing unit conflicted with the
-/// separate playback engine (`auou/vpio/appl render err: -1` loop, silent
-/// agent), and with `echoCancel: false` the speaker leaked into the mic and
-/// the agent barged in on itself. See AUDIO.md § iOS.
-///
-/// The iOS implementation therefore streams mic audio from the same native
-/// engine that plays the agent audio (PcmAudioPlayer.swift), which means the
-/// voice session's playback (`PcmAudioPlayer.start` in Dart, done by
-/// `_command.start()`) must be running before [start] is called.
+/// Mobile capture and playback share one native audio session and route.
+/// The record plugin is only the desktop fallback; it never owns a second
+/// mobile audio session or competes for audio focus.
 abstract class MicCapture {
   /// 16 kHz mono PCM16 — the wire format Gemini Live expects.
   static const sampleRate = 16000;
 
   factory MicCapture.forPlatform() {
-    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.iOS) {
-      return IosEngineMicCapture();
+    if (!kIsWeb &&
+        (defaultTargetPlatform == TargetPlatform.iOS ||
+            defaultTargetPlatform == TargetPlatform.android)) {
+      return NativeEngineMicCapture();
     }
     return RecordMicCapture();
   }
@@ -51,7 +40,7 @@ abstract class MicCapture {
 
 enum MicCaptureIssue { permissionDenied, pcmUnsupported }
 
-/// Capture via the `record` plugin — every platform except iOS.
+/// Desktop capture fallback.
 class RecordMicCapture implements MicCapture {
   final AudioRecorder _recorder = AudioRecorder();
 
@@ -102,53 +91,78 @@ class RecordMicCapture implements MicCapture {
   Future<void> dispose() => _recorder.dispose();
 }
 
-/// Capture from the native voice engine (PcmAudioPlayer.swift) — iOS only.
-///
-/// Subscribing to [start]'s stream installs the mic tap on the engine
-/// (EventChannel onListen); cancelling every subscription removes it
-/// (onCancel). The engine itself is started/stopped by the playback side of
-/// the channel, so capture requires an active voice session.
-class IosEngineMicCapture implements MicCapture {
+/// Exactly one EventChannel subscription owns capture. Audio and level
+/// listeners share its broadcast stream; stop/dispose cancel the native input
+/// even if a caller forgets to cancel its own subscription.
+class NativeEngineMicCapture implements MicCapture {
   static const _events = EventChannel('live.walletbot.app/pcm_audio/capture');
-
-  Stream<Uint8List>? _chunks;
+  StreamController<Uint8List>? _controller;
+  StreamSubscription<dynamic>? _native;
+  bool _disposed = false;
 
   @override
-  Future<MicCaptureIssue?> checkAvailability() async {
-    // Permission is handled by permission_handler before this point, and the
-    // native engine always produces PCM16.
-    return null;
-  }
+  Future<MicCaptureIssue?> checkAvailability() async => null;
 
   @override
   Future<Stream<Uint8List>> start() async {
-    final chunks = _events.receiveBroadcastStream().map(
-      (dynamic event) => event as Uint8List,
+    if (_disposed) throw StateError('Microphone disposed');
+    if (_controller != null) return _controller!.stream;
+    final controller = StreamController<Uint8List>.broadcast();
+    _controller = controller;
+    _native = _events.receiveBroadcastStream().listen(
+      (dynamic event) {
+        if (!identical(_controller, controller)) return;
+        if (event is Uint8List && event.length.isEven) {
+          controller.add(event);
+        } else {
+          controller.addError(
+            const FormatException('Invalid microphone PCM16'),
+          );
+        }
+      },
+      onError: (Object error, StackTrace stack) {
+        if (identical(_controller, controller)) {
+          controller.addError(error, stack);
+        }
+      },
+      onDone: () {
+        if (identical(_controller, controller)) {
+          controller.addError(StateError('Microphone stream closed'));
+        }
+      },
     );
-    _chunks = chunks;
-    return chunks;
+    return controller.stream;
   }
 
   @override
   Stream<double> onAmplitudeDbfs(Duration interval) {
-    final chunks = _chunks;
-    if (chunks == null) {
-      throw StateError('IosEngineMicCapture.start() must be called first');
-    }
-    // Chunks arrive at ~100 ms cadence already; derive the level from them
-    // instead of asking the platform (record's formula: peak dBFS).
-    return chunks.map(_peakDbfs);
+    final controller = _controller;
+    if (controller == null) throw StateError('Start microphone first');
+    final timer = Stopwatch()..start();
+    return controller.stream
+        .where((_) {
+          if (timer.elapsed < interval) return false;
+          timer.reset();
+          return true;
+        })
+        .map(_peakDbfs);
   }
 
   @override
   Future<void> stop() async {
-    // Nothing to do: cancelling the stream subscriptions triggers the
-    // EventChannel's onCancel, which removes the native tap.
-    _chunks = null;
+    final native = _native;
+    final controller = _controller;
+    _native = null;
+    _controller = null;
+    await native?.cancel();
+    await controller?.close();
   }
 
   @override
-  Future<void> dispose() async {}
+  Future<void> dispose() async {
+    _disposed = true;
+    await stop();
+  }
 
   static double _peakDbfs(Uint8List chunk) {
     if (chunk.length < 2) return -160;
