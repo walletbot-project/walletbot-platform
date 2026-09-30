@@ -3338,6 +3338,12 @@ abstract class AppLocalizations {
   /// **'Could not save the tag'**
   String get tagSaveFailed;
 
+  /// No description provided for @tagsReorderFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not save the new order of your tags'**
+  String get tagsReorderFailed;
+
   /// No description provided for @legalFirstTitle.
   ///
   /// In en, this message translates to:

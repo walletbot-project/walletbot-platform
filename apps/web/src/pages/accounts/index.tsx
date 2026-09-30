@@ -1,4 +1,5 @@
 import { api } from '@wallet-bot/backend/api'
+import { compareByPosition } from '@wallet-bot/shared'
 import { Button, IconButton } from 'actify'
 import { useMutation, useQuery } from 'convex/react'
 import { useMemo, useState } from 'react'
@@ -51,7 +52,7 @@ export function Accounts() {
         localStore.setQuery(
             api.v1.accounts.queries.listActive,
             {},
-            applyReorder(current, args.ids),
+            applyReorder(current, args.ids, compareByPosition),
         )
     })
     const canReorder = (accounts?.length ?? 0) > 1

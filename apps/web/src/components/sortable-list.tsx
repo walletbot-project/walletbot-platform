@@ -3,6 +3,7 @@ import {
     closestCenter,
     DndContext,
     type DragEndEvent,
+    type KeyboardCoordinateGetter,
     KeyboardSensor,
     PointerSensor,
     type UniqueIdentifier,
@@ -42,6 +43,14 @@ type SortableListProps<T> = {
         },
     ) => ReactNode
     className?: string
+    /** Gap between rows, in px. Defaults to the grouped-list seam. */
+    gap?: number
+    /**
+     * Classes for the row while it is lifted. Rows that paint their own card
+     * only need the shadow; content without a surface (tag chips) also needs
+     * a background to read as picked up.
+     */
+    liftedClassName?: string
 }
 
 /**
@@ -61,14 +70,40 @@ export function SortableList<T>({
     onReorder,
     renderItem,
     className,
+    gap = GROUP_SPACING,
+    liftedClassName = 'shadow-lg',
 }: SortableListProps<T>) {
     const t = useT()
     const ids = items.map(idOf)
+    // Arrow keys step to the previous/next row by lining up the row's centre
+    // with its neighbour's. dnd-kit's `sortableKeyboardCoordinates` aligns
+    // edges instead, which with rows of different heights (a tag family is
+    // taller than a single tag) leaves the lifted row closest to its own slot,
+    // so it never moves.
+    const coordinateGetter: KeyboardCoordinateGetter = (event, args) => {
+        const step =
+            event.code === 'ArrowDown' ? 1 : event.code === 'ArrowUp' ? -1 : 0
+        if (step === 0) return sortableKeyboardCoordinates(event, args)
+        event.preventDefault()
+        const { active, over, collisionRect, droppableRects } = args.context
+        if (!active || !collisionRect) return undefined
+        const from = ids.indexOf(String(over?.id ?? active.id))
+        const target = ids[from + step]
+        const rect =
+            target === undefined ? undefined : droppableRects.get(target)
+        if (!rect) return undefined
+        const shift =
+            rect.top +
+            rect.height / 2 -
+            (collisionRect.top + collisionRect.height / 2)
+        return {
+            ...args.currentCoordinates,
+            y: args.currentCoordinates.y + shift,
+        }
+    }
     const sensors = useSensors(
         useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
-        useSensor(KeyboardSensor, {
-            coordinateGetter: sortableKeyboardCoordinates,
-        }),
+        useSensor(KeyboardSensor, { coordinateGetter }),
     )
 
     const nameFor = (id: UniqueIdentifier) => {
@@ -135,10 +170,7 @@ export function SortableList<T>({
                 strategy={verticalListSortingStrategy}
                 disabled={!editing}
             >
-                <div
-                    className={cn('flex flex-col', className)}
-                    style={{ gap: GROUP_SPACING }}
-                >
+                <div className={cn('flex flex-col', className)} style={{ gap }}>
                     {items.map((item, index) => (
                         <SortableRow
                             key={idOf(item)}
@@ -146,6 +178,7 @@ export function SortableList<T>({
                             name={nameOf(item)}
                             editing={editing}
                             radius={groupedRadius(index, items.length)}
+                            liftedClassName={liftedClassName}
                             render={(slot) => renderItem(item, slot)}
                         />
                     ))}
@@ -160,12 +193,14 @@ function SortableRow({
     name,
     editing,
     radius,
+    liftedClassName,
     render,
 }: {
     id: string
     name: string
     editing: boolean
     radius: CSSProperties
+    liftedClassName: string
     render: (slot: {
         radius: CSSProperties
         dragHandle: ReactNode
@@ -189,7 +224,11 @@ function SortableRow({
     return (
         <div
             ref={setNodeRef}
-            className={cn('relative', isDragging && 'z-10 shadow-lg')}
+            className={cn(
+                'relative',
+                isDragging && 'z-10',
+                isDragging && liftedClassName,
+            )}
             style={{
                 transform: CSS.Translate.toString(transform),
                 transition,

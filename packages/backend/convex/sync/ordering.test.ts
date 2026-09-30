@@ -3,7 +3,7 @@
 import aggregate from '@convex-dev/aggregate/test'
 import { convexTest } from 'convex-test'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { api } from '../_generated/api'
+import { api, internal } from '../_generated/api'
 import schema from '../schema'
 
 const modules = import.meta.glob('../**/*.ts')
@@ -231,5 +231,229 @@ describe('account and category ordering', { timeout: 30000 }, () => {
         })
         expect(result.ok).toBe(true)
         expect((await activeAccountIds(authed))[0]).toBe('a3')
+    })
+})
+
+describe('tag ordering', { timeout: 30000 }, () => {
+    beforeEach(() => {
+        vi.useFakeTimers()
+        vi.setSystemTime(now)
+        vi.stubEnv('CONVEX_SITE_URL', 'https://test.convex.site')
+    })
+    afterEach(() => {
+        vi.useRealTimers()
+        vi.unstubAllEnvs()
+    })
+
+    // A (children B, D), C top-level, E top-level. Names chosen so the
+    // alphabetical fallback is visible.
+    async function tagFixture() {
+        const { t, authed } = await fixture()
+        await t.run(async (ctx) => {
+            const tags: [string, string, string | undefined][] = [
+                ['A', 'Hogar', undefined],
+                ['B', 'Luz', 'A'],
+                ['D', 'Agua', 'A'],
+                ['C', 'Auto', undefined],
+                ['E', 'Viajes', undefined],
+            ]
+            for (const [index, [id, name, parentId]] of tags.entries()) {
+                await ctx.db.insert('tags', {
+                    userId,
+                    id,
+                    name,
+                    parentId,
+                    color: '#000000',
+                    isArchived: false,
+                    createdAt: BigInt(index + 1),
+                    updatedAt: BigInt(index + 1),
+                    seq: BigInt(index + 7),
+                })
+            }
+            const counter = await ctx.db
+                .query('syncCounters')
+                .withIndex('by_user', (q) => q.eq('userId', userId))
+                .unique()
+            if (counter) await ctx.db.patch(counter._id, { value: 11n })
+        })
+        return { t, authed }
+    }
+
+    async function tagOrder(
+        authed: Awaited<ReturnType<typeof fixture>>['authed'],
+    ) {
+        return (
+            await authed.query(api.v1.tags.queries.listActiveWithCounts, {})
+        ).map((tag) => tag.id)
+    }
+
+    it('lists alphabetically until a level is reordered', async () => {
+        const { authed } = await tagFixture()
+        // Agua, Auto, Hogar, Luz, Viajes
+        expect(await tagOrder(authed)).toEqual(['D', 'C', 'A', 'B', 'E'])
+    })
+
+    it('reorders one level, leaving unpositioned tags alphabetical after', async () => {
+        const { authed } = await tagFixture()
+        await authed.mutation(api.v1.tags.mutations.reorder, {
+            ids: ['E', 'A'],
+        })
+        await authed.mutation(api.v1.tags.mutations.reorder, {
+            parentId: 'A',
+            ids: ['B', 'D'],
+        })
+        const rows = await authed.query(
+            api.v1.tags.queries.listActiveWithCounts,
+            {},
+        )
+        const roots = rows.filter((r) => r.parentId === undefined)
+        const underA = rows.filter((r) => r.parentId === 'A')
+        expect(roots.map((r) => r.id)).toEqual(['E', 'A', 'C'])
+        expect(underA.map((r) => r.id)).toEqual(['B', 'D'])
+    })
+
+    it('never moves a tag across levels', async () => {
+        const { t, authed } = await tagFixture()
+        await expect(
+            authed.mutation(api.v1.tags.mutations.reorder, {
+                ids: ['B', 'A'],
+            }),
+        ).rejects.toThrow('Tags can only be reordered among siblings')
+        await expect(
+            authed.mutation(api.v1.tags.mutations.reorder, {
+                parentId: 'A',
+                ids: ['C', 'B'],
+            }),
+        ).rejects.toThrow('Tags can only be reordered among siblings')
+        // Nothing was half-written.
+        const anyPositioned = await t.run(async (ctx) =>
+            (
+                await ctx.db
+                    .query('tags')
+                    .withIndex('by_user_archived', (q) =>
+                        q.eq('userId', userId).eq('isArchived', false),
+                    )
+                    .collect()
+            ).some((r) => r.position !== undefined),
+        )
+        expect(anyPositioned).toBe(false)
+    })
+
+    it('drops the position when a tag changes parent', async () => {
+        const { t, authed } = await tagFixture()
+        await authed.mutation(api.v1.tags.mutations.reorder, {
+            ids: ['E', 'C', 'A'],
+        })
+        await authed.mutation(api.v1.tags.mutations.update, {
+            id: 'C',
+            parentId: 'A',
+        })
+        // Renaming keeps it.
+        await authed.mutation(api.v1.tags.mutations.update, {
+            id: 'E',
+            name: 'Vacaciones',
+        })
+        const byId = await t.run(async (ctx) => {
+            const rows = await ctx.db
+                .query('tags')
+                .withIndex('by_user_archived', (q) =>
+                    q.eq('userId', userId).eq('isArchived', false),
+                )
+                .collect()
+            return Object.fromEntries(rows.map((r) => [r.id, r]))
+        })
+        expect('position' in byId.C).toBe(false)
+        expect(byId.E.position).toBe(0)
+    })
+
+    it('the agent drops the position when it moves a tag, keeps it on rename', async () => {
+        const { t, authed } = await tagFixture()
+        await authed.mutation(api.v1.tags.mutations.reorder, {
+            ids: ['E', 'C', 'A'],
+        })
+        const run = (argsJson: object) =>
+            t.mutation(internal.agent.tools.execute, {
+                userId,
+                name: 'updateTag',
+                argsJson: JSON.stringify(argsJson),
+                nowMs: now,
+                utcOffsetMinutes: 0,
+            })
+        await run({ idOrName: 'C', parentIdOrName: 'A' })
+        await run({ idOrName: 'E', name: 'Vacaciones' })
+        const byId = await t.run(async (ctx) => {
+            const rows = await ctx.db
+                .query('tags')
+                .withIndex('by_user_archived', (q) =>
+                    q.eq('userId', userId).eq('isArchived', false),
+                )
+                .collect()
+            return Object.fromEntries(rows.map((r) => [r.id, r]))
+        })
+        expect(byId.C.parentId).toBe('A')
+        expect('position' in byId.C).toBe(false)
+        expect(byId.E.name).toBe('Vacaciones')
+        expect(byId.E.position).toBe(0)
+    })
+
+    it('re-parented children of an archived tag lose their position', async () => {
+        const { t, authed } = await tagFixture()
+        await authed.mutation(api.v1.tags.mutations.reorder, {
+            parentId: 'A',
+            ids: ['B', 'D'],
+        })
+        await authed.mutation(api.v1.tags.mutations.archive, { id: 'A' })
+        const rows = await t.run(async (ctx) =>
+            ctx.db
+                .query('tags')
+                .withIndex('by_user_archived', (q) =>
+                    q.eq('userId', userId).eq('isArchived', false),
+                )
+                .collect(),
+        )
+        const moved = rows.filter((r) => r.id === 'B' || r.id === 'D')
+        expect(moved.map((r) => [r.parentId, 'position' in r])).toEqual([
+            [undefined, false],
+            [undefined, false],
+        ])
+    })
+
+    it('sync keeps the position when an old client omits it, but not across parents', async () => {
+        const { authed } = await tagFixture()
+        await authed.mutation(api.v1.tags.mutations.reorder, {
+            ids: ['E', 'C', 'A'],
+        })
+        const counter = await authed.query(api.v1.sync.queries.getCounter, {})
+        const base = {
+            color: '#000000',
+            isArchived: false,
+            updatedAt: 100n,
+        }
+        const result = await authed.mutation(api.v1.sync.mutations.push, {
+            ...legacy,
+            expectedServerSeq: counter,
+            upserts: {
+                tags: [
+                    // Renamed in place: keeps position 0.
+                    { ...base, id: 'E', name: 'Vacaciones', createdAt: 5n },
+                    // Moved under A: its root position no longer applies.
+                    {
+                        ...base,
+                        id: 'C',
+                        name: 'Auto',
+                        parentId: 'A',
+                        createdAt: 4n,
+                    },
+                ],
+            },
+        })
+        expect(result.ok).toBe(true)
+        const rows = await authed.query(
+            api.v1.tags.queries.listActiveWithCounts,
+            {},
+        )
+        const byId = Object.fromEntries(rows.map((r) => [r.id, r]))
+        expect(byId.E.position).toBe(0)
+        expect(byId.C.position).toBeUndefined()
     })
 })

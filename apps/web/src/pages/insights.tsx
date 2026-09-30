@@ -1,4 +1,8 @@
 import { api } from '@wallet-bot/backend/api'
+import {
+    compareByPosition,
+    compareByPositionThenName,
+} from '@wallet-bot/shared'
 import { IconButton, TabItem, Tabs } from 'actify'
 import { useMutation, useQuery } from 'convex/react'
 import { useMemo, useState } from 'react'
@@ -55,11 +59,11 @@ export function Insights() {
         { asOfMs },
     )
     const tags = useQuery(api.v1.tags.queries.listActiveWithCounts, { asOfMs })
-    // Reorder mode for the categories tab, like the home dashboard's edit
-    // mode: a mode of the list, not something open beside it, so it stays out
-    // of the URL. Tags are not reorderable.
-    const [editingCategories, setEditingCategories] = useState(false)
-    const editing = editingCategories && tab === 'categories'
+    // Reorder mode for the visible tab, like the home dashboard's edit mode:
+    // a mode of the list, not something open beside it, so it stays out of
+    // the URL.
+    const [editingTab, setEditingTab] = useState<InsightsTab | null>(null)
+    const editing = editingTab === tab
     // Optimistic, so a dropped row stays where it landed; Convex rolls the
     // patch back by itself if the mutation fails.
     const reorderCategories = useMutation(
@@ -72,7 +76,7 @@ export function Insights() {
             localStore.setQuery(
                 api.v1.categories.queries.listActiveWithCounts,
                 queryArgs,
-                applyReorder(value, args.ids),
+                applyReorder(value, args.ids, compareByPosition),
             )
         }
         const active = localStore.getQuery(
@@ -83,11 +87,28 @@ export function Insights() {
             localStore.setQuery(
                 api.v1.categories.queries.listActive,
                 {},
-                applyReorder(active, args.ids),
+                applyReorder(active, args.ids, compareByPosition),
             )
         }
     })
-    const canReorder = tab === 'categories' && (categories?.length ?? 0) > 1
+    // Tags keep their tree: only one level changes, and the flat
+    // `listActive` stays alphabetical, so only the tree query is patched.
+    const reorderTags = useMutation(
+        api.v1.tags.mutations.reorder,
+    ).withOptimisticUpdate((localStore, args) => {
+        for (const { args: queryArgs, value } of localStore.getAllQueries(
+            api.v1.tags.queries.listActiveWithCounts,
+        )) {
+            if (!value) continue
+            localStore.setQuery(
+                api.v1.tags.queries.listActiveWithCounts,
+                queryArgs,
+                applyReorder(value, args.ids, compareByPositionThenName),
+            )
+        }
+    })
+    const canReorder =
+        ((tab === 'categories' ? categories : tags)?.length ?? 0) > 1
 
     const list = (
         <>
@@ -97,7 +118,7 @@ export function Insights() {
                     editing ? (
                         <IconButton
                             aria-label={t.common.done}
-                            onPress={() => setEditingCategories(false)}
+                            onPress={() => setEditingTab(null)}
                             className="text-on-surface-variant"
                         >
                             <Icon name="check" />
@@ -106,8 +127,12 @@ export function Insights() {
                         <>
                             {canReorder ? (
                                 <IconButton
-                                    aria-label={t.reorder.reorderCategories}
-                                    onPress={() => setEditingCategories(true)}
+                                    aria-label={
+                                        tab === 'categories'
+                                            ? t.reorder.reorderCategories
+                                            : t.reorder.reorderTags
+                                    }
+                                    onPress={() => setEditingTab(tab)}
                                     className="text-on-surface-variant"
                                 >
                                     <Icon name="edit" />
@@ -133,7 +158,7 @@ export function Insights() {
                 selectedKey={tab}
                 onSelectionChange={(key) => {
                     // Leaving the tab ends reorder mode.
-                    setEditingCategories(false)
+                    setEditingTab(null)
                     navigate(`/insights/${key}`)
                 }}
                 className="m3-tabs flex min-h-0 flex-1 flex-col"
@@ -178,6 +203,13 @@ export function Insights() {
                     <TagsView
                         tags={tags}
                         onSelect={(id) => navigate(`/insights/tags/${id}`)}
+                        editing={editing}
+                        onReorder={(parentId, ids) => {
+                            reorderTags({
+                                ...(parentId ? { parentId } : {}),
+                                ids,
+                            }).catch(() => toast.error(t.reorder.tagsFailed))
+                        }}
                     />
                 </TabItem>
             </Tabs>

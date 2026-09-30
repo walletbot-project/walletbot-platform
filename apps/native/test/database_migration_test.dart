@@ -217,6 +217,7 @@ void main() {
     expect(await db.select(db.recurrences).get(), isEmpty);
     await db.customSelect('SELECT position FROM accounts').get();
     await db.customSelect('SELECT position FROM categories').get();
+    await db.customSelect('SELECT position FROM tags').get();
   });
 
   test(
@@ -358,6 +359,13 @@ void main() {
         "('c1', 'Comida', 'súper', '#AABBCC', 'restaurant', 0, 10, 20, 1)",
       );
 
+      schema.rawDatabase.execute(
+        'INSERT INTO tags '
+        '(id, name, parent_id, color, is_archived, created_at, updated_at) '
+        "VALUES ('g1', 'Hogar', NULL, '#69F0AE', 0, 10, 20), "
+        "('g2', 'Luz', 'g1', '#FF0000', 0, 11, 21)",
+      );
+
       final db = AppDatabase.forTesting(schema.newConnection());
       addTearDown(db.close);
       await verifier.migrateAndValidate(db, 6);
@@ -405,6 +413,16 @@ void main() {
       expect(categories[0].read<int>('dirty'), 1);
       expect(categories[1].read<int>('is_archived'), 1);
       expect(categories.map((r) => r.read<int?>('position')), [null, null]);
+
+      final tags = await db
+          .customSelect(
+            'SELECT id, name, parent_id, color, position FROM tags ORDER BY id',
+          )
+          .get();
+      expect(tags.map((r) => r.read<String>('name')), ['Hogar', 'Luz']);
+      expect(tags[1].read<String?>('parent_id'), 'g1');
+      expect(tags[1].read<String>('color'), '#FF0000');
+      expect(tags.map((r) => r.read<int?>('position')), [null, null]);
 
       // With no positions yet, lists keep the pre-v6 creation order.
       final repositories = AppRepositories(db);

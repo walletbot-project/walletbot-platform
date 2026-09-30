@@ -521,6 +521,8 @@ export const es = {
         reorderCategories: 'Ordenar categorías',
         accountsFailed: 'No se pudo guardar el nuevo orden de tus cuentas',
         categoriesFailed: 'No se pudo guardar el nuevo orden de tus categorías',
+        reorderTags: 'Ordenar etiquetas',
+        tagsFailed: 'No se pudo guardar el nuevo orden de tus etiquetas',
         dragHandle: (p: { name: string }) => `Mover ${p.name}`,
         instructions:
             'Para mover un elemento, presioná espacio o enter, movelo con las flechas y presioná espacio o enter de nuevo para soltarlo. Escape cancela.',

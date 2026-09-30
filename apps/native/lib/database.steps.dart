@@ -3112,7 +3112,7 @@ final class Schema6 extends i0.VersionedSchema {
     ),
     alias: null,
   );
-  late final Shape3 tags = Shape3(
+  late final Shape17 tags = Shape17(
     source: i0.VersionedTable(
       entityName: 'tags',
       withoutRowId: false,
@@ -3124,6 +3124,7 @@ final class Schema6 extends i0.VersionedSchema {
         _column_3,
         _column_25,
         _column_26,
+        _column_73,
         _column_6,
         _column_7,
         _column_8,
@@ -3569,6 +3570,30 @@ class Shape16 extends i0.VersionedTable {
       columnsByName['color']! as i1.GeneratedColumn<String>;
   i1.GeneratedColumn<String> get icon =>
       columnsByName['icon']! as i1.GeneratedColumn<String>;
+  i1.GeneratedColumn<int> get position =>
+      columnsByName['position']! as i1.GeneratedColumn<int>;
+  i1.GeneratedColumn<int> get isArchived =>
+      columnsByName['is_archived']! as i1.GeneratedColumn<int>;
+  i1.GeneratedColumn<int> get createdAt =>
+      columnsByName['created_at']! as i1.GeneratedColumn<int>;
+  i1.GeneratedColumn<int> get updatedAt =>
+      columnsByName['updated_at']! as i1.GeneratedColumn<int>;
+  i1.GeneratedColumn<int> get dirty =>
+      columnsByName['dirty']! as i1.GeneratedColumn<int>;
+}
+
+class Shape17 extends i0.VersionedTable {
+  Shape17({required super.source, required super.alias}) : super.aliased();
+  i1.GeneratedColumn<String> get id =>
+      columnsByName['id']! as i1.GeneratedColumn<String>;
+  i1.GeneratedColumn<String> get name =>
+      columnsByName['name']! as i1.GeneratedColumn<String>;
+  i1.GeneratedColumn<String> get description =>
+      columnsByName['description']! as i1.GeneratedColumn<String>;
+  i1.GeneratedColumn<String> get parentId =>
+      columnsByName['parent_id']! as i1.GeneratedColumn<String>;
+  i1.GeneratedColumn<String> get color =>
+      columnsByName['color']! as i1.GeneratedColumn<String>;
   i1.GeneratedColumn<int> get position =>
       columnsByName['position']! as i1.GeneratedColumn<int>;
   i1.GeneratedColumn<int> get isArchived =>

@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { compareByPosition, type Orderable } from '../src/ordering'
+import {
+    compareByPosition,
+    compareByPositionThenName,
+    type Orderable,
+} from '../src/ordering'
 
 function row(id: string, createdAt: bigint, position?: number) {
     return { id, createdAt, position }
@@ -37,5 +41,28 @@ describe('compareByPosition', () => {
 
     it('breaks position ties by creation', () => {
         expect(order([row('b', 2n, 0), row('a', 1n, 0)])).toEqual(['a', 'b'])
+    })
+})
+
+describe('compareByPositionThenName', () => {
+    const tag = (name: string, position?: number) => ({ name, position })
+    const names = (rows: { name: string; position?: number }[]) =>
+        [...rows].sort(compareByPositionThenName).map((r) => r.name)
+
+    it('is alphabetical (case- and accent-insensitive) when nothing is positioned', () => {
+        expect(
+            names([tag('viajes'), tag('Auto'), tag('Ágil'), tag('hogar')]),
+        ).toEqual(['Ágil', 'Auto', 'hogar', 'viajes'])
+    })
+
+    it('puts positioned tags first, the rest alphabetically after', () => {
+        expect(
+            names([
+                tag('Zeta'),
+                tag('Viajes', 1),
+                tag('Auto'),
+                tag('Hogar', 0),
+            ]),
+        ).toEqual(['Hogar', 'Viajes', 'Auto', 'Zeta'])
     })
 })

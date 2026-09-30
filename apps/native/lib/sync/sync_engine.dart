@@ -749,6 +749,7 @@ class SyncEngine extends ChangeNotifier {
     if (row.description != null) 'description': row.description,
     if (row.parentId != null) 'parentId': row.parentId,
     'color': row.color,
+    if (row.position != null) 'position': row.position,
     'isArchived': row.archived,
     'createdAt': row.createdAt,
     'updatedAt': row.updatedAt,

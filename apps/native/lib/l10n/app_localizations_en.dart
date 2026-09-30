@@ -1843,6 +1843,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get tagSaveFailed => 'Could not save the tag';
 
   @override
+  String get tagsReorderFailed => 'Could not save the new order of your tags';
+
+  @override
   String get legalFirstTitle => 'Before you start';
 
   @override

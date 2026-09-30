@@ -142,8 +142,12 @@ export {
     pastCutoffBigInt,
     pastCutoffMs,
 } from './occurrence'
-export type { Orderable } from './ordering'
-export { compareByPosition, MAX_REORDER_ITEMS } from './ordering'
+export type { NamedOrderable, Orderable } from './ordering'
+export {
+    compareByPosition,
+    compareByPositionThenName,
+    MAX_REORDER_ITEMS,
+} from './ordering'
 export type {
     RecurrenceFrequency,
     RecurrenceHorizon,

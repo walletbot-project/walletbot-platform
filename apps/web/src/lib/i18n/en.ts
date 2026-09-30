@@ -485,6 +485,8 @@ export const en: Messages = {
         reorderCategories: 'Reorder categories',
         accountsFailed: 'Could not save the new order of your accounts',
         categoriesFailed: 'Could not save the new order of your categories',
+        reorderTags: 'Reorder tags',
+        tagsFailed: 'Could not save the new order of your tags',
         dragHandle: (p) => `Move ${p.name}`,
         instructions:
             'To move an item, press space or enter, move it with the arrow keys, and press space or enter again to drop it. Press escape to cancel.',

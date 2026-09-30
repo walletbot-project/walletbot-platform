@@ -1847,6 +1847,10 @@ class AppLocalizationsEs extends AppLocalizations {
   String get tagSaveFailed => 'No se pudo guardar la etiqueta';
 
   @override
+  String get tagsReorderFailed =>
+      'No se pudo guardar el nuevo orden de tus etiquetas';
+
+  @override
   String get legalFirstTitle => 'Antes de empezar';
 
   @override

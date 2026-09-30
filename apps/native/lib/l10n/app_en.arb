@@ -612,6 +612,7 @@
   "editCategory": "Edit category",
   "editTag": "Edit tag",
   "tagSaveFailed": "Could not save the tag",
+  "tagsReorderFailed": "Could not save the new order of your tags",
   "legalFirstTitle": "Before you start",
   "legalFirstSubtitle": "We need your acceptance to create your account and provide the service.",
   "legalUpdatedTermsTitle": "We updated the Terms",

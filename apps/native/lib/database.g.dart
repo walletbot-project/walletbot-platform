@@ -2599,6 +2599,17 @@ class $TagsTable extends Tags with TableInfo<$TagsTable, Tag> {
     requiredDuringInsert: false,
     defaultValue: const Constant('#69F0AE'),
   );
+  static const VerificationMeta _positionMeta = const VerificationMeta(
+    'position',
+  );
+  @override
+  late final GeneratedColumn<int> position = GeneratedColumn<int>(
+    'position',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _archivedMeta = const VerificationMeta(
     'archived',
   );
@@ -2656,6 +2667,7 @@ class $TagsTable extends Tags with TableInfo<$TagsTable, Tag> {
     description,
     parentId,
     color,
+    position,
     archived,
     createdAt,
     updatedAt,
@@ -2705,6 +2717,12 @@ class $TagsTable extends Tags with TableInfo<$TagsTable, Tag> {
       context.handle(
         _colorMeta,
         color.isAcceptableOrUnknown(data['color']!, _colorMeta),
+      );
+    }
+    if (data.containsKey('position')) {
+      context.handle(
+        _positionMeta,
+        position.isAcceptableOrUnknown(data['position']!, _positionMeta),
       );
     }
     if (data.containsKey('is_archived')) {
@@ -2764,6 +2782,10 @@ class $TagsTable extends Tags with TableInfo<$TagsTable, Tag> {
         DriftSqlType.string,
         data['${effectivePrefix}color'],
       )!,
+      position: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}position'],
+      ),
       archived: attachedDatabase.typeMapping.read(
         DriftSqlType.bool,
         data['${effectivePrefix}is_archived'],
@@ -2795,6 +2817,7 @@ class Tag extends DataClass implements Insertable<Tag> {
   final String? description;
   final String? parentId;
   final String color;
+  final int? position;
   final bool archived;
   final BigInt createdAt;
   final BigInt updatedAt;
@@ -2805,6 +2828,7 @@ class Tag extends DataClass implements Insertable<Tag> {
     this.description,
     this.parentId,
     required this.color,
+    this.position,
     required this.archived,
     required this.createdAt,
     required this.updatedAt,
@@ -2822,6 +2846,9 @@ class Tag extends DataClass implements Insertable<Tag> {
       map['parent_id'] = Variable<String>(parentId);
     }
     map['color'] = Variable<String>(color);
+    if (!nullToAbsent || position != null) {
+      map['position'] = Variable<int>(position);
+    }
     map['is_archived'] = Variable<bool>(archived);
     map['created_at'] = Variable<BigInt>(createdAt);
     map['updated_at'] = Variable<BigInt>(updatedAt);
@@ -2840,6 +2867,9 @@ class Tag extends DataClass implements Insertable<Tag> {
           ? const Value.absent()
           : Value(parentId),
       color: Value(color),
+      position: position == null && nullToAbsent
+          ? const Value.absent()
+          : Value(position),
       archived: Value(archived),
       createdAt: Value(createdAt),
       updatedAt: Value(updatedAt),
@@ -2858,6 +2888,7 @@ class Tag extends DataClass implements Insertable<Tag> {
       description: serializer.fromJson<String?>(json['description']),
       parentId: serializer.fromJson<String?>(json['parentId']),
       color: serializer.fromJson<String>(json['color']),
+      position: serializer.fromJson<int?>(json['position']),
       archived: serializer.fromJson<bool>(json['archived']),
       createdAt: serializer.fromJson<BigInt>(json['createdAt']),
       updatedAt: serializer.fromJson<BigInt>(json['updatedAt']),
@@ -2873,6 +2904,7 @@ class Tag extends DataClass implements Insertable<Tag> {
       'description': serializer.toJson<String?>(description),
       'parentId': serializer.toJson<String?>(parentId),
       'color': serializer.toJson<String>(color),
+      'position': serializer.toJson<int?>(position),
       'archived': serializer.toJson<bool>(archived),
       'createdAt': serializer.toJson<BigInt>(createdAt),
       'updatedAt': serializer.toJson<BigInt>(updatedAt),
@@ -2886,6 +2918,7 @@ class Tag extends DataClass implements Insertable<Tag> {
     Value<String?> description = const Value.absent(),
     Value<String?> parentId = const Value.absent(),
     String? color,
+    Value<int?> position = const Value.absent(),
     bool? archived,
     BigInt? createdAt,
     BigInt? updatedAt,
@@ -2896,6 +2929,7 @@ class Tag extends DataClass implements Insertable<Tag> {
     description: description.present ? description.value : this.description,
     parentId: parentId.present ? parentId.value : this.parentId,
     color: color ?? this.color,
+    position: position.present ? position.value : this.position,
     archived: archived ?? this.archived,
     createdAt: createdAt ?? this.createdAt,
     updatedAt: updatedAt ?? this.updatedAt,
@@ -2910,6 +2944,7 @@ class Tag extends DataClass implements Insertable<Tag> {
           : this.description,
       parentId: data.parentId.present ? data.parentId.value : this.parentId,
       color: data.color.present ? data.color.value : this.color,
+      position: data.position.present ? data.position.value : this.position,
       archived: data.archived.present ? data.archived.value : this.archived,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
@@ -2925,6 +2960,7 @@ class Tag extends DataClass implements Insertable<Tag> {
           ..write('description: $description, ')
           ..write('parentId: $parentId, ')
           ..write('color: $color, ')
+          ..write('position: $position, ')
           ..write('archived: $archived, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt, ')
@@ -2940,6 +2976,7 @@ class Tag extends DataClass implements Insertable<Tag> {
     description,
     parentId,
     color,
+    position,
     archived,
     createdAt,
     updatedAt,
@@ -2954,6 +2991,7 @@ class Tag extends DataClass implements Insertable<Tag> {
           other.description == this.description &&
           other.parentId == this.parentId &&
           other.color == this.color &&
+          other.position == this.position &&
           other.archived == this.archived &&
           other.createdAt == this.createdAt &&
           other.updatedAt == this.updatedAt &&
@@ -2966,6 +3004,7 @@ class TagsCompanion extends UpdateCompanion<Tag> {
   final Value<String?> description;
   final Value<String?> parentId;
   final Value<String> color;
+  final Value<int?> position;
   final Value<bool> archived;
   final Value<BigInt> createdAt;
   final Value<BigInt> updatedAt;
@@ -2977,6 +3016,7 @@ class TagsCompanion extends UpdateCompanion<Tag> {
     this.description = const Value.absent(),
     this.parentId = const Value.absent(),
     this.color = const Value.absent(),
+    this.position = const Value.absent(),
     this.archived = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.updatedAt = const Value.absent(),
@@ -2989,6 +3029,7 @@ class TagsCompanion extends UpdateCompanion<Tag> {
     this.description = const Value.absent(),
     this.parentId = const Value.absent(),
     this.color = const Value.absent(),
+    this.position = const Value.absent(),
     this.archived = const Value.absent(),
     required BigInt createdAt,
     required BigInt updatedAt,
@@ -3004,6 +3045,7 @@ class TagsCompanion extends UpdateCompanion<Tag> {
     Expression<String>? description,
     Expression<String>? parentId,
     Expression<String>? color,
+    Expression<int>? position,
     Expression<bool>? archived,
     Expression<BigInt>? createdAt,
     Expression<BigInt>? updatedAt,
@@ -3016,6 +3058,7 @@ class TagsCompanion extends UpdateCompanion<Tag> {
       if (description != null) 'description': description,
       if (parentId != null) 'parent_id': parentId,
       if (color != null) 'color': color,
+      if (position != null) 'position': position,
       if (archived != null) 'is_archived': archived,
       if (createdAt != null) 'created_at': createdAt,
       if (updatedAt != null) 'updated_at': updatedAt,
@@ -3030,6 +3073,7 @@ class TagsCompanion extends UpdateCompanion<Tag> {
     Value<String?>? description,
     Value<String?>? parentId,
     Value<String>? color,
+    Value<int?>? position,
     Value<bool>? archived,
     Value<BigInt>? createdAt,
     Value<BigInt>? updatedAt,
@@ -3042,6 +3086,7 @@ class TagsCompanion extends UpdateCompanion<Tag> {
       description: description ?? this.description,
       parentId: parentId ?? this.parentId,
       color: color ?? this.color,
+      position: position ?? this.position,
       archived: archived ?? this.archived,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
@@ -3067,6 +3112,9 @@ class TagsCompanion extends UpdateCompanion<Tag> {
     }
     if (color.present) {
       map['color'] = Variable<String>(color.value);
+    }
+    if (position.present) {
+      map['position'] = Variable<int>(position.value);
     }
     if (archived.present) {
       map['is_archived'] = Variable<bool>(archived.value);
@@ -3094,6 +3142,7 @@ class TagsCompanion extends UpdateCompanion<Tag> {
           ..write('description: $description, ')
           ..write('parentId: $parentId, ')
           ..write('color: $color, ')
+          ..write('position: $position, ')
           ..write('archived: $archived, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt, ')
@@ -9796,6 +9845,7 @@ typedef $$TagsTableCreateCompanionBuilder =
       Value<String?> description,
       Value<String?> parentId,
       Value<String> color,
+      Value<int?> position,
       Value<bool> archived,
       required BigInt createdAt,
       required BigInt updatedAt,
@@ -9809,6 +9859,7 @@ typedef $$TagsTableUpdateCompanionBuilder =
       Value<String?> description,
       Value<String?> parentId,
       Value<String> color,
+      Value<int?> position,
       Value<bool> archived,
       Value<BigInt> createdAt,
       Value<BigInt> updatedAt,
@@ -9846,6 +9897,11 @@ class $$TagsTableFilterComposer extends Composer<_$AppDatabase, $TagsTable> {
 
   ColumnFilters<String> get color => $composableBuilder(
     column: $table.color,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get position => $composableBuilder(
+    column: $table.position,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -9903,6 +9959,11 @@ class $$TagsTableOrderingComposer extends Composer<_$AppDatabase, $TagsTable> {
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<int> get position => $composableBuilder(
+    column: $table.position,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<bool> get archived => $composableBuilder(
     column: $table.archived,
     builder: (column) => ColumnOrderings(column),
@@ -9950,6 +10011,9 @@ class $$TagsTableAnnotationComposer
   GeneratedColumn<String> get color =>
       $composableBuilder(column: $table.color, builder: (column) => column);
 
+  GeneratedColumn<int> get position =>
+      $composableBuilder(column: $table.position, builder: (column) => column);
+
   GeneratedColumn<bool> get archived =>
       $composableBuilder(column: $table.archived, builder: (column) => column);
 
@@ -9996,6 +10060,7 @@ class $$TagsTableTableManager
                 Value<String?> description = const Value.absent(),
                 Value<String?> parentId = const Value.absent(),
                 Value<String> color = const Value.absent(),
+                Value<int?> position = const Value.absent(),
                 Value<bool> archived = const Value.absent(),
                 Value<BigInt> createdAt = const Value.absent(),
                 Value<BigInt> updatedAt = const Value.absent(),
@@ -10007,6 +10072,7 @@ class $$TagsTableTableManager
                 description: description,
                 parentId: parentId,
                 color: color,
+                position: position,
                 archived: archived,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
@@ -10020,6 +10086,7 @@ class $$TagsTableTableManager
                 Value<String?> description = const Value.absent(),
                 Value<String?> parentId = const Value.absent(),
                 Value<String> color = const Value.absent(),
+                Value<int?> position = const Value.absent(),
                 Value<bool> archived = const Value.absent(),
                 required BigInt createdAt,
                 required BigInt updatedAt,
@@ -10031,6 +10098,7 @@ class $$TagsTableTableManager
                 description: description,
                 parentId: parentId,
                 color: color,
+                position: position,
                 archived: archived,
                 createdAt: createdAt,
                 updatedAt: updatedAt,

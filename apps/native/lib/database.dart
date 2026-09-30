@@ -201,6 +201,11 @@ class Tags extends Table {
   // Always defined (business rule): non-null with a DB default.
   TextColumn get color =>
       text().named('color').withDefault(const Constant('#69F0AE'))();
+  // User-chosen order among its siblings (same `parentId`), v6. NULL until
+  // the user reorders that level, and cleared when the tag changes parent;
+  // NULL rows sort after positioned ones, by name — see `TagRepository` and
+  // `compareByPositionThenName` in @wallet-bot/shared.
+  IntColumn get position => integer().named('position').nullable()();
 
   BoolColumn get archived =>
       boolean().named('is_archived').withDefault(const Constant(false))();
@@ -626,9 +631,9 @@ class AppDatabase extends _$AppDatabase {
         await m.create(transactionsRecurrenceIdRecurrenceIndex);
         await customStatement('UPDATE sync_state SET last_server_seq = 0');
       }
-      // v6: user-chosen order for accounts and categories. Two nullable
-      // columns; existing rows keep NULL, which sorts exactly as before
-      // (creation order). Additive on the wire, so `minSupportedVersion` is
+      // v6: user-chosen order for accounts, categories and tags. Three
+      // nullable columns; existing rows keep NULL, which sorts exactly as
+      // before (creation order for accounts/categories, name for tags). Additive on the wire, so `minSupportedVersion` is
       // unchanged: the backend preserves a stored position when an older
       // client omits it. A v5 device merged pulled rows without reading
       // `position`, so replay server history to hydrate any order already set
@@ -636,6 +641,7 @@ class AppDatabase extends _$AppDatabase {
       if (from < 6) {
         await m.addColumn(accounts, accounts.position);
         await m.addColumn(categories, categories.position);
+        await m.addColumn(tags, tags.position);
         await customStatement('UPDATE sync_state SET last_server_seq = 0');
       }
     },

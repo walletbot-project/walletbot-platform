@@ -1,6 +1,7 @@
 import 'package:app/data/data.dart';
 import 'package:app/database.dart';
 import 'package:app/sync/sync_merge.dart';
+import 'package:drift/drift.dart' show Value;
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -129,5 +130,92 @@ void main() {
     final rows = await repos.accounts.listActive();
     expect(rows.map((r) => r.id), ['y', 'x', 'z']);
     expect(rows.map((r) => r.position), [0, 1, null]);
+  });
+
+  group('tags', () {
+    late Map<String, String> ids;
+
+    setUp(() async {
+      final hogar = await repos.tags.create(name: 'Hogar');
+      ids = {
+        'Hogar': hogar,
+        'Luz': await repos.tags.create(name: 'Luz', parentId: hogar),
+        'Agua': await repos.tags.create(name: 'Agua', parentId: hogar),
+        'Auto': await repos.tags.create(name: 'Auto'),
+      };
+    });
+
+    Future<Map<String, Tag>> byName() async => {
+      for (final t in await repos.tags.listAll()) t.name: t,
+    };
+
+    test('reorder refuses ids from another level and writes nothing', () async {
+      await expectLater(
+        repos.tags.reorder(null, [ids['Luz']!, ids['Auto']!]),
+        throwsArgumentError,
+      );
+      final tags = await byName();
+      expect(tags.values.every((t) => t.position == null), isTrue);
+    });
+
+    test(
+      'unpositioned tags stay alphabetical after the reordered ones',
+      () async {
+        await repos.tags.reorder(ids['Hogar'], [ids['Luz']!]);
+        final nuevo = await repos.tags.create(
+          name: 'Gas',
+          parentId: ids['Hogar'],
+        );
+        final rows = await repos.tags.watchWithCounts().first;
+        expect(
+          rows
+              .where((r) => r.tag.parentId == ids['Hogar'])
+              .map((r) => r.tag.id),
+          [ids['Luz'], ids['Agua'], nuevo],
+        );
+      },
+    );
+
+    test('changing parent clears the position; renaming keeps it', () async {
+      await repos.tags.reorder(null, [ids['Auto']!, ids['Hogar']!]);
+      await repos.tags.update(ids['Auto']!, parentId: Value(ids['Hogar']));
+      await repos.tags.update(ids['Hogar']!, name: const Value('Casa'));
+      final tags = await byName();
+      expect(tags['Auto']!.position, isNull);
+      expect(tags['Casa']!.position, 1);
+    });
+
+    test('children re-parented by an archive lose their position', () async {
+      await repos.tags.reorder(ids['Hogar'], [ids['Luz']!, ids['Agua']!]);
+      await repos.tags.archive(
+        ids['Hogar']!,
+        mode: TagArchiveMode.reparentChildren,
+      );
+      final tags = await byName();
+      expect(tags['Luz']!.parentId, isNull);
+      expect(tags['Luz']!.position, isNull);
+      expect(tags['Agua']!.position, isNull);
+    });
+
+    test('pulled tags carry their position', () async {
+      await PullPageMerger(db).applyPage(
+        rows: [
+          {
+            'tableName': 'tags',
+            'row': {
+              'id': 'remote',
+              'name': 'Remoto',
+              'color': '#000000',
+              'position': 0.0,
+              'isArchived': false,
+              'createdAt': BigInt.one,
+              'updatedAt': BigInt.from(10),
+            },
+          },
+        ],
+        tombstones: [],
+      );
+      expect((await repos.tags.getById('remote'))!.position, 0);
+    });
   });
 }

@@ -169,6 +169,7 @@ class PullPageMerger {
       description: Value(r['description'] as String?),
       parentId: Value(r['parentId'] as String?),
       color: Value((r['color'] as String?) ?? kDefaultTagColor),
+      position: Value((r['position'] as num?)?.toInt()),
       archived: Value(r['isArchived'] as bool? ?? false),
       createdAt: Value(_asBigInt(r['createdAt'])),
       updatedAt: Value(remoteUpdatedAt),

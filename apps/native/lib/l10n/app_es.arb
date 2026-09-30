@@ -563,6 +563,7 @@
   "editCategory": "Editar categoría",
   "editTag": "Editar etiqueta",
   "tagSaveFailed": "No se pudo guardar la etiqueta",
+  "tagsReorderFailed": "No se pudo guardar el nuevo orden de tus etiquetas",
   "legalFirstTitle": "Antes de empezar",
   "legalFirstSubtitle": "Necesitamos tu aceptación para crear tu cuenta y darte el servicio.",
   "legalUpdatedTermsTitle": "Actualizamos los Términos",

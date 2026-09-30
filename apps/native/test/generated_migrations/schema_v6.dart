@@ -552,6 +552,14 @@ class Tags extends Table with TableInfo {
     $customConstraints: 'NOT NULL DEFAULT \'#69F0AE\'',
     defaultValue: const CustomExpression('\'#69F0AE\''),
   );
+  late final GeneratedColumn<int> position = GeneratedColumn<int>(
+    'position',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    $customConstraints: 'NULL',
+  );
   late final GeneratedColumn<int> isArchived = GeneratedColumn<int>(
     'is_archived',
     aliasedName,
@@ -593,6 +601,7 @@ class Tags extends Table with TableInfo {
     description,
     parentId,
     color,
+    position,
     isArchived,
     createdAt,
     updatedAt,
