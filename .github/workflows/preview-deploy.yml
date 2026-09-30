@@ -153,6 +153,41 @@ jobs:
             echo "convex_site_url=$SITE_URL"
           } >> "$GITHUB_OUTPUT"
 
+      # Native sign-in (authNative) mints/verifies JWTs with JWT_PRIVATE_KEY /
+      # JWKS. Prod has these set by hand on its deployment (see LESSONS.md #10)
+      # but a preview is a brand-new, empty Convex deployment — without this
+      # step native Google sign-in 500s on every preview with
+      # "JWT_PRIVATE_KEY environment variable is not set". This is a
+      # dedicated preview-only keypair, not prod's, since previews are
+      # ephemeral and publicly reachable.
+      - name: Set backend preview native-auth JWT env vars
+        working-directory: packages/backend
+        env:
+          CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_PREVIEW_DEPLOY_KEY }}
+          JWT_PRIVATE_KEY_PREVIEW: ${{ secrets.JWT_PRIVATE_KEY_PREVIEW }}
+          JWKS_PREVIEW: ${{ secrets.JWKS_PREVIEW }}
+        run: |
+          set -euo pipefail
+          printf '%s' "$JWT_PRIVATE_KEY_PREVIEW" > "$RUNNER_TEMP/jwt_private_key.pem"
+          printf '%s' "$JWKS_PREVIEW" > "$RUNNER_TEMP/jwks.json"
+          npx convex env set JWT_PRIVATE_KEY --from-file "$RUNNER_TEMP/jwt_private_key.pem" \
+            --deployment "$CONVEX_PREVIEW_NAME"
+          npx convex env set JWKS --from-file "$RUNNER_TEMP/jwks.json" \
+            --deployment "$CONVEX_PREVIEW_NAME"
+
+      # Confirm the values actually applied rather than assuming the CLI call
+      # succeeded (LESSONS.md #10 — a mangled multi-line value here fails
+      # silently until someone hits native sign-in).
+      - name: Verify native-auth JWT env vars applied
+        run: |
+          set -euo pipefail
+          kid="$(curl -sf "$VITE_CONVEX_SITE_URL/native-auth/.well-known/jwks.json" | jq -r '.keys[0].kid // empty')"
+          if [ -z "$kid" ]; then
+            echo "::error::JWKS did not apply to preview deployment $CONVEX_PREVIEW_NAME — native sign-in will fail with JWT_PRIVATE_KEY/JWKS not set"
+            exit 1
+          fi
+          echo "JWKS applied to $CONVEX_PREVIEW_NAME, kid=$kid"
+
       - name: Build web app
         working-directory: apps/web
         run: pnpm run build
