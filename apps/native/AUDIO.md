@@ -130,9 +130,13 @@ screen detach and background cleanup cancel that subscription, so focus gain
 cannot restart it. Permanent focus loss requires a fresh microphone tap. Reader
 and writer teardown joins run off the UI thread before native handles release.
 
-On iOS, a configuration notification rebuilds the current engine's graph, input
-tap and converter even if the engine reports running; stale-engine notifications
-are ignored. Phone-call interruptions deliberately stop the engine and report an
+On iOS, `AVAudioEngineConfigurationChange` means the engine stopped itself on a
+hardware format change (enabling voice processing posts it once after the first
+start). The handler follows AVAudioEngine.h: it reinstalls the input tap and
+converter at the new input format and restarts the same engine, without
+touching the audio session. A fresh engine plus session deactivate/reactivate
+re-posts the notification and resets the echo canceller each pass, which let
+the agent hear itself. Stale-engine notifications are ignored. Phone-call interruptions deliberately stop the engine and report an
 interruption to Dart. A new microphone tap resumes after the call; automatic
 resume on `.ended` is not implemented. Mute/unmute still rebuilds the duplex
 engine, so physical-device listening and route testing remain release checks.

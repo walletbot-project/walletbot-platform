@@ -323,14 +323,36 @@ final class PcmAudioPlayer: NSObject {
       )
   }
 
+  /// AVAudioEngine.h: on an I/O hardware change the engine stops itself and
+  /// posts this; nodes stay attached and the app reestablishes connections
+  /// whose format changed, then restarts. Enabling voice processing triggers
+  /// it too, right after the first start(). Restart the same engine in place:
+  /// a fresh engine plus session deactivate/reactivate re-posts the
+  /// notification and resets the echo canceller on every pass.
   private func handleConfigurationChange(_ changedEngine: AVAudioEngine) {
-    guard let engine, engine === changedEngine else { return }
-    // Route changes can change the tap's format. Rebuild the converter and
-    // graph together instead of restarting an engine with stale formats.
-    let capture = captureEnabled
+    guard let engine, engine === changedEngine, let playerNode else { return }
+    NSLog(
+      "[PcmAudio] configuration change: running=%d capture=%d route=[%@] hwRate=%.0f",
+      engine.isRunning ? 1 : 0,
+      captureEnabled ? 1 : 0,
+      routeDescription(),
+      AVAudioSession.sharedInstance().sampleRate
+    )
     do {
-      try startEngine(capture: capture)
+      if captureEnabled {
+        removeCaptureTap()
+        try installCaptureTap(engine: engine, srcFormat: engine.inputNode.outputFormat(forBus: 0))
+      }
+      // The stop dropped the player's schedule; account for it like interrupt.
+      playbackGeneration += 1
+      queuedFrames = 0
+      playerNode.stop()
+      engine.prepare()
+      try startWithRetry(engine)
+      playerNode.play()
+      NSLog("[PcmAudio] configuration change handled: running=%d", engine.isRunning ? 1 : 0)
     } catch {
+      NSLog("[PcmAudio] configuration change restart FAILED: \(error)")
       let sink = captureSink
       captureSink = nil
       stopEngine()
