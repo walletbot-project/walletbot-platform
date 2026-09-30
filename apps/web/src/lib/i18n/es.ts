@@ -515,6 +515,25 @@ export const es = {
             'Esta sesión ya no es válida. Te llevamos a iniciar sesión de nuevo.',
     },
 
+    reorder: {
+        roleDescription: 'elemento reordenable',
+        reorderAccounts: 'Ordenar cuentas',
+        reorderCategories: 'Ordenar categorías',
+        accountsFailed: 'No se pudo guardar el nuevo orden de tus cuentas',
+        categoriesFailed: 'No se pudo guardar el nuevo orden de tus categorías',
+        dragHandle: (p: { name: string }) => `Mover ${p.name}`,
+        instructions:
+            'Para mover un elemento, presioná espacio o enter, movelo con las flechas y presioná espacio o enter de nuevo para soltarlo. Escape cancela.',
+        picked: (p: { name: string; position: number; total: number }) =>
+            `Agarraste ${p.name}, en la posición ${p.position} de ${p.total}.`,
+        moved: (p: { name: string; position: number; total: number }) =>
+            `${p.name} está en la posición ${p.position} de ${p.total}.`,
+        dropped: (p: { name: string; position: number; total: number }) =>
+            `Soltaste ${p.name} en la posición ${p.position} de ${p.total}.`,
+        cancelled: (p: { name: string }) =>
+            `Movimiento cancelado. ${p.name} volvió a su lugar.`,
+    },
+
     accounts: {
         accountDetails: 'Detalle de cuenta',
         newAccount: 'Nueva cuenta',

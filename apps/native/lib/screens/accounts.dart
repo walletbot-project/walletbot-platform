@@ -4,6 +4,7 @@ import 'package:app/components/color_picker.dart';
 import 'package:app/components/color_utils.dart';
 import 'package:app/components/grouped_card.dart';
 import 'package:app/components/icon_picker.dart';
+import 'package:app/components/reorderable_grouped_list.dart';
 import 'package:app/components/transaction_row.dart';
 import 'package:app/data/data.dart';
 import 'package:app/database.dart';
@@ -162,18 +163,19 @@ class _AccountsScreenState extends State<AccountsScreen> {
             if (accounts.isEmpty) {
               return _EmptyBody(onCreateTap: () => _openCreate(context));
             }
-            return ListView.separated(
+            // Long-press a row to drag it into a new place (WAL-199).
+            return ReorderableGroupedList<Account>(
               padding: const EdgeInsets.only(left: 16, right: 16, bottom: 96),
-              itemCount: accounts.length,
-              separatorBuilder: (_, _) => const SizedBox(height: kGroupSpacing),
-              itemBuilder: (context, index) {
-                final account = accounts[index];
-                return _AccountTile(
-                  account: account,
-                  borderRadius: groupedRadius(index, accounts.length),
-                  onTap: () => _openAccountDetails(account),
-                );
-              },
+              items: accounts,
+              idOf: (account) => account.id,
+              reorderFailedMessage: context.l10n.accountsReorderFailed,
+              onReorder: (ordered) =>
+                  repos.accounts.reorder([for (final a in ordered) a.id]),
+              itemBuilder: (context, account, radius) => _AccountTile(
+                account: account,
+                borderRadius: radius,
+                onTap: () => _openAccountDetails(account),
+              ),
             );
           },
         ),

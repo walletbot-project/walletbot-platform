@@ -1,7 +1,7 @@
 import { api } from '@wallet-bot/backend/api'
 import { IconButton, TabItem, Tabs } from 'actify'
 import { useMutation, useQuery } from 'convex/react'
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { toast } from 'sonner'
 import { DetailNotFound, DetailSkeleton } from '@/components/detail-fallbacks'
@@ -11,6 +11,7 @@ import { ListDetailLayout } from '@/components/m3/list-detail-layout'
 import { useOccurrenceCutoff } from '@/hooks/use-occurrence-cutoff'
 import { useT } from '@/lib/i18n'
 import { newId } from '@/lib/new-id'
+import { applyReorder } from '@/lib/ordering'
 import { CategoriesView } from '@/pages/insights/categories-view'
 import {
     CategoryDetail,
@@ -54,29 +55,87 @@ export function Insights() {
         { asOfMs },
     )
     const tags = useQuery(api.v1.tags.queries.listActiveWithCounts, { asOfMs })
+    // Reorder mode for the categories tab, like the home dashboard's edit
+    // mode: a mode of the list, not something open beside it, so it stays out
+    // of the URL. Tags are not reorderable.
+    const [editingCategories, setEditingCategories] = useState(false)
+    const editing = editingCategories && tab === 'categories'
+    // Optimistic, so a dropped row stays where it landed; Convex rolls the
+    // patch back by itself if the mutation fails.
+    const reorderCategories = useMutation(
+        api.v1.categories.mutations.reorder,
+    ).withOptimisticUpdate((localStore, args) => {
+        for (const { args: queryArgs, value } of localStore.getAllQueries(
+            api.v1.categories.queries.listActiveWithCounts,
+        )) {
+            if (!value) continue
+            localStore.setQuery(
+                api.v1.categories.queries.listActiveWithCounts,
+                queryArgs,
+                applyReorder(value, args.ids),
+            )
+        }
+        const active = localStore.getQuery(
+            api.v1.categories.queries.listActive,
+            {},
+        )
+        if (active) {
+            localStore.setQuery(
+                api.v1.categories.queries.listActive,
+                {},
+                applyReorder(active, args.ids),
+            )
+        }
+    })
+    const canReorder = tab === 'categories' && (categories?.length ?? 0) > 1
 
     const list = (
         <>
             <AppBar
                 title={t.nav.insights}
                 actions={
-                    <IconButton
-                        aria-label={
-                            tab === 'categories'
-                                ? t.insights.newCategory
-                                : t.insights.newTag
-                        }
-                        onPress={() => navigate(`/insights/${tab}/new`)}
-                        className="text-on-surface-variant"
-                    >
-                        <Icon name="add" />
-                    </IconButton>
+                    editing ? (
+                        <IconButton
+                            aria-label={t.common.done}
+                            onPress={() => setEditingCategories(false)}
+                            className="text-on-surface-variant"
+                        >
+                            <Icon name="check" />
+                        </IconButton>
+                    ) : (
+                        <>
+                            {canReorder ? (
+                                <IconButton
+                                    aria-label={t.reorder.reorderCategories}
+                                    onPress={() => setEditingCategories(true)}
+                                    className="text-on-surface-variant"
+                                >
+                                    <Icon name="edit" />
+                                </IconButton>
+                            ) : null}
+                            <IconButton
+                                aria-label={
+                                    tab === 'categories'
+                                        ? t.insights.newCategory
+                                        : t.insights.newTag
+                                }
+                                onPress={() => navigate(`/insights/${tab}/new`)}
+                                className="text-on-surface-variant"
+                            >
+                                <Icon name="add" />
+                            </IconButton>
+                        </>
+                    )
                 }
             />
             <Tabs
                 aria-label={t.nav.insights}
                 selectedKey={tab}
-                onSelectionChange={(key) => navigate(`/insights/${key}`)}
+                onSelectionChange={(key) => {
+                    // Leaving the tab ends reorder mode.
+                    setEditingCategories(false)
+                    navigate(`/insights/${key}`)
+                }}
                 className="m3-tabs flex min-h-0 flex-1 flex-col"
                 contentClassName="min-h-0 flex-1 overflow-y-auto"
             >
@@ -101,6 +160,12 @@ export function Insights() {
                         onSelect={(id) =>
                             navigate(`/insights/categories/${id}`)
                         }
+                        editing={editing}
+                        onReorder={(ids) => {
+                            reorderCategories({ ids }).catch(() =>
+                                toast.error(t.reorder.categoriesFailed),
+                            )
+                        }}
                     />
                 </TabItem>
                 <TabItem

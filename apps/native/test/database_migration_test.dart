@@ -14,13 +14,13 @@ void main() {
     verifier = SchemaVerifier(GeneratedHelper());
   });
 
-  test('fresh database matches the versioned v5 schema snapshot', () async {
+  test('fresh database matches the versioned v6 schema snapshot', () async {
     final db = AppDatabase.forTesting(NativeDatabase.memory());
     addTearDown(db.close);
 
     await verifier.migrateAndValidate(
       db,
-      5,
+      6,
       options: const ValidationOptions(validateDropped: true),
     );
   });
@@ -69,7 +69,7 @@ void main() {
 
       final db = AppDatabase.forTesting(schema.newConnection());
       addTearDown(db.close);
-      await verifier.migrateAndValidate(db, 5);
+      await verifier.migrateAndValidate(db, 6);
 
       final rows = await db
           .customSelect(
@@ -110,7 +110,7 @@ void main() {
 
       final db = AppDatabase.forTesting(schema.newConnection());
       addTearDown(db.close);
-      await verifier.migrateAndValidate(db, 5);
+      await verifier.migrateAndValidate(db, 6);
 
       final transactions = await db
           .customSelect(
@@ -162,7 +162,7 @@ void main() {
 
       final db = AppDatabase.forTesting(schema.newConnection());
       addTearDown(db.close);
-      await verifier.migrateAndValidate(db, 5);
+      await verifier.migrateAndValidate(db, 6);
 
       final transactions = await db
           .customSelect(
@@ -188,7 +188,7 @@ void main() {
     },
   );
 
-  test('a v1 database upgrades all the way to v5 in one open', () async {
+  test('a v1 database upgrades all the way to v6 in one open', () async {
     final schema = await verifier.schemaAt(1);
     addTearDown(schema.close);
 
@@ -202,10 +202,11 @@ void main() {
 
     final db = AppDatabase.forTesting(schema.newConnection());
     addTearDown(db.close);
-    await verifier.migrateAndValidate(db, 5);
+    await verifier.migrateAndValidate(db, 6);
 
-    // Every step ran: the v2 column is there with its default AND the v3,
-    // v4 and v5 tables exist. A chain that returned early would fail here.
+    // Every step ran: the v2 column is there with its default, the v3, v4
+    // and v5 tables exist, and so does the v6 column. A chain that returned
+    // early would fail here.
     final rows = await db
         .customSelect('SELECT id, time_status, recurrence_id FROM transactions')
         .get();
@@ -214,6 +215,8 @@ void main() {
     expect(await db.select(db.legalAcceptances).get(), isEmpty);
     expect(await db.select(db.agentMemories).get(), isEmpty);
     expect(await db.select(db.recurrences).get(), isEmpty);
+    await db.customSelect('SELECT position FROM accounts').get();
+    await db.customSelect('SELECT position FROM categories').get();
   });
 
   test(
@@ -296,7 +299,7 @@ void main() {
 
       final db = AppDatabase.forTesting(schema.newConnection());
       addTearDown(db.close);
-      await verifier.migrateAndValidate(db, 5);
+      await verifier.migrateAndValidate(db, 6);
 
       // Values are preserved, not just the columns.
       expect(
@@ -330,10 +333,98 @@ void main() {
     },
   );
 
+  test(
+    'v5 rows survive the upgrade to the current schema, gaining position',
+    () async {
+      final schema = await verifier.schemaAt(5);
+      addTearDown(schema.close);
+
+      schema.rawDatabase.execute(
+        "INSERT INTO sync_state (id, last_server_seq) VALUES ('singleton', 999)",
+      );
+      schema.rawDatabase.execute(
+        'INSERT INTO accounts '
+        '(id, name, currency, description, color, icon, is_archived, '
+        'created_at, updated_at, dirty) '
+        "VALUES ('a2', 'Banco', 'USD', 'sueldo', '#112233', 'bank', 0, "
+        '20, 30, 1), '
+        "('a1', 'Efectivo', 'ARS', NULL, '#445566', 'wallet', 0, 10, 20, 0)",
+      );
+      schema.rawDatabase.execute(
+        'INSERT INTO categories '
+        '(id, name, description, color, icon, is_archived, created_at, '
+        'updated_at, dirty) '
+        "VALUES ('c2', 'Alquiler', NULL, '#778899', 'home', 1, 20, 30, 0), "
+        "('c1', 'Comida', 'súper', '#AABBCC', 'restaurant', 0, 10, 20, 1)",
+      );
+
+      final db = AppDatabase.forTesting(schema.newConnection());
+      addTearDown(db.close);
+      await verifier.migrateAndValidate(db, 6);
+
+      // Replays history so orders set from another device are hydrated.
+      expect(
+        (await db.select(db.syncState).get()).single.lastServerSeq,
+        BigInt.zero,
+      );
+
+      final accounts = await db
+          .customSelect(
+            'SELECT id, name, currency, description, color, icon, '
+            'is_archived, created_at, updated_at, dirty, position '
+            'FROM accounts ORDER BY id',
+          )
+          .get();
+      expect(accounts, hasLength(2));
+      final a1 = accounts[0];
+      expect(a1.read<String>('name'), 'Efectivo');
+      expect(a1.read<String>('currency'), 'ARS');
+      expect(a1.read<String?>('description'), isNull);
+      expect(a1.read<String>('color'), '#445566');
+      expect(a1.read<String>('icon'), 'wallet');
+      expect(a1.read<int>('created_at'), 10);
+      expect(a1.read<int>('updated_at'), 20);
+      expect(a1.read<int>('dirty'), 0);
+      final a2 = accounts[1];
+      expect(a2.read<String>('description'), 'sueldo');
+      expect(a2.read<int>('dirty'), 1);
+      // Never reordered: no position invented.
+      expect(accounts.map((r) => r.read<int?>('position')), [null, null]);
+
+      final categories = await db
+          .customSelect(
+            'SELECT id, name, description, color, icon, is_archived, '
+            'created_at, updated_at, dirty, position '
+            'FROM categories ORDER BY id',
+          )
+          .get();
+      expect(categories, hasLength(2));
+      expect(categories[0].read<String>('name'), 'Comida');
+      expect(categories[0].read<String>('description'), 'súper');
+      expect(categories[0].read<String>('icon'), 'restaurant');
+      expect(categories[0].read<int>('dirty'), 1);
+      expect(categories[1].read<int>('is_archived'), 1);
+      expect(categories.map((r) => r.read<int?>('position')), [null, null]);
+
+      // With no positions yet, lists keep the pre-v6 creation order.
+      final repositories = AppRepositories(db);
+      expect((await repositories.accounts.listActive()).map((a) => a.id), [
+        'a1',
+        'a2',
+      ]);
+      expect(
+        (await repositories.categories.listAll(
+          includeArchived: true,
+        )).map((c) => c.id),
+        ['c1', 'c2'],
+      );
+    },
+  );
+
   test('future databases fail instead of being silently downgraded', () async {
     final db = AppDatabase.forTesting(
       NativeDatabase.memory(
-        setup: (database) => database.execute('PRAGMA user_version = 6'),
+        setup: (database) => database.execute('PRAGMA user_version = 7'),
       ),
     );
     addTearDown(db.close);
@@ -344,7 +435,7 @@ void main() {
         isA<UnsupportedError>().having(
           (error) => error.message,
           'message',
-          contains('Unhandled SQLite migration path: v6 -> v5'),
+          contains('Unhandled SQLite migration path: v7 -> v6'),
         ),
       ),
     );

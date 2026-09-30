@@ -743,6 +743,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get accountSaveFailed => 'Could not save the account';
 
   @override
+  String get accountsReorderFailed =>
+      'Could not save the new order of your accounts';
+
+  @override
   String get adjustBalance => 'Adjust balance';
 
   @override
@@ -846,6 +850,10 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get categorySaveFailed => 'Could not save the category';
+
+  @override
+  String get categoriesReorderFailed =>
+      'Could not save the new order of your categories';
 
   @override
   String get latestMovements => 'Latest movements';

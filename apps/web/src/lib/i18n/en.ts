@@ -479,6 +479,23 @@ export const en: Messages = {
             'This session is no longer valid. Taking you back to sign in.',
     },
 
+    reorder: {
+        roleDescription: 'sortable item',
+        reorderAccounts: 'Reorder accounts',
+        reorderCategories: 'Reorder categories',
+        accountsFailed: 'Could not save the new order of your accounts',
+        categoriesFailed: 'Could not save the new order of your categories',
+        dragHandle: (p) => `Move ${p.name}`,
+        instructions:
+            'To move an item, press space or enter, move it with the arrow keys, and press space or enter again to drop it. Press escape to cancel.',
+        picked: (p) =>
+            `Picked up ${p.name}, at position ${p.position} of ${p.total}.`,
+        moved: (p) => `${p.name} is at position ${p.position} of ${p.total}.`,
+        dropped: (p) =>
+            `Dropped ${p.name} at position ${p.position} of ${p.total}.`,
+        cancelled: (p) => `Move cancelled. ${p.name} went back to its place.`,
+    },
+
     accounts: {
         accountDetails: 'Account details',
         newAccount: 'New account',

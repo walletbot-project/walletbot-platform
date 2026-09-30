@@ -2964,11 +2964,629 @@ i1.GeneratedColumn<int> _column_72(String aliasedName) =>
       type: i1.DriftSqlType.int,
       $customConstraints: 'NULL',
     );
+
+final class Schema6 extends i0.VersionedSchema {
+  Schema6({required super.database}) : super(version: 6);
+  @override
+  late final List<i1.DatabaseSchemaEntity> entities = [
+    accounts,
+    categories,
+    transactions,
+    tags,
+    transactionTags,
+    savedFilters,
+    dashboardWidgets,
+    agentMemories,
+    recurrences,
+    syncState,
+    tombstones,
+    voiceSessions,
+    voiceSessionEvents,
+    legalAcceptances,
+    accountsArchived,
+    accountsUpdatedAt,
+    accountsNeedsSync,
+    categoriesArchived,
+    categoriesUpdatedAt,
+    categoriesNeedsSync,
+    transactionsAccountId,
+    transactionsCategoryId,
+    transactionsToAccountId,
+    transactionsDate,
+    transactionsStatus,
+    transactionsType,
+    transactionsArchived,
+    transactionsUpdatedAt,
+    transactionsAccountIdDate,
+    transactionsCategoryIdDate,
+    transactionsRecurrenceIdDate,
+    transactionsRecurrenceIdRecurrenceIndex,
+    transactionsNeedsSync,
+    tagsParentId,
+    tagsArchived,
+    tagsUpdatedAt,
+    tagsNeedsSync,
+    transactionTagsTransactionId,
+    transactionTagsTagId,
+    transactionTagsUpdatedAt,
+    transactionTagsNeedsSync,
+    savedFiltersArchived,
+    savedFiltersUpdatedAt,
+    savedFiltersNeedsSync,
+    dashboardWidgetsPosition,
+    dashboardWidgetsArchived,
+    dashboardWidgetsUpdatedAt,
+    dashboardWidgetsNeedsSync,
+    agentMemoriesArchived,
+    agentMemoriesUpdatedAt,
+    agentMemoriesNeedsSync,
+    recurrencesArchived,
+    recurrencesUpdatedAt,
+    recurrencesNeedsSync,
+    tombstonesEntityTable,
+    tombstonesUpdatedAt,
+    tombstonesNeedsSync,
+    voiceSessionsStatus,
+    voiceSessionsUpdatedAt,
+    voiceEventsSessionId,
+    voiceEventsRemoteSynced,
+    legalAcceptancesDocumentVersion,
+  ];
+  late final Shape15 accounts = Shape15(
+    source: i0.VersionedTable(
+      entityName: 'accounts',
+      withoutRowId: false,
+      isStrict: false,
+      tableConstraints: ['PRIMARY KEY(id)'],
+      columns: [
+        _column_0,
+        _column_1,
+        _column_2,
+        _column_3,
+        _column_4,
+        _column_5,
+        _column_73,
+        _column_6,
+        _column_7,
+        _column_8,
+        _column_9,
+      ],
+      attachedDatabase: database,
+    ),
+    alias: null,
+  );
+  late final Shape16 categories = Shape16(
+    source: i0.VersionedTable(
+      entityName: 'categories',
+      withoutRowId: false,
+      isStrict: false,
+      tableConstraints: ['PRIMARY KEY(id)'],
+      columns: [
+        _column_0,
+        _column_1,
+        _column_3,
+        _column_10,
+        _column_11,
+        _column_73,
+        _column_6,
+        _column_7,
+        _column_8,
+        _column_9,
+      ],
+      attachedDatabase: database,
+    ),
+    alias: null,
+  );
+  late final Shape13 transactions = Shape13(
+    source: i0.VersionedTable(
+      entityName: 'transactions',
+      withoutRowId: false,
+      isStrict: false,
+      tableConstraints: ['PRIMARY KEY(id)'],
+      columns: [
+        _column_0,
+        _column_12,
+        _column_1,
+        _column_3,
+        _column_13,
+        _column_14,
+        _column_15,
+        _column_16,
+        _column_17,
+        _column_18,
+        _column_2,
+        _column_19,
+        _column_20,
+        _column_21,
+        _column_22,
+        _column_23,
+        _column_24,
+        _column_67,
+        _column_68,
+        _column_6,
+        _column_7,
+        _column_8,
+        _column_9,
+      ],
+      attachedDatabase: database,
+    ),
+    alias: null,
+  );
+  late final Shape3 tags = Shape3(
+    source: i0.VersionedTable(
+      entityName: 'tags',
+      withoutRowId: false,
+      isStrict: false,
+      tableConstraints: ['PRIMARY KEY(id)'],
+      columns: [
+        _column_0,
+        _column_1,
+        _column_3,
+        _column_25,
+        _column_26,
+        _column_6,
+        _column_7,
+        _column_8,
+        _column_9,
+      ],
+      attachedDatabase: database,
+    ),
+    alias: null,
+  );
+  late final Shape4 transactionTags = Shape4(
+    source: i0.VersionedTable(
+      entityName: 'transaction_tags',
+      withoutRowId: false,
+      isStrict: false,
+      tableConstraints: ['PRIMARY KEY(id)', 'UNIQUE(transaction_id, tag_id)'],
+      columns: [
+        _column_0,
+        _column_27,
+        _column_28,
+        _column_7,
+        _column_8,
+        _column_9,
+      ],
+      attachedDatabase: database,
+    ),
+    alias: null,
+  );
+  late final Shape5 savedFilters = Shape5(
+    source: i0.VersionedTable(
+      entityName: 'saved_filters',
+      withoutRowId: false,
+      isStrict: false,
+      tableConstraints: ['PRIMARY KEY(id)'],
+      columns: [
+        _column_0,
+        _column_1,
+        _column_29,
+        _column_6,
+        _column_7,
+        _column_8,
+        _column_9,
+      ],
+      attachedDatabase: database,
+    ),
+    alias: null,
+  );
+  late final Shape6 dashboardWidgets = Shape6(
+    source: i0.VersionedTable(
+      entityName: 'dashboard_widgets',
+      withoutRowId: false,
+      isStrict: false,
+      tableConstraints: ['PRIMARY KEY(id)'],
+      columns: [
+        _column_0,
+        _column_12,
+        _column_30,
+        _column_31,
+        _column_32,
+        _column_33,
+        _column_6,
+        _column_7,
+        _column_8,
+        _column_9,
+      ],
+      attachedDatabase: database,
+    ),
+    alias: null,
+  );
+  late final Shape12 agentMemories = Shape12(
+    source: i0.VersionedTable(
+      entityName: 'agent_memories',
+      withoutRowId: false,
+      isStrict: false,
+      tableConstraints: ['PRIMARY KEY(id)'],
+      columns: [
+        _column_0,
+        _column_66,
+        _column_6,
+        _column_7,
+        _column_8,
+        _column_9,
+      ],
+      attachedDatabase: database,
+    ),
+    alias: null,
+  );
+  late final Shape14 recurrences = Shape14(
+    source: i0.VersionedTable(
+      entityName: 'recurrences',
+      withoutRowId: false,
+      isStrict: false,
+      tableConstraints: ['PRIMARY KEY(id)'],
+      columns: [
+        _column_0,
+        _column_69,
+        _column_70,
+        _column_71,
+        _column_72,
+        _column_6,
+        _column_7,
+        _column_8,
+        _column_9,
+      ],
+      attachedDatabase: database,
+    ),
+    alias: null,
+  );
+  late final Shape7 syncState = Shape7(
+    source: i0.VersionedTable(
+      entityName: 'sync_state',
+      withoutRowId: false,
+      isStrict: false,
+      tableConstraints: ['PRIMARY KEY(id)'],
+      columns: [_column_34, _column_35, _column_36, _column_37],
+      attachedDatabase: database,
+    ),
+    alias: null,
+  );
+  late final Shape8 tombstones = Shape8(
+    source: i0.VersionedTable(
+      entityName: 'tombstones',
+      withoutRowId: false,
+      isStrict: false,
+      tableConstraints: ['PRIMARY KEY(entity_table, entity_id)'],
+      columns: [
+        _column_38,
+        _column_39,
+        _column_40,
+        _column_7,
+        _column_8,
+        _column_9,
+      ],
+      attachedDatabase: database,
+    ),
+    alias: null,
+  );
+  late final Shape9 voiceSessions = Shape9(
+    source: i0.VersionedTable(
+      entityName: 'voice_sessions',
+      withoutRowId: false,
+      isStrict: false,
+      tableConstraints: ['PRIMARY KEY(id)'],
+      columns: [
+        _column_0,
+        _column_41,
+        _column_13,
+        _column_42,
+        _column_8,
+        _column_43,
+        _column_44,
+        _column_45,
+        _column_46,
+        _column_47,
+        _column_48,
+      ],
+      attachedDatabase: database,
+    ),
+    alias: null,
+  );
+  late final Shape10 voiceSessionEvents = Shape10(
+    source: i0.VersionedTable(
+      entityName: 'voice_session_events',
+      withoutRowId: false,
+      isStrict: false,
+      tableConstraints: ['PRIMARY KEY(id)', 'UNIQUE(session_id, sequence)'],
+      columns: [
+        _column_0,
+        _column_49,
+        _column_50,
+        _column_51,
+        _column_12,
+        _column_52,
+        _column_53,
+        _column_54,
+        _column_55,
+        _column_56,
+        _column_57,
+        _column_48,
+      ],
+      attachedDatabase: database,
+    ),
+    alias: null,
+  );
+  late final Shape11 legalAcceptances = Shape11(
+    source: i0.VersionedTable(
+      entityName: 'legal_acceptances',
+      withoutRowId: false,
+      isStrict: false,
+      tableConstraints: ['PRIMARY KEY(id)'],
+      columns: [
+        _column_0,
+        _column_58,
+        _column_59,
+        _column_60,
+        _column_61,
+        _column_62,
+        _column_63,
+        _column_64,
+        _column_65,
+      ],
+      attachedDatabase: database,
+    ),
+    alias: null,
+  );
+  final i1.Index accountsArchived = i1.Index(
+    'accounts_archived',
+    'CREATE INDEX accounts_archived ON accounts (is_archived)',
+  );
+  final i1.Index accountsUpdatedAt = i1.Index(
+    'accounts_updated_at',
+    'CREATE INDEX accounts_updated_at ON accounts (updated_at)',
+  );
+  final i1.Index accountsNeedsSync = i1.Index(
+    'accounts_needs_sync',
+    'CREATE INDEX accounts_needs_sync ON accounts (updated_at) WHERE dirty = 1',
+  );
+  final i1.Index categoriesArchived = i1.Index(
+    'categories_archived',
+    'CREATE INDEX categories_archived ON categories (is_archived)',
+  );
+  final i1.Index categoriesUpdatedAt = i1.Index(
+    'categories_updated_at',
+    'CREATE INDEX categories_updated_at ON categories (updated_at)',
+  );
+  final i1.Index categoriesNeedsSync = i1.Index(
+    'categories_needs_sync',
+    'CREATE INDEX categories_needs_sync ON categories (updated_at) WHERE dirty = 1',
+  );
+  final i1.Index transactionsAccountId = i1.Index(
+    'transactions_account_id',
+    'CREATE INDEX transactions_account_id ON transactions (account_id)',
+  );
+  final i1.Index transactionsCategoryId = i1.Index(
+    'transactions_category_id',
+    'CREATE INDEX transactions_category_id ON transactions (category_id)',
+  );
+  final i1.Index transactionsToAccountId = i1.Index(
+    'transactions_to_account_id',
+    'CREATE INDEX transactions_to_account_id ON transactions (to_account_id)',
+  );
+  final i1.Index transactionsDate = i1.Index(
+    'transactions_date',
+    'CREATE INDEX transactions_date ON transactions (date)',
+  );
+  final i1.Index transactionsStatus = i1.Index(
+    'transactions_status',
+    'CREATE INDEX transactions_status ON transactions (status)',
+  );
+  final i1.Index transactionsType = i1.Index(
+    'transactions_type',
+    'CREATE INDEX transactions_type ON transactions (type)',
+  );
+  final i1.Index transactionsArchived = i1.Index(
+    'transactions_archived',
+    'CREATE INDEX transactions_archived ON transactions (is_archived)',
+  );
+  final i1.Index transactionsUpdatedAt = i1.Index(
+    'transactions_updated_at',
+    'CREATE INDEX transactions_updated_at ON transactions (updated_at)',
+  );
+  final i1.Index transactionsAccountIdDate = i1.Index(
+    'transactions_account_id_date',
+    'CREATE INDEX transactions_account_id_date ON transactions (account_id, date)',
+  );
+  final i1.Index transactionsCategoryIdDate = i1.Index(
+    'transactions_category_id_date',
+    'CREATE INDEX transactions_category_id_date ON transactions (category_id, date)',
+  );
+  final i1.Index transactionsRecurrenceIdDate = i1.Index(
+    'transactions_recurrence_id_date',
+    'CREATE INDEX transactions_recurrence_id_date ON transactions (recurrence_id, date)',
+  );
+  final i1.Index transactionsRecurrenceIdRecurrenceIndex = i1.Index(
+    'transactions_recurrence_id_recurrence_index',
+    'CREATE INDEX transactions_recurrence_id_recurrence_index ON transactions (recurrence_id, recurrence_index)',
+  );
+  final i1.Index transactionsNeedsSync = i1.Index(
+    'transactions_needs_sync',
+    'CREATE INDEX transactions_needs_sync ON transactions (updated_at) WHERE dirty = 1',
+  );
+  final i1.Index tagsParentId = i1.Index(
+    'tags_parent_id',
+    'CREATE INDEX tags_parent_id ON tags (parent_id)',
+  );
+  final i1.Index tagsArchived = i1.Index(
+    'tags_archived',
+    'CREATE INDEX tags_archived ON tags (is_archived)',
+  );
+  final i1.Index tagsUpdatedAt = i1.Index(
+    'tags_updated_at',
+    'CREATE INDEX tags_updated_at ON tags (updated_at)',
+  );
+  final i1.Index tagsNeedsSync = i1.Index(
+    'tags_needs_sync',
+    'CREATE INDEX tags_needs_sync ON tags (updated_at) WHERE dirty = 1',
+  );
+  final i1.Index transactionTagsTransactionId = i1.Index(
+    'transaction_tags_transaction_id',
+    'CREATE INDEX transaction_tags_transaction_id ON transaction_tags (transaction_id)',
+  );
+  final i1.Index transactionTagsTagId = i1.Index(
+    'transaction_tags_tag_id',
+    'CREATE INDEX transaction_tags_tag_id ON transaction_tags (tag_id)',
+  );
+  final i1.Index transactionTagsUpdatedAt = i1.Index(
+    'transaction_tags_updated_at',
+    'CREATE INDEX transaction_tags_updated_at ON transaction_tags (updated_at)',
+  );
+  final i1.Index transactionTagsNeedsSync = i1.Index(
+    'transaction_tags_needs_sync',
+    'CREATE INDEX transaction_tags_needs_sync ON transaction_tags (updated_at) WHERE dirty = 1',
+  );
+  final i1.Index savedFiltersArchived = i1.Index(
+    'saved_filters_archived',
+    'CREATE INDEX saved_filters_archived ON saved_filters (is_archived)',
+  );
+  final i1.Index savedFiltersUpdatedAt = i1.Index(
+    'saved_filters_updated_at',
+    'CREATE INDEX saved_filters_updated_at ON saved_filters (updated_at)',
+  );
+  final i1.Index savedFiltersNeedsSync = i1.Index(
+    'saved_filters_needs_sync',
+    'CREATE INDEX saved_filters_needs_sync ON saved_filters (updated_at) WHERE dirty = 1',
+  );
+  final i1.Index dashboardWidgetsPosition = i1.Index(
+    'dashboard_widgets_position',
+    'CREATE INDEX dashboard_widgets_position ON dashboard_widgets (position)',
+  );
+  final i1.Index dashboardWidgetsArchived = i1.Index(
+    'dashboard_widgets_archived',
+    'CREATE INDEX dashboard_widgets_archived ON dashboard_widgets (is_archived)',
+  );
+  final i1.Index dashboardWidgetsUpdatedAt = i1.Index(
+    'dashboard_widgets_updated_at',
+    'CREATE INDEX dashboard_widgets_updated_at ON dashboard_widgets (updated_at)',
+  );
+  final i1.Index dashboardWidgetsNeedsSync = i1.Index(
+    'dashboard_widgets_needs_sync',
+    'CREATE INDEX dashboard_widgets_needs_sync ON dashboard_widgets (updated_at) WHERE dirty = 1',
+  );
+  final i1.Index agentMemoriesArchived = i1.Index(
+    'agent_memories_archived',
+    'CREATE INDEX agent_memories_archived ON agent_memories (is_archived)',
+  );
+  final i1.Index agentMemoriesUpdatedAt = i1.Index(
+    'agent_memories_updated_at',
+    'CREATE INDEX agent_memories_updated_at ON agent_memories (updated_at)',
+  );
+  final i1.Index agentMemoriesNeedsSync = i1.Index(
+    'agent_memories_needs_sync',
+    'CREATE INDEX agent_memories_needs_sync ON agent_memories (updated_at) WHERE dirty = 1',
+  );
+  final i1.Index recurrencesArchived = i1.Index(
+    'recurrences_archived',
+    'CREATE INDEX recurrences_archived ON recurrences (is_archived)',
+  );
+  final i1.Index recurrencesUpdatedAt = i1.Index(
+    'recurrences_updated_at',
+    'CREATE INDEX recurrences_updated_at ON recurrences (updated_at)',
+  );
+  final i1.Index recurrencesNeedsSync = i1.Index(
+    'recurrences_needs_sync',
+    'CREATE INDEX recurrences_needs_sync ON recurrences (updated_at) WHERE dirty = 1',
+  );
+  final i1.Index tombstonesEntityTable = i1.Index(
+    'tombstones_entity_table',
+    'CREATE INDEX tombstones_entity_table ON tombstones (entity_table)',
+  );
+  final i1.Index tombstonesUpdatedAt = i1.Index(
+    'tombstones_updated_at',
+    'CREATE INDEX tombstones_updated_at ON tombstones (updated_at)',
+  );
+  final i1.Index tombstonesNeedsSync = i1.Index(
+    'tombstones_needs_sync',
+    'CREATE INDEX tombstones_needs_sync ON tombstones (updated_at) WHERE dirty = 1',
+  );
+  final i1.Index voiceSessionsStatus = i1.Index(
+    'voice_sessions_status',
+    'CREATE INDEX voice_sessions_status ON voice_sessions (status)',
+  );
+  final i1.Index voiceSessionsUpdatedAt = i1.Index(
+    'voice_sessions_updated_at',
+    'CREATE INDEX voice_sessions_updated_at ON voice_sessions (updated_at)',
+  );
+  final i1.Index voiceEventsSessionId = i1.Index(
+    'voice_events_session_id',
+    'CREATE INDEX voice_events_session_id ON voice_session_events (session_id)',
+  );
+  final i1.Index voiceEventsRemoteSynced = i1.Index(
+    'voice_events_remote_synced',
+    'CREATE INDEX voice_events_remote_synced ON voice_session_events (remote_synced)',
+  );
+  final i1.Index legalAcceptancesDocumentVersion = i1.Index(
+    'legal_acceptances_document_version',
+    'CREATE INDEX legal_acceptances_document_version ON legal_acceptances (document, version)',
+  );
+}
+
+class Shape15 extends i0.VersionedTable {
+  Shape15({required super.source, required super.alias}) : super.aliased();
+  i1.GeneratedColumn<String> get id =>
+      columnsByName['id']! as i1.GeneratedColumn<String>;
+  i1.GeneratedColumn<String> get name =>
+      columnsByName['name']! as i1.GeneratedColumn<String>;
+  i1.GeneratedColumn<String> get currency =>
+      columnsByName['currency']! as i1.GeneratedColumn<String>;
+  i1.GeneratedColumn<String> get description =>
+      columnsByName['description']! as i1.GeneratedColumn<String>;
+  i1.GeneratedColumn<String> get color =>
+      columnsByName['color']! as i1.GeneratedColumn<String>;
+  i1.GeneratedColumn<String> get icon =>
+      columnsByName['icon']! as i1.GeneratedColumn<String>;
+  i1.GeneratedColumn<int> get position =>
+      columnsByName['position']! as i1.GeneratedColumn<int>;
+  i1.GeneratedColumn<int> get isArchived =>
+      columnsByName['is_archived']! as i1.GeneratedColumn<int>;
+  i1.GeneratedColumn<int> get createdAt =>
+      columnsByName['created_at']! as i1.GeneratedColumn<int>;
+  i1.GeneratedColumn<int> get updatedAt =>
+      columnsByName['updated_at']! as i1.GeneratedColumn<int>;
+  i1.GeneratedColumn<int> get dirty =>
+      columnsByName['dirty']! as i1.GeneratedColumn<int>;
+}
+
+i1.GeneratedColumn<int> _column_73(String aliasedName) =>
+    i1.GeneratedColumn<int>(
+      'position',
+      aliasedName,
+      true,
+      type: i1.DriftSqlType.int,
+      $customConstraints: 'NULL',
+    );
+
+class Shape16 extends i0.VersionedTable {
+  Shape16({required super.source, required super.alias}) : super.aliased();
+  i1.GeneratedColumn<String> get id =>
+      columnsByName['id']! as i1.GeneratedColumn<String>;
+  i1.GeneratedColumn<String> get name =>
+      columnsByName['name']! as i1.GeneratedColumn<String>;
+  i1.GeneratedColumn<String> get description =>
+      columnsByName['description']! as i1.GeneratedColumn<String>;
+  i1.GeneratedColumn<String> get color =>
+      columnsByName['color']! as i1.GeneratedColumn<String>;
+  i1.GeneratedColumn<String> get icon =>
+      columnsByName['icon']! as i1.GeneratedColumn<String>;
+  i1.GeneratedColumn<int> get position =>
+      columnsByName['position']! as i1.GeneratedColumn<int>;
+  i1.GeneratedColumn<int> get isArchived =>
+      columnsByName['is_archived']! as i1.GeneratedColumn<int>;
+  i1.GeneratedColumn<int> get createdAt =>
+      columnsByName['created_at']! as i1.GeneratedColumn<int>;
+  i1.GeneratedColumn<int> get updatedAt =>
+      columnsByName['updated_at']! as i1.GeneratedColumn<int>;
+  i1.GeneratedColumn<int> get dirty =>
+      columnsByName['dirty']! as i1.GeneratedColumn<int>;
+}
+
 i0.MigrationStepWithVersion migrationSteps({
   required Future<void> Function(i1.Migrator m, Schema2 schema) from1To2,
   required Future<void> Function(i1.Migrator m, Schema3 schema) from2To3,
   required Future<void> Function(i1.Migrator m, Schema4 schema) from3To4,
   required Future<void> Function(i1.Migrator m, Schema5 schema) from4To5,
+  required Future<void> Function(i1.Migrator m, Schema6 schema) from5To6,
 }) {
   return (currentVersion, database) async {
     switch (currentVersion) {
@@ -2992,6 +3610,11 @@ i0.MigrationStepWithVersion migrationSteps({
         final migrator = i1.Migrator(database, schema);
         await from4To5(migrator, schema);
         return 5;
+      case 5:
+        final schema = Schema6(database: database);
+        final migrator = i1.Migrator(database, schema);
+        await from5To6(migrator, schema);
+        return 6;
       default:
         throw ArgumentError.value('Unknown migration from $currentVersion');
     }
@@ -3003,11 +3626,13 @@ i1.OnUpgrade stepByStep({
   required Future<void> Function(i1.Migrator m, Schema3 schema) from2To3,
   required Future<void> Function(i1.Migrator m, Schema4 schema) from3To4,
   required Future<void> Function(i1.Migrator m, Schema5 schema) from4To5,
+  required Future<void> Function(i1.Migrator m, Schema6 schema) from5To6,
 }) => i0.VersionedSchema.stepByStepHelper(
   step: migrationSteps(
     from1To2: from1To2,
     from2To3: from2To3,
     from3To4: from3To4,
     from4To5: from4To5,
+    from5To6: from5To6,
   ),
 );

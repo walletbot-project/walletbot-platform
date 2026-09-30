@@ -16,6 +16,8 @@ type EntityListTileProps = {
      */
     trailing?: ReactNode
     chevron?: boolean
+    /** A drag handle shown last, while the list is being reordered. */
+    dragHandle?: ReactNode
     onClick?: () => void
 }
 
@@ -31,6 +33,7 @@ export function EntityListTile({
     subtitle,
     trailing,
     chevron = false,
+    dragHandle,
     onClick,
 }: EntityListTileProps) {
     return (
@@ -55,6 +58,7 @@ export function EntityListTile({
                         className="text-on-surface-variant"
                     />
                 ) : null}
+                {dragHandle ?? null}
             </div>
         </GroupedCard>
     )

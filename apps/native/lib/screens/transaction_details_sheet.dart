@@ -108,7 +108,7 @@ class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
     if (!mounted) return;
     _series = series;
 
-    categories.sort((a, b) => a.name.compareTo(b.name));
+    // Categories keep the user's order from the repository.
     tags.sort((a, b) => a.name.compareTo(b.name));
 
     _transaction = transaction;

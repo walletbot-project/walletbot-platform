@@ -42,6 +42,10 @@ class Accounts extends Table {
       text().named('color').withDefault(const Constant('#3B82F6'))();
   TextColumn get icon =>
       text().named('icon').withDefault(const Constant('wallet'))();
+  // User-chosen list order (v6). NULL until the user first reorders; NULL
+  // rows sort after positioned ones, by creation — see `orderByPosition` in
+  // the repositories and `compareByPosition` in @wallet-bot/shared.
+  IntColumn get position => integer().named('position').nullable()();
 
   BoolColumn get archived =>
       boolean().named('is_archived').withDefault(const Constant(false))();
@@ -71,6 +75,10 @@ class Categories extends Table {
       text().named('color').withDefault(const Constant('#6366F1'))();
   TextColumn get icon =>
       text().named('icon').withDefault(const Constant('category'))();
+  // User-chosen list order (v6). NULL until the user first reorders; NULL
+  // rows sort after positioned ones, by creation — see `orderByPosition` in
+  // the repositories and `compareByPosition` in @wallet-bot/shared.
+  IntColumn get position => integer().named('position').nullable()();
 
   BoolColumn get archived =>
       boolean().named('is_archived').withDefault(const Constant(false))();
@@ -560,7 +568,7 @@ class AppDatabase extends _$AppDatabase {
   }
 
   @override
-  int get schemaVersion => 5;
+  int get schemaVersion => 6;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -568,14 +576,14 @@ class AppDatabase extends _$AppDatabase {
     onUpgrade: (m, from, to) async {
       // Anything below the v1 baseline, a downgrade, or a version this build
       // has never heard of must fail loudly rather than be guessed at.
-      if (from < 1 || from > to || to > 5) {
+      if (from < 1 || from > to || to > 6) {
         throw UnsupportedError(
           'Unhandled SQLite migration path: v$from -> v$to. '
           'Define an explicit upgrade path in AppDatabase.migration.',
         );
       }
       // Steps are cumulative and must stay that way: a v1 database upgrading
-      // straight to v5 runs all four. (The previous single-step form returned
+      // straight to v6 runs all five. (The previous single-step form returned
       // early after v2, which would have skipped everything after it.)
       //
       // v2: approximate/confirmed timing metadata on transactions.
@@ -616,6 +624,18 @@ class AppDatabase extends _$AppDatabase {
         await m.addColumn(transactions, transactions.recurrenceIndex);
         await m.create(transactionsRecurrenceIdDate);
         await m.create(transactionsRecurrenceIdRecurrenceIndex);
+        await customStatement('UPDATE sync_state SET last_server_seq = 0');
+      }
+      // v6: user-chosen order for accounts and categories. Two nullable
+      // columns; existing rows keep NULL, which sorts exactly as before
+      // (creation order). Additive on the wire, so `minSupportedVersion` is
+      // unchanged: the backend preserves a stored position when an older
+      // client omits it. A v5 device merged pulled rows without reading
+      // `position`, so replay server history to hydrate any order already set
+      // from another device.
+      if (from < 6) {
+        await m.addColumn(accounts, accounts.position);
+        await m.addColumn(categories, categories.position);
         await customStatement('UPDATE sync_state SET last_server_seq = 0');
       }
     },

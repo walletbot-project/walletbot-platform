@@ -6,9 +6,17 @@ snapshots used to test it.
 
 ## Current schema
 
-The complete current schema is `v3`. `v1` is the native SQLite baseline; `v2` added `transactions.time_status`, and `v3` added the `legal_acceptances` table (Terms/Privacy acceptance records — see `docs/legal/README.md`).
+The complete current schema is `v6`. `v1` is the native SQLite baseline. Each later version added:
 
-Supported upgrade paths are `v1 -> v3` and `v2 -> v3`. The steps in `AppDatabase.migration` are cumulative and must stay that way: each is an independent `if (from < N)` block, never an early `return`, or a v1 database jumping straight to the current version would silently skip everything after the first step.
+| Version | Change |
+|---|---|
+| `v2` | `transactions.time_status` |
+| `v3` | `legal_acceptances` table (Terms/Privacy acceptance records — see `docs/legal/README.md`) |
+| `v4` | `agent_memories` table (the agent's synced long-term memory); shipped with a `minSupportedVersion` bump to 0.3.0 |
+| `v5` | `recurrences` table plus `transactions.recurrence_id` / `recurrence_index`; resets `sync_state.last_server_seq` to replay history |
+| `v6` | nullable `accounts.position` / `categories.position` (user-chosen list order, WAL-199); resets `sync_state.last_server_seq` to replay history |
+
+Supported upgrade paths are every `vN -> v6` for `N` from 1 to 5. The steps in `AppDatabase.migration` are cumulative and must stay that way: each is an independent `if (from < N)` block, never an early `return`, or a v1 database jumping straight to the current version would silently skip everything after the first step.
 
 Historical development databases from before this baseline are not supported by
 runtime cleanup helpers. Unsupported paths must fail explicitly instead of

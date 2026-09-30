@@ -116,6 +116,8 @@ class PullPageMerger {
       description: Value(r['description'] as String?),
       color: Value((r['color'] as String?) ?? kDefaultAccountColor),
       icon: Value((r['icon'] as String?) ?? kDefaultAccountIcon),
+      // Absent until the user reorders, and on rows an older client wrote.
+      position: Value((r['position'] as num?)?.toInt()),
       archived: Value(r['isArchived'] as bool? ?? false),
       createdAt: Value(_asBigInt(r['createdAt'])),
       updatedAt: Value(remoteUpdatedAt),
@@ -141,6 +143,7 @@ class PullPageMerger {
       description: Value(r['description'] as String?),
       color: Value((r['color'] as String?) ?? kDefaultCategoryColor),
       icon: Value((r['icon'] as String?) ?? kDefaultCategoryIcon),
+      position: Value((r['position'] as num?)?.toInt()),
       archived: Value(r['isArchived'] as bool? ?? false),
       createdAt: Value(_asBigInt(r['createdAt'])),
       updatedAt: Value(remoteUpdatedAt),

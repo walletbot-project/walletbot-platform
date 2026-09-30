@@ -1,7 +1,7 @@
 import { api } from '@wallet-bot/backend/api'
 import { Button, IconButton } from 'actify'
 import { useMutation, useQuery } from 'convex/react'
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { toast } from 'sonner'
 import { DetailNotFound, DetailSkeleton } from '@/components/detail-fallbacks'
@@ -9,11 +9,12 @@ import { AppBar } from '@/components/m3/app-bar'
 import { Icon } from '@/components/m3/icon'
 import { ListDetailLayout } from '@/components/m3/list-detail-layout'
 import { StateMessage } from '@/components/m3/state-message'
+import { SortableList } from '@/components/sortable-list'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useOccurrenceCutoff } from '@/hooks/use-occurrence-cutoff'
-import { GROUP_SPACING, groupedRadius } from '@/lib/grouped-list'
 import { type Messages, useT } from '@/lib/i18n'
 import { newId } from '@/lib/new-id'
+import { applyReorder } from '@/lib/ordering'
 import {
     AccountDetail,
     type AccountSummary,
@@ -34,19 +35,60 @@ export function Accounts() {
     const t = useT()
     const navigate = useNavigate()
     const accounts = useQuery(api.v1.accounts.queries.listActive)
+    // Reorder mode, like the home dashboard's edit mode: a mode of this list,
+    // not something open beside it, so it stays out of the URL.
+    const [editing, setEditing] = useState(false)
+    // Optimistic, so a dropped row stays where it landed; Convex rolls the
+    // patch back by itself if the mutation fails.
+    const reorder = useMutation(
+        api.v1.accounts.mutations.reorder,
+    ).withOptimisticUpdate((localStore, args) => {
+        const current = localStore.getQuery(
+            api.v1.accounts.queries.listActive,
+            {},
+        )
+        if (!current) return
+        localStore.setQuery(
+            api.v1.accounts.queries.listActive,
+            {},
+            applyReorder(current, args.ids),
+        )
+    })
+    const canReorder = (accounts?.length ?? 0) > 1
 
     const list = (
         <>
             <AppBar
                 title={t.nav.accounts}
                 actions={
-                    <IconButton
-                        aria-label={t.accounts.newAccount}
-                        onPress={() => navigate('/accounts/new')}
-                        className="text-on-surface-variant"
-                    >
-                        <Icon name="add" />
-                    </IconButton>
+                    editing ? (
+                        <IconButton
+                            aria-label={t.common.done}
+                            onPress={() => setEditing(false)}
+                            className="text-on-surface-variant"
+                        >
+                            <Icon name="check" />
+                        </IconButton>
+                    ) : (
+                        <>
+                            {canReorder ? (
+                                <IconButton
+                                    aria-label={t.reorder.reorderAccounts}
+                                    onPress={() => setEditing(true)}
+                                    className="text-on-surface-variant"
+                                >
+                                    <Icon name="edit" />
+                                </IconButton>
+                            ) : null}
+                            <IconButton
+                                aria-label={t.accounts.newAccount}
+                                onPress={() => navigate('/accounts/new')}
+                                className="text-on-surface-variant"
+                            >
+                                <Icon name="add" />
+                            </IconButton>
+                        </>
+                    )
                 }
             />
             <div className="min-h-0 flex-1 overflow-y-auto">
@@ -58,24 +100,37 @@ export function Accounts() {
                         onCreate={() => navigate('/accounts/new')}
                     />
                 ) : (
-                    <div
-                        className="flex flex-col px-4 pb-24"
-                        style={{ gap: GROUP_SPACING }}
-                    >
-                        {accounts.map((account, index) => (
+                    <SortableList
+                        className="px-4 pb-24"
+                        items={accounts}
+                        idOf={(account) => account.id}
+                        nameOf={(account) => account.name}
+                        editing={editing}
+                        onReorder={(ids) => {
+                            reorder({ ids }).catch(() =>
+                                toast.error(t.reorder.accountsFailed),
+                            )
+                        }}
+                        renderItem={(account, { radius, dragHandle }) => (
                             <AccountTile
-                                key={account.id}
                                 id={account.id}
                                 name={account.name}
                                 icon={account.icon}
                                 color={account.color}
-                                radius={groupedRadius(index, accounts.length)}
-                                onClick={() =>
-                                    navigate(`/accounts/${account.id}`)
+                                radius={radius}
+                                dragHandle={dragHandle}
+                                // While reordering, rows only move.
+                                onClick={
+                                    editing
+                                        ? undefined
+                                        : () =>
+                                              navigate(
+                                                  `/accounts/${account.id}`,
+                                              )
                                 }
                             />
-                        ))}
-                    </div>
+                        )}
+                    />
                 )}
             </div>
         </>
