@@ -184,10 +184,25 @@ explicitly deferred (see "Traces, eventually" above).
 
 ### Starter PromQL
 
-Sync error rate by reason (last 5 min):
+**Confirmed against real Grafana Cloud/Mimir data (2026-09-30):** every
+counter listed above lands with a `_total` suffix once OTLP normalizes it to
+a Prometheus name — e.g. `system.function.duration_bucket_count` becomes
+`system_function_duration_bucket_count_total`, not just
+`system_function_duration_bucket_count`. This is standard OTel→Prometheus
+convention for monotonic sums, not something specific to our exporter — it
+almost certainly applies to every pre-existing business counter in
+`docs/observability-grafana.md` too (that doc's PromQL predates this
+verification and should be spot-checked against a real panel). The queries
+below already include the suffix. Also confirmed: these are one-shot,
+non-continuously-scraped pushes (one OTLP POST per event, not a periodic
+scrape), so `increase()`/`rate()` need a wide window (`[1d]`, not `[5m]` or
+`[1h]`) to reliably catch two samples — a short window reliably shows "No
+data" even when the metric exists and exported fine.
+
+Sync error rate by reason (last day):
 
 ```promql
-sum by (direction, reason) (increase(sync_errors_count[5m]))
+sum by (direction, reason) (increase(sync_errors_count_total[1d]))
 ```
 
 Sync push/pull "is it healthy" single-stat (errors vs. attempts — would need
@@ -195,32 +210,32 @@ a companion `sync.attempts.count` counter alongside `sync.errors.count` to
 turn this into a rate rather than a raw error count):
 
 ```promql
-sum(rate(sync_errors_count{reason!="cursor_mismatch"}[15m]))
+sum(increase(sync_errors_count_total{reason!="cursor_mismatch"}[1d]))
 ```
 
 Agent tool error rate by tool:
 
 ```promql
-sum by (tool_name, reason) (increase(agent_tool_errors_count[1d]))
+sum by (tool_name, reason) (increase(agent_tool_errors_count_total[1d]))
 ```
 
 Voice connect time distribution (bucketed, not a true percentile — see
 limitation above):
 
 ```promql
-sum by (bucket) (increase(voice_connect_setup_complete_bucket_count[1d]))
+sum by (bucket) (increase(voice_connect_setup_complete_bucket_count_total[1d]))
 ```
 
 Backend total-latency distribution per instrumented function, and its error
 overlay:
 
 ```promql
-sum by (function, bucket) (increase(system_function_duration_bucket_count[1d]))
+sum by (function, bucket) (increase(system_function_duration_bucket_count_total[1d]))
 ```
 
 ```promql
-sum by (function) (increase(system_function_duration_bucket_count{status="error"}[1d]))
-/ sum by (function) (increase(system_function_duration_bucket_count[1d]))
+sum by (function) (increase(system_function_duration_bucket_count_total{status="error"}[1d]))
+/ sum by (function) (increase(system_function_duration_bucket_count_total[1d]))
 ```
 
 Note these bucketed counters are a distribution shape, not a true cumulative
@@ -228,7 +243,8 @@ Prometheus histogram — `histogram_quantile()` doesn't apply to them. If an
 exact p95 is needed before the Option E traces work lands, use Option D
 (`@convex-dev/aggregate` keyed by `duration_ms`, queried with `.at(rank)`)
 instead, which gives an exact percentile from inside Convex without going
-through Grafana at all.
+through Grafana at all. See "Path to p50/p95/p99" below for how to get there
+without redoing what's already implemented.
 
 ## Answering the ticket's open questions directly
 
@@ -247,28 +263,112 @@ through Grafana at all.
   metric by call site, same principle Log Streams' `function.path` would have
   given us for free — we just have to name each site by hand instead of
   getting all ~98 automatically.
-- **Is Sync healthy?** Unknown today, and it can't become known without at
-  least the `sync.errors.count` counter above — currently a permanent bug and
-  a Wi-Fi blip are indistinguishable both to us and to the user.
+- **Is Sync healthy?** Partially answerable now — `sync.errors.count` is
+  implemented and confirmed exporting end-to-end (Grafana Cloud, 2026-09-30).
+  Still a **count**, not a **rate**: without a `sync.attempts.count`
+  denominator (not built, see "Prerequisites" below), you can see error
+  volume trending but not "X% of syncs are failing."
+
+## Path to p50/p95/p99 (not yet built)
+
+The ticket that opened this spike explicitly asked for p50/p95/p99 latency
+and an error *rate*. What shipped in this iteration (Option A,
+bucketed counters) deliberately does not provide either — this section
+documents why, and how to iterate from what exists into a version that does,
+without discarding it.
+
+**Why the current implementation can't produce real percentiles.**
+`system.function.duration_bucket_count` and the other `*_bucket_count`
+metrics are the same "poor-man's histogram" trick as
+`agent.session.cost_bucket_count`: pick a bucket label from the raw value,
+then increment a plain Prometheus counter. `histogram_quantile()` requires a
+true cumulative histogram — several series sharing an `le` ("less than or
+equal") label, where each bucket's count includes every lower bucket. Ours
+are **exclusive** ranges (`'100-250'` counts only that range), so
+`histogram_quantile()` either errors or returns nonsense against this data.
+You can eyeball "most `sync_pull`s land in 100–250ms" from the resulting bar
+chart, but there is no mathematically real p95 hiding in it.
+
+**Why error counts aren't yet an error rate.** `sync.errors.count` and
+`agent.tool.errors.count` have no attempts/total-calls denominator counter.
+Rate = errors / attempts; without the denominator you only get a trend on
+absolute volume.
+
+**Two iteration paths, from the exact call sites already instrumented today**
+(`v1/sync/mutations.ts:push`, `whatsapp/nodeActions.ts:runAgentTurn`,
+`agent/tools.ts:execute`) — the raw `durationMs`/error is already computed at
+each of these before it gets reduced to a bucket label or a plain counter
+increment, so nothing already recorded needs to be thrown away to pursue
+either path:
+
+1. **`@convex-dev/aggregate` (Option D), additive.** Insert `durationMs` into
+   an aggregate keyed by `function` (and optionally a time window) at the
+   same call sites, *alongside* the existing bucketed counter — the bucketed
+   counters keep feeding today's distribution-shape panels unchanged. Add a
+   cron (same shape as the existing `business.users.registered_total` /
+   `agent.user.monthly_cost_usd` scheduled gauges) that periodically reads
+   `.at(rank)` from the aggregate and exports the result as a **gauge**
+   metric (e.g. `system.function.duration_p95_ms{function="sync_pull"}`)
+   through the OTLP pipeline that already works. This gets a real p95 into
+   Grafana as a periodic snapshot (matching the existing 5–15 min export
+   cadence) rather than a live-queried histogram, which is enough for an ops
+   dashboard. Purely additive: new component, new cron, one new line at each
+   of the 3 existing call sites — nothing already shipped changes.
+2. **A real OTLP histogram, not additive.** Would replace the bucketed
+   counters for these metrics rather than run beside them. Requires
+   implementing the histogram branch `toOtlpMetricsPayload`
+   (`telemetry/actions.ts`) doesn't have today — `MetricType` already
+   includes `'histogram'` in the type system, but a metric typed that way
+   currently silently exports as a plain counter. Also requires switching
+   from exclusive-range buckets to real cumulative `le` boundaries, which is
+   a different accumulation model than `telemetryMetricSeries`'s
+   independent-counter-per-attribute-combination shape (closer to a single
+   document holding a bucket-count array that gets read-modified-written).
+   Real, separate engineering effort — not a follow-up task, a small project.
+
+**Recommendation if/when this becomes a priority:** Path 1, plus a
+`*.attempts.count` counter at the same call sites for a true error rate.
+Both are additive to what's merged in this PR; Path 2 is a deliberate,
+separate scope decision, not an extension of Option A.
 
 ## Prerequisites / follow-up work (not yet created as Linear tickets)
 
-1. Small closed error-code enum at the sync push/pull throw sites (~10
-   places) and agent tool-call catch sites — prerequisite for #2.
-2. `sync.errors.count` + `agent.tool.errors.count` counters, wired at those
-   sites, plus catalog/validator entries.
-3. `system.function.duration_bucket_count`: time sync `push`/`pull` and agent
-   turn processing end-to-end (entry `Date.now()` to `try`/`catch`/`finally`
-   exit) and bucket the result, reusing the `cost_bucket_count` pattern —
-   total latency only, no DB/API breakdown.
-4. Redirect native's existing connect-phase `Stopwatch` into
-   `trackMetric` (`voice.connect.setup_complete_bucket_count`); add a
-   time-to-first-response timer.
+1. ✅ **Done.** Small closed error-code enum at the sync push/pull throw
+   sites (`SyncValidationError`) and agent tool-call catch sites (a `reason`
+   field on `fail()`/`unresolved()`, stripped before the result reaches the
+   model).
+2. ✅ **Done.** `sync.errors.count` + `agent.tool.errors.count` counters,
+   wired at those sites, plus catalog/validator entries. Confirmed exporting
+   end-to-end against a real Grafana Cloud stack (2026-09-30) for the paths
+   reachable outside WhatsApp; `agent.tool.errors.count` and the
+   `agent_turn` case of item 3 remain untested in practice since they're
+   WhatsApp-only and not reachable from an ephemeral PR preview.
+3. ✅ **Done.** `system.function.duration_bucket_count`: times sync `push`
+   (backend, mutation) end-to-end, and — because `pull` is a Convex **query**
+   and structurally cannot write telemetry itself (no `ctx.db`/scheduler) —
+   `sync_pull`'s duration is instead reported from the native client
+   (`sync_engine.dart`), source `'native'` instead of `'backend'`. Also times
+   `agent_turn` (the model+tools loop only, not queue/gate time). Total
+   latency only, no DB/API breakdown, as scoped.
+4. ✅ **Done.** Redirected native's existing connect-phase `Stopwatch` into
+   `voice.connect.setup_complete_bucket_count`; added a
+   time-to-first-response timer (`agent.response.first_token_bucket_count`).
 5. Build a web telemetry client (parity with native) — prerequisite for any
-   web-side latency metric.
+   web-side latency metric. Not started.
 6. **Deferred, not this iteration:** hand-rolled OTLP traces (Option E) —
    new `telemetrySpans` outbox + exporter, targeted at whatever #3 points at
    as slow. Revisit once total-latency data exists to point at something.
+7. **Real p50/p95/p99 + a true error rate** — see "Path to p50/p95/p99"
+   above. Not started; the ticket asked for this and Option A doesn't
+   provide it, so treat it as its own scope decision rather than assuming
+   it falls out of what's already shipped.
+
+Two things surfaced only after implementing and testing against a real
+Grafana Cloud stack, not knowable at spike time: every counter above exports
+with a `_total` suffix (standard OTel→Prometheus convention, see "Starter
+PromQL"), and these are sparse one-shot pushes, not scraped series, so
+`increase()`/`rate()` need a wide window (`[1d]`, not `[5m]`) to reliably see
+two samples.
 
 I haven't created these in Linear yet — want me to file them once you've
 reviewed the recommendation, or adjust scope first?
