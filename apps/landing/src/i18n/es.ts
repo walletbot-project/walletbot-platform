@@ -27,7 +27,7 @@ export const es = {
         languageLabel: 'Idioma',
         features: 'Funciones',
         download: 'Descargar',
-        requestAccess: 'Pedir acceso',
+        getTheApp: 'Conseguí la app',
     },
 
     hero: {
@@ -134,9 +134,8 @@ export const es = {
                 body: 'Cuánto llevás gastado, en qué, cuánto queda. Armás el inicio con los widgets que quieras — estadísticas, listas, gráficos de torta, barras o líneas — o se lo pedís al asistente y lo arma él.',
             },
             // Not shipped. The card is on the page anyway because it is
-            // labelled "próximamente" and styled as unavailable, the same
-            // treatment the App Store badge gets — a stated roadmap item, not
-            // a claim about what the app does today.
+            // labelled "próximamente" and styled as unavailable. It is a stated
+            // roadmap item, not a claim about what the app does today.
             whatsapp: {
                 title: 'Registrá por WhatsApp',
                 body: 'Mandá un mensaje o un audio por WhatsApp y el gasto queda anotado, sin abrir la app.',
@@ -152,19 +151,17 @@ export const es = {
         },
     },
 
-    // The service is free of charge per T&C §2. The three surfaces sit at the
-    // same level even though only the web app is open: Android is a closed
-    // test and iOS is not submitted yet, so both stores route to the beta form.
+    // The service is free of charge per T&C §2. All three are public, but both
+    // store badges route to the beta form first; see `beta` below.
     download: {
         title: 'Probala gratis',
-        subtitle:
-            'La app web ya está abierta. Android está en beta cerrada y iPhone llega muy pronto.',
+        subtitle: 'Ya está en Android, iPhone y la web.',
         android: {
-            lead: 'Beta cerrada en',
+            lead: 'Disponible en',
             name: 'Google Play',
         },
         ios: {
-            lead: 'Próximamente en',
+            lead: 'Disponible en el',
             name: 'App Store',
         },
         web: {
@@ -173,29 +170,28 @@ export const es = {
         },
     },
 
-    // Landing page for both store badges: the tester list for Android today,
-    // the launch list for iPhone later. The form itself is not built yet.
+    // Landing page for both store badges. Both apps are public, but the Google
+    // Form is the way in: its confirmation message holds the two store links,
+    // so the copy has to make clear that the links come after the form.
     beta: {
         meta: {
-            title: 'Wallet Bot — Pedí acceso a la beta',
+            title: 'Wallet Bot — Descargá la app',
             description:
-                'Sumate a la beta cerrada de Wallet Bot en Android y enterate primero cuando salga la app de iPhone.',
+                'Wallet Bot ya está en Android y iPhone. Completá un formulario corto y accedé a los links de descarga.',
         },
         chip: {
-            android: 'Android en beta cerrada',
-            ios: 'iPhone próximamente',
+            android: 'Disponible en Android',
+            ios: 'Disponible en iPhone',
         },
-        heading: 'Pedí acceso a la beta',
-        body: 'Android está en beta cerrada: dejanos tu mail y te sumamos a la lista de testers.',
+        heading: 'Descargá la app',
+        body: 'Ya está en Google Play y en el App Store. Para descargarla, completá este formulario corto. Los links de descarga están al final.',
         formCta: {
             title: 'Completá el formulario',
-            body: 'Son un par de preguntas. Te escribimos por mail cuando te sumemos a la lista.',
+            body: 'Son un par de preguntas. Cuando lo envíes, vas a ver los links para Android y iPhone.',
         },
-        iosNote:
-            'Si tenés iPhone, completalo igual: usamos la misma lista para avisarte apenas la app esté disponible en el App Store.',
         webHeading: 'O usala ahora mismo desde el navegador',
         webNotice:
-            'No hace falta esperar: la app web está abierta para cualquiera.',
+            'Sin instalar nada. La app web está abierta para cualquiera.',
         webCta: 'Abrir la app web',
         backHome: 'Volver al inicio',
     },

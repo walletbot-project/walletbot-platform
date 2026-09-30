@@ -75,13 +75,13 @@ const home = getRelativeLocaleUrl(locale)
                 }
             </nav>
 
-            {/* Both app builds are gated, so the bar's one button asks for
-                access rather than pointing at a store. */}
+            {/* Both stores are reached through the form on the beta page, so
+                the bar's one button goes there rather than to a store. */}
             <a
                 href={getRelativeLocaleUrl(locale, 'beta')}
                 class="rounded-full bg-ink px-4 py-2 text-sm font-medium text-surface transition-colors hover:bg-ink-soft"
             >
-                {t.nav.requestAccess}
+                {t.nav.getTheApp}
             </a>
         </div>
     </div>
