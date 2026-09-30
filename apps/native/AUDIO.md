@@ -98,7 +98,7 @@ The input tap is installed before starting the engine and resampled to 16 kHz
 with a persistent converter. Voice-processing failure is surfaced instead of
 silently starting echo-prone full-duplex audio. Route changes rebuild stopped
 graphs and converters. OS interruptions report capture failure and release the
-session. Cancelling capture returns to playback-only mode.
+session. Cancelling capture removes the tap and keeps the duplex engine.
 
 Native buffers and capture callbacks are generation-scoped. Old callbacks cannot
 feed a replacement capture session. Playback completion tracks the bounded queue.
@@ -138,5 +138,9 @@ touching the audio session. A fresh engine plus session deactivate/reactivate
 re-posts the notification and resets the echo canceller each pass, which let
 the agent hear itself. Stale-engine notifications are ignored. Phone-call interruptions deliberately stop the engine and report an
 interruption to Dart. A new microphone tap resumes after the call; automatic
-resume on `.ended` is not implemented. Mute/unmute still rebuilds the duplex
-engine, so physical-device listening and route testing remain release checks.
+resume on `.ended` is not implemented. Mute removes the input tap and unmute
+reinstalls it on the running voice-processing engine; the engine is only
+rebuilt when the session has no voice-processing engine yet (first microphone
+tap, or after an interruption). While muted the microphone hardware stays open
+but no audio leaves the device. Physical-device listening and route testing
+remain release checks.

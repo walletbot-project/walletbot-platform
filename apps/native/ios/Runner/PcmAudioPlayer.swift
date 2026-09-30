@@ -339,7 +339,7 @@ final class PcmAudioPlayer: NSObject {
       AVAudioSession.sharedInstance().sampleRate
     )
     do {
-      if captureEnabled {
+      if captureEnabled && captureSink != nil {
         removeCaptureTap()
         try installCaptureTap(engine: engine, srcFormat: engine.inputNode.outputFormat(forBus: 0))
       }
@@ -610,7 +610,15 @@ extension PcmAudioPlayer: FlutterStreamHandler {
     eventSink events: @escaping FlutterEventSink
   ) -> FlutterError? {
     do {
-      try startEngine(capture: true)
+      // Mute/unmute only moves the tap. Rebuilding the engine per toggle
+      // flushed the agent's queued speech and blocked the main thread on VP
+      // init; the voice-processing engine stays up for the whole session.
+      if let engine, captureEnabled, engine.isRunning {
+        removeCaptureTap()
+        try installCaptureTap(engine: engine, srcFormat: engine.inputNode.outputFormat(forBus: 0))
+      } else {
+        try startEngine(capture: true)
+      }
     } catch {
       stopEngine()
       return FlutterError(code: "pcm_capture_failed", message: error.localizedDescription, details: nil)
@@ -623,9 +631,8 @@ extension PcmAudioPlayer: FlutterStreamHandler {
   func onCancel(withArguments arguments: Any?) -> FlutterError? {
     NSLog("[PcmAudio] capture sink detached after %d chunks", captureChunkCount)
     captureSink = nil
-    if engine != nil && captureEnabled {
-      do { try startEngine(capture: false) } catch { stopEngine() }
-    }
+    captureGeneration += 1
+    removeCaptureTap()
     return nil
   }
 }
