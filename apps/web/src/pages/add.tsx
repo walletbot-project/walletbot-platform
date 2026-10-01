@@ -569,6 +569,7 @@ function PrimaryActionButton({
     const t = useT()
     const timerRef = useRef<number | null>(null)
     const isLongPressRef = useRef(false)
+    const suppressClickRef = useRef(false)
 
     const clearTimer = useCallback(() => {
         if (timerRef.current === null) return
@@ -604,6 +605,7 @@ function PrimaryActionButton({
     const handlePointerDown = (event: PointerEvent<HTMLButtonElement>) => {
         if (event.button !== 0) return
         isLongPressRef.current = false
+        suppressClickRef.current = false
         timerRef.current = window.setTimeout(() => {
             timerRef.current = null
             isLongPressRef.current = true
@@ -613,10 +615,8 @@ function PrimaryActionButton({
 
     const handlePointerUp = () => {
         clearTimer()
-        if (!isLongPressRef.current) {
-            onTap()
-            return
-        }
+        if (!isLongPressRef.current) return
+        suppressClickRef.current = true
         isLongPressRef.current = false
         onLongPressEnd()
     }
@@ -639,6 +639,13 @@ function PrimaryActionButton({
             type="button"
             aria-label={micLabel}
             className={cn(className, 'touch-none select-none')}
+            onClick={() => {
+                if (suppressClickRef.current) {
+                    suppressClickRef.current = false
+                    return
+                }
+                onTap()
+            }}
             onPointerDown={handlePointerDown}
             onPointerUp={handlePointerUp}
             onPointerCancel={handlePointerAbort}
@@ -646,7 +653,7 @@ function PrimaryActionButton({
             onKeyDown={handleKeyDown}
             onContextMenu={(event) => event.preventDefault()}
         >
-            {isConnecting ? (
+            {isConnecting && !isMicCaptureActive ? (
                 <CircularProgress isIndeterminate size="xs" />
             ) : (
                 <Icon
@@ -773,7 +780,11 @@ export function Add() {
     }
 
     const handleTap = () => {
-        if (voice.isConnecting || isComposing) return
+        if (voice.isConnecting) {
+            voice.setMicOn(false)
+            return
+        }
+        if (isComposing) return
         if (!voice.isConnected) {
             startVoiceSession()
             return
@@ -799,7 +810,6 @@ export function Add() {
     }
 
     const handleLongPressEnd = () => {
-        if (!voice.isConnected || !voice.isMicCaptureActive) return
         voice.setMicOn(false)
     }
 

@@ -19,6 +19,7 @@ import { Icon } from '@/components/m3/icon'
 import { ListDetailLayout } from '@/components/m3/list-detail-layout'
 import { StateMessage } from '@/components/m3/state-message'
 import { Skeleton } from '@/components/ui/skeleton'
+import { usePinnedOccurrenceCutoff } from '@/hooks/use-occurrence-cutoff'
 import {
     ACCOUNT_DEFAULT_COLOR,
     CATEGORY_DEFAULT_COLOR,
@@ -51,6 +52,9 @@ export function Activity() {
         () => readFilterSeed(location.state) ?? EMPTY_FILTER,
     )
     const navigate = useNavigate()
+    // Pinned, not re-armed: this feeds a paginated query, and moving the cutoff
+    // there discards the pages the reader has already scrolled through.
+    const asOfMs = usePinnedOccurrenceCutoff()
 
     // What is open beside the list is the child route's business, not this
     // component's — see `ListDetailLayout`. Opening one is a navigation.
@@ -89,7 +93,7 @@ export function Activity() {
 
     const { results, status, loadMore } = usePaginatedQuery(
         api.v1.transactions.queries.listByFilter,
-        { config },
+        { config, asOfMs },
         { initialNumItems: PAGE_SIZE },
     )
 
@@ -122,13 +126,29 @@ export function Activity() {
             <AppBar
                 title={t.nav.activity}
                 actions={
-                    <IconButton
-                        aria-label={t.activity.addTransaction}
-                        onPress={openCreate}
-                        className="text-on-surface-variant"
-                    >
-                        <Icon name="add" />
-                    </IconButton>
+                    <>
+                        {/*
+                         * The way across to the upcoming side, which Activity
+                         * otherwise gives no hint of — the two lists are one
+                         * timeline split at the occurrence cutoff. Not behind
+                         * the `recurringExpense` flag: the cutoff applies to
+                         * every future-dated movement, series or not.
+                         */}
+                        <IconButton
+                            aria-label={t.activity.viewFutureMovements}
+                            onPress={() => navigate('/future-movements')}
+                            className="text-on-surface-variant"
+                        >
+                            <Icon name="event_repeat" />
+                        </IconButton>
+                        <IconButton
+                            aria-label={t.activity.addTransaction}
+                            onPress={openCreate}
+                            className="text-on-surface-variant"
+                        >
+                            <Icon name="add" />
+                        </IconButton>
+                    </>
                 }
             />
             <div className="min-h-0 flex-1 overflow-y-auto">

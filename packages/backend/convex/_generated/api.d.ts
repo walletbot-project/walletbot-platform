@@ -8,6 +8,14 @@
  * @module
  */
 
+import type * as agent_idempotency from "../agent/idempotency.js";
+import type * as agent_internal from "../agent/internal.js";
+import type * as agent_prompt from "../agent/prompt.js";
+import type * as agent_resolve from "../agent/resolve.js";
+import type * as agent_runner from "../agent/runner.js";
+import type * as agent_time from "../agent/time.js";
+import type * as agent_tools from "../agent/tools.js";
+import type * as agent_toolset from "../agent/toolset.js";
 import type * as agentReports_helpers from "../agentReports/helpers.js";
 import type * as agentReports_internal from "../agentReports/internal.js";
 import type * as agentReports_rateLimits from "../agentReports/rateLimits.js";
@@ -48,6 +56,9 @@ import type * as live_helpers from "../live/helpers.js";
 import type * as live_internal from "../live/internal.js";
 import type * as live_rateLimits from "../live/rateLimits.js";
 import type * as migrations from "../migrations.js";
+import type * as occurrences_helpers from "../occurrences/helpers.js";
+import type * as recurrences_internal from "../recurrences/internal.js";
+import type * as recurrences_workflow from "../recurrences/workflow.js";
 import type * as schema_accounts from "../schema/accounts.js";
 import type * as schema_agentMemories from "../schema/agentMemories.js";
 import type * as schema_agentReports from "../schema/agentReports.js";
@@ -58,6 +69,8 @@ import type * as schema_exchangeRates from "../schema/exchangeRates.js";
 import type * as schema_featureFlags from "../schema/featureFlags.js";
 import type * as schema_feedback from "../schema/feedback.js";
 import type * as schema_legal from "../schema/legal.js";
+import type * as schema_occurrenceClock from "../schema/occurrenceClock.js";
+import type * as schema_recurrences from "../schema/recurrences.js";
 import type * as schema_refreshTokens from "../schema/refreshTokens.js";
 import type * as schema_supportEmails from "../schema/supportEmails.js";
 import type * as schema_sync from "../schema/sync.js";
@@ -68,11 +81,15 @@ import type * as schema_transactions from "../schema/transactions.js";
 import type * as schema_userDeletion from "../schema/userDeletion.js";
 import type * as schema_userSettings from "../schema/userSettings.js";
 import type * as schema_voice from "../schema/voice.js";
+import type * as schema_whatsapp from "../schema/whatsapp.js";
 import type * as support_actions from "../support/actions.js";
 import type * as support_http from "../support/http.js";
 import type * as support_internal from "../support/internal.js";
 import type * as support_utils from "../support/utils.js";
+import type * as sync_compatibility from "../sync/compatibility.js";
 import type * as sync_helpers from "../sync/helpers.js";
+import type * as tags_backfill from "../tags/backfill.js";
+import type * as tags_helpers from "../tags/helpers.js";
 import type * as telemetry_actions from "../telemetry/actions.js";
 import type * as telemetry_agentPricing from "../telemetry/agentPricing.js";
 import type * as telemetry_catalog from "../telemetry/catalog.js";
@@ -83,6 +100,7 @@ import type * as telemetry_queries from "../telemetry/queries.js";
 import type * as telemetry_types from "../telemetry/types.js";
 import type * as telemetry_validators from "../telemetry/validators.js";
 import type * as transactions_backfill from "../transactions/backfill.js";
+import type * as transactions_helpers from "../transactions/helpers.js";
 import type * as userDeletion_helpers from "../userDeletion/helpers.js";
 import type * as userDeletion_http from "../userDeletion/http.js";
 import type * as userDeletion_internal from "../userDeletion/internal.js";
@@ -107,6 +125,8 @@ import type * as v1_legal_queries from "../v1/legal/queries.js";
 import type * as v1_live_actions from "../v1/live/actions.js";
 import type * as v1_memories_mutations from "../v1/memories/mutations.js";
 import type * as v1_memories_queries from "../v1/memories/queries.js";
+import type * as v1_recurrences_mutations from "../v1/recurrences/mutations.js";
+import type * as v1_recurrences_queries from "../v1/recurrences/queries.js";
 import type * as v1_support_queries from "../v1/support/queries.js";
 import type * as v1_sync_mutations from "../v1/sync/mutations.js";
 import type * as v1_sync_queries from "../v1/sync/queries.js";
@@ -119,8 +139,19 @@ import type * as v1_users_internal from "../v1/users/internal.js";
 import type * as v1_users_mutations from "../v1/users/mutations.js";
 import type * as v1_users_queries from "../v1/users/queries.js";
 import type * as v1_users_utils from "../v1/users/utils.js";
+import type * as v1_voice_metrics from "../v1/voice/metrics.js";
 import type * as v1_voice_sessions from "../v1/voice/sessions.js";
 import type * as v1_voice_utils from "../v1/voice/utils.js";
+import type * as v1_whatsapp_mutations from "../v1/whatsapp/mutations.js";
+import type * as v1_whatsapp_queries from "../v1/whatsapp/queries.js";
+import type * as voice_internal from "../voice/internal.js";
+import type * as voice_utils from "../voice/utils.js";
+import type * as whatsapp_helpers from "../whatsapp/helpers.js";
+import type * as whatsapp_http from "../whatsapp/http.js";
+import type * as whatsapp_internal from "../whatsapp/internal.js";
+import type * as whatsapp_linking from "../whatsapp/linking.js";
+import type * as whatsapp_nodeActions from "../whatsapp/nodeActions.js";
+import type * as whatsapp_utils from "../whatsapp/utils.js";
 
 import type {
   ApiFromModules,
@@ -129,6 +160,14 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  "agent/idempotency": typeof agent_idempotency;
+  "agent/internal": typeof agent_internal;
+  "agent/prompt": typeof agent_prompt;
+  "agent/resolve": typeof agent_resolve;
+  "agent/runner": typeof agent_runner;
+  "agent/time": typeof agent_time;
+  "agent/tools": typeof agent_tools;
+  "agent/toolset": typeof agent_toolset;
   "agentReports/helpers": typeof agentReports_helpers;
   "agentReports/internal": typeof agentReports_internal;
   "agentReports/rateLimits": typeof agentReports_rateLimits;
@@ -169,6 +208,9 @@ declare const fullApi: ApiFromModules<{
   "live/internal": typeof live_internal;
   "live/rateLimits": typeof live_rateLimits;
   migrations: typeof migrations;
+  "occurrences/helpers": typeof occurrences_helpers;
+  "recurrences/internal": typeof recurrences_internal;
+  "recurrences/workflow": typeof recurrences_workflow;
   "schema/accounts": typeof schema_accounts;
   "schema/agentMemories": typeof schema_agentMemories;
   "schema/agentReports": typeof schema_agentReports;
@@ -179,6 +221,8 @@ declare const fullApi: ApiFromModules<{
   "schema/featureFlags": typeof schema_featureFlags;
   "schema/feedback": typeof schema_feedback;
   "schema/legal": typeof schema_legal;
+  "schema/occurrenceClock": typeof schema_occurrenceClock;
+  "schema/recurrences": typeof schema_recurrences;
   "schema/refreshTokens": typeof schema_refreshTokens;
   "schema/supportEmails": typeof schema_supportEmails;
   "schema/sync": typeof schema_sync;
@@ -189,11 +233,15 @@ declare const fullApi: ApiFromModules<{
   "schema/userDeletion": typeof schema_userDeletion;
   "schema/userSettings": typeof schema_userSettings;
   "schema/voice": typeof schema_voice;
+  "schema/whatsapp": typeof schema_whatsapp;
   "support/actions": typeof support_actions;
   "support/http": typeof support_http;
   "support/internal": typeof support_internal;
   "support/utils": typeof support_utils;
+  "sync/compatibility": typeof sync_compatibility;
   "sync/helpers": typeof sync_helpers;
+  "tags/backfill": typeof tags_backfill;
+  "tags/helpers": typeof tags_helpers;
   "telemetry/actions": typeof telemetry_actions;
   "telemetry/agentPricing": typeof telemetry_agentPricing;
   "telemetry/catalog": typeof telemetry_catalog;
@@ -204,6 +252,7 @@ declare const fullApi: ApiFromModules<{
   "telemetry/types": typeof telemetry_types;
   "telemetry/validators": typeof telemetry_validators;
   "transactions/backfill": typeof transactions_backfill;
+  "transactions/helpers": typeof transactions_helpers;
   "userDeletion/helpers": typeof userDeletion_helpers;
   "userDeletion/http": typeof userDeletion_http;
   "userDeletion/internal": typeof userDeletion_internal;
@@ -228,6 +277,8 @@ declare const fullApi: ApiFromModules<{
   "v1/live/actions": typeof v1_live_actions;
   "v1/memories/mutations": typeof v1_memories_mutations;
   "v1/memories/queries": typeof v1_memories_queries;
+  "v1/recurrences/mutations": typeof v1_recurrences_mutations;
+  "v1/recurrences/queries": typeof v1_recurrences_queries;
   "v1/support/queries": typeof v1_support_queries;
   "v1/sync/mutations": typeof v1_sync_mutations;
   "v1/sync/queries": typeof v1_sync_queries;
@@ -240,8 +291,19 @@ declare const fullApi: ApiFromModules<{
   "v1/users/mutations": typeof v1_users_mutations;
   "v1/users/queries": typeof v1_users_queries;
   "v1/users/utils": typeof v1_users_utils;
+  "v1/voice/metrics": typeof v1_voice_metrics;
   "v1/voice/sessions": typeof v1_voice_sessions;
   "v1/voice/utils": typeof v1_voice_utils;
+  "v1/whatsapp/mutations": typeof v1_whatsapp_mutations;
+  "v1/whatsapp/queries": typeof v1_whatsapp_queries;
+  "voice/internal": typeof voice_internal;
+  "voice/utils": typeof voice_utils;
+  "whatsapp/helpers": typeof whatsapp_helpers;
+  "whatsapp/http": typeof whatsapp_http;
+  "whatsapp/internal": typeof whatsapp_internal;
+  "whatsapp/linking": typeof whatsapp_linking;
+  "whatsapp/nodeActions": typeof whatsapp_nodeActions;
+  "whatsapp/utils": typeof whatsapp_utils;
 }>;
 
 /**
@@ -275,6 +337,8 @@ export declare const components: {
   migrations: import("@convex-dev/migrations/_generated/component.js").ComponentApi<"migrations">;
   rateLimiter: import("@convex-dev/rate-limiter/_generated/component.js").ComponentApi<"rateLimiter">;
   resend: import("@convex-dev/resend/_generated/component.js").ComponentApi<"resend">;
+  workflow: import("@convex-dev/workflow/_generated/component.js").ComponentApi<"workflow">;
   outflowsByAccount: import("@convex-dev/aggregate/_generated/component.js").ComponentApi<"outflowsByAccount">;
   inflowsByAccount: import("@convex-dev/aggregate/_generated/component.js").ComponentApi<"inflowsByAccount">;
+  transactionsByTag: import("@convex-dev/aggregate/_generated/component.js").ComponentApi<"transactionsByTag">;
 };

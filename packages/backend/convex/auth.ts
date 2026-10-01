@@ -16,6 +16,10 @@ import {
 const siteUrl = process.env.SITE_URL!
 const convexSiteUrl = process.env.CONVEX_SITE_URL
 
+// Sign in with Apple is native-iOS-only, and Apple mints that ID token for the
+// app itself: its `aud` is the bundle identifier, never a Services ID. So the
+// bundle id is what gates the provider, and `APPLE_CLIENT_ID` only becomes
+// meaningful the day the web app grows the button (see below).
 const appleClientId = process.env.APPLE_CLIENT_ID
 const appleBundleId = process.env.APPLE_BUNDLE_ID
 
@@ -59,6 +63,37 @@ const authMethodForWebSession = (
     if (context.path === '/sign-in/email') return 'email_password'
     if (context.path === '/callback/:id') return 'google'
     return null
+}
+
+/**
+ * A stand-in address for an Apple ID token that carries no `email` claim.
+ *
+ * Apple sends `email` **only on the very first authorization** and offers no
+ * user-info endpoint to ask again, but better-auth's ID-token sign-in rejects a
+ * profile without one outright (`USER_EMAIL_NOT_FOUND`). Left alone, Sign in
+ * with Apple would work exactly once per user and 401 forever after.
+ *
+ * Nothing is lost by filling it in: better-auth resolves a returning user by
+ * `providerId + accountId` (Apple's `sub`) before it ever looks at the email,
+ * and it does not overwrite a stored profile on sign-in — so the address the
+ * user really registered with stays put and this value is never read.
+ *
+ * `.invalid` is reserved by RFC 2606 and resolves nowhere, which is the point:
+ * if this ever does land on a row, it must be impossible to mistake for a real
+ * inbox or to collide with one. `sub` is stable per Apple Team, so the same
+ * person always maps to the same address.
+ */
+const appleFallbackEmail = (sub: string): string => `${sub}@apple.invalid`
+
+/**
+ * Which provider a `/sign-in/social` call named, off better-auth's untyped
+ * endpoint body. Only the two the native app can actually reach are accepted;
+ * anything else counts as no provider and records nothing.
+ */
+const nativeSocialProvider = (body: unknown): 'google' | 'apple' | null => {
+    if (typeof body !== 'object' || body === null) return null
+    const provider = (body as { provider?: unknown }).provider
+    return provider === 'google' || provider === 'apple' ? provider : null
 }
 
 /**
@@ -119,9 +154,11 @@ export const createAuth = (
                     // new account from a duplicate attempt. This hook only runs
                     // when a row is actually written, so duplicates never count.
                     //
-                    // Scoped to the email path: social sign-in creates users
-                    // through `/sign-in/social`, and `googleSignIn` in
-                    // `authNative/http.ts` already records those.
+                    // Native social sign-in has the same problem for a different
+                    // reason: the ID-token branch of `/sign-in/social` answers
+                    // `{ redirect, token, url, user }` and never reports whether
+                    // it registered or merely signed in, so its handler cannot
+                    // tell either. It counts here too.
                     after: async (user, context) => {
                         // Seeding the language runs for EVERY newly inserted
                         // user, not just the email path: it is the only way the
@@ -143,6 +180,18 @@ export const createAuth = (
                                 internal.v1.users.internal.seedLanguage,
                                 { userId: user.id, acceptLanguage },
                             )
+                        }
+
+                        if (context?.path === '/sign-in/social') {
+                            const provider = nativeSocialProvider(context.body)
+                            if (provider) {
+                                await requireRunMutationCtx(ctx).runMutation(
+                                    internal.telemetry.mutations
+                                        .recordUserAccountCreated,
+                                    { userId: user.id, authMethod: provider },
+                                )
+                            }
+                            return
                         }
 
                         if (context?.path !== '/sign-up/email') return
@@ -212,11 +261,24 @@ export const createAuth = (
                     : googleClientId,
                 clientSecret: process.env.GOOGLE_CLIENT_SECRET as string,
             },
-            ...(appleClientId
+            // `appBundleIdentifier` is the only field that decides whether a
+            // native ID token verifies: better-auth checks `aud` against it and
+            // ignores `clientId` entirely when it is set. `clientId` is still
+            // required by the provider's type, and is spent only on building a
+            // web authorization URL — a code path nothing reaches while the
+            // button exists on iOS alone. Put the Services ID in
+            // `APPLE_CLIENT_ID` when the web app gets it; that flow also needs
+            // a client secret, which this deployment does not have.
+            ...(appleBundleId
                 ? {
                       apple: {
-                          clientId: appleClientId,
+                          clientId: appleClientId ?? appleBundleId,
                           appBundleIdentifier: appleBundleId,
+                          mapProfileToUser: (profile) => ({
+                              email:
+                                  profile.email ??
+                                  appleFallbackEmail(profile.sub),
+                          }),
                       },
                   }
                 : {}),

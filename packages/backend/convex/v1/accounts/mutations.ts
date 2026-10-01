@@ -9,8 +9,8 @@ import { hasDuplicateAccount } from './helpers'
 // Business rule: an account always has a color + icon. Convex has no
 // column-level defaults, so we fill them here when a writer omits them.
 // Mirror the native defaults in apps/native/lib/database.dart.
-const DEFAULT_ACCOUNT_COLOR = '#3B82F6'
-const DEFAULT_ACCOUNT_ICON = 'wallet'
+export const DEFAULT_ACCOUNT_COLOR = '#3B82F6'
+export const DEFAULT_ACCOUNT_ICON = 'wallet'
 
 export const create = mutation({
     args: {

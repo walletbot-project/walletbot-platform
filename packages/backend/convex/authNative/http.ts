@@ -83,6 +83,13 @@ type GoogleSignInBody = {
     nonce?: string
 }
 
+type AppleSignInBody = {
+    idToken?: string
+    nonce?: string
+    givenName?: string
+    familyName?: string
+}
+
 type EmailSignInBody = {
     email?: string
     password?: string
@@ -146,12 +153,6 @@ type NativeAuthUser = {
     image?: string | null
 }
 
-const isNewSocialUserResult = (value: unknown): boolean => {
-    if (typeof value !== 'object' || value === null) return false
-    const record = value as Record<string, unknown>
-    return record.isNewUser === true || record.newUser === true
-}
-
 const issueNativeSession = async (
     ctx: ActionCtx,
     req: Request,
@@ -192,7 +193,7 @@ const issueNativeSession = async (
 
 const recordNativeSignInTelemetry = async (
     ctx: ActionCtx,
-    args: { userId: string; authMethod: 'email_password' | 'google' },
+    args: { userId: string; authMethod: 'email_password' | 'google' | 'apple' },
 ): Promise<void> => {
     try {
         await ctx.runMutation(
@@ -273,26 +274,105 @@ const googleSignIn = corsHttpAction(async (ctx, req) => {
 
     const response = await issueNativeSession(ctx, req, result.user)
 
-    if (isNewSocialUserResult(result)) {
-        try {
-            await ctx.runMutation(
-                internal.telemetry.mutations.recordUserAccountCreated,
-                {
-                    userId: result.user.id,
-                    authMethod: 'google',
-                },
-            )
-        } catch (error) {
-            console.warn('native account-created telemetry failed', {
-                userId: result.user.id,
-                authMethod: 'google',
-                error: error instanceof Error ? error.message : String(error),
-            })
-        }
-    }
+    // Account-creation telemetry is NOT recorded here: this response cannot
+    // say whether it registered or signed in. It hangs off the real row insert
+    // in `databaseHooks.user.create.after` (see `auth.ts`) instead.
     await recordNativeSignInTelemetry(ctx, {
         userId: result.user.id,
         authMethod: 'google',
+    })
+
+    return response
+})
+
+const trimmedOrUndefined = (value: unknown): string | undefined => {
+    if (typeof value !== 'string') return undefined
+    const trimmed = value.trim()
+    return trimmed.length > 0 ? trimmed : undefined
+}
+
+/**
+ * Sign in with Apple, iOS only.
+ *
+ * Apple hands the app an ID token whose `aud` is the bundle identifier, which
+ * `appBundleIdentifier` in `auth.ts` is what verifies it against. The `nonce`
+ * here is the client's RAW nonce: the app gives Apple its SHA-256 hex digest,
+ * Apple embeds that digest in the token verbatim, and better-auth re-hashes
+ * this value to compare. Sending the digest instead would hash it twice and
+ * fail verification with a bare 401.
+ *
+ * `givenName`/`familyName` come from the client because Apple returns the
+ * user's name exactly once — on the first authorization, alongside the token
+ * and never inside it. Miss that moment and the name is gone for good, so the
+ * app forwards it and better-auth stores it on the row it creates. A returning
+ * user sends nothing, which is fine: better-auth does not overwrite an
+ * existing user's profile on sign-in.
+ */
+const appleSignIn = corsHttpAction(async (ctx, req) => {
+    const body = await parseJsonBody<AppleSignInBody>(req)
+    if (
+        !body ||
+        typeof body.idToken !== 'string' ||
+        body.idToken.length === 0
+    ) {
+        return jsonError(400, 'bad_request', 'missing idToken')
+    }
+
+    const givenName = trimmedOrUndefined(body.givenName)
+    const familyName = trimmedOrUndefined(body.familyName)
+
+    const { auth, headers } = await nativeAuth(ctx, req)
+    const authHeaders = new Headers(headers)
+    authHeaders.set('x-walletbot-client-platform', 'native')
+
+    let result: Awaited<ReturnType<typeof auth.api.signInSocial>>
+    try {
+        result = await auth.api.signInSocial({
+            body: {
+                provider: 'apple',
+                idToken: {
+                    token: body.idToken,
+                    ...(body.nonce ? { nonce: body.nonce } : {}),
+                    ...(givenName || familyName
+                        ? {
+                              user: {
+                                  name: {
+                                      ...(givenName
+                                          ? { firstName: givenName }
+                                          : {}),
+                                      ...(familyName
+                                          ? { lastName: familyName }
+                                          : {}),
+                                  },
+                              },
+                          }
+                        : {}),
+                },
+            },
+            headers: authHeaders,
+        })
+    } catch (err) {
+        const message = err instanceof Error ? err.message : String(err)
+        return jsonError(401, 'sign_in_failed', message)
+    }
+
+    if (!('user' in result) || !result.user) {
+        return jsonError(500, 'sign_in_failed', 'sign-in did not return a user')
+    }
+
+    // better-auth stores `''` rather than null when no name was available, and
+    // the account switcher's `name ?? email ?? noName` fallback only fires on
+    // null. Reached by someone who authorized the app before, had their account
+    // deleted, and signed in again — Apple never re-offers the name.
+    const response = await issueNativeSession(ctx, req, {
+        ...result.user,
+        name: trimmedOrUndefined(result.user.name) ?? null,
+    })
+
+    // As with Google, creation is counted in `databaseHooks.user.create.after`.
+    await recordNativeSignInTelemetry(ctx, {
+        userId: result.user.id,
+        authMethod: 'apple',
     })
 
     return response
@@ -721,6 +801,7 @@ const preflightHandler = httpAction(async (_ctx, req) => {
 
 export const registerAuthNativeRoutes = (http: HttpRouter): void => {
     http.route({ path: '/auth/google', method: 'POST', handler: googleSignIn })
+    http.route({ path: '/auth/apple', method: 'POST', handler: appleSignIn })
     http.route({
         path: '/auth/email/sign-in',
         method: 'POST',

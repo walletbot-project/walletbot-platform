@@ -27,25 +27,62 @@ export const es = {
         languageLabel: 'Idioma',
         features: 'Funciones',
         download: 'Descargar',
-        getApp: 'Descargar la app',
+        getTheApp: 'Conseguí la app',
     },
 
     hero: {
-        badge: 'Modo de voz en vivo',
+        // The tape under the hero. `label` is read by screen readers in place
+        // of the scrolling list; `chip` is the fixed pill that frames the
+        // quotes as complaints about tracking expenses today, so they can't be
+        // misread as reviews of the app.
+        //
+        // The quotes are verbatim open-text answers from the project's own
+        // research survey (207 responses, April 6–12 2026), across its three
+        // free-text questions: what bothers you most about logging expenses,
+        // why you don't, and what put you off. Nothing is edited — no fixed
+        // spelling, no trimmed clauses, no composites — beyond stripping a
+        // trailing space. R35 keeps its full stop because the respondent
+        // typed one. The survey collected no names, emails or phone numbers,
+        // and respondents were told their answers could be used anonymously.
+        //
+        // Order alternates long and short so the tape never runs several wide
+        // rows together.
+        quoteTape: {
+            label: 'Motivos por los que se deja de registrar gastos',
+            chip: 'Por qué se deja de anotar',
+            quotes: [
+                '«Me lleva mucho tiempo registrar cada uno»',
+                '«No duré ni medio día»',
+                '«La fricción de tener que recordar, categorizar y anotar cada gasto»',
+                '«Cargarlos en la hoja»',
+                '«Me olvido, no tengo un lugar para anotarlo rápido»',
+                '«Porque consume mucho tiempo el hacerlo en el momento»',
+                '«A veces pago en efectivo o tiro el ticket y no tengo registro de lo que gasté»',
+                '«Tener que ingresarlos y clasificarlos manualmente»',
+                '«El tiempo que tengo que invertir en escribir los detalles del gasto.»',
+                '«Que siento que debería ser automático»',
+            ],
+        },
         headline: 'Hablá. Ya quedó registrado.',
-        subheadline:
-            'Wallet Bot es un gestor de gastos personales con modo de voz en vivo: contale qué gastaste y el asistente lo anota por vos. Sin planillas. Sin formularios. Solo una conversación.',
+        // Split so the middle part can be bolded. No part carries leading or
+        // trailing spaces; Astro drops the whitespace around an expression, so
+        // the markup puts the one space back explicitly.
+        subheadline: {
+            lead: 'Wallet Bot es un',
+            highlight: 'gestor de gastos personales con modo de voz en vivo',
+            rest: ': contale qué gastaste y el asistente lo anota por vos. Sin planillas. Sin formularios. Solo una conversación.',
+        },
         ctaFeatures: 'Ver funciones',
     },
 
-    // Verified numbers only: 52 currencies in the catalog, 4 movement types in
-    // the transactions schema, es/en app UI (the assistant understands most
-    // languages), offline-first native data layer.
-    stats: {
-        currencies: { value: '50+', label: 'monedas soportadas' },
-        types: { value: '4', label: 'tipos de movimiento' },
-        languages: { value: '2', label: 'idiomas en la app' },
-        offline: { value: '100%', label: 'offline-first en el celular' },
+    // Replaces the old stats strip. Those were four spec counters ("50+
+    // monedas", "2 idiomas") — facts about the build, not reasons to care.
+    // This states the problem instead, and it is the only place on the page
+    // that argues rather than describes.
+    problem: {
+        title: 'Entender en qué se va la plata es mucho más fácil cuando ya está todo anotado.',
+        body: 'El tema es que anotarlo cuesta. Comprar algo lleva diez segundos; registrarlo bien lleva más — abrir la app, elegir la categoría, escribir el número, elegir la cuenta, guardar.',
+        close: 'De esa parte se encarga Wallet Bot. Le contás el gasto, queda anotado, y a fin de mes está todo junto para mirarlo.',
     },
 
     // Static illustration of the real voice flow: the assistant registers the
@@ -63,11 +100,11 @@ export const es = {
     features: {
         title: 'Simple a propósito',
         subtitle:
-            'Lo que necesitás para saber en qué se va la plata — y nada más.',
+            'Lo que necesitás para entender en qué se va la plata — y nada más.',
         items: {
             voice: {
-                title: 'Asistente de voz en vivo',
-                body: 'Hablale y queda anotado: crea cuentas y categorías sobre la marcha, y cada acción aparece como una tarjeta editable para corregir al toque.',
+                title: 'Le contás y lo anota',
+                body: 'Decís «pagué 8.500 en el super con la tarjeta» y listo. Sin campos, sin listas, sin elegir categoría: el asistente crea la cuenta y la categoría sobre la marcha, y deja una tarjeta editable por si entendió mal.',
                 types: {
                     expense: 'Gastos',
                     income: 'Ingresos',
@@ -76,25 +113,33 @@ export const es = {
                 },
             },
             offline: {
-                title: 'Funciona sin conexión',
-                body: 'La app móvil guarda todo en tu teléfono y sincroniza sola entre tus dispositivos cuando volvés a tener red.',
+                title: 'También sin internet',
+                body: 'En el celular queda guardado igual, y se pone al día solo cuando volvés a tener señal.',
             },
             local: {
-                title: 'Modo local, sin cuenta',
-                body: 'Usá la app móvil sin registrarte: tus registros financieros se quedan en tu dispositivo.',
+                title: 'Sin crear una cuenta',
+                body: 'La app del celular funciona sin que te registres, y lo que anotás se queda en el dispositivo. La cuenta hace falta sólo si querés sincronizarlo.',
             },
             fast: {
-                title: 'Rápida de verdad',
-                body: 'Sin recargas ni esperas: registrás algo — vos o el asistente — y aparece al instante en listas, saldos y gráficos.',
+                title: 'Los números se actualizan solos',
+                body: 'Registrás algo — vos o el asistente — y ya está en las listas, los saldos y los gráficos. Sin recargas ni esperas.',
                 chip: 'Cero spinners',
             },
-            currencies: {
-                title: 'Multi-moneda',
-                body: 'Cuentas en más de 50 monedas, transferencias entre monedas con tipo de cambio, y totales siempre separados por moneda.',
+            crossDevice: {
+                title: 'En el celu y en la compu',
+                body: 'Lo que anotás en el teléfono aparece en la computadora, y al revés. Se sincroniza solo entre tus dispositivos.',
             },
             dashboard: {
-                title: 'Inicio a tu medida',
-                body: 'Armá el inicio de la app móvil con widgets: estadísticas, listas y gráficos de torta, barras o líneas. El asistente también puede armarlo por vos.',
+                title: 'Preguntale cómo venís',
+                body: 'Cuánto llevás gastado, en qué, cuánto queda. Armás el inicio con los widgets que quieras — estadísticas, listas, gráficos de torta, barras o líneas — o se lo pedís al asistente y lo arma él.',
+            },
+            // Not shipped. The card is on the page anyway because it is
+            // labelled "próximamente" and styled as unavailable. It is a stated
+            // roadmap item, not a claim about what the app does today.
+            whatsapp: {
+                title: 'Registrá por WhatsApp',
+                body: 'Mandá un mensaje o un audio por WhatsApp y el gasto queda anotado, sin abrir la app.',
+                chip: 'Próximamente',
             },
             // The filters card is hidden on the home page for now — saved
             // filters aren't shipped in the app yet. Kept so the card can be
@@ -103,33 +148,80 @@ export const es = {
                 title: 'Filtros con memoria',
                 body: 'Buscá por texto, combiná condiciones y guardá tus vistas favoritas para volver a ellas con un toque.',
             },
-            bilingual: {
-                title: 'Español, inglés y más',
-                body: 'La app está en español e inglés, y el asistente entiende la mayoría de los idiomas: hablale en el tuyo. Cambiá cuando quieras, incluso en medio de una conversación.',
-                chipMore: '+ muchos más',
-            },
         },
     },
 
-    // The service is free of charge per T&C §2.
+    // The service is free of charge per T&C §2. All three are public, but both
+    // store badges route to the beta form first; see `beta` below.
     download: {
-        title: 'Descargala gratis',
-        subtitle: 'Hoy en Android. Muy pronto en iPhone.',
+        title: 'Probala gratis',
+        subtitle: 'Ya está en Android, iPhone y la web.',
         android: {
             lead: 'Disponible en',
             name: 'Google Play',
         },
         ios: {
-            lead: 'Próximamente en',
+            lead: 'Disponible en el',
             name: 'App Store',
         },
+        web: {
+            lead: 'Beta abierta',
+            name: 'App web',
+        },
+    },
+
+    // Landing page for both store badges. Both apps are public, but the Google
+    // Form is the way in: its confirmation message holds the two store links,
+    // so the copy has to make clear that the links come after the form.
+    beta: {
+        meta: {
+            title: 'Wallet Bot — Descargá la app',
+            description:
+                'Wallet Bot ya está en Android y iPhone. Completá un formulario corto y accedé a los links de descarga.',
+        },
+        chip: {
+            android: 'Disponible en Android',
+            ios: 'Disponible en iPhone',
+        },
+        heading: 'Descargá la app',
+        body: 'Ya está en Google Play y en el App Store. Para descargarla, completá este formulario corto. Los links de descarga están al final.',
+        formCta: {
+            title: 'Completá el formulario',
+            body: 'Son un par de preguntas. Cuando lo envíes, vas a ver los links para Android y iPhone.',
+        },
+        webHeading: 'O usala ahora mismo desde el navegador',
+        webNotice:
+            'Sin instalar nada. La app web está abierta para cualquiera.',
+        webCta: 'Abrir la app web',
+        backHome: 'Volver al inicio',
+    },
+
+    // Apple wants a working support URL on the App Store listing
+    // (docs/appstore-readiness.md), and there is nothing to put behind it
+    // beyond the mailbox: no form, no ticket system.
+    support: {
+        meta: {
+            title: 'Wallet Bot — Soporte',
+            description:
+                'Escribinos por mail: la dirección de soporte de Wallet Bot.',
+        },
+        heading: 'Soporte',
+        body: 'Cualquier duda, problema con la app o pedido sobre tu cuenta, escribinos por mail.',
+        emailLabel: 'Escribinos a',
+        // Localizada a propósito, igual que `feedback.supportEmail` en
+        // apps/web y `feedbackSupportEmail` en la app nativa: el catálogo en
+        // inglés muestra support@. Las dos direcciones llegan a la misma
+        // bandeja, así que esto no es una frase para traducir libremente.
+        email: 'soporte@walletbot.live',
+        emailSubject: 'Soporte de Wallet Bot',
+        backHome: 'Volver al inicio',
     },
 
     footer: {
         tagline: 'Gestor de gastos personales, conversacional y simple.',
+        support: 'Soporte',
         privacy: 'Política de Privacidad',
         terms: 'Términos y Condiciones',
-        webApp: 'App web (beta)',
         copyright: (p: { year: number }) => `© ${p.year} Wallet Bot`,
     },
 

@@ -1,9 +1,10 @@
 import { api } from '@wallet-bot/backend/api'
 import type { AgentUserContext } from '@wallet-bot/shared'
-import { AGENT_CONTEXT_CAPS } from '@wallet-bot/shared'
+import { AGENT_CONTEXT_CAPS, pastCutoffBigInt } from '@wallet-bot/shared'
 import type { ConvexReactClient } from 'convex/react'
 import { readLanguagePreference } from '@/lib/i18n'
 import { readThemePreference } from '@/lib/theme/preference'
+import { WEB_LIVE_VERSION } from './gemini-live'
 
 /**
  * The arguments `v1/live/actions:requestLiveToken` accepts — platform
@@ -63,6 +64,7 @@ export async function buildLiveTokenMintArgs(opts: {
             client
                 .query(api.v1.transactions.queries.recent, {
                     limit: AGENT_CONTEXT_CAPS.recentTransactions,
+                    asOfMs: pastCutoffBigInt(),
                 })
                 .catch(() => null),
             client.query(api.v1.memories.queries.listActive).catch(() => null),
@@ -127,9 +129,8 @@ export async function buildLiveTokenMintArgs(opts: {
 
     return {
         platform: 'web',
-        // The web client ships with the backend, so it carries no meaningful
-        // version; the mint treats platform 'web' as unrestricted.
-        appVersion: '0.0.0',
+        // Capability version keeps cached older web builds on their old model.
+        appVersion: WEB_LIVE_VERSION,
         locale,
         ...(timezone ? { timezone } : {}),
         timezoneOffsetMinutes: -new Date().getTimezoneOffset(),

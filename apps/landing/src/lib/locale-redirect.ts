@@ -75,7 +75,7 @@ export function negotiateLocale(header: string | null): Locale {
  * Pages the landing prerenders per locale and also answers unprefixed. `''` is
  * the home page, whose localized URL is just `/<locale>/`.
  */
-export type LocalizedPage = '' | 'privacy' | 'terms'
+export type LocalizedPage = '' | 'privacy' | 'terms' | 'support' | 'beta'
 
 /**
  * Builds the `onRequest` handler for one unprefixed route: it 302s to the same

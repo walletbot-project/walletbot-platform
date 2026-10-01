@@ -156,6 +156,20 @@ class VoiceSessionRepository {
     );
   });
 
+  /// Latest connection model; individual setup events preserve model history.
+  Future<void> updateModel(String sessionId, String model) => _serial(() async {
+    final updatedAt = await _nextUpdatedAt(sessionId, DateTime.now());
+    await (db.update(
+      db.voiceSessions,
+    )..where((row) => row.id.equals(sessionId))).write(
+      VoiceSessionsCompanion(
+        model: Value(model),
+        updatedAt: Value(updatedAt),
+        remoteSynced: remoteEnabled ? const Value(false) : const Value.absent(),
+      ),
+    );
+  });
+
   Future<void> markStatus(String sessionId, String status) => _serial(() async {
     final now = DateTime.now();
     final updatedAt = await _nextUpdatedAt(sessionId, now);

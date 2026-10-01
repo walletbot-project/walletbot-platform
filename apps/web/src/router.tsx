@@ -248,11 +248,47 @@ export const router = createBrowserRouter([
                                             })),
                                     },
                                     {
+                                        // Not behind `recurringExpense`: the
+                                        // occurrence cutoff hides any
+                                        // future-dated movement from Activity
+                                        // whether or not the user can create
+                                        // series, so this is the only place
+                                        // such a movement can be found.
+                                        path: '/future-movements',
+                                        lazy: () =>
+                                            import(
+                                                '@/pages/future-movements'
+                                            ).then((m) => ({
+                                                Component: m.FutureMovements,
+                                            })),
+                                        children: [
+                                            {
+                                                path: ':movementId',
+                                                lazy: () =>
+                                                    import(
+                                                        '@/pages/future-movements'
+                                                    ).then((m) => ({
+                                                        Component:
+                                                            m.FutureMovementDetailRoute,
+                                                    })),
+                                            },
+                                        ],
+                                    },
+                                    {
                                         path: '/settings',
                                         lazy: () =>
                                             import('@/pages/settings').then(
                                                 (m) => ({
                                                     Component: m.Settings,
+                                                }),
+                                            ),
+                                    },
+                                    {
+                                        path: '/whatsapp',
+                                        lazy: () =>
+                                            import('@/pages/whatsapp').then(
+                                                (m) => ({
+                                                    Component: m.Whatsapp,
                                                 }),
                                             ),
                                     },

@@ -1,0 +1,72 @@
+---
+import { useTranslations } from '@/i18n'
+
+/**
+ * The band under the hero. It used to be a mic feeding a tape of invented
+ * amounts — money moving, carrying no information. It now carries the one
+ * thing the page can actually prove: what people say about tracking expenses
+ * today.
+ *
+ * The fixed chip is not decoration. Unattributed quotes sitting next to a
+ * product read as reviews *of the product*, and these are complaints about the
+ * status quo — without the frame, "I quit after a week" looks like a review of
+ * Wallet Bot. The chip is what makes them the problem instead.
+ *
+ * There is no mic and no waveform here on purpose: a listening indicator next
+ * to people complaining about manual entry reads as the app recording
+ * complaints.
+ */
+const { t } = useTranslations(Astro.currentLocale)
+
+// Four copies so one half of the tape is wider than any viewport, which is
+// what lets the -50% translate loop without a gap.
+const loop = [
+    ...t.hero.quoteTape.quotes,
+    ...t.hero.quoteTape.quotes,
+    ...t.hero.quoteTape.quotes,
+    ...t.hero.quoteTape.quotes,
+]
+---
+
+<div class="border-t border-line bg-panel-alt">
+    <div
+        class="mx-auto flex w-full max-w-6xl flex-col items-start gap-3 px-6 py-4 sm:flex-row sm:items-center sm:gap-8"
+    >
+        <span class="sr-only">{t.hero.quoteTape.label}</span>
+
+        <p
+            class="flex shrink-0 items-center gap-2 rounded-full border border-line-strong bg-panel px-4 py-1.5 text-[13px] font-semibold text-ink-soft"
+            aria-hidden="true"
+        >
+            <span class="relative top-[3px] text-lg leading-none text-brand-ink"
+                >&ldquo;</span
+            >
+            {t.hero.quoteTape.chip}
+        </p>
+
+        {/* Mobile keeps the first quote still: a single line scrolling past a
+            phone-width viewport is more empty tape than text. */}
+        <p class="text-sm text-ink-soft sm:hidden" aria-hidden="true">
+            {t.hero.quoteTape.quotes[0]}
+        </p>
+
+        <div
+            class="hidden flex-1 overflow-hidden [mask-image:linear-gradient(to_right,transparent,black_6%,black_94%,transparent)] sm:block"
+            aria-hidden="true"
+        >
+            {/* 120s, where the old amounts tape ran at 60s. These rows are far
+                wider and a quote has to stay legible long enough to finish
+                reading it, so the tape runs at a quarter of the pace it was
+                first drafted at (90s) and half the original. */}
+            <ul
+                class="flex w-max items-center gap-14 motion-safe:animate-[ticker_120s_linear_infinite]"
+            >
+                {
+                    loop.map((quote) => (
+                        <li class="text-sm text-ink-soft">{quote}</li>
+                    ))
+                }
+            </ul>
+        </div>
+    </div>
+</div>

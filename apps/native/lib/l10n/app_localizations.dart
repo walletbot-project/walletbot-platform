@@ -320,6 +320,12 @@ abstract class AppLocalizations {
   /// **'Amount'**
   String get amount;
 
+  /// No description provided for @time.
+  ///
+  /// In en, this message translates to:
+  /// **'Time'**
+  String get time;
+
   /// No description provided for @date.
   ///
   /// In en, this message translates to:
@@ -343,6 +349,132 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Exchange rate'**
   String get exchangeRate;
+
+  /// No description provided for @accountIdentity.
+  ///
+  /// In en, this message translates to:
+  /// **'Account: {name}'**
+  String accountIdentity(String name);
+
+  /// No description provided for @categoryIdentity.
+  ///
+  /// In en, this message translates to:
+  /// **'Category: {name}'**
+  String categoryIdentity(String name);
+
+  /// No description provided for @detail.
+  ///
+  /// In en, this message translates to:
+  /// **'Details'**
+  String get detail;
+
+  /// No description provided for @editActivity.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit activity'**
+  String get editActivity;
+
+  /// No description provided for @activityGone.
+  ///
+  /// In en, this message translates to:
+  /// **'This activity no longer exists'**
+  String get activityGone;
+
+  /// No description provided for @estimatedDate.
+  ///
+  /// In en, this message translates to:
+  /// **'Estimated date'**
+  String get estimatedDate;
+
+  /// No description provided for @estimatedTime.
+  ///
+  /// In en, this message translates to:
+  /// **'Estimated time'**
+  String get estimatedTime;
+
+  /// No description provided for @sourceAccount.
+  ///
+  /// In en, this message translates to:
+  /// **'Source account'**
+  String get sourceAccount;
+
+  /// No description provided for @destinationAccount.
+  ///
+  /// In en, this message translates to:
+  /// **'Destination account'**
+  String get destinationAccount;
+
+  /// No description provided for @noTags.
+  ///
+  /// In en, this message translates to:
+  /// **'No tags'**
+  String get noTags;
+
+  /// No description provided for @noCategory.
+  ///
+  /// In en, this message translates to:
+  /// **'No category'**
+  String get noCategory;
+
+  /// No description provided for @balanceUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Balance unavailable'**
+  String get balanceUnavailable;
+
+  /// No description provided for @sameAccounts.
+  ///
+  /// In en, this message translates to:
+  /// **'The source and destination accounts must be different'**
+  String get sameAccounts;
+
+  /// No description provided for @invalidAmount.
+  ///
+  /// In en, this message translates to:
+  /// **'The amount isn\'t valid'**
+  String get invalidAmount;
+
+  /// No description provided for @noOtherAccount.
+  ///
+  /// In en, this message translates to:
+  /// **'No other account available'**
+  String get noOtherAccount;
+
+  /// No description provided for @amountNotEditable.
+  ///
+  /// In en, this message translates to:
+  /// **'The amount of balance adjustments and initial balances cannot be edited.'**
+  String get amountNotEditable;
+
+  /// No description provided for @change.
+  ///
+  /// In en, this message translates to:
+  /// **'Change'**
+  String get change;
+
+  /// No description provided for @activityUpdateFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'The activity could not be saved'**
+  String get activityUpdateFailed;
+
+  /// No description provided for @activityDeleteTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete activity'**
+  String get activityDeleteTitle;
+
+  /// No description provided for @activityDeleteConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete “{name}”?'**
+  String activityDeleteConfirm(String name);
+
+  /// No description provided for @activityDeleteFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'The activity could not be deleted'**
+  String get activityDeleteFailed;
 
   /// No description provided for @status.
   ///
@@ -1027,6 +1159,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Add transaction'**
   String get addTransaction;
+
+  /// No description provided for @viewFutureMovements.
+  ///
+  /// In en, this message translates to:
+  /// **'View future movements'**
+  String get viewFutureMovements;
 
   /// No description provided for @transactionsLoadFailed.
   ///
@@ -1940,6 +2078,252 @@ abstract class AppLocalizations {
   /// **'Recurring expense'**
   String get recurringExpense;
 
+  /// No description provided for @recurringIncome.
+  ///
+  /// In en, this message translates to:
+  /// **'Recurring income'**
+  String get recurringIncome;
+
+  /// No description provided for @frequency.
+  ///
+  /// In en, this message translates to:
+  /// **'Frequency'**
+  String get frequency;
+
+  /// No description provided for @recurrenceDaily.
+  ///
+  /// In en, this message translates to:
+  /// **'Daily'**
+  String get recurrenceDaily;
+
+  /// No description provided for @recurrenceWeekly.
+  ///
+  /// In en, this message translates to:
+  /// **'Weekly'**
+  String get recurrenceWeekly;
+
+  /// No description provided for @recurrenceMonthly.
+  ///
+  /// In en, this message translates to:
+  /// **'Monthly'**
+  String get recurrenceMonthly;
+
+  /// No description provided for @recurrenceYearly.
+  ///
+  /// In en, this message translates to:
+  /// **'Yearly'**
+  String get recurrenceYearly;
+
+  /// No description provided for @recurrenceEndDateOptional.
+  ///
+  /// In en, this message translates to:
+  /// **'End date (optional)'**
+  String get recurrenceEndDateOptional;
+
+  /// No description provided for @recurrenceNoEndDate.
+  ///
+  /// In en, this message translates to:
+  /// **'No end date'**
+  String get recurrenceNoEndDate;
+
+  /// No description provided for @recurrenceSpanDays.
+  ///
+  /// In en, this message translates to:
+  /// **'{value} days'**
+  String recurrenceSpanDays(int value);
+
+  /// No description provided for @recurrenceSpanMonths.
+  ///
+  /// In en, this message translates to:
+  /// **'{value} months'**
+  String recurrenceSpanMonths(int value);
+
+  /// No description provided for @recurrenceSpanYears.
+  ///
+  /// In en, this message translates to:
+  /// **'{value} years'**
+  String recurrenceSpanYears(int value);
+
+  /// No description provided for @recurrenceOpenEndedNote.
+  ///
+  /// In en, this message translates to:
+  /// **'No end date does not mean forever: {count} movements are created, covering about {span}. You can add more whenever you want.'**
+  String recurrenceOpenEndedNote(int count, String span);
+
+  /// No description provided for @recurrenceTooLong.
+  ///
+  /// In en, this message translates to:
+  /// **'That end date would create too many movements. The maximum for this frequency is {max}.'**
+  String recurrenceTooLong(int max);
+
+  /// No description provided for @recurrenceCustomDays.
+  ///
+  /// In en, this message translates to:
+  /// **'Every X days'**
+  String get recurrenceCustomDays;
+
+  /// No description provided for @recurrenceRepeatEvery.
+  ///
+  /// In en, this message translates to:
+  /// **'Repeat every'**
+  String get recurrenceRepeatEvery;
+
+  /// No description provided for @recurrenceDaysUnit.
+  ///
+  /// In en, this message translates to:
+  /// **'days'**
+  String get recurrenceDaysUnit;
+
+  /// No description provided for @recurrenceEveryNDays.
+  ///
+  /// In en, this message translates to:
+  /// **'Every {days} days'**
+  String recurrenceEveryNDays(int days);
+
+  /// No description provided for @futureMovements.
+  ///
+  /// In en, this message translates to:
+  /// **'Future movements'**
+  String get futureMovements;
+
+  /// No description provided for @futureMovementsInfo.
+  ///
+  /// In en, this message translates to:
+  /// **'These are your future movements: the ones that haven\'t happened yet. They won\'t show in Activity until they occur.'**
+  String get futureMovementsInfo;
+
+  /// No description provided for @noFutureMovements.
+  ///
+  /// In en, this message translates to:
+  /// **'You have no scheduled future movements'**
+  String get noFutureMovements;
+
+  /// No description provided for @seriesPosition.
+  ///
+  /// In en, this message translates to:
+  /// **'{index}/{total}'**
+  String seriesPosition(int index, int total);
+
+  /// No description provided for @coveredThrough.
+  ///
+  /// In en, this message translates to:
+  /// **'until {date}'**
+  String coveredThrough(String date);
+
+  /// No description provided for @addMoreMovements.
+  ///
+  /// In en, this message translates to:
+  /// **'Add {count} more'**
+  String addMoreMovements(int count);
+
+  /// No description provided for @addMoreMovementsHint.
+  ///
+  /// In en, this message translates to:
+  /// **'The new movements carry on from the last one in the series, not from this one.'**
+  String get addMoreMovementsHint;
+
+  /// No description provided for @addingMoreMovements.
+  ///
+  /// In en, this message translates to:
+  /// **'Adding movements…'**
+  String get addingMoreMovements;
+
+  /// No description provided for @addedMoreMovements.
+  ///
+  /// In en, this message translates to:
+  /// **'Added {count} movements'**
+  String addedMoreMovements(int count);
+
+  /// No description provided for @addMoreMovementsFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'The movements could not be added'**
+  String get addMoreMovementsFailed;
+
+  /// No description provided for @editMovement.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit movement'**
+  String get editMovement;
+
+  /// No description provided for @titlePlaceholder.
+  ///
+  /// In en, this message translates to:
+  /// **'Title'**
+  String get titlePlaceholder;
+
+  /// No description provided for @descriptionPlaceholder.
+  ///
+  /// In en, this message translates to:
+  /// **'Optional detail'**
+  String get descriptionPlaceholder;
+
+  /// No description provided for @saveChanges.
+  ///
+  /// In en, this message translates to:
+  /// **'Save changes'**
+  String get saveChanges;
+
+  /// No description provided for @deleteRecurring.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete recurring movement'**
+  String get deleteRecurring;
+
+  /// No description provided for @savedOnlyThis.
+  ///
+  /// In en, this message translates to:
+  /// **'Changes applied to this movement'**
+  String get savedOnlyThis;
+
+  /// No description provided for @savedAllFuture.
+  ///
+  /// In en, this message translates to:
+  /// **'Changes applied to this movement and future ones'**
+  String get savedAllFuture;
+
+  /// No description provided for @deletedOnlyThis.
+  ///
+  /// In en, this message translates to:
+  /// **'Movement deleted'**
+  String get deletedOnlyThis;
+
+  /// No description provided for @deletedAllFuture.
+  ///
+  /// In en, this message translates to:
+  /// **'Movement and its future ones deleted'**
+  String get deletedAllFuture;
+
+  /// No description provided for @scopeEditDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Apply the changes to this movement only, or to the future ones too?'**
+  String get scopeEditDescription;
+
+  /// No description provided for @scopeDeleteDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete “{name}” just this once, or the future ones too?'**
+  String scopeDeleteDescription(String name);
+
+  /// No description provided for @scopeOnlyThis.
+  ///
+  /// In en, this message translates to:
+  /// **'This movement only'**
+  String get scopeOnlyThis;
+
+  /// No description provided for @scopeAllFuture.
+  ///
+  /// In en, this message translates to:
+  /// **'This and the future ones'**
+  String get scopeAllFuture;
+
+  /// No description provided for @scopeOnlyThisUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Changing the frequency always affects the future movements.'**
+  String get scopeOnlyThisUnavailable;
+
   /// No description provided for @leaves.
   ///
   /// In en, this message translates to:
@@ -2059,6 +2443,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Continue with Google'**
   String get continueWithGoogle;
+
+  /// No description provided for @continueWithApple.
+  ///
+  /// In en, this message translates to:
+  /// **'Continue with Apple'**
+  String get continueWithApple;
 
   /// No description provided for @continueLocally.
   ///
@@ -2263,6 +2653,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Could not sign in with Google: {error}'**
   String googleSignInFailed(Object error);
+
+  /// No description provided for @appleSignInFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not sign in with Apple: {error}'**
+  String appleSignInFailed(Object error);
 
   /// No description provided for @close.
   ///
@@ -3217,6 +3613,228 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'There is no response to report yet'**
   String get reportResponseNoResponseYet;
+
+  /// No description provided for @whatsappTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'WhatsApp'**
+  String get whatsappTitle;
+
+  /// No description provided for @whatsappLocalAccountTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Not available for local accounts'**
+  String get whatsappLocalAccountTitle;
+
+  /// No description provided for @whatsappLocalAccountBody.
+  ///
+  /// In en, this message translates to:
+  /// **'This space only lives on your device, so there is no account to link. Sign in to sync it first.'**
+  String get whatsappLocalAccountBody;
+
+  /// No description provided for @whatsappLoadFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not load your WhatsApp status'**
+  String get whatsappLoadFailed;
+
+  /// No description provided for @whatsappUnavailableTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Not available yet'**
+  String get whatsappUnavailableTitle;
+
+  /// No description provided for @whatsappUnavailableBody.
+  ///
+  /// In en, this message translates to:
+  /// **'WhatsApp is not configured on this server. Try again later.'**
+  String get whatsappUnavailableBody;
+
+  /// No description provided for @whatsappNotConnectedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Not connected'**
+  String get whatsappNotConnectedTitle;
+
+  /// No description provided for @whatsappNotConnectedBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Link your number to record expenses by chatting with Gaston on WhatsApp.'**
+  String get whatsappNotConnectedBody;
+
+  /// No description provided for @whatsappConnect.
+  ///
+  /// In en, this message translates to:
+  /// **'Connect WhatsApp'**
+  String get whatsappConnect;
+
+  /// No description provided for @whatsappCodeLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Your linking code'**
+  String get whatsappCodeLabel;
+
+  /// No description provided for @whatsappCodeExpiryHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Valid for 10 minutes, and can be used once.'**
+  String get whatsappCodeExpiryHint;
+
+  /// No description provided for @whatsappOpenWhatsapp.
+  ///
+  /// In en, this message translates to:
+  /// **'Open WhatsApp'**
+  String get whatsappOpenWhatsapp;
+
+  /// No description provided for @whatsappCopyCode.
+  ///
+  /// In en, this message translates to:
+  /// **'Copy code'**
+  String get whatsappCopyCode;
+
+  /// No description provided for @whatsappCodeCopied.
+  ///
+  /// In en, this message translates to:
+  /// **'Code copied'**
+  String get whatsappCodeCopied;
+
+  /// No description provided for @whatsappCodeFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not create a linking code'**
+  String get whatsappCodeFailed;
+
+  /// No description provided for @whatsappOpenFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not open WhatsApp. Copy the code and send it manually.'**
+  String get whatsappOpenFailed;
+
+  /// No description provided for @whatsappConnectedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Connected'**
+  String get whatsappConnectedTitle;
+
+  /// No description provided for @whatsappConnectedBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Write to Gaston on WhatsApp and it will record your movements.'**
+  String get whatsappConnectedBody;
+
+  /// No description provided for @whatsappLinkedOn.
+  ///
+  /// In en, this message translates to:
+  /// **'Linked on {date}'**
+  String whatsappLinkedOn(String date);
+
+  /// No description provided for @whatsappDisconnect.
+  ///
+  /// In en, this message translates to:
+  /// **'Disconnect'**
+  String get whatsappDisconnect;
+
+  /// No description provided for @whatsappDisconnectConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Gaston will stop answering this number until you link it again.'**
+  String get whatsappDisconnectConfirm;
+
+  /// No description provided for @whatsappDisconnectFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not disconnect the number'**
+  String get whatsappDisconnectFailed;
+
+  /// No description provided for @aiConsentTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Before you use the assistant'**
+  String get aiConsentTitle;
+
+  /// No description provided for @aiConsentIntro.
+  ///
+  /// In en, this message translates to:
+  /// **'The assistant sends what you say and part of your Wallet Bot data to our AI providers, Google LLC (Gemini) and OpenAI, LLC, in the United States.'**
+  String get aiConsentIntro;
+
+  /// No description provided for @aiConsentMicTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'We\'ll ask for the microphone'**
+  String get aiConsentMicTitle;
+
+  /// No description provided for @aiConsentMicBody.
+  ///
+  /// In en, this message translates to:
+  /// **'iOS asks when you start a voice conversation. Typing to the assistant needs no microphone.'**
+  String get aiConsentMicBody;
+
+  /// No description provided for @aiConsentWhatWeSend.
+  ///
+  /// In en, this message translates to:
+  /// **'What gets sent'**
+  String get aiConsentWhatWeSend;
+
+  /// No description provided for @aiConsentItemAudio.
+  ///
+  /// In en, this message translates to:
+  /// **'Your voice while a conversation is open, and what you type.'**
+  String get aiConsentItemAudio;
+
+  /// No description provided for @aiConsentItemProfile.
+  ///
+  /// In en, this message translates to:
+  /// **'Your name and email.'**
+  String get aiConsentItemProfile;
+
+  /// No description provided for @aiConsentItemFinancial.
+  ///
+  /// In en, this message translates to:
+  /// **'Your accounts, categories, tags and recent transactions.'**
+  String get aiConsentItemFinancial;
+
+  /// No description provided for @aiConsentItemMemories.
+  ///
+  /// In en, this message translates to:
+  /// **'Notes the assistant saved about you.'**
+  String get aiConsentItemMemories;
+
+  /// No description provided for @aiConsentItemActions.
+  ///
+  /// In en, this message translates to:
+  /// **'Records it creates or changes.'**
+  String get aiConsentItemActions;
+
+  /// No description provided for @aiConsentReadPolicy.
+  ///
+  /// In en, this message translates to:
+  /// **'Read the Privacy Policy'**
+  String get aiConsentReadPolicy;
+
+  /// No description provided for @aiConsentDecline.
+  ///
+  /// In en, this message translates to:
+  /// **'Not now'**
+  String get aiConsentDecline;
+
+  /// No description provided for @aiConsentAccept.
+  ///
+  /// In en, this message translates to:
+  /// **'Agree and continue'**
+  String get aiConsentAccept;
+
+  /// No description provided for @aiConsentFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'We could not record your permission. Check your connection and try again.'**
+  String get aiConsentFailed;
+
+  /// No description provided for @aiConsentDeclined.
+  ///
+  /// In en, this message translates to:
+  /// **'You need to agree before the assistant can run.'**
+  String get aiConsentDeclined;
 }
 
 class _AppLocalizationsDelegate

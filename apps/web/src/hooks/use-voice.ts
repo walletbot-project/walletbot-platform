@@ -1,8 +1,4 @@
-import {
-    GoogleGenAI,
-    type LiveServerMessage,
-    type Session,
-} from '@google/genai'
+import type { LiveServerMessage } from '@google/genai'
 import { api } from '@wallet-bot/backend/api'
 import type { ToolName } from '@wallet-bot/shared'
 import { useConvex, useQuery } from 'convex/react'
@@ -10,7 +6,21 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { LiveTokenMintArgs } from '@/lib/agent-context'
 import { executeToolCall } from '@/lib/agent-tools'
 import type { AgentToolContext } from '@/lib/agent-tools/helpers'
+import {
+    connectGeminiLive,
+    type LiveSession,
+    WEB_LIVE_VERSION,
+} from '@/lib/gemini-live'
 import { useT } from '@/lib/i18n'
+import {
+    readMicrophonePreference,
+    writeMicrophonePreference,
+} from '@/lib/microphone-preference'
+import {
+    captureMicrophone,
+    microphonePcm,
+    VoicePlayback,
+} from '@/lib/voice-audio'
 import {
     createVoiceHistoryRecorder,
     type VoiceEventDirection,
@@ -24,9 +34,6 @@ import {
 } from '@/lib/voice-seed'
 
 // Constants
-
-const INPUT_SAMPLE_RATE = 16000
-const OUTPUT_SAMPLE_RATE = 24000
 
 /**
  * Whether the model's spoken answer is played back when the user's turn was
@@ -49,47 +56,6 @@ const RESPOND_TO_TEXT_WITH_AUDIO = false
 
 /** Which interaction opened the session — it decides the reply modality. */
 export type SessionMode = 'audio' | 'text'
-
-// Audio helpers
-
-function floatTo16BitPCM(float32: Float32Array): ArrayBuffer {
-    const int16 = new Int16Array(float32.length)
-    for (let i = 0; i < float32.length; i++) {
-        int16[i] = Math.max(-1, Math.min(1, float32[i])) * 0x7fff
-    }
-    return int16.buffer
-}
-
-function arrayBufferToBase64(buffer: ArrayBuffer): string {
-    const bytes = new Uint8Array(buffer)
-    let binary = ''
-    for (let i = 0; i < bytes.byteLength; i++) {
-        binary += String.fromCharCode(bytes[i])
-    }
-    return btoa(binary)
-}
-
-function base64ToPcmFloat32(base64: string): Float32Array {
-    const binary = atob(base64)
-    const bytes = new Uint8Array(binary.length)
-    for (let i = 0; i < binary.length; i++) {
-        bytes[i] = binary.charCodeAt(i)
-    }
-    const int16 = new Int16Array(bytes.buffer)
-    const float32 = new Float32Array(int16.length)
-    for (let i = 0; i < int16.length; i++) {
-        float32[i] = int16[i] / 32768
-    }
-    return float32
-}
-
-function computeRMS(float32: Float32Array): number {
-    let sum = 0
-    for (let i = 0; i < float32.length; i++) {
-        sum += float32[i] * float32[i]
-    }
-    return Math.sqrt(sum / float32.length)
-}
 
 // Chat message model
 
@@ -185,19 +151,25 @@ export function useVoice(opts: UseVoiceOpts) {
     const [isMicOn, setIsMicOn] = useState(false)
     const [micLevel, setMicLevel] = useState(0)
     const [devices, setDevices] = useState<MediaDeviceInfo[]>([])
-    const [selectedDeviceId, setSelectedDeviceId] = useState<string>('')
+    const [selectedDeviceId, setSelectedDeviceId] = useState<string>(
+        readMicrophonePreference,
+    )
     const [messages, setMessages] = useState<ChatMessage[]>([])
 
     const optsRef = useRef(opts)
     // eslint-disable-next-line react-hooks/refs
     optsRef.current = opts
 
-    const sessionRef = useRef<Session | null>(null)
-    const captureContextRef = useRef<AudioContext | null>(null)
-    const captureWorkletRef = useRef<AudioWorkletNode | null>(null)
-    const mediaStreamRef = useRef<MediaStream | null>(null)
-    const playbackContextRef = useRef<AudioContext | null>(null)
-    const playbackWorkletRef = useRef<AudioWorkletNode | null>(null)
+    const sessionRef = useRef<LiveSession | null>(null)
+    const connectAbortRef = useRef<AbortController | null>(null)
+    const toolsSettledRef = useRef<Promise<void>>(Promise.resolve())
+    const micAbortRef = useRef<AbortController | null>(null)
+    const microphoneRef = useRef<{ stop: () => void } | null>(null)
+    const playbackRef = useRef(new VoicePlayback())
+    const startupAudioRef = useRef<{
+        chunks: string[]
+        samples: number
+    } | null>(null)
     const selectedDeviceIdRef = useRef(selectedDeviceId)
 
     // Mirrors of the state above, so the audio callbacks and the message
@@ -205,7 +177,6 @@ export function useVoice(opts: UseVoiceOpts) {
     const statusRef = useRef<ConnectionStatus>('disconnected')
     const micCaptureActiveRef = useRef(false)
     const micOnRef = useRef(false)
-    const micOpeningRef = useRef(false)
     const composingRef = useRef(false)
 
     // Reply-modality state — see RESPOND_TO_TEXT_WITH_AUDIO above.
@@ -539,7 +510,7 @@ export function useVoice(opts: UseVoiceOpts) {
         const mics = all.filter((d) => d.kind === 'audioinput')
         setDevices(mics)
         if (
-            mics.length > 0 &&
+            mics.some((d) => d.deviceId.length > 0) &&
             !mics.some((d) => d.deviceId === selectedDeviceIdRef.current)
         ) {
             setSelectedDeviceId(mics[0].deviceId)
@@ -548,7 +519,7 @@ export function useVoice(opts: UseVoiceOpts) {
 
     useEffect(() => {
         const handler = () => {
-            refreshDevicesRef.current()
+            void refreshDevicesRef.current().catch(() => {})
         }
         handler()
         navigator.mediaDevices.addEventListener('devicechange', handler)
@@ -569,67 +540,12 @@ export function useVoice(opts: UseVoiceOpts) {
         sessionRef.current?.sendRealtimeInput({ audioStreamEnd: true })
     }, [])
 
-    // Mic capture (16kHz AudioWorklet)
-    const startMicCapture = useCallback(async (deviceId: string) => {
-        const stream = await navigator.mediaDevices.getUserMedia({
-            audio: {
-                deviceId: deviceId ? { exact: deviceId } : undefined,
-                sampleRate: INPUT_SAMPLE_RATE,
-                channelCount: 1,
-                echoCancellation: true,
-                noiseSuppression: true,
-                autoGainControl: true,
-            },
-        })
-        mediaStreamRef.current = stream
-
-        const captureCtx = new AudioContext({ sampleRate: INPUT_SAMPLE_RATE })
-        await captureCtx.audioWorklet.addModule(
-            '/audio-processors/capture.worklet.js',
-        )
-
-        const worklet = new AudioWorkletNode(
-            captureCtx,
-            'audio-capture-processor',
-        )
-
-        worklet.port.onmessage = (event: MessageEvent) => {
-            const float32: Float32Array = event.data.data
-            // Muted covers all three native conditions: capture off, user mic
-            // off, or the user is composing text (`_isMicEffectivelyMuted`).
-            const muted = !micOnRef.current || composingRef.current
-            setMicLevel(muted ? 0 : Math.min(1, computeRMS(float32) * 10))
-            if (muted) return
-
-            const session = sessionRef.current
-            if (!session) return
-
-            const pcm = floatTo16BitPCM(float32)
-            const base64 = arrayBufferToBase64(pcm)
-            audioStreamOpenRef.current = true
-            session.sendRealtimeInput({
-                audio: { data: base64, mimeType: 'audio/pcm;rate=16000' },
-            })
-        }
-
-        const source = captureCtx.createMediaStreamSource(stream)
-        source.connect(worklet)
-
-        captureContextRef.current = captureCtx
-        captureWorkletRef.current = worklet
-    }, [])
-
     // Stop mic capture
     const stopMicCapture = useCallback(() => {
-        captureWorkletRef.current?.disconnect()
-        captureWorkletRef.current?.port.close()
-        captureContextRef.current?.close()
-        for (const track of mediaStreamRef.current?.getTracks() ?? []) {
-            track.stop()
-        }
-        captureWorkletRef.current = null
-        captureContextRef.current = null
-        mediaStreamRef.current = null
+        startupAudioRef.current = null
+        micAbortRef.current?.abort()
+        microphoneRef.current?.stop()
+        microphoneRef.current = null
         micCaptureActiveRef.current = false
         micOnRef.current = false
         setIsMicCaptureActive(false)
@@ -638,7 +554,7 @@ export function useVoice(opts: UseVoiceOpts) {
         recordHistory('mic_capture_stopped', 'client', { muted: true })
     }, [recordHistory])
 
-    /** Turn the user's mic on or off without tearing capture down. */
+    /** Muting releases the browser's microphone indicator and hardware. */
     const setMicOn = useCallback(
         (on: boolean) => {
             micOnRef.current = on
@@ -647,8 +563,9 @@ export function useVoice(opts: UseVoiceOpts) {
             if (on) return
             setMicLevel(0)
             endAudioStream()
+            stopMicCapture()
         },
-        [endAudioStream, recordMute],
+        [endAudioStream, recordMute, stopMicCapture],
     )
 
     /** Open the mic — prompts for permission the first time. */
@@ -658,17 +575,63 @@ export function useVoice(opts: UseVoiceOpts) {
                 if (turnOn) setMicOn(true)
                 return
             }
-            if (micOpeningRef.current) return
-            micOpeningRef.current = true
+            if (micAbortRef.current && !micAbortRef.current.signal.aborted)
+                return
+            const controller = new AbortController()
+            micAbortRef.current = controller
             try {
-                await startMicCapture(selectedDeviceIdRef.current)
-                // Device labels are only exposed once permission is granted.
-                await refreshDevicesRef.current()
+                // Resume playback during the gesture, before network/permission waits.
+                await playbackRef.current.open()
+                controller.signal.throwIfAborted()
+                const microphone = await captureMicrophone({
+                    deviceId: selectedDeviceIdRef.current,
+                    signal: controller.signal,
+                    onAudio: (samples) => {
+                        if (
+                            controller.signal.aborted ||
+                            !micOnRef.current ||
+                            composingRef.current
+                        )
+                            return
+                        const chunk = microphonePcm(samples)
+                        setMicLevel(chunk.level)
+                        const pending = startupAudioRef.current
+                        if (pending) {
+                            pending.samples += samples.length
+                            if (pending.samples > 16000 * 5) {
+                                stopMicCapture()
+                                addSystem(
+                                    catalog.voice.startupAudioTimeout,
+                                    'error',
+                                )
+                                return
+                            }
+                            pending.chunks.push(chunk.data)
+                            return
+                        }
+                        if (!sessionRef.current) return
+                        audioStreamOpenRef.current = true
+                        sessionRef.current.sendRealtimeInput({
+                            audio: {
+                                data: chunk.data,
+                                mimeType: 'audio/pcm;rate=16000',
+                            },
+                        })
+                    },
+                })
+                if (controller.signal.aborted) {
+                    microphone.stop()
+                    return
+                }
+                microphoneRef.current = microphone
                 micCaptureActiveRef.current = true
                 setIsMicCaptureActive(true)
                 setMicOn(turnOn)
                 recordMute('mic_capture_started')
+                // Device labels are available now; listing them must not delay capture.
+                void refreshDevicesRef.current().catch(() => {})
             } catch (err) {
+                if (controller.signal.aborted) return
                 stopMicCapture()
                 const message = catalog.voice.systemMicOpenFailed({
                     error: err instanceof Error ? err.message : String(err),
@@ -679,12 +642,8 @@ export function useVoice(opts: UseVoiceOpts) {
                     isTransient: false,
                 })
             }
-            // Cleared on both paths — `finally` would stop the React Compiler
-            // from lowering this hook (`react-hooks/todo`).
-            micOpeningRef.current = false
         },
         [
-            startMicCapture,
             stopMicCapture,
             setMicOn,
             addSystem,
@@ -697,6 +656,7 @@ export function useVoice(opts: UseVoiceOpts) {
     // Switch mic while connected
     const handleDeviceChange = useCallback(
         async (deviceId: string) => {
+            writeMicrophonePreference(deviceId)
             setSelectedDeviceId(deviceId)
             selectedDeviceIdRef.current = deviceId
             if (!micCaptureActiveRef.current) return
@@ -714,10 +674,7 @@ export function useVoice(opts: UseVoiceOpts) {
      * a server-side close used to leak one per attempt.
      */
     const stopPlayback = useCallback(() => {
-        playbackWorkletRef.current?.disconnect()
-        playbackContextRef.current?.close()
-        playbackWorkletRef.current = null
-        playbackContextRef.current = null
+        playbackRef.current.close()
     }, [])
 
     /** Send the turns typed before the session was up, in order. */
@@ -778,6 +735,9 @@ export function useVoice(opts: UseVoiceOpts) {
     const connectAttempt = useCallback(async () => {
         if (!sessionActiveRef.current) return
         const generation = ++generationRef.current
+        connectAbortRef.current?.abort()
+        const controller = new AbortController()
+        connectAbortRef.current = controller
         applyStatus('connecting')
 
         try {
@@ -788,7 +748,7 @@ export function useVoice(opts: UseVoiceOpts) {
                 .catch(() => undefined)
             const minted = await convex.action(
                 api.v1.live.actions.requestLiveToken,
-                mintArgs ?? {},
+                { ...mintArgs, platform: 'web', appVersion: WEB_LIVE_VERSION },
             )
             if (generation !== generationRef.current) return
             if (!sessionActiveRef.current) return
@@ -802,6 +762,8 @@ export function useVoice(opts: UseVoiceOpts) {
                     isTransient: false,
                 })
                 sessionActiveRef.current = false
+                stopMicCapture()
+                stopPlayback()
                 clearReconnectTimers()
                 applyStatus('disconnected')
                 return
@@ -815,93 +777,98 @@ export function useVoice(opts: UseVoiceOpts) {
             modelRef.current = model
             recordHistory('system', 'local', { message: tokenNotice })
 
-            const playbackCtx = new AudioContext({
-                sampleRate: OUTPUT_SAMPLE_RATE,
-            })
-            await playbackCtx.audioWorklet.addModule(
-                '/audio-processors/playback.worklet.js',
-            )
-            const playbackNode = new AudioWorkletNode(
-                playbackCtx,
-                'pcm-processor',
-            )
-            playbackNode.connect(playbackCtx.destination)
-            playbackContextRef.current = playbackCtx
-            playbackWorkletRef.current = playbackNode
-
-            const ai = new GoogleGenAI({
-                apiKey: token,
-                httpOptions: { apiVersion: 'v1alpha' },
-            })
-            const session = await ai.live.connect({
-                model: `models/${model}`,
+            const seenCalls = new Set<string>()
+            const cancelledCalls = new Set<string>()
+            const toolContext = optsRef.current.context
+            const conversation = conversationLogRef.current
+            const recorder = historyRef.current
+            const current = () =>
+                generation === generationRef.current && sessionActiveRef.current
+            const session = await connectGeminiLive({
+                token,
+                model,
+                signal: controller.signal,
                 callbacks: {
-                    onmessage: async (msg: LiveServerMessage) => {
+                    onmessage: (msg: LiveServerMessage) => {
                         if (generation !== generationRef.current) return
-                        if (msg.toolCall) {
-                            const functionCalls =
-                                msg.toolCall.functionCalls ?? []
-                            const functionResponses: {
-                                id?: string
-                                name?: string
-                                response: {
-                                    result: Record<string, unknown>
-                                }
-                            }[] = []
-                            for (const fc of functionCalls) {
-                                addToolCall(
-                                    fc.id ?? '',
-                                    fc.name ?? '',
-                                    (fc.args ?? {}) as Record<string, unknown>,
-                                )
-                                conversationLogRef.current.push({
-                                    type: 'tool_call',
-                                })
-                                recordHistory(
-                                    'tool_call',
-                                    'server',
-                                    {
-                                        id: fc.id ?? '',
-                                        name: fc.name ?? '',
-                                        args: fc.args ?? {},
-                                    },
-                                    'tool',
-                                )
-                            }
-                            for (const fc of functionCalls) {
-                                const result = await executeToolCall(
-                                    optsRef.current.context,
-                                    fc.name ?? '',
-                                    (fc.args ?? {}) as Record<string, unknown>,
-                                )
-                                completeToolCall(fc.id ?? '', result)
-                                conversationLogRef.current.push({
-                                    type: 'tool_result',
-                                })
-                                recordHistory(
-                                    'tool_result',
-                                    'client',
-                                    {
-                                        id: fc.id ?? '',
-                                        name: fc.name ?? '',
+                        for (const fc of msg.toolCall?.functionCalls ?? []) {
+                            if (!fc.id || !fc.name || seenCalls.has(fc.id))
+                                continue
+                            seenCalls.add(fc.id)
+                            const { id, name } = fc
+                            const args = (fc.args ?? {}) as Record<
+                                string,
+                                unknown
+                            >
+                            addToolCall(id, name, args)
+                            conversation.push({
+                                type: 'tool_call',
+                                id,
+                                name,
+                                args,
+                            })
+                            recorder?.record(
+                                'tool_call',
+                                'server',
+                                { id, name, args },
+                                'tool',
+                            )
+                            toolsSettledRef.current = toolsSettledRef.current
+                                .then(async () => {
+                                    if (!current() || cancelledCalls.has(id))
+                                        return
+                                    let result: Record<string, unknown>
+                                    try {
+                                        result = await executeToolCall(
+                                            toolContext,
+                                            name,
+                                            args,
+                                        )
+                                    } catch {
+                                        result = {
+                                            error: 'Tool execution failed',
+                                        }
+                                    }
+                                    // A committed write stays in its original conversation even if
+                                    // cancellation or a disconnect arrived while it was executing.
+                                    conversation.push({
+                                        type: 'tool_result',
+                                        id,
+                                        name,
                                         result,
-                                    },
-                                    'tool',
-                                )
-                                functionResponses.push({
-                                    id: fc.id,
-                                    name: fc.name,
-                                    response: { result },
+                                    })
+                                    recorder?.record(
+                                        'tool_result',
+                                        'client',
+                                        { id, name, result },
+                                        'tool',
+                                    )
+                                    if (
+                                        historyRef.current === recorder &&
+                                        !cancelledCalls.has(id)
+                                    )
+                                        completeToolCall(id, result)
+                                    if (!current() || cancelledCalls.has(id))
+                                        return
+                                    session.sendToolResponse({
+                                        functionResponses: [
+                                            { id, name, response: { result } },
+                                        ],
+                                    })
                                 })
-                            }
-                            session.sendToolResponse({ functionResponses })
-                            return
+                                .catch((error) =>
+                                    console.warn(
+                                        'Live tool response failed',
+                                        error,
+                                    ),
+                                )
                         }
 
                         if (msg.toolCallCancellation) {
                             const ids = (
                                 msg.toolCallCancellation.ids ?? []
                             ).filter((x): x is string => typeof x === 'string')
+                            for (const id of ids) cancelledCalls.add(id)
                             cancelToolCalls(ids)
                             conversationLogRef.current.push({
                                 type: 'tool_cancelled',
@@ -912,12 +879,13 @@ export function useVoice(opts: UseVoiceOpts) {
                                 { ids },
                                 'tool',
                             )
-                            return
                         }
 
                         if (msg.usageMetadata) {
                             recordHistory('usage_metadata', 'server', {
                                 ...msg.usageMetadata,
+                                model,
+                                mode: sessionModeRef.current,
                             })
                         }
                         if (msg.goAway) {
@@ -944,7 +912,7 @@ export function useVoice(opts: UseVoiceOpts) {
                                 // is ignored, then reconnect immediately.
                                 generationRef.current += 1
                                 sessionRef.current = null
-                                stopPlayback()
+                                playbackRef.current.interrupt()
                                 try {
                                     session.close()
                                 } catch {
@@ -994,7 +962,7 @@ export function useVoice(opts: UseVoiceOpts) {
                                 reason: 'server_interrupted',
                             })
                             discardOutputRef.current = true
-                            playbackNode.port.postMessage('interrupt')
+                            playbackRef.current.interrupt()
                             finalisePendingAgent({ interrupted: true })
                         }
 
@@ -1004,14 +972,26 @@ export function useVoice(opts: UseVoiceOpts) {
                                 audioPlaybackEnabledRef.current &&
                                 !discardOutputRef.current
                             for (const part of parts) {
-                                if (playable && part.inlineData?.data) {
-                                    playbackNode.port.postMessage(
-                                        base64ToPcmFloat32(
-                                            part.inlineData.data,
-                                        ),
+                                if (part.thought) continue
+                                if (
+                                    playable &&
+                                    part.inlineData?.data &&
+                                    /^audio\/pcm(?:;|$)/.test(
+                                        part.inlineData.mimeType ?? '',
                                     )
+                                ) {
+                                    try {
+                                        playbackRef.current.enqueue(
+                                            part.inlineData.data,
+                                            part.inlineData.mimeType ?? '',
+                                        )
+                                    } catch (error) {
+                                        recordHistory('error', 'local', {
+                                            message: String(error),
+                                        })
+                                    }
                                 }
-                                if (part.text) {
+                                if (part.text && !outputText) {
                                     appendAgent(part.text)
                                 }
                             }
@@ -1021,7 +1001,10 @@ export function useVoice(opts: UseVoiceOpts) {
                             conversationLogRef.current.push({
                                 type: 'agent_turn_complete',
                             })
-                            recordHistory('agent_turn_complete', 'server')
+                            recordHistory('agent_turn_complete', 'server', {
+                                model,
+                                mode: sessionModeRef.current,
+                            })
                             discardOutputRef.current = false
                             finalisePendingAgent()
                         }
@@ -1033,14 +1016,16 @@ export function useVoice(opts: UseVoiceOpts) {
                             message: catalog.voice.systemSocketError,
                             isTransient: true,
                         })
-                        // Recovery belongs to onclose, which follows an
-                        // errored socket; nothing else to do here.
+                        // Closing also handles errors that don't close themselves.
+                        sessionRef.current?.close()
                     },
                     onclose: (event: CloseEvent) => {
                         if (generation !== generationRef.current) return
+                        generationRef.current += 1
                         sessionRef.current = null
                         audioStreamOpenRef.current = false
-                        stopPlayback()
+                        playbackRef.current.interrupt()
+                        if (startupAudioRef.current) stopMicCapture()
                         finalisePendingUser()
                         finalisePendingAgent()
                         // The explicit End already cleaned everything up —
@@ -1076,6 +1061,11 @@ export function useVoice(opts: UseVoiceOpts) {
                 }
                 return
             }
+            await toolsSettledRef.current
+            if (!current()) {
+                session.close()
+                return
+            }
             sessionRef.current = session
             reconnectAttemptRef.current = 0
             applyStatus('connected')
@@ -1104,9 +1094,20 @@ export function useVoice(opts: UseVoiceOpts) {
                 })
             }
             flushPendingText()
+            const pendingAudio = startupAudioRef.current
+            startupAudioRef.current = null
+            if (micOnRef.current && !composingRef.current) {
+                for (const data of pendingAudio?.chunks ?? []) {
+                    session.sendRealtimeInput({
+                        audio: { data, mimeType: 'audio/pcm;rate=16000' },
+                    })
+                    audioStreamOpenRef.current = true
+                }
+            }
         } catch (err) {
             if (generation !== generationRef.current) return
-            stopPlayback()
+            if (startupAudioRef.current) stopMicCapture()
+            playbackRef.current.interrupt()
             const message = catalog.voice.systemConnectionFailed({
                 error: err instanceof Error ? err.message : String(err),
             })
@@ -1129,6 +1130,7 @@ export function useVoice(opts: UseVoiceOpts) {
         applyStatus,
         clearReconnectTimers,
         stopPlayback,
+        stopMicCapture,
         flushPendingText,
         addSystem,
         addToolCall,
@@ -1161,6 +1163,7 @@ export function useVoice(opts: UseVoiceOpts) {
             sessionModeRef.current = mode
             reconnectAttemptRef.current = 0
             conversationLogRef.current = []
+            modelRef.current = null
             pendingUserIdRef.current = null
             pendingAgentIdRef.current = null
             audioStreamOpenRef.current = false
@@ -1181,13 +1184,11 @@ export function useVoice(opts: UseVoiceOpts) {
                 message: catalog.voice.systemConnecting,
             })
 
-            await connectAttempt()
-            // Only on the session's first successful connect: reconnects keep
-            // whatever capture state the user had. A live session handle is
-            // the "connected" signal (TS keeps the guard's narrowing of
-            // statusRef.current across the await, so the ref can't be read).
-            if (mode === 'audio' && sessionRef.current !== null) {
-                await openMic({ turnOn: true })
+            if (mode === 'audio') {
+                startupAudioRef.current = { chunks: [], samples: 0 }
+                await Promise.all([connectAttempt(), openMic({ turnOn: true })])
+            } else {
+                await connectAttempt()
             }
         },
         [convex, catalog, addSystem, recordHistory, connectAttempt, openMic],
@@ -1203,6 +1204,10 @@ export function useVoice(opts: UseVoiceOpts) {
             const text = raw.trim()
             if (!text) return
             const status = statusRef.current
+            if (status !== 'connected' && pendingTextRef.current.length >= 20) {
+                addSystem(catalog.voice.systemUnavailable, 'error')
+                return
+            }
 
             if (status === 'connected') {
                 appendTypedUser(text)
@@ -1231,7 +1236,14 @@ export function useVoice(opts: UseVoiceOpts) {
             pendingTextRef.current = [...pendingTextRef.current, text]
             recordSendMessage(text)
         },
-        [appendTypedUser, endAudioStream, connect, recordSendMessage],
+        [
+            appendTypedUser,
+            endAudioStream,
+            connect,
+            recordSendMessage,
+            addSystem,
+            catalog,
+        ],
     )
 
     /**
@@ -1244,6 +1256,7 @@ export function useVoice(opts: UseVoiceOpts) {
             const started = composing && !composingRef.current
             composingRef.current = composing
             if (started) recordMute('text_composing')
+            if (started && startupAudioRef.current) stopMicCapture()
             if (composing) setMicLevel(0)
             if (
                 started &&
@@ -1253,7 +1266,7 @@ export function useVoice(opts: UseVoiceOpts) {
                 endAudioStream()
             }
         },
-        [endAudioStream, recordMute],
+        [endAudioStream, recordMute, stopMicCapture],
     )
 
     // Disconnect — the explicit End. The only path that closes a
@@ -1267,6 +1280,7 @@ export function useVoice(opts: UseVoiceOpts) {
         // Invalidate the socket's callbacks and any in-flight attempt before
         // closing, so the close below is not mistaken for a drop.
         generationRef.current += 1
+        connectAbortRef.current?.abort()
         endAudioStream()
         stopMicCapture()
         stopPlayback()
@@ -1282,7 +1296,10 @@ export function useVoice(opts: UseVoiceOpts) {
         finalisePendingAgent()
         setMessages([])
         // Ends the row and flushes the tail, native's `endExplicitly` + flush.
-        historyRef.current?.end({ explicit: true })
+        const recorder = historyRef.current
+        void toolsSettledRef.current.then(() =>
+            recorder?.end({ explicit: true }),
+        )
     }, [
         endAudioStream,
         stopMicCapture,
@@ -1331,11 +1348,26 @@ export function useVoice(opts: UseVoiceOpts) {
         // are cleared again by the next spoken turn / `turnComplete`.
         audioPlaybackEnabledRef.current = false
         discardOutputRef.current = true
-        playbackWorkletRef.current?.port.postMessage('interrupt')
+        playbackRef.current.interrupt()
         finalisePendingAgent({ interrupted: true })
         endAudioStream()
         stopMicCapture()
-    }, [recordHistory, finalisePendingAgent, endAudioStream, stopMicCapture])
+        stopPlayback()
+    }, [
+        recordHistory,
+        finalisePendingAgent,
+        endAudioStream,
+        stopMicCapture,
+        stopPlayback,
+    ])
+
+    useEffect(() => {
+        const hidden = () => {
+            if (document.visibilityState === 'hidden') detach()
+        }
+        document.addEventListener('visibilitychange', hidden)
+        return () => document.removeEventListener('visibilitychange', hidden)
+    }, [detach])
 
     const clearMessages = useCallback(() => setMessages([]), [])
 

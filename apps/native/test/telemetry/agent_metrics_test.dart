@@ -8,6 +8,50 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 
 void main() {
+  for (final model in ['gemini-3.8-live', 'gemini-3.1-flash-live-preview']) {
+    test('HTTP metric payloads preserve selected model $model', () async {
+      FlutterSecureStorage.setMockInitialValues({});
+      final sent = <Map<String, dynamic>>[];
+      final telemetry = TelemetryClient(
+        convexSiteUrl: 'https://example.convex.site',
+        httpClient: MockClient((request) async {
+          final body = jsonDecode(request.body) as Map;
+          sent.addAll((body['metrics'] as List).cast<Map<String, dynamic>>());
+          return http.Response('{"accepted":1}', 200);
+        }),
+      );
+      final metrics = AgentMetrics(telemetry);
+      const usage = <String, Object?>{
+        'promptTokenCount': 100,
+        'responseTokenCount': 50,
+      };
+      await metrics.recordInteractionCostFromUsage(
+        sessionId: 'voice-test',
+        sampleId: 'voice-test:1',
+        model: model,
+        mode: 'voice',
+        interactionType: 'voice',
+        usage: usage,
+      );
+      await metrics.recordSessionCostFromUsage(
+        sessionId: 'voice-test',
+        model: model,
+        mode: 'voice',
+        usage: usage,
+      );
+      expect(sent.map((metric) => metric['name']), [
+        'agent.interaction.cost_usd',
+        'agent.interactions.completed_count',
+        'agent.session.cost_usd',
+      ]);
+      for (final metric in sent) {
+        expect(metric['attributes']['model'], model);
+        expect(metric['sessionId'], 'voice-test');
+      }
+      telemetry.dispose();
+    });
+  }
+
   test('estimates and sends session cost from usage metadata', () async {
     FlutterSecureStorage.setMockInitialValues({});
 

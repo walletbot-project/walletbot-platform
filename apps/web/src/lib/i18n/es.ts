@@ -52,9 +52,43 @@ export const es = {
         insights: 'Organización',
         addWithGasti: 'Añadir con Gasti',
         addManually: 'Añadir manualmente',
+        futureMovements: 'Movimientos futuros',
         sendFeedback: 'Enviar comentarios',
         signOut: 'Cerrar sesión',
         language: 'Idioma',
+    },
+
+    whatsapp: {
+        title: 'WhatsApp',
+        subtitle: 'Registrá gastos chateando con Gaston',
+        loadFailed: 'No pudimos cargar el estado de WhatsApp',
+        retry: 'Tocá para reintentar',
+        unavailableTitle: 'Todavía no está disponible',
+        unavailableBody:
+            'WhatsApp no está habilitado para tu cuenta. Te avisamos cuando se active.',
+        notConnectedTitle: 'Sin conectar',
+        notConnectedBody:
+            'Vinculá tu número para registrar gastos chateando con Gaston por WhatsApp.',
+        connect: 'Conectar WhatsApp',
+        codeLabel: 'Tu código de vinculación',
+        codeExpiryHint: 'Vale 10 minutos y se usa una sola vez.',
+        openWhatsapp: 'Abrir WhatsApp',
+        copyCode: 'Copiar código',
+        codeCopied: 'Código copiado',
+        copyFailed:
+            'No pudimos copiar el código. Seleccionalo y copialo a mano.',
+        codeFailed: 'No pudimos crear el código',
+        openFailed:
+            'No pudimos abrir WhatsApp. Copiá el código y mandalo a mano.',
+        connectedTitle: 'Conectado',
+        connectedBody:
+            'Escribile a Gaston por WhatsApp y va a registrar tus movimientos.',
+        linkedOn: (p: { date: string }) => `Vinculado el ${p.date}`,
+        disconnect: 'Desconectar',
+        disconnectConfirm:
+            'Gaston va a dejar de responderle a este número hasta que lo vincules de nuevo.',
+        disconnectFailed: 'No pudimos desconectar el número',
+        disconnected: 'Número desconectado',
     },
 
     feedback: {
@@ -541,6 +575,7 @@ export const es = {
         typeBalanceAdjustment: 'Ajustes',
         noTransactions: 'No hay transacciones',
         addTransaction: 'Agregar transacción',
+        viewFutureMovements: 'Ver movimientos futuros',
         selectDetail: 'Seleccioná una transacción para ver su detalle',
         today: 'Hoy',
         yesterday: 'Ayer',
@@ -692,6 +727,8 @@ export const es = {
         systemDisconnected: 'Desconectado',
         systemConnected: 'Conectado. Podés hablar.',
         systemConnectedTyping: 'Conectado. Enviando tu mensaje…',
+        startupAudioTimeout:
+            'La conexión tardó demasiado. Tocá el micrófono para volver a intentar.',
         systemConnectionFailed: (p: { error: string }) =>
             `Falló la conexión: ${p.error}`,
         systemUnavailable:
@@ -807,6 +844,25 @@ export const es = {
         swapSides: 'Invertir origen y destino',
         account: 'Cuenta',
         recurringExpense: 'Gasto recurrente',
+        recurringIncome: 'Ingreso recurrente',
+        frequency: 'Frecuencia',
+        recurrenceDaily: 'Diario',
+        recurrenceWeekly: 'Semanal',
+        recurrenceMonthly: 'Mensual',
+        recurrenceYearly: 'Anual',
+        recurrenceCustomDays: 'Cada X días',
+        recurrenceEveryNDays: (days: number) => `Cada ${days} días`,
+        recurrenceRepeatEvery: 'Repetir cada',
+        recurrenceDaysUnit: 'días',
+        recurrenceEndDateOptional: 'Fecha de fin (opcional)',
+        recurrenceNoEndDate: 'Sin fecha de fin',
+        recurrenceSpanDays: (value: number) => `${value} días`,
+        recurrenceSpanMonths: (value: number) => `${value} meses`,
+        recurrenceSpanYears: (value: number) => `${value} años`,
+        recurrenceOpenEndedNote: (count: number, span: string) =>
+            `Sin fecha de fin no es para siempre: se crean ${count} movimientos, que cubren unos ${span}. Podés agregar más cuando quieras.`,
+        recurrenceTooLong: (max: number) =>
+            `Esa fecha de fin crearía demasiados movimientos. El máximo para esta frecuencia es ${max}.`,
         newTransaction: 'Añadir movimiento',
         select: 'Seleccionar',
         newAccount: 'Nueva cuenta',
@@ -841,6 +897,56 @@ export const es = {
         categoryAdded: 'Categoría agregada al formulario',
         accountNamePlaceholder: 'Ej: Efectivo, Banco Nación',
         categoryNamePlaceholder: 'Ej: Comida, Regalo, Freelance',
+    },
+
+    futureMovements: {
+        selectDetail: 'Elegí un movimiento para ver su detalle',
+        title: 'Movimientos futuros',
+        info: 'Estos son tus movimientos futuros: los que todavía no ocurrieron. No aparecen en Actividad hasta que suceden.',
+        empty: 'No tenés movimientos futuros programados',
+        detail: 'Detalle',
+        editMovement: 'Editar movimiento',
+        edit: 'Editar',
+        delete: 'Eliminar',
+        close: 'Cerrar',
+        titlePlaceholder: 'Título',
+        amount: 'Monto',
+        frequency: 'Frecuencia',
+        date: 'Fecha',
+        account: 'Cuenta',
+        category: 'Categoría',
+        description: 'Descripción',
+        descriptionPlaceholder: 'Detalle opcional',
+        noDescription: 'Sin descripción',
+        seriesPosition: (p: { index: number; total: number }) =>
+            `${p.index}/${p.total}`,
+        coveredThrough: (date: string) => `hasta ${date}`,
+        addMore: (p: { count: number }) => `Añadir ${p.count} más`,
+        addMoreHint:
+            'Los nuevos movimientos continúan a partir del último de la serie, no de este.',
+        addingMore: 'Añadiendo movimientos…',
+        addedMore: (p: { count: number }) =>
+            `Se añadieron ${p.count} movimientos`,
+        addMoreFailed: 'No se pudieron añadir los movimientos',
+        saveChanges: 'Guardar cambios',
+        deleteRecurring: 'Eliminar movimiento recurrente',
+        titleRequired: 'El título es obligatorio',
+        amountGreaterThanZero: 'El monto debe ser mayor a 0',
+        savedOnlyThis: 'Cambios aplicados a este movimiento',
+        savedAllFuture: 'Cambios aplicados a este y los futuros',
+        deletedOnlyThis: 'Movimiento eliminado',
+        deletedAllFuture: 'Movimiento y sus futuros eliminados',
+        scopeEditDescription:
+            '¿Aplicar los cambios solo a este movimiento o también a los futuros?',
+        scopeDeleteDescription: (name: string) =>
+            `¿Querés eliminar “${name}” solo esta vez o también los futuros?`,
+        scopeOnlyThisUnavailable:
+            'Cambiar la frecuencia siempre afecta a los movimientos futuros.',
+        scopeOnlyThis: 'Solo este movimiento',
+        scopeAllFuture: 'Este y los futuros',
+        cancel: 'Cancelar',
+        accountIdentity: (name: string) => `Cuenta: ${name}`,
+        categoryIdentity: (name: string) => `Categoría: ${name}`,
     },
 }
 

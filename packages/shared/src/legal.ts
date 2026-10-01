@@ -89,3 +89,21 @@ export const legalDocumentUrl = (
     locale: LegalLocale,
 ): string =>
     `${LEGAL_SITE_URL}/${locale}/${document === 'terms' ? 'terms' : 'privacy'}`
+
+/**
+ * Consent to send data to the third-party AI providers, recorded in the same
+ * append-only log as the documents above but deliberately NOT one of them.
+ *
+ * `LEGAL_DOCUMENTS` drives the launch gate: adding `ai` there would turn every
+ * existing user's missing consent into a blocking verdict on next launch. This
+ * consent is asked for at the point of use instead (before the first agent
+ * session), so it lives on its own constant and is read through its own
+ * queries.
+ *
+ * Same ordered-string versioning rule as the documents: bump this when the
+ * disclosure itself changes and every user is asked again.
+ */
+export const AI_CONSENT_VERSION = '2026-09-19'
+
+/** The `document` value an AI-consent row carries in the acceptance log. */
+export const AI_CONSENT_DOCUMENT = 'ai' as const

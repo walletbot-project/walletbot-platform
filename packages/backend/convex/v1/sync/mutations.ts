@@ -5,6 +5,12 @@ import { mutation } from '../../_generated/server'
 import { inflowsByAccount, outflowsByAccount } from '../../aggregates'
 import { CLIENT_OUTDATED, isClientSupported } from '../../config/helpers'
 import { syncedTable } from '../../schema/sync'
+import {
+    tagAggregateAttach,
+    tagAggregateDeleteTransaction,
+    tagAggregateDetach,
+} from '../../tags/helpers'
+import { aggregateInsert, aggregateReplace } from '../../transactions/helpers'
 import { requireAuth } from '../../users/helpers'
 import {
     reconcileAccountDuplicates,
@@ -76,6 +82,28 @@ const transactionUpsert = v.object({
     toCurrency: v.optional(v.string()),
     exchangeRate: v.optional(v.number()),
     balanceAfter: v.optional(v.int64()),
+    // Set on an occurrence of a recurring rule; absent on a one-off. Optional
+    // for backward-compat, like `dateConfirmed` above: a client from before
+    // v5 simply never sends them; replacement preserves the stored link.
+    recurrenceId: v.optional(v.string()),
+    recurrenceIndex: v.optional(v.int64()),
+    isArchived: v.boolean(),
+    createdAt: v.int64(),
+    updatedAt: v.int64(),
+})
+
+const recurrenceUpsert = v.object({
+    id: v.string(),
+    frequency: v.union(
+        v.literal('daily'),
+        v.literal('weekly'),
+        v.literal('monthly'),
+        v.literal('yearly'),
+        v.literal('customDays'),
+    ),
+    dayInterval: v.optional(v.int64()),
+    anchorDate: v.int64(),
+    endDate: v.optional(v.int64()),
     isArchived: v.boolean(),
     createdAt: v.int64(),
     updatedAt: v.int64(),
@@ -182,6 +210,8 @@ type TransactionUpsert = {
     toCurrency?: string
     exchangeRate?: number
     balanceAfter?: bigint
+    recurrenceId?: string
+    recurrenceIndex?: bigint
     isArchived: boolean
     createdAt: bigint
     updatedAt: bigint
@@ -220,12 +250,24 @@ type AgentMemoryUpsert = {
     updatedAt: bigint
 }
 
+type RecurrenceUpsert = {
+    id: string
+    frequency: 'daily' | 'weekly' | 'monthly' | 'yearly' | 'customDays'
+    dayInterval?: bigint
+    anchorDate: bigint
+    endDate?: bigint
+    isArchived: boolean
+    createdAt: bigint
+    updatedAt: bigint
+}
+
 type SyncedTableName =
     | 'accounts'
     | 'categories'
     | 'transactions'
     | 'tags'
     | 'transactionTags'
+    | 'recurrences'
     | 'savedFilters'
     | 'dashboardWidgets'
     | 'agentMemories'
@@ -495,6 +537,8 @@ async function applyTransactionUpsert(
         toCurrency: payload.toCurrency,
         exchangeRate: payload.exchangeRate,
         balanceAfter: payload.balanceAfter,
+        recurrenceId: payload.recurrenceId ?? existing?.recurrenceId,
+        recurrenceIndex: payload.recurrenceIndex ?? existing?.recurrenceIndex,
         isArchived: payload.isArchived,
         createdAt: payload.createdAt,
         updatedAt: payload.updatedAt,
@@ -504,18 +548,10 @@ async function applyTransactionUpsert(
     if (existing) {
         const oldDoc = existing
         await ctx.db.replace(existing._id, doc)
-        const newDoc = await ctx.db.get(existing._id)
-        if (newDoc) {
-            await outflowsByAccount.replace(ctx, oldDoc, newDoc)
-            await inflowsByAccount.replace(ctx, oldDoc, newDoc)
-        }
+        await aggregateReplace(ctx, oldDoc, existing._id)
     } else {
         const newId = await ctx.db.insert('transactions', doc)
-        const newDoc = await ctx.db.get(newId)
-        if (newDoc) {
-            await outflowsByAccount.insert(ctx, newDoc)
-            await inflowsByAccount.insert(ctx, newDoc)
-        }
+        await aggregateInsert(ctx, newId)
     }
     await clearTombstone(ctx, userId, 'transactions', payload.id)
 }
@@ -578,6 +614,7 @@ async function applyTransactionTagUpsert(
     } else {
         await ctx.db.insert('transactionTags', doc)
     }
+    await tagAggregateAttach(ctx, doc, txn)
     await clearTombstone(ctx, userId, 'transactionTags', payload.id)
 }
 
@@ -676,6 +713,38 @@ async function applyAgentMemoryUpsert(
     await clearTombstone(ctx, userId, 'agentMemories', payload.id)
 }
 
+async function applyRecurrenceUpsert(
+    ctx: MutationCtx,
+    userId: string,
+    seq: bigint,
+    payload: RecurrenceUpsert,
+): Promise<void> {
+    const existing = await ctx.db
+        .query('recurrences')
+        .withIndex('by_user_id', (q) =>
+            q.eq('userId', userId).eq('id', payload.id),
+        )
+        .unique()
+    const doc: Omit<Doc<'recurrences'>, '_id' | '_creationTime'> = {
+        userId,
+        id: payload.id,
+        frequency: payload.frequency,
+        dayInterval: payload.dayInterval,
+        anchorDate: payload.anchorDate,
+        endDate: payload.endDate,
+        isArchived: payload.isArchived,
+        createdAt: payload.createdAt,
+        updatedAt: payload.updatedAt,
+        seq,
+    }
+    if (existing) {
+        await ctx.db.replace(existing._id, doc)
+    } else {
+        await ctx.db.insert('recurrences', doc)
+    }
+    await clearTombstone(ctx, userId, 'recurrences', payload.id)
+}
+
 async function applyTombstone(
     ctx: MutationCtx,
     userId: string,
@@ -726,9 +795,22 @@ async function applyTombstone(
                 )
                 .unique()
             if (row) {
-                await outflowsByAccount.deleteIfExists(ctx, row)
-                await inflowsByAccount.deleteIfExists(ctx, row)
-                await ctx.db.delete(row._id)
+                if (row.recurrenceId !== undefined) {
+                    // The archived anchor is still the series template. A
+                    // legacy delete means this occurrence, not the rule or
+                    // the ability to extend its remaining occurrences.
+                    await ctx.db.patch(row._id, {
+                        isArchived: true,
+                        updatedAt: args.deletedAt,
+                        seq,
+                    })
+                    await aggregateReplace(ctx, row, row._id)
+                } else {
+                    await outflowsByAccount.deleteIfExists(ctx, row)
+                    await inflowsByAccount.deleteIfExists(ctx, row)
+                    await tagAggregateDeleteTransaction(ctx, row)
+                    await ctx.db.delete(row._id)
+                }
             }
             break
         }
@@ -739,7 +821,10 @@ async function applyTombstone(
                     q.eq('userId', userId).eq('id', args.entityId),
                 )
                 .unique()
-            if (row) await ctx.db.delete(row._id)
+            if (row) {
+                await tagAggregateDetach(ctx, row)
+                await ctx.db.delete(row._id)
+            }
             break
         }
         case 'savedFilters': {
@@ -765,6 +850,16 @@ async function applyTombstone(
         case 'agentMemories': {
             const row = await ctx.db
                 .query('agentMemories')
+                .withIndex('by_user_id', (q) =>
+                    q.eq('userId', userId).eq('id', args.entityId),
+                )
+                .unique()
+            if (row) await ctx.db.delete(row._id)
+            break
+        }
+        case 'recurrences': {
+            const row = await ctx.db
+                .query('recurrences')
                 .withIndex('by_user_id', (q) =>
                     q.eq('userId', userId).eq('id', args.entityId),
                 )
@@ -807,6 +902,7 @@ export const push = mutation({
             accounts: v.optional(v.array(accountUpsert)),
             categories: v.optional(v.array(categoryUpsert)),
             tags: v.optional(v.array(tagUpsert)),
+            recurrences: v.optional(v.array(recurrenceUpsert)),
             transactions: v.optional(v.array(transactionUpsert)),
             transactionTags: v.optional(v.array(transactionTagUpsert)),
             savedFilters: v.optional(v.array(savedFilterUpsert)),
@@ -863,7 +959,7 @@ export const push = mutation({
             const key = await applyAccountUpsert(ctx, userId, newSeq, u)
             if (key) {
                 dirtyAccountKeys.set(
-                    `${key.currency} ${key.name.trim().toLowerCase()}`,
+                    `${key.currency}\u0000${key.name.trim().toLowerCase()}`,
                     key,
                 )
             }
@@ -882,6 +978,10 @@ export const push = mutation({
         }
         for (const u of args.upserts.tags ?? []) {
             await applyTagUpsert(ctx, userId, newSeq, u)
+        }
+        // Rules before their occurrences: a transaction carries `recurrenceId`.
+        for (const u of args.upserts.recurrences ?? []) {
+            await applyRecurrenceUpsert(ctx, userId, newSeq, u)
         }
         for (const u of args.upserts.transactions ?? []) {
             await applyTransactionUpsert(ctx, userId, newSeq, u)
@@ -914,6 +1014,9 @@ export const push = mutation({
             dashboardWidgets: 5,
             savedFilters: 6,
             agentMemories: 7,
+            // After transactions: an occurrence still points at the rule, so
+            // the rule outlives the rows it owns.
+            recurrences: 8,
         }
         const sortedTombs = [...tombs].sort(
             (a, b) => order[a.tableName] - order[b.tableName],
