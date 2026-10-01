@@ -6,18 +6,43 @@ import {
     AGENT_VOICE_NAME,
     sanitizeAgentContext,
     TOOL_DEFINITIONS,
+    withoutRecurrence,
 } from '@wallet-bot/shared'
 import { compareVersions } from '../config/utils'
 import type { FlagKey } from '../featureFlags/utils'
+import { supportsRecurrences } from '../sync/compatibility'
 
 // Deliberately NOT 'use node': minting is one HTTPS call, kept in Convex's
 // default runtime so token requests never pay a Node cold start.
 //
-// Model + voice come from packages/shared/src/tools/constants.ts — the same
-// source the native setup frame derives from (via the generated
-// apps/native/lib/voice/agent_generated.dart), so a bump here can never
-// silently desync the two sides.
-const MODEL = AGENT_MODEL
+// The token response is authoritative for model-aware native clients.
+// Older binaries still require the model compiled into their setup frame.
+export function liveModelFor(
+    platform?: string,
+    appVersion?: string,
+    flags?: Partial<Record<FlagKey, boolean>>,
+): string {
+    const native =
+        platform === 'android' || platform === 'ios' || platform === 'macos'
+    if (
+        platform === 'web' &&
+        compareVersions(appVersion ?? '0.0.0', '0.5.1') >= 0
+    ) {
+        return flags?.agentGemini31
+            ? 'gemini-3.1-flash-live-preview'
+            : AGENT_MODEL
+    }
+    if (!native || compareVersions(appVersion ?? '0.0.0', '0.5.0') < 0) {
+        return 'gemini-3.1-flash-live-preview'
+    }
+    if (
+        flags?.agentGemini31 === true &&
+        compareVersions(appVersion ?? '0.0.0', '0.5.1') >= 0
+    ) {
+        return 'gemini-3.1-flash-live-preview'
+    }
+    return AGENT_MODEL
+}
 // The clients open the Live constrained WebSocket against v1alpha; mint the
 // token against the same API version.
 const AUTH_TOKENS_URL =
@@ -88,6 +113,12 @@ const NATIVE_TOOL_MIN_VERSION: Readonly<Record<string, string>> = {
     // Ships in the same release as the calculators, plus the device-scoped
     // rate cache the executor reads (apps/native/lib/fx/).
     getExchangeRate: '0.3.1',
+    // Recurring movements: the executors need the v5 local schema (the
+    // `recurrences` table and the occurrence columns), which is the 0.4.0
+    // coordinated bump. A 0.3.x binary has nowhere to put a rule.
+    listUpcomingTransactions: '0.4.0',
+    listRecurrences: '0.4.0',
+    addRecurrenceOccurrences: '0.4.0',
 }
 
 // Tools behind a feature flag, on every platform. Unlike the version gate
@@ -96,6 +127,20 @@ const NATIVE_TOOL_MIN_VERSION: Readonly<Record<string, string>> = {
 // model cannot call something the rollout has not reached yet.
 const FLAG_GATED_TOOLS: Readonly<Record<string, FlagKey>> = {
     getExchangeRate: 'exchangeRates',
+    // Same flag that gates the UI. With it off the user has no way to see or
+    // manage a recurring rule, so the agent must not be able to create one.
+    listRecurrences: 'recurringExpense',
+    addRecurrenceOccurrences: 'recurringExpense',
+    // `listUpcomingTransactions` is NOT gated: one-off movements dated in the
+    // future exist regardless of the flag, and they are invisible everywhere
+    // else, so the agent needs to be able to see them either way.
+    //
+    // Withholding these two is only half of `recurringExpense`: addExpense,
+    // addIncome, updateTransaction and deleteTransaction stay declared but
+    // carry recurrence arguments of their own, so the same flag also strips
+    // those (`withoutRecurrence`, applied in `declarationsFor` below).
+    // Without that the model could still create and scope a series the user
+    // has no way to see.
 }
 
 export function declarationsFor(
@@ -104,7 +149,12 @@ export function declarationsFor(
     flags: Partial<Record<FlagKey, boolean>> = {},
 ): FunctionDeclaration[] {
     const version = appVersion ?? '0.0.0'
-    return TOOL_DECLARATIONS.filter((declaration) => {
+    const declarations =
+        flags.recurringExpense === true &&
+        supportsRecurrences(platform, appVersion)
+            ? TOOL_DECLARATIONS
+            : TOOL_DECLARATIONS_WITHOUT_RECURRENCE
+    return declarations.filter((declaration) => {
         const flag = FLAG_GATED_TOOLS[declaration.name]
         if (flag !== undefined && flags[flag] !== true) return false
         // Web ships with the backend, so only the flag gate applies there.
@@ -143,7 +193,9 @@ You manage four kinds of movements:
 - Transfer — moving money between two accounts. If the accounts hold different currencies, ask for the exchange rate or the amount received on the other side. A category is optional on transfers.
 - Balance adjustment — when the user counted cash or saw the actual balance on a statement. Record that final number; the system computes the difference.
 
-You can also list, search, update, archive, or delete movements; manage accounts, categories, and tags (including attaching/detaching tags through updateTransaction); produce summaries by category or account over a date range (summarizeTransactions); and manage the home dashboard's saved filters and widgets.`
+You can also list, search, update, archive, or delete movements; manage accounts, categories, and tags (including attaching/detaching tags through updateTransaction); produce summaries by category or account over a date range (summarizeTransactions); and manage the home dashboard's saved filters and widgets.
+
+Movements can also be dated in the FUTURE. On clients with upcoming-movement support they are absent from Activity, balances, summaries and widgets until their date arrives. Only use listUpcomingTransactions when it is declared in this session.`
 
 const DASHBOARD_GUIDE = `# Home dashboard and filters
 - The home dashboard is made of saved filters plus widgets. It is the same dashboard on every one of the user's devices.
@@ -205,6 +257,18 @@ const FX_GUIDE = `# Exchange rates
 - A market quote is never the user's own rate. On a real cross-currency transfer, ask what actually arrived on the destination side and record that as toAmount; offer the quote only as a suggestion to confirm.
 - Say the date when a result comes back \`stale\`, and read the exchange-rates skill before explaining any of this in depth.`
 
+// Only included when the connecting client declares the recurrence tools
+// (feature flag + native version) — the prompt must never reference a tool the
+// session cannot call.
+const RECURRENCE_GUIDE = `# Recurring movements
+- A movement can repeat: pass \`recurrence\` on addExpense/addIncome with a frequency (daily, weekly, monthly, yearly, or customDays plus dayInterval) and, if the user gave one, an end date.
+- The occurrences are created up front as real future movements. With an end date, all of them; without one, a fixed batch. The result says how many were created and roughly how far they reach — tell the user that number instead of implying it repeats forever, and mention they can add more later.
+- listRecurrences shows what the user has repeating. addRecurrenceOccurrences extends an open-ended rule by another batch, continuing from the last occurrence that exists.
+- EDITING OR DELETING an occurrence is ambiguous and you must resolve it: \`scope: 'only-this'\` touches that one movement, \`scope: 'all-future'\` touches it and every later one (and a delete also stops the rule there). Ask the user which they mean — never guess, and never let a "delete the rent" become one month or the whole series by accident.
+- Occurrences before the one you are editing are never affected by either scope.
+- Changing the cadence needs scope all-future and splits the rule in two: the old one ends at the previous occurrence, a new one starts at this one. Say so — the earlier movements keep their old spacing.
+- Read the recurring-movements skill before explaining any of this in depth.`
+
 const FEATURE_DISCOVERY = `# Suggesting features (gently)
 The user may not know everything the app can do. When a feature clearly fits what they are doing, offer it in ONE short sentence AFTER completing their request — never instead of it, and never as a lecture:
 - They keep asking for the same total or breakdown → mention that a dashboard widget could keep it on their home screen, and offer to create it.
@@ -223,9 +287,13 @@ Your long-term memory is the Memories list in the data snapshot (shared across t
 - Forget on request: when the user says to forget something, call forgetMemory and confirm.
 - Consolidate: when the Memories list contains duplicates, contradictions, or entries made obsolete by newer ones, merge or rewrite them (updateMemory) and delete the leftovers (forgetMemory). Keep the set small, current, and non-overlapping. When addMemory reports the set is full, consolidate first.`
 
-const SKILLS_INDEX = `# Skills
+const skillsIndex = (recurrences: boolean) => `# Skills
 Reference documents you can read with readSkill(slug). Call readSkill BEFORE answering questions about how the app itself behaves — policies, sync, data handling — instead of guessing:
-${AGENT_SKILLS.map((skill) => `- ${skill.slug}: ${skill.oneLiner}`).join('\n')}`
+${AGENT_SKILLS.filter(
+    (skill) => recurrences || skill.slug !== 'recurring-movements',
+)
+    .map((skill) => `- ${skill.slug}: ${skill.oneLiner}`)
+    .join('\n')}`
 
 // ─── USER_CONTEXT rendering ──────────────────────────────────────────────────
 
@@ -389,9 +457,10 @@ export function buildSystemInstruction(
         CORE_RULES,
         declared.has('calculate') ? MATH_GUIDE : null,
         declared.has('getExchangeRate') ? FX_GUIDE : null,
+        declared.has('listRecurrences') ? RECURRENCE_GUIDE : null,
         FEATURE_DISCOVERY,
         MEMORY_RULES,
-        SKILLS_INDEX,
+        skillsIndex(declared.has('listRecurrences')),
         userContext,
         buildDateLine(options),
     ]
@@ -412,6 +481,7 @@ type GoogleSchema = {
 }
 
 type FunctionDeclaration = {
+    behavior: 'BLOCKING' | 'NON_BLOCKING'
     name: string
     description: string
     parameters: GoogleSchema
@@ -446,6 +516,10 @@ function toFunctionDeclarations(
     }[],
 ): FunctionDeclaration[] {
     return defs.map((d) => ({
+        // Keep local financial operations ordered and wait for committed
+        // results before confirming them. Opt reads into async separately
+        // once the conversation UX represents outstanding work explicitly.
+        behavior: 'BLOCKING',
         name: d.name,
         description: d.description,
         parameters: toGoogleSchema(d.parameters),
@@ -453,6 +527,13 @@ function toFunctionDeclarations(
 }
 
 const TOOL_DECLARATIONS = toFunctionDeclarations(TOOL_DEFINITIONS)
+// The same set for a user the `recurringExpense` rollout has not reached:
+// every tool that stays declared, minus its recurrence arguments and the
+// sentence documenting them. Converted once at module load like the full set,
+// so a mint never pays for the second pass.
+const TOOL_DECLARATIONS_WITHOUT_RECURRENCE = toFunctionDeclarations(
+    TOOL_DEFINITIONS.map(withoutRecurrence),
+)
 
 // Stamped at module load. A small `moduleAgeMs` on an invocation means the
 // request paid a Node runtime cold start (module re-evaluation, including
@@ -468,6 +549,11 @@ export async function createLiveToken(
     timings: { googleMs: number; mintMs: number; moduleAgeMs: number }
 }> {
     const startedAt = Date.now()
+    const model = liveModelFor(
+        options.platform,
+        options.appVersion,
+        options.flags,
+    )
     const apiKey = process.env.GEMINI_API_KEY
     if (!apiKey) {
         throw new Error('GEMINI_API_KEY environment variable is not set')
@@ -488,7 +574,7 @@ export async function createLiveToken(
             Date.now() + NEW_SESSION_WINDOW_MS,
         ).toISOString(),
         bidiGenerateContentSetup: {
-            model: `models/${MODEL}`,
+            model: `models/${model}`,
             generationConfig: {
                 responseModalities: ['AUDIO'],
                 speechConfig: {
@@ -507,7 +593,11 @@ export async function createLiveToken(
                         options.platform,
                         options.appVersion,
                         options.flags,
-                    ),
+                    ).map((declaration) => {
+                        if (model === AGENT_MODEL) return declaration
+                        const { behavior: _behavior, ...legacy } = declaration
+                        return legacy
+                    }),
                 },
             ],
             inputAudioTranscription: {},
@@ -550,7 +640,7 @@ export async function createLiveToken(
     return {
         token: token.name,
         expireTime,
-        model: MODEL,
+        model,
         timings,
     }
 }

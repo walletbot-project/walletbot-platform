@@ -156,14 +156,19 @@ version gating is handled.
   `/v1/live/token`. Do not version framework-managed authentication, OIDC,
   JWKS, or Better Auth routes. To make a breaking contract change, add the next
   version and retire the old one only when its clients no longer require it.
-- **Breaking sync/wire changes are a coordinated bump.** Any change to the sync
-  wire format or the set of synced tables/fields must bump **both**
-  `minSupportedVersion` (backend constants in
-  `packages/backend/convex/config/helpers.ts`, per platform) and the drift
-  `schemaVersion` in `apps/native/lib/database.dart` in the same change. Old
-  clients must fail *closed on sync* while continuing to work *offline* on their
-  local data — never silently drop or diverge. The gate is enforced on **both**
-  sides: the client won't start sync when `syncAllowed` is false, and because a
+- **Preserve published native sync contracts.** Additive schema changes may
+  bump Drift `schemaVersion` without increasing `minSupportedVersion` when
+  the backend provides a tested legacy projection, preserves fields older
+  writers omit, and hydrates newly supported data when a device upgrades.
+  Recurrences use this path: 0.3.x remains supported; 0.4.0 adds the capability.
+  For WAL-174, older clients intentionally receive future movements as ordinary
+  rows and may count them early. This accepted limitation needs no publication
+  cron or scheduled delivery; the compatibility guarantee is continued sync
+  without a forced update, not occurrence-aware totals on old binaries.
+  Only genuinely incompatible changes require a coordinated minimum-version
+  bump; those clients must fail closed on sync while retaining offline data.
+  The version floor is enforced on both sides: the client won't start sync
+  when `syncAllowed` is false, and because a
   client whose config fetch failed fails *open*, `v1/sync/mutations:push` and
   `v1/sync/queries:pull` also check `appVersion`/`platform` against
   `minSupportedVersion` server-side

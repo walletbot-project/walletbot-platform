@@ -39,7 +39,7 @@ jobs:
   # meaningful single-push diff, so those always mark everything changed —
   # correct, since those are exactly the events that need to create things.
   changes:
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     if: |
       contains(github.event.pull_request.labels.*.name, 'create-staging-web') ||
       contains(github.event.pull_request.labels.*.name, 'create-staging-mobile')
@@ -90,7 +90,7 @@ jobs:
 
   web:
     needs: changes
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     if: |
       (contains(github.event.pull_request.labels.*.name, 'create-staging-web') ||
        contains(github.event.pull_request.labels.*.name, 'create-staging-mobile')) &&
@@ -153,6 +153,73 @@ jobs:
             echo "convex_site_url=$SITE_URL"
           } >> "$GITHUB_OUTPUT"
 
+      # Native sign-in (authNative) mints/verifies JWTs with JWT_PRIVATE_KEY /
+      # JWKS. Prod has these set by hand on its deployment (see LESSONS.md #10)
+      # but a preview is a brand-new, empty Convex deployment — without this
+      # step native Google sign-in 500s on every preview with
+      # "JWT_PRIVATE_KEY environment variable is not set". This is a
+      # dedicated preview-only keypair, not prod's, since previews are
+      # ephemeral and publicly reachable.
+      - name: Set backend preview native-auth JWT env vars
+        working-directory: packages/backend
+        env:
+          CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_PREVIEW_DEPLOY_KEY }}
+          JWT_PRIVATE_KEY_PREVIEW: ${{ secrets.JWT_PRIVATE_KEY_PREVIEW }}
+          JWKS_PREVIEW: ${{ secrets.JWKS_PREVIEW }}
+        run: |
+          set -euo pipefail
+          printf '%s' "$JWT_PRIVATE_KEY_PREVIEW" > "$RUNNER_TEMP/jwt_private_key.pem"
+          printf '%s' "$JWKS_PREVIEW" > "$RUNNER_TEMP/jwks.json"
+          npx convex env set JWT_PRIVATE_KEY --from-file "$RUNNER_TEMP/jwt_private_key.pem" \
+            --deployment "$CONVEX_PREVIEW_NAME"
+          npx convex env set JWKS --from-file "$RUNNER_TEMP/jwks.json" \
+            --deployment "$CONVEX_PREVIEW_NAME"
+
+      # Confirm the values actually applied rather than assuming the CLI call
+      # succeeded (LESSONS.md #10 — a mangled multi-line value here fails
+      # silently until someone hits native sign-in).
+      - name: Verify native-auth JWT env vars applied
+        run: |
+          set -euo pipefail
+          kid="$(curl -sf "$VITE_CONVEX_SITE_URL/native-auth/.well-known/jwks.json" | jq -r '.keys[0].kid // empty')"
+          if [ -z "$kid" ]; then
+            echo "::error::JWKS did not apply to preview deployment $CONVEX_PREVIEW_NAME — native sign-in will fail with JWT_PRIVATE_KEY/JWKS not set"
+            exit 1
+          fi
+          echo "JWKS applied to $CONVEX_PREVIEW_NAME, kid=$kid"
+
+      # A preview is a brand-new, empty Convex deployment, so
+      # OTEL_EXPORTER_OTLP_ENDPOINT is never set on it and the exporter
+      # (telemetry/actions.ts) always no-ops with "OTEL_EXPORTER_OTLP_ENDPOINT
+      # not configured". Points at the same Grafana Cloud stack as production
+      # (docs/observability-grafana.md) — no second stack to provision — via
+      # a dedicated preview OTLP token, same prod/preview credential split as
+      # JWT_PRIVATE_KEY_PREVIEW above. `deployment.environment=preview` keeps
+      # preview noise out of production dashboards. Skips (warns, doesn't
+      # fail the job) if the secret hasn't been provisioned yet, so this
+      # doesn't break staging previews for PRs that don't need it.
+      - name: Set backend preview OTLP export env vars
+        working-directory: packages/backend
+        env:
+          CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_PREVIEW_DEPLOY_KEY }}
+          OTEL_EXPORTER_OTLP_ENDPOINT_PREVIEW: ${{ secrets.OTEL_EXPORTER_OTLP_ENDPOINT_PREVIEW }}
+          OTEL_EXPORTER_OTLP_HEADERS_PREVIEW: ${{ secrets.OTEL_EXPORTER_OTLP_HEADERS_PREVIEW }}
+        run: |
+          set -euo pipefail
+          if [ -z "$OTEL_EXPORTER_OTLP_ENDPOINT_PREVIEW" ]; then
+            echo "::warning::OTEL_EXPORTER_OTLP_ENDPOINT_PREVIEW secret not set — this preview's metrics export stays disabled (see docs/observability-grafana.md)"
+            exit 0
+          fi
+          npx convex env set OTEL_SERVICE_NAME "walletbot-backend" \
+            --deployment "$CONVEX_PREVIEW_NAME"
+          npx convex env set OTEL_RESOURCE_ATTRIBUTES \
+            "deployment.environment=preview,service.namespace=walletbot,service.version=preview" \
+            --deployment "$CONVEX_PREVIEW_NAME"
+          npx convex env set OTEL_EXPORTER_OTLP_ENDPOINT "$OTEL_EXPORTER_OTLP_ENDPOINT_PREVIEW" \
+            --deployment "$CONVEX_PREVIEW_NAME"
+          npx convex env set OTEL_EXPORTER_OTLP_HEADERS "$OTEL_EXPORTER_OTLP_HEADERS_PREVIEW" \
+            --deployment "$CONVEX_PREVIEW_NAME"
+
       - name: Build web app
         working-directory: apps/web
         run: pnpm run build
@@ -189,7 +256,7 @@ jobs:
             _Use this stable branch-alias URL — per-commit `<hash>.pages.dev` URLs are not trusted by the backend and will CORS-fail. Remove the `create-staging-web` label to tear this down (it also comes down automatically if `create-staging-mobile` is removed and no longer present)._
 
   destroy-web:
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     if: |
       github.event.action == 'unlabeled' &&
       (github.event.label.name == 'create-staging-web' || github.event.label.name == 'create-staging-mobile') &&
@@ -265,7 +332,7 @@ jobs:
             🗑️ **Web staging preview removed**
 
   landing:
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     if: contains(github.event.pull_request.labels.*.name, 'create-staging-landing')
     permissions:
       contents: read
@@ -315,7 +382,7 @@ jobs:
             - **Landing**: ${{ steps.deploy.outputs.pages-deployment-alias-url }}
 
   destroy-landing:
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     if: github.event.action == 'unlabeled' && github.event.label.name == 'create-staging-landing'
     permissions:
       contents: read
@@ -353,7 +420,7 @@ jobs:
 
   mobile:
     needs: [web, changes]
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     if: |
       contains(github.event.pull_request.labels.*.name, 'create-staging-mobile') &&
       needs.changes.outputs.native == 'true' &&
@@ -497,7 +564,7 @@ jobs:
             Download it from the [workflow run artifacts](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) (requires a GitHub login). Remove the `create-staging-mobile` label to remove this build.
 
   destroy-mobile:
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     if: github.event.action == 'unlabeled' && github.event.label.name == 'create-staging-mobile'
     permissions:
       contents: read

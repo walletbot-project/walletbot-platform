@@ -6,6 +6,48 @@ import { recordWebMetricBatch, type TelemetryMetric } from '@/lib/telemetry'
 type SessionMode = 'voice' | 'text' | 'mixed'
 type InteractionType = SessionMode | 'tool'
 
+type AgentSessionCostSample = {
+    model: string
+    mode: SessionMode
+    costUsd: number
+    tokenAttributes: Record<string, number>
+}
+
+/** Main reports usage per generation, including after a reconnect or model change. */
+export class AgentSessionCostTracker {
+    private readonly totals = new Map<string, AgentSessionCostSample>()
+
+    recordUsage({
+        model,
+        mode,
+        usage,
+    }: {
+        model: string
+        mode: SessionMode
+        usage: UsageMetadata
+    }): void {
+        const costUsd = estimateSessionCostUsd(usage)
+        if (costUsd === null || costUsd <= 0) return
+        const previous = this.totals.get(model)
+        const tokenAttributes = { ...previous?.tokenAttributes }
+        for (const [key, value] of Object.entries(
+            usageTokenAttributes(usage),
+        )) {
+            tokenAttributes[key] = (tokenAttributes[key] ?? 0) + value
+        }
+        this.totals.set(model, {
+            model,
+            mode: previous && previous.mode !== mode ? 'mixed' : mode,
+            costUsd: (previous?.costUsd ?? 0) + costUsd,
+            tokenAttributes,
+        })
+    }
+
+    samples(): AgentSessionCostSample[] {
+        return Array.from(this.totals.values())
+    }
+}
+
 // Local estimate used only to detect cumulative usage changes. The backend
 // recalculates accepted costs from token attributes and its pricing catalog.
 const gemini31FlashLiveInputTextUsdPerMillion = 0.75
@@ -194,6 +236,15 @@ export const recordAgentSessionCostFromUsage = (
         }),
     ])
 }
+
+/** Send one total per model; backend pricing remains authoritative. */
+export const recordAgentSessionCost = (
+    client: ConvexReactClient,
+    args: AgentSessionCostSample & { sessionId: string },
+): Promise<void> =>
+    recordWebMetricBatch(client, [
+        costGaugeMetric({ name: 'agent.session.cost_usd', ...args }),
+    ])
 
 export const recordAgentInteractionCost = (
     client: ConvexReactClient,

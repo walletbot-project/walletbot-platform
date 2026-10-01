@@ -6,8 +6,8 @@ import { requireAuth } from '../../users/helpers'
 // Business rule: a category always has a color + icon. Convex has no
 // column-level defaults, so we fill them here when a writer omits them.
 // Mirror the native defaults in apps/native/lib/database.dart.
-const DEFAULT_CATEGORY_COLOR = '#6366F1'
-const DEFAULT_CATEGORY_ICON = 'category'
+export const DEFAULT_CATEGORY_COLOR = '#6366F1'
+export const DEFAULT_CATEGORY_ICON = 'category'
 
 export const create = mutation({
     args: {

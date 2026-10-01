@@ -9,6 +9,8 @@ served from `app.walletbot.live` (its own Pages project).
 | Route (per locale) | Source | Content |
 |---|---|---|
 | `/{en,es}/` | `src/components/home-page.astro` | Hero, feature grid, get-the-app links |
+| `/{en,es}/beta` | `src/components/beta-page.astro` | Get-the-app page, a card out to the Google Form that hands out both store links. Also answered unprefixed at `/beta` |
+| `/{en,es}/support` | `src/components/support-page.astro` | Support mailbox: one `mailto:` card, nothing else. Also answered unprefixed at `/support` (§ The only server code) — that is the link on the store listings |
 | `/{en,es}/privacy` | `src/components/legal-page.astro` | Renders `docs/legal/privacy-policy.{locale}.md` |
 | `/{en,es}/terms` | `src/components/legal-page.astro` | Renders `docs/legal/terms-and-conditions.{locale}.md` |
 
@@ -18,11 +20,30 @@ features that don't exist — the saved-filters card is commented out until that
 feature ships — and keep local-only wording scoped to *financial records*, per
 `docs/legal/README.md`.
 
-Store links are the primary CTA (hero badges, header button, closing section):
-Google Play points at the real `live.walletbot.app` listing URL (a placeholder
-until the listing goes live) and the App Store badge is "coming soon" (no
-link). The web app is deliberately downplayed — a single quiet footer link to
-`app.walletbot.live`. URLs live in `src/lib/links.ts`.
+The one card describing something unbuilt is WhatsApp, and it says so: dashed
+border, no brand color, a "coming soon" chip (`soonCard` / `soonIconChip` in
+`home-page.astro`). A roadmap item earns a place on the page only with that
+treatment. When it ships, move it onto `card` / `iconChip` and drop the chip.
+
+## Getting the app
+
+`src/components/store-badges.astro` renders the three ways in as one row of
+equal badges, in the hero and again, larger, in the closing section. The web
+app links straight to `app.walletbot.live`. Both store listings are public, but
+the Play and App Store badges point at `/{locale}/beta` instead of a store, on
+purpose: we want visitors to fill out the form before they download. The header
+button goes there too. URLs live in `src/lib/links.ts`. `PLAY_STORE_URL` and
+`APP_STORE_URL` are kept there unlinked, as the record of what the form hands
+out.
+
+`/{locale}/beta` is one big card out to a **Google Form** (`BETA_FORM_URL`),
+not a form of our own, plus the web app underneath for anyone who would rather
+not install anything. The store links live in the form's confirmation message
+(Settings → Presentation → Confirmation message), which is outside this repo:
+if a listing URL changes, update `links.ts` and the form together. Nothing on
+this site posts anything anywhere, which is why it can stay a plain static
+build. Like the other handed-out URLs it is also answered unprefixed at
+`/beta` (§ The only server code).
 
 ## Legal documents
 
@@ -71,9 +92,9 @@ Astro's built-in i18n routing owns the URLs; `src/i18n/` owns the copy.
 - `i18n.routing.prefixDefaultLocale: true` — every URL carries its language, so
   pages live under `src/pages/en/` and `src/pages/es/`. There is no unprefixed
   content.
-- The unprefixed paths `/`, `/privacy` and `/terms` have no page in the build.
-  A Pages Function owns each one and 302s to the same page under the language
-  the browser asked for — see § Deploying. Neither Astro mechanism can do this:
+- The unprefixed paths `/`, `/privacy`, `/terms`, `/support` and `/beta` have
+  no page in the build. A Pages Function owns each one and 302s to the same page under the
+  language the browser asked for — see § Deploying. Neither Astro mechanism can do this:
   `redirects` in `astro.config.mjs` only emits a meta-refresh page without an
   adapter, and `i18n.routing.redirectToDefaultLocale` demands a root
   `src/pages/index.astro` (which it then shadows, warning about the conflict on
@@ -110,10 +131,19 @@ retired `@astrojs/tailwind` integration. There is no `tailwind.config.js` —
 tokens go in the `@theme` block in `src/styles/global.css`, which
 `base-layout.astro` imports.
 
-- Dark theme (`bg-slate-950`), Linear-style: white/slate type, hairline
-  `white/10` borders, `--color-brand` (the native app's Material seed color)
-  reserved for glows, icons and tinted chips. It is too light for text — never
-  use it as a text color.
+- Light theme built on the app's own Material scheme, copied token for token
+  from `apps/web/src/styles/m3-theme.css` (light) into the `@theme` block —
+  the site and the app are one palette, not two. Surfaces are `bg-surface` /
+  `bg-panel` / `bg-panel-alt`, type is `text-ink` / `text-ink-soft`, borders
+  are `border-line` / `border-line-strong`.
+- Two brand tokens, and the distinction matters: `--color-brand` (#6de7d8,
+  Material's `primaryContainer`) is the bright turquoise and is **fill only** —
+  it sits at 1.5:1 on `--color-surface`, so it can never carry text. Anything
+  readable uses `--color-brand-ink` (#006a61, `primary`) at 6.2:1. `--color-amber`
+  (`tertiaryContainer`) is the palette's second accent, used for the eyebrow
+  rule and the "zero spinners" chip.
+- Contrast floor is WCAG AA (4.5:1). `--color-ink-soft` is the lightest text
+  token at 7.4:1; there is deliberately nothing between it and the surface.
 - Font: Inter Variable, self-hosted via `@fontsource-variable/inter`.
 - Icons are inline SVGs in `src/components/icon.astro` — Lucide outlines plus
   the Apple and Google Play brand glyphs (Simple Icons paths). No icon font, no
@@ -121,7 +151,16 @@ tokens go in the `@theme` block in `src/styles/global.css`, which
 - The hero phone mockup (`src/components/phone-mockup.astro`) is a CSS-only
   illustration of the native voice screen; its copy lives in the `demo` catalog
   section.
-- Legal pages use `@tailwindcss/typography` (`prose prose-invert`), loaded with
+- The band closing the hero (`src/components/live-ledger.astro`) is a tape of
+  quotes about why people stop tracking their expenses, from the
+  `hero.quoteTape` catalog section. The fixed chip beside it is load-bearing,
+  not decoration: unattributed quotes next to a product read as reviews *of
+  that product*, and these are complaints about the status quo — the chip is
+  what frames them as the problem. There is no mic or waveform here on purpose;
+  a listening indicator next to complaints about manual entry reads as the app
+  recording complaints. Below `sm` the tape holds one quote still, since a
+  single line scrolling past a phone-width viewport is mostly empty tape.
+- Legal pages use `@tailwindcss/typography` (`prose prose-slate`), loaded with
   `@plugin` in `global.css`.
 
 ## Markdown
@@ -146,20 +185,25 @@ the production domain (`www.walletbot.live`).
 
 ### The only server code
 
-Three Pages Functions, one per unprefixed path, and they exist solely because
+Five Pages Functions, one per unprefixed path, and they exist solely because
 picking a language from the `Accept-Language` header has to happen per request —
-a static redirect rule has no access to request headers. All three are one-liners
+a static redirect rule has no access to request headers. All five are one-liners
 over `localeRedirect` in `src/lib/locale-redirect.ts`, which parses the header's
 weighted language ranges (honouring `q=` ordering and `q=0` rejections, matching
 on the primary subtag so `es-419` and `es-AR` both resolve to `es`), then 302s to
 the same page under that locale, carrying the query string over so campaign
 parameters survive.
 
-`/privacy` and `/terms` are covered because the legal URLs get handed out
-without a locale prefix — Google Play and Apple each want one public
-privacy-policy link (`docs/legal/README.md`), and whoever pastes it cannot know
-the reader's language. Trailing slashes are optional in Pages' routing, so
-`/privacy/` hits the same function.
+`/privacy`, `/terms`, `/support` and `/beta` are covered because those URLs
+get handed out without a locale prefix — Google Play and Apple each want one
+public privacy-policy link and one support link (`docs/legal/README.md`), and
+whoever pastes any of them cannot know the reader's language. Trailing slashes
+are optional in Pages' routing, so `/privacy/` hits the same function.
+
+A page reachable only at `/en/…` and `/es/…` is not reachable at the URL a store
+listing carries. Adding a locale-prefixed page and stopping there is how
+`/support` shipped 404ing on 2026-09-07; anything meant to be handed out needs
+its function and its `_routes.json` entry in the same change.
 
 The response sets `Vary: Accept-Language` and `Cache-Control: no-store`: the
 destination is derived from a request header, so without them a shared cache
@@ -169,8 +213,8 @@ Three conventions keep this cheap:
 
 | File | Role |
 |---|---|
-| `functions/{index,privacy,terms}.ts` | Pages' file-based routing maps these to exactly `/`, `/privacy` and `/terms` |
-| `public/_routes.json` | `include` lists those three paths (plus the trailing-slash spellings) — everything else, the six prerendered pages and every asset, stays a free static request and never starts a Worker |
+| `functions/{index,privacy,terms,support,beta}.ts` | Pages' file-based routing maps these to exactly `/`, `/privacy`, `/terms`, `/support` and `/beta` |
+| `public/_routes.json` | `include` lists those five paths (plus the trailing-slash spellings) — everything else, the six prerendered pages and every asset, stays a free static request and never starts a Worker |
 | `public/_headers` | Immutable caching for `/_astro/*`, which Astro fingerprints; replaces what the Vercel adapter used to emit |
 
 `_routes.json` and `_headers` live in `public/` because Astro copies that

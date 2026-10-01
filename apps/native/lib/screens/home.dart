@@ -11,6 +11,7 @@ import 'package:app/data/data.dart';
 import 'package:app/database.dart';
 import 'package:app/l10n/l10n.dart';
 import 'package:app/screens/account_switcher.dart';
+import 'package:app/screens/future_movements.dart';
 import 'package:app/screens/transaction_form.dart';
 import 'package:app/shared/app_navigation.dart';
 import 'package:app/sync/sync_engine.dart';
@@ -132,6 +133,20 @@ class _HomeScreenState extends State<HomeScreen> {
     context.read<AppNavigation>().index = AppNavigation.activityTab;
   }
 
+  void _openFutureMovements() {
+    // Same as _openManualAdd: the pushed route sits above the account-scoped
+    // providers, so the screen's data layer has to be re-provided into it.
+    final repos = context.read<AppRepositories>();
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => Provider<AppRepositories>.value(
+          value: repos,
+          child: const FutureMovementsScreen(),
+        ),
+      ),
+    );
+  }
+
   bool _editing = false;
 
   Future<void> _openAddWidget() async {
@@ -213,6 +228,14 @@ class _HomeScreenState extends State<HomeScreen> {
                   icon: Icons.feedback_rounded,
                   onTap: _openFeedback,
                 ),
+              // Not behind `recurringExpense`: the occurrence cutoff hides
+              // any future-dated movement from Activity whether or not the
+              // user can create series, so this door always exists.
+              _HomeActionCard(
+                label: context.l10n.futureMovements,
+                icon: Icons.event_repeat_rounded,
+                onTap: _openFutureMovements,
+              ),
             ],
           ),
         ],

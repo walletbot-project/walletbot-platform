@@ -49,6 +49,41 @@ const dateConfirmed = z
     .describe(
         'Whether the calendar day is certain. true when date comes from an explicit or deterministic relative day; false when date is omitted and today is only the default. Executors enforce this from date presence.',
     )
+const recurrenceFrequency = z.enum([
+    'daily',
+    'weekly',
+    'monthly',
+    'yearly',
+    'customDays',
+])
+const recurrenceDraft = z
+    .object({
+        frequency: recurrenceFrequency.describe(
+            'How often it repeats. Use customDays with dayInterval for "every N days".',
+        ),
+        dayInterval: z
+            .number()
+            .int()
+            .optional()
+            .describe(
+                'Days between occurrences. Only read for customDays, where it is required.',
+            ),
+        endDate: isoOrNaturalDate
+            .optional()
+            .describe(
+                'Inclusive last day. Omit for an open-ended rule, which materialises a fixed batch instead (the result says how many and how far).',
+            ),
+    })
+    .describe(
+        'Makes this a recurring movement. The movements are created up front as ordinary future movements, so the user sees them in Movimientos futuros and they stay out of Activity, balances and summaries until their date arrives.',
+    )
+const recurrenceScope = z
+    .enum(['only-this', 'all-future'])
+    .optional()
+    .describe(
+        'Which occurrences of a recurring series to touch: only-this for this movement alone, all-future for this one and every later one. Defaults to only-this. ASK the user which they mean before editing or deleting an occurrence — never guess. Ignored for a movement that is not part of a series.',
+    )
+
 const tagList = z
     .array(idOrName)
     .describe(
@@ -210,6 +245,14 @@ export const toolSchemas = {
     getTransaction: z.object({
         id: z.string().describe('Transaction UUID'),
     }),
+    listUpcomingTransactions: z.object({
+        limit: z
+            .number()
+            .int()
+            .optional()
+            .describe('Max results, soonest first. Defaults to 20.'),
+    }),
+    listRecurrences: z.object({}),
 
     // ───── Transactions: write (split per type) ─────
     addExpense: z.object({
@@ -224,6 +267,7 @@ export const toolSchemas = {
         description: z.string().optional(),
         tagIdsOrNames: tagList.optional(),
         status: transactionStatus.optional(),
+        recurrence: recurrenceDraft.optional(),
     }),
     addIncome: z.object({
         amount: z.number(),
@@ -237,6 +281,7 @@ export const toolSchemas = {
         description: z.string().optional(),
         tagIdsOrNames: tagList.optional(),
         status: transactionStatus.optional(),
+        recurrence: recurrenceDraft.optional(),
     }),
     addTransfer: z.object({
         amount: z.number().describe('Amount taken from source account'),
@@ -304,9 +349,21 @@ export const toolSchemas = {
             .describe(
                 'Tags to detach. Tag UUIDs or names; unknown names are skipped and reported in `missing`.',
             ),
+        scope: recurrenceScope,
+        recurrence: recurrenceDraft
+            .optional()
+            .describe(
+                'Re-cadence a series from this occurrence on. Requires scope all-future, and splits the rule in two: the old one ends at the previous occurrence and a new one starts here. The occurrences before this one keep their own spacing, so there is no way to express it as one rule.',
+            ),
     }),
     deleteTransaction: z.object({
         id: z.string(),
+        scope: recurrenceScope,
+    }),
+    addRecurrenceOccurrences: z.object({
+        recurrenceId: z
+            .string()
+            .describe('Recurring rule UUID, from listRecurrences.'),
     }),
 
     // ───── Summaries ─────

@@ -1,4 +1,7 @@
 import {
+    AI_CONSENT_DOCUMENT,
+    AI_CONSENT_VERSION,
+    isLegalVersionAtLeast,
     LEGAL_DOCUMENTS,
     LEGAL_VERSIONS,
     type LegalDocument,
@@ -45,7 +48,7 @@ export type LegalAcceptanceStatus = Record<
 const latestAcceptance = async (
     ctx: QueryCtx | MutationCtx,
     userId: string,
-    document: LegalDocument,
+    document: LegalDocument | typeof AI_CONSENT_DOCUMENT,
 ): Promise<{ version: string; acceptedAt: number } | null> => {
     const latest = await ctx.db
         .query('legalAcceptances')
@@ -129,4 +132,62 @@ export async function recordAcceptances(
             locale: args.locale,
         })
     }
+}
+
+/** What the signed-in user has consented to on the AI disclosure. */
+export type AiConsentStatus = {
+    /** Accepted `current` or newer: the agent may run. */
+    accepted: boolean
+    /** Highest version this user ever accepted, or null. */
+    version: string | null
+    acceptedAt: number | null
+    /** The version a fresh consent records, and the one the sheet shows. */
+    current: string
+}
+
+export async function resolveAiConsent(
+    ctx: QueryCtx | MutationCtx,
+    userId: string,
+): Promise<AiConsentStatus> {
+    const latest = await latestAcceptance(ctx, userId, AI_CONSENT_DOCUMENT)
+    return {
+        accepted:
+            latest !== null &&
+            isLegalVersionAtLeast(latest.version, AI_CONSENT_VERSION),
+        version: latest?.version ?? null,
+        acceptedAt: latest?.acceptedAt ?? null,
+        current: AI_CONSENT_VERSION,
+    }
+}
+
+export type RecordAiConsentArgs = {
+    userId: string
+    platform: string
+    appVersion?: string
+    locale?: string
+}
+
+/**
+ * Records consent to send data to the AI providers.
+ *
+ * Append-only like every other row here, and the version written is always the
+ * server's `AI_CONSENT_VERSION` — a client cannot claim to have consented to a
+ * disclosure it was never shown. `ageConfirmed` is true because reaching the
+ * agent requires an accepted Terms row, which carries that representation; the
+ * field is about the Terms, not about this consent.
+ */
+export async function recordAiConsent(
+    ctx: MutationCtx,
+    args: RecordAiConsentArgs,
+): Promise<void> {
+    await ctx.db.insert('legalAcceptances', {
+        userId: args.userId,
+        document: AI_CONSENT_DOCUMENT,
+        version: AI_CONSENT_VERSION,
+        acceptedAt: BigInt(Date.now()),
+        ageConfirmed: true,
+        platform: args.platform,
+        appVersion: args.appVersion,
+        locale: args.locale,
+    })
 }

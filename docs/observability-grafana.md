@@ -1,5 +1,16 @@
 # Grafana Cloud Observability Setup
 
+**Instance:** <https://fearlesspillar2602.grafana.net> (org access required)
+
+| Dashboard | |
+| --- | --- |
+| Accounts created by auth method | <https://fearlesspillar2602.grafana.net/d/geb465q/user-accounts-created-by-auth-method?var-Scope=production> |
+
+The link keeps `var-Scope=production` because the scope actually selects the
+data; the time range and panel state are left off on purpose so it opens on the
+dashboard's own defaults rather than someone's saved window.
+
+
 ## Goal
 
 Send WalletBot business metrics to Grafana Cloud through OTLP HTTP.
@@ -44,6 +55,33 @@ Notes:
 ```sh
 OTEL_EXPORTER_OTLP_METRICS_ENDPOINT=https://otlp-gateway-<REGION>.grafana.net/otlp/v1/metrics
 ```
+
+### Preview (PR staging) deployments
+
+Every PR preview (`create-staging-web`/`create-staging-mobile` labels,
+`.github/workflows/preview-deploy.yml`) is a brand-new, empty Convex
+deployment — it has none of production's env vars, so the exporter always
+no-ops with `OTEL_EXPORTER_OTLP_ENDPOINT not configured` unless configured.
+The `web` job's "Set backend preview OTLP export env vars" step sets this
+automatically, pointed at the **same Grafana Cloud stack as production** (no
+second stack to provision) via two dedicated GitHub Actions repo secrets:
+
+- `OTEL_EXPORTER_OTLP_ENDPOINT_PREVIEW`
+- `OTEL_EXPORTER_OTLP_HEADERS_PREVIEW`
+
+These are separate from any production credential — same split as
+`JWT_PRIVATE_KEY_PREVIEW`/`JWKS_PREVIEW` already use, so a leaked/misused
+preview credential can't be used against production. In Grafana Cloud,
+create a second OTLP access policy/token scoped to metrics write only (same
+`Connections` → `OpenTelemetry` flow as the production setup above), and add
+its endpoint/headers as those two secrets.
+
+The step also sets `OTEL_RESOURCE_ATTRIBUTES` with
+`deployment.environment=preview`, so preview data lands as its own series —
+filter it out of production dashboards/PromQL with
+`deployment_environment="production"` (or filter it in, to look at a
+specific preview). If the secrets aren't set yet, the step warns and skips
+rather than failing the staging deploy.
 
 ## Expected Metrics
 
@@ -285,7 +323,10 @@ Common failures:
   was not sent as a cumulative monotonic OTLP `Sum`. The exporter keeps
   cumulative state in `telemetryMetricSeries`.
 - `OTEL_EXPORTER_OTLP_ENDPOINT not configured`: env vars are not set in the
-  Convex deployment running the action.
+  Convex deployment running the action. On a PR preview, see "Preview (PR
+  staging) deployments" above — most likely the
+  `OTEL_EXPORTER_OTLP_ENDPOINT_PREVIEW`/`OTEL_EXPORTER_OTLP_HEADERS_PREVIEW`
+  repo secrets aren't set yet.
 
 The exporter also writes a structured `console.warn("telemetry export failed",
 ...)` without headers or tokens.

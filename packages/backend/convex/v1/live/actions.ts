@@ -79,6 +79,24 @@ export const requestLiveToken = action({
         // Flag-gated tools are resolved server-side, never taken from the
         // client: the mint decides what the session may call.
         const userId = await requireAuth(ctx)
+        const flags = await ctx.runQuery(
+            internal.featureFlags.internal.resolveFlagsForUserInternal,
+            { userId },
+        )
+        // Backstop for the client-side sheet (App Store guideline 5.1.2(i)):
+        // nothing is sent to the AI providers for an iOS user who has not
+        // consented. Checked before the rate limit so a refusal costs the user
+        // no mint budget. iOS only, by product decision — Android and web are
+        // not gated, and the `platform` arg is the client's own claim, which
+        // is acceptable here because the only thing lying about it buys is
+        // sending your own data.
+        if (args.platform === 'ios' && flags.aiConsent === true) {
+            const consent = await ctx.runQuery(
+                internal.legal.internal.aiConsentForUser,
+                { userId },
+            )
+            if (!consent.accepted) return { error: 'ai_consent_required' }
+        }
         // Authenticated callers are still bounded: every mint is real Gemini
         // spend, and this path shares the deployment-wide ceiling with the
         // unauthenticated HTTP route.
@@ -91,10 +109,6 @@ export const requestLiveToken = action({
                 ? { error: gate.error }
                 : { error: gate.error, retryAfter: gate.retryAfter }
         }
-        const flags = await ctx.runQuery(
-            internal.featureFlags.internal.resolveFlagsForUserInternal,
-            { userId },
-        )
 
         const result = await createLiveToken({
             platform: args.platform,

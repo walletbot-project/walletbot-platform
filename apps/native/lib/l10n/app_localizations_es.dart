@@ -120,6 +120,9 @@ class AppLocalizationsEs extends AppLocalizations {
   String get amount => 'Monto';
 
   @override
+  String get time => 'Horario';
+
+  @override
   String get date => 'Fecha';
 
   @override
@@ -130,6 +133,76 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get exchangeRate => 'Tipo de cambio';
+
+  @override
+  String accountIdentity(String name) {
+    return 'Cuenta: $name';
+  }
+
+  @override
+  String categoryIdentity(String name) {
+    return 'Categoría: $name';
+  }
+
+  @override
+  String get detail => 'Detalle';
+
+  @override
+  String get editActivity => 'Editar actividad';
+
+  @override
+  String get activityGone => 'La actividad ya no existe';
+
+  @override
+  String get estimatedDate => 'Fecha estimada';
+
+  @override
+  String get estimatedTime => 'Horario estimado';
+
+  @override
+  String get sourceAccount => 'Cuenta origen';
+
+  @override
+  String get destinationAccount => 'Cuenta destino';
+
+  @override
+  String get noTags => 'Sin etiquetas';
+
+  @override
+  String get noCategory => 'Sin categoría';
+
+  @override
+  String get balanceUnavailable => 'Saldo no disponible';
+
+  @override
+  String get sameAccounts => 'La cuenta origen y destino deben ser distintas';
+
+  @override
+  String get invalidAmount => 'El monto no es válido';
+
+  @override
+  String get noOtherAccount => 'No hay otra cuenta disponible';
+
+  @override
+  String get amountNotEditable =>
+      'El monto de ajustes de saldo y balances iniciales no son editables.';
+
+  @override
+  String get change => 'Cambiar';
+
+  @override
+  String get activityUpdateFailed => 'No se pudo guardar la actividad';
+
+  @override
+  String get activityDeleteTitle => 'Eliminar actividad';
+
+  @override
+  String activityDeleteConfirm(String name) {
+    return '¿Seguro que querés eliminar “$name”?';
+  }
+
+  @override
+  String get activityDeleteFailed => 'No se pudo eliminar la actividad';
 
   @override
   String get status => 'Estado';
@@ -528,6 +601,9 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get addTransaction => 'Añadir movimiento';
+
+  @override
+  String get viewFutureMovements => 'Ver movimientos futuros';
 
   @override
   String transactionsLoadFailed(Object error) {
@@ -1048,6 +1124,155 @@ class AppLocalizationsEs extends AppLocalizations {
   String get recurringExpense => 'Gasto recurrente';
 
   @override
+  String get recurringIncome => 'Ingreso recurrente';
+
+  @override
+  String get frequency => 'Frecuencia';
+
+  @override
+  String get recurrenceDaily => 'Diario';
+
+  @override
+  String get recurrenceWeekly => 'Semanal';
+
+  @override
+  String get recurrenceMonthly => 'Mensual';
+
+  @override
+  String get recurrenceYearly => 'Anual';
+
+  @override
+  String get recurrenceEndDateOptional => 'Fecha de fin (opcional)';
+
+  @override
+  String get recurrenceNoEndDate => 'Sin fecha de fin';
+
+  @override
+  String recurrenceSpanDays(int value) {
+    return '$value días';
+  }
+
+  @override
+  String recurrenceSpanMonths(int value) {
+    return '$value meses';
+  }
+
+  @override
+  String recurrenceSpanYears(int value) {
+    return '$value años';
+  }
+
+  @override
+  String recurrenceOpenEndedNote(int count, String span) {
+    return 'Sin fecha de fin no es para siempre: se crean $count movimientos, que cubren unos $span. Podés agregar más cuando quieras.';
+  }
+
+  @override
+  String recurrenceTooLong(int max) {
+    return 'Esa fecha de fin crearía demasiados movimientos. El máximo para esta frecuencia es $max.';
+  }
+
+  @override
+  String get recurrenceCustomDays => 'Cada X días';
+
+  @override
+  String get recurrenceRepeatEvery => 'Repetir cada';
+
+  @override
+  String get recurrenceDaysUnit => 'días';
+
+  @override
+  String recurrenceEveryNDays(int days) {
+    return 'Cada $days días';
+  }
+
+  @override
+  String get futureMovements => 'Movimientos futuros';
+
+  @override
+  String get futureMovementsInfo =>
+      'Estos son tus movimientos futuros: los que todavía no ocurrieron. No aparecen en Actividad hasta que suceden.';
+
+  @override
+  String get noFutureMovements => 'No tenés movimientos futuros programados';
+
+  @override
+  String seriesPosition(int index, int total) {
+    return '$index/$total';
+  }
+
+  @override
+  String coveredThrough(String date) {
+    return 'hasta $date';
+  }
+
+  @override
+  String addMoreMovements(int count) {
+    return 'Añadir $count más';
+  }
+
+  @override
+  String get addMoreMovementsHint =>
+      'Los nuevos movimientos continúan a partir del último de la serie, no de este.';
+
+  @override
+  String get addingMoreMovements => 'Añadiendo movimientos…';
+
+  @override
+  String addedMoreMovements(int count) {
+    return 'Se añadieron $count movimientos';
+  }
+
+  @override
+  String get addMoreMovementsFailed => 'No se pudieron añadir los movimientos';
+
+  @override
+  String get editMovement => 'Editar movimiento';
+
+  @override
+  String get titlePlaceholder => 'Título';
+
+  @override
+  String get descriptionPlaceholder => 'Detalle opcional';
+
+  @override
+  String get saveChanges => 'Guardar cambios';
+
+  @override
+  String get deleteRecurring => 'Eliminar movimiento recurrente';
+
+  @override
+  String get savedOnlyThis => 'Cambios aplicados a este movimiento';
+
+  @override
+  String get savedAllFuture => 'Cambios aplicados a este y los futuros';
+
+  @override
+  String get deletedOnlyThis => 'Movimiento eliminado';
+
+  @override
+  String get deletedAllFuture => 'Movimiento y sus futuros eliminados';
+
+  @override
+  String get scopeEditDescription =>
+      '¿Aplicar los cambios solo a este movimiento o también a los futuros?';
+
+  @override
+  String scopeDeleteDescription(String name) {
+    return '¿Querés eliminar “$name” solo esta vez o también los futuros?';
+  }
+
+  @override
+  String get scopeOnlyThis => 'Solo este movimiento';
+
+  @override
+  String get scopeAllFuture => 'Este y los futuros';
+
+  @override
+  String get scopeOnlyThisUnavailable =>
+      'Cambiar la frecuencia siempre afecta a los movimientos futuros.';
+
+  @override
   String get leaves => 'Sale';
 
   @override
@@ -1108,6 +1333,9 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get continueWithGoogle => 'Continuar con Google';
+
+  @override
+  String get continueWithApple => 'Continuar con Apple';
 
   @override
   String get continueLocally => 'Continuar sin cuenta';
@@ -1238,6 +1466,11 @@ class AppLocalizationsEs extends AppLocalizations {
   @override
   String googleSignInFailed(Object error) {
     return 'No se pudo iniciar sesión con Google: $error';
+  }
+
+  @override
+  String appleSignInFailed(Object error) {
+    return 'No se pudo iniciar sesión con Apple: $error';
   }
 
   @override
@@ -1762,4 +1995,131 @@ class AppLocalizationsEs extends AppLocalizations {
   @override
   String get reportResponseNoResponseYet =>
       'Todavía no hay ninguna respuesta para reportar';
+
+  @override
+  String get whatsappTitle => 'WhatsApp';
+
+  @override
+  String get whatsappLocalAccountTitle => 'No disponible en cuentas locales';
+
+  @override
+  String get whatsappLocalAccountBody =>
+      'Este espacio vive sólo en tu dispositivo, así que no hay cuenta para vincular. Iniciá sesión para sincronizarlo.';
+
+  @override
+  String get whatsappLoadFailed => 'No se pudo cargar tu estado de WhatsApp';
+
+  @override
+  String get whatsappUnavailableTitle => 'Todavía no disponible';
+
+  @override
+  String get whatsappUnavailableBody =>
+      'WhatsApp no está configurado en este servidor. Probá más tarde.';
+
+  @override
+  String get whatsappNotConnectedTitle => 'Sin conectar';
+
+  @override
+  String get whatsappNotConnectedBody =>
+      'Vinculá tu número para registrar gastos chateando con Gaston por WhatsApp.';
+
+  @override
+  String get whatsappConnect => 'Conectar WhatsApp';
+
+  @override
+  String get whatsappCodeLabel => 'Tu código de vinculación';
+
+  @override
+  String get whatsappCodeExpiryHint =>
+      'Vale 10 minutos y se puede usar una sola vez.';
+
+  @override
+  String get whatsappOpenWhatsapp => 'Abrir WhatsApp';
+
+  @override
+  String get whatsappCopyCode => 'Copiar código';
+
+  @override
+  String get whatsappCodeCopied => 'Código copiado';
+
+  @override
+  String get whatsappCodeFailed => 'No se pudo crear el código de vinculación';
+
+  @override
+  String get whatsappOpenFailed =>
+      'No se pudo abrir WhatsApp. Copiá el código y enviálo a mano.';
+
+  @override
+  String get whatsappConnectedTitle => 'Conectado';
+
+  @override
+  String get whatsappConnectedBody =>
+      'Escribile a Gaston por WhatsApp y va a registrar tus movimientos.';
+
+  @override
+  String whatsappLinkedOn(String date) {
+    return 'Vinculado el $date';
+  }
+
+  @override
+  String get whatsappDisconnect => 'Desconectar';
+
+  @override
+  String get whatsappDisconnectConfirm =>
+      'Gaston va a dejar de responderle a este número hasta que lo vincules de nuevo.';
+
+  @override
+  String get whatsappDisconnectFailed => 'No se pudo desconectar el número';
+
+  @override
+  String get aiConsentTitle => 'Antes de usar el asistente';
+
+  @override
+  String get aiConsentIntro =>
+      'El asistente envía lo que decís y parte de tus datos de Wallet Bot a nuestros proveedores de IA, Google LLC (Gemini) y OpenAI, LLC, en Estados Unidos.';
+
+  @override
+  String get aiConsentMicTitle => 'Te vamos a pedir el micrófono';
+
+  @override
+  String get aiConsentMicBody =>
+      'iOS lo pide cuando empezás una conversación por voz. Escribirle al asistente no necesita micrófono.';
+
+  @override
+  String get aiConsentWhatWeSend => 'Qué se envía';
+
+  @override
+  String get aiConsentItemAudio =>
+      'Tu voz mientras hay una conversación abierta, y lo que escribís.';
+
+  @override
+  String get aiConsentItemProfile => 'Tu nombre y tu correo.';
+
+  @override
+  String get aiConsentItemFinancial =>
+      'Tus cuentas, categorías, etiquetas y movimientos recientes.';
+
+  @override
+  String get aiConsentItemMemories =>
+      'Las notas que el asistente guardó sobre vos.';
+
+  @override
+  String get aiConsentItemActions => 'Los registros que crea o modifica.';
+
+  @override
+  String get aiConsentReadPolicy => 'Leer la Política de Privacidad';
+
+  @override
+  String get aiConsentDecline => 'Ahora no';
+
+  @override
+  String get aiConsentAccept => 'Aceptar y continuar';
+
+  @override
+  String get aiConsentFailed =>
+      'No se pudo registrar tu permiso. Revisá tu conexión y probá de nuevo.';
+
+  @override
+  String get aiConsentDeclined =>
+      'Necesitás aceptar para que el asistente funcione.';
 }

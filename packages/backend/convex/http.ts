@@ -13,6 +13,7 @@ import type { LiveTokenError } from './live/helpers'
 import { registerSupportRoutes } from './support/http'
 import { registerTelemetryRoutes } from './telemetry/http'
 import { registerUserDeletionRoutes } from './userDeletion/http'
+import { registerWhatsappRoutes } from './whatsapp/http'
 
 const http = httpRouter()
 
@@ -28,6 +29,11 @@ registerTelemetryRoutes(http)
 // - `/v1/account-config` = account layer (remote session token or local label)
 registerConfigRoutes(http)
 
+// WhatsApp Cloud API webhook: GET verification handshake + POST events.
+// Signature-verified via WHATSAPP_APP_SECRET; fails closed (500) until that env
+// var is set, so an unverified payload can never reach the agent.
+registerWhatsappRoutes(http)
+
 // Market exchange rates for the agent's getExchangeRate tool (public data).
 registerExchangeRateRoutes(http)
 
@@ -41,6 +47,8 @@ const liveRefusalStatus = (error: LiveTokenError): number => {
         case 'rate_limited':
             return 429
         case 'local_accounts_disabled':
+            return 403
+        case 'ai_consent_required':
             return 403
         case 'unidentified_client':
             return 400

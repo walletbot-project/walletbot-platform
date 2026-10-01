@@ -14,6 +14,7 @@ import { IconPicker } from '@/components/icon-picker'
 import { DetailPaneHeader } from '@/components/m3/detail-pane-header'
 import { DialogAction, M3Dialog } from '@/components/m3/dialog'
 import { Icon } from '@/components/m3/icon'
+import { useOccurrenceCutoff } from '@/hooks/use-occurrence-cutoff'
 import { useSeededEntity } from '@/hooks/use-seeded-entity'
 import { useToastMutation } from '@/hooks/use-toast-mutation'
 import { ACCOUNT_ICONS } from '@/lib/account-icons'
@@ -58,12 +59,15 @@ export function AccountDetail({
         api.v1.transactions.mutations.createBalanceAdjustment,
     )
 
+    const asOfMs = useOccurrenceCutoff()
     const balance = useQuery(api.v1.transactions.queries.balance, {
         accountId: account.id,
+        asOfMs,
     })
     const recent = useQuery(api.v1.accounts.queries.recentTransactions, {
         id: account.id,
         limit: 5,
+        asOfMs,
     })
 
     const { fields, setFields, editing, setEditing } = useSeededEntity(
@@ -124,6 +128,7 @@ export function AccountDetail({
                 accountId: account.id,
                 balanceAfter: BigInt(Math.round(parsed * 100)),
                 dateConfirmed: true,
+                asOfMs,
             }),
             {
                 loading: t.accounts.adjusting,

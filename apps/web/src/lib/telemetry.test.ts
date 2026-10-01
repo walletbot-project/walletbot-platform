@@ -42,7 +42,7 @@ describe('web telemetry client', () => {
                         ...metric,
                         source: 'web',
                         platform: 'web',
-                        appVersion: '0.0.0',
+                        appVersion: '0.5.1',
                         installationId: 'installation-1',
                     },
                 ],

@@ -3,6 +3,7 @@ import type { ConvexReactClient } from 'convex/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
     AgentInteractionCostTracker,
+    AgentSessionCostTracker,
     estimateSessionCostUsd,
     recordAgentSessionStarted,
     usageTokenAttributes,
@@ -23,6 +24,74 @@ afterEach(() => {
 })
 
 describe('agent web metrics', () => {
+    it('adds per-generation usage across reconnects instead of keeping only the last turn', () => {
+        const tracker = new AgentSessionCostTracker()
+        tracker.recordUsage({
+            model: 'gemini-3.8-live',
+            mode: 'voice',
+            usage: {
+                promptTokenCount: 100,
+                responseTokenCount: 20,
+                totalTokenCount: 120,
+            },
+        })
+        // A new connection can report less usage than the preceding generation.
+        tracker.recordUsage({
+            model: 'gemini-3.8-live',
+            mode: 'text',
+            usage: {
+                promptTokenCount: 30,
+                responseTokenCount: 10,
+                totalTokenCount: 40,
+            },
+        })
+        expect(tracker.samples()).toEqual([
+            {
+                model: 'gemini-3.8-live',
+                mode: 'mixed',
+                costUsd: expect.closeTo(0.0002325, 10),
+                tokenAttributes: {
+                    token_input_text: 130,
+                    token_output_text: 30,
+                    token_total: 160,
+                },
+            },
+        ])
+    })
+
+    it('keeps costs under the model that produced them when rollback changes the model', () => {
+        const tracker = new AgentSessionCostTracker()
+        for (const model of [
+            'gemini-3.8-live',
+            'gemini-3.1-flash-live-preview',
+        ]) {
+            tracker.recordUsage({
+                model,
+                mode: 'voice',
+                usage: { totalTokenCount: 100 },
+            })
+        }
+        expect(
+            tracker.samples().map(({ model, tokenAttributes }) => ({
+                model,
+                tokenAttributes,
+            })),
+        ).toEqual([
+            { model: 'gemini-3.8-live', tokenAttributes: { token_total: 100 } },
+            {
+                model: 'gemini-3.1-flash-live-preview',
+                tokenAttributes: { token_total: 100 },
+            },
+        ])
+        const empty = new AgentSessionCostTracker()
+        empty.recordUsage({
+            model: 'gemini-3.8-live',
+            mode: 'voice',
+            usage: {},
+        })
+        expect(empty.samples()).toEqual([])
+    })
+
     it('records new and resumed session starts with native-compatible attributes', async () => {
         installBrowserGlobals()
         const mutation = vi.fn().mockResolvedValue({ accepted: 1 })

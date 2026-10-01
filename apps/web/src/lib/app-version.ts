@@ -1,2 +1,2 @@
-// The web app and backend deploy together; web does not use native version gating.
-export const appVersion = '0.0.0'
+// Capability version keeps cached older web builds on their previous model.
+export { WEB_LIVE_VERSION as appVersion } from './gemini-live'

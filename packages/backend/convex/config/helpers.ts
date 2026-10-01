@@ -76,20 +76,13 @@ type AccountConfigAccount =
     | { type: 'local'; name: string | null; accountId: string | null }
     | null
 
-// apps/native/pubspec.yaml is currently 0.3.0+6. PackageInfo.version sends the
-// build-name only, so the backend compares against 0.3.0.
-//
-// Bumped from 0.2.0 alongside native drift schemaVersion v3 -> v4 (adds the
-// synced `agent_memories` table — the agent-overhaul memory subsystem). Per
-// the CLAUDE.md client–server contract, a change to the set of synced tables
-// must bump BOTH this `minSupportedVersion` and the drift `schemaVersion` in
-// the same change so pre-v4 clients fail CLOSED on sync (they keep working
-// offline on local data). Previous bump: 0.1.0 -> 0.2.0 with v1 -> v2
-// (`transactions.time_status`).
+// 0.3.x remains supported. Recurrence-aware sync is negotiated separately;
+// older clients receive only occurred movements and retain their v1 contract.
 const BASE_MIN_SUPPORTED_VERSION = '0.3.0'
-// Keep in lockstep with the shipped `apps/native/pubspec.yaml` build-name.
+// Keep in lockstep with the PUBLISHED native build, not with pubspec.yaml.
 // Setting this ahead of the released build nags every current client with the
-// soft-update banner for a version that isn't out yet.
+// soft-update banner for a version that isn't out yet. Raise to 0.4.0 only
+// once the 0.4.0 builds are live in both stores.
 const BASE_LATEST_VERSION = '0.3.0'
 
 // A client that cannot determine its own version reports '0.0.0' (and any

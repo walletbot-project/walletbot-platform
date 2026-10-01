@@ -5,13 +5,13 @@ import 'telemetry_client.dart';
 class AgentMetrics {
   const AgentMetrics(this._telemetry);
 
-  // Local estimate only used for client-side delta detection. Backend pricing
+  // Local estimate for generation/session samples. Backend pricing
   // recalculates USD from token attributes before storing/exporting metrics.
-  static const _gemini31FlashLiveInputTextUsdPerMillion = 0.75;
-  static const _gemini31FlashLiveInputAudioUsdPerMillion = 3.00;
-  static const _gemini31FlashLiveInputMediaUsdPerMillion = 1.00;
-  static const _gemini31FlashLiveOutputTextUsdPerMillion = 4.50;
-  static const _gemini31FlashLiveOutputAudioUsdPerMillion = 12.00;
+  static const _geminiLiveInputTextUsdPerMillion = 0.75;
+  static const _geminiLiveInputAudioUsdPerMillion = 3.00;
+  static const _geminiLiveInputMediaUsdPerMillion = 1.00;
+  static const _geminiLiveOutputTextUsdPerMillion = 4.50;
+  static const _geminiLiveOutputAudioUsdPerMillion = 12.00;
   final TelemetryClient? _telemetry;
 
   /// One live session opened, counted at the session boundary rather than at
@@ -136,6 +136,27 @@ class AgentMetrics {
         sessionId: sessionId,
       ),
     ]);
+  }
+
+  void recordSessionCostBestEffort({
+    required String sessionId,
+    required String model,
+    required String mode,
+    required double costUsd,
+    required Map<String, int> tokenAttributes,
+  }) {
+    unawaited(
+      _telemetry?.sendMetricBatch([
+        _costGaugeMetric(
+          name: 'agent.session.cost_usd',
+          sessionId: sessionId,
+          model: model,
+          mode: _normalizeMode(mode),
+          costUsd: costUsd,
+          tokenAttributes: tokenAttributes,
+        ),
+      ]),
+    );
   }
 
   void recordSessionCostFromUsageBestEffort({
@@ -263,10 +284,7 @@ class AgentMetrics {
 
     if (estimatedInputUsd == null && estimatedOutputUsd == null) {
       if (totalTokens == null) return null;
-      return _tokensToUsd(
-        totalTokens,
-        _gemini31FlashLiveOutputTextUsdPerMillion,
-      );
+      return _tokensToUsd(totalTokens, _geminiLiveOutputTextUsdPerMillion);
     }
     return (estimatedInputUsd ?? 0) + (estimatedOutputUsd ?? 0);
   }
@@ -302,9 +320,9 @@ class AgentMetrics {
   }) => _estimateCost(
     totalTokens: totalTokens,
     details: details,
-    textUsdPerMillion: _gemini31FlashLiveInputTextUsdPerMillion,
-    audioUsdPerMillion: _gemini31FlashLiveInputAudioUsdPerMillion,
-    mediaUsdPerMillion: _gemini31FlashLiveInputMediaUsdPerMillion,
+    textUsdPerMillion: _geminiLiveInputTextUsdPerMillion,
+    audioUsdPerMillion: _geminiLiveInputAudioUsdPerMillion,
+    mediaUsdPerMillion: _geminiLiveInputMediaUsdPerMillion,
   );
 
   double? _estimateOutputCost({
@@ -313,9 +331,9 @@ class AgentMetrics {
   }) => _estimateCost(
     totalTokens: totalTokens,
     details: details,
-    textUsdPerMillion: _gemini31FlashLiveOutputTextUsdPerMillion,
-    audioUsdPerMillion: _gemini31FlashLiveOutputAudioUsdPerMillion,
-    mediaUsdPerMillion: _gemini31FlashLiveOutputTextUsdPerMillion,
+    textUsdPerMillion: _geminiLiveOutputTextUsdPerMillion,
+    audioUsdPerMillion: _geminiLiveOutputAudioUsdPerMillion,
+    mediaUsdPerMillion: _geminiLiveOutputTextUsdPerMillion,
   );
 
   double? _estimateCost({

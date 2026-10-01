@@ -1,6 +1,7 @@
 import 'package:drift/drift.dart';
 
 import '../../database.dart';
+import '../occurrence.dart';
 import '../ids.dart';
 import '../models/entity_counts.dart';
 import 'repository_base.dart';
@@ -47,15 +48,19 @@ class TagRepository extends RepositoryBase {
       '''
         SELECT tg.id, tg.name, tg.description, tg.parent_id, tg.color,
                tg.is_archived, tg.created_at, tg.updated_at, tg.dirty,
-               COUNT(tt.id) AS transaction_count
+               COUNT(t.id) AS transaction_count
         FROM tags tg
         LEFT JOIN transaction_tags tt ON tt.tag_id = tg.id
+        LEFT JOIN transactions t
+               ON t.id = tt.transaction_id
+              AND t.is_archived = 0
+              AND t.date < $pastCutoffSql
         WHERE tg.is_archived = 0
         GROUP BY tg.id, tg.name, tg.description, tg.parent_id, tg.color,
                  tg.is_archived, tg.created_at, tg.updated_at, tg.dirty
         ORDER BY tg.name COLLATE NOCASE
       ''',
-      readsFrom: {db.tags, db.transactionTags},
+      readsFrom: {db.tags, db.transactionTags, db.transactions},
     );
 
     return query.watch().map((rows) {
@@ -103,7 +108,8 @@ class TagRepository extends RepositoryBase {
                 db.transactions.archived.equals(false) &
                 db.transactions.type.equals('expense') &
                 db.transactions.date.isBiggerOrEqualValue(fromMs) &
-                db.transactions.date.isSmallerThanValue(toExclusiveMs),
+                db.transactions.date.isSmallerThanValue(toExclusiveMs) &
+                db.transactions.date.isSmallerThan(pastCutoffExpression()),
           )
           ..groupBy([currency]);
 

@@ -17,6 +17,8 @@ import {
     feedbackSweepState,
 } from './schema/feedback'
 import { legalAcceptances } from './schema/legal'
+import { occurrenceClock } from './schema/occurrenceClock'
+import { recurrences } from './schema/recurrences'
 import { refreshTokens } from './schema/refreshTokens'
 import { supportEmails } from './schema/supportEmails'
 import { syncCounters, tombstones } from './schema/sync'
@@ -31,8 +33,16 @@ import { transactionTags } from './schema/transactionTags'
 import { deletedUsers, userDeletionRequests } from './schema/userDeletion'
 import { userSettings } from './schema/userSettings'
 import { voiceSessionEvents, voiceSessions } from './schema/voice'
+import {
+    whatsappConversations,
+    whatsappInboundMessages,
+    whatsappLinkCodes,
+    whatsappOutboundMessages,
+    whatsappWebhookRoutes,
+} from './schema/whatsapp'
 
 export default defineSchema({
+    occurrenceClock,
     accounts,
     agentUsageMonthly,
     agentUsageSamples,
@@ -49,6 +59,7 @@ export default defineSchema({
     feedbackAttachments,
     feedbackSweepState,
     legalAcceptances,
+    recurrences,
     refreshTokens,
     savedFilters,
     supportEmails,
@@ -64,4 +75,9 @@ export default defineSchema({
     userSettings,
     voiceSessionEvents,
     voiceSessions,
+    whatsappConversations,
+    whatsappInboundMessages,
+    whatsappLinkCodes,
+    whatsappOutboundMessages,
+    whatsappWebhookRoutes,
 })

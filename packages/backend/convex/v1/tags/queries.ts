@@ -1,5 +1,7 @@
 import { v } from 'convex/values'
 import { query } from '../../_generated/server'
+import { resolveOccurrenceCutoff } from '../../occurrences/helpers'
+import { countTaggedBefore } from '../../tags/helpers'
 import { requireAuth } from '../../users/helpers'
 
 export const listActive = query({
@@ -35,9 +37,10 @@ export const list = query({
 })
 
 export const listActiveWithCounts = query({
-    args: {},
-    handler: async (ctx) => {
+    args: { asOfMs: v.optional(v.int64()) },
+    handler: async (ctx, args) => {
         const userId = await requireAuth(ctx)
+        const asOfMs = resolveOccurrenceCutoff(args.asOfMs)
         const tags = await ctx.db
             .query('tags')
             .withIndex('by_user_archived', (q) =>
@@ -46,18 +49,15 @@ export const listActiveWithCounts = query({
             .collect()
 
         const withCounts = await Promise.all(
-            tags.map(async (tag) => {
-                const joins = await ctx.db
-                    .query('transactionTags')
-                    .withIndex('by_user_tag', (q) =>
-                        q.eq('userId', userId).eq('tagId', tag.id),
-                    )
-                    .collect()
-                return {
-                    ...tag,
-                    transactionCount: joins.length,
-                }
-            }),
+            tags.map(async (tag) => ({
+                ...tag,
+                transactionCount: await countTaggedBefore(
+                    ctx,
+                    userId,
+                    tag.id,
+                    asOfMs,
+                ),
+            })),
         )
 
         return withCounts.sort((a, b) =>
@@ -88,9 +88,11 @@ export const spendByCurrency = query({
         id: v.string(),
         fromMs: v.int64(),
         toExclusiveMs: v.int64(),
+        asOfMs: v.optional(v.int64()),
     },
     handler: async (ctx, args) => {
         const userId = await requireAuth(ctx)
+        const asOfMs = resolveOccurrenceCutoff(args.asOfMs)
         const joins = await ctx.db
             .query('transactionTags')
             .withIndex('by_user_tag', (q) =>
@@ -108,6 +110,7 @@ export const spendByCurrency = query({
                 .unique()
             if (!t || t.isArchived || t.type !== 'expense') continue
             if (t.date < args.fromMs || t.date >= args.toExclusiveMs) continue
+            if (t.date >= asOfMs) continue
             const cents = Math.abs(Number(t.amount))
             totals.set(t.currency, (totals.get(t.currency) ?? 0) + cents)
         }
@@ -120,9 +123,14 @@ export const spendByCurrency = query({
 // The most recent (non-archived) transactions carrying a tag, newest first.
 // Backs the "últimos movimientos" section of the tag details sheet.
 export const recentTransactions = query({
-    args: { id: v.string(), limit: v.optional(v.number()) },
+    args: {
+        id: v.string(),
+        limit: v.optional(v.number()),
+        asOfMs: v.optional(v.int64()),
+    },
     handler: async (ctx, args) => {
         const userId = await requireAuth(ctx)
+        const asOfMs = resolveOccurrenceCutoff(args.asOfMs)
         const limit = Math.min(args.limit ?? 5, 50)
         const joins = await ctx.db
             .query('transactionTags')
@@ -139,7 +147,7 @@ export const recentTransactions = query({
                     q.eq('userId', userId).eq('id', join.transactionId),
                 )
                 .unique()
-            if (t && !t.isArchived) txns.push(t)
+            if (t && !t.isArchived && t.date < asOfMs) txns.push(t)
         }
         txns.sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0))
         return txns.slice(0, limit)

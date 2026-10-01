@@ -5,6 +5,7 @@
 // The label-producing helpers take the active catalog and BCP 47 tag rather
 // than reading a module-level locale, so they stay pure and testable.
 
+import type { RecurrenceFrequency } from '@wallet-bot/shared'
 import {
     EMPTY_FILTER,
     parseFilterConfig,
@@ -46,6 +47,10 @@ export type ActivityTransaction = {
     timeStatus?: TransactionTimeStatus
     isArchived: boolean
     tagIds?: string[]
+    /** Set when the movement is one occurrence of a recurring rule. */
+    recurrenceId?: string
+    /** Its position in that rule's series, counting the anchor as 0. */
+    recurrenceIndex?: bigint
 }
 
 /**
@@ -371,4 +376,145 @@ export function buildListEntries(
         }
     }
     return entries
+}
+
+/**
+ * How a cadence reads in a sentence. Deliberately the same catalogue the form
+ * offers ("Mensual", "Cada 3 días"), so a rule is described identically where
+ * it is created and where it is read back — the labels live in `addManual`
+ * because that is where the vocabulary is defined.
+ *
+ * `customDays` is the one that differs: the form shows the chip "Cada X días"
+ * with the interval in its own field, while here the interval is part of the
+ * description.
+ */
+export function frequencyLabel(
+    frequency: RecurrenceFrequency,
+    dayInterval: number,
+    messages: Messages,
+): string {
+    switch (frequency) {
+        case 'daily':
+            return messages.addManual.recurrenceDaily
+        case 'weekly':
+            return messages.addManual.recurrenceWeekly
+        case 'monthly':
+            return messages.addManual.recurrenceMonthly
+        case 'yearly':
+            return messages.addManual.recurrenceYearly
+        case 'customDays':
+            return messages.addManual.recurrenceEveryNDays(dayInterval)
+    }
+}
+
+/**
+ * The cadence as a *picker option*, where the interval has its own field
+ * alongside — so `customDays` stays the open "Cada X días" rather than
+ * naming a specific interval it is not choosing.
+ *
+ * The counterpart to `frequencyLabel`, which describes a rule that already
+ * has one. Mirrors `_frequencyOptionLabel` in the native detail.
+ */
+export function frequencyOptionLabel(
+    frequency: RecurrenceFrequency,
+    messages: Messages,
+): string {
+    return frequency === 'customDays'
+        ? messages.addManual.recurrenceCustomDays
+        : frequencyLabel(frequency, 1, messages)
+}
+
+/** The rule and series reach as `v1/recurrences/queries:get` returns them. */
+export type RecurrenceSeries = {
+    frequency: RecurrenceFrequency
+    dayInterval?: bigint
+    endDate?: bigint
+    position: number | null
+    total: number | null
+    coveredThroughMs: bigint | null
+}
+
+/**
+ * What the series reaches, shown beside the cadence.
+ *
+ * A bounded rule says where this movement sits in it ("3/12"): the total is
+ * knowable, so the position is the useful fact. An open-ended one has no total
+ * to be a fraction of, so it says how far the movements that exist go instead
+ * — which is also exactly what the top-up button extends.
+ *
+ * Both numbers count the occurrences that survive, so deleting one renumbers
+ * the rest. A series too long to count cheaply falls back to the reach, the
+ * same as an open-ended one.
+ */
+export function seriesReachLabel(
+    series: RecurrenceSeries,
+    messages: Messages,
+    formatDate: (date: Date) => string,
+): string | null {
+    if (
+        series.endDate !== undefined &&
+        series.position !== null &&
+        series.total !== null &&
+        series.total > 0
+    ) {
+        return messages.futureMovements.seriesPosition({
+            index: series.position,
+            total: series.total,
+        })
+    }
+    if (series.coveredThroughMs === null) return null
+    return messages.futureMovements.coveredThrough(
+        formatDate(new Date(Number(series.coveredThroughMs))),
+    )
+}
+
+// ───── Field <-> value conversions, shared by the two detail forms ─────
+//
+// The Activity detail and the future-movements detail edit the same shape, so
+// they parse and format it the same way rather than each rolling its own.
+
+export function centsToInput(cents: bigint): string {
+    return (Number(cents < 0n ? -cents : cents) / 100).toFixed(2)
+}
+
+export function normalizeAmount(value: string): string {
+    const normalized = value.replace(',', '.')
+    return normalized.replace(/[^\d.]/g, '').replace(/(\..*)\./g, '$1')
+}
+
+export function inputToCents(value: string): bigint | null {
+    const parsed = Number(value.replace(',', '.'))
+    if (!Number.isFinite(parsed)) return null
+    return BigInt(Math.round(Math.abs(parsed) * 100))
+}
+
+export function dateInputValue(epoch: bigint): string {
+    const date = new Date(Number(epoch))
+    return `${date.getFullYear().toString().padStart(4, '0')}-${(date.getMonth() + 1).toString().padStart(2, '0')}-${date.getDate().toString().padStart(2, '0')}`
+}
+
+export function timeInputValue(epoch: bigint): string {
+    const date = new Date(Number(epoch))
+    return `${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`
+}
+
+export function localDateTimeEpoch(
+    dateValue: string,
+    timeValue: string,
+): bigint {
+    const [year, month, day] = dateValue.split('-').map(Number)
+    const [hour, minute] = timeValue.split(':').map(Number)
+    return BigInt(new Date(year, month - 1, day, hour, minute, 0, 0).getTime())
+}
+
+export function formatDate(epoch: bigint, locale: string): string {
+    return new Intl.DateTimeFormat(locale).format(new Date(Number(epoch)))
+}
+
+export function formatTime(epoch: bigint, locale: string): string {
+    return new Intl.DateTimeFormat(locale, {
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false,
+    }).format(new Date(Number(epoch)))
 }

@@ -134,7 +134,7 @@
                                 "wideLayout": true
                             }
                         },
-                        "version": "13.2.0-31997728368"
+                        "version": "13.3.0-36394719073"
                     }
                 }
             },
@@ -157,7 +157,7 @@
                                             "kind": "DataQuery",
                                             "spec": {
                                                 "editorMode": "builder",
-                                                "expr": "max by(__name__) (agent_user_monthly_cost_usd{deployment_environment=\"$Scope\"})",
+                                                "expr": "max by(__name__) (agent_user_monthly_cost_usd{deployment_environment=\"$Scope\",model=~\"$model\"})",
                                                 "legendFormat": "__auto",
                                                 "range": true
                                             },
@@ -216,7 +216,7 @@
                                 "wideLayout": true
                             }
                         },
-                        "version": "13.2.0-31997728368"
+                        "version": "13.3.0-36394719073"
                     }
                 }
             },
@@ -303,7 +303,7 @@
                                 }
                             }
                         },
-                        "version": "13.2.0-31997728368"
+                        "version": "13.3.0-36394719073"
                     }
                 }
             },
@@ -327,7 +327,7 @@
                                             "spec": {
                                                 "editorMode": "code",
                                                 "exemplar": false,
-                                                "expr": "label_replace(sum(count_over_time((agent_session_cost_usd{deployment_environment=\"$Scope\"} < 0.01)[$__range:])), \"bucket\", \"0-0.01\", \"\", \"\") or label_replace(sum(count_over_time((agent_session_cost_usd{deployment_environment=\"$Scope\"} >= 0.01 and agent_session_cost_usd{deployment_environment=\"$Scope\"} < 0.05)[$__range:])), \"bucket\", \"0.01-0.05\", \"\", \"\") or label_replace(sum(count_over_time((agent_session_cost_usd{deployment_environment=\"$Scope\"} >= 0.05 and agent_session_cost_usd{deployment_environment=\"$Scope\"} < 0.10)[$__range:])), \"bucket\", \"0.05-0.10\", \"\", \"\") or label_replace(sum(count_over_time((agent_session_cost_usd{deployment_environment=\"$Scope\"} >= 0.10 and agent_session_cost_usd{deployment_environment=\"$Scope\"} < 0.50)[$__range:])), \"bucket\", \"0.10-0.50\", \"\", \"\") or label_replace(sum(count_over_time((agent_session_cost_usd{deployment_environment=\"$Scope\"} >= 0.50 and agent_session_cost_usd{deployment_environment=\"$Scope\"} < 1.00)[$__range:])), \"bucket\", \"0.50-1.00\", \"\", \"\") or label_replace(sum(count_over_time((agent_session_cost_usd{deployment_environment=\"$Scope\"} >= 1.00)[$__range:])), \"bucket\", \"1.00+\", \"\", \"\")",
+                                                "expr": "label_replace(sum(count_over_time((agent_session_cost_usd{deployment_environment=\"$Scope\",model=~\"$model\"} < 0.01)[$__range:])), \"bucket\", \"0-0.01\", \"\", \"\") or label_replace(sum(count_over_time((agent_session_cost_usd{deployment_environment=\"$Scope\",model=~\"$model\"} >= 0.01 and agent_session_cost_usd{deployment_environment=\"$Scope\",model=~\"$model\"} < 0.05)[$__range:])), \"bucket\", \"0.01-0.05\", \"\", \"\") or label_replace(sum(count_over_time((agent_session_cost_usd{deployment_environment=\"$Scope\",model=~\"$model\"} >= 0.05 and agent_session_cost_usd{deployment_environment=\"$Scope\",model=~\"$model\"} < 0.10)[$__range:])), \"bucket\", \"0.05-0.10\", \"\", \"\") or label_replace(sum(count_over_time((agent_session_cost_usd{deployment_environment=\"$Scope\",model=~\"$model\"} >= 0.10 and agent_session_cost_usd{deployment_environment=\"$Scope\",model=~\"$model\"} < 0.50)[$__range:])), \"bucket\", \"0.10-0.50\", \"\", \"\") or label_replace(sum(count_over_time((agent_session_cost_usd{deployment_environment=\"$Scope\",model=~\"$model\"} >= 0.50 and agent_session_cost_usd{deployment_environment=\"$Scope\",model=~\"$model\"} < 1.00)[$__range:])), \"bucket\", \"0.50-1.00\", \"\", \"\") or label_replace(sum(count_over_time((agent_session_cost_usd{deployment_environment=\"$Scope\",model=~\"$model\"} >= 1.00)[$__range:])), \"bucket\", \"1.00+\", \"\", \"\")",
                                                 "format": "table",
                                                 "instant": true,
                                                 "legendFormat": "{{bucket}}",
@@ -413,7 +413,7 @@
                                 "xTickLabelSpacing": 0
                             }
                         },
-                        "version": "13.2.0-31997728368"
+                        "version": "13.3.0-36394719073"
                     }
                 }
             },
@@ -495,7 +495,8 @@
                                         },
                                         "thresholdsStyle": {
                                             "mode": "off"
-                                        }
+                                        },
+                                        "showValues": false
                                     },
                                     "min": 0,
                                     "thresholds": {
@@ -525,7 +526,7 @@
                                 }
                             }
                         },
-                        "version": "13.2.0-31997728368"
+                        "version": "13.3.0-36394719073"
                     }
                 }
             },
@@ -547,10 +548,10 @@
                                             "group": "prometheus",
                                             "kind": "DataQuery",
                                             "spec": {
-                                                "editorMode": "builder",
+                                                "editorMode": "code",
                                                 "exemplar": false,
-                                                "expr": "max by(mode) (agent_session_cost_usd{deployment_environment=\"$Scope\"})",
-                                                "legendFormat": "{{mode}}",
+                                                "expr": "max by(model, mode) (agent_session_cost_usd{deployment_environment=\"$Scope\",model=~\"$model\"})",
+                                                "legendFormat": "{{model}} / {{mode}}",
                                                 "range": true
                                             },
                                             "version": "v0"
@@ -563,7 +564,7 @@
                             "transformations": []
                         }
                     },
-                    "description": "Costo del modelo agente separado por texto, voz o hibrido.\n\nAlgunos puntos se muestran duplicados",
+                    "description": "Costo del agente separado por modelo y modo (texto, voz o hibrido). Los nombres que contienen 3.8 se muestran en azul y los que contienen 3.1 en naranja. Selecciona All o ambos modelos en el selector Modelo para compararlos simultaneamente.\n\nAlgunos puntos se muestran duplicados.",
                     "id": 3,
                     "links": [],
                     "title": "Costo por modo",
@@ -622,9 +623,42 @@
                                                 "value": 80
                                             }
                                         ]
-                                    }
+                                    },
+                                    "unit": "currencyUSD",
+                                    "min": 0
                                 },
-                                "overrides": []
+                                "overrides": [
+                                    {
+                                        "matcher": {
+                                            "id": "byRegexp",
+                                            "options": "/.*3[.]8.*/"
+                                        },
+                                        "properties": [
+                                            {
+                                                "id": "color",
+                                                "value": {
+                                                    "mode": "fixed",
+                                                    "fixedColor": "#5794F2"
+                                                }
+                                            }
+                                        ]
+                                    },
+                                    {
+                                        "matcher": {
+                                            "id": "byRegexp",
+                                            "options": "/.*3[.]1.*/"
+                                        },
+                                        "properties": [
+                                            {
+                                                "id": "color",
+                                                "value": {
+                                                    "mode": "fixed",
+                                                    "fixedColor": "#FF9830"
+                                                }
+                                            }
+                                        ]
+                                    }
+                                ]
                             },
                             "options": {
                                 "legend": {
@@ -635,12 +669,12 @@
                                 },
                                 "tooltip": {
                                     "hideZeros": false,
-                                    "mode": "single",
-                                    "sort": "none"
+                                    "mode": "multi",
+                                    "sort": "desc"
                                 }
                             }
                         },
-                        "version": "13.2.0-31997728368"
+                        "version": "13.3.0-36394719073"
                     }
                 }
             },
@@ -664,7 +698,7 @@
                                             "spec": {
                                                 "editorMode": "builder",
                                                 "exemplar": false,
-                                                "expr": "max(agent_session_cost_usd{deployment_environment=\"$Scope\"})",
+                                                "expr": "max(agent_session_cost_usd{deployment_environment=\"$Scope\",model=~\"$model\"})",
                                                 "legendFormat": "Costo",
                                                 "range": true
                                             },
@@ -723,7 +757,7 @@
                                 "wideLayout": true
                             }
                         },
-                        "version": "13.2.0-31997728368"
+                        "version": "13.3.0-36394719073"
                     }
                 }
             },
@@ -747,7 +781,7 @@
                                             "spec": {
                                                 "editorMode": "code",
                                                 "exemplar": false,
-                                                "expr": "sum by(start_kind) (count_over_time(agent_sessions_started_count_total{deployment_environment=\"$Scope\"}[$__range]))",
+                                                "expr": "sum by(start_kind) (count_over_time(agent_sessions_started_count_total{deployment_environment=\"$Scope\",model=~\"$model\"}[$__range]))",
                                                 "instant": true,
                                                 "legendFormat": "{{start_kind}}",
                                                 "range": false
@@ -792,7 +826,6 @@
                                 },
                                 "overrides": [
                                     {
-                                        "kind": "FieldConfigSource",
                                         "matcher": {
                                             "id": "byName",
                                             "options": "new"
@@ -812,7 +845,6 @@
                                         ]
                                     },
                                     {
-                                        "kind": "FieldConfigSource",
                                         "matcher": {
                                             "id": "byName",
                                             "options": "resumed"
@@ -849,7 +881,7 @@
                                 "wideLayout": true
                             }
                         },
-                        "version": "13.2.0-31997728368"
+                        "version": "13.3.0-36394719073"
                     }
                 }
             },
@@ -936,7 +968,7 @@
                                 }
                             }
                         },
-                        "version": "13.2.0-31997728368"
+                        "version": "13.3.0-36394719073"
                     }
                 }
             },
@@ -959,7 +991,7 @@
                                             "kind": "DataQuery",
                                             "spec": {
                                                 "editorMode": "builder",
-                                                "expr": "max by(__name__) (agent_user_monthly_cost_usd{deployment_environment=\"$Scope\"})",
+                                                "expr": "max by(__name__) (agent_user_monthly_cost_usd{deployment_environment=\"$Scope\",model=~\"$model\"})",
                                                 "legendFormat": "__auto",
                                                 "range": true
                                             },
@@ -1018,7 +1050,7 @@
                                 "wideLayout": true
                             }
                         },
-                        "version": "13.2.0-31997728368"
+                        "version": "13.3.0-36394719073"
                     }
                 }
             },
@@ -1041,7 +1073,7 @@
                                             "kind": "DataQuery",
                                             "spec": {
                                                 "editorMode": "code",
-                                                "expr": "sum by (user_hash) (last_over_time(agent_user_monthly_cost_usd{deployment_environment=\"$Scope\"}[$__range]))",
+                                                "expr": "sum by (user_hash) (last_over_time(agent_user_monthly_cost_usd{deployment_environment=\"$Scope\",model=~\"$model\"}[$__range]))",
                                                 "format": "table",
                                                 "instant": true,
                                                 "legendFormat": "__auto",
@@ -1118,10 +1150,11 @@
                                         "desc": true,
                                         "displayName": "Consumo (USD)"
                                     }
-                                ]
+                                ],
+                                "zebraStriping": false
                             }
                         },
-                        "version": "13.2.0-31997728368"
+                        "version": "13.3.0-36394719073"
                     }
                 }
             },
@@ -1144,7 +1177,7 @@
                                             "kind": "DataQuery",
                                             "spec": {
                                                 "editorMode": "code",
-                                                "expr": "sum(count_over_time(business_movements_created_count_total{deployment_environment=\"$Scope\",created_by=\"agent\"}[$__range])) / sum(count_over_time(business_movements_created_count_total{deployment_environment=\"$Scope\"}[$__range]))",
+                                                "expr": "(sum(count_over_time(business_movements_created_count_total{deployment_environment=\"$Scope\",created_by=\"agent\"}[$__range])) or vector(0)) / sum(count_over_time(business_movements_created_count_total{deployment_environment=\"$Scope\"}[$__range]))",
                                                 "instant": true,
                                                 "legendFormat": "% agente",
                                                 "range": false
@@ -1213,7 +1246,7 @@
                                 "wideLayout": true
                             }
                         },
-                        "version": "13.2.0-31997728368"
+                        "version": "13.3.0-36394719073"
                     }
                 }
             },
@@ -1262,7 +1295,8 @@
                             "fieldConfig": {
                                 "defaults": {
                                     "color": {
-                                        "mode": "palette-classic"
+                                        "mode": "palette-classic",
+                                        "fixedColor": "#73BF69"
                                     },
                                     "custom": {
                                         "hideFrom": {
@@ -1300,7 +1334,7 @@
                                 }
                             }
                         },
-                        "version": "13.2.0-31997728368"
+                        "version": "13.3.0-36394719073"
                     }
                 }
             },
@@ -1413,10 +1447,11 @@
                                         "desc": true,
                                         "displayName": "Total"
                                     }
-                                ]
+                                ],
+                                "zebraStriping": false
                             }
                         },
-                        "version": "13.2.0-31997728368"
+                        "version": "13.3.0-36394719073"
                     }
                 }
             },
@@ -1439,7 +1474,7 @@
                                             "kind": "DataQuery",
                                             "spec": {
                                                 "editorMode": "code",
-                                                "expr": "sum by(start_kind) (count_over_time(agent_sessions_started_count_total{deployment_environment=\"$Scope\"}[$__interval]))",
+                                                "expr": "sum by(start_kind) (count_over_time(agent_sessions_started_count_total{deployment_environment=\"$Scope\",model=~\"$model\"}[$__interval]))",
                                                 "instant": false,
                                                 "legendFormat": "{{start_kind}}",
                                                 "range": true
@@ -1498,16 +1533,29 @@
                                         },
                                         "thresholdsStyle": {
                                             "mode": "off"
-                                        }
+                                        },
+                                        "showValues": false
                                     },
                                     "decimals": 0,
                                     "min": 0,
                                     "noValue": "Sin sesiones en el rango",
-                                    "unit": "short"
+                                    "unit": "short",
+                                    "thresholds": {
+                                        "mode": "absolute",
+                                        "steps": [
+                                            {
+                                                "color": "green",
+                                                "value": 0
+                                            },
+                                            {
+                                                "color": "red",
+                                                "value": 80
+                                            }
+                                        ]
+                                    }
                                 },
                                 "overrides": [
                                     {
-                                        "kind": "FieldConfigSource",
                                         "matcher": {
                                             "id": "byName",
                                             "options": "new"
@@ -1527,7 +1575,6 @@
                                         ]
                                     },
                                     {
-                                        "kind": "FieldConfigSource",
                                         "matcher": {
                                             "id": "byName",
                                             "options": "resumed"
@@ -1562,7 +1609,7 @@
                                 }
                             }
                         },
-                        "version": "13.2.0-31997728368"
+                        "version": "13.3.0-36394719073"
                     }
                 }
             },
@@ -1585,7 +1632,7 @@
                                             "kind": "DataQuery",
                                             "spec": {
                                                 "editorMode": "code",
-                                                "expr": "sum(count_over_time(agent_sessions_started_count_total{deployment_environment=\"$Scope\"}[$__range])) - sum(count_over_time(agent_session_cost_bucket_count{deployment_environment=\"$Scope\"}[$__range]))",
+                                                "expr": "sum(count_over_time(agent_sessions_started_count_total{deployment_environment=\"$Scope\",model=~\"$model\"}[$__range])) - (sum(count_over_time(agent_session_cost_bucket_count_total{deployment_environment=\"$Scope\",model=~\"$model\"}[$__range])) or vector(0))",
                                                 "instant": true,
                                                 "legendFormat": "Sin costo reportado",
                                                 "range": false
@@ -1600,7 +1647,7 @@
                             "transformations": []
                         }
                     },
-                    "description": "Sesiones abiertas en el rango seleccionado que nunca reportaron costo. El bucket de costo se emite como efecto de recibir un agent.session.cost_usd, asi que esta resta son sesiones que se abrieron y no produjeron nada: caidas antes del cierre, o sin usageMetadata. Cerca de cero es lo sano. Puede dar negativo en los bordes en el rango seleccionado, cuando el costo de una sesion cae dentro de la ventana y su apertura quedo afuera.\n\nConteo real dentro del rango elegido: cambiar el selector de tiempo cambia el numero. Cuenta muestras exportadas, y cada evento produce exactamente una, asi que no hay extrapolacion ni decimales.",
+                    "description": "Sesiones abiertas en el rango seleccionado que nunca reportaron costo. El bucket de costo se emite como efecto de recibir un agent.session.cost_usd, asi que esta resta son sesiones que se abrieron y no produjeron nada: caidas antes del cierre, o sin usageMetadata. Cerca de cero es lo sano. Puede dar negativo en los bordes en el rango seleccionado, cuando el costo de una sesion cae dentro de la ventana y su apertura quedo afuera.\n\nConteo real dentro del rango elegido: cambiar el selector de tiempo cambia el numero. Cuenta muestras exportadas, y cada evento produce exactamente una, asi que no hay extrapolacion ni decimales.\n\nEl selector Modelo filtra tanto las sesiones abiertas como las que reportaron costo. Con All tambien se incluyen las series historicas sin etiqueta model.",
                     "id": 17,
                     "links": [],
                     "title": "Sesiones sin costo reportado",
@@ -1652,7 +1699,7 @@
                                 "wideLayout": true
                             }
                         },
-                        "version": "13.2.0-31997728368"
+                        "version": "13.3.0-36394719073"
                     }
                 }
             }
@@ -1947,7 +1994,7 @@
                 "1d"
             ],
             "fiscalYearStartMonth": 0,
-            "from": "now-30d",
+            "from": "now-12h",
             "hideTimepicker": false,
             "timezone": "browser",
             "to": "now"
@@ -1986,7 +2033,44 @@
                     "multi": false,
                     "includeAll": false,
                     "allowCustomValue": true,
-                    "skipUrlSync": false
+                    "skipUrlSync": false,
+                    "regexApplyTo": "value"
+                }
+            },
+            {
+                "kind": "QueryVariable",
+                "spec": {
+                    "name": "model",
+                    "label": "Modelo",
+                    "description": "Modelo de Gemini Live con el que se etiquetaron las metricas del agente",
+                    "hide": "dontHide",
+                    "refresh": "onDashboardLoad",
+                    "skipUrlSync": false,
+                    "query": {
+                        "kind": "DataQuery",
+                        "group": "prometheus",
+                        "version": "v0",
+                        "datasource": {
+                            "name": "grafanacloud-prom"
+                        },
+                        "spec": {
+                            "qryType": 1,
+                            "query": "label_values(agent_session_cost_usd{deployment_environment=\"$Scope\"}, model)",
+                            "refId": "PrometheusVariableQueryEditor-VariableQuery"
+                        }
+                    },
+                    "regex": "",
+                    "sort": "alphabeticalAsc",
+                    "definition": "label_values(agent_session_cost_usd{deployment_environment=\"$Scope\"}, model)",
+                    "options": [],
+                    "multi": true,
+                    "includeAll": true,
+                    "allValue": ".*",
+                    "allowCustomValue": true,
+                    "current": {
+                        "text": ["All"],
+                        "value": ["$__all"]
+                    }
                 }
             }
         ]
