@@ -47,7 +47,9 @@ class PullPageMerger {
             ))
             .getSingleOrNull();
     if (tomb != null) {
-      if (tomb.deletedAt >= remoteUpdatedAt) {
+      final archivedSeriesTemplate =
+          !tomb.dirty && tableName == 'transactions' && _isArchivedSeriesRow(r);
+      if (!archivedSeriesTemplate && tomb.deletedAt >= remoteUpdatedAt) {
         // Local delete is newer; keep tombstone (it'll push and revoke).
         return;
       }
@@ -83,12 +85,18 @@ class PullPageMerger {
       case 'agentMemories':
         await _applyAgentMemory(id, remoteUpdatedAt, r);
         break;
+      case 'recurrences':
+        await _applyRecurrence(id, remoteUpdatedAt, r);
+        break;
       default:
         // Unknown table — skip rather than crash. Forward-compat: a future
         // server may sync more tables than this client knows.
         break;
     }
   }
+
+  bool _isArchivedSeriesRow(Map<String, Object?> row) =>
+      row['isArchived'] == true && row['recurrenceId'] is String;
 
   Future<void> _applyAccount(
     String id,
@@ -175,7 +183,22 @@ class PullPageMerger {
       db.transactions,
     )..where((t) => t.id.equals(id))).getSingleOrNull();
     if (existing != null && existing.dirty) {
-      if (existing.updatedAt >= remoteUpdatedAt) return;
+      if (existing.updatedAt >= remoteUpdatedAt) {
+        // An upgrading v4 client may have an offline edit but no columns for
+        // the series it belongs to. Keep that edit while hydrating metadata
+        // which the old binary could not have changed.
+        if (existing.recurrenceId == null && r['recurrenceId'] is String) {
+          await (db.update(
+            db.transactions,
+          )..where((t) => t.id.equals(id))).write(
+            TransactionsCompanion(
+              recurrenceId: Value(r['recurrenceId'] as String),
+              recurrenceIndex: Value(_asIntOrNull(r['recurrenceIndex'])),
+            ),
+          );
+        }
+        return;
+      }
     }
     final companion = TransactionsCompanion(
       id: Value(id),
@@ -195,6 +218,8 @@ class PullPageMerger {
       toCurrency: Value(r['toCurrency'] as String?),
       exchangeRate: Value((r['exchangeRate'] as num?)?.toDouble()),
       balanceAfter: Value(_asBigIntOrNull(r['balanceAfter'])),
+      recurrenceId: Value(r['recurrenceId'] as String?),
+      recurrenceIndex: Value(_asIntOrNull(r['recurrenceIndex'])),
       archived: Value(r['isArchived'] as bool? ?? false),
       createdAt: Value(_asBigInt(r['createdAt'])),
       updatedAt: Value(remoteUpdatedAt),
@@ -294,6 +319,31 @@ class PullPageMerger {
       dirty: const Value(false),
     );
     await db.into(db.agentMemories).insertOnConflictUpdate(companion);
+  }
+
+  Future<void> _applyRecurrence(
+    String id,
+    BigInt remoteUpdatedAt,
+    Map<String, Object?> r,
+  ) async {
+    final existing = await (db.select(
+      db.recurrences,
+    )..where((x) => x.id.equals(id))).getSingleOrNull();
+    if (existing != null && existing.dirty) {
+      if (existing.updatedAt >= remoteUpdatedAt) return;
+    }
+    final companion = RecurrencesCompanion(
+      id: Value(id),
+      frequency: Value(r['frequency'] as String),
+      dayInterval: Value(_asIntOrNull(r['dayInterval'])),
+      anchorDate: Value(_asBigInt(r['anchorDate'])),
+      endDate: Value(_asBigIntOrNull(r['endDate'])),
+      archived: Value(r['isArchived'] as bool? ?? false),
+      createdAt: Value(_asBigInt(r['createdAt'])),
+      updatedAt: Value(remoteUpdatedAt),
+      dirty: const Value(false),
+    );
+    await db.into(db.recurrences).insertOnConflictUpdate(companion);
   }
 
   // ─── Tombstone apply ─────────────────────────────────────────────────────
@@ -424,6 +474,20 @@ class PullPageMerger {
           }
         }
         break;
+      case 'recurrences':
+        final row = await (db.select(
+          db.recurrences,
+        )..where((x) => x.id.equals(entityId))).getSingleOrNull();
+        if (row != null) {
+          if (row.dirty && row.updatedAt > deletedAt) {
+            keepLocalRow = true;
+          } else {
+            await (db.delete(
+              db.recurrences,
+            )..where((x) => x.id.equals(entityId))).go();
+          }
+        }
+        break;
     }
 
     if (keepLocalRow) {
@@ -494,3 +558,7 @@ BigInt _asBigInt(Object? v) {
 }
 
 BigInt? _asBigIntOrNull(Object? v) => v == null ? null : _asBigInt(v);
+
+/// The wire carries these as int64; the columns are plain ints (an occurrence
+/// index and a day interval are both small by construction).
+int? _asIntOrNull(Object? v) => v == null ? null : _asBigInt(v).toInt();

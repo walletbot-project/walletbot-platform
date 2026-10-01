@@ -120,6 +120,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get amount => 'Amount';
 
   @override
+  String get time => 'Time';
+
+  @override
   String get date => 'Date';
 
   @override
@@ -130,6 +133,77 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get exchangeRate => 'Exchange rate';
+
+  @override
+  String accountIdentity(String name) {
+    return 'Account: $name';
+  }
+
+  @override
+  String categoryIdentity(String name) {
+    return 'Category: $name';
+  }
+
+  @override
+  String get detail => 'Details';
+
+  @override
+  String get editActivity => 'Edit activity';
+
+  @override
+  String get activityGone => 'This activity no longer exists';
+
+  @override
+  String get estimatedDate => 'Estimated date';
+
+  @override
+  String get estimatedTime => 'Estimated time';
+
+  @override
+  String get sourceAccount => 'Source account';
+
+  @override
+  String get destinationAccount => 'Destination account';
+
+  @override
+  String get noTags => 'No tags';
+
+  @override
+  String get noCategory => 'No category';
+
+  @override
+  String get balanceUnavailable => 'Balance unavailable';
+
+  @override
+  String get sameAccounts =>
+      'The source and destination accounts must be different';
+
+  @override
+  String get invalidAmount => 'The amount isn\'t valid';
+
+  @override
+  String get noOtherAccount => 'No other account available';
+
+  @override
+  String get amountNotEditable =>
+      'The amount of balance adjustments and initial balances cannot be edited.';
+
+  @override
+  String get change => 'Change';
+
+  @override
+  String get activityUpdateFailed => 'The activity could not be saved';
+
+  @override
+  String get activityDeleteTitle => 'Delete activity';
+
+  @override
+  String activityDeleteConfirm(String name) {
+    return 'Delete “$name”?';
+  }
+
+  @override
+  String get activityDeleteFailed => 'The activity could not be deleted';
 
   @override
   String get status => 'Status';
@@ -526,6 +600,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get addTransaction => 'Add transaction';
+
+  @override
+  String get viewFutureMovements => 'View future movements';
 
   @override
   String transactionsLoadFailed(Object error) {
@@ -1042,6 +1119,156 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get recurringExpense => 'Recurring expense';
+
+  @override
+  String get recurringIncome => 'Recurring income';
+
+  @override
+  String get frequency => 'Frequency';
+
+  @override
+  String get recurrenceDaily => 'Daily';
+
+  @override
+  String get recurrenceWeekly => 'Weekly';
+
+  @override
+  String get recurrenceMonthly => 'Monthly';
+
+  @override
+  String get recurrenceYearly => 'Yearly';
+
+  @override
+  String get recurrenceEndDateOptional => 'End date (optional)';
+
+  @override
+  String get recurrenceNoEndDate => 'No end date';
+
+  @override
+  String recurrenceSpanDays(int value) {
+    return '$value days';
+  }
+
+  @override
+  String recurrenceSpanMonths(int value) {
+    return '$value months';
+  }
+
+  @override
+  String recurrenceSpanYears(int value) {
+    return '$value years';
+  }
+
+  @override
+  String recurrenceOpenEndedNote(int count, String span) {
+    return 'No end date does not mean forever: $count movements are created, covering about $span. You can add more whenever you want.';
+  }
+
+  @override
+  String recurrenceTooLong(int max) {
+    return 'That end date would create too many movements. The maximum for this frequency is $max.';
+  }
+
+  @override
+  String get recurrenceCustomDays => 'Every X days';
+
+  @override
+  String get recurrenceRepeatEvery => 'Repeat every';
+
+  @override
+  String get recurrenceDaysUnit => 'days';
+
+  @override
+  String recurrenceEveryNDays(int days) {
+    return 'Every $days days';
+  }
+
+  @override
+  String get futureMovements => 'Future movements';
+
+  @override
+  String get futureMovementsInfo =>
+      'These are your future movements: the ones that haven\'t happened yet. They won\'t show in Activity until they occur.';
+
+  @override
+  String get noFutureMovements => 'You have no scheduled future movements';
+
+  @override
+  String seriesPosition(int index, int total) {
+    return '$index/$total';
+  }
+
+  @override
+  String coveredThrough(String date) {
+    return 'until $date';
+  }
+
+  @override
+  String addMoreMovements(int count) {
+    return 'Add $count more';
+  }
+
+  @override
+  String get addMoreMovementsHint =>
+      'The new movements carry on from the last one in the series, not from this one.';
+
+  @override
+  String get addingMoreMovements => 'Adding movements…';
+
+  @override
+  String addedMoreMovements(int count) {
+    return 'Added $count movements';
+  }
+
+  @override
+  String get addMoreMovementsFailed => 'The movements could not be added';
+
+  @override
+  String get editMovement => 'Edit movement';
+
+  @override
+  String get titlePlaceholder => 'Title';
+
+  @override
+  String get descriptionPlaceholder => 'Optional detail';
+
+  @override
+  String get saveChanges => 'Save changes';
+
+  @override
+  String get deleteRecurring => 'Delete recurring movement';
+
+  @override
+  String get savedOnlyThis => 'Changes applied to this movement';
+
+  @override
+  String get savedAllFuture =>
+      'Changes applied to this movement and future ones';
+
+  @override
+  String get deletedOnlyThis => 'Movement deleted';
+
+  @override
+  String get deletedAllFuture => 'Movement and its future ones deleted';
+
+  @override
+  String get scopeEditDescription =>
+      'Apply the changes to this movement only, or to the future ones too?';
+
+  @override
+  String scopeDeleteDescription(String name) {
+    return 'Delete “$name” just this once, or the future ones too?';
+  }
+
+  @override
+  String get scopeOnlyThis => 'This movement only';
+
+  @override
+  String get scopeAllFuture => 'This and the future ones';
+
+  @override
+  String get scopeOnlyThisUnavailable =>
+      'Changing the frequency always affects the future movements.';
 
   @override
   String get leaves => 'Leaves';
@@ -1838,4 +2065,55 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get whatsappDisconnectFailed => 'Could not disconnect the number';
+
+  @override
+  String get aiConsentTitle => 'Before you use the assistant';
+
+  @override
+  String get aiConsentIntro =>
+      'The assistant sends what you say and part of your Wallet Bot data to our AI providers, Google LLC (Gemini) and OpenAI, LLC, in the United States.';
+
+  @override
+  String get aiConsentMicTitle => 'We\'ll ask for the microphone';
+
+  @override
+  String get aiConsentMicBody =>
+      'iOS asks when you start a voice conversation. Typing to the assistant needs no microphone.';
+
+  @override
+  String get aiConsentWhatWeSend => 'What gets sent';
+
+  @override
+  String get aiConsentItemAudio =>
+      'Your voice while a conversation is open, and what you type.';
+
+  @override
+  String get aiConsentItemProfile => 'Your name and email.';
+
+  @override
+  String get aiConsentItemFinancial =>
+      'Your accounts, categories, tags and recent transactions.';
+
+  @override
+  String get aiConsentItemMemories => 'Notes the assistant saved about you.';
+
+  @override
+  String get aiConsentItemActions => 'Records it creates or changes.';
+
+  @override
+  String get aiConsentReadPolicy => 'Read the Privacy Policy';
+
+  @override
+  String get aiConsentDecline => 'Not now';
+
+  @override
+  String get aiConsentAccept => 'Agree and continue';
+
+  @override
+  String get aiConsentFailed =>
+      'We could not record your permission. Check your connection and try again.';
+
+  @override
+  String get aiConsentDeclined =>
+      'You need to agree before the assistant can run.';
 }

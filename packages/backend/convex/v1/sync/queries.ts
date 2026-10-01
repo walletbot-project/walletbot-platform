@@ -4,6 +4,7 @@ import type { QueryCtx } from '../../_generated/server'
 import { query } from '../../_generated/server'
 import { CLIENT_OUTDATED, isClientSupported } from '../../config/helpers'
 import { syncedTable } from '../../schema/sync'
+import { supportsRecurrences } from '../../sync/compatibility'
 import { requireAuth } from '../../users/helpers'
 
 // Default page size if the caller doesn't override. Calibrated below the
@@ -15,6 +16,7 @@ const MAX_LIMIT = 500
 const SYNCED_TABLES = [
     'accounts',
     'categories',
+    'recurrences',
     'transactions',
     'tags',
     'transactionTags',
@@ -88,6 +90,7 @@ function stripSystemFields<T extends { _id: unknown; _creationTime: unknown }>(
     void _id
     void _creationTime
     if ('userId' in rest) delete (rest as { userId?: string }).userId
+    if ('legacyPendingDate' in rest) delete rest.legacyPendingDate
     return rest as Omit<T, '_id' | '_creationTime' | 'userId'>
 }
 
@@ -102,19 +105,23 @@ function tablePriority(t: SyncedTable): number {
             return 1
         case 'tags':
             return 2
-        case 'transactions':
+        // Before transactions: an occurrence carries `recurrenceId`, so the
+        // rule has to exist by the time the row lands.
+        case 'recurrences':
             return 3
-        case 'transactionTags':
+        case 'transactions':
             return 4
+        case 'transactionTags':
+            return 5
         // Dashboard layout: saved filters before widgets (a widget's filterId
         // soft-references a saved filter).
         case 'savedFilters':
-            return 5
-        case 'dashboardWidgets':
             return 6
+        case 'dashboardWidgets':
+            return 7
         // No FKs in either direction — order is only for determinism.
         case 'agentMemories':
-            return 7
+            return 8
     }
 }
 
@@ -210,6 +217,15 @@ async function fetchTableRows(
         case 'agentMemories':
             docs = await ctx.db
                 .query('agentMemories')
+                .withIndex('by_user_seq', (q) =>
+                    q.eq('userId', userId).gt('seq', since),
+                )
+                .order('asc')
+                .take(take)
+            break
+        case 'recurrences':
+            docs = await ctx.db
+                .query('recurrences')
                 .withIndex('by_user_seq', (q) =>
                     q.eq('userId', userId).gt('seq', since),
                 )
@@ -331,7 +347,40 @@ export const pull = query({
             }
         }
 
-        const taken = buffer.slice(0, cutoff)
+        const pageItems = buffer.slice(0, cutoff)
+        const taken: PullItem[] = []
+        const modern = supportsRecurrences(args.platform, args.appVersion)
+        for (const item of pageItems) {
+            if (modern) {
+                if (
+                    item.kind === 'tombstone' &&
+                    item.tableName === 'transactions'
+                ) {
+                    const txn = await ctx.db
+                        .query('transactions')
+                        .withIndex('by_user_id', (q) =>
+                            q.eq('userId', userId).eq('id', item.entityId),
+                        )
+                        .unique()
+                    // Recurrence-aware clients retain archived templates;
+                    // legacy clients still receive the ordinary deletion.
+                    if (txn?.isArchived && txn.recurrenceId !== undefined)
+                        continue
+                }
+                taken.push(item)
+                continue
+            }
+            if (item.tableName === 'recurrences') continue
+            if (item.kind === 'tombstone') {
+                taken.push(item)
+                continue
+            }
+            // Old native clients can store ordinary future movements, but
+            // cannot interpret series metadata. Their totals may include
+            // future amounts; no timed publication is needed.
+            const { recurrenceId, recurrenceIndex, ...row } = item.row
+            taken.push({ ...item, row })
+        }
         const rows = taken
             .filter((i): i is PullRowItem => i.kind === 'row')
             .map((i) => ({ tableName: i.tableName, row: i.row }))
@@ -345,7 +394,7 @@ export const pull = query({
             }))
 
         const hasMore = buffer.length > cutoff
-        const lastSeq = taken[taken.length - 1].seq
+        const lastSeq = pageItems[pageItems.length - 1].seq
         const nextCursor = hasMore ? lastSeq : null
 
         return {

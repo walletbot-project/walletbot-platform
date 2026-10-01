@@ -1,6 +1,9 @@
+import 'package:app/app_config/client_info.dart';
 import 'package:app/components/grouped_card.dart';
+import 'package:app/components/voice/ai_consent_sheet.dart';
 import 'package:app/convex/convex_client.dart';
 import 'package:app/l10n/l10n.dart';
+import 'package:app/legal/ai_consent_controller.dart';
 import 'package:app/whatsapp/whatsapp_link_controller.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -14,7 +17,12 @@ import 'package:url_launcher/url_launcher.dart';
 /// between visits, and creating it here means the screen always opens against
 /// fresh backend state.
 class WhatsappLinkScreen extends StatelessWidget {
-  const WhatsappLinkScreen({required this.isRemote, this.client, super.key});
+  const WhatsappLinkScreen({
+    required this.isRemote,
+    this.client,
+    this.aiConsent,
+    super.key,
+  });
 
   /// False for local-only accounts, which have no backend user to link to.
   final bool isRemote;
@@ -25,18 +33,29 @@ class WhatsappLinkScreen extends StatelessWidget {
   /// here touches the network.
   final ConvexClient? client;
 
+  /// Permission to send this account's data to the AI providers. Handed over
+  /// by value for the same reason as [client]: this route is pushed from the
+  /// account switcher, above the account-scoped providers. Null means no gate
+  /// (widget tests, and every platform but iOS).
+  final AiConsentController? aiConsent;
+
   @override
   Widget build(BuildContext context) {
     return ChangeNotifierProvider<WhatsappLinkController>(
-      create: (_) =>
-          WhatsappLinkController(isRemote: isRemote, client: client)..load(),
-      child: const _WhatsappLinkView(),
+      create: (ctx) => WhatsappLinkController(
+        isRemote: isRemote,
+        client: client,
+        platform: ctx.read<ClientInfo?>()?.platform,
+      )..load(),
+      child: _WhatsappLinkView(aiConsent: aiConsent),
     );
   }
 }
 
 class _WhatsappLinkView extends StatelessWidget {
-  const _WhatsappLinkView();
+  const _WhatsappLinkView({required this.aiConsent});
+
+  final AiConsentController? aiConsent;
 
   @override
   Widget build(BuildContext context) {
@@ -93,16 +112,17 @@ class _WhatsappLinkView extends StatelessWidget {
         if (controller.isLinked)
           _LinkedNumbers(controller: controller)
         else
-          _NotLinked(controller: controller),
+          _NotLinked(controller: controller, aiConsent: aiConsent),
       ],
     );
   }
 }
 
 class _NotLinked extends StatelessWidget {
-  const _NotLinked({required this.controller});
+  const _NotLinked({required this.controller, required this.aiConsent});
 
   final WhatsappLinkController controller;
+  final AiConsentController? aiConsent;
 
   @override
   Widget build(BuildContext context) {
@@ -189,11 +209,31 @@ class _NotLinked extends StatelessWidget {
 
   Future<void> _create(BuildContext context) async {
     final messenger = ScaffoldMessenger.of(context);
-    final failed = context.l10n.whatsappCodeFailed;
+    final l10n = context.l10n;
+
+    // Linking is the last point before this account's data starts reaching the
+    // AI providers through WhatsApp: every inbound message runs the agent
+    // server-side (`convex/agent/runner.ts`), with no device in the loop to
+    // ask anything. Same gate as the in-app session, and the same recorded
+    // consent, so a user who already agreed in the app is not asked twice.
+    final outcome = await ensureAiConsent(context, aiConsent);
+    if (outcome != AiConsentOutcome.granted) {
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            outcome == AiConsentOutcome.declined
+                ? l10n.aiConsentDeclined
+                : l10n.aiConsentFailed,
+          ),
+        ),
+      );
+      return;
+    }
+
     try {
       await controller.createCode();
     } catch (_) {
-      messenger.showSnackBar(SnackBar(content: Text(failed)));
+      messenger.showSnackBar(SnackBar(content: Text(l10n.whatsappCodeFailed)));
     }
   }
 

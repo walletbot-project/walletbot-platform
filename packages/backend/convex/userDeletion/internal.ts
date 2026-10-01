@@ -8,6 +8,7 @@ import {
 } from '../_generated/server'
 import { inflowsByAccount, outflowsByAccount } from '../aggregates'
 import { createAuth } from '../auth'
+import { tagAggregateDetach } from '../tags/helpers'
 import { MAX_REQUESTS_PER_HOUR } from './helpers'
 
 const HOUR_MS = 60 * 60 * 1000
@@ -246,13 +247,19 @@ export const purgeUserData = internalMutation({
                         .withIndex('by_userId', (q) => q.eq('userId', userId))
                         .take(n),
                 ),
-            async (n) =>
-                deleteRows(
-                    await ctx.db
-                        .query('transactionTags')
-                        .withIndex('by_user_seq', (q) => q.eq('userId', userId))
-                        .take(n),
-                ),
+            async (n) => {
+                const joins = await ctx.db
+                    .query('transactionTags')
+                    .withIndex('by_user_seq', (q) => q.eq('userId', userId))
+                    .take(n)
+                // Before the transactions step: the entry is keyed by the
+                // transaction's date, so the row has to still be there.
+                for (const join of joins) {
+                    await tagAggregateDetach(ctx, join)
+                    await ctx.db.delete(join._id)
+                }
+                return joins.length
+            },
             async (n) =>
                 deleteRows(
                     await ctx.db
@@ -271,6 +278,13 @@ export const purgeUserData = internalMutation({
                 deleteRows(
                     await ctx.db
                         .query('agentMemories')
+                        .withIndex('by_user_seq', (q) => q.eq('userId', userId))
+                        .take(n),
+                ),
+            async (n) =>
+                deleteRows(
+                    await ctx.db
+                        .query('recurrences')
                         .withIndex('by_user_seq', (q) => q.eq('userId', userId))
                         .take(n),
                 ),

@@ -1,36 +1,66 @@
+import 'dart:async';
 import 'package:flutter/services.dart';
 
+/// Orders platform calls and invalidates queued audio synchronously on mute,
+/// interruption and stop. Native drivers own the bounded hardware queues.
 class PcmAudioPlayer {
-  static const _channel = MethodChannel('live.walletbot.app/pcm_audio');
+  PcmAudioPlayer({MethodChannel? channel})
+    : _channel = channel ?? const MethodChannel('live.walletbot.app/pcm_audio');
 
+  final MethodChannel _channel;
+  Future<void> _tail = Future.value();
   bool _started = false;
+  bool _requested = false;
+  int _generation = 0;
 
-  /// Starts native playback. On iOS the platform side returns a diagnostics
-  /// map (voice-processing state, session formats, route) that callers
-  /// should surface into the session event log; Android returns null.
-  Future<Map<String, Object?>?> start({int sampleRate = 24000}) async {
-    if (_started) return null;
-    final diagnostics = await _channel.invokeMethod<Map<Object?, Object?>>(
-      'start',
-      {'sampleRate': sampleRate},
-    );
-    _started = true;
-    return diagnostics?.map((key, value) => MapEntry(key.toString(), value));
+  Future<T> _serial<T>(Future<T> Function() work) {
+    final result = _tail.then((_) => work());
+    _tail = result.then<void>((_) {}, onError: (Object _) {});
+    return result;
   }
 
-  Future<void> enqueue(Uint8List pcm16Bytes) async {
-    if (!_started || pcm16Bytes.isEmpty) return;
-    await _channel.invokeMethod<void>('enqueue', pcm16Bytes);
+  Future<Map<String, Object?>?> start({int sampleRate = 24000}) {
+    _requested = true;
+    return _serial(() async {
+      if (!_requested || _started) return null;
+      final diagnostics = await _channel.invokeMethod<Map<Object?, Object?>>(
+        'start',
+        {'sampleRate': sampleRate},
+      );
+      _started = true;
+      return diagnostics?.map((key, value) => MapEntry(key.toString(), value));
+    });
   }
 
-  Future<void> interrupt() async {
-    if (!_started) return;
-    await _channel.invokeMethod<void>('interrupt');
+  Future<void> enqueue(Uint8List bytes) {
+    if (!_requested || bytes.isEmpty) return Future.value();
+    if (bytes.length.isOdd) {
+      return Future.error(const FormatException('Unaligned PCM16'));
+    }
+    final generation = _generation;
+    return _serial(() async {
+      if (!_started || !_requested || generation != _generation) return;
+      await _channel.invokeMethod<void>('enqueue', bytes);
+    });
   }
 
-  Future<void> stop() async {
-    if (!_started) return;
-    await _channel.invokeMethod<void>('stop');
-    _started = false;
+  Future<void> interrupt() {
+    ++_generation;
+    return _serial(() async {
+      if (_started) await _channel.invokeMethod<void>('interrupt');
+    });
+  }
+
+  Future<void> stop() {
+    _requested = false;
+    ++_generation;
+    return _serial(() async {
+      if (!_started) return;
+      try {
+        await _channel.invokeMethod<void>('stop');
+      } finally {
+        _started = false;
+      }
+    });
   }
 }

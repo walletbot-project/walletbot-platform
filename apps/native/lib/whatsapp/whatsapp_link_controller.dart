@@ -66,10 +66,19 @@ class WhatsappLinkCode {
 /// [isRemote] gates every call: a local-only account has no backend user, so
 /// there is nothing to link it to.
 class WhatsappLinkController extends ChangeNotifier {
-  WhatsappLinkController({required this.isRemote, ConvexClient? client})
-    : _client = client;
+  WhatsappLinkController({
+    required this.isRemote,
+    ConvexClient? client,
+    String? platform,
+  }) : _client = client,
+       _platform = platform;
 
   final bool isRemote;
+
+  /// This client's platform key, forwarded to `createLinkCode` so the backend
+  /// can apply the iOS AI-consent check. Null in widget tests and in builds
+  /// with no resolved [ClientInfo]; the backend then skips the check.
+  final String? _platform;
 
   // Only ever touched when [isRemote] is true, so a local account — and a
   // widget test — runs without a Convex transport. Same shape as
@@ -165,7 +174,7 @@ class WhatsappLinkController extends ChangeNotifier {
     try {
       final decoded = await _resolvedClient.mutation<Object?>(
         'v1/whatsapp/mutations:createLinkCode',
-        const {},
+        {'platform': ?_platform},
       );
       if (decoded is! Map) {
         throw const FormatException('createLinkCode did not return an object');

@@ -5,7 +5,13 @@
 // list the model is given. Two sources of truth for "what tools exist" is how
 // you end up with a model that calls something the executor cannot dispatch.
 
-import type { ToolName } from '@wallet-bot/shared'
+import {
+    AGENT_SKILLS,
+    TOOL_MAP,
+    type ToolDefinition,
+    type ToolName,
+    withoutRecurrence,
+} from '@wallet-bot/shared'
 import type { FlagKey } from '../featureFlags/utils'
 
 // The nine dashboard/saved-filter tools are deliberately absent.
@@ -87,3 +93,36 @@ export const isAgentToolName = (name: string): name is AgentToolName =>
 /** The flag a tool is gated behind, or undefined when it is always available. */
 export const flagForTool = (name: AgentToolName): FlagKey | undefined =>
     FLAG_GATED_TOOLS[name]
+
+// Recurrence tools run on the native/web clients. This channel has no executor
+// for series writes, so shared definitions must not advertise those arguments.
+export const toolDefinitionsFor = (
+    flags: Partial<Record<FlagKey, boolean>>,
+): ToolDefinition[] =>
+    AGENT_TOOL_NAMES.filter((name) => {
+        const flag = flagForTool(name)
+        return flag === undefined || flags[flag] === true
+    }).map((name) => withoutRecurrence(TOOL_MAP[name]))
+
+export const AGENT_CHANNEL_SKILLS = AGENT_SKILLS.filter(
+    (skill) => skill.slug !== 'recurring-movements',
+)
+
+// Reject stale or fabricated series arguments before a write can turn a
+// requested series into one movement, or apply a series-wide edit to one row.
+export function hasUnsupportedRecurrenceArguments(
+    name: string,
+    raw: unknown,
+): boolean {
+    if (
+        ![
+            'addExpense',
+            'addIncome',
+            'updateTransaction',
+            'deleteTransaction',
+        ].includes(name)
+    )
+        return false
+    if (typeof raw !== 'object' || raw === null) return false
+    return 'recurrence' in raw || 'scope' in raw
+}

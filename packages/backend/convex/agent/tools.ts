@@ -23,8 +23,6 @@
 
 import {
     AGENT_CONTEXT_CAPS,
-    AGENT_SKILLS,
-    AGENT_SKILLS_BY_SLUG,
     convertAmount,
     DEFAULT_FX_MARKET,
     fxAlternatives,
@@ -32,6 +30,7 @@ import {
     isValidCurrencyCode,
     normalizeCurrencyCode,
     parseAmountToCents,
+    pastCutoffBigInt,
     resolveFxQuote,
     runCalculate,
     runCalculateDate,
@@ -39,18 +38,19 @@ import {
     toolSchemas,
 } from '@wallet-bot/shared'
 import { v } from 'convex/values'
-import type { Doc, Id } from '../_generated/dataModel'
+import type { Doc } from '../_generated/dataModel'
 import type { MutationCtx } from '../_generated/server'
 import { internalMutation } from '../_generated/server'
-import { inflowsByAccount, outflowsByAccount } from '../aggregates'
 import { readSnapshot } from '../exchangeRates/helpers'
 import { resolveFlagsForUser } from '../featureFlags/helpers'
 import { nextSeq, writeTombstone } from '../sync/helpers'
+import { tagAggregateDetach } from '../tags/helpers'
 import {
     recordFinancialAccountCreated,
     recordMovementCreated,
     recordTransferCreated,
 } from '../telemetry/metrics'
+import { aggregateInsert, aggregateReplace } from '../transactions/helpers'
 import { hasDuplicateAccount } from '../v1/accounts/helpers'
 import {
     DEFAULT_ACCOUNT_COLOR,
@@ -74,7 +74,12 @@ import {
     parseAgentDateEndOfDay,
     parseAgentTransactionDate,
 } from './time'
-import { flagForTool, isAgentToolName } from './toolset'
+import {
+    AGENT_CHANNEL_SKILLS,
+    flagForTool,
+    hasUnsupportedRecurrenceArguments,
+    isAgentToolName,
+} from './toolset'
 
 // Every read below is narrowed to one user through an index, but a user with a
 // long history could still ask for a year of transactions. These caps keep a
@@ -128,27 +133,6 @@ const getTransactionRow = async (
         .query('transactions')
         .withIndex('by_user_id', (q) => q.eq('userId', userId).eq('id', id))
         .unique()
-
-const aggregateInsert = async (
-    ctx: Ctx,
-    id: Id<'transactions'>,
-): Promise<void> => {
-    const doc = await ctx.db.get(id)
-    if (!doc) return
-    await outflowsByAccount.insert(ctx, doc)
-    await inflowsByAccount.insert(ctx, doc)
-}
-
-const aggregateReplace = async (
-    ctx: Ctx,
-    oldDoc: Doc<'transactions'>,
-    id: Id<'transactions'>,
-): Promise<void> => {
-    const newDoc = await ctx.db.get(id)
-    if (!newDoc) return
-    await outflowsByAccount.replace(ctx, oldDoc, newDoc)
-    await inflowsByAccount.replace(ctx, oldDoc, newDoc)
-}
 
 const serializeTransaction = (
     t: Doc<'transactions'>,
@@ -700,8 +684,9 @@ const listTransactionsTool = async (
                   ),
               )
             : undefined
-    // Inclusive of the whole closing day — see parseAgentDateEndOfDay.
-    const to =
+    const cutoff = pastCutoffBigInt(new Date(clock.nowMs))
+    // Respect the requested day while excluding occurrences that are not due.
+    const requestedTo =
         args.dateTo !== undefined
             ? BigInt(
                   parseAgentDateEndOfDay(
@@ -711,6 +696,10 @@ const listTransactionsTool = async (
                   ),
               )
             : undefined
+    const to =
+        requestedTo !== undefined && requestedTo < cutoff
+            ? requestedTo
+            : cutoff - 1n
 
     const matches = (t: Doc<'transactions'>): boolean => {
         if (t.isArchived) return false
@@ -1035,7 +1024,12 @@ const addBalanceAdjustmentTool = async (
     // `balanceAfter` is the user's observed truth and is stored verbatim; the
     // delta is derived, never the other way around.
     const balanceAfter = parseAmountToCents(args.balanceAfter)
-    const current = await computeAccountBalance(ctx, userId, account.value.id)
+    const current = await computeAccountBalance(
+        ctx,
+        userId,
+        account.value.id,
+        pastCutoffBigInt(new Date(clock.nowMs)),
+    )
     const amount = balanceAfter - current
 
     const date = BigInt(
@@ -1210,6 +1204,7 @@ const deleteTransactionTool = async (
         .collect()
     for (const join of joins) {
         const joinSeq = await nextSeq(ctx, userId)
+        await tagAggregateDetach(ctx, join, row)
         await ctx.db.delete(join._id)
         await writeTombstone(ctx, {
             userId,
@@ -1254,7 +1249,13 @@ const summarizeTransactionsTool = async (
     args: ToolArgs<'summarizeTransactions'>,
     clock: Clock,
 ): Promise<ToolResult> => {
-    const { from, to } = summaryWindow(args.dateFrom, args.dateTo, clock)
+    const { from, to: requestedTo } = summaryWindow(
+        args.dateFrom,
+        args.dateTo,
+        clock,
+    )
+    const cutoff = pastCutoffBigInt(new Date(clock.nowMs))
+    const to = requestedTo < cutoff ? requestedTo : cutoff - 1n
     const rows = await ctx.db
         .query('transactions')
         .withIndex('by_user_date', (q) =>
@@ -1545,10 +1546,10 @@ const calculateDateTool = (
 }
 
 const readSkillTool = (args: ToolArgs<'readSkill'>): ToolResult => {
-    const skill = AGENT_SKILLS_BY_SLUG.get(args.slug)
+    const skill = AGENT_CHANNEL_SKILLS.find((skill) => skill.slug === args.slug)
     if (!skill) {
         return fail(`Unknown skill: ${args.slug}`, {
-            availableSlugs: AGENT_SKILLS.map((s) => s.slug),
+            availableSlugs: AGENT_CHANNEL_SKILLS.map((s) => s.slug),
         })
     }
     return ok({ slug: skill.slug, title: skill.title, body: skill.body })
@@ -1594,6 +1595,7 @@ const dispatch = async (
                 ctx,
                 userId,
                 found.value.id,
+                pastCutoffBigInt(new Date(clock.nowMs)),
             )
             return ok({
                 accountId: found.value.id,
@@ -1855,6 +1857,13 @@ export const execute = internalMutation({
             }
         }
         const raw: unknown = JSON.parse(args.argsJson)
+        if (hasUnsupportedRecurrenceArguments(args.name, raw)) {
+            return JSON.stringify(
+                fail(
+                    'Recurring movements and series-wide changes must be managed in the app.',
+                ),
+            )
+        }
         const result = await dispatch(
             ctx,
             args.userId,

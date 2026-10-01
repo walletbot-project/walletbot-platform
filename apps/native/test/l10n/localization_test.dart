@@ -91,6 +91,46 @@ void main() {
     }
   });
 
+  test('the Activity detail speaks both languages', () {
+    final en = AppLocalizationsEn();
+    final es = AppLocalizationsEs();
+
+    // This receipt was hardcoded Spanish until WAL-174. Asserting the pairs
+    // differ catches the usual regression: a key added to `app_es.arb` and
+    // copied verbatim into `app_en.arb`.
+    final pairs = <String, String>{
+      en.detail: es.detail,
+      en.editActivity: es.editActivity,
+      en.activityGone: es.activityGone,
+      en.estimatedDate: es.estimatedDate,
+      en.estimatedTime: es.estimatedTime,
+      en.sourceAccount: es.sourceAccount,
+      en.destinationAccount: es.destinationAccount,
+      en.noCategory: es.noCategory,
+      en.noTags: es.noTags,
+      en.balanceUnavailable: es.balanceUnavailable,
+      en.change: es.change,
+      en.invalidAmount: es.invalidAmount,
+      en.noOtherAccount: es.noOtherAccount,
+      en.amountNotEditable: es.amountNotEditable,
+      en.activityUpdateFailed: es.activityUpdateFailed,
+      en.activityDeleteTitle: es.activityDeleteTitle,
+      en.activityDeleteFailed: es.activityDeleteFailed,
+    };
+    for (final entry in pairs.entries) {
+      expect(entry.key, isNot(entry.value), reason: entry.key);
+    }
+
+    expect(en.activityDeleteConfirm('Rent'), contains('Rent'));
+    expect(es.activityDeleteConfirm('Alquiler'), contains('Alquiler'));
+
+    // The identity chips carried the label inline, accent and all — the
+    // Spanish one was even spelled "Categoria".
+    expect(en.accountIdentity('Cash'), 'Account: Cash');
+    expect(es.accountIdentity('Efectivo'), 'Cuenta: Efectivo');
+    expect(es.categoryIdentity('Comida'), 'Categoría: Comida');
+  });
+
   test('dates and money use locale-specific separators and ordering', () {
     final date = DateTime(2026, 7, 10);
 

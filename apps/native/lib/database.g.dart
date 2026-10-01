@@ -1349,6 +1349,28 @@ class $TransactionsTable extends Transactions
     type: DriftSqlType.bigInt,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _recurrenceIdMeta = const VerificationMeta(
+    'recurrenceId',
+  );
+  @override
+  late final GeneratedColumn<String> recurrenceId = GeneratedColumn<String>(
+    'recurrence_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _recurrenceIndexMeta = const VerificationMeta(
+    'recurrenceIndex',
+  );
+  @override
+  late final GeneratedColumn<int> recurrenceIndex = GeneratedColumn<int>(
+    'recurrence_index',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _archivedMeta = const VerificationMeta(
     'archived',
   );
@@ -1418,6 +1440,8 @@ class $TransactionsTable extends Transactions
     toCurrency,
     exchangeRate,
     balanceAfter,
+    recurrenceId,
+    recurrenceIndex,
     archived,
     createdAt,
     updatedAt,
@@ -1561,6 +1585,24 @@ class $TransactionsTable extends Transactions
         ),
       );
     }
+    if (data.containsKey('recurrence_id')) {
+      context.handle(
+        _recurrenceIdMeta,
+        recurrenceId.isAcceptableOrUnknown(
+          data['recurrence_id']!,
+          _recurrenceIdMeta,
+        ),
+      );
+    }
+    if (data.containsKey('recurrence_index')) {
+      context.handle(
+        _recurrenceIndexMeta,
+        recurrenceIndex.isAcceptableOrUnknown(
+          data['recurrence_index']!,
+          _recurrenceIndexMeta,
+        ),
+      );
+    }
     if (data.containsKey('is_archived')) {
       context.handle(
         _archivedMeta,
@@ -1668,6 +1710,14 @@ class $TransactionsTable extends Transactions
         DriftSqlType.bigInt,
         data['${effectivePrefix}balance_after'],
       ),
+      recurrenceId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}recurrence_id'],
+      ),
+      recurrenceIndex: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}recurrence_index'],
+      ),
       archived: attachedDatabase.typeMapping.read(
         DriftSqlType.bool,
         data['${effectivePrefix}is_archived'],
@@ -1716,6 +1766,8 @@ class Transaction extends DataClass implements Insertable<Transaction> {
   final String? toCurrency;
   final double? exchangeRate;
   final BigInt? balanceAfter;
+  final String? recurrenceId;
+  final int? recurrenceIndex;
   final bool archived;
   final BigInt createdAt;
   final BigInt updatedAt;
@@ -1738,6 +1790,8 @@ class Transaction extends DataClass implements Insertable<Transaction> {
     this.toCurrency,
     this.exchangeRate,
     this.balanceAfter,
+    this.recurrenceId,
+    this.recurrenceIndex,
     required this.archived,
     required this.createdAt,
     required this.updatedAt,
@@ -1779,6 +1833,12 @@ class Transaction extends DataClass implements Insertable<Transaction> {
     if (!nullToAbsent || balanceAfter != null) {
       map['balance_after'] = Variable<BigInt>(balanceAfter);
     }
+    if (!nullToAbsent || recurrenceId != null) {
+      map['recurrence_id'] = Variable<String>(recurrenceId);
+    }
+    if (!nullToAbsent || recurrenceIndex != null) {
+      map['recurrence_index'] = Variable<int>(recurrenceIndex);
+    }
     map['is_archived'] = Variable<bool>(archived);
     map['created_at'] = Variable<BigInt>(createdAt);
     map['updated_at'] = Variable<BigInt>(updatedAt);
@@ -1817,6 +1877,12 @@ class Transaction extends DataClass implements Insertable<Transaction> {
       balanceAfter: balanceAfter == null && nullToAbsent
           ? const Value.absent()
           : Value(balanceAfter),
+      recurrenceId: recurrenceId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(recurrenceId),
+      recurrenceIndex: recurrenceIndex == null && nullToAbsent
+          ? const Value.absent()
+          : Value(recurrenceIndex),
       archived: Value(archived),
       createdAt: Value(createdAt),
       updatedAt: Value(updatedAt),
@@ -1849,6 +1915,8 @@ class Transaction extends DataClass implements Insertable<Transaction> {
       toCurrency: serializer.fromJson<String?>(json['toCurrency']),
       exchangeRate: serializer.fromJson<double?>(json['exchangeRate']),
       balanceAfter: serializer.fromJson<BigInt?>(json['balanceAfter']),
+      recurrenceId: serializer.fromJson<String?>(json['recurrenceId']),
+      recurrenceIndex: serializer.fromJson<int?>(json['recurrenceIndex']),
       archived: serializer.fromJson<bool>(json['archived']),
       createdAt: serializer.fromJson<BigInt>(json['createdAt']),
       updatedAt: serializer.fromJson<BigInt>(json['updatedAt']),
@@ -1878,6 +1946,8 @@ class Transaction extends DataClass implements Insertable<Transaction> {
       'toCurrency': serializer.toJson<String?>(toCurrency),
       'exchangeRate': serializer.toJson<double?>(exchangeRate),
       'balanceAfter': serializer.toJson<BigInt?>(balanceAfter),
+      'recurrenceId': serializer.toJson<String?>(recurrenceId),
+      'recurrenceIndex': serializer.toJson<int?>(recurrenceIndex),
       'archived': serializer.toJson<bool>(archived),
       'createdAt': serializer.toJson<BigInt>(createdAt),
       'updatedAt': serializer.toJson<BigInt>(updatedAt),
@@ -1903,6 +1973,8 @@ class Transaction extends DataClass implements Insertable<Transaction> {
     Value<String?> toCurrency = const Value.absent(),
     Value<double?> exchangeRate = const Value.absent(),
     Value<BigInt?> balanceAfter = const Value.absent(),
+    Value<String?> recurrenceId = const Value.absent(),
+    Value<int?> recurrenceIndex = const Value.absent(),
     bool? archived,
     BigInt? createdAt,
     BigInt? updatedAt,
@@ -1925,6 +1997,10 @@ class Transaction extends DataClass implements Insertable<Transaction> {
     toCurrency: toCurrency.present ? toCurrency.value : this.toCurrency,
     exchangeRate: exchangeRate.present ? exchangeRate.value : this.exchangeRate,
     balanceAfter: balanceAfter.present ? balanceAfter.value : this.balanceAfter,
+    recurrenceId: recurrenceId.present ? recurrenceId.value : this.recurrenceId,
+    recurrenceIndex: recurrenceIndex.present
+        ? recurrenceIndex.value
+        : this.recurrenceIndex,
     archived: archived ?? this.archived,
     createdAt: createdAt ?? this.createdAt,
     updatedAt: updatedAt ?? this.updatedAt,
@@ -1965,6 +2041,12 @@ class Transaction extends DataClass implements Insertable<Transaction> {
       balanceAfter: data.balanceAfter.present
           ? data.balanceAfter.value
           : this.balanceAfter,
+      recurrenceId: data.recurrenceId.present
+          ? data.recurrenceId.value
+          : this.recurrenceId,
+      recurrenceIndex: data.recurrenceIndex.present
+          ? data.recurrenceIndex.value
+          : this.recurrenceIndex,
       archived: data.archived.present ? data.archived.value : this.archived,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
@@ -1992,6 +2074,8 @@ class Transaction extends DataClass implements Insertable<Transaction> {
           ..write('toCurrency: $toCurrency, ')
           ..write('exchangeRate: $exchangeRate, ')
           ..write('balanceAfter: $balanceAfter, ')
+          ..write('recurrenceId: $recurrenceId, ')
+          ..write('recurrenceIndex: $recurrenceIndex, ')
           ..write('archived: $archived, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt, ')
@@ -2019,6 +2103,8 @@ class Transaction extends DataClass implements Insertable<Transaction> {
     toCurrency,
     exchangeRate,
     balanceAfter,
+    recurrenceId,
+    recurrenceIndex,
     archived,
     createdAt,
     updatedAt,
@@ -2045,6 +2131,8 @@ class Transaction extends DataClass implements Insertable<Transaction> {
           other.toCurrency == this.toCurrency &&
           other.exchangeRate == this.exchangeRate &&
           other.balanceAfter == this.balanceAfter &&
+          other.recurrenceId == this.recurrenceId &&
+          other.recurrenceIndex == this.recurrenceIndex &&
           other.archived == this.archived &&
           other.createdAt == this.createdAt &&
           other.updatedAt == this.updatedAt &&
@@ -2069,6 +2157,8 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
   final Value<String?> toCurrency;
   final Value<double?> exchangeRate;
   final Value<BigInt?> balanceAfter;
+  final Value<String?> recurrenceId;
+  final Value<int?> recurrenceIndex;
   final Value<bool> archived;
   final Value<BigInt> createdAt;
   final Value<BigInt> updatedAt;
@@ -2092,6 +2182,8 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
     this.toCurrency = const Value.absent(),
     this.exchangeRate = const Value.absent(),
     this.balanceAfter = const Value.absent(),
+    this.recurrenceId = const Value.absent(),
+    this.recurrenceIndex = const Value.absent(),
     this.archived = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.updatedAt = const Value.absent(),
@@ -2116,6 +2208,8 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
     this.toCurrency = const Value.absent(),
     this.exchangeRate = const Value.absent(),
     this.balanceAfter = const Value.absent(),
+    this.recurrenceId = const Value.absent(),
+    this.recurrenceIndex = const Value.absent(),
     this.archived = const Value.absent(),
     required BigInt createdAt,
     required BigInt updatedAt,
@@ -2150,6 +2244,8 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
     Expression<String>? toCurrency,
     Expression<double>? exchangeRate,
     Expression<BigInt>? balanceAfter,
+    Expression<String>? recurrenceId,
+    Expression<int>? recurrenceIndex,
     Expression<bool>? archived,
     Expression<BigInt>? createdAt,
     Expression<BigInt>? updatedAt,
@@ -2174,6 +2270,8 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
       if (toCurrency != null) 'to_currency': toCurrency,
       if (exchangeRate != null) 'exchange_rate': exchangeRate,
       if (balanceAfter != null) 'balance_after': balanceAfter,
+      if (recurrenceId != null) 'recurrence_id': recurrenceId,
+      if (recurrenceIndex != null) 'recurrence_index': recurrenceIndex,
       if (archived != null) 'is_archived': archived,
       if (createdAt != null) 'created_at': createdAt,
       if (updatedAt != null) 'updated_at': updatedAt,
@@ -2200,6 +2298,8 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
     Value<String?>? toCurrency,
     Value<double?>? exchangeRate,
     Value<BigInt?>? balanceAfter,
+    Value<String?>? recurrenceId,
+    Value<int?>? recurrenceIndex,
     Value<bool>? archived,
     Value<BigInt>? createdAt,
     Value<BigInt>? updatedAt,
@@ -2224,6 +2324,8 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
       toCurrency: toCurrency ?? this.toCurrency,
       exchangeRate: exchangeRate ?? this.exchangeRate,
       balanceAfter: balanceAfter ?? this.balanceAfter,
+      recurrenceId: recurrenceId ?? this.recurrenceId,
+      recurrenceIndex: recurrenceIndex ?? this.recurrenceIndex,
       archived: archived ?? this.archived,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
@@ -2288,6 +2390,12 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
     if (balanceAfter.present) {
       map['balance_after'] = Variable<BigInt>(balanceAfter.value);
     }
+    if (recurrenceId.present) {
+      map['recurrence_id'] = Variable<String>(recurrenceId.value);
+    }
+    if (recurrenceIndex.present) {
+      map['recurrence_index'] = Variable<int>(recurrenceIndex.value);
+    }
     if (archived.present) {
       map['is_archived'] = Variable<bool>(archived.value);
     }
@@ -2326,6 +2434,8 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
           ..write('toCurrency: $toCurrency, ')
           ..write('exchangeRate: $exchangeRate, ')
           ..write('balanceAfter: $balanceAfter, ')
+          ..write('recurrenceId: $recurrenceId, ')
+          ..write('recurrenceIndex: $recurrenceIndex, ')
           ..write('archived: $archived, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt, ')
@@ -4770,6 +4880,585 @@ class AgentMemoriesCompanion extends UpdateCompanion<AgentMemory> {
     return (StringBuffer('AgentMemoriesCompanion(')
           ..write('id: $id, ')
           ..write('content: $content, ')
+          ..write('archived: $archived, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('dirty: $dirty, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $RecurrencesTable extends Recurrences
+    with TableInfo<$RecurrencesTable, Recurrence> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $RecurrencesTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _frequencyMeta = const VerificationMeta(
+    'frequency',
+  );
+  @override
+  late final GeneratedColumn<String> frequency = GeneratedColumn<String>(
+    'frequency',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _dayIntervalMeta = const VerificationMeta(
+    'dayInterval',
+  );
+  @override
+  late final GeneratedColumn<int> dayInterval = GeneratedColumn<int>(
+    'day_interval',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _anchorDateMeta = const VerificationMeta(
+    'anchorDate',
+  );
+  @override
+  late final GeneratedColumn<BigInt> anchorDate = GeneratedColumn<BigInt>(
+    'anchor_date',
+    aliasedName,
+    false,
+    type: DriftSqlType.bigInt,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _endDateMeta = const VerificationMeta(
+    'endDate',
+  );
+  @override
+  late final GeneratedColumn<BigInt> endDate = GeneratedColumn<BigInt>(
+    'end_date',
+    aliasedName,
+    true,
+    type: DriftSqlType.bigInt,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _archivedMeta = const VerificationMeta(
+    'archived',
+  );
+  @override
+  late final GeneratedColumn<bool> archived = GeneratedColumn<bool>(
+    'is_archived',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("is_archived" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<BigInt> createdAt = GeneratedColumn<BigInt>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.bigInt,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
+    'updatedAt',
+  );
+  @override
+  late final GeneratedColumn<BigInt> updatedAt = GeneratedColumn<BigInt>(
+    'updated_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.bigInt,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _dirtyMeta = const VerificationMeta('dirty');
+  @override
+  late final GeneratedColumn<bool> dirty = GeneratedColumn<bool>(
+    'dirty',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("dirty" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    frequency,
+    dayInterval,
+    anchorDate,
+    endDate,
+    archived,
+    createdAt,
+    updatedAt,
+    dirty,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'recurrences';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<Recurrence> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('frequency')) {
+      context.handle(
+        _frequencyMeta,
+        frequency.isAcceptableOrUnknown(data['frequency']!, _frequencyMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_frequencyMeta);
+    }
+    if (data.containsKey('day_interval')) {
+      context.handle(
+        _dayIntervalMeta,
+        dayInterval.isAcceptableOrUnknown(
+          data['day_interval']!,
+          _dayIntervalMeta,
+        ),
+      );
+    }
+    if (data.containsKey('anchor_date')) {
+      context.handle(
+        _anchorDateMeta,
+        anchorDate.isAcceptableOrUnknown(data['anchor_date']!, _anchorDateMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_anchorDateMeta);
+    }
+    if (data.containsKey('end_date')) {
+      context.handle(
+        _endDateMeta,
+        endDate.isAcceptableOrUnknown(data['end_date']!, _endDateMeta),
+      );
+    }
+    if (data.containsKey('is_archived')) {
+      context.handle(
+        _archivedMeta,
+        archived.isAcceptableOrUnknown(data['is_archived']!, _archivedMeta),
+      );
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_createdAtMeta);
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(
+        _updatedAtMeta,
+        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_updatedAtMeta);
+    }
+    if (data.containsKey('dirty')) {
+      context.handle(
+        _dirtyMeta,
+        dirty.isAcceptableOrUnknown(data['dirty']!, _dirtyMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  Recurrence map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return Recurrence(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      frequency: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}frequency'],
+      )!,
+      dayInterval: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}day_interval'],
+      ),
+      anchorDate: attachedDatabase.typeMapping.read(
+        DriftSqlType.bigInt,
+        data['${effectivePrefix}anchor_date'],
+      )!,
+      endDate: attachedDatabase.typeMapping.read(
+        DriftSqlType.bigInt,
+        data['${effectivePrefix}end_date'],
+      ),
+      archived: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}is_archived'],
+      )!,
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.bigInt,
+        data['${effectivePrefix}created_at'],
+      )!,
+      updatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.bigInt,
+        data['${effectivePrefix}updated_at'],
+      )!,
+      dirty: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}dirty'],
+      )!,
+    );
+  }
+
+  @override
+  $RecurrencesTable createAlias(String alias) {
+    return $RecurrencesTable(attachedDatabase, alias);
+  }
+}
+
+class Recurrence extends DataClass implements Insertable<Recurrence> {
+  final String id;
+
+  /// "daily" | "weekly" | "monthly" | "yearly" | "customDays"
+  final String frequency;
+
+  /// Only meaningful for "customDays".
+  final int? dayInterval;
+
+  /// The first occurrence's date. Every later one is projected from *here*, by
+  /// index, never from its predecessor — that is what keeps a February clipped
+  /// to the 28th from dragging March with it (docs/recurrency-design.md §2.3).
+  final BigInt anchorDate;
+
+  /// Inclusive. Null means open-ended, capped by the frequency's batch.
+  final BigInt? endDate;
+  final bool archived;
+  final BigInt createdAt;
+  final BigInt updatedAt;
+  final bool dirty;
+  const Recurrence({
+    required this.id,
+    required this.frequency,
+    this.dayInterval,
+    required this.anchorDate,
+    this.endDate,
+    required this.archived,
+    required this.createdAt,
+    required this.updatedAt,
+    required this.dirty,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['frequency'] = Variable<String>(frequency);
+    if (!nullToAbsent || dayInterval != null) {
+      map['day_interval'] = Variable<int>(dayInterval);
+    }
+    map['anchor_date'] = Variable<BigInt>(anchorDate);
+    if (!nullToAbsent || endDate != null) {
+      map['end_date'] = Variable<BigInt>(endDate);
+    }
+    map['is_archived'] = Variable<bool>(archived);
+    map['created_at'] = Variable<BigInt>(createdAt);
+    map['updated_at'] = Variable<BigInt>(updatedAt);
+    map['dirty'] = Variable<bool>(dirty);
+    return map;
+  }
+
+  RecurrencesCompanion toCompanion(bool nullToAbsent) {
+    return RecurrencesCompanion(
+      id: Value(id),
+      frequency: Value(frequency),
+      dayInterval: dayInterval == null && nullToAbsent
+          ? const Value.absent()
+          : Value(dayInterval),
+      anchorDate: Value(anchorDate),
+      endDate: endDate == null && nullToAbsent
+          ? const Value.absent()
+          : Value(endDate),
+      archived: Value(archived),
+      createdAt: Value(createdAt),
+      updatedAt: Value(updatedAt),
+      dirty: Value(dirty),
+    );
+  }
+
+  factory Recurrence.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return Recurrence(
+      id: serializer.fromJson<String>(json['id']),
+      frequency: serializer.fromJson<String>(json['frequency']),
+      dayInterval: serializer.fromJson<int?>(json['dayInterval']),
+      anchorDate: serializer.fromJson<BigInt>(json['anchorDate']),
+      endDate: serializer.fromJson<BigInt?>(json['endDate']),
+      archived: serializer.fromJson<bool>(json['archived']),
+      createdAt: serializer.fromJson<BigInt>(json['createdAt']),
+      updatedAt: serializer.fromJson<BigInt>(json['updatedAt']),
+      dirty: serializer.fromJson<bool>(json['dirty']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'frequency': serializer.toJson<String>(frequency),
+      'dayInterval': serializer.toJson<int?>(dayInterval),
+      'anchorDate': serializer.toJson<BigInt>(anchorDate),
+      'endDate': serializer.toJson<BigInt?>(endDate),
+      'archived': serializer.toJson<bool>(archived),
+      'createdAt': serializer.toJson<BigInt>(createdAt),
+      'updatedAt': serializer.toJson<BigInt>(updatedAt),
+      'dirty': serializer.toJson<bool>(dirty),
+    };
+  }
+
+  Recurrence copyWith({
+    String? id,
+    String? frequency,
+    Value<int?> dayInterval = const Value.absent(),
+    BigInt? anchorDate,
+    Value<BigInt?> endDate = const Value.absent(),
+    bool? archived,
+    BigInt? createdAt,
+    BigInt? updatedAt,
+    bool? dirty,
+  }) => Recurrence(
+    id: id ?? this.id,
+    frequency: frequency ?? this.frequency,
+    dayInterval: dayInterval.present ? dayInterval.value : this.dayInterval,
+    anchorDate: anchorDate ?? this.anchorDate,
+    endDate: endDate.present ? endDate.value : this.endDate,
+    archived: archived ?? this.archived,
+    createdAt: createdAt ?? this.createdAt,
+    updatedAt: updatedAt ?? this.updatedAt,
+    dirty: dirty ?? this.dirty,
+  );
+  Recurrence copyWithCompanion(RecurrencesCompanion data) {
+    return Recurrence(
+      id: data.id.present ? data.id.value : this.id,
+      frequency: data.frequency.present ? data.frequency.value : this.frequency,
+      dayInterval: data.dayInterval.present
+          ? data.dayInterval.value
+          : this.dayInterval,
+      anchorDate: data.anchorDate.present
+          ? data.anchorDate.value
+          : this.anchorDate,
+      endDate: data.endDate.present ? data.endDate.value : this.endDate,
+      archived: data.archived.present ? data.archived.value : this.archived,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+      dirty: data.dirty.present ? data.dirty.value : this.dirty,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('Recurrence(')
+          ..write('id: $id, ')
+          ..write('frequency: $frequency, ')
+          ..write('dayInterval: $dayInterval, ')
+          ..write('anchorDate: $anchorDate, ')
+          ..write('endDate: $endDate, ')
+          ..write('archived: $archived, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('dirty: $dirty')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    frequency,
+    dayInterval,
+    anchorDate,
+    endDate,
+    archived,
+    createdAt,
+    updatedAt,
+    dirty,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is Recurrence &&
+          other.id == this.id &&
+          other.frequency == this.frequency &&
+          other.dayInterval == this.dayInterval &&
+          other.anchorDate == this.anchorDate &&
+          other.endDate == this.endDate &&
+          other.archived == this.archived &&
+          other.createdAt == this.createdAt &&
+          other.updatedAt == this.updatedAt &&
+          other.dirty == this.dirty);
+}
+
+class RecurrencesCompanion extends UpdateCompanion<Recurrence> {
+  final Value<String> id;
+  final Value<String> frequency;
+  final Value<int?> dayInterval;
+  final Value<BigInt> anchorDate;
+  final Value<BigInt?> endDate;
+  final Value<bool> archived;
+  final Value<BigInt> createdAt;
+  final Value<BigInt> updatedAt;
+  final Value<bool> dirty;
+  final Value<int> rowid;
+  const RecurrencesCompanion({
+    this.id = const Value.absent(),
+    this.frequency = const Value.absent(),
+    this.dayInterval = const Value.absent(),
+    this.anchorDate = const Value.absent(),
+    this.endDate = const Value.absent(),
+    this.archived = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.dirty = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  RecurrencesCompanion.insert({
+    required String id,
+    required String frequency,
+    this.dayInterval = const Value.absent(),
+    required BigInt anchorDate,
+    this.endDate = const Value.absent(),
+    this.archived = const Value.absent(),
+    required BigInt createdAt,
+    required BigInt updatedAt,
+    this.dirty = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       frequency = Value(frequency),
+       anchorDate = Value(anchorDate),
+       createdAt = Value(createdAt),
+       updatedAt = Value(updatedAt);
+  static Insertable<Recurrence> custom({
+    Expression<String>? id,
+    Expression<String>? frequency,
+    Expression<int>? dayInterval,
+    Expression<BigInt>? anchorDate,
+    Expression<BigInt>? endDate,
+    Expression<bool>? archived,
+    Expression<BigInt>? createdAt,
+    Expression<BigInt>? updatedAt,
+    Expression<bool>? dirty,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (frequency != null) 'frequency': frequency,
+      if (dayInterval != null) 'day_interval': dayInterval,
+      if (anchorDate != null) 'anchor_date': anchorDate,
+      if (endDate != null) 'end_date': endDate,
+      if (archived != null) 'is_archived': archived,
+      if (createdAt != null) 'created_at': createdAt,
+      if (updatedAt != null) 'updated_at': updatedAt,
+      if (dirty != null) 'dirty': dirty,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  RecurrencesCompanion copyWith({
+    Value<String>? id,
+    Value<String>? frequency,
+    Value<int?>? dayInterval,
+    Value<BigInt>? anchorDate,
+    Value<BigInt?>? endDate,
+    Value<bool>? archived,
+    Value<BigInt>? createdAt,
+    Value<BigInt>? updatedAt,
+    Value<bool>? dirty,
+    Value<int>? rowid,
+  }) {
+    return RecurrencesCompanion(
+      id: id ?? this.id,
+      frequency: frequency ?? this.frequency,
+      dayInterval: dayInterval ?? this.dayInterval,
+      anchorDate: anchorDate ?? this.anchorDate,
+      endDate: endDate ?? this.endDate,
+      archived: archived ?? this.archived,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      dirty: dirty ?? this.dirty,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (frequency.present) {
+      map['frequency'] = Variable<String>(frequency.value);
+    }
+    if (dayInterval.present) {
+      map['day_interval'] = Variable<int>(dayInterval.value);
+    }
+    if (anchorDate.present) {
+      map['anchor_date'] = Variable<BigInt>(anchorDate.value);
+    }
+    if (endDate.present) {
+      map['end_date'] = Variable<BigInt>(endDate.value);
+    }
+    if (archived.present) {
+      map['is_archived'] = Variable<bool>(archived.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<BigInt>(createdAt.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<BigInt>(updatedAt.value);
+    }
+    if (dirty.present) {
+      map['dirty'] = Variable<bool>(dirty.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('RecurrencesCompanion(')
+          ..write('id: $id, ')
+          ..write('frequency: $frequency, ')
+          ..write('dayInterval: $dayInterval, ')
+          ..write('anchorDate: $anchorDate, ')
+          ..write('endDate: $endDate, ')
           ..write('archived: $archived, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt, ')
@@ -7562,6 +8251,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     this,
   );
   late final $AgentMemoriesTable agentMemories = $AgentMemoriesTable(this);
+  late final $RecurrencesTable recurrences = $RecurrencesTable(this);
   late final $SyncStateTable syncState = $SyncStateTable(this);
   late final $TombstonesTable tombstones = $TombstonesTable(this);
   late final $VoiceSessionsTable voiceSessions = $VoiceSessionsTable(this);
@@ -7633,6 +8323,14 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final Index transactionsCategoryIdDate = Index(
     'transactions_category_id_date',
     'CREATE INDEX transactions_category_id_date ON transactions (category_id, date)',
+  );
+  late final Index transactionsRecurrenceIdDate = Index(
+    'transactions_recurrence_id_date',
+    'CREATE INDEX transactions_recurrence_id_date ON transactions (recurrence_id, date)',
+  );
+  late final Index transactionsRecurrenceIdRecurrenceIndex = Index(
+    'transactions_recurrence_id_recurrence_index',
+    'CREATE INDEX transactions_recurrence_id_recurrence_index ON transactions (recurrence_id, recurrence_index)',
   );
   late final Index transactionsNeedsSync = Index(
     'transactions_needs_sync',
@@ -7710,6 +8408,18 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     'agent_memories_needs_sync',
     'CREATE INDEX agent_memories_needs_sync ON agent_memories (updated_at) WHERE dirty = 1',
   );
+  late final Index recurrencesArchived = Index(
+    'recurrences_archived',
+    'CREATE INDEX recurrences_archived ON recurrences (is_archived)',
+  );
+  late final Index recurrencesUpdatedAt = Index(
+    'recurrences_updated_at',
+    'CREATE INDEX recurrences_updated_at ON recurrences (updated_at)',
+  );
+  late final Index recurrencesNeedsSync = Index(
+    'recurrences_needs_sync',
+    'CREATE INDEX recurrences_needs_sync ON recurrences (updated_at) WHERE dirty = 1',
+  );
   late final Index tombstonesEntityTable = Index(
     'tombstones_entity_table',
     'CREATE INDEX tombstones_entity_table ON tombstones (entity_table)',
@@ -7755,6 +8465,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     savedFilters,
     dashboardWidgets,
     agentMemories,
+    recurrences,
     syncState,
     tombstones,
     voiceSessions,
@@ -7776,6 +8487,8 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     transactionsUpdatedAt,
     transactionsAccountIdDate,
     transactionsCategoryIdDate,
+    transactionsRecurrenceIdDate,
+    transactionsRecurrenceIdRecurrenceIndex,
     transactionsNeedsSync,
     tagsParentId,
     tagsArchived,
@@ -7795,6 +8508,9 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     agentMemoriesArchived,
     agentMemoriesUpdatedAt,
     agentMemoriesNeedsSync,
+    recurrencesArchived,
+    recurrencesUpdatedAt,
+    recurrencesNeedsSync,
     tombstonesEntityTable,
     tombstonesUpdatedAt,
     tombstonesNeedsSync,
@@ -8388,6 +9104,8 @@ typedef $$TransactionsTableCreateCompanionBuilder =
       Value<String?> toCurrency,
       Value<double?> exchangeRate,
       Value<BigInt?> balanceAfter,
+      Value<String?> recurrenceId,
+      Value<int?> recurrenceIndex,
       Value<bool> archived,
       required BigInt createdAt,
       required BigInt updatedAt,
@@ -8413,6 +9131,8 @@ typedef $$TransactionsTableUpdateCompanionBuilder =
       Value<String?> toCurrency,
       Value<double?> exchangeRate,
       Value<BigInt?> balanceAfter,
+      Value<String?> recurrenceId,
+      Value<int?> recurrenceIndex,
       Value<bool> archived,
       Value<BigInt> createdAt,
       Value<BigInt> updatedAt,
@@ -8516,6 +9236,16 @@ class $$TransactionsTableFilterComposer
 
   ColumnFilters<BigInt> get balanceAfter => $composableBuilder(
     column: $table.balanceAfter,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get recurrenceId => $composableBuilder(
+    column: $table.recurrenceId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get recurrenceIndex => $composableBuilder(
+    column: $table.recurrenceIndex,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -8634,6 +9364,16 @@ class $$TransactionsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get recurrenceId => $composableBuilder(
+    column: $table.recurrenceId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get recurrenceIndex => $composableBuilder(
+    column: $table.recurrenceIndex,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<bool> get archived => $composableBuilder(
     column: $table.archived,
     builder: (column) => ColumnOrderings(column),
@@ -8732,6 +9472,16 @@ class $$TransactionsTableAnnotationComposer
     builder: (column) => column,
   );
 
+  GeneratedColumn<String> get recurrenceId => $composableBuilder(
+    column: $table.recurrenceId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get recurrenceIndex => $composableBuilder(
+    column: $table.recurrenceIndex,
+    builder: (column) => column,
+  );
+
   GeneratedColumn<bool> get archived =>
       $composableBuilder(column: $table.archived, builder: (column) => column);
 
@@ -8793,6 +9543,8 @@ class $$TransactionsTableTableManager
                 Value<String?> toCurrency = const Value.absent(),
                 Value<double?> exchangeRate = const Value.absent(),
                 Value<BigInt?> balanceAfter = const Value.absent(),
+                Value<String?> recurrenceId = const Value.absent(),
+                Value<int?> recurrenceIndex = const Value.absent(),
                 Value<bool> archived = const Value.absent(),
                 Value<BigInt> createdAt = const Value.absent(),
                 Value<BigInt> updatedAt = const Value.absent(),
@@ -8816,6 +9568,8 @@ class $$TransactionsTableTableManager
                 toCurrency: toCurrency,
                 exchangeRate: exchangeRate,
                 balanceAfter: balanceAfter,
+                recurrenceId: recurrenceId,
+                recurrenceIndex: recurrenceIndex,
                 archived: archived,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
@@ -8841,6 +9595,8 @@ class $$TransactionsTableTableManager
                 Value<String?> toCurrency = const Value.absent(),
                 Value<double?> exchangeRate = const Value.absent(),
                 Value<BigInt?> balanceAfter = const Value.absent(),
+                Value<String?> recurrenceId = const Value.absent(),
+                Value<int?> recurrenceIndex = const Value.absent(),
                 Value<bool> archived = const Value.absent(),
                 required BigInt createdAt,
                 required BigInt updatedAt,
@@ -8864,6 +9620,8 @@ class $$TransactionsTableTableManager
                 toCurrency: toCurrency,
                 exchangeRate: exchangeRate,
                 balanceAfter: balanceAfter,
+                recurrenceId: recurrenceId,
+                recurrenceIndex: recurrenceIndex,
                 archived: archived,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
@@ -10148,6 +10906,286 @@ typedef $$AgentMemoriesTableProcessedTableManager =
         BaseReferences<_$AppDatabase, $AgentMemoriesTable, AgentMemory>,
       ),
       AgentMemory,
+      PrefetchHooks Function()
+    >;
+typedef $$RecurrencesTableCreateCompanionBuilder =
+    RecurrencesCompanion Function({
+      required String id,
+      required String frequency,
+      Value<int?> dayInterval,
+      required BigInt anchorDate,
+      Value<BigInt?> endDate,
+      Value<bool> archived,
+      required BigInt createdAt,
+      required BigInt updatedAt,
+      Value<bool> dirty,
+      Value<int> rowid,
+    });
+typedef $$RecurrencesTableUpdateCompanionBuilder =
+    RecurrencesCompanion Function({
+      Value<String> id,
+      Value<String> frequency,
+      Value<int?> dayInterval,
+      Value<BigInt> anchorDate,
+      Value<BigInt?> endDate,
+      Value<bool> archived,
+      Value<BigInt> createdAt,
+      Value<BigInt> updatedAt,
+      Value<bool> dirty,
+      Value<int> rowid,
+    });
+
+class $$RecurrencesTableFilterComposer
+    extends Composer<_$AppDatabase, $RecurrencesTable> {
+  $$RecurrencesTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get frequency => $composableBuilder(
+    column: $table.frequency,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get dayInterval => $composableBuilder(
+    column: $table.dayInterval,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<BigInt> get anchorDate => $composableBuilder(
+    column: $table.anchorDate,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<BigInt> get endDate => $composableBuilder(
+    column: $table.endDate,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get archived => $composableBuilder(
+    column: $table.archived,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<BigInt> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<BigInt> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get dirty => $composableBuilder(
+    column: $table.dirty,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$RecurrencesTableOrderingComposer
+    extends Composer<_$AppDatabase, $RecurrencesTable> {
+  $$RecurrencesTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get frequency => $composableBuilder(
+    column: $table.frequency,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get dayInterval => $composableBuilder(
+    column: $table.dayInterval,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<BigInt> get anchorDate => $composableBuilder(
+    column: $table.anchorDate,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<BigInt> get endDate => $composableBuilder(
+    column: $table.endDate,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get archived => $composableBuilder(
+    column: $table.archived,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<BigInt> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<BigInt> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get dirty => $composableBuilder(
+    column: $table.dirty,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$RecurrencesTableAnnotationComposer
+    extends Composer<_$AppDatabase, $RecurrencesTable> {
+  $$RecurrencesTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get frequency =>
+      $composableBuilder(column: $table.frequency, builder: (column) => column);
+
+  GeneratedColumn<int> get dayInterval => $composableBuilder(
+    column: $table.dayInterval,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<BigInt> get anchorDate => $composableBuilder(
+    column: $table.anchorDate,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<BigInt> get endDate =>
+      $composableBuilder(column: $table.endDate, builder: (column) => column);
+
+  GeneratedColumn<bool> get archived =>
+      $composableBuilder(column: $table.archived, builder: (column) => column);
+
+  GeneratedColumn<BigInt> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  GeneratedColumn<BigInt> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+
+  GeneratedColumn<bool> get dirty =>
+      $composableBuilder(column: $table.dirty, builder: (column) => column);
+}
+
+class $$RecurrencesTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $RecurrencesTable,
+          Recurrence,
+          $$RecurrencesTableFilterComposer,
+          $$RecurrencesTableOrderingComposer,
+          $$RecurrencesTableAnnotationComposer,
+          $$RecurrencesTableCreateCompanionBuilder,
+          $$RecurrencesTableUpdateCompanionBuilder,
+          (
+            Recurrence,
+            BaseReferences<_$AppDatabase, $RecurrencesTable, Recurrence>,
+          ),
+          Recurrence,
+          PrefetchHooks Function()
+        > {
+  $$RecurrencesTableTableManager(_$AppDatabase db, $RecurrencesTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$RecurrencesTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$RecurrencesTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$RecurrencesTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String> frequency = const Value.absent(),
+                Value<int?> dayInterval = const Value.absent(),
+                Value<BigInt> anchorDate = const Value.absent(),
+                Value<BigInt?> endDate = const Value.absent(),
+                Value<bool> archived = const Value.absent(),
+                Value<BigInt> createdAt = const Value.absent(),
+                Value<BigInt> updatedAt = const Value.absent(),
+                Value<bool> dirty = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => RecurrencesCompanion(
+                id: id,
+                frequency: frequency,
+                dayInterval: dayInterval,
+                anchorDate: anchorDate,
+                endDate: endDate,
+                archived: archived,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                dirty: dirty,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                required String frequency,
+                Value<int?> dayInterval = const Value.absent(),
+                required BigInt anchorDate,
+                Value<BigInt?> endDate = const Value.absent(),
+                Value<bool> archived = const Value.absent(),
+                required BigInt createdAt,
+                required BigInt updatedAt,
+                Value<bool> dirty = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => RecurrencesCompanion.insert(
+                id: id,
+                frequency: frequency,
+                dayInterval: dayInterval,
+                anchorDate: anchorDate,
+                endDate: endDate,
+                archived: archived,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                dirty: dirty,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$RecurrencesTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $RecurrencesTable,
+      Recurrence,
+      $$RecurrencesTableFilterComposer,
+      $$RecurrencesTableOrderingComposer,
+      $$RecurrencesTableAnnotationComposer,
+      $$RecurrencesTableCreateCompanionBuilder,
+      $$RecurrencesTableUpdateCompanionBuilder,
+      (
+        Recurrence,
+        BaseReferences<_$AppDatabase, $RecurrencesTable, Recurrence>,
+      ),
+      Recurrence,
       PrefetchHooks Function()
     >;
 typedef $$SyncStateTableCreateCompanionBuilder =
@@ -11548,6 +12586,8 @@ class $AppDatabaseManager {
       $$DashboardWidgetsTableTableManager(_db, _db.dashboardWidgets);
   $$AgentMemoriesTableTableManager get agentMemories =>
       $$AgentMemoriesTableTableManager(_db, _db.agentMemories);
+  $$RecurrencesTableTableManager get recurrences =>
+      $$RecurrencesTableTableManager(_db, _db.recurrences);
   $$SyncStateTableTableManager get syncState =>
       $$SyncStateTableTableManager(_db, _db.syncState);
   $$TombstonesTableTableManager get tombstones =>

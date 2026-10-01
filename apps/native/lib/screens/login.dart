@@ -861,11 +861,7 @@ class _RemoteLoginPanel extends StatelessWidget {
           ],
           _SocialSignInButton(
             onPressed: submitting ? null : onGoogle,
-            icon: SvgPicture.asset(
-              'assets/google.svg',
-              width: 20,
-              height: 20,
-            ),
+            icon: SvgPicture.asset('assets/google.svg', width: 20, height: 20),
             label: context.l10n.continueWithGoogle,
           ),
         ],

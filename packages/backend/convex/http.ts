@@ -48,6 +48,8 @@ const liveRefusalStatus = (error: LiveTokenError): number => {
             return 429
         case 'local_accounts_disabled':
             return 403
+        case 'ai_consent_required':
+            return 403
         case 'unidentified_client':
             return 400
     }

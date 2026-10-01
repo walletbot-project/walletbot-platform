@@ -112,7 +112,190 @@ void main() {
 
   test('deleteTransaction is idempotent', () async {
     final res = await tools.execute('deleteTransaction', {'id': 'missing'});
-    expect(res, {'ok': true, 'id': 'missing'});
+    // The result echoes the scope back so the model can confirm to the user
+    // which of the two things it just did.
+    expect(res, {'ok': true, 'id': 'missing', 'scope': 'only-this'});
+  });
+
+  group('recurring movements', () {
+    Future<Map<String, dynamic>> seedSeries({String? endDate}) async {
+      await tools.execute('createAccount', {'name': 'Cash', 'currency': 'ARS'});
+      await tools.execute('createCategory', {'name': 'Home'});
+      return await tools.execute('addExpense', {
+        'accountIdOrName': 'Cash',
+        'categoryIdOrName': 'Home',
+        'name': 'Rent',
+        'amount': 1500,
+        'date': '2026-01-15',
+        'dateConfirmed': true,
+        'timeStatus': 'confirmed',
+        'time': '09:30',
+        'recurrence': {'frequency': 'monthly', 'endDate': ?endDate},
+      });
+    }
+
+    test('addExpense creates the series and reports its size', () async {
+      final res = await seedSeries();
+      expect(res['ok'], isTrue);
+      final series = res['recurrence'] as Map<String, Object?>;
+      expect(series['frequency'], 'monthly');
+      // The monthly batch. The model has to say this instead of "forever".
+      expect(series['total'], 48);
+      expect(series['coveredThrough'], isNotNull);
+    });
+
+    test('an unreadable cadence is refused, not silently dropped', () async {
+      await tools.execute('createAccount', {'name': 'Cash', 'currency': 'ARS'});
+      await tools.execute('createCategory', {'name': 'Home'});
+      final res = await tools.execute('addExpense', {
+        'accountIdOrName': 'Cash',
+        'categoryIdOrName': 'Home',
+        'name': 'Rent',
+        'amount': 1500,
+        'dateConfirmed': false,
+        'timeStatus': 'none',
+        'recurrence': {'frequency': 'fortnightly'},
+      });
+      expect(res['ok'], isFalse);
+      expect(res['error'], contains('fortnightly'));
+    });
+
+    test('customDays without an interval is refused', () async {
+      await tools.execute('createAccount', {'name': 'Cash', 'currency': 'ARS'});
+      await tools.execute('createCategory', {'name': 'Home'});
+      final res = await tools.execute('addExpense', {
+        'accountIdOrName': 'Cash',
+        'categoryIdOrName': 'Home',
+        'name': 'Rent',
+        'amount': 1500,
+        'dateConfirmed': false,
+        'timeStatus': 'none',
+        'recurrence': {'frequency': 'customDays'},
+      });
+      expect(res['ok'], isFalse);
+      expect(res['error'], contains('dayInterval'));
+    });
+
+    test('the occurrences stay out of listTransactions', () async {
+      await seedSeries();
+      final listed = await tools.execute('listTransactions', {'limit': 100});
+      final items = listed['items'] as List;
+      // Only what has already happened: the anchor is in the past, the rest
+      // of the series is not.
+      expect(items, hasLength(lessThan(48)));
+
+      final upcoming = await tools.execute('listUpcomingTransactions', {
+        'limit': 100,
+      });
+      expect((upcoming['items'] as List), isNotEmpty);
+    });
+
+    test('listRecurrences names the rule by its movement', () async {
+      await seedSeries();
+      final res = await tools.execute('listRecurrences', {});
+      final items = res['items'] as List;
+      expect(items, hasLength(1));
+      final rule = items.single as Map<String, Object?>;
+      expect(rule['name'], 'Rent');
+      expect(rule['frequency'], 'monthly');
+      expect(rule['amount'], 1500);
+      expect(rule['id'], isNotNull);
+    });
+
+    test('getTransaction carries the series it belongs to', () async {
+      final created = await seedSeries(endDate: '2026-05-31');
+      final res = await tools.execute('getTransaction', {'id': created['id']});
+      final txn = res['transaction'] as Map<String, Object?>;
+      final series = txn['recurrence'] as Map<String, Object?>;
+      expect(series['total'], 5);
+      expect(series['position'], 1);
+    });
+
+    test('addRecurrenceOccurrences extends an open-ended rule', () async {
+      await seedSeries();
+      final rules = await tools.execute('listRecurrences', {});
+      final id = (rules['items'] as List).single as Map<String, Object?>;
+
+      final res = await tools.execute('addRecurrenceOccurrences', {
+        'recurrenceId': id['id'],
+      });
+      expect(res['ok'], isTrue);
+      expect(res['added'], 48);
+    });
+
+    test('addRecurrenceOccurrences refuses a bounded rule', () async {
+      await seedSeries(endDate: '2026-05-31');
+      final rules = await tools.execute('listRecurrences', {});
+      final rule = (rules['items'] as List).single as Map<String, Object?>;
+
+      final res = await tools.execute('addRecurrenceOccurrences', {
+        'recurrenceId': rule['id'],
+      });
+      expect(res['ok'], isFalse);
+      expect(res['error'], contains('end date'));
+    });
+
+    test('an all-future delete stops the rule; only-this does not', () async {
+      final created = await seedSeries(endDate: '2026-05-31');
+
+      final one = await tools.execute('deleteTransaction', {
+        'id': created['id'],
+        'scope': 'only-this',
+      });
+      expect(one['scope'], 'only-this');
+
+      // The rest of the series is untouched, and renumbers.
+      final rules = await tools.execute('listRecurrences', {});
+      expect((rules['items'] as List), hasLength(1));
+    });
+
+    test('a cadence change without all-future is refused', () async {
+      final created = await seedSeries();
+      final res = await tools.execute('updateTransaction', {
+        'id': created['id'],
+        'scope': 'only-this',
+        'recurrence': {'frequency': 'weekly'},
+      });
+      expect(res['ok'], isFalse);
+      expect(res['error'], contains('all-future'));
+    });
+
+    test('an all-future date move is refused with a way forward', () async {
+      final created = await seedSeries();
+      final res = await tools.execute('updateTransaction', {
+        'id': created['id'],
+        'scope': 'all-future',
+        'date': '2026-02-20',
+      });
+      expect(res['ok'], isFalse);
+      expect(res['error'], contains('only-this'));
+    });
+
+    test('an all-future edit carries the value fields', () async {
+      final created = await seedSeries(endDate: '2026-05-31');
+      final res = await tools.execute('updateTransaction', {
+        'id': created['id'],
+        'scope': 'all-future',
+        'amount': 1800,
+      });
+      expect(res['ok'], isTrue);
+      expect(res['scope'], 'all-future');
+      expect(res['changed'], 5);
+    });
+
+    test('an all-future cadence change splits the rule', () async {
+      final created = await seedSeries();
+      final res = await tools.execute('updateTransaction', {
+        'id': created['id'],
+        'scope': 'all-future',
+        'recurrence': {'frequency': 'weekly'},
+      });
+      expect(res['ok'], isTrue);
+      expect(res['splitFrom'], created['id']);
+      final series = res['recurrence'] as Map<String, Object?>;
+      expect(series['frequency'], 'weekly');
+      expect(series['total'], 100);
+    });
   });
 
   test('transaction tools persist and return date with timeStatus', () async {

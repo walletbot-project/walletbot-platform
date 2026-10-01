@@ -8,11 +8,11 @@ import Icon from './icon.astro'
  * The three ways to get Wallet Bot, side by side. Shown in the hero and again,
  * larger, in the closing download section.
  *
- * Both store badges route to the beta form rather than a store: Android is a
- * closed test (access runs through the tester list) and iOS is not submitted
- * yet. Only the web app is open to anyone, so it links straight out — and
- * since it is the only one that works today, it leads and carries the brand
- * fill. The two stores follow, muted.
+ * Both store badges route to the beta form rather than a store. The two
+ * listings are public, but the form is the way in, and its confirmation
+ * message carries the store links (src/lib/links.ts). The web app is the only
+ * one that skips the form, so it links straight out, leads and carries the
+ * brand fill. The two stores follow, muted and identical.
  */
 type Props = {
     /** `hero`: left-aligned on desktop. `cta`: centered and larger. */
@@ -49,10 +49,10 @@ const badges = [
         href: beta,
         icon: 'apple',
         copy: t.download.ios,
-        tone: 'border-dashed border-line-strong bg-panel-alt hover:border-ink-soft/40 hover:bg-panel',
-        iconTone: 'text-ink-soft',
+        tone: 'border-line-strong bg-panel hover:border-brand-line hover:bg-brand-tint',
+        iconTone: 'text-ink',
         leadTone: 'text-ink-soft',
-        nameTone: 'text-ink-soft',
+        nameTone: 'text-ink',
     },
 ] as const
 ---

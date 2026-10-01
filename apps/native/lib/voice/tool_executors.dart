@@ -6,6 +6,7 @@ import 'package:app/widgets/currency_picker.dart' show currencies;
 import 'package:drift/drift.dart' show Value;
 
 import '../data/data.dart';
+import '../data/recurrence.dart';
 import '../database.dart';
 import '../settings/display_settings.dart';
 import '../shared/money.dart' show centsToDouble;
@@ -98,6 +99,10 @@ class ToolExecutors {
           return await _listTransactions(args);
         case 'getTransaction':
           return await _getTransaction(args);
+        case 'listUpcomingTransactions':
+          return await _listUpcomingTransactions(args);
+        case 'listRecurrences':
+          return await _listRecurrences(args);
         // Transactions: write
         case 'addExpense':
           return await _addExpense(args);
@@ -111,6 +116,8 @@ class ToolExecutors {
           return await _updateTransaction(args);
         case 'deleteTransaction':
           return await _deleteTransaction(args);
+        case 'addRecurrenceOccurrences':
+          return await _addRecurrenceOccurrences(args);
         // Summaries
         case 'summarizeTransactions':
           return await _summarizeTransactions(args);
@@ -576,8 +583,63 @@ class ToolExecutors {
     if (txn == null) return {'ok': false, 'error': 'Transaction not found'};
     final result = _serializeTransaction(txn);
     result['tagIds'] = await repos.transactions.tagIdsOf(id);
+    // The series it belongs to, when it belongs to one: the model needs to
+    // know before it can offer the user a scope choice.
+    final series = await repos.transactions.seriesOf(
+      txn.recurrenceId,
+      occurrenceIndex: txn.recurrenceIndex,
+    );
+    if (series != null) result['recurrence'] = _serializeSeries(series);
     return {'ok': true, 'transaction': result};
   }
+
+  /// The other side of the occurrence cutoff. Ascending, because the soonest
+  /// movement is the interesting one.
+  Future<Map<String, dynamic>> _listUpcomingTransactions(
+    Map<String, dynamic> args,
+  ) async {
+    final limit = (args['limit'] as num?)?.toInt() ?? 20;
+    final items = await repos.transactions.listUpcoming(limit: limit);
+    return {'ok': true, 'items': items.map(_serializeTransaction).toList()};
+  }
+
+  Future<Map<String, dynamic>> _listRecurrences(
+    Map<String, dynamic> args,
+  ) async {
+    final rules = await repos.transactions.listRecurrences();
+    return {
+      'ok': true,
+      'items': [
+        for (final entry in rules)
+          {
+            'id': entry.rule.id,
+            'name': entry.anchor?.name,
+            'type': entry.anchor?.type,
+            'amount': entry.anchor == null
+                ? null
+                : entry.anchor!.amount.toInt() / 100,
+            'currency': entry.anchor?.currency,
+            'accountId': entry.anchor?.accountId,
+            'categoryId': entry.anchor?.categoryId,
+            'frequency': entry.rule.frequency,
+            'dayInterval': entry.rule.dayInterval,
+            'anchorDate': entry.rule.anchorDate.toString(),
+            'endDate': entry.rule.endDate?.toString(),
+            'coveredThrough': entry.coveredThrough?.toIso8601String(),
+          },
+      ],
+    };
+  }
+
+  Map<String, Object?> _serializeSeries(RecurrenceSeries series) => {
+    'recurrenceId': series.rule.id,
+    'frequency': series.rule.frequency,
+    'dayInterval': series.rule.dayInterval,
+    'endDate': series.rule.endDate?.toString(),
+    'position': series.position,
+    'total': series.total,
+    'coveredThrough': series.coveredThrough?.toIso8601String(),
+  };
 
   // ───── Transaction writes ─────
 
@@ -585,6 +647,59 @@ class ToolExecutors {
   // When date is omitted, the executor defaults the day to today and marks it
   // unconfirmed. This prevents a mistaken model boolean from overriding the
   // actual tool payload.
+  /// The recurrence the model asked for, or null. Returns an error string
+  /// instead when the payload cannot be interpreted, so the caller reports it
+  /// rather than silently creating a one-off.
+  ({RecurrenceDraft? draft, String? error}) _recurrenceOf(
+    Map<String, dynamic> args,
+  ) {
+    final raw = args['recurrence'];
+    if (raw == null) return (draft: null, error: null);
+    if (raw is! Map) {
+      return (draft: null, error: 'recurrence must be an object');
+    }
+    final frequency = recurrenceFrequencyFromName('${raw['frequency']}');
+    if (frequency == null) {
+      return (
+        draft: null,
+        error:
+            'Unknown recurrence frequency: ${raw['frequency']}. '
+            'Use daily, weekly, monthly, yearly or customDays.',
+      );
+    }
+    final interval = (raw['dayInterval'] as num?)?.toInt();
+    if (frequency == RecurrenceFrequency.customDays &&
+        (interval == null || interval < 1)) {
+      return (
+        draft: null,
+        error: 'dayInterval of at least 1 is required for customDays',
+      );
+    }
+    DateTime? endDate;
+    final rawEnd = raw['endDate'];
+    if (rawEnd is String && rawEnd.trim().isNotEmpty) {
+      // Inclusive to the end of the day the user named: "hasta el 31" has to
+      // include the 31st, and the anchor's clock time is not midnight.
+      final day = DateTime.fromMillisecondsSinceEpoch(
+        parseNaturalDate(rawEnd).toInt(),
+      );
+      endDate = DateTime(day.year, day.month, day.day, 23, 59, 59, 999);
+    }
+    return (
+      draft: RecurrenceDraft(
+        frequency: frequency,
+        dayInterval: interval ?? 1,
+        endDate: endDate,
+      ),
+      error: null,
+    );
+  }
+
+  /// Which occurrences a scoped edit or delete touches. Defaults to this one:
+  /// the narrower answer is the recoverable one.
+  bool _isAllFutureScope(Map<String, dynamic> args) =>
+      args['scope'] == 'all-future';
+
   bool _dateConfirmedOf(Map<String, dynamic> args) {
     final date = args['date'];
     return date is String && date.trim().isNotEmpty;
@@ -653,6 +768,11 @@ class ToolExecutors {
     );
     if (cat == null) return {'ok': false, 'error': 'Category not found'};
 
+    final recurrence = _recurrenceOf(args);
+    if (recurrence.error != null) {
+      return {'ok': false, 'error': recurrence.error};
+    }
+
     final id = await repos.transactions.addExpense(
       accountId: acc.id,
       categoryId: cat.id,
@@ -666,6 +786,7 @@ class ToolExecutors {
       dateConfirmed: _dateConfirmedOf(args),
       timeStatus: _timeStatusOf(args),
       tagIds: await _resolveTagIds(args['tagIdsOrNames']),
+      recurrence: recurrence.draft,
     );
     return _transactionWriteResult(id);
   }
@@ -680,6 +801,11 @@ class ToolExecutors {
     );
     if (cat == null) return {'ok': false, 'error': 'Category not found'};
 
+    final recurrence = _recurrenceOf(args);
+    if (recurrence.error != null) {
+      return {'ok': false, 'error': recurrence.error};
+    }
+
     final id = await repos.transactions.addIncome(
       accountId: acc.id,
       categoryId: cat.id,
@@ -693,6 +819,7 @@ class ToolExecutors {
       dateConfirmed: _dateConfirmedOf(args),
       timeStatus: _timeStatusOf(args),
       tagIds: await _resolveTagIds(args['tagIdsOrNames']),
+      recurrence: recurrence.draft,
     );
     return _transactionWriteResult(id);
   }
@@ -796,6 +923,27 @@ class ToolExecutors {
       categoryId = cat.id;
     }
 
+    final allFuture = _isAllFutureScope(args);
+    final recurrence = _recurrenceOf(args);
+    if (recurrence.error != null) {
+      return {'ok': false, 'error': recurrence.error};
+    }
+    if (recurrence.draft != null && !allFuture) {
+      return {
+        'ok': false,
+        'error':
+            'Changing the cadence needs scope all-future: the occurrences '
+            'before this one keep their own spacing, so it cannot apply to '
+            'one movement.',
+      };
+    }
+    if (recurrence.draft != null) {
+      return await _splitSeries(txn, args, recurrence.draft!, categoryId);
+    }
+    if (allFuture) {
+      return await _updateFuture(txn, args, categoryId);
+    }
+
     await repos.transactions.update(
       id,
       name: args.containsKey('name')
@@ -842,6 +990,89 @@ class ToolExecutors {
 
     final result = await _transactionWriteResult(id);
     if (missing.isNotEmpty) result['missing'] = missing;
+    result['scope'] = 'only-this';
+    return result;
+  }
+
+  /// Carries the value fields to this occurrence and every later one.
+  ///
+  /// Only the value fields travel: a date or cadence change is a split, not an
+  /// update, because the occurrences before this one keep their own spacing.
+  /// Tags stay per-occurrence for the same reason a date does.
+  Future<Map<String, dynamic>> _updateFuture(
+    Transaction txn,
+    Map<String, dynamic> args,
+    String? categoryId,
+  ) async {
+    if (args['date'] != null || args['time'] != null) {
+      return {
+        'ok': false,
+        'error':
+            'Moving the date of this movement and the ones after it re-anchors '
+            'the series, so it needs a recurrence argument (it splits the rule '
+            'in two). To move just this movement, use scope only-this.',
+      };
+    }
+    final changed = await repos.transactions.updateFuture(
+      txn.id,
+      name: args.containsKey('name')
+          ? Value(args['name'] as String)
+          : const Value.absent(),
+      description: args.containsKey('description')
+          ? Value(args['description'] as String?)
+          : const Value.absent(),
+      amount: args['amount'] != null
+          ? Value(parseAmountToCents(args['amount'] as num))
+          : const Value.absent(),
+      categoryId: categoryId != null ? Value(categoryId) : const Value.absent(),
+    );
+    final result = await _transactionWriteResult(txn.id);
+    result['scope'] = 'all-future';
+    result['changed'] = changed;
+    return result;
+  }
+
+  /// Re-cadences the series from this occurrence on, by splitting it in two.
+  Future<Map<String, dynamic>> _splitSeries(
+    Transaction txn,
+    Map<String, dynamic> args,
+    RecurrenceDraft draft,
+    String? categoryId,
+  ) async {
+    final accountId = txn.accountId;
+    final account = await repos.accounts.getById(accountId);
+    final date = args['date'] != null || args['time'] != null
+        ? _updatedTransactionDate(args, txn)
+        : txn.date;
+    final newId = await repos.transactions.splitSeries(
+      txn.id,
+      frequency: draft.frequency,
+      dayInterval: draft.dayInterval,
+      date: date,
+      dateConfirmed: args['date'] != null ? true : txn.dateConfirmed,
+      timeStatus: args.containsKey('timeStatus')
+          ? _timeStatusOf(args)
+          : txn.timeStatus,
+      name: args.containsKey('name') ? args['name'] as String : txn.name,
+      description: args.containsKey('description')
+          ? args['description'] as String?
+          : txn.description,
+      amountCents: args['amount'] != null
+          ? parseAmountToCents(args['amount'] as num)
+          : txn.amount,
+      accountId: accountId,
+      currency: account?.currency ?? txn.currency,
+      categoryId: categoryId ?? txn.categoryId,
+    );
+    if (newId == null) {
+      return {
+        'ok': false,
+        'error': 'That movement is not part of a recurring series.',
+      };
+    }
+    final result = await _transactionWriteResult(newId);
+    result['scope'] = 'all-future';
+    result['splitFrom'] = txn.id;
     return result;
   }
 
@@ -870,8 +1101,38 @@ class ToolExecutors {
   ) async {
     final id = args['id'] as String;
     // Idempotent: deleting a missing transaction still reports ok.
+    if (_isAllFutureScope(args)) {
+      // Also truncates the rule, so nothing new is created past here. On a
+      // movement with no series this degrades to deleting that one.
+      final deleted = await repos.transactions.deleteFuture(id);
+      return {'ok': true, 'id': id, 'scope': 'all-future', 'deleted': deleted};
+    }
     await repos.transactions.delete(id);
-    return {'ok': true, 'id': id};
+    return {'ok': true, 'id': id, 'scope': 'only-this'};
+  }
+
+  /// Extends an open-ended rule by another batch, from the last occurrence
+  /// that exists.
+  Future<Map<String, dynamic>> _addRecurrenceOccurrences(
+    Map<String, dynamic> args,
+  ) async {
+    final recurrenceId = args['recurrenceId'] as String;
+    final added = await repos.transactions.addOccurrences(recurrenceId);
+    if (added == 0) {
+      return {
+        'ok': false,
+        'error':
+            'That rule cannot be extended: it either has an end date (so the '
+            'series is already complete) or no longer exists.',
+      };
+    }
+    final series = await repos.transactions.seriesOf(recurrenceId);
+    return {
+      'ok': true,
+      'recurrenceId': recurrenceId,
+      'added': added,
+      'coveredThrough': series?.coveredThrough?.toIso8601String(),
+    };
   }
 
   Future<Map<String, dynamic>> _transactionWriteResult(String id) async {
@@ -879,12 +1140,18 @@ class ToolExecutors {
     if (transaction == null) {
       return {'ok': true, 'id': id};
     }
-    return {
+    final result = {
       'ok': true,
       'id': id,
       'date': transaction.date.toString(),
       'timeStatus': transaction.timeStatus.name,
     };
+    final series = await repos.transactions.seriesOf(
+      transaction.recurrenceId,
+      occurrenceIndex: transaction.recurrenceIndex,
+    );
+    if (series != null) result['recurrence'] = _serializeSeries(series);
+    return result;
   }
 
   // ───── Summaries ─────
