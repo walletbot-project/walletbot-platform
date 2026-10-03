@@ -334,22 +334,30 @@ an explicit window covering the trigger. **Nothing below counts as validated
 until its evidence column holds an observed result**; code review alone
 doesn't count.
 
-Environment for every row: PR #296 preview backend
-(`rare-robin-106`, `deployment_environment="preview"`, shared by every
-preview — so check timestamps against the trigger time, not just presence),
-staging APK from the same commit.
+Environment for every row: PR #296 preview backend and the staging APK built
+from the same commit. The preview deployment name changes between deploys
+(the sticky "Mobile staging APK built" comment on the PR names the current
+one), so record it next to each piece of evidence. `deployment_environment`
+is `preview` for every PR preview, so check sample timestamps against the
+trigger time, not just presence.
 
 | # | Metric | How to trigger | Query (window = since trigger) | Expected | Evidence |
 |---|---|---|---|---|---|
-| 1 | Sync errors (push) | (a) edit any movement → normal push; (b) two devices on one account editing offline, then reconnecting both → `cursor_mismatch`; (c) `validation`: not reachable from a correct client — covered by `pushTelemetry.test.ts` | `sum by (direction, reason) (count_over_time(sync_errors_count_total{deployment_environment="preview"}[1h]))` | (b) ≥1 `{direction="push", reason="cursor_mismatch"}`; (a) adds nothing | Pending |
-| 2 | Sync errors (pull) | Sign the device out server-side (or let the session expire) while it syncs → `auth_failure`; airplane mode mid-pull → `unknown` | same query, `direction="pull"` | ≥1 sample with the matching reason, `metric_source="native"` | Pending |
+| 1 | Sync errors (push) | Convex dashboard function runner on the preview: `v1/sync/mutations:push` with "Act as a user" (`subject` = your user id, `issuer` = `https://<deployment>.convex.site/native-auth`). (a) `expectedServerSeq` ≠ current counter → `cursor_mismatch`; (b) `appVersion: "0.2.0"` → `client_outdated`; (c) current counter + a movement whose `currency` differs from its account → `validation`. Two real devices don't reproduce (a) reliably: native pulls right before every push, so a mismatch needs a write to land in that gap | `sum by (direction, reason, platform) (count_over_time(sync_errors_count_total{deployment_environment="preview"}[2h]))` | one `direction="push"` sample per run with the matching `reason`, `metric_source="backend"`; (c) also leaves the counter unchanged and no movement written | ✅ 2026-10-03, `unique-rabbit-836`, window `[2h]`: `client_outdated` 1, `validation` 1, `cursor_mismatch` 2 (one without a `platform` label — most likely a run with `platform: ""`, whose empty label is dropped; not confirmed). Rollback after (c): `syncCounters.value` unchanged in the dashboard (confirmed); absence of the test movement not checked — covered by `pushTelemetry.test.ts` |
+| 2 | Sync errors (pull) | Sign the device out server-side (or let the session expire) while it syncs → `auth_failure`; airplane mode mid-pull → `unknown` | same query, `direction="pull"` | ≥1 sample with the matching reason, `metric_source="native"` | **Not tested** in this round |
 | 3 | Tool errors | WhatsApp only — not reachable from the preview | `sum by (tool_name, reason) (count_over_time(agent_tool_errors_count_total{deployment_environment="preview"}[1h]))` | — | **Not verifiable on preview** |
-| 4 | `sync_push` duration | Same as 1(a), N pushes | `sum by (status, bucket) (count_over_time(system_function_duration_bucket_count_total{deployment_environment="preview", function="sync_push"}[1h]))` | N `status="ok"` samples; not every one in `0-100` merely because the clock was frozen | Pending |
-| 5 | `sync_pull` duration | Open the app / pull to refresh | same, `function="sync_pull"` | ≥1 sample per sync round, `metric_source="native"` | Pending |
+| 4 | `sync_push` duration | Edits on the APK plus the row 1 runs | `sum by (status, bucket) (count_over_time(system_function_duration_bucket_count_total{deployment_environment="preview", function="sync_push"}[2h]))` | one sample per call; status matches the outcome; not every sample in `0-100` | ✅ 2026-10-03, `unique-rabbit-836`, window `[2h]`: `ok` 5 (4 in `0-100`, **1 in `100-250`** — impossible with the old frozen clock, which always measured 0), `rejected` 3 (= 2 `cursor_mismatch` + 1 `client_outdated`), `error` 1 (= the `validation` run) |
+| 5 | `sync_pull` duration | Open the app / pull to refresh | same, `function="sync_pull"` | ≥1 sample per sync round, `metric_source="native"` | ✅ 2026-10-03, `unique-rabbit-836`, window `[2h]`: 11 `ok` samples (`100-250` 2, `250-500` 8, `500-1000` 1), `app_version="1.0.0+1"`. Every build reports that version (`AppConfig.appVersion` is a hardcoded constant — WAL-215), so the exact APK commit can't be told apart from the data |
 | 6 | `agent_turn` duration | WhatsApp only | same, `function="agent_turn"` | — | **Not verifiable on preview** |
-| 7 | Voice connect | Start a voice session on the APK | `sum by (bucket, resumed) (count_over_time(voice_connect_setup_complete_bucket_count_total{deployment_environment="preview"}[1h]))` | 1 sample per connect, `resumed="false"` on a fresh one | Pending |
-| 8 | First response, text | Send a typed message to the agent | `sum by (mode, bucket) (count_over_time(agent_response_first_token_bucket_count_total{deployment_environment="preview"}[1h]))` | 1 `mode="text"` sample per message | Pending |
-| 9 | First response, voice | Speak a turn | same query | 1 `mode="voice"` sample per turn | Pending |
+| 7 | Voice connect | Start a voice session on the APK | `sum by (bucket, resumed) (count_over_time(voice_connect_setup_complete_bucket_count_total{deployment_environment="preview"}[2h]))` | 1 sample per connect, `resumed="false"` on a fresh one | ✅ 2026-10-03, `unique-rabbit-836`, window `[2h]`: 1 sample, `500-1000`, `resumed="false"` |
+| 8 | First response, text | Send a typed message to the agent | `sum by (mode, bucket) (count_over_time(agent_response_first_token_bucket_count_total{deployment_environment="preview"}[2h]))` | 1 `mode="text"` sample per message | ✅ 2026-10-03, `unique-rabbit-836`, window `[2h]`: 1 `mode="text"`, `2500-5000` |
+| 9 | First response, voice | Speak a turn | same query | 1 `mode="voice"` sample per turn | ✅ 2026-10-03, `unique-rabbit-836`, window `[2h]`: 1 `mode="voice"`, `2500-5000` |
+
+Attribution: `deployment_environment="preview"` is shared by every PR
+preview, but these metrics only exist on this branch, and before
+2026-10-03 no `sync_errors_count_total` series existed at all. Avoid
+`timestamp(last_over_time(...))` to date a sample: it returns the
+evaluation time, not the sample's.
 
 Before reading an empty result as "not emitted", confirm the series name
 with `query.py --series-days 14 '{__name__=~"<prefix>.*"}'` — an instant
