@@ -18,6 +18,7 @@ import {
     useState,
 } from 'react'
 import { useNavigate } from 'react-router-dom'
+import appIcon from '@/assets/favicon.png'
 import { AgentGlyph } from '@/components/m3/agent-glyph'
 import { AppBar } from '@/components/m3/app-bar'
 import { AssistChip } from '@/components/m3/chip'
@@ -43,6 +44,12 @@ const HOLD_MS = 300
 const LOCK_DISTANCE = 80
 
 const WAVEFORM_BARS = 64
+
+/**
+ * Whether the chat shows a card ("Herramienta") for each tool call the agent
+ * makes. Hidden for now, as on native (`_kShowToolCards`).
+ */
+const SHOW_TOOL_CARDS = false
 
 /** Four lines of the composer at `text-sm`, plus its vertical padding. */
 const COMPOSER_MAX_HEIGHT = 104
@@ -484,7 +491,9 @@ function MessageView({
                 />
             )
         case 'tool':
-            return <ToolCard message={message} debugEnabled={debugEnabled} />
+            return SHOW_TOOL_CARDS ? (
+                <ToolCard message={message} debugEnabled={debugEnabled} />
+            ) : null
         case 'system':
             return <SystemLine message={message} />
         case 'action-result':
@@ -499,19 +508,17 @@ type BarMode = 'composer' | 'holding' | 'locked'
 
 /**
  * The empty conversation, porting `_WelcomeView`: one line, the prompt
- * suggestions and the start button while idle, the mic orb once the mic is
+ * suggestions and the start button while idle, the app icon once the mic is
  * opening, listening or paused.
  */
 function WelcomeView({
     phase,
-    level,
     suggestions,
     onSuggestion,
     onStart,
     startDisabled,
 }: {
     phase: MicPhase
-    level: number
     suggestions: { key: string; text: string }[]
     onSuggestion: (text: string) => void
     onStart: () => void
@@ -521,7 +528,7 @@ function WelcomeView({
     if (phase !== 'idle') {
         return (
             <div className="flex flex-1 flex-col items-center justify-center gap-4">
-                <MicOrb phase={phase} level={level} />
+                <img src={appIcon} alt="" className="size-24 object-contain" />
                 <p
                     className={cn(
                         'm3-title-medium',
@@ -570,35 +577,6 @@ function WelcomeView({
                 <Icon name="mic" filled size={20} />
                 {t.voice.startTalking}
             </Button>
-        </div>
-    )
-}
-
-function MicOrb({ phase, level }: { phase: MicPhase; level: number }) {
-    const paused = phase === 'paused'
-    const halo =
-        phase === 'listening' ? 1 + level * 0.9 : phase === 'opening' ? 1.15 : 1
-    return (
-        <div className="relative grid size-44 place-items-center">
-            <span
-                aria-hidden
-                className={cn(
-                    'absolute size-22 rounded-full transition-transform duration-100',
-                    paused ? 'opacity-0' : 'bg-primary-container/45',
-                    phase === 'opening' && 'motion-safe:animate-pulse',
-                )}
-                style={{ transform: `scale(${halo})` }}
-            />
-            <span
-                className={cn(
-                    'relative grid size-22 place-items-center rounded-full',
-                    paused
-                        ? 'bg-surface-container-highest text-on-surface-variant'
-                        : 'bg-primary-container text-on-primary-container',
-                )}
-            >
-                <Icon name={paused ? 'mic_off' : 'mic'} filled size={40} />
-            </span>
         </div>
     )
 }
@@ -1345,7 +1323,6 @@ export function Add() {
                 {voice.messages.length === 0 ? (
                     <WelcomeView
                         phase={phase}
-                        level={voice.micLevel}
                         suggestions={suggestions}
                         onSuggestion={handleSuggestion}
                         onStart={handleMicPress}

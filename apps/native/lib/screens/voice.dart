@@ -28,6 +28,10 @@ import 'voice_action_widget.dart';
 /// expose this as a user-configurable preference.
 const bool _kRespondToTextWithAudio = false;
 
+/// Whether the chat shows a card ("Herramienta") for each tool call the agent
+/// makes. Hidden for now.
+const bool _kShowToolCards = false;
+
 const double _kLockDistance = 80;
 
 enum _SessionMode { audio, text }
@@ -1370,7 +1374,6 @@ class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
             child: _items.isEmpty
                 ? _WelcomeView(
                     phase: phase,
-                    level: _level,
                     suggestions: suggestions,
                     onSuggestion: _applySuggestion,
                     onStart: _isTextComposing ? null : _onMicPressed,
@@ -1386,6 +1389,9 @@ class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
                       itemCount: _items.length,
                       itemBuilder: (context, i) {
                         final item = _items[i];
+                        if (item is _ToolItem && !_kShowToolCards) {
+                          return SizedBox.shrink(key: ObjectKey(item));
+                        }
                         return Padding(
                           // The report icon's fade keeps state, so its element
                           // has to track the item and not the row index.
@@ -2164,14 +2170,12 @@ class _SpeakingDotsState extends State<_SpeakingDots>
 class _WelcomeView extends StatelessWidget {
   const _WelcomeView({
     required this.phase,
-    required this.level,
     required this.suggestions,
     required this.onSuggestion,
     required this.onStart,
   });
 
   final _MicPhase phase;
-  final double level;
   final List<String> suggestions;
   final ValueChanged<String> onSuggestion;
   final VoidCallback? onStart;
@@ -2254,7 +2258,12 @@ class _WelcomeView extends StatelessWidget {
         : Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              _MicOrb(phase: phase, level: level),
+              Image.asset(
+                'assets/icon/icon-android.png',
+                width: 96,
+                height: 96,
+                fit: BoxFit.contain,
+              ),
               const SizedBox(height: 16),
               Text(
                 switch (phase) {
@@ -2278,104 +2287,6 @@ class _WelcomeView extends StatelessWidget {
             minHeight: math.max(0, constraints.maxHeight - 32),
           ),
           child: Center(child: content),
-        ),
-      ),
-    );
-  }
-}
-
-class _MicOrb extends StatefulWidget {
-  const _MicOrb({required this.phase, required this.level});
-
-  final _MicPhase phase;
-  final double level;
-
-  @override
-  State<_MicOrb> createState() => _MicOrbState();
-}
-
-class _MicOrbState extends State<_MicOrb> with SingleTickerProviderStateMixin {
-  static const _size = 88.0;
-
-  late final AnimationController _pulse = AnimationController(
-    vsync: this,
-    duration: const Duration(milliseconds: 900),
-  );
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    _syncPulse();
-  }
-
-  @override
-  void didUpdateWidget(_MicOrb oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    _syncPulse();
-  }
-
-  void _syncPulse() {
-    final pulse =
-        widget.phase == _MicPhase.opening &&
-        !MediaQuery.disableAnimationsOf(context);
-    if (pulse && !_pulse.isAnimating) {
-      _pulse.repeat(reverse: true);
-    } else if (!pulse && _pulse.isAnimating) {
-      _pulse
-        ..stop()
-        ..value = 0;
-    }
-  }
-
-  @override
-  void dispose() {
-    _pulse.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final paused = widget.phase == _MicPhase.paused;
-    final core = paused
-        ? scheme.surfaceContainerHighest
-        : scheme.primaryContainer;
-    final onCore = paused ? scheme.onSurfaceVariant : scheme.onPrimaryContainer;
-    return SizedBox.square(
-      dimension: _size * 2,
-      child: AnimatedBuilder(
-        animation: _pulse,
-        builder: (context, child) {
-          final halo = switch (widget.phase) {
-            _MicPhase.listening => 1 + widget.level * 0.9,
-            _MicPhase.opening => 1 + _pulse.value * 0.3,
-            _ => 1.0,
-          };
-          return Stack(
-            alignment: Alignment.center,
-            children: [
-              AnimatedContainer(
-                duration: const Duration(milliseconds: 120),
-                width: _size * halo,
-                height: _size * halo,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: core.withValues(alpha: paused ? 0 : 0.45),
-                ),
-              ),
-              child!,
-            ],
-          );
-        },
-        child: Container(
-          width: _size,
-          height: _size,
-          decoration: BoxDecoration(shape: BoxShape.circle, color: core),
-          child: Icon(
-            paused ? Icons.mic_off_rounded : Icons.mic_rounded,
-            size: 40,
-            color: onCore,
-          ),
         ),
       ),
     );
