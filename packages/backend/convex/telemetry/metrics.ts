@@ -2,6 +2,7 @@ import { internal } from '../_generated/api'
 import type { MutationCtx } from '../_generated/server'
 import { costBucket, normalizeAgentCostMetric } from './agentPricing'
 import type { MetricAttributeValue, MetricInput, MetricName } from './types'
+import { usageActor } from './usageActor'
 
 type CreatedBy = 'form' | 'agent'
 // Where the write entered the system. `direct_mutation` is the app calling a
@@ -30,12 +31,20 @@ const recordAgentUsageMonthly = async (
     metric: MetricInput,
 ): Promise<void> => {
     if (metric.name !== 'agent.interaction.cost_usd') return
-    if (!metric.userId || !metric.sampleId || metric.value <= 0) return
+    if (!metric.sampleId || metric.value <= 0) return
+    const actor = await usageActor(metric)
+    if (!actor) return
+    // Preserve the exact existing remote keys, including property order, so a
+    // retry of a pre-deployment sample cannot be counted a second time.
+    const owner =
+        actor.actorType === 'user'
+            ? { userId: actor.userId }
+            : { actorType: actor.actorType, actorKey: actor.actorKey }
 
     const model = stringAttribute(metric.attributes, 'model') ?? 'unknown'
     const mode = stringAttribute(metric.attributes, 'mode') ?? 'mixed'
     const sampleKey = JSON.stringify({
-        userId: metric.userId,
+        ...owner,
         metric: metric.name,
         sampleId: metric.sampleId,
     })
@@ -50,7 +59,7 @@ const recordAgentUsageMonthly = async (
     const now = Date.now()
     await ctx.db.insert('agentUsageSamples', {
         sampleKey,
-        userId: metric.userId,
+        ...actor,
         month,
         ...(metric.sessionId ? { sessionId: metric.sessionId } : {}),
         ...(metric.sampleId ? { interactionId: metric.sampleId } : {}),
@@ -61,7 +70,7 @@ const recordAgentUsageMonthly = async (
         createdAt: now,
     })
 
-    const key = JSON.stringify({ userId: metric.userId, month, model, mode })
+    const key = JSON.stringify({ ...owner, month, model, mode })
     const existingRollup = await ctx.db
         .query('agentUsageMonthly')
         .withIndex('by_key', (q) => q.eq('key', key))
@@ -75,7 +84,7 @@ const recordAgentUsageMonthly = async (
     } else {
         await ctx.db.insert('agentUsageMonthly', {
             key,
-            userId: metric.userId,
+            ...actor,
             month,
             model,
             mode,

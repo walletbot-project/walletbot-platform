@@ -202,7 +202,14 @@ const exportableMetricAttributeKeys = (
                 'pricing_effective_from',
             ])
         case 'agent.user.monthly_cost_usd':
-            return new Set(['user_hash', 'rank', 'month', 'model', 'mode'])
+            return new Set([
+                'user_hash',
+                'rank',
+                'month',
+                'model',
+                'mode',
+                'account_scope',
+            ])
         case 'agent.interactions.completed_count':
             return new Set(['model', 'mode', 'interaction_type'])
         case 'agent.session.cost_bucket_count':
@@ -310,7 +317,9 @@ const recordAgentMonthlyUsageMetric = async (
     month = currentMonth(),
 ): Promise<{ rows: number; exportedRows: number; accepted: number }> => {
     const rows: Array<{
-        userId: string
+        userId?: string
+        actorType: 'user' | 'installation'
+        actorKey: string
         month: string
         model: string
         mode: string
@@ -323,10 +332,16 @@ const recordAgentMonthlyUsageMetric = async (
     if (rows.length === 0) return { rows: 0, exportedRows: 0, accepted: 0 }
 
     const now = Date.now()
-    const topRows = rows
-        .filter((row) => row.estimatedCostUsd > 0)
-        .sort((a, b) => b.estimatedCostUsd - a.estimatedCostUsd)
-        .slice(0, 20)
+    // Keep each scope visible even when remote users dominate the ranking.
+    const topRows = (['user', 'installation'] as const).flatMap((actorType) =>
+        rows
+            .filter(
+                (row) =>
+                    row.actorType === actorType && row.estimatedCostUsd > 0,
+            )
+            .sort((a, b) => b.estimatedCostUsd - a.estimatedCostUsd)
+            .slice(0, 20),
+    )
     const metrics: MetricInput[] = []
     for (const [index, row] of topRows.entries()) {
         const mode = normalizeAgentMode(row.mode)
@@ -337,9 +352,11 @@ const recordAgentMonthlyUsageMetric = async (
             type: 'gauge',
             value: row.estimatedCostUsd,
             unit: 'usd',
-            userId: row.userId,
+            ...(row.userId ? { userId: row.userId } : {}),
             attributes: {
-                user_hash: await userHash(row.userId),
+                user_hash: await userHash(row.userId ?? row.actorKey),
+                account_scope:
+                    row.actorType === 'installation' ? 'local' : 'remote',
                 rank: `${index + 1}`,
                 month: row.month,
                 model: row.model,

@@ -3,7 +3,12 @@ import { v } from 'convex/values'
 
 export const agentUsageSamples = defineTable({
     sampleKey: v.string(),
-    userId: v.string(),
+    // Optional actor fields keep pre-WAL-196 user rows valid without backfill.
+    userId: v.optional(v.string()),
+    actorType: v.optional(
+        v.union(v.literal('user'), v.literal('installation')),
+    ),
+    actorKey: v.optional(v.string()),
     month: v.string(),
     sessionId: v.optional(v.string()),
     interactionId: v.optional(v.string()),
@@ -15,12 +20,18 @@ export const agentUsageSamples = defineTable({
 })
     .index('by_sampleKey', ['sampleKey'])
     .index('by_user_month', ['userId', 'month'])
+    .index('by_actorKey_and_month', ['actorKey', 'month'])
     .index('by_month', ['month'])
     .index('by_createdAt', ['createdAt'])
 
 export const agentUsageMonthly = defineTable({
     key: v.string(),
-    userId: v.string(),
+    // Optional actor fields keep pre-WAL-196 user rows valid without backfill.
+    userId: v.optional(v.string()),
+    actorType: v.optional(
+        v.union(v.literal('user'), v.literal('installation')),
+    ),
+    actorKey: v.optional(v.string()),
     month: v.string(),
     model: v.string(),
     mode: v.string(),
@@ -30,4 +41,5 @@ export const agentUsageMonthly = defineTable({
 })
     .index('by_key', ['key'])
     .index('by_user_month', ['userId', 'month'])
+    .index('by_actorKey_and_month', ['actorKey', 'month'])
     .index('by_month', ['month'])

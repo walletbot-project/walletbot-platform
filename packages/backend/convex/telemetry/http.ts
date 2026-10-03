@@ -21,6 +21,8 @@ import type {
     TelemetryPlatform,
 } from './types'
 
+import { validInstallationId } from './usageActor'
+
 const maxBatchSize = 50
 const maxRequestBytes = 64 * 1024
 const maxPropertiesBytes = 8 * 1024
@@ -283,8 +285,8 @@ const normalizeMetric = (
     }
 
     const installationId = normalizeString(value.installationId)
-    if (!userId && !installationId) {
-        throw new Error('anonymous metrics require installationId')
+    if (!userId && (!installationId || !validInstallationId(installationId))) {
+        throw new Error('anonymous metrics require a valid installationId')
     }
 
     const platform =

@@ -261,7 +261,8 @@ gauge with the latest total registered accounts.
 `agent.user.monthly_cost_usd` is emitted every 6 hours by the Convex cron
 `record agent monthly usage`. It reads the current `agentUsageMonthly` rollup
 and exports one gauge for each of the top 20 `user_hash + month + model + mode`
-rows by monthly estimated cost.
+rows **per account scope** by monthly estimated cost (at most 40 rows).
+The `account_scope` label distinguishes `local` from `remote`.
 
 To force a refresh while testing, run the internal action from the Convex CLI:
 
@@ -332,3 +333,51 @@ The exporter also writes a structured `console.warn("telemetry export failed",
 For manual tests, omit `timestamp` or use the current epoch milliseconds.
 Old timestamps may export successfully but will not appear in Grafana's default
 time range.
+
+## Local AI usage by installation (WAL-196)
+
+Anonymous interaction costs use the existing telemetry `installationId`, a UUID
+persisted under `telemetry_installation_id` in native secure storage. All local
+accounts on that installation share the same usage actor; it is not a person or
+a financial account. No extra registration endpoint, authenticated user, device
+identifier, financial data, memories or conversation content is created by this
+path. Reinstallation/storage reset can change the identity (secure storage may
+survive reinstall on some platforms). Different devices remain separate.
+
+`agentUsageSamples` and `agentUsageMonthly` store `actorType=installation` and
+`actorKey=installation:<SHA-256(installation:installationId)>`, without `userId`.
+Authenticated requests always use the server-verified user, even if the body
+supplies a different `userId` or an installation. Their existing keys and exported
+hashes remain unchanged, including historical rows with no actor fields. Thus
+replaying a pre-deployment remote sample does not count it again. Anonymous IDs
+must be 8–128 ASCII letters, digits, underscores or hyphens, starting alphanumeric.
+These self-reported identifiers are for analytics, not authorization or billing.
+
+The sample key includes the local actor type/key and `sampleId`; monthly keys
+also include UTC month, model and mode. Backend token pricing still determines
+USD. Retrying the same sample leaves its rollup unchanged. Sample deduplication
+lasts while the sample exists: samples are retained for 90 days by the existing
+cleanup, and monthly rollups currently have no expiration. The existing raw
+telemetry buffer also retains `installationId` for up to 90 days (14 days for
+failed exports); this change adds no raw identifier to rollups or metric labels.
+Historical anonymous costs are not backfilled.
+
+Grafana receives only the existing 24-hex `user_hash` label (also used for hashed
+installation actors) plus `account_scope=local|remote`. Raw user, installation
+and device IDs are never metric labels. The dashboard compares scopes and shows
+month and pseudonymous identity, retaining `$Scope` and `$model` filters. Its
+25-hour lookback also works with the daily snapshots in PR #284. Queries collapse
+rank changes with a per-actor/model/mode maximum before summing, so moving in the
+ranking does not count the same cumulative cost twice. Snapshots are
+**top-N rows per scope**, not complete billing totals; an actor split across
+models/modes can have only some rows in the top-N. After rollout, older series
+without `account_scope` age out of that window.
+
+For validation, send a local AI interaction, replay its `sampleId`, and confirm
+one sample and one monthly increment. Send an authenticated interaction from the
+same installation and verify it appears only in that user's rollup. Run
+`telemetry/actions:recordAgentMonthlyUsageNow` in the target development deployment
+and inspect both scopes in Grafana. The automated `localUsage.test.ts` suite
+covers ingestion, impersonation rejection, legacy retries, private user queries,
+backend pricing, bounded snapshot export, and absence of financial writes. Live
+Convex/Grafana validation must be performed after deploying the branch.
