@@ -42,9 +42,7 @@ void main() {
     await tester.pumpAndSettle();
   }
 
-  testWidgets('shows what was declared and what the app showed', (
-    tester,
-  ) async {
+  testWidgets('shows the declared and the calculated balance', (tester) async {
     final cash = await repos.accounts.create(name: 'Efectivo', currency: 'ARS');
     final category = await repos.categories.create(name: 'Varios');
     final now = DateTime.now().millisecondsSinceEpoch;
@@ -69,7 +67,7 @@ void main() {
 
     expect(find.text('Saldo declarado'), findsOneWidget);
     expect(find.text(formatMoney(500000, 'ARS')), findsWidgets);
-    expect(find.text('Saldo que marcaba la app'), findsOneWidget);
+    expect(find.text('Saldo calculado'), findsOneWidget);
     expect(find.text(formatMoney(300000, 'ARS')), findsOneWidget);
   });
 

@@ -178,7 +178,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get declaredBalance => 'Declared balance';
 
   @override
-  String get platformBalance => 'Balance the app showed';
+  String get platformBalance => 'Calculated balance';
 
   @override
   String get sameAccounts =>

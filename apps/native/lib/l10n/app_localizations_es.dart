@@ -178,7 +178,7 @@ class AppLocalizationsEs extends AppLocalizations {
   String get declaredBalance => 'Saldo declarado';
 
   @override
-  String get platformBalance => 'Saldo que marcaba la app';
+  String get platformBalance => 'Saldo calculado';
 
   @override
   String get sameAccounts => 'La cuenta origen y destino deben ser distintas';

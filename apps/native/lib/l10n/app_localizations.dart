@@ -431,7 +431,7 @@ abstract class AppLocalizations {
   /// No description provided for @platformBalance.
   ///
   /// In en, this message translates to:
-  /// **'Balance the app showed'**
+  /// **'Calculated balance'**
   String get platformBalance;
 
   /// No description provided for @sameAccounts.

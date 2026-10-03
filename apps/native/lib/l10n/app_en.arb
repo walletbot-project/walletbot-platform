@@ -57,7 +57,7 @@
   "noCategory": "No category",
   "balanceUnavailable": "Balance unavailable",
   "declaredBalance": "Declared balance",
-  "platformBalance": "Balance the app showed",
+  "platformBalance": "Calculated balance",
   "sameAccounts": "The source and destination accounts must be different",
   "invalidAmount": "The amount isn't valid",
   "noOtherAccount": "No other account available",
