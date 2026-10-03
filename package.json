@@ -6,6 +6,7 @@
         "dev": "pnpm --parallel -r run dev",
         "typecheck": "pnpm -r run typecheck",
         "format": "biome check --write --unsafe",
+        "validate-dashboards": "node scripts/validate-dashboards.mjs",
         "native": "cd apps/native && flutter run",
         "build-flutter": "cd apps/native && flutter build apk --debug"
     },

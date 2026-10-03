@@ -37,6 +37,7 @@ export function IconColorPicker({
                     value={color}
                     onChange={onColorChange}
                     options={colors}
+                    themed
                 />
             </div>
         </div>

@@ -108,8 +108,9 @@ class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
     if (!mounted) return;
     _series = series;
 
-    categories.sort((a, b) => a.name.compareTo(b.name));
-    tags.sort((a, b) => a.name.compareTo(b.name));
+    // Categories keep the user's order from the repository; tags stay
+    // strictly alphabetical in forms (not the user's tree order).
+    tags.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
 
     _transaction = transaction;
     _accounts = accounts;
@@ -663,7 +664,10 @@ class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
     final category = _selectedCategory;
     final categoryColor = category == null
         ? colors.onSurfaceVariant
-        : colorFromHex(category.color, fallback: categoryDefaultColor);
+        : readableAccent(
+            colorFromHex(category.color, fallback: categoryDefaultColor),
+            Theme.of(context).brightness,
+          );
     final categoryIcon = category == null
         ? Icons.receipt_long_rounded
         : categoryIconFromName(category.icon);
@@ -901,7 +905,10 @@ class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
     required AccountBalanceAroundTransaction? balance,
     Widget? trailing,
   }) {
-    final color = colorFromHex(account.color, fallback: accountDefaultColor);
+    final color = readableAccent(
+      colorFromHex(account.color, fallback: accountDefaultColor),
+      Theme.of(context).brightness,
+    );
     return _ReceiptRow(
       icon: accountIconFromName(account.icon),
       iconColor: color,
@@ -1291,15 +1298,16 @@ class _EntityCircleIcon extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final accent = readableAccent(color, Theme.of(context).brightness);
     return Container(
       width: 32,
       height: 32,
       alignment: Alignment.center,
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.16),
+        color: accent.withValues(alpha: 0.16),
         shape: BoxShape.circle,
       ),
-      child: Icon(icon, size: 18, color: color),
+      child: Icon(icon, size: 18, color: accent),
     );
   }
 }

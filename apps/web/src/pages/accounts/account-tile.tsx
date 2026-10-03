@@ -1,6 +1,6 @@
 import { api } from '@wallet-bot/backend/api'
 import { useQuery } from 'convex/react'
-import type { CSSProperties } from 'react'
+import type { CSSProperties, ReactNode } from 'react'
 import { AccountIcon } from '@/components/account-icon'
 import { EntityAvatar, EntityListTile } from '@/components/m3/entity-list-tile'
 import { useOccurrenceCutoff } from '@/hooks/use-occurrence-cutoff'
@@ -16,7 +16,10 @@ type AccountTileProps = {
     color?: string
     /** Shape for this tile's position in the group — see `groupedRadius`. */
     radius: CSSProperties
-    onClick: () => void
+    /** Shown while the list is being reordered. */
+    dragHandle?: ReactNode
+    /** Omitted while reordering, when the row is not a link. */
+    onClick?: () => void
 }
 
 /**
@@ -30,6 +33,7 @@ export function AccountTile({
     icon,
     color,
     radius,
+    dragHandle,
     onClick,
 }: AccountTileProps) {
     const formatLocale = useFormatLocale()
@@ -47,6 +51,7 @@ export function AccountTile({
         <EntityListTile
             radius={radius}
             onClick={onClick}
+            dragHandle={dragHandle}
             leading={
                 <EntityAvatar color={accent}>
                     <AccountIcon name={icon} size={22} color={accent} />

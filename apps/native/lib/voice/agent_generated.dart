@@ -5,7 +5,7 @@
 // The freshness test lives at packages/shared/test/agent-codegen.test.ts.
 
 /// The Gemini Live model the backend mints tokens for.
-const String kAgentModel = 'gemini-3.1-flash-live-preview';
+const String kAgentModel = 'gemini-3.8-live';
 
 /// The prebuilt voice negotiated into the session.
 const String kAgentVoiceName = 'Rasalgethi';

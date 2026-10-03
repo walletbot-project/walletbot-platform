@@ -38,7 +38,8 @@ void main() {
   testWidgets(
     'a failed start keeps the conversation and queued text, without raw errors',
     (tester) async {
-      final command = _RecordingCommand(active: false, failStarts: true);
+      final command = _RecordingCommand(active: false, failStarts: true)
+        ..failCleanup = true;
       final factory = _RecordingFactory(command);
       await tester.pumpWidget(_voiceApp(factory));
       await tester.pump();
@@ -55,6 +56,8 @@ void main() {
       expect(find.textContaining('StateError'), findsNothing);
       expect(factory.discardCalls, 0);
 
+      expect(find.byType(CircularProgressIndicator), findsNothing);
+      command.failCleanup = false;
       command.failStarts = false;
       await _sendText(tester, 'second message');
       command.emit(VoiceConnectedEvent());
@@ -113,6 +116,7 @@ class _RecordingCommand implements VoiceExpenseCommand {
   final _events = StreamController<VoiceEvent>.broadcast();
   final List<String> sentTexts = [];
   bool failStarts;
+  bool failCleanup = false;
   bool _active;
 
   void emit(VoiceEvent event) => _events.add(event);
@@ -142,13 +146,18 @@ class _RecordingCommand implements VoiceExpenseCommand {
   }
 
   @override
+  Future<void> prepareAudio() async {}
+
+  @override
   Future<void> ensureConnected() async {}
 
   @override
   Future<void> addAudioChunk(Uint8List chunk) async {}
 
   @override
-  Future<void> endAudioStream() async {}
+  Future<void> endAudioStream() async {
+    if (failCleanup) throw StateError('injected cleanup failure');
+  }
 
   @override
   Future<void> sendText(String text) async {
@@ -174,5 +183,7 @@ class _RecordingCommand implements VoiceExpenseCommand {
   }
 
   @override
-  Future<void> dispose() async {}
+  Future<void> dispose() async {
+    if (failCleanup) throw StateError('injected dispose failure');
+  }
 }

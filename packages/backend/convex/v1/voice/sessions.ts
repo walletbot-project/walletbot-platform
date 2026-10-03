@@ -1,6 +1,9 @@
 import { v } from 'convex/values'
 import { mutation } from '../../_generated/server'
+import { insertMetricBatch } from '../../telemetry/metrics'
+import type { MetricInput } from '../../telemetry/types'
 import { requireAuth } from '../../users/helpers'
+import { webVoiceMetric } from './metrics'
 import { sessionFieldsChanged } from './utils'
 
 const sessionArg = v.object({
@@ -31,6 +34,7 @@ const eventArg = v.object({
 export const appendEvents = mutation({
     args: {
         ownerId: v.string(),
+        source: v.optional(v.literal('web')),
         session: sessionArg,
         events: v.array(eventArg),
     },
@@ -67,6 +71,7 @@ export const appendEvents = mutation({
         }
 
         let inserted = 0
+        const metrics: MetricInput[] = []
         for (const event of args.events) {
             const existing = await ctx.db
                 .query('voiceSessionEvents')
@@ -90,7 +95,19 @@ export const appendEvents = mutation({
                 binaryMimeType: event.binaryMimeType,
             })
             inserted += 1
+            if (args.source === 'web') {
+                const metric = webVoiceMetric({
+                    userId,
+                    sessionId: args.session.id,
+                    event,
+                })
+                if (metric) metrics.push(metric)
+            }
         }
+        // The event-id dedupe above and metric insertion share this transaction.
+        // Retrying a history upload cannot count the same usage twice.
+        if (metrics.length)
+            await insertMetricBatch(ctx, { metrics, receivedAt: Date.now() })
         return { ok: true, inserted }
     },
 })

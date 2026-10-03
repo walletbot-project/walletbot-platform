@@ -8,15 +8,20 @@ import { COLOR_OPTIONS } from '@/lib/entity-colors'
 import { GROUP_SPACING, groupedRadius } from '@/lib/grouped-list'
 import { useT } from '@/lib/i18n'
 
-/** The color-swatch row a detail shows under its hero while editing. */
+/**
+ * The color-swatch row a detail shows under its hero while editing. `themed`
+ * previews accents as accounts and categories paint them (see `ColorSwatches`).
+ */
 export function DetailColorEditor({
     editing,
     color,
     onChange,
+    themed = false,
 }: {
     editing: boolean
     color: string
     onChange: (color: string) => void
+    themed?: boolean
 }) {
     if (!editing) return null
     return (
@@ -25,6 +30,7 @@ export function DetailColorEditor({
                 value={color}
                 onChange={onChange}
                 options={COLOR_OPTIONS}
+                themed={themed}
             />
         </div>
     )

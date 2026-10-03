@@ -25,25 +25,34 @@ class AccountRepository extends RepositoryBase {
 
   final BusinessMetrics? _businessMetrics;
 
-  /// Active accounts ordered by creation time (the accounts screen order).
+  /// The user's order: positioned rows by `position`, then the rest (never
+  /// reordered, or created since) by creation. Mirrors `compareByPosition` in
+  /// @wallet-bot/shared — keep them in lockstep.
+  static List<OrderClauseGenerator<$AccountsTable>> get _userOrder => [
+    (a) => OrderingTerm(expression: a.position.isNull()),
+    (a) => OrderingTerm(expression: a.position),
+    (a) => OrderingTerm(expression: a.createdAt),
+  ];
+
+  /// Active accounts in the user's order (the accounts screen order).
   Stream<List<Account>> watchActive() =>
       (db.select(db.accounts)
             ..where((a) => a.archived.equals(false))
-            ..orderBy([(a) => OrderingTerm(expression: a.createdAt)]))
+            ..orderBy(_userOrder))
           .watch();
 
-  /// Live list, active-only by default. Insertion order.
+  /// Live list, active-only by default, in the user's order.
   Stream<List<Account>> watchAll({bool includeArchived = false}) {
-    final query = db.select(db.accounts);
+    final query = db.select(db.accounts)..orderBy(_userOrder);
     if (!includeArchived) {
       query.where((a) => a.archived.equals(false));
     }
     return query.watch();
   }
 
-  /// One-shot list, active-only by default. Insertion order, no sorting.
+  /// One-shot list, active-only by default, in the user's order.
   Future<List<Account>> listAll({bool includeArchived = false}) {
-    final query = db.select(db.accounts);
+    final query = db.select(db.accounts)..orderBy(_userOrder);
     if (!includeArchived) {
       query.where((a) => a.archived.equals(false));
     }
@@ -188,6 +197,29 @@ class AccountRepository extends RepositoryBase {
         dirty: const Value(true),
       ),
     );
+  }
+
+  /// Persists the user's order: `position = index` for each id, in one
+  /// transaction. Rows already at their index are left alone, so a drag only
+  /// re-dirties (and syncs) the accounts that actually moved.
+  Future<void> reorder(List<String> idsInOrder) async {
+    final now = currentMs;
+    await db.transaction(() async {
+      for (var i = 0; i < idsInOrder.length; i++) {
+        await (db.update(db.accounts)..where(
+              (a) =>
+                  a.id.equals(idsInOrder[i]) &
+                  (a.position.isNull() | a.position.equals(i).not()),
+            ))
+            .write(
+              AccountsCompanion(
+                position: Value(i),
+                updatedAt: Value(now),
+                dirty: const Value(true),
+              ),
+            );
+      }
+    });
   }
 
   /// Soft delete: `archived = true` + tombstone, atomically. The row stays

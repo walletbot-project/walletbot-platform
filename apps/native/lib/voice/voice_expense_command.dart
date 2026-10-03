@@ -60,6 +60,10 @@ abstract interface class VoiceExpenseCommand {
   /// timer). No-op when already connected or when there is no session.
   Future<void> ensureConnected();
 
+  /// Acquires native audio for microphone capture or audible responses.
+  /// Text-only sessions do not need an audio device or audio focus.
+  Future<void> prepareAudio();
+
   Future<void> addAudioChunk(Uint8List chunk);
 
   /// Flushes any audio buffered server-side since the last chunk so the
@@ -157,6 +161,9 @@ class DebugVoiceExpenseCommand implements VoiceExpenseCommand {
 
   @override
   Future<void> ensureConnected() async {}
+
+  @override
+  Future<void> prepareAudio() async {}
 
   @override
   Future<void> addAudioChunk(Uint8List chunk) async {

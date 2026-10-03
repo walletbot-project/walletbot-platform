@@ -18,10 +18,15 @@ import { useOccurrenceCutoff } from '@/hooks/use-occurrence-cutoff'
 import { useSeededEntity } from '@/hooks/use-seeded-entity'
 import { useToastMutation } from '@/hooks/use-toast-mutation'
 import { CATEGORY_ICONS } from '@/lib/category-icons'
-import { CATEGORY_DEFAULT_COLOR, normalizeColor } from '@/lib/entity-colors'
+import {
+    CATEGORY_DEFAULT_COLOR,
+    normalizeColor,
+    readableAccent,
+} from '@/lib/entity-colors'
 import { groupedRadius } from '@/lib/grouped-list'
 import { useT } from '@/lib/i18n'
 import { currentMonthWindow } from '@/lib/month-window'
+import { useTheme } from '@/lib/theme'
 import type { ActivityFilterSeed } from '@/pages/activity/helpers'
 
 export type CategorySummary = {
@@ -75,9 +80,14 @@ export function CategoryDetail({
     const { pending: saving, run } = useToastMutation()
     const [deleteOpen, setDeleteOpen] = useState(false)
 
-    const accent = editing
+    const { brightness } = useTheme()
+    const color = editing
         ? fields.color
         : normalizeColor(category.color, CATEGORY_DEFAULT_COLOR)
+    // The hero paints the accent as it reads in this theme; the stored color
+    // (and what the pickers select) stays the raw pick. `CategoryIcon` adapts on
+    // its own, so it gets the stored color: adapting twice shifts it again.
+    const accent = readableAccent(color, brightness)
 
     const handleToggleEditing = () => {
         if (!editing) {
@@ -158,7 +168,7 @@ export function CategoryDetail({
                             <CategoryIcon
                                 name={category.icon}
                                 size={30}
-                                color={accent}
+                                color={color}
                             />
                         </span>
                     )}
@@ -194,6 +204,7 @@ export function CategoryDetail({
                     onChange={(color) =>
                         setFields((current) => ({ ...current, color }))
                     }
+                    themed
                 />
 
                 <MonthlySpendHero

@@ -9,7 +9,7 @@ served from `app.walletbot.live` (its own Pages project).
 | Route (per locale) | Source | Content |
 |---|---|---|
 | `/{en,es}/` | `src/components/home-page.astro` | Hero, feature grid, get-the-app links |
-| `/{en,es}/beta` | `src/components/beta-page.astro` | Beta access request — a card out to the Google Form. Also answered unprefixed at `/beta` |
+| `/{en,es}/beta` | `src/components/beta-page.astro` | Get-the-app page, a card out to the Google Form that hands out both store links. Also answered unprefixed at `/beta` |
 | `/{en,es}/support` | `src/components/support-page.astro` | Support mailbox: one `mailto:` card, nothing else. Also answered unprefixed at `/support` (§ The only server code) — that is the link on the store listings |
 | `/{en,es}/privacy` | `src/components/legal-page.astro` | Renders `docs/legal/privacy-policy.{locale}.md` |
 | `/{en,es}/terms` | `src/components/legal-page.astro` | Renders `docs/legal/terms-and-conditions.{locale}.md` |
@@ -28,17 +28,19 @@ treatment. When it ships, move it onto `card` / `iconChip` and drop the chip.
 ## Getting the app
 
 `src/components/store-badges.astro` renders the three ways in as one row of
-equal badges, in the hero and again, larger, in the closing section. Only the
-web app is actually open: it links straight to `app.walletbot.live`. Both store
-badges point at `/{locale}/beta` instead of a store, because the Android build
-is a **closed** test (access runs through the tester list) and iOS is not
-submitted yet. The header button asks for access too. URLs live in
-`src/lib/links.ts` — `PLAY_STORE_URL` is kept there, unlinked, for when the
-test opens.
+equal badges, in the hero and again, larger, in the closing section. The web
+app links straight to `app.walletbot.live`. Both store listings are public, but
+the Play and App Store badges point at `/{locale}/beta` instead of a store, on
+purpose: we want visitors to fill out the form before they download. The header
+button goes there too. URLs live in `src/lib/links.ts`. `PLAY_STORE_URL` and
+`APP_STORE_URL` are kept there unlinked, as the record of what the form hands
+out.
 
-`/{locale}/beta` collects tester requests through a **Google Form**
-(`BETA_FORM_URL`), not a form of our own — the page is one big card out to it,
-plus the web app underneath as the way in that needs no waiting. Nothing on
+`/{locale}/beta` is one big card out to a **Google Form** (`BETA_FORM_URL`),
+not a form of our own, plus the web app underneath for anyone who would rather
+not install anything. The store links live in the form's confirmation message
+(Settings → Presentation → Confirmation message), which is outside this repo:
+if a listing URL changes, update `links.ts` and the form together. Nothing on
 this site posts anything anywhere, which is why it can stay a plain static
 build. Like the other handed-out URLs it is also answered unprefixed at
 `/beta` (§ The only server code).

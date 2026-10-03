@@ -1,6 +1,7 @@
 import 'package:app/components/color_picker.dart';
 import 'package:app/components/color_utils.dart';
 import 'package:app/components/grouped_card.dart';
+import 'package:app/components/reorderable_tag_tree.dart';
 import 'package:app/components/tag_chip.dart';
 import 'package:app/components/transaction_row.dart';
 import 'package:app/data/data.dart';
@@ -56,76 +57,36 @@ class _TagsViewState extends State<TagsView>
           return Center(child: Text(context.l10n.noTagsYet));
         }
 
-        final tree = _buildTagTree(data);
-
-        return ListView.builder(
-          padding: const EdgeInsets.fromLTRB(12, 8, 12, 96),
-          itemCount: tree.length,
-          itemBuilder: (context, index) {
-            final entry = tree[index];
-            final tag = entry.row.tag;
+        final parentOf = {for (final row in data) row.tag.id: row.tag.parentId};
+        // Long-press a chip to drag it (with its sub-tags) among its
+        // siblings; the hierarchy itself never changes here (WAL-199).
+        return ReorderableTagTree(
+          roots: buildTagTree([for (final row in data) row.tag]),
+          padding: const EdgeInsets.fromLTRB(12, 12, 12, 96),
+          reorderFailedMessage: context.l10n.tagsReorderFailed,
+          moveUpLabel: context.l10n.moveUp,
+          moveDownLabel: context.l10n.moveDown,
+          // A tag whose parent is gone shows at the top level but still
+          // carries that parentId; it is not a sibling there, so it is left
+          // out rather than making the whole level's write fail.
+          onReorder: (parentId, ids) => tags.reorder(parentId, [
+            for (final id in ids)
+              if (parentOf[id] == parentId) id,
+          ]),
+          chipBuilder: (context, tag) {
             final style = tagChipStyle(context, colorFromHex(tag.color));
-
-            // The chip stays as the tag's representation; tapping it opens the
-            // details sheet. Sub-tags keep their indentation.
-            return Padding(
-              padding: EdgeInsets.only(
-                left: entry.depth * 20.0,
-                top: 4,
-                bottom: 4,
-              ),
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: ActionChip(
-                  avatar: CircleAvatar(backgroundColor: style.avatarColor),
-                  backgroundColor: style.background,
-                  label: Text(tag.name),
-                  labelStyle: style.labelStyle,
-                  onPressed: () => widget.onSelect(tag),
-                ),
-              ),
+            return ActionChip(
+              avatar: CircleAvatar(backgroundColor: style.avatarColor),
+              backgroundColor: style.background,
+              label: Text(tag.name),
+              labelStyle: style.labelStyle,
+              onPressed: () => widget.onSelect(tag),
             );
           },
         );
       },
     );
   }
-}
-
-class _TagTreeEntry {
-  _TagTreeEntry({required this.row, required this.depth});
-
-  final TagWithCount row;
-  final int depth;
-}
-
-List<_TagTreeEntry> _buildTagTree(List<TagWithCount> rows) {
-  final rowsById = {for (final r in rows) r.tag.id: r};
-  final childrenByParent = <String, List<TagWithCount>>{};
-  final roots = <TagWithCount>[];
-
-  for (final row in rows) {
-    final parentId = row.tag.parentId;
-    if (parentId != null && rowsById.containsKey(parentId)) {
-      childrenByParent.putIfAbsent(parentId, () => []).add(row);
-    } else {
-      roots.add(row);
-    }
-  }
-
-  final result = <_TagTreeEntry>[];
-  void visit(TagWithCount row, int depth) {
-    result.add(_TagTreeEntry(row: row, depth: depth));
-    final children = childrenByParent[row.tag.id] ?? const [];
-    for (final child in children) {
-      visit(child, depth + 1);
-    }
-  }
-
-  for (final root in roots) {
-    visit(root, 0);
-  }
-  return result;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

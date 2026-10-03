@@ -1,21 +1,7 @@
 import type { ReactNode } from 'react'
+import { foregroundOn } from '@/lib/entity-colors'
 import { useTheme } from '@/lib/theme'
 import { cn } from '@/lib/utils'
-
-/**
- * Whether black or white reads better on `color` — the web counterpart of the
- * native `foregroundOn` helper.
- */
-function foregroundOn(color: string): string {
-    const hex = color.replace('#', '')
-    if (hex.length !== 6) return '#000000'
-    const r = Number.parseInt(hex.slice(0, 2), 16)
-    const g = Number.parseInt(hex.slice(2, 4), 16)
-    const b = Number.parseInt(hex.slice(4, 6), 16)
-    // Relative luminance, matching Flutter's `Color.computeLuminance` weights.
-    const luminance = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255
-    return luminance > 0.5 ? '#000000' : '#ffffff'
-}
 
 /**
  * A tag rendered as a Material 3 chip, matching the native `tagChipStyle`

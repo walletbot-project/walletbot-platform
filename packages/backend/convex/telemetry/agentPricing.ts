@@ -16,7 +16,20 @@ type AgentPrice = {
     cachedInputUsdPerMillion?: number
 }
 
+// Google lists 3.8 Live and 3.1 Live at the same rates:
+// https://ai.google.dev/gemini-api/docs/pricing (verified 2026-09-20).
 const pricingCatalog: AgentPrice[] = [
+    {
+        model: 'gemini-3.8-live',
+        effectiveFrom: Date.parse('2026-09-15T00:00:00.000Z'),
+        inputTextUsdPerMillion: 0.75,
+        inputAudioUsdPerMillion: 3.0,
+        inputMediaUsdPerMillion: 1.0,
+        outputTextUsdPerMillion: 4.5,
+        outputAudioUsdPerMillion: 12.0,
+        outputMediaUsdPerMillion: 4.5,
+        cachedInputUsdPerMillion: 0.75,
+    },
     {
         model: 'gemini-3.1-flash-live-preview',
         effectiveFrom: Date.parse('2026-08-23T00:00:00.000Z'),
