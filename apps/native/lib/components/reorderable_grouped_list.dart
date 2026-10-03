@@ -121,7 +121,12 @@ class _ReorderableGroupedListState<T> extends State<ReorderableGroupedList<T>> {
       buildDefaultDragHandles: false,
       proxyDecorator: _decorateProxy,
       onReorderStart: (_) => HapticFeedback.mediumImpact(),
-      onReorderItem: _handleReorder,
+      // CI and release builds use Flutter 3.41, whose callback reports the
+      // insertion slot before removing the dragged row.
+      onReorder: (oldIndex, newIndex) => _handleReorder(
+        oldIndex,
+        newIndex > oldIndex ? newIndex - 1 : newIndex,
+      ),
       itemBuilder: (context, index) {
         final item = items[index];
         return ReorderableDelayedDragStartListener(

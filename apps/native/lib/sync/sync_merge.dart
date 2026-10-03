@@ -107,7 +107,16 @@ class PullPageMerger {
       db.accounts,
     )..where((a) => a.id.equals(id))).getSingleOrNull();
     if (existing != null && existing.dirty) {
-      if (existing.updatedAt >= remoteUpdatedAt) return;
+      if (existing.updatedAt >= remoteUpdatedAt) {
+        // A v5 offline edit has no position. Hydrate the server's order
+        // without replacing that edit, its timestamp, or its dirty flag.
+        if (existing.position == null && r['position'] is num) {
+          await (db.update(db.accounts)..where((a) => a.id.equals(id))).write(
+            AccountsCompanion(position: Value((r['position'] as num).toInt())),
+          );
+        }
+        return;
+      }
     }
     final companion = AccountsCompanion(
       id: Value(id),
@@ -135,7 +144,16 @@ class PullPageMerger {
       db.categories,
     )..where((c) => c.id.equals(id))).getSingleOrNull();
     if (existing != null && existing.dirty) {
-      if (existing.updatedAt >= remoteUpdatedAt) return;
+      if (existing.updatedAt >= remoteUpdatedAt) {
+        if (existing.position == null && r['position'] is num) {
+          await (db.update(db.categories)..where((c) => c.id.equals(id))).write(
+            CategoriesCompanion(
+              position: Value((r['position'] as num).toInt()),
+            ),
+          );
+        }
+        return;
+      }
     }
     final companion = CategoriesCompanion(
       id: Value(id),
@@ -161,7 +179,18 @@ class PullPageMerger {
       db.tags,
     )..where((t) => t.id.equals(id))).getSingleOrNull();
     if (existing != null && existing.dirty) {
-      if (existing.updatedAt >= remoteUpdatedAt) return;
+      if (existing.updatedAt >= remoteUpdatedAt) {
+        // Positions only apply within the same family. A local re-parent
+        // deliberately cleared the old position and must keep it cleared.
+        if (existing.position == null &&
+            existing.parentId == r['parentId'] &&
+            r['position'] is num) {
+          await (db.update(db.tags)..where((t) => t.id.equals(id))).write(
+            TagsCompanion(position: Value((r['position'] as num).toInt())),
+          );
+        }
+        return;
+      }
     }
     final companion = TagsCompanion(
       id: Value(id),
