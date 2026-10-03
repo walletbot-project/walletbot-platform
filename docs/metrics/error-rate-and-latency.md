@@ -525,9 +525,6 @@ Goals for the report, all building on what this PR records:
 Voice connect timing stays, but isn't a report goal. WhatsApp coverage is
 tertiary. Distributed traces aren't required for any of the above.
 
-I haven't created these in Linear yet — want me to file them once you've
-reviewed the recommendation, or adjust scope first?
-
 ## Related risks
 
 Touches existing entries in [`riesgos.md`](../riesgos.md): R-011 (unauth'd
