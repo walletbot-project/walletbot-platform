@@ -185,11 +185,13 @@ async function nextAdjustmentAfter(
  * when the amount actually moved, with a fresh `seq` so every device pulls
  * the new amount — including the one whose push triggered it, since a push
  * acks its own `seq` and would otherwise never see the correction.
+ *
+ * Returns the change it made, or null when the amount was already right.
  */
-async function reconcileAdjustment(
+export async function reconcileAdjustment(
     ctx: MutationCtx,
     adjustment: Doc<'transactions'>,
-): Promise<void> {
+): Promise<{ from: bigint; to: bigint } | null> {
     const previous = await balanceBeforeInLedger(
         ctx,
         adjustment.userId,
@@ -200,7 +202,7 @@ async function reconcileAdjustment(
         adjustment.balanceAfter ?? previous,
         previous,
     )
-    if (amount === adjustment.amount) return
+    if (amount === adjustment.amount) return null
 
     const seq = await nextSeq(ctx, adjustment.userId)
     await ctx.db.patch(adjustment._id, {
@@ -208,13 +210,19 @@ async function reconcileAdjustment(
         updatedAt: BigInt(Date.now()),
         seq,
     })
+    const change = { from: adjustment.amount, to: amount }
     const updated = await ctx.db.get(adjustment._id)
-    if (!updated) return
+    if (!updated) return change
     // Only the amount moved, and the tag aggregate is keyed by date alone.
-    // Not `aggregateReplace`: re-deriving an adjustment never moves the
-    // balance after it, so there is nothing further to reconcile.
+    // Not `aggregateReplace`: when every adjustment was consistent before the
+    // write, re-deriving this one puts the balance after it back on
+    // `balanceAfter` — what later adjustments were already measured against —
+    // so there is nothing further to reconcile. Data that was never
+    // reconciled does not meet that precondition: fixing it has to walk each
+    // account's adjustments in ledger order.
     await outflowsByAccount.replace(ctx, adjustment, updated)
     await inflowsByAccount.replace(ctx, adjustment, updated)
+    return change
 }
 
 /**

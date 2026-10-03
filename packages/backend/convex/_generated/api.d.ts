@@ -99,6 +99,7 @@ import type * as telemetry_mutations from "../telemetry/mutations.js";
 import type * as telemetry_queries from "../telemetry/queries.js";
 import type * as telemetry_types from "../telemetry/types.js";
 import type * as telemetry_validators from "../telemetry/validators.js";
+import type * as transactions_adjustmentBackfill from "../transactions/adjustmentBackfill.js";
 import type * as transactions_backfill from "../transactions/backfill.js";
 import type * as transactions_helpers from "../transactions/helpers.js";
 import type * as userDeletion_helpers from "../userDeletion/helpers.js";
@@ -251,6 +252,7 @@ declare const fullApi: ApiFromModules<{
   "telemetry/queries": typeof telemetry_queries;
   "telemetry/types": typeof telemetry_types;
   "telemetry/validators": typeof telemetry_validators;
+  "transactions/adjustmentBackfill": typeof transactions_adjustmentBackfill;
   "transactions/backfill": typeof transactions_backfill;
   "transactions/helpers": typeof transactions_helpers;
   "userDeletion/helpers": typeof userDeletion_helpers;
