@@ -807,6 +807,8 @@ function MicButton({
                 onPointerCancel={handlePointerCancel}
                 onKeyDown={handleKeyDown}
                 onContextMenu={(event) => event.preventDefault()}
+                // Clicking the mic must not pull focus out of the composer.
+                onMouseDown={(event) => event.preventDefault()}
             >
                 {showSpinner ? (
                     <CircularProgress isIndeterminate size="xs" />
@@ -1094,8 +1096,15 @@ export function Add() {
     }, [voice.messages])
 
     const handleTextChange = (next: string) => {
+        const startedComposing = next.trim().length > 0 && !isComposing
         setText(next)
         voice.setComposing(next.trim().length > 0)
+        // The hidden composer keeps the keyboard up while the mic is open, so
+        // typing there is the same as the switch-to-text button.
+        if (startedComposing && barMode !== 'composer') {
+            setHolding(false)
+            handleSwitchToText()
+        }
     }
 
     const handleSend = () => {
@@ -1363,15 +1372,24 @@ export function Add() {
                         phase === 'idle' &&
                         !isComposing && <HoldHint />}
                     <div className="flex items-end gap-2">
-                        <div className="min-w-0 flex-1">
-                            {barMode === 'composer' ? (
+                        <div className="relative min-w-0 flex-1">
+                            {/* Hidden, not unmounted, while the mic is open:
+                                the textarea keeps its focus and the keyboard. */}
+                            <div
+                                className={
+                                    barMode === 'composer'
+                                        ? undefined
+                                        : 'sr-only'
+                                }
+                            >
                                 <Composer
                                     value={text}
                                     onChange={handleTextChange}
                                     onSend={handleComposerSend}
                                     inputRef={composerRef}
                                 />
-                            ) : (
+                            </div>
+                            {barMode !== 'composer' && (
                                 <RecordingStrip
                                     variant={
                                         barMode === 'holding'

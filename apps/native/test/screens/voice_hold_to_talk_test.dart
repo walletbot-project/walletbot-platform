@@ -231,6 +231,42 @@ void main() {
     variant: TargetPlatformVariant.only(TargetPlatform.android),
   );
 
+  testWidgets(
+    'the keyboard stays up with the mic open, and typing switches to text',
+    (tester) async {
+      await tester.pumpWidget(app(_Command()));
+      await tester.pump();
+      await tester.showKeyboard(find.byType(TextField));
+      FocusNode focus() => tester
+          .widget<TextField>(find.byType(TextField, skipOffstage: false))
+          .focusNode!;
+      expect(focus().hasFocus, isTrue);
+
+      await tester.tap(composerMic());
+      await tester.pump();
+      await tester.pump();
+      expect(captureCalls, ['listen']);
+      expect(find.text('Pause'), findsOneWidget);
+      expect(find.byType(TextField), findsNothing);
+      expect(focus().hasFocus, isTrue);
+      expect(tester.testTextInput.isVisible, isTrue);
+
+      await tester.enterText(
+        find.byType(TextField, skipOffstage: false),
+        'café',
+      );
+      await settleCapture(tester);
+      expect(captureCalls, ['listen', 'cancel']);
+      expect(find.text('Pause'), findsNothing);
+      expect(
+        tester.widget<TextField>(find.byType(TextField)).controller!.text,
+        'café',
+      );
+      await tester.pumpWidget(const SizedBox());
+    },
+    variant: TargetPlatformVariant.only(TargetPlatform.android),
+  );
+
   testWidgets('suggestions fill the input when the flag is on', (tester) async {
     final db = AppDatabase.forTesting(NativeDatabase.memory());
     addTearDown(db.close);

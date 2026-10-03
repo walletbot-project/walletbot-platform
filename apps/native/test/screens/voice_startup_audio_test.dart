@@ -175,7 +175,14 @@ void main() {
     variant: TargetPlatformVariant.only(TargetPlatform.android),
   );
 
-  for (final cancel in ['tap', 'background', 'error', 'overflow', 'leave']) {
+  for (final cancel in [
+    'tap',
+    'background',
+    'error',
+    'overflow',
+    'text',
+    'leave',
+  ]) {
     testWidgets(
       '$cancel discards startup audio and prevents late capture restart',
       (tester) async {
@@ -193,6 +200,12 @@ void main() {
             );
           case 'overflow':
             await chunk(tester, List.filled(160000, 0));
+          case 'text':
+            // Hidden behind the recording bar, but still there for the keyboard.
+            await tester.enterText(
+              find.byType(TextField, skipOffstage: false),
+              'hello',
+            );
           case 'leave':
             await tester.pumpWidget(const SizedBox());
         }

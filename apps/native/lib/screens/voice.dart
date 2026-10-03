@@ -345,9 +345,6 @@ class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
     if (startedComposing && _startupAudio != null) {
       unawaited(_stopMicCapture());
     }
-    // Unreachable for now: the recording bar replaces the text field while
-    // the mic is open, so nobody can start typing with the mic on. Kept on
-    // purpose to turn typing with the mic open back on later. Do not delete.
     if (startedComposing && _isConnected && _micActive) {
       // User started typing while the mic was open: we already stop
       // forwarding audio chunks via _isMicEffectivelyMuted, but the
@@ -356,6 +353,22 @@ class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
       unawaited(_command?.endAudioStream());
       _recordMuteEvent('text_composing');
     }
+    if (startedComposing) _switchToTextOnTyping();
+  }
+
+  /// The hidden text field keeps the keyboard up while the mic is open, so
+  /// typing is the same as the switch-to-text button: the mic closes and the
+  /// composer comes back with what was typed.
+  void _switchToTextOnTyping() {
+    if (!_handsFree && !_holding && !_paused && !_micActive && !_micStarting) {
+      return;
+    }
+    setState(() {
+      _handsFree = false;
+      _holding = false;
+      _paused = false;
+    });
+    if (_micActive || _micStarting) unawaited(_stopMicCapture());
   }
 
   // -- Voice button gestures ------------------------------------------------
@@ -2422,9 +2435,18 @@ class _ControlBar extends StatelessWidget {
         top: false,
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          child: mode == _BarMode.locked
-              ? _buildLocked(context)
-              : _buildComposer(context),
+          // The composer stays mounted while the mic is open, so the text
+          // field keeps its focus and the keyboard stays up.
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Offstage(
+                offstage: mode == _BarMode.locked,
+                child: _buildComposer(context),
+              ),
+              if (mode == _BarMode.locked) _buildLocked(context),
+            ],
+          ),
         ),
       ),
     );
@@ -2440,16 +2462,24 @@ class _ControlBar extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
             Expanded(
-              child: holding
-                  ? _HoldStrip(
-                      timerKey: recordingTimerKey,
-                      listening: phase == _MicPhase.listening,
-                    )
-                  : _TextComposer(
+              child: Stack(
+                fit: StackFit.passthrough,
+                children: [
+                  Offstage(
+                    offstage: holding,
+                    child: _TextComposer(
                       controller: textController,
                       focusNode: textFocusNode,
                       onSend: onSendText,
                     ),
+                  ),
+                  if (holding)
+                    _HoldStrip(
+                      timerKey: recordingTimerKey,
+                      listening: phase == _MicPhase.listening,
+                    ),
+                ],
+              ),
             ),
             const SizedBox(width: 8),
             _MicButton(

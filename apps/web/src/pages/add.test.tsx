@@ -209,3 +209,32 @@ it('sliding up locks, then pause, resume and switch to text reuse the tap path',
     setVoice({ isMicCaptureActive: false, isMicOn: false })
     expect(container.querySelector('textarea')).not.toBeNull()
 })
+
+it('keeps the composer focused with the mic open and switches to text on typing', () => {
+    const textarea = container.querySelector('textarea')
+    if (!textarea) throw new Error('no composer')
+    act(() => textarea.focus())
+
+    const mic = byLabel('Start talking')
+    pointer(mic, 'pointerdown')
+    pointer(mic, 'pointerup')
+    act(() => mic.click())
+    expect(f.voice.connect).toHaveBeenCalledWith('audio')
+    setVoice({ isConnecting: true })
+    expect(byLabel('Switch to text')).toBeDefined()
+    expect(container.querySelector('textarea')).toBe(textarea)
+    expect(document.activeElement).toBe(textarea)
+
+    const setValue = Object.getOwnPropertyDescriptor(
+        HTMLTextAreaElement.prototype,
+        'value',
+    )?.set
+    act(() => {
+        setValue?.call(textarea, 'café')
+        textarea.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    expect(f.voice.setMicOn).toHaveBeenCalledWith(false)
+    setVoice({ isConnecting: false })
+    expect(container.querySelector('.sr-only')).toBeNull()
+    expect(textarea.value).toBe('café')
+})
