@@ -149,6 +149,25 @@ export {
     MAX_REORDER_ITEMS,
 } from './ordering'
 export type {
+    PromptSuggestion,
+    PromptSuggestionKind,
+    SuggestionAccount,
+    SuggestionCategory,
+    SuggestionData,
+    SuggestionMovement,
+    SuggestionTag,
+} from './prompt-suggestions'
+export {
+    generatePromptSuggestions,
+    mulberry32,
+    nextPromptSuggestions,
+    niceAmountCents,
+    PROMPT_SUGGESTION_COUNT,
+    PROMPT_SUGGESTION_MOVEMENTS_CAP,
+    promptSuggestionKey,
+    promptSuggestionSetKey,
+} from './prompt-suggestions'
+export type {
     RecurrenceFrequency,
     RecurrenceHorizon,
     RecurrenceSpan,

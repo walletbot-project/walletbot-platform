@@ -1,4 +1,5 @@
 import { api } from '@wallet-bot/backend/api'
+import { type PromptSuggestion, promptSuggestionKey } from '@wallet-bot/shared'
 import {
     Button,
     CircularProgress,
@@ -10,18 +11,22 @@ import { useQuery } from 'convex/react'
 import {
     type KeyboardEvent,
     type PointerEvent,
+    type RefObject,
     useCallback,
     useEffect,
     useRef,
     useState,
 } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { AgentGlyph } from '@/components/m3/agent-glyph'
 import { AppBar } from '@/components/m3/app-bar'
+import { AssistChip } from '@/components/m3/chip'
 import { Icon } from '@/components/m3/icon'
 import { useEnterSends } from '@/hooks/use-enter-sends'
+import { usePromptSuggestions } from '@/hooks/use-prompt-suggestions'
 import type { ChatMessage } from '@/hooks/use-voice'
 import { useVoiceSession } from '@/hooks/use-voice-session'
-import { useFormatLocale, useT } from '@/lib/i18n'
+import { type Messages, useFormatLocale, useT } from '@/lib/i18n'
 import { cn } from '@/lib/utils'
 import {
     ReportResponseSheet,
@@ -31,8 +36,13 @@ import { ActionWidget } from '@/pages/add-action-widget'
 
 // Constants
 
-/** Flutter's long-press timeout — the composer's push-to-talk threshold. */
-const LONG_PRESS_MS = 500
+/** How long the mic has to be held before it is push-to-talk, not a tap. */
+const HOLD_MS = 300
+
+/** How far up a hold has to travel to lock the mic open. */
+const LOCK_DISTANCE = 80
+
+const WAVEFORM_BARS = 64
 
 /** Four lines of the composer at `text-sm`, plus its vertical padding. */
 const COMPOSER_MAX_HEIGHT = 104
@@ -45,6 +55,57 @@ function formatTime(date: Date, locale: string) {
         hour: '2-digit',
         minute: '2-digit',
     })
+}
+
+function suggestionText(
+    t: Messages,
+    locale: string,
+    s: PromptSuggestion,
+): string {
+    const m = t.voice.suggestions
+    const amount = new Intl.NumberFormat(locale, {
+        maximumFractionDigits: 2,
+    }).format((s.amountCents ?? 0) / 100)
+    const category = s.category ?? ''
+    const account = s.account ?? ''
+    switch (s.kind) {
+        case 'logExpense':
+            return s.account === undefined
+                ? m.logExpense({ amount, category })
+                : m.logExpenseWithAccount({ amount, category, account })
+        case 'spentInCategoryThisMonth':
+            return m.spentInCategoryThisMonth({ category })
+        case 'accountBalance':
+            return m.accountBalance({ account })
+        case 'topSpendingThisMonth':
+            return m.topSpendingThisMonth
+        case 'compareCategoryLastMonth':
+            return m.compareCategoryLastMonth({ category })
+        case 'transfer':
+            return m.transfer({
+                amount,
+                account,
+                toAccount: s.toAccount ?? '',
+            })
+        case 'logIncome':
+            return m.logIncome({ amount, account })
+        case 'spentWithTag':
+            return m.spentWithTag({ tag: s.tag ?? '' })
+        case 'recentExpenses':
+            return m.recentExpenses
+        case 'whatCanYouDo':
+            return m.whatCanYouDo
+        case 'createCashAccount':
+            return m.createCashAccount
+        case 'setupCategories':
+            return m.setupCategories
+        case 'howToLogExpense':
+            return m.howToLogExpense
+        case 'homeWidget':
+            return s.category === undefined
+                ? m.homeWidget
+                : m.homeWidgetForCategory({ category })
+    }
 }
 
 function formatJson(data: Record<string, unknown>): string {
@@ -431,60 +492,113 @@ function MessageView({
     }
 }
 
-// Status pill
+// Welcome view
 
-function StatusPill({
-    status,
+type MicPhase = 'idle' | 'opening' | 'listening' | 'paused'
+type BarMode = 'composer' | 'holding' | 'locked'
+
+/**
+ * The empty conversation, porting `_WelcomeView`: one line, the prompt
+ * suggestions and the start button while idle, the mic orb once the mic is
+ * opening, listening or paused.
+ */
+function WelcomeView({
+    phase,
+    level,
+    suggestions,
+    onSuggestion,
+    onStart,
+    startDisabled,
 }: {
-    status: 'idle' | 'connecting' | 'connected'
+    phase: MicPhase
+    level: number
+    suggestions: { key: string; text: string }[]
+    onSuggestion: (text: string) => void
+    onStart: () => void
+    startDisabled: boolean
 }) {
     const t = useT()
-    const color =
-        status === 'connected'
-            ? 'border-primary text-primary'
-            : status === 'connecting'
-              ? 'border-tertiary text-tertiary'
-              : 'border-outline text-on-surface-variant'
-    const label =
-        status === 'connected'
-            ? t.voice.statusConnected
-            : status === 'connecting'
-              ? t.voice.statusConnecting
-              : t.voice.statusIdle
+    if (phase !== 'idle') {
+        return (
+            <div className="flex flex-1 flex-col items-center justify-center gap-4">
+                <MicOrb phase={phase} level={level} />
+                <p
+                    className={cn(
+                        'm3-title-medium',
+                        phase === 'listening'
+                            ? 'text-on-surface'
+                            : 'text-on-surface-variant',
+                    )}
+                >
+                    {phase === 'opening'
+                        ? t.voice.preparingMic
+                        : phase === 'paused'
+                          ? t.voice.micPaused
+                          : t.voice.listening}
+                </p>
+            </div>
+        )
+    }
     return (
-        <div
-            className={cn(
-                'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs',
-                color,
+        <div className="flex flex-1 flex-col items-center justify-center text-center">
+            <span className="grid size-18 place-items-center rounded-full bg-secondary-container text-on-secondary-container">
+                <AgentGlyph size={34} />
+            </span>
+            <h2 className="m3-headline-small mt-5 text-on-surface">
+                {t.voice.welcomeTitle}
+            </h2>
+            <p className="m3-body-medium mt-2 max-w-xs text-on-surface-variant">
+                {t.voice.welcome}
+            </p>
+            {suggestions.length > 0 && (
+                <div className="mt-7 flex max-w-xl flex-wrap justify-center gap-2">
+                    {suggestions.map((s) => (
+                        <AssistChip
+                            key={s.key}
+                            label={s.text}
+                            onPress={() => onSuggestion(s.text)}
+                        />
+                    ))}
+                </div>
             )}
-        >
-            <span
-                className={cn(
-                    'size-2 rounded-full bg-current',
-                    status === 'connected' && 'animate-pulse',
-                )}
-            />
-            {label}
+            <Button
+                variant="filled"
+                onPress={onStart}
+                isDisabled={startDisabled}
+                className="mt-7 h-14 px-7"
+            >
+                <Icon name="mic" filled size={20} />
+                {t.voice.startTalking}
+            </Button>
         </div>
     )
 }
 
-// Empty state
-
-function EmptyState({ isConnecting }: { isConnecting: boolean }) {
-    const t = useT()
+function MicOrb({ phase, level }: { phase: MicPhase; level: number }) {
+    const paused = phase === 'paused'
+    const halo =
+        phase === 'listening' ? 1 + level * 0.9 : phase === 'opening' ? 1.15 : 1
     return (
-        <div className="flex flex-1 flex-col items-center justify-center gap-3 text-muted-foreground">
-            {/* `cloud_sync_rounded` / `mic_none_rounded`, as in `_EmptyState`. */}
-            <Icon
-                name={isConnecting ? 'cloud_sync' : 'mic'}
-                filled={isConnecting}
-                size={48}
-                className="opacity-50"
+        <div className="relative grid size-44 place-items-center">
+            <span
+                aria-hidden
+                className={cn(
+                    'absolute size-22 rounded-full transition-transform duration-100',
+                    paused ? 'opacity-0' : 'bg-primary-container/45',
+                    phase === 'opening' && 'motion-safe:animate-pulse',
+                )}
+                style={{ transform: `scale(${halo})` }}
             />
-            <p className="text-sm">
-                {isConnecting ? t.voice.connectingEllipsis : t.voice.tapToStart}
-            </p>
+            <span
+                className={cn(
+                    'relative grid size-22 place-items-center rounded-full',
+                    paused
+                        ? 'bg-surface-container-highest text-on-surface-variant'
+                        : 'bg-primary-container text-on-primary-container',
+                )}
+            >
+                <Icon name={paused ? 'mic_off' : 'mic'} filled size={40} />
+            </span>
         </div>
     )
 }
@@ -500,13 +614,14 @@ function Composer({
     value,
     onChange,
     onSend,
+    inputRef: ref,
 }: {
     value: string
     onChange: (value: string) => void
     onSend: () => void
+    inputRef: RefObject<HTMLTextAreaElement | null>
 }) {
     const t = useT()
-    const ref = useRef<HTMLTextAreaElement>(null)
     const enterSends = useEnterSends()
 
     useEffect(() => {
@@ -517,7 +632,7 @@ function Composer({
         el.style.height = 'auto'
         if (value === '') return
         el.style.height = `${Math.min(el.scrollHeight, COMPOSER_MAX_HEIGHT)}px`
-    }, [value])
+    }, [value, ref])
 
     const handleKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
         if (!enterSends(event)) return
@@ -526,7 +641,7 @@ function Composer({
     }
 
     return (
-        <div className="min-w-0 flex-1 rounded-3xl border border-outline-variant bg-surface px-4">
+        <div className="flex min-h-12 min-w-0 flex-1 items-center rounded-3xl bg-surface-container-high px-4">
             <textarea
                 ref={ref}
                 rows={1}
@@ -541,38 +656,60 @@ function Composer({
     )
 }
 
-// Primary action button
+// Hold hint
+
+/** Points at the composer's mic, so it is clear which mic can be held. */
+function HoldHint() {
+    const t = useT()
+    return (
+        <div className="flex flex-col items-end">
+            <span className="m3-body-small rounded-lg bg-inverse-surface px-3 py-2 text-inverse-on-surface">
+                {t.voice.holdHint}
+            </span>
+            {/* Centres the caret on the 48px mic button below. */}
+            <span
+                aria-hidden
+                className="mr-[18px] size-0 border-x-[6px] border-t-[6px] border-x-transparent border-t-inverse-surface"
+            />
+        </div>
+    )
+}
+
+// Mic button
 
 /**
- * The single trailing button of the control bar, porting
- * `_PrimaryActionButton`: a send arrow while the composer holds text,
- * otherwise the mic — tap to toggle, press and hold to talk.
+ * The composer's trailing button, porting `_MicButton`: a send arrow while
+ * the composer holds text, otherwise the mic. Tap opens it hands-free, press
+ * and hold talks, dragging up locks it. Pointer capture keeps the drag alive
+ * once the finger leaves the button.
  */
-function PrimaryActionButton({
-    isConnecting,
-    isMicCaptureActive,
-    isMicMuted,
+function MicButton({
+    holding,
+    showSpinner,
     hasText,
-    micLabel,
+    holdDrag,
     onTap,
-    onLongPressStart,
-    onLongPressEnd,
     onSend,
+    onHoldStart,
+    onHoldMove,
+    onHoldEnd,
 }: {
-    isConnecting: boolean
-    isMicCaptureActive: boolean
-    isMicMuted: boolean
+    holding: boolean
+    showSpinner: boolean
     hasText: boolean
-    micLabel: string
+    holdDrag: number
     onTap: () => void
-    onLongPressStart: () => void
-    onLongPressEnd: () => void
     onSend: () => void
+    onHoldStart: () => void
+    onHoldMove: (dy: number) => void
+    onHoldEnd: () => void
 }) {
     const t = useT()
-    const timerRef = useRef<number | null>(null)
-    const isLongPressRef = useRef(false)
+    const pointerRef = useRef<number | null>(null)
+    const originRef = useRef(0)
+    const heldRef = useRef(false)
     const suppressClickRef = useRef(false)
+    const timerRef = useRef<number | null>(null)
 
     const clearTimer = useCallback(() => {
         if (timerRef.current === null) return
@@ -582,15 +719,8 @@ function PrimaryActionButton({
 
     useEffect(() => clearTimer, [clearTimer])
 
-    const showMutedStyle = !hasText && isMicCaptureActive && isMicMuted
     const base =
-        'grid size-14 shrink-0 place-items-center rounded-full transition-colors'
-    const className = showMutedStyle
-        ? cn(base, 'border-[1.5px] border-outline text-on-surface-variant')
-        : cn(
-              base,
-              'bg-primary-container text-on-primary-container shadow-level-2',
-          )
+        'grid size-12 shrink-0 place-items-center rounded-full bg-primary-container text-on-primary-container'
 
     if (hasText) {
         return (
@@ -598,37 +728,59 @@ function PrimaryActionButton({
                 type="button"
                 onClick={onSend}
                 aria-label={t.voice.send}
-                className={className}
+                className={base}
             >
-                <Icon name="arrow_upward" filled size={26} />
+                <Icon name="arrow_upward" filled size={24} />
             </button>
         )
     }
 
     const handlePointerDown = (event: PointerEvent<HTMLButtonElement>) => {
-        if (event.button !== 0) return
-        isLongPressRef.current = false
-        suppressClickRef.current = false
+        if (event.button !== 0 || pointerRef.current !== null) return
+        pointerRef.current = event.pointerId
+        originRef.current = event.clientY
+        heldRef.current = false
+        event.currentTarget.setPointerCapture(event.pointerId)
         timerRef.current = window.setTimeout(() => {
             timerRef.current = null
-            isLongPressRef.current = true
-            onLongPressStart()
-        }, LONG_PRESS_MS)
+            heldRef.current = true
+            onHoldStart()
+        }, HOLD_MS)
     }
 
-    const handlePointerUp = () => {
+    const handlePointerMove = (event: PointerEvent<HTMLButtonElement>) => {
+        if (event.pointerId !== pointerRef.current || !heldRef.current) return
+        onHoldMove(event.clientY - originRef.current)
+    }
+
+    const handlePointerUp = (event: PointerEvent<HTMLButtonElement>) => {
+        if (event.pointerId !== pointerRef.current) return
+        pointerRef.current = null
         clearTimer()
-        if (!isLongPressRef.current) return
+        if (!heldRef.current) return
+        heldRef.current = false
         suppressClickRef.current = true
-        isLongPressRef.current = false
-        onLongPressEnd()
+        onHoldEnd()
     }
 
-    const handlePointerAbort = () => {
+    // A tap acts on `click`, not on pointer up: acting on pointer up swaps in
+    // the locked bar first, and the browser's click then lands on whatever
+    // now sits under the finger, which is the switch-to-text button.
+    const handleClick = () => {
+        if (suppressClickRef.current) {
+            suppressClickRef.current = false
+            return
+        }
+        onTap()
+    }
+
+    const handlePointerCancel = (event: PointerEvent<HTMLButtonElement>) => {
+        if (event.pointerId !== pointerRef.current) return
+        pointerRef.current = null
         clearTimer()
-        if (!isLongPressRef.current) return
-        isLongPressRef.current = false
-        onLongPressEnd()
+        if (!heldRef.current) return
+        heldRef.current = false
+        onHoldEnd()
     }
 
     const handleKeyDown = (event: KeyboardEvent<HTMLButtonElement>) => {
@@ -638,34 +790,232 @@ function PrimaryActionButton({
     }
 
     return (
-        <button
-            type="button"
-            aria-label={micLabel}
-            className={cn(className, 'touch-none select-none')}
-            onClick={() => {
-                if (suppressClickRef.current) {
-                    suppressClickRef.current = false
-                    return
-                }
-                onTap()
-            }}
-            onPointerDown={handlePointerDown}
-            onPointerUp={handlePointerUp}
-            onPointerCancel={handlePointerAbort}
-            onPointerLeave={handlePointerAbort}
-            onKeyDown={handleKeyDown}
-            onContextMenu={(event) => event.preventDefault()}
+        <div className="relative shrink-0">
+            {holding && <LockPill drag={holdDrag} />}
+            <button
+                type="button"
+                aria-label={t.voice.startTalking}
+                className={cn(
+                    base,
+                    'touch-none transition-transform duration-150 select-none',
+                    holding && 'scale-[1.45] shadow-level-3',
+                )}
+                onClick={handleClick}
+                onPointerDown={handlePointerDown}
+                onPointerMove={handlePointerMove}
+                onPointerUp={handlePointerUp}
+                onPointerCancel={handlePointerCancel}
+                onKeyDown={handleKeyDown}
+                onContextMenu={(event) => event.preventDefault()}
+            >
+                {showSpinner ? (
+                    <CircularProgress isIndeterminate size="xs" />
+                ) : (
+                    <Icon name="mic" filled size={24} />
+                )}
+            </button>
+        </div>
+    )
+}
+
+function LockPill({ drag }: { drag: number }) {
+    const locked = -drag / LOCK_DISTANCE > 0.6
+    return (
+        <div
+            aria-hidden
+            className="absolute bottom-[calc(100%+24px)] left-1/2 flex flex-col items-center gap-1.5 rounded-full bg-surface-container-high px-2 py-2.5 text-on-surface-variant shadow-level-2"
+            style={{ transform: `translate(-50%, ${drag * 0.6}px)` }}
         >
-            {isConnecting && !isMicCaptureActive ? (
+            <Icon name={locked ? 'lock' : 'lock_open'} size={22} />
+            <Icon name="keyboard_arrow_up" size={22} />
+        </div>
+    )
+}
+
+// Recording strip
+
+/**
+ * The left side of the bar while the mic is open. One component for both the
+ * hold and the locked layouts, at the same place in the tree, so the timer
+ * keeps counting when a hold turns into a lock.
+ */
+function RecordingStrip({
+    variant,
+    phase,
+    level,
+}: {
+    variant: 'holding' | 'locked'
+    phase: MicPhase
+    level: number
+}) {
+    const t = useT()
+    const listening = phase === 'listening'
+    return (
+        <div
+            className={cn(
+                'flex h-12 min-w-0 items-center gap-2.5',
+                variant === 'holding'
+                    ? 'rounded-3xl bg-surface-container-high px-4'
+                    : 'px-2',
+            )}
+        >
+            {variant === 'locked' && phase === 'opening' ? (
                 <CircularProgress isIndeterminate size="xs" />
-            ) : (
+            ) : variant === 'holding' ? (
                 <Icon
-                    name={showMutedStyle ? 'mic_off' : 'mic'}
+                    name="mic"
                     filled
-                    size={26}
+                    size={20}
+                    className={cn(
+                        'shrink-0',
+                        listening
+                            ? 'text-error motion-safe:animate-pulse'
+                            : 'text-on-surface-variant',
+                    )}
+                />
+            ) : (
+                <span
+                    className={cn(
+                        'size-2.5 shrink-0 rounded-full',
+                        listening
+                            ? 'bg-error motion-safe:animate-pulse'
+                            : 'bg-on-surface-variant',
+                    )}
                 />
             )}
-        </button>
+            <RecordingTimer running={listening} />
+            {variant === 'holding' ? (
+                <span className="ml-auto flex min-w-0 items-center gap-1 text-on-surface-variant">
+                    <Icon name="keyboard_arrow_up" size={18} />
+                    <span className="m3-body-medium truncate">
+                        {t.voice.slideToLock}
+                    </span>
+                </span>
+            ) : (
+                <Waveform level={level} running={listening} />
+            )}
+        </div>
+    )
+}
+
+function RecordingTimer({ running }: { running: boolean }) {
+    const accumulatedRef = useRef(0)
+    const [seconds, setSeconds] = useState(0)
+
+    useEffect(() => {
+        if (!running) return
+        const startedAt = Date.now()
+        const id = window.setInterval(() => {
+            setSeconds(
+                Math.floor(
+                    (accumulatedRef.current + Date.now() - startedAt) / 1000,
+                ),
+            )
+        }, 250)
+        return () => {
+            window.clearInterval(id)
+            accumulatedRef.current += Date.now() - startedAt
+        }
+    }, [running])
+
+    return (
+        <span className="m3-body-large shrink-0 text-on-surface tabular-nums">
+            {Math.floor(seconds / 60)}:{String(seconds % 60).padStart(2, '0')}
+        </span>
+    )
+}
+
+/** The last few seconds of mic level, newest on the right. */
+function Waveform({ level, running }: { level: number; running: boolean }) {
+    const levelRef = useRef(level)
+    const [levels, setLevels] = useState<number[]>(() =>
+        Array.from({ length: WAVEFORM_BARS }, () => 0),
+    )
+
+    useEffect(() => {
+        levelRef.current = level
+    }, [level])
+
+    useEffect(() => {
+        if (!running) return
+        const id = window.setInterval(() => {
+            setLevels((prev) => [...prev.slice(1), levelRef.current])
+        }, 100)
+        return () => window.clearInterval(id)
+    }, [running])
+
+    return (
+        <div
+            aria-hidden
+            className="flex h-8 min-w-0 flex-1 items-center justify-end gap-[3px] overflow-hidden"
+        >
+            {levels.map((value, i) => (
+                <span
+                    key={i}
+                    className="w-[3px] shrink-0 rounded-full bg-on-surface-variant"
+                    style={{ height: Math.max(3, Math.round(value * 32)) }}
+                />
+            ))}
+        </div>
+    )
+}
+
+// Locked controls
+
+function LockedControls({
+    paused,
+    canPause,
+    canResume,
+    onPause,
+    onResume,
+    onSwitchToText,
+}: {
+    paused: boolean
+    canPause: boolean
+    canResume: boolean
+    onPause: () => void
+    onResume: () => void
+    onSwitchToText: () => void
+}) {
+    const t = useT()
+    const pill =
+        'm3-label-large m3-state-layer flex h-12 flex-1 cursor-pointer items-center justify-center gap-2 rounded-full disabled:cursor-default disabled:opacity-40'
+    return (
+        <div className="flex items-center gap-2">
+            {paused ? (
+                <button
+                    type="button"
+                    onClick={onResume}
+                    disabled={!canResume}
+                    className={cn(pill, 'bg-primary text-on-primary')}
+                >
+                    <Icon name="mic" filled size={20} />
+                    {t.voice.resume}
+                </button>
+            ) : (
+                <button
+                    type="button"
+                    onClick={onPause}
+                    disabled={!canPause}
+                    className={cn(
+                        pill,
+                        'bg-surface-container-highest text-on-surface',
+                    )}
+                >
+                    <Icon name="pause" filled size={20} />
+                    {t.voice.pause}
+                </button>
+            )}
+            <button
+                type="button"
+                onClick={onSwitchToText}
+                aria-label={t.voice.switchToText}
+                title={t.voice.switchToText}
+                className="m3-state-layer grid size-12 shrink-0 cursor-pointer place-items-center rounded-full bg-primary-container text-on-primary-container"
+            >
+                <Icon name="chat" filled size={24} />
+            </button>
+        </div>
     )
 }
 
@@ -685,6 +1035,9 @@ export function Add() {
      * trip must not be a window where the chat has no visible way to report.
      */
     const showReportButton = flags?.agentReportButton ?? true
+    const suggestionsEnabled = flags?.agentPromptSuggestions ?? false
+    const promptSuggestions = usePromptSuggestions(suggestionsEnabled)
+    const formatLocale = useFormatLocale()
     const [reportTarget, setReportTarget] = useState<ReportTarget | null>(null)
     const [reportSession, setReportSession] = useState<{
         sessionId?: string
@@ -693,6 +1046,13 @@ export function Add() {
 
     const [text, setText] = useState('')
     const isComposing = text.trim().length > 0
+    const composerRef = useRef<HTMLTextAreaElement>(null)
+
+    const [handsFree, setHandsFree] = useState(false)
+    const [holding, setHolding] = useState(false)
+    const [paused, setPaused] = useState(false)
+    const [openingMic, setOpeningMic] = useState(false)
+    const [holdDrag, setHoldDrag] = useState(0)
 
     // Native's `screen_attached` / `screen_detached`, with the same effects:
     // leaving mutes the mic and interrupts the answer in flight, and keeps
@@ -704,17 +1064,25 @@ export function Add() {
         return detach
     }, [attach, detach])
 
-    const status: 'idle' | 'connecting' | 'connected' = voice.isConnected
-        ? 'connected'
-        : voice.isConnecting
-          ? 'connecting'
-          : 'idle'
-
-    // Mirrors `_isMicEffectivelyMuted`: nothing reaches the model unless
-    // capture is running, the user has the mic on, and they are not typing.
-    const isMicMuted =
-        !voice.isMicCaptureActive || !voice.isMicOn || isComposing
-    const showLevel = voice.isMicCaptureActive && !isMicMuted
+    // Mirrors native's `_MicPhase` and `_BarMode`: derived from the session's
+    // own mic state, so a failed open or a dropped capture hides the bar.
+    const isListening =
+        voice.isMicCaptureActive && voice.isMicOn && !isComposing
+    const phase: MicPhase = paused
+        ? 'paused'
+        : isListening
+          ? 'listening'
+          : openingMic || (voice.isConnecting && (handsFree || holding))
+            ? 'opening'
+            : 'idle'
+    const barMode: BarMode = holding
+        ? 'holding'
+        : paused ||
+            voice.isMicCaptureActive ||
+            openingMic ||
+            (handsFree && voice.isConnecting)
+          ? 'locked'
+          : 'composer'
 
     const bottomRef = useRef<HTMLDivElement>(null)
     useEffect(() => {
@@ -793,7 +1161,7 @@ export function Add() {
             return
         }
         if (!voice.isMicCaptureActive) {
-            void voice.openMic({ turnOn: true })
+            openMic()
             return
         }
         voice.setMicOn(!voice.isMicOn)
@@ -806,7 +1174,7 @@ export function Add() {
             return
         }
         if (!voice.isMicCaptureActive) {
-            void voice.openMic({ turnOn: true })
+            openMic()
             return
         }
         voice.setMicOn(true)
@@ -816,11 +1184,85 @@ export function Add() {
         voice.setMicOn(false)
     }
 
-    const micLabel = !voice.isConnected
-        ? t.voice.startConversation
-        : isMicMuted
-          ? t.voice.unmute
-          : t.voice.mute
+    /** `voice.openMic`, tracked so the bar can show it opening. */
+    const openMic = () => {
+        setOpeningMic(true)
+        void voice.openMic({ turnOn: true }).finally(() => setOpeningMic(false))
+    }
+
+    // The controls of the welcome view and the recording bar. They only drive
+    // the UI state and delegate every microphone action to the handlers above.
+
+    const handleMicPress = () => {
+        if (isComposing) return
+        if (!voice.isConnecting) {
+            setHandsFree(true)
+            setPaused(false)
+        }
+        handleTap()
+    }
+
+    const handleHoldStart = () => {
+        if (voice.isConnecting || isComposing) return
+        setHoldDrag(0)
+        setHolding(true)
+        setPaused(false)
+        handleLongPressStart()
+    }
+
+    const handleHoldMove = (dy: number) => {
+        if (!holding) return
+        setHoldDrag(Math.max(-LOCK_DISTANCE, Math.min(0, dy)))
+        if (dy > -LOCK_DISTANCE) return
+        setHolding(false)
+        setHandsFree(true)
+    }
+
+    const handleHoldEnd = () => {
+        if (!holding) return
+        setHolding(false)
+        handleLongPressEnd()
+    }
+
+    const handlePause = () => {
+        setPaused(true)
+        handleTap()
+    }
+
+    const handleResume = () => {
+        setPaused(false)
+        handleTap()
+    }
+
+    const handleSwitchToText = () => {
+        const micOn =
+            voice.isConnecting || (voice.isMicCaptureActive && voice.isMicOn)
+        setHandsFree(false)
+        setPaused(false)
+        if (micOn) handleTap()
+    }
+
+    const handleComposerSend = () => {
+        setHandsFree(false)
+        handleSend()
+    }
+
+    const handleEnd = () => {
+        setHandsFree(false)
+        setHolding(false)
+        setPaused(false)
+        voice.disconnect()
+    }
+
+    const handleSuggestion = (suggestion: string) => {
+        handleTextChange(suggestion)
+        composerRef.current?.focus()
+    }
+
+    const suggestions = promptSuggestions.map((s) => ({
+        key: promptSuggestionKey(s),
+        text: suggestionText(t, formatLocale, s),
+    }))
 
     return (
         <>
@@ -847,18 +1289,14 @@ export function Add() {
                                     }
                                 />
                             )}
-                        {voice.isConnected ? (
+                        {voice.isConnected && (
                             <IconButton
                                 aria-label={t.voice.endSession}
-                                onPress={voice.disconnect}
+                                onPress={handleEnd}
                                 className="text-error"
                             >
                                 <Icon name="call_end" filled />
                             </IconButton>
-                        ) : (
-                            <div className="pr-2">
-                                <StatusPill status={status} />
-                            </div>
                         )}
                         <MenuButton
                             label={
@@ -896,7 +1334,14 @@ export function Add() {
 
             <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-4 py-6">
                 {voice.messages.length === 0 ? (
-                    <EmptyState isConnecting={voice.isConnecting} />
+                    <WelcomeView
+                        phase={phase}
+                        level={voice.micLevel}
+                        suggestions={suggestions}
+                        onSuggestion={handleSuggestion}
+                        onStart={handleMicPress}
+                        startDisabled={isComposing}
+                    />
                 ) : (
                     voice.messages.map((m) => (
                         <MessageView
@@ -911,38 +1356,64 @@ export function Add() {
                 <div ref={bottomRef} aria-hidden className="h-0" />
             </div>
 
-            {/* Control bar — composer plus one primary action, as on native */}
-            <div className="shrink-0 bg-surface-container px-3 pt-2 pb-3">
-                <div className="mx-auto flex max-w-2xl flex-col gap-2.5">
-                    {showLevel && (
-                        <div className="h-1 overflow-hidden rounded-full bg-surface-container-highest">
-                            <div
-                                className="h-full bg-primary transition-all duration-75"
-                                style={{
-                                    width: `${Math.round(voice.micLevel * 100)}%`,
-                                }}
-                            />
-                        </div>
-                    )}
-
+            <div className="shrink-0 bg-surface px-3 py-2">
+                <div className="mx-auto flex max-w-2xl flex-col gap-2">
+                    {voice.messages.length === 0 &&
+                        barMode === 'composer' &&
+                        phase === 'idle' &&
+                        !isComposing && <HoldHint />}
                     <div className="flex items-end gap-2">
-                        <Composer
-                            value={text}
-                            onChange={handleTextChange}
-                            onSend={handleSend}
-                        />
-                        <PrimaryActionButton
-                            isConnecting={voice.isConnecting}
-                            isMicCaptureActive={voice.isMicCaptureActive}
-                            isMicMuted={isMicMuted}
-                            hasText={isComposing}
-                            micLabel={micLabel}
-                            onTap={handleTap}
-                            onLongPressStart={handleLongPressStart}
-                            onLongPressEnd={handleLongPressEnd}
-                            onSend={handleSend}
-                        />
+                        <div className="min-w-0 flex-1">
+                            {barMode === 'composer' ? (
+                                <Composer
+                                    value={text}
+                                    onChange={handleTextChange}
+                                    onSend={handleComposerSend}
+                                    inputRef={composerRef}
+                                />
+                            ) : (
+                                <RecordingStrip
+                                    variant={
+                                        barMode === 'holding'
+                                            ? 'holding'
+                                            : 'locked'
+                                    }
+                                    phase={phase}
+                                    level={voice.micLevel}
+                                />
+                            )}
+                        </div>
+                        {barMode !== 'locked' && (
+                            <MicButton
+                                holding={barMode === 'holding'}
+                                showSpinner={
+                                    voice.isConnecting &&
+                                    !voice.isMicCaptureActive
+                                }
+                                hasText={isComposing}
+                                holdDrag={holdDrag}
+                                onTap={handleMicPress}
+                                onSend={handleComposerSend}
+                                onHoldStart={handleHoldStart}
+                                onHoldMove={handleHoldMove}
+                                onHoldEnd={handleHoldEnd}
+                            />
+                        )}
                     </div>
+                    {barMode === 'locked' && (
+                        <LockedControls
+                            paused={phase === 'paused'}
+                            canPause={
+                                voice.isConnected &&
+                                voice.isMicCaptureActive &&
+                                voice.isMicOn
+                            }
+                            canResume={!voice.isConnecting && !openingMic}
+                            onPause={handlePause}
+                            onResume={handleResume}
+                            onSwitchToText={handleSwitchToText}
+                        />
+                    )}
                 </div>
             </div>
         </>

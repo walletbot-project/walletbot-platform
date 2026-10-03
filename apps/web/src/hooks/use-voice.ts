@@ -625,6 +625,15 @@ export function useVoice(opts: UseVoiceOpts) {
                 }
                 microphoneRef.current = microphone
                 micCaptureActiveRef.current = true
+                // The picker shows the mic that is recording, not just the
+                // one that was asked for.
+                if (
+                    microphone.deviceId &&
+                    microphone.deviceId !== selectedDeviceIdRef.current
+                ) {
+                    selectedDeviceIdRef.current = microphone.deviceId
+                    setSelectedDeviceId(microphone.deviceId)
+                }
                 setIsMicCaptureActive(true)
                 setMicOn(turnOn)
                 recordMute('mic_capture_started')

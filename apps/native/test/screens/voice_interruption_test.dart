@@ -73,7 +73,6 @@ void main() {
       );
       expect(find.textContaining('WebSocket error'), findsNothing);
       expect(find.textContaining('Reconnect failed'), findsNothing);
-      expect(find.text('connecting'), findsOneWidget);
 
       command.emit(VoiceConnectedEvent());
       await tester.pump();
@@ -91,7 +90,6 @@ void main() {
     final command = _ActiveVoiceCommand(connected: false);
     await tester.pumpWidget(_voiceApp(command));
 
-    expect(find.text('connecting'), findsOneWidget);
     expect(
       find.text('Connection lost. Reconnecting automatically…'),
       findsOneWidget,
@@ -100,7 +98,6 @@ void main() {
     await tester.pumpWidget(_voiceApp(command, locale: const Locale('es')));
     await tester.pump();
 
-    expect(find.text('conectando'), findsOneWidget);
     expect(
       find.text('Se perdió la conexión. Reconectando automáticamente…'),
       findsOneWidget,

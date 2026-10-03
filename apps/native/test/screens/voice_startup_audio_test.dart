@@ -75,7 +75,7 @@ void main() {
       ),
     );
     await tester.pump();
-    await tester.tap(find.byIcon(Icons.mic_rounded));
+    await tester.tap(find.text('Start talking'));
     await tester.pump();
     await tester.pump();
     expect(captureCalls, ['listen']);
@@ -101,7 +101,7 @@ void main() {
       await chunk(tester, [1, 0]);
       await chunk(tester, [2, 0]);
       expect(command.audio, isEmpty);
-      expect(find.byType(LinearProgressIndicator), findsOneWidget);
+      expect(find.text("I'm listening"), findsOneWidget);
       command.ready();
       await tester.pump();
       await chunk(tester, [3, 0]);
@@ -142,7 +142,7 @@ void main() {
         ),
       );
       await tester.pump();
-      await tester.tap(find.byIcon(Icons.mic_rounded));
+      await tester.tap(find.text('Start talking'));
       await tester.pump();
       binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
       binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
@@ -175,14 +175,7 @@ void main() {
     variant: TargetPlatformVariant.only(TargetPlatform.android),
   );
 
-  for (final cancel in [
-    'tap',
-    'background',
-    'error',
-    'overflow',
-    'text',
-    'leave',
-  ]) {
+  for (final cancel in ['tap', 'background', 'error', 'overflow', 'leave']) {
     testWidgets(
       '$cancel discards startup audio and prevents late capture restart',
       (tester) async {
@@ -191,7 +184,7 @@ void main() {
         await chunk(tester, [1, 0]);
         switch (cancel) {
           case 'tap':
-            await tester.tap(find.byIcon(Icons.mic_rounded));
+            await tester.tap(find.byTooltip('Switch to text'));
           case 'background':
             binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
           case 'error':
@@ -200,8 +193,6 @@ void main() {
             );
           case 'overflow':
             await chunk(tester, List.filled(160000, 0));
-          case 'text':
-            await tester.enterText(find.byType(TextField), 'hello');
           case 'leave':
             await tester.pumpWidget(const SizedBox());
         }

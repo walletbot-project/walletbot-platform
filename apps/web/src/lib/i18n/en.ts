@@ -679,9 +679,6 @@ export const en: Messages = {
 
     voice: {
         title: 'Talk to Gaston',
-        statusIdle: 'idle',
-        statusConnecting: 'connecting',
-        statusConnected: 'connected',
         speaking: 'Speaking',
         you: 'You',
         agent: 'Gaston',
@@ -690,17 +687,56 @@ export const en: Messages = {
         toolRunning: 'Running',
         toolDone: 'Done',
         toolCancelled: 'Cancelled',
-        connectingEllipsis: 'Connecting…',
-        tapToStart: 'Tap the mic or type a message to start',
         microphone: 'Microphone',
-        mute: 'Mute',
-        unmute: 'Unmute',
         connect: 'Connect',
         disconnect: 'Disconnect',
-        startConversation: 'Start a conversation',
         endSession: 'End session',
         typeMessage: 'Type a message…',
         send: 'Send',
+        welcomeTitle: 'How can I help?',
+        welcome: 'Tell me about an expense or ask about your accounts',
+        startTalking: 'Start talking',
+        holdHint: 'Hold to talk',
+        preparingMic: 'Getting the mic ready',
+        listening: "I'm listening",
+        micPaused: 'Mic paused',
+        slideToLock: 'Slide up to lock',
+        pause: 'Pause',
+        resume: 'Resume',
+        switchToText: 'Switch to text',
+        suggestions: {
+            logExpense: (p: { amount: string; category: string }) =>
+                `I spent ${p.amount} on ${p.category}`,
+            logExpenseWithAccount: (p: {
+                amount: string
+                category: string
+                account: string
+            }) => `I spent ${p.amount} on ${p.category} with ${p.account}`,
+            spentInCategoryThisMonth: (p: { category: string }) =>
+                `How much did I spend on ${p.category} this month?`,
+            accountBalance: (p: { account: string }) =>
+                `How much do I have in ${p.account}?`,
+            topSpendingThisMonth: 'What did I spend the most on this month?',
+            compareCategoryLastMonth: (p: { category: string }) =>
+                `Did I spend more on ${p.category} than last month?`,
+            transfer: (p: {
+                amount: string
+                account: string
+                toAccount: string
+            }) => `I moved ${p.amount} from ${p.account} to ${p.toAccount}`,
+            logIncome: (p: { amount: string; account: string }) =>
+                `I got paid ${p.amount} into ${p.account}`,
+            spentWithTag: (p: { tag: string }) =>
+                `How much did I spend tagged ${p.tag}?`,
+            recentExpenses: 'What were my latest expenses?',
+            whatCanYouDo: 'What can you do?',
+            createCashAccount: 'Create a cash account',
+            setupCategories: 'Help me set up my categories',
+            howToLogExpense: 'How do I record an expense?',
+            homeWidget: "Add a Home widget with this month's spending",
+            homeWidgetForCategory: (p: { category: string }) =>
+                `Add a Home widget with my spending on ${p.category}`,
+        },
         systemConnecting: 'Connecting…',
         systemTokenReceived: (p) => `Token received for ${p.model}`,
         systemSocketError: 'WebSocket error',

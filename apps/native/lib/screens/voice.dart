@@ -9,12 +9,16 @@ import 'package:app/app_config/app_config_controller.dart';
 import 'package:app/app_config/client_info.dart';
 import 'package:app/components/voice/ai_consent_sheet.dart';
 import 'package:app/components/voice/report_response_sheet.dart';
+import 'package:app/data/data.dart';
 import 'package:app/l10n/l10n.dart';
 import 'package:app/legal/ai_consent_controller.dart';
+import 'package:flutter_svg/flutter_svg.dart';
+import 'package:intl/intl.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:provider/provider.dart';
 
 import '../voice/mic_capture.dart';
+import '../voice/prompt_suggestions.dart';
 import '../voice/voice_event.dart';
 import '../voice/voice_expense_command.dart';
 import 'voice_action_widget.dart';
@@ -23,6 +27,8 @@ import 'voice_action_widget.dart';
 /// the session by sending a text message. Hardcoded for now; future work will
 /// expose this as a user-configurable preference.
 const bool _kRespondToTextWithAudio = false;
+
+const double _kLockDistance = 80;
 
 enum _SessionMode { audio, text }
 
@@ -79,6 +85,14 @@ class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
   bool _conversationRestored = false;
   bool _aiConsentAsked = false;
   double _level = 0;
+
+  bool _handsFree = false;
+  bool _holding = false;
+  bool _paused = false;
+  final ValueNotifier<double> _holdDrag = ValueNotifier(0);
+  final GlobalKey _recordingTimerKey = GlobalKey();
+  List<PromptSuggestion>? _suggestions;
+  bool _suggestionsRequested = false;
 
   bool get _isTextComposing => _textController.text.trim().isNotEmpty;
   bool get _isMicEffectivelyMuted =>
@@ -316,6 +330,7 @@ class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
     _textController.removeListener(_onTextChanged);
     _textController.dispose();
     _textFocusNode.dispose();
+    _holdDrag.dispose();
     super.dispose();
   }
 
@@ -330,6 +345,9 @@ class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
     if (startedComposing && _startupAudio != null) {
       unawaited(_stopMicCapture());
     }
+    // Unreachable for now: the recording bar replaces the text field while
+    // the mic is open, so nobody can start typing with the mic on. Kept on
+    // purpose to turn typing with the mic open back on later. Do not delete.
     if (startedComposing && _isConnected && _micActive) {
       // User started typing while the mic was open: we already stop
       // forwarding audio chunks via _isMicEffectivelyMuted, but the
@@ -395,6 +413,147 @@ class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
     if (wasOn || _micStarting) {
       unawaited(_stopMicCapture());
     }
+  }
+
+  // The controls of the welcome view and the recording bar. They only drive
+  // the UI state and delegate every microphone action to the handlers above.
+
+  void _onMicPressed() {
+    if (_isTextComposing) return;
+    if (!_isStarting) {
+      setState(() {
+        _handsFree = true;
+        _paused = false;
+      });
+    }
+    _handleVoiceTap();
+  }
+
+  void _onHoldStart() {
+    if (_isStarting || _isTextComposing) return;
+    unawaited(HapticFeedback.lightImpact());
+    _holdDrag.value = 0;
+    setState(() {
+      _holding = true;
+      _paused = false;
+    });
+    _handleVoiceLongPressStart();
+  }
+
+  void _onHoldMove(double dy) {
+    if (!_holding) return;
+    _holdDrag.value = dy.clamp(-_kLockDistance, 0);
+    if (dy > -_kLockDistance) return;
+    unawaited(HapticFeedback.mediumImpact());
+    setState(() {
+      _holding = false;
+      _handsFree = true;
+    });
+  }
+
+  void _onHoldEnd() {
+    if (!_holding) return;
+    setState(() => _holding = false);
+    _handleVoiceLongPressEnd();
+  }
+
+  void _onPausePressed() {
+    setState(() => _paused = true);
+    _handleVoiceTap();
+  }
+
+  void _onResumePressed() {
+    setState(() => _paused = false);
+    _handleVoiceTap();
+  }
+
+  void _onStopPressed() {
+    final micOn = _isStarting || (_micActive && _userMicOn);
+    setState(() {
+      _handsFree = false;
+      _paused = false;
+    });
+    if (micOn) _handleVoiceTap();
+  }
+
+  void _onSendPressed() {
+    _handsFree = false;
+    _handleSendText();
+  }
+
+  void _onEndPressed() {
+    setState(() {
+      _handsFree = false;
+      _holding = false;
+      _paused = false;
+    });
+    unawaited(_endConversation());
+  }
+
+  void _applySuggestion(String text) {
+    _textController.value = TextEditingValue(
+      text: text,
+      selection: TextSelection.collapsed(offset: text.length),
+    );
+    _textFocusNode.requestFocus();
+  }
+
+  Future<void> _loadSuggestions() async {
+    final repositories = context.read<AppRepositories?>();
+    if (repositories == null) return;
+    try {
+      final data = await loadSuggestionData(repositories);
+      if (!mounted) return;
+      setState(() => _suggestions = nextPromptSuggestions(data));
+    } catch (error) {
+      debugPrint('[voice] prompt suggestions failed: $error');
+    }
+  }
+
+  String _suggestionText(PromptSuggestion s) {
+    final l10n = context.l10n;
+    String amount() => NumberFormat.decimalPattern(
+      Localizations.localeOf(context).toString(),
+    ).format((s.amountCents ?? 0) / 100);
+    final category = s.category ?? '';
+    final account = s.account ?? '';
+    return switch (s.kind) {
+      PromptSuggestionKind.logExpense =>
+        s.account == null
+            ? l10n.suggestionLogExpense(amount(), category)
+            : l10n.suggestionLogExpenseWithAccount(amount(), category, account),
+      PromptSuggestionKind.spentInCategoryThisMonth =>
+        l10n.suggestionSpentInCategoryThisMonth(category),
+      PromptSuggestionKind.accountBalance => l10n.suggestionAccountBalance(
+        account,
+      ),
+      PromptSuggestionKind.topSpendingThisMonth =>
+        l10n.suggestionTopSpendingThisMonth,
+      PromptSuggestionKind.compareCategoryLastMonth =>
+        l10n.suggestionCompareCategoryLastMonth(category),
+      PromptSuggestionKind.transfer => l10n.suggestionTransfer(
+        amount(),
+        account,
+        s.toAccount ?? '',
+      ),
+      PromptSuggestionKind.logIncome => l10n.suggestionLogIncome(
+        amount(),
+        account,
+      ),
+      PromptSuggestionKind.spentWithTag => l10n.suggestionSpentWithTag(
+        s.tag ?? '',
+      ),
+      PromptSuggestionKind.recentExpenses => l10n.suggestionRecentExpenses,
+      PromptSuggestionKind.whatCanYouDo => l10n.suggestionWhatCanYouDo,
+      PromptSuggestionKind.createCashAccount =>
+        l10n.suggestionCreateCashAccount,
+      PromptSuggestionKind.setupCategories => l10n.suggestionSetupCategories,
+      PromptSuggestionKind.howToLogExpense => l10n.suggestionHowToLogExpense,
+      PromptSuggestionKind.homeWidget =>
+        s.category == null
+            ? l10n.suggestionHomeWidget
+            : l10n.suggestionHomeWidgetForCategory(category),
+    };
   }
 
   // -- Text input -----------------------------------------------------------
@@ -1118,11 +1277,33 @@ class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final status = _isConnected
-        ? _StatusLevel.connected
-        : _isStarting || _isReconnecting
-        ? _StatusLevel.connecting
-        : _StatusLevel.disconnected;
+    final phase = _paused
+        ? _MicPhase.paused
+        : _micActive && _userMicOn
+        ? _MicPhase.listening
+        : _micStarting || (_isStarting && (_handsFree || _holding))
+        ? _MicPhase.opening
+        : _MicPhase.idle;
+    final barMode = _holding
+        ? _BarMode.holding
+        : _paused || _micActive || _micStarting || (_handsFree && _isStarting)
+        ? _BarMode.locked
+        : _BarMode.composer;
+
+    final suggestionsEnabled =
+        context.watch<AppConfigController?>()?.isFlagEnabled(
+          'agentPromptSuggestions',
+        ) ??
+        false;
+    if (suggestionsEnabled && !_suggestionsRequested) {
+      _suggestionsRequested = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) unawaited(_loadSuggestions());
+      });
+    }
+    final suggestions = suggestionsEnabled
+        ? [for (final s in _suggestions ?? const []) _suggestionText(s)]
+        : const <String>[];
 
     // Defaults to shown, both when the controller is absent (tests build this
     // screen bare) and when its config fetch never landed: this is the control
@@ -1142,11 +1323,6 @@ class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
       appBar: AppBar(
         title: Text(context.l10n.liveVoice),
         actions: [
-          if (!_isConnected)
-            Padding(
-              padding: EdgeInsets.only(right: showEndButton ? 0 : 12),
-              child: Center(child: _StatusChip(level: status)),
-            ),
           if (showEndButton)
             Padding(
               padding: const EdgeInsets.only(right: 4),
@@ -1157,7 +1333,7 @@ class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
                     color: theme.colorScheme.error,
                   ),
                   tooltip: context.l10n.endSession,
-                  onPressed: () => unawaited(_endConversation()),
+                  onPressed: _onEndPressed,
                 ),
               ),
             ),
@@ -1179,7 +1355,13 @@ class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
         children: [
           Expanded(
             child: _items.isEmpty
-                ? _EmptyState(isStarting: _isStarting)
+                ? _WelcomeView(
+                    phase: phase,
+                    level: _level,
+                    suggestions: suggestions,
+                    onSuggestion: _applySuggestion,
+                    onStart: _isTextComposing ? null : _onMicPressed,
+                  )
                 : NotificationListener<UserScrollNotification>(
                     onNotification: _handleUserScroll,
                     child: ListView.builder(
@@ -1207,17 +1389,30 @@ class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
                   ),
           ),
           _ControlBar(
-            isStarting: _isStarting,
-            isMicActive: _micActive,
-            isMicMuted: _isMicEffectivelyMuted,
-            isTextComposing: _isTextComposing,
+            mode: barMode,
+            phase: phase,
+            showSpinner: _isStarting && !_micActive && !_isTextComposing,
+            showHoldHint:
+                _items.isEmpty &&
+                barMode == _BarMode.composer &&
+                phase == _MicPhase.idle &&
+                !_isTextComposing,
+            hasText: _isTextComposing,
             level: _level,
+            canPause: _isConnected && _micActive && _userMicOn && !_isStarting,
+            canResume: !_isStarting && !_micStarting,
             textController: _textController,
             textFocusNode: _textFocusNode,
-            onSendText: _handleSendText,
-            onTap: _handleVoiceTap,
-            onLongPressStart: _handleVoiceLongPressStart,
-            onLongPressEnd: _handleVoiceLongPressEnd,
+            recordingTimerKey: _recordingTimerKey,
+            holdDrag: _holdDrag,
+            onSendText: _onSendPressed,
+            onMicTap: _onMicPressed,
+            onHoldStart: _onHoldStart,
+            onHoldMove: _onHoldMove,
+            onHoldEnd: _onHoldEnd,
+            onPause: _onPausePressed,
+            onResume: _onResumePressed,
+            onStop: _onStopPressed,
           ),
         ],
       ),
@@ -1298,7 +1493,9 @@ class _ActionResultItem extends _ChatItem {
 
 enum _SystemKind { info, success, error }
 
-enum _StatusLevel { disconnected, connecting, connected }
+enum _MicPhase { idle, opening, listening, paused }
+
+enum _BarMode { composer, holding, locked }
 
 // =============================================================================
 // Widgets
@@ -1951,82 +2148,222 @@ class _SpeakingDotsState extends State<_SpeakingDots>
   }
 }
 
-class _StatusChip extends StatelessWidget {
-  const _StatusChip({required this.level});
-  final _StatusLevel level;
+class _WelcomeView extends StatelessWidget {
+  const _WelcomeView({
+    required this.phase,
+    required this.level,
+    required this.suggestions,
+    required this.onSuggestion,
+    required this.onStart,
+  });
+
+  final _MicPhase phase;
+  final double level;
+  final List<String> suggestions;
+  final ValueChanged<String> onSuggestion;
+  final VoidCallback? onStart;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final (color, label) = switch (level) {
-      _StatusLevel.connected => (
-        theme.colorScheme.primary,
-        context.l10n.connected,
-      ),
-      _StatusLevel.connecting => (
-        theme.colorScheme.tertiary,
-        context.l10n.connecting,
-      ),
-      _StatusLevel.disconnected => (
-        theme.colorScheme.outline,
-        context.l10n.idle,
-      ),
-    };
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(
-        border: Border.all(color: color),
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (level == _StatusLevel.connecting)
-            SizedBox(
-              width: 10,
-              height: 10,
-              child: CircularProgressIndicator(strokeWidth: 1.5, color: color),
-            )
-          else
-            Container(
-              width: 8,
-              height: 8,
-              decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-            ),
-          const SizedBox(width: 6),
-          Text(label, style: TextStyle(color: color, fontSize: 12)),
-        ],
+    final l10n = context.l10n;
+    final muted = theme.colorScheme.onSurfaceVariant;
+    final Widget content = phase == _MicPhase.idle
+        ? Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 72,
+                height: 72,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.secondaryContainer,
+                  shape: BoxShape.circle,
+                ),
+                child: SvgPicture.asset(
+                  'assets/agent-glyph.svg',
+                  width: 34,
+                  height: 34,
+                  colorFilter: ColorFilter.mode(
+                    theme.colorScheme.onSecondaryContainer,
+                    BlendMode.srcIn,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 20),
+              Text(
+                l10n.voiceWelcomeTitle,
+                textAlign: TextAlign.center,
+                style: theme.textTheme.headlineSmall?.copyWith(
+                  color: theme.colorScheme.onSurface,
+                ),
+              ),
+              const SizedBox(height: 8),
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 320),
+                child: Text(
+                  l10n.voiceWelcome,
+                  textAlign: TextAlign.center,
+                  style: theme.textTheme.bodyMedium?.copyWith(color: muted),
+                ),
+              ),
+              if (suggestions.isNotEmpty) ...[
+                const SizedBox(height: 28),
+                ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 560),
+                  child: Wrap(
+                    alignment: WrapAlignment.center,
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      for (final text in suggestions)
+                        ActionChip(
+                          visualDensity: VisualDensity.compact,
+                          label: Text(text),
+                          onPressed: () => onSuggestion(text),
+                        ),
+                    ],
+                  ),
+                ),
+              ],
+              const SizedBox(height: 28),
+              FilledButton.icon(
+                onPressed: onStart,
+                style: FilledButton.styleFrom(
+                  minimumSize: const Size(0, 56),
+                  padding: const EdgeInsets.symmetric(horizontal: 28),
+                ),
+                icon: const Icon(Icons.mic_rounded),
+                label: Text(l10n.voiceStartTalking),
+              ),
+            ],
+          )
+        : Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _MicOrb(phase: phase, level: level),
+              const SizedBox(height: 16),
+              Text(
+                switch (phase) {
+                  _MicPhase.opening => l10n.voicePreparingMic,
+                  _MicPhase.paused => l10n.voiceMicPaused,
+                  _ => l10n.voiceListening,
+                },
+                style: theme.textTheme.titleMedium?.copyWith(
+                  color: phase == _MicPhase.listening
+                      ? theme.colorScheme.onSurface
+                      : muted,
+                ),
+              ),
+            ],
+          );
+    return LayoutBuilder(
+      builder: (context, constraints) => SingleChildScrollView(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            minHeight: math.max(0, constraints.maxHeight - 32),
+          ),
+          child: Center(child: content),
+        ),
       ),
     );
   }
 }
 
-class _EmptyState extends StatelessWidget {
-  const _EmptyState({required this.isStarting});
-  final bool isStarting;
+class _MicOrb extends StatefulWidget {
+  const _MicOrb({required this.phase, required this.level});
+
+  final _MicPhase phase;
+  final double level;
+
+  @override
+  State<_MicOrb> createState() => _MicOrbState();
+}
+
+class _MicOrbState extends State<_MicOrb> with SingleTickerProviderStateMixin {
+  static const _size = 88.0;
+
+  late final AnimationController _pulse = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 900),
+  );
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _syncPulse();
+  }
+
+  @override
+  void didUpdateWidget(_MicOrb oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _syncPulse();
+  }
+
+  void _syncPulse() {
+    final pulse =
+        widget.phase == _MicPhase.opening &&
+        !MediaQuery.disableAnimationsOf(context);
+    if (pulse && !_pulse.isAnimating) {
+      _pulse.repeat(reverse: true);
+    } else if (!pulse && _pulse.isAnimating) {
+      _pulse
+        ..stop()
+        ..value = 0;
+    }
+  }
+
+  @override
+  void dispose() {
+    _pulse.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            isStarting ? Icons.cloud_sync_rounded : Icons.mic_none_rounded,
-            size: 56,
-            color: theme.colorScheme.onSurfaceVariant,
+    final scheme = Theme.of(context).colorScheme;
+    final paused = widget.phase == _MicPhase.paused;
+    final core = paused
+        ? scheme.surfaceContainerHighest
+        : scheme.primaryContainer;
+    final onCore = paused ? scheme.onSurfaceVariant : scheme.onPrimaryContainer;
+    return SizedBox.square(
+      dimension: _size * 2,
+      child: AnimatedBuilder(
+        animation: _pulse,
+        builder: (context, child) {
+          final halo = switch (widget.phase) {
+            _MicPhase.listening => 1 + widget.level * 0.9,
+            _MicPhase.opening => 1 + _pulse.value * 0.3,
+            _ => 1.0,
+          };
+          return Stack(
+            alignment: Alignment.center,
+            children: [
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 120),
+                width: _size * halo,
+                height: _size * halo,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: core.withValues(alpha: paused ? 0 : 0.45),
+                ),
+              ),
+              child!,
+            ],
+          );
+        },
+        child: Container(
+          width: _size,
+          height: _size,
+          decoration: BoxDecoration(shape: BoxShape.circle, color: core),
+          child: Icon(
+            paused ? Icons.mic_off_rounded : Icons.mic_rounded,
+            size: 40,
+            color: onCore,
           ),
-          const SizedBox(height: 12),
-          Text(
-            isStarting
-                ? context.l10n.connectingPrompt
-                : context.l10n.voiceStartPrompt,
-            style: theme.textTheme.bodyMedium?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -2034,84 +2371,509 @@ class _EmptyState extends StatelessWidget {
 
 class _ControlBar extends StatelessWidget {
   const _ControlBar({
-    required this.isStarting,
-    required this.isMicActive,
-    required this.isMicMuted,
-    required this.isTextComposing,
+    required this.mode,
+    required this.phase,
+    required this.showSpinner,
+    required this.showHoldHint,
+    required this.hasText,
     required this.level,
+    required this.canPause,
+    required this.canResume,
     required this.textController,
     required this.textFocusNode,
+    required this.recordingTimerKey,
+    required this.holdDrag,
     required this.onSendText,
-    required this.onTap,
-    required this.onLongPressStart,
-    required this.onLongPressEnd,
+    required this.onMicTap,
+    required this.onHoldStart,
+    required this.onHoldMove,
+    required this.onHoldEnd,
+    required this.onPause,
+    required this.onResume,
+    required this.onStop,
   });
 
-  final bool isStarting;
-  final bool isMicActive;
-  final bool isMicMuted;
-  final bool isTextComposing;
+  final _BarMode mode;
+  final _MicPhase phase;
+  final bool showSpinner;
+  final bool showHoldHint;
+  final bool hasText;
   final double level;
+  final bool canPause;
+  final bool canResume;
   final TextEditingController textController;
   final FocusNode textFocusNode;
+  final GlobalKey recordingTimerKey;
+  final ValueListenable<double> holdDrag;
   final VoidCallback onSendText;
-  final VoidCallback onTap;
-  final VoidCallback onLongPressStart;
-  final VoidCallback onLongPressEnd;
+  final VoidCallback onMicTap;
+  final VoidCallback onHoldStart;
+  final ValueChanged<double> onHoldMove;
+  final VoidCallback onHoldEnd;
+  final VoidCallback onPause;
+  final VoidCallback onResume;
+  final VoidCallback onStop;
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final showLevel = isMicActive && !isMicMuted;
     return Material(
-      color: theme.colorScheme.surfaceContainer,
+      color: Theme.of(context).colorScheme.surface,
       child: SafeArea(
         top: false,
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (showLevel) ...[
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(999),
-                  child: LinearProgressIndicator(
-                    value: level,
-                    minHeight: 4,
-                    backgroundColor: theme.colorScheme.surfaceContainerHighest,
-                  ),
-                ),
-                const SizedBox(height: 10),
-              ],
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Expanded(
-                    child: _TextComposer(
-                      controller: textController,
-                      focusNode: textFocusNode,
-                      onSend: onSendText,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  _PrimaryActionButton(
-                    isStarting: isStarting,
-                    isMicActive: isMicActive,
-                    isMicMuted: isMicMuted,
-                    hasText: isTextComposing,
-                    onTap: onTap,
-                    onLongPressStart: onLongPressStart,
-                    onLongPressEnd: onLongPressEnd,
-                    onSend: onSendText,
-                  ),
-                ],
-              ),
-            ],
-          ),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          child: mode == _BarMode.locked
+              ? _buildLocked(context)
+              : _buildComposer(context),
         ),
       ),
     );
   }
+
+  Widget _buildComposer(BuildContext context) {
+    final holding = mode == _BarMode.holding;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _HoldHint(visible: showHoldHint && !holding),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            Expanded(
+              child: holding
+                  ? _HoldStrip(
+                      timerKey: recordingTimerKey,
+                      listening: phase == _MicPhase.listening,
+                    )
+                  : _TextComposer(
+                      controller: textController,
+                      focusNode: textFocusNode,
+                      onSend: onSendText,
+                    ),
+            ),
+            const SizedBox(width: 8),
+            _MicButton(
+              holding: holding,
+              showSpinner: showSpinner,
+              hasText: hasText,
+              holdDrag: holdDrag,
+              onTap: hasText ? onSendText : onMicTap,
+              onHoldStart: hasText ? null : onHoldStart,
+              onHoldMove: onHoldMove,
+              onHoldEnd: onHoldEnd,
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildLocked(BuildContext context) {
+    final theme = Theme.of(context);
+    final l10n = context.l10n;
+    final paused = phase == _MicPhase.paused;
+    final listening = phase == _MicPhase.listening;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        SizedBox(
+          height: 40,
+          child: Row(
+            children: [
+              const SizedBox(width: 8),
+              if (phase == _MicPhase.opening)
+                SizedBox.square(
+                  dimension: 12,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                )
+              else
+                _RecordingDot(active: listening),
+              const SizedBox(width: 10),
+              _RecordingTimer(key: recordingTimerKey, running: listening),
+              const SizedBox(width: 16),
+              Expanded(
+                child: _Waveform(level: level, running: listening),
+              ),
+              const SizedBox(width: 8),
+            ],
+          ),
+        ),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            Expanded(
+              child: paused
+                  ? FilledButton.icon(
+                      onPressed: canResume ? onResume : null,
+                      style: FilledButton.styleFrom(
+                        minimumSize: const Size(0, 48),
+                      ),
+                      icon: const Icon(Icons.mic_rounded),
+                      label: Text(l10n.voiceResume),
+                    )
+                  : FilledButton.icon(
+                      onPressed: canPause ? onPause : null,
+                      style: FilledButton.styleFrom(
+                        minimumSize: const Size(0, 48),
+                        backgroundColor:
+                            theme.colorScheme.surfaceContainerHighest,
+                        foregroundColor: theme.colorScheme.onSurface,
+                      ),
+                      icon: const Icon(Icons.pause_rounded),
+                      label: Text(l10n.voicePause),
+                    ),
+            ),
+            const SizedBox(width: 8),
+            IconButton.filled(
+              onPressed: onStop,
+              tooltip: l10n.voiceSwitchToText,
+              style: IconButton.styleFrom(
+                minimumSize: const Size.square(48),
+                backgroundColor: theme.colorScheme.primaryContainer,
+                foregroundColor: theme.colorScheme.onPrimaryContainer,
+              ),
+              icon: const Icon(Icons.chat_rounded),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+/// Points at the composer's mic, so it is clear which mic can be held.
+class _HoldHint extends StatelessWidget {
+  const _HoldHint({required this.visible});
+
+  final bool visible;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!visible) return const SizedBox.shrink();
+    final theme = Theme.of(context);
+    final color = theme.colorScheme.inverseSurface;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Align(
+        alignment: Alignment.centerRight,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            DecoratedBox(
+              decoration: BoxDecoration(
+                color: color,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 8,
+                ),
+                child: Text(
+                  context.l10n.voiceHoldHint,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onInverseSurface,
+                  ),
+                ),
+              ),
+            ),
+            Padding(
+              // Centres the caret on the 48px mic button below.
+              padding: const EdgeInsets.only(right: 18),
+              child: CustomPaint(
+                size: const Size(12, 6),
+                painter: _CaretPainter(color),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _CaretPainter extends CustomPainter {
+  const _CaretPainter(this.color);
+
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    canvas.drawPath(
+      Path()
+        ..lineTo(size.width, 0)
+        ..lineTo(size.width / 2, size.height)
+        ..close(),
+      Paint()..color = color,
+    );
+  }
+
+  @override
+  bool shouldRepaint(_CaretPainter oldDelegate) => oldDelegate.color != color;
+}
+
+class _HoldStrip extends StatelessWidget {
+  const _HoldStrip({required this.timerKey, required this.listening});
+
+  final GlobalKey timerKey;
+  final bool listening;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final muted = theme.colorScheme.onSurfaceVariant;
+    return Container(
+      height: 48,
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerHigh,
+        borderRadius: BorderRadius.circular(24),
+      ),
+      child: Row(
+        children: [
+          _RecordingDot(active: listening, icon: Icons.mic_rounded),
+          const SizedBox(width: 10),
+          _RecordingTimer(key: timerKey, running: listening),
+          const Spacer(),
+          Icon(Icons.keyboard_arrow_up_rounded, size: 18, color: muted),
+          const SizedBox(width: 4),
+          Flexible(
+            child: Text(
+              context.l10n.voiceSlideToLock,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.bodyMedium?.copyWith(color: muted),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _RecordingDot extends StatefulWidget {
+  const _RecordingDot({required this.active, this.icon});
+
+  final bool active;
+  final IconData? icon;
+
+  @override
+  State<_RecordingDot> createState() => _RecordingDotState();
+}
+
+class _RecordingDotState extends State<_RecordingDot>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _blink = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 600),
+  );
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _syncBlink();
+  }
+
+  @override
+  void didUpdateWidget(_RecordingDot oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _syncBlink();
+  }
+
+  void _syncBlink() {
+    final blink = widget.active && !MediaQuery.disableAnimationsOf(context);
+    if (blink && !_blink.isAnimating) {
+      _blink.repeat(reverse: true);
+    } else if (!blink && _blink.isAnimating) {
+      _blink
+        ..stop()
+        ..value = 0;
+    }
+  }
+
+  @override
+  void dispose() {
+    _blink.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final color = widget.active ? scheme.error : scheme.onSurfaceVariant;
+    final icon = widget.icon;
+    return FadeTransition(
+      opacity: Tween(begin: 1.0, end: 0.25).animate(_blink),
+      child: icon == null
+          ? Container(
+              width: 10,
+              height: 10,
+              decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+            )
+          : Icon(icon, size: 20, color: color),
+    );
+  }
+}
+
+class _RecordingTimer extends StatefulWidget {
+  const _RecordingTimer({super.key, required this.running});
+
+  final bool running;
+
+  @override
+  State<_RecordingTimer> createState() => _RecordingTimerState();
+}
+
+class _RecordingTimerState extends State<_RecordingTimer> {
+  final Stopwatch _stopwatch = Stopwatch();
+  Timer? _ticker;
+
+  @override
+  void initState() {
+    super.initState();
+    _sync();
+  }
+
+  @override
+  void didUpdateWidget(_RecordingTimer oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _sync();
+  }
+
+  void _sync() {
+    if (widget.running && !_stopwatch.isRunning) {
+      _stopwatch.start();
+      _ticker = Timer.periodic(
+        const Duration(milliseconds: 250),
+        (_) => setState(() {}),
+      );
+    } else if (!widget.running && _stopwatch.isRunning) {
+      _stopwatch.stop();
+      _ticker?.cancel();
+      _ticker = null;
+    }
+  }
+
+  @override
+  void dispose() {
+    _ticker?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final seconds = _stopwatch.elapsed.inSeconds;
+    return Text(
+      '${seconds ~/ 60}:${(seconds % 60).toString().padLeft(2, '0')}',
+      style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+        fontFeatures: const [FontFeature.tabularFigures()],
+      ),
+    );
+  }
+}
+
+class _Waveform extends StatefulWidget {
+  const _Waveform({required this.level, required this.running});
+
+  final double level;
+  final bool running;
+
+  @override
+  State<_Waveform> createState() => _WaveformState();
+}
+
+class _WaveformState extends State<_Waveform> {
+  static const _capacity = 64;
+
+  List<double> _levels = List.filled(_capacity, 0);
+  Timer? _ticker;
+
+  @override
+  void initState() {
+    super.initState();
+    _sync();
+  }
+
+  @override
+  void didUpdateWidget(_Waveform oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _sync();
+  }
+
+  void _sync() {
+    if (widget.running && _ticker == null) {
+      _ticker = Timer.periodic(const Duration(milliseconds: 100), (_) {
+        setState(() => _levels = [..._levels.skip(1), widget.level]);
+      });
+    } else if (!widget.running && _ticker != null) {
+      _ticker?.cancel();
+      _ticker = null;
+    }
+  }
+
+  @override
+  void dispose() {
+    _ticker?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 32,
+      child: CustomPaint(
+        size: Size.infinite,
+        painter: _WaveformPainter(
+          levels: _levels,
+          color: Theme.of(context).colorScheme.onSurfaceVariant,
+        ),
+      ),
+    );
+  }
+}
+
+class _WaveformPainter extends CustomPainter {
+  const _WaveformPainter({required this.levels, required this.color});
+
+  static const _barWidth = 3.0;
+  static const _gap = 3.0;
+
+  final List<double> levels;
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()..color = color;
+    final count = math.min(
+      levels.length,
+      (size.width / (_barWidth + _gap)).floor(),
+    );
+    final centerY = size.height / 2;
+    for (var i = 0; i < count; i++) {
+      final level = levels[levels.length - 1 - i];
+      final height = math.max(_barWidth, level * size.height);
+      final right = size.width - i * (_barWidth + _gap);
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromLTRB(
+            right - _barWidth,
+            centerY - height / 2,
+            right,
+            centerY + height / 2,
+          ),
+          const Radius.circular(_barWidth / 2),
+        ),
+        paint,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(_WaveformPainter oldDelegate) =>
+      !identical(oldDelegate.levels, levels) || oldDelegate.color != color;
 }
 
 class _TextComposer extends StatelessWidget {
@@ -2147,10 +2909,11 @@ class _TextComposer extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Container(
+      constraints: const BoxConstraints(minHeight: 48),
+      alignment: Alignment.centerLeft,
       decoration: BoxDecoration(
-        color: theme.colorScheme.surface,
+        color: theme.colorScheme.surfaceContainerHigh,
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: theme.colorScheme.outlineVariant),
       ),
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Focus(
@@ -2176,86 +2939,190 @@ class _TextComposer extends StatelessWidget {
   }
 }
 
-class _PrimaryActionButton extends StatelessWidget {
-  const _PrimaryActionButton({
-    required this.isStarting,
-    required this.isMicActive,
-    required this.isMicMuted,
+class _MicButton extends StatefulWidget {
+  const _MicButton({
+    required this.holding,
+    required this.showSpinner,
     required this.hasText,
+    required this.holdDrag,
     required this.onTap,
-    required this.onLongPressStart,
-    required this.onLongPressEnd,
-    required this.onSend,
+    required this.onHoldStart,
+    required this.onHoldMove,
+    required this.onHoldEnd,
   });
 
-  final bool isStarting;
-  final bool isMicActive;
-  final bool isMicMuted;
+  final bool holding;
+  final bool showSpinner;
   final bool hasText;
+  final ValueListenable<double> holdDrag;
   final VoidCallback onTap;
-  final VoidCallback onLongPressStart;
-  final VoidCallback onLongPressEnd;
-  final VoidCallback onSend;
+  final VoidCallback? onHoldStart;
+  final ValueChanged<double> onHoldMove;
+  final VoidCallback onHoldEnd;
+
+  @override
+  State<_MicButton> createState() => _MicButtonState();
+}
+
+/// Press and hold to talk, drag up to lock, tap for hands-free. Raw pointer
+/// events instead of a long-press recognizer: the button's subtree is swapped
+/// for the locked bar while the finger is still down, and every callback here
+/// has to tolerate arriving after that.
+class _MicButtonState extends State<_MicButton> {
+  static const _holdDelay = Duration(milliseconds: 300);
+
+  int? _pointer;
+  Offset _origin = Offset.zero;
+  Timer? _holdTimer;
+  bool _held = false;
+
+  void _onDown(PointerDownEvent event) {
+    if (_pointer != null) return;
+    _pointer = event.pointer;
+    _origin = event.position;
+    _held = false;
+    final onHoldStart = widget.onHoldStart;
+    if (onHoldStart == null) return;
+    _holdTimer = Timer(_holdDelay, () {
+      _holdTimer = null;
+      if (!mounted) return;
+      _held = true;
+      onHoldStart();
+    });
+  }
+
+  void _onMove(PointerMoveEvent event) {
+    if (event.pointer != _pointer || !_held || !mounted) return;
+    widget.onHoldMove(event.position.dy - _origin.dy);
+  }
+
+  void _onUp(PointerUpEvent event) {
+    if (event.pointer != _pointer) return;
+    _pointer = null;
+    _holdTimer?.cancel();
+    _holdTimer = null;
+    if (!mounted) return;
+    if (_held) {
+      _held = false;
+      widget.onHoldEnd();
+    } else {
+      widget.onTap();
+    }
+  }
+
+  void _onCancel(PointerCancelEvent event) {
+    if (event.pointer != _pointer) return;
+    _pointer = null;
+    _holdTimer?.cancel();
+    _holdTimer = null;
+    if (!mounted || !_held) return;
+    _held = false;
+    widget.onHoldEnd();
+  }
+
+  @override
+  void dispose() {
+    _holdTimer?.cancel();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final showMutedStyle = !hasText && isMicActive && isMicMuted;
-
-    final Color bg;
-    final Color fg;
-    final BorderSide border;
-    final double elevation;
-
-    if (showMutedStyle) {
-      bg = Colors.transparent;
-      fg = theme.colorScheme.onSurfaceVariant;
-      border = BorderSide(color: theme.colorScheme.outline, width: 1.5);
-      elevation = 0;
-    } else {
-      bg = theme.colorScheme.primaryContainer;
-      fg = theme.colorScheme.onPrimaryContainer;
-      border = BorderSide.none;
-      elevation = 2;
-    }
-
-    final IconData iconData;
-    if (hasText) {
-      iconData = Icons.arrow_upward_rounded;
-    } else if (showMutedStyle) {
-      iconData = Icons.mic_off_rounded;
-    } else {
-      iconData = Icons.mic_rounded;
-    }
-
-    final button = SizedBox(
-      width: 56,
-      height: 56,
-      child: Material(
-        color: bg,
-        shape: CircleBorder(side: border),
-        elevation: elevation,
-        child: Center(
-          child: isStarting && !isMicActive && !hasText
-              ? SizedBox(
-                  width: 26,
-                  height: 26,
-                  child: CircularProgressIndicator(strokeWidth: 2.5, color: fg),
-                )
-              : Icon(iconData, color: fg, size: 26),
+    final scheme = Theme.of(context).colorScheme;
+    final l10n = context.l10n;
+    final fg = scheme.onPrimaryContainer;
+    return Semantics(
+      button: true,
+      label: widget.hasText ? l10n.voiceSend : l10n.voiceStartTalking,
+      onTap: widget.onTap,
+      child: Listener(
+        onPointerDown: _onDown,
+        onPointerMove: _onMove,
+        onPointerUp: _onUp,
+        onPointerCancel: _onCancel,
+        child: Stack(
+          clipBehavior: Clip.none,
+          alignment: Alignment.center,
+          children: [
+            AnimatedScale(
+              scale: widget.holding ? 1.45 : 1,
+              duration: const Duration(milliseconds: 150),
+              child: SizedBox.square(
+                dimension: 48,
+                child: Material(
+                  color: scheme.primaryContainer,
+                  shape: const CircleBorder(),
+                  elevation: widget.holding ? 3 : 0,
+                  child: Center(
+                    child: widget.showSpinner
+                        ? SizedBox.square(
+                            dimension: 22,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2.5,
+                              color: fg,
+                            ),
+                          )
+                        : Icon(
+                            widget.hasText
+                                ? Icons.arrow_upward_rounded
+                                : Icons.mic_rounded,
+                            color: fg,
+                          ),
+                  ),
+                ),
+              ),
+            ),
+            if (widget.holding)
+              Positioned(bottom: 72, child: _LockPill(drag: widget.holdDrag)),
+          ],
         ),
       ),
     );
+  }
+}
 
-    if (hasText) {
-      return GestureDetector(onTap: onSend, child: button);
-    }
+class _LockPill extends StatelessWidget {
+  const _LockPill({required this.drag});
 
-    return GestureDetector(
-      onTap: onTap,
-      onLongPressStart: (_) => onLongPressStart(),
-      onLongPressEnd: (_) => onLongPressEnd(),
-      child: button,
+  final ValueListenable<double> drag;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return ValueListenableBuilder<double>(
+      valueListenable: drag,
+      builder: (context, offset, _) {
+        final progress = (-offset / _kLockDistance).clamp(0.0, 1.0);
+        return Transform.translate(
+          offset: Offset(0, offset * 0.6),
+          child: Material(
+            color: scheme.surfaceContainerHigh,
+            elevation: 2,
+            borderRadius: BorderRadius.circular(20),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    progress > 0.6
+                        ? Icons.lock_rounded
+                        : Icons.lock_open_rounded,
+                    size: 22,
+                    color: scheme.onSurfaceVariant,
+                  ),
+                  const SizedBox(height: 6),
+                  Icon(
+                    Icons.keyboard_arrow_up_rounded,
+                    size: 22,
+                    color: scheme.onSurfaceVariant,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 }
