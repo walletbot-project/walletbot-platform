@@ -1906,28 +1906,18 @@ export const execute = internalMutation({
                 ),
             )
         }
-        try {
-            const result = await dispatch(
-                ctx,
-                args.userId,
-                args.name,
-                raw,
-                { nowMs: args.nowMs, offsetMinutes: args.utcOffsetMinutes },
-                args.writeKey,
-            )
-            return await finish(result)
-        } catch (error) {
-            // Unexpected throws (a malformed argument via zod's `.parse`, a
-            // failed aggregate write) still roll the transaction back per the
-            // comment above — this only adds telemetry before rethrowing.
-            await recordAgentToolError(ctx, {
-                toolName: args.name,
-                reason:
-                    error instanceof Error && error.name === 'ZodError'
-                        ? 'invalid_args'
-                        : 'unknown',
-            })
-            throw error
-        }
+        // A throw (a malformed argument via zod's `.parse`, a failed aggregate
+        // write) rolls this whole transaction back — any telemetry written
+        // here included — so thrown errors are recorded by the caller,
+        // outside the transaction (`agent/runner.ts`).
+        const result = await dispatch(
+            ctx,
+            args.userId,
+            args.name,
+            raw,
+            { nowMs: args.nowMs, offsetMinutes: args.utcOffsetMinutes },
+            args.writeKey,
+        )
+        return await finish(result)
     },
 })

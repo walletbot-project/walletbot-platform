@@ -23,7 +23,9 @@ export type AgentToolErrorReason =
     | 'provider_error'
     | 'unknown'
 export type InstrumentedFunction = 'sync_push' | 'sync_pull' | 'agent_turn'
-type FunctionStatus = 'ok' | 'error'
+// `rejected`: a refusal returned as data with no writes (`client_outdated`,
+// `cursor_mismatch`); `error`: an exception.
+type FunctionStatus = 'ok' | 'rejected' | 'error'
 
 // Mirrors `agentPricing.ts:costBucket` for a plain duration in ms, at the
 // bucket boundaries `system.function.duration_bucket_count` uses (a wider,
@@ -250,10 +252,11 @@ export const recordAgentReportSubmitted = (
     })
 
 /**
- * `push` is a mutation and can call this directly. `pull` is a query and
- * structurally cannot (no `ctx.db`/`ctx.scheduler`) — pull's errors are
- * instead reported from the native client with the same metric name/
- * attributes and `source: 'native'` (see `apps/native/lib/sync/sync_engine.dart`).
+ * One emitter per direction. `push` is a mutation and is the only emitter of
+ * `direction: 'push'`. `pull` is a query and structurally cannot write (no
+ * `ctx.db`/`ctx.scheduler`), so the native client is the only emitter of
+ * `direction: 'pull'`, with `source: 'native'` (see
+ * `apps/native/lib/sync/sync_engine.dart`).
  */
 export const recordSyncError = (
     ctx: MutationCtx,

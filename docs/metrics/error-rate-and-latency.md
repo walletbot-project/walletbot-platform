@@ -103,19 +103,19 @@ We're not paying for Convex Pro, so Option B is off the table, and Option C
 iteration. First iteration is **total latency only** — no DB/external-API
 breakdown yet:
 
-1. **Errors, targeted (Option A).** Add one new counter,
-   `system.errors.count`, called explicitly at the handful of catch sites that
-   actually answer an open question in the ticket — sync `push`/`pull` and
-   agent tool-call failures. Before that, give those specific throw sites a
-   small closed error code (a shared string union, not `ConvexError` — no
-   precedent for it here and it'd be the only place using it) so the label
-   stays low-cardinality instead of being free text. This directly answers
-   "is Sync healthy?", which today it's impossible to answer without asking a
-   user to reproduce the issue and read `debugPrint` output off their device.
+1. **Errors, targeted (Option A).** Two counters, `sync.errors.count` and
+   `agent.tool.errors.count`, recorded explicitly at the handful of sites
+   that answer an open question in the ticket — sync `push`/`pull` and agent
+   tool-call failures. Those sites carry a small closed error code so the
+   label stays low-cardinality instead of being free text. This directly
+   answers "is Sync healthy?", which today it's impossible to answer without
+   asking a user to reproduce the issue and read `debugPrint` output off
+   their device. A failure that throws inside a Convex transaction rolls back
+   every write in it, telemetry included, so errors are recorded from
+   *outside* the failing transaction — see "Emitters and coverage".
 2. **Backend total latency, also Option A.** Time the same call sites we're
-   already adding error counters to (sync `push`/`pull`, agent turn
-   processing) end-to-end — one `Date.now()` at entry, one at the
-   `try`/`catch`/`finally` exit — and bucket the elapsed ms into
+   already adding error counters to (sync `push`, agent turn processing)
+   end-to-end and bucket the elapsed ms into
    `system.function.duration_bucket_count` the same way
    `agent.session.cost_bucket_count` already buckets cost. This is a handful
    of call sites, not all 98 functions, and needs no exporter changes at all
@@ -123,11 +123,16 @@ breakdown yet:
    "how slow is a sync round / an agent turn," which is most of what the
    ticket actually needs for v1 — it does **not** tell us whether a slow call
    was slow in the DB, in a `fetch` to Gemini, or in our own code, and that's
-   an explicit, accepted gap for this iteration.
+   an explicit, accepted gap for this iteration. **Clock:** inside a query or
+   mutation, `Date.now()` is frozen at the moment the function starts, so
+   subtracting two readings always gives 0 (the first version of `push` did
+   exactly that). `performance.now()` does advance inside mutations, so
+   `push` uses it ([Convex runtimes](https://docs.convex.dev/functions/runtimes)).
+   In actions (`agent_turn`), `Date.now()` advances normally.
 3. **Client latency, native only for now.** Redirect the `Stopwatch` values
    `gemini_voice_expense_command.dart` already computes
-   (`setup_complete`) into `trackMetric(..., type: 'histogram', unit: 'ms')`,
-   and add one new start/end timer pair for time-to-first-response. Web needs
+   (`setup_complete`) into a bucketed counter, and add one new start/end
+   timer pair for time-to-first-response. Web needs
    its own telemetry client built first — track that as a separate ticket, it
    shouldn't block this spike's POC.
 4. **Keep the bucketed-counter pattern** (`agent.session.cost_bucket_count`
@@ -167,76 +172,188 @@ metrics from this iteration point at a slow call site:
 ## Proposed metrics
 
 All new metric names follow the existing `<domain>.<subject>.<verb>_<unit>`
-convention and would be added to `MetricName`/`metricCatalog` like any
+convention and are registered in `MetricName`/`metricCatalog` like any
 existing metric.
 
-| Name | Type | Unit | Labels | Source |
+| Name | Type | Unit | Labels | Emitter |
 |---|---|---|---|---|
-| `sync.errors.count` | counter | count | `direction` (`push`\|`pull`), `reason` (`client_outdated`\|`cursor_mismatch`\|`auth_failure`\|`validation`\|`unknown`), `platform` | backend |
+| `sync.errors.count` | counter | count | `direction` (`push`\|`pull`), `reason` (`client_outdated`\|`cursor_mismatch`\|`auth_failure`\|`validation`\|`unknown`), `platform` | backend for `push`, native for `pull` |
 | `agent.tool.errors.count` | counter | count | `tool_name` (bounded — existing tool registry), `reason` (`invalid_args`\|`not_found`\|`provider_error`\|`unknown`) | backend |
-| `system.function.duration_bucket_count` | counter | count | `function` (`sync_push`\|`sync_pull`\|`agent_turn` — the handful we instrument, not all 98), `bucket` (`0-100`\|`100-250`\|`250-500`\|`500-1000`\|`1000-2500`\|`2500-5000`\|`5000+`), `status` (`ok`\|`error`) | backend |
+| `system.function.duration_bucket_count` | counter | count | `function` (`sync_push`\|`sync_pull`\|`agent_turn` — the handful we instrument, not all 98), `bucket` (`0-100`\|`100-250`\|`250-500`\|`500-1000`\|`1000-2500`\|`2500-5000`\|`5000+`), `status` (`ok`\|`rejected`\|`error`) | backend for `sync_push`/`agent_turn`, native for `sync_pull` |
 | `voice.connect.setup_complete_bucket_count` | counter | count | `bucket` (`0-250`\|`250-500`\|`500-1000`\|`1000-2500`\|`2500-5000`\|`5000+`), `platform`, `resumed` | native (later: web) |
 | `agent.response.first_token_bucket_count` | counter | count | `bucket` (same shape as above), `mode` (`voice`\|`text`), `platform` | native (later: web) |
 
-All four are total-duration/count signals — none of them break a call down
+All of them are total-duration/count signals — none of them break a call down
 into DB time vs. external-API time vs. our own code. That breakdown is
 explicitly deferred (see "Traces, eventually" above).
 
+`status` on `system.function.duration_bucket_count`:
+
+- `ok` — the call did its job.
+- `rejected` — a refusal returned as data, with no writes: `client_outdated`
+  or `cursor_mismatch`. Not a failure of the backend. `cursor_mismatch` in
+  particular is **recoverable**: the client drains pull and retries the same
+  batch, so it measures contention, not breakage.
+- `error` — an exception.
+
+Every `sync_push` call records exactly one duration sample, so the count of
+`sync_push` samples is the push **attempt count**, and the error rate needs
+no separate attempts counter.
+
+## Emitters and coverage
+
+**One emitter per observed operation.** Counting the same event from two
+places and relying on a `metric_source` filter to dedupe is how panels end up
+double-counting, so each operation has a single owner:
+
+| Operation | Errors | Duration | Owner and why |
+|---|---|---|---|
+| Sync push (apply one batch) | `sync.errors.count{direction="push"}` | `sync_push` | **Backend.** It applies the batch, and sees rejections returned as data that an HTTP status would never show. |
+| Sync pull | `sync.errors.count{direction="pull"}` | `sync_pull` | **Native.** `pull` is a Convex query and cannot write. The duration covers the network download **and** the local Drift apply of every page, not backend time alone. |
+| Agent tool call (WhatsApp) | `agent.tool.errors.count` | — | **Backend.** |
+| Agent turn (WhatsApp) | — | `agent_turn` | **Backend.** Model + tools loop only, not queue wait or reply send. |
+| Time to first agent response | — | `agent.response.first_token_bucket_count` | **Native.** `mode` separates text from voice. |
+| Voice connect | — | `voice.connect.setup_complete_bucket_count` | **Native.** |
+
+**Recording errors outside the failing transaction.** A Convex mutation that
+throws rolls back *all* its writes, a telemetry row included, so "catch →
+record metric → rethrow" records nothing. The fix depends on where the
+outer layer is:
+
+- **Push.** `v1/sync/mutations.ts:push` keeps auth, the version floor and the
+  CAS, and applies the batch (counter bump, upserts, tombstones) through
+  `ctx.runMutation(internal.v1.sync.internal.applyPushBatch)`. A nested
+  `runMutation` is a sub-transaction: if it throws, only *its* writes roll
+  back and the caller can catch the error
+  ([docs](https://docs.convex.dev/api/interfaces/server.GenericMutationCtx#runmutation)).
+  `push` then records the error and returns
+  `{ ok: false, error: 'push_failed', reason }` instead of rethrowing. No
+  business write from a failed batch commits, only the telemetry. Validation
+  throws are a `ConvexError` with `kind: 'sync_validation'`, because only a
+  `ConvexError`'s data survives the `runMutation` boundary. Covered by
+  `convex/sync/pushTelemetry.test.ts`.
+  *Contract:* `push_failed` is a new, additive `ok: false` variant. Native
+  binaries from before it treat any unknown `ok: false` as a failed round
+  and retry with backoff, which is exactly what they did for the throw, so
+  no `minSupportedVersion` bump is needed.
+- **Agent tools.** `agent/tools.ts:execute` still records `fail()` results
+  itself (those return normally, so they commit). Throws are recorded by its
+  caller, the `agent/runner.ts` action, via
+  `internal.telemetry.mutations.recordAgentToolErrorInternal`, best effort.
+- **Agent turn.** Already outside any transaction (an action calling
+  `ctx.runMutation`), so it records directly.
+
+**Not recorded yet** (explicit gaps, not oversights):
+
+- **Unauthenticated push.** `requireAuth` throws before anything can be
+  recorded, and turning it into a returned value would change how clients
+  detect an expired session.
+- **Push failures the backend never sees**: network/connection failures
+  before the request lands. If we want them, they belong in a separate
+  client-side metric, not in `sync.errors.count`, so the push count keeps a
+  single emitter.
+- **The reason for thrown tool errors.** They cross the action boundary as
+  `reason: 'unknown'`, including zod argument errors.
+- **WhatsApp paths** (`agent.tool.errors.count`, `agent_turn`) are not
+  reachable from a PR preview. Tertiary priority; they don't block this
+  iteration.
+- **Web**, which has no telemetry client yet.
+
 ### Starter PromQL
 
-**Confirmed against real Grafana Cloud/Mimir data (2026-09-30):** every
-counter listed above lands with a `_total` suffix once OTLP normalizes it to
-a Prometheus name — e.g. `system.function.duration_bucket_count` becomes
-`system_function_duration_bucket_count_total`, not just
-`system_function_duration_bucket_count`. This is standard OTel→Prometheus
-convention for monotonic sums, not something specific to our exporter — it
-almost certainly applies to every pre-existing business counter in
-`docs/observability-grafana.md` too (that doc's PromQL predates this
-verification and should be spot-checked against a real panel). The queries
-below already include the suffix. Also confirmed: these are one-shot,
-non-continuously-scraped pushes (one OTLP POST per event, not a periodic
-scrape), so `increase()`/`rate()` need a wide window (`[1d]`, not `[5m]` or
-`[1h]`) to reliably catch two samples — a short window reliably shows "No
-data" even when the metric exists and exported fine.
+**Names.** Every counter lands in Mimir with a `_total` suffix once OTLP is
+normalized to Prometheus names — `system.function.duration_bucket_count` →
+`system_function_duration_bucket_count_total` (observed in Grafana Cloud on
+2026-09-30).
 
-Sync error rate by reason (last day):
+**Scope.** Every query filters on `deployment_environment="$Scope"`
+(`production`, `development-3`, or `preview` for every PR preview — see
+[`promql.md`](./promql.md#scope)). Without it, dev and preview traffic
+pollutes production numbers.
 
-```promql
-sum by (direction, reason) (increase(sync_errors_count_total[1d]))
-```
+**Function.** These counters are sparse, one sample per event, so
+`increase()` extrapolates: it inflates, returns fractions, or shows
+"No data" when a window has fewer than two samples — exactly the events you
+fire to validate a panel ([`promql.md`](./promql.md#increase-miente-acá)).
+Counts use `count_over_time`, which counts samples, and is exact as long as
+each event is one exported row with its own `receivedAt`. That holds today:
+backend metrics are one insert per event, and native `trackMetric` sends one
+metric per request. `[$__range]` makes the dashboard time picker decide the
+window; replace it with a literal (`[1h]`) when querying outside Grafana.
 
-Sync push/pull "is it healthy" single-stat (errors vs. attempts — would need
-a companion `sync.attempts.count` counter alongside `sync.errors.count` to
-turn this into a rate rather than a raw error count):
+Sync errors by direction and reason:
 
 ```promql
-sum(increase(sync_errors_count_total{reason!="cursor_mismatch"}[1d]))
+sum by (direction, reason) (count_over_time(sync_errors_count_total{deployment_environment="$Scope"}[$__range]))
 ```
 
-Agent tool error rate by tool:
+Push error rate — exceptions over attempts. Rejections (`cursor_mismatch`,
+`client_outdated`) are excluded on purpose; `or vector(0)` turns "no errors"
+into 0 instead of an empty result:
 
 ```promql
-sum by (tool_name, reason) (increase(agent_tool_errors_count_total[1d]))
+(sum(count_over_time(system_function_duration_bucket_count_total{deployment_environment="$Scope", function="sync_push", status="error"}[$__range])) or vector(0))
+/ sum(count_over_time(system_function_duration_bucket_count_total{deployment_environment="$Scope", function="sync_push"}[$__range]))
 ```
 
-Voice connect time distribution (bucketed, not a true percentile — see
-limitation above):
+Push outcomes (ok / rejected / error), for the same window:
 
 ```promql
-sum by (bucket) (increase(voice_connect_setup_complete_bucket_count_total[1d]))
+sum by (status) (count_over_time(system_function_duration_bucket_count_total{deployment_environment="$Scope", function="sync_push"}[$__range]))
 ```
 
-Backend total-latency distribution per instrumented function, and its error
-overlay:
-
-```promql
-sum by (function, bucket) (increase(system_function_duration_bucket_count_total[1d]))
-```
+Agent tool errors by tool:
 
 ```promql
-sum by (function) (increase(system_function_duration_bucket_count_total{status="error"}[1d]))
-/ sum by (function) (increase(system_function_duration_bucket_count_total[1d]))
+sum by (tool_name, reason) (count_over_time(agent_tool_errors_count_total{deployment_environment="$Scope"}[$__range]))
 ```
+
+Latency distribution per instrumented function (bucketed, not a true
+percentile):
+
+```promql
+sum by (function, bucket) (count_over_time(system_function_duration_bucket_count_total{deployment_environment="$Scope"}[$__range]))
+```
+
+Voice connect and time to first response:
+
+```promql
+sum by (bucket, resumed) (count_over_time(voice_connect_setup_complete_bucket_count_total{deployment_environment="$Scope"}[$__range]))
+```
+
+```promql
+sum by (mode, bucket) (count_over_time(agent_response_first_token_bucket_count_total{deployment_environment="$Scope"}[$__range]))
+```
+
+### Grafana validation checklist
+
+To be run with the `walletbot-metrics-doctor` skill
+(`.agents/skills/walletbot-metrics-doctor/`) against the PR preview backend.
+The query script evaluates instant queries, so `[$__range]` is replaced by
+an explicit window covering the trigger. **Nothing below counts as validated
+until its evidence column holds an observed result**; code review alone
+doesn't count.
+
+Environment for every row: PR #296 preview backend
+(`rare-robin-106`, `deployment_environment="preview"`, shared by every
+preview — so check timestamps against the trigger time, not just presence),
+staging APK from the same commit.
+
+| # | Metric | How to trigger | Query (window = since trigger) | Expected | Evidence |
+|---|---|---|---|---|---|
+| 1 | Sync errors (push) | (a) edit any movement → normal push; (b) two devices on one account editing offline, then reconnecting both → `cursor_mismatch`; (c) `validation`: not reachable from a correct client — covered by `pushTelemetry.test.ts` | `sum by (direction, reason) (count_over_time(sync_errors_count_total{deployment_environment="preview"}[1h]))` | (b) ≥1 `{direction="push", reason="cursor_mismatch"}`; (a) adds nothing | Pending |
+| 2 | Sync errors (pull) | Sign the device out server-side (or let the session expire) while it syncs → `auth_failure`; airplane mode mid-pull → `unknown` | same query, `direction="pull"` | ≥1 sample with the matching reason, `metric_source="native"` | Pending |
+| 3 | Tool errors | WhatsApp only — not reachable from the preview | `sum by (tool_name, reason) (count_over_time(agent_tool_errors_count_total{deployment_environment="preview"}[1h]))` | — | **Not verifiable on preview** |
+| 4 | `sync_push` duration | Same as 1(a), N pushes | `sum by (status, bucket) (count_over_time(system_function_duration_bucket_count_total{deployment_environment="preview", function="sync_push"}[1h]))` | N `status="ok"` samples; not every one in `0-100` merely because the clock was frozen | Pending |
+| 5 | `sync_pull` duration | Open the app / pull to refresh | same, `function="sync_pull"` | ≥1 sample per sync round, `metric_source="native"` | Pending |
+| 6 | `agent_turn` duration | WhatsApp only | same, `function="agent_turn"` | — | **Not verifiable on preview** |
+| 7 | Voice connect | Start a voice session on the APK | `sum by (bucket, resumed) (count_over_time(voice_connect_setup_complete_bucket_count_total{deployment_environment="preview"}[1h]))` | 1 sample per connect, `resumed="false"` on a fresh one | Pending |
+| 8 | First response, text | Send a typed message to the agent | `sum by (mode, bucket) (count_over_time(agent_response_first_token_bucket_count_total{deployment_environment="preview"}[1h]))` | 1 `mode="text"` sample per message | Pending |
+| 9 | First response, voice | Speak a turn | same query | 1 `mode="voice"` sample per turn | Pending |
+
+Before reading an empty result as "not emitted", confirm the series name
+with `query.py --series-days 14 '{__name__=~"<prefix>.*"}'` — an instant
+query can be empty while the series exists.
 
 Note these bucketed counters are a distribution shape, not a true cumulative
 Prometheus histogram — `histogram_quantile()` doesn't apply to them. If an
@@ -263,11 +380,11 @@ without redoing what's already implemented.
   metric by call site, same principle Log Streams' `function.path` would have
   given us for free — we just have to name each site by hand instead of
   getting all ~98 automatically.
-- **Is Sync healthy?** Partially answerable now — `sync.errors.count` is
-  implemented and confirmed exporting end-to-end (Grafana Cloud, 2026-09-30).
-  Still a **count**, not a **rate**: without a `sync.attempts.count`
-  denominator (not built, see "Prerequisites" below), you can see error
-  volume trending but not "X% of syncs are failing."
+- **Is Sync healthy?** Partially answerable now. Push and pull each record
+  one duration sample per attempt with an `ok`/`rejected`/`error` status, so
+  "X% of pushes failed" is a query (see "Starter PromQL"), with the coverage
+  gaps listed in "Emitters and coverage". Not yet answered: whether sync
+  *converges correctly* after failures — see "Next iteration".
 
 ## Path to p50/p95/p99 (not yet built)
 
@@ -289,10 +406,10 @@ are **exclusive** ranges (`'100-250'` counts only that range), so
 You can eyeball "most `sync_pull`s land in 100–250ms" from the resulting bar
 chart, but there is no mathematically real p95 hiding in it.
 
-**Why error counts aren't yet an error rate.** `sync.errors.count` and
-`agent.tool.errors.count` have no attempts/total-calls denominator counter.
-Rate = errors / attempts; without the denominator you only get a trend on
-absolute volume.
+**Error rate.** For sync, the duration samples double as the attempt count
+(one per call, with a status), so push and pull already have a rate.
+`agent.tool.errors.count` still has no denominator: there is no "tool calls
+attempted" counter, so tool errors are a trend on absolute volume only.
 
 **Two iteration paths, from the exact call sites already instrumented today**
 (`v1/sync/mutations.ts:push`, `whatsapp/nodeActions.ts:runAgentTurn`,
@@ -326,9 +443,9 @@ either path:
    document holding a bucket-count array that gets read-modified-written).
    Real, separate engineering effort — not a follow-up task, a small project.
 
-**Recommendation if/when this becomes a priority:** Path 1, plus a
-`*.attempts.count` counter at the same call sites for a true error rate.
-Both are additive to what's merged in this PR; Path 2 is a deliberate,
+**Recommendation if/when this becomes a priority:** Path 1, plus a tool-call
+attempts counter for a true tool error rate (sync already has one). Both are
+additive to what's merged in this PR; Path 2 is a deliberate,
 separate scope decision, not an extension of Option A.
 
 ## Prerequisites / follow-up work (not yet created as Linear tickets)
@@ -338,16 +455,23 @@ separate scope decision, not an extension of Option A.
    field on `fail()`/`unresolved()`, stripped before the result reaches the
    model).
 2. ✅ **Done.** `sync.errors.count` + `agent.tool.errors.count` counters,
-   wired at those sites, plus catalog/validator entries. Confirmed exporting
-   end-to-end against a real Grafana Cloud stack (2026-09-30) for the paths
-   reachable outside WhatsApp; `agent.tool.errors.count` and the
-   `agent_turn` case of item 3 remain untested in practice since they're
-   WhatsApp-only and not reachable from an ephemeral PR preview.
+   wired at those sites, plus catalog/validator entries. Errors that throw
+   are recorded outside the failing transaction (see "Emitters and
+   coverage"); the first version recorded them inside it, where the rollback
+   discarded them. An earlier draft of this doc called both "confirmed
+   exporting"; a series lookup on 2026-10-03 (14-day window, which covers
+   that test) found **no `sync_errors_count_total` or
+   `agent_tool_errors_count_total` series at all** — only the duration,
+   voice-connect and first-response series exist, all in `preview`. Neither
+   error counter has been observed in Grafana yet; the "Grafana validation
+   checklist" is the source of truth. WhatsApp-only paths remain unverified.
 3. ✅ **Done.** `system.function.duration_bucket_count`: times sync `push`
-   (backend, mutation) end-to-end, and — because `pull` is a Convex **query**
+   (backend, mutation, with `performance.now()` — `Date.now()` is frozen
+   inside a mutation and always measured 0), and — because `pull` is a Convex **query**
    and structurally cannot write telemetry itself (no `ctx.db`/scheduler) —
    `sync_pull`'s duration is instead reported from the native client
-   (`sync_engine.dart`), source `'native'` instead of `'backend'`. Also times
+   (`sync_engine.dart`), source `'native'` instead of `'backend'`, and
+   includes the download plus the local apply. Also times
    `agent_turn` (the model+tools loop only, not queue/gate time). Total
    latency only, no DB/API breakdown, as scoped.
 4. ✅ **Done.** Redirected native's existing connect-phase `Stopwatch` into
@@ -366,9 +490,32 @@ separate scope decision, not an extension of Option A.
 Two things surfaced only after implementing and testing against a real
 Grafana Cloud stack, not knowable at spike time: every counter above exports
 with a `_total` suffix (standard OTel→Prometheus convention, see "Starter
-PromQL"), and these are sparse one-shot pushes, not scraped series, so
-`increase()`/`rate()` need a wide window (`[1d]`, not `[5m]`) to reliably see
-two samples.
+PromQL"), and these are sparse one-shot pushes, not scraped series. The
+first draft of this doc concluded that `increase()` just needed a wide
+window; that was wrong — on sparse series `increase()` extrapolates and
+miscounts at any window, so counts use `count_over_time` instead (see
+[`promql.md`](./promql.md)).
+
+## Next iteration
+
+Goals for the report, all building on what this PR records:
+
+1. **Backend error rate for applying sync batches**, with successes,
+   rejections and exceptions each counted correctly. This PR gets the
+   counting right for push; the remaining gap is the unauthenticated case
+   and clean dashboard panels.
+2. **p50/p95/p99** for backend batch application (`sync_push`) and for time
+   to first agent response, stating the window and sample count next to
+   every percentile, and taking **batch size** into account — an 80-row
+   batch and a 1-row batch aren't the same operation, so batch size needs to
+   become a label (bucketed) or a separate dimension in the percentile
+   source. See "Path to p50/p95/p99".
+3. **Sync correctness and recovery tests** — that sync converges after
+   `cursor_mismatch`, retries and failed batches — alongside its timings and
+   errors.
+
+Voice connect timing stays, but isn't a report goal. WhatsApp coverage is
+tertiary. Distributed traces aren't required for any of the above.
 
 I haven't created these in Linear yet — want me to file them once you've
 reviewed the recommendation, or adjust scope first?

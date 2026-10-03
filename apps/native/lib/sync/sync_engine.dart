@@ -53,11 +53,11 @@ class SyncEngine extends ChangeNotifier {
 
   final AppDatabase _db;
 
-  // `pull` is a Convex query and cannot write telemetry itself (no
-  // `ctx.db`/scheduler on the backend) — its errors and latency are reported
-  // from here instead, sourced 'native' where the backend's own
-  // `sync.errors.count`/`system.function.duration_bucket_count` are sourced
-  // 'backend' (see docs/metrics/error-rate-and-latency.md).
+  // One emitter per operation (docs/metrics/error-rate-and-latency.md):
+  // push results and timing are recorded by the backend, which applies the
+  // batch. `pull` is a Convex query and cannot write telemetry (no
+  // `ctx.db`/scheduler on the backend), so its errors and timing are
+  // reported only from here, sourced 'native'.
   final TelemetryClient? _telemetry;
 
   /// Null when the app runs without a Convex transport (widget tests). The
@@ -244,14 +244,7 @@ class SyncEngine extends ChangeNotifier {
     return fut;
   }
 
-  // `sync.errors.count` reports need to know which half of the round threw —
-  // pull and push share this one `catch`, so the phase is tracked as we go.
-  String _currentSyncPhase = 'pull';
-
-  void _recordSyncErrorBestEffort({
-    required String direction,
-    required String reason,
-  }) {
+  void _recordPullErrorBestEffort({required String reason}) {
     unawaited(
       _telemetry?.trackMetric(
         'sync.errors.count',
@@ -259,7 +252,7 @@ class SyncEngine extends ChangeNotifier {
         value: 1,
         unit: 'count',
         attributes: {
-          'direction': direction,
+          'direction': 'pull',
           'reason': reason,
           'platform': currentPlatform,
         },
@@ -293,10 +286,8 @@ class SyncEngine extends ChangeNotifier {
       var attempts = 0;
       while (attempts < 5) {
         attempts += 1;
-        _currentSyncPhase = 'pull';
         await _pullDrain();
         await _recompute();
-        _currentSyncPhase = 'push';
         final mismatched = await _pushAllChunks();
         if (!mismatched) break;
       }
@@ -318,11 +309,6 @@ class SyncEngine extends ChangeNotifier {
       debugPrint('sync: backend rejected client as outdated — halting sync');
       _haltForOutdatedClient();
     } catch (e, st) {
-      final reason =
-          e is ConvexFunctionError && e.errorMessage == 'Unauthenticated'
-          ? 'auth_failure'
-          : 'unknown';
-      _recordSyncErrorBestEffort(direction: _currentSyncPhase, reason: reason);
       debugPrint('sync: runOnce failed: $e\n$st');
       _setStatus(SyncStatus.error, error: e);
       _scheduleRetry();
@@ -377,10 +363,11 @@ class SyncEngine extends ChangeNotifier {
 
   // ─── Pull ────────────────────────────────────────────────────────────────
 
-  // Whole-operation timing (one Stopwatch across every page of the drain),
-  // matching how the backend times `sync_push` end-to-end — not per-page,
-  // since `system.function.duration_bucket_count` measures one logical pull,
-  // not one HTTP round trip.
+  // Whole-operation timing (one Stopwatch across every page of the drain) —
+  // not per-page, since `system.function.duration_bucket_count` measures one
+  // logical pull, not one HTTP round trip. Unlike the backend's `sync_push`
+  // (batch application only), this includes the network download and the
+  // local Drift apply of every page.
   Future<void> _pullDrain() async {
     final stopwatch = Stopwatch()..start();
     var status = 'ok';
@@ -408,11 +395,8 @@ class SyncEngine extends ChangeNotifier {
           throw StateError('sync: malformed pull response: $decoded');
         }
         if (decoded['error'] == _clientOutdatedError) {
-          status = 'error';
-          _recordSyncErrorBestEffort(
-            direction: 'pull',
-            reason: 'client_outdated',
-          );
+          status = 'rejected';
+          _recordPullErrorBestEffort(reason: 'client_outdated');
           throw const _ClientOutdatedException();
         }
         final rows = (decoded['rows'] as List).cast<Map<String, Object?>>();
@@ -448,8 +432,15 @@ class SyncEngine extends ChangeNotifier {
       // páginas").
       await _writeLastServerSeq(finalCurrentCounter);
       _lastKnownRemoteCounter = finalCurrentCounter;
-    } catch (_) {
+    } on _ClientOutdatedException {
+      rethrow;
+    } catch (e) {
       status = 'error';
+      _recordPullErrorBestEffort(
+        reason: e is ConvexFunctionError && e.errorMessage == 'Unauthenticated'
+            ? 'auth_failure'
+            : 'unknown',
+      );
       rethrow;
     } finally {
       _recordSyncPullDurationBestEffort(
@@ -667,20 +658,9 @@ class SyncEngine extends ChangeNotifier {
     if (!ok) {
       final err = decoded['error'];
       if (err == _clientOutdatedError) {
-        // Also recorded server-side (`v1/sync/mutations.ts:push`, source
-        // 'backend') — this native-sourced copy is a client-observed
-        // cross-check, not the primary signal.
-        _recordSyncErrorBestEffort(
-          direction: 'push',
-          reason: 'client_outdated',
-        );
         throw const _ClientOutdatedException();
       }
       if (err == 'cursor_mismatch') {
-        _recordSyncErrorBestEffort(
-          direction: 'push',
-          reason: 'cursor_mismatch',
-        );
         final cc = decoded['currentCounter'];
         if (cc is BigInt) _lastKnownRemoteCounter = cc;
         return _PushResult.cursorMismatch();

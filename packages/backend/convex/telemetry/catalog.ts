@@ -253,7 +253,7 @@ export const metricCatalog: Record<
         attributes: {
             function: new Set(['sync_push', 'sync_pull', 'agent_turn']),
             bucket: new Set(DURATION_BUCKETS),
-            status: new Set(['ok', 'error']),
+            status: new Set(['ok', 'rejected', 'error']),
         },
     },
     'voice.connect.setup_complete_bucket_count': {
