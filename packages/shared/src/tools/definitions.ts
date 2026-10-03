@@ -122,6 +122,11 @@ export const toolSchemas = {
     }),
     getAccountBalance: z.object({
         idOrName: idOrName,
+        date: isoOrNaturalDate
+            .optional()
+            .describe(
+                'Optional day to read the balance on, e.g. "2026-08-15" or "el jueves pasado". The balance at the END of that day: every movement of the day counts. Omit for the current balance.',
+            ),
     }),
     createAccount: z.object({
         name: z.string().describe('Display name (e.g. "BBVA", "Efectivo")'),

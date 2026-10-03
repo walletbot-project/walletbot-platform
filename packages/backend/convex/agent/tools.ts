@@ -75,6 +75,7 @@ import { resolveAccount, resolveCategory, resolveTag } from './resolve'
 import {
     formatLocalDateTime,
     hostDateAtLocalWallClock,
+    parseAgentBalanceAsOf,
     parseAgentDate,
     parseAgentDateEndOfDay,
     parseAgentTransactionDate,
@@ -1626,17 +1627,28 @@ const dispatch = async (
             const args = toolSchemas.getAccountBalance.parse(raw)
             const found = await resolveAccount(ctx, userId, args.idOrName)
             if (found.kind !== 'resolved') return unresolved('Account', found)
+            // With a date, the balance at the end of that day in the user's
+            // calendar; without one, the balance right now.
+            const asOfMs =
+                args.date === undefined
+                    ? pastCutoffBigInt(new Date(clock.nowMs))
+                    : parseAgentBalanceAsOf(
+                          args.date,
+                          clock.nowMs,
+                          clock.offsetMinutes,
+                      )
             const balance = await computeAccountBalance(
                 ctx,
                 userId,
                 found.value.id,
-                pastCutoffBigInt(new Date(clock.nowMs)),
+                asOfMs,
             )
             return ok({
                 accountId: found.value.id,
                 accountName: found.value.name,
                 balance: centsToDecimal(balance),
                 currency: found.value.currency,
+                ...(args.date !== undefined ? { date: args.date } : {}),
             })
         }
         case 'createAccount':

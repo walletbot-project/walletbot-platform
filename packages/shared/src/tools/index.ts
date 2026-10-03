@@ -45,7 +45,7 @@ const toolDescriptions = {
     getAccount:
         'Get a single account by UUID or name (case-insensitive). Use it when the context snapshot may be stale or a name is ambiguous — on ambiguity it returns candidates to choose from.',
     getAccountBalance:
-        'Get the current balance of an account in its own currency. Fails with "Account not found" when the id or name resolves to nothing.',
+        'Get the balance of an account in its own currency: the current one, or with `date` the balance at the end of that day (every movement of the day counts; for today it is the current balance; for a future day it includes the movements already scheduled up to then). For a currency total, call it per account and add the results. Fails with "Account not found" when the id or name resolves to nothing.',
     createAccount:
         'Create a new account. Currency is immutable once set and defaults to the user default currency when omitted. Returns the new account id.',
     updateAccount:

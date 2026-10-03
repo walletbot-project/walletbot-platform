@@ -53,6 +53,8 @@ export const AGENT_SKILLS: readonly AgentSkill[] = [
 - That difference stays current on its own. Recording, editing or deleting a movement dated before the adjustment changes the difference so the declared balance still holds; movements dated after it never touch it. Only the first adjustment after a movement absorbs it — a later declaration starts from the earlier one.
 - Movements are placed by their own date and time. One recorded today without a time is placed at the moment it was recorded, so it lands after an adjustment declared earlier today. If the user says it happened before they counted, give it a time before the adjustment.
 - An adjustment's amount and date cannot be edited. To correct a declared balance, record a new balance adjustment.
+- Balance on a day: getAccountBalance with \`date\` returns the balance at the end of that day — every movement of the day counts. For "how much did I have in total", read each account in that currency and add them; never add balances across currencies.
+- A past balance only reflects what was recorded. Money the user never recorded shows up on the date of the next balance adjustment, not spread over the days before it — so a past balance can differ from what the user remembers having. Say so if they question it.
 - Balances are per account, in that account's currency. There is no automatic currency conversion anywhere: totals never mix currencies meaningfully, so keep summaries and numeric widgets scoped to one currency.`,
     },
     {

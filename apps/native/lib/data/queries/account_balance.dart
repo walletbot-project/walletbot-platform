@@ -24,13 +24,23 @@ Expression<bool> _touchesAccount($TransactionsTable t, String accountId) =>
     t.accountId.equals(accountId) |
     (t.type.equals('transfer') & t.toAccountId.equals(accountId));
 
-/// A balance is always "as of" a moment, and the moment is the occurrence
-/// cutoff: a movement scheduled for next month is not money the user has.
-Future<BigInt> computeAccountBalance(AppDatabase db, String accountId) async {
+/// A balance is always "as of" a moment, and by default the moment is the
+/// occurrence cutoff: a movement scheduled for next month is not money the
+/// user has. [asOfMs] reads it at another moment instead — an exclusive upper
+/// bound, like the backend's `computeAccountBalance`.
+Future<BigInt> computeAccountBalance(
+  AppDatabase db,
+  String accountId, {
+  BigInt? asOfMs,
+}) async {
   final rows =
       await (db.select(db.transactions)
             ..where((t) => t.archived.equals(false))
-            ..where((t) => t.date.isSmallerThan(pastCutoffExpression()))
+            ..where(
+              (t) => asOfMs == null
+                  ? t.date.isSmallerThan(pastCutoffExpression())
+                  : t.date.isSmallerThanValue(asOfMs),
+            )
             ..where((t) => _touchesAccount(t, accountId)))
           .get();
   return accountBalanceFromRows(rows, accountId);

@@ -13,6 +13,7 @@ import {
     AGENT_SKILLS,
     AGENT_SKILLS_BY_SLUG,
     backgroundToJson,
+    balanceAsOfMs,
     collapseEmptyRows,
     convertAmount,
     DASHBOARD_WIDTHS,
@@ -79,9 +80,15 @@ export const toolExecutors = {
         async (ctx, args) => {
             const r = await resolveAccount(ctx, args.idOrName)
             if (!r.ok) return resolutionError('Account', r)
+            // With a date, the balance at the end of that day on this
+            // device's calendar; without one, the balance right now.
+            const asOfMs =
+                args.date === undefined
+                    ? pastCutoffBigInt()
+                    : balanceAsOfMs(args.date)
             const balance = await ctx.client.query(
                 api.v1.transactions.queries.balance,
-                { accountId: r.entity.id, asOfMs: pastCutoffBigInt() },
+                { accountId: r.entity.id, asOfMs },
             )
             if (!balance) return { ok: false, error: 'Account not found' }
             return {
@@ -90,6 +97,7 @@ export const toolExecutors = {
                 accountName: r.entity.name,
                 balance: Number(balance.balance) / 100,
                 currency: balance.currency,
+                ...(args.date !== undefined ? { date: args.date } : {}),
             }
         },
     ),

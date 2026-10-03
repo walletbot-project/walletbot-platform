@@ -225,6 +225,7 @@ export type { ToolDefinition, ToolSchema } from './tools/helpers'
 export { SchemaType, zodToToolSchema } from './tools/helpers'
 export type { TransactionTimeStatus } from './tools/parsing'
 export {
+    balanceAsOfMs,
     normalizeName,
     parseAmountToCents,
     parseNaturalDate,

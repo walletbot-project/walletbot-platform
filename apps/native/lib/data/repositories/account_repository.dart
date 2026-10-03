@@ -66,10 +66,11 @@ class AccountRepository extends RepositoryBase {
   Future<Account?> getById(String id) =>
       (db.select(db.accounts)..where((a) => a.id.equals(id))).getSingleOrNull();
 
-  /// Current balance in cents (see `queries/account_balance.dart` for the
-  /// arithmetic, which must stay in lockstep with the sync recompute).
-  Future<BigInt> getBalanceCents(String accountId) =>
-      computeAccountBalance(db, accountId);
+  /// Current balance in cents, or the balance as of [asOfMs] (exclusive) when
+  /// given (see `queries/account_balance.dart` for the arithmetic, which must
+  /// stay in lockstep with the sync recompute).
+  Future<BigInt> getBalanceCents(String accountId, {BigInt? asOfMs}) =>
+      computeAccountBalance(db, accountId, asOfMs: asOfMs);
 
   /// Live balance: re-emits whenever any transaction touching the account
   /// changes (local writes, agent writes, or sync merges).

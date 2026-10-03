@@ -241,13 +241,20 @@ class ToolExecutors {
       await repos.resolver.account(args['idOrName'] as String),
     );
     if (acc == null) return {'ok': false, 'error': 'Account not found'};
-    final balance = await repos.accounts.getBalanceCents(acc.id);
+    // With a date, the balance at the end of that day on this device's
+    // calendar; without one, the balance right now.
+    final date = args['date'] as String?;
+    final balance = await repos.accounts.getBalanceCents(
+      acc.id,
+      asOfMs: date == null ? null : balanceAsOfMs(date),
+    );
     return {
       'ok': true,
       'accountId': acc.id,
       'accountName': acc.name,
       'balance': centsToDouble(balance),
       'currency': acc.currency,
+      'date': ?date,
     };
   }
 

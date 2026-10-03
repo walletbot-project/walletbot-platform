@@ -72,6 +72,49 @@ void main() {
     },
   );
 
+  test('getAccountBalance with a date counts that whole local day', () async {
+    await tools.execute('createAccount', {'name': 'Cash', 'currency': 'ARS'});
+    final cash = (await repos.accounts.listActive()).single;
+    final categoryId = await repos.categories.create(name: 'General');
+    // Late on the 15th, then just after midnight on the 16th.
+    await repos.transactions.addIncome(
+      accountId: cash.id,
+      categoryId: categoryId,
+      name: 'Salary',
+      amountCents: BigInt.from(100000),
+      currency: 'ARS',
+      dateMs: BigInt.from(DateTime(2026, 8, 15, 23, 30).millisecondsSinceEpoch),
+      timeStatus: TransactionTimeStatus.confirmed,
+    );
+    await repos.transactions.addExpense(
+      accountId: cash.id,
+      categoryId: categoryId,
+      name: 'Coffee',
+      amountCents: BigInt.from(20000),
+      currency: 'ARS',
+      dateMs: BigInt.from(DateTime(2026, 8, 16, 0, 10).millisecondsSinceEpoch),
+      timeStatus: TransactionTimeStatus.confirmed,
+    );
+
+    final onThe15th = await tools.execute('getAccountBalance', {
+      'idOrName': 'Cash',
+      'date': '2026-08-15',
+    });
+    expect(onThe15th['ok'], isTrue);
+    expect(onThe15th['balance'], 1000);
+    expect(onThe15th['date'], '2026-08-15');
+
+    final onThe16th = await tools.execute('getAccountBalance', {
+      'idOrName': 'Cash',
+      'date': '2026-08-16',
+    });
+    expect(onThe16th['balance'], 800);
+
+    final now = await tools.execute('getAccountBalance', {'idOrName': 'Cash'});
+    expect(now['balance'], 800);
+    expect(now.containsKey('date'), isFalse);
+  });
+
   test('ambiguous account surfaces candidates on getAccount', () async {
     await tools.execute('createAccount', {'name': 'Cash', 'currency': 'USD'});
     await tools.execute('createAccount', {'name': 'cash', 'currency': 'EUR'});
