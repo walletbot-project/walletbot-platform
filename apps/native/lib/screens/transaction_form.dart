@@ -87,12 +87,14 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
       repos.categories.listActive(),
       repos.tags.listActive(),
     ]);
-    final accounts = List<Account>.from(results[0] as List<Account>)
-      ..sort((a, b) => a.createdAt.compareTo(b.createdAt));
-    final categories = List<Category>.from(results[1] as List<Category>)
-      ..sort((a, b) => a.createdAt.compareTo(b.createdAt));
+    // Accounts and categories already come in the user's order (the
+    // repositories sort by position), which also makes the first one the
+    // default selection.
+    final accounts = List<Account>.from(results[0] as List<Account>);
+    final categories = List<Category>.from(results[1] as List<Category>);
+    // Tags stay strictly alphabetical in forms (not the user's tree order).
     final tags = List<Tag>.from(results[2] as List<Tag>)
-      ..sort((a, b) => a.createdAt.compareTo(b.createdAt));
+      ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
 
     if (!mounted) return;
     setState(() {

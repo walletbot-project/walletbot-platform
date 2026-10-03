@@ -1430,6 +1430,12 @@ abstract class AppLocalizations {
   /// **'Could not save the account'**
   String get accountSaveFailed;
 
+  /// No description provided for @accountsReorderFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not save the new order of your accounts'**
+  String get accountsReorderFailed;
+
   /// No description provided for @adjustBalance.
   ///
   /// In en, this message translates to:
@@ -1627,6 +1633,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Could not save the category'**
   String get categorySaveFailed;
+
+  /// No description provided for @categoriesReorderFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not save the new order of your categories'**
+  String get categoriesReorderFailed;
 
   /// No description provided for @latestMovements.
   ///
@@ -3325,6 +3337,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Could not save the tag'**
   String get tagSaveFailed;
+
+  /// No description provided for @tagsReorderFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not save the new order of your tags'**
+  String get tagsReorderFailed;
 
   /// No description provided for @legalFirstTitle.
   ///

@@ -10,23 +10,35 @@ import 'repository_base.dart';
 class CategoryRepository extends RepositoryBase {
   CategoryRepository(super.db);
 
-  /// Active categories, unsorted (sort at the call site if needed).
-  Stream<List<Category>> watchActive() => (db.select(
-    db.categories,
-  )..where((c) => c.archived.equals(false))).watch();
+  /// The user's order: positioned rows by `position`, then the rest (never
+  /// reordered, or created since) by creation. Mirrors `compareByPosition` in
+  /// @wallet-bot/shared and the SQL in [watchWithCounts] — keep them in
+  /// lockstep.
+  static List<OrderClauseGenerator<$CategoriesTable>> get _userOrder => [
+    (c) => OrderingTerm(expression: c.position.isNull()),
+    (c) => OrderingTerm(expression: c.position),
+    (c) => OrderingTerm(expression: c.createdAt),
+  ];
 
-  /// Live list, active-only by default.
+  /// Active categories in the user's order.
+  Stream<List<Category>> watchActive() =>
+      (db.select(db.categories)
+            ..where((c) => c.archived.equals(false))
+            ..orderBy(_userOrder))
+          .watch();
+
+  /// Live list, active-only by default, in the user's order.
   Stream<List<Category>> watchAll({bool includeArchived = false}) {
-    final query = db.select(db.categories);
+    final query = db.select(db.categories)..orderBy(_userOrder);
     if (!includeArchived) {
       query.where((c) => c.archived.equals(false));
     }
     return query.watch();
   }
 
-  /// One-shot list, active-only by default.
+  /// One-shot list, active-only by default, in the user's order.
   Future<List<Category>> listAll({bool includeArchived = false}) {
-    final query = db.select(db.categories);
+    final query = db.select(db.categories)..orderBy(_userOrder);
     if (!includeArchived) {
       query.where((c) => c.archived.equals(false));
     }
@@ -41,14 +53,14 @@ class CategoryRepository extends RepositoryBase {
     db.categories,
   )..where((c) => c.id.equals(id))).getSingleOrNull();
 
-  /// Active categories with their transaction counts, name-ordered. The
+  /// Active categories with their transaction counts, in the user's order. The
   /// `readsFrom` set is what keeps the count live when sync merges land —
   /// keep it in lockstep with the SQL.
   Stream<List<CategoryWithCount>> watchWithCounts() {
     final query = db.customSelect(
       '''
-        SELECT c.id, c.name, c.description, c.color, c.icon, c.is_archived,
-               c.created_at, c.updated_at, c.dirty,
+        SELECT c.id, c.name, c.description, c.color, c.icon, c.position,
+               c.is_archived, c.created_at, c.updated_at, c.dirty,
                COUNT(t.id) AS transaction_count
         FROM categories c
         LEFT JOIN transactions t
@@ -56,9 +68,9 @@ class CategoryRepository extends RepositoryBase {
               AND t.is_archived = 0
               AND t.date < $pastCutoffSql
         WHERE c.is_archived = 0
-        GROUP BY c.id, c.name, c.description, c.color, c.icon, c.is_archived,
-                 c.created_at, c.updated_at, c.dirty
-        ORDER BY c.name COLLATE NOCASE
+        GROUP BY c.id, c.name, c.description, c.color, c.icon, c.position,
+                 c.is_archived, c.created_at, c.updated_at, c.dirty
+        ORDER BY c.position IS NULL, c.position, c.created_at
       ''',
       readsFrom: {db.categories, db.transactions},
     );
@@ -72,6 +84,7 @@ class CategoryRepository extends RepositoryBase {
             description: row.readNullable<String>('description'),
             color: row.read<String>('color'),
             icon: row.read<String>('icon'),
+            position: row.readNullable<int>('position'),
             archived: row.read<bool>('is_archived'),
             createdAt: row.read<BigInt>('created_at'),
             updatedAt: row.read<BigInt>('updated_at'),
@@ -162,6 +175,29 @@ class CategoryRepository extends RepositoryBase {
         dirty: const Value(true),
       ),
     );
+  }
+
+  /// Persists the user's order: `position = index` for each id, in one
+  /// transaction. Rows already at their index are left alone, so a drag only
+  /// re-dirties (and syncs) the categories that actually moved.
+  Future<void> reorder(List<String> idsInOrder) async {
+    final now = currentMs;
+    await db.transaction(() async {
+      for (var i = 0; i < idsInOrder.length; i++) {
+        await (db.update(db.categories)..where(
+              (c) =>
+                  c.id.equals(idsInOrder[i]) &
+                  (c.position.isNull() | c.position.equals(i).not()),
+            ))
+            .write(
+              CategoriesCompanion(
+                position: Value(i),
+                updatedAt: Value(now),
+                dirty: const Value(true),
+              ),
+            );
+      }
+    });
   }
 
   /// Soft delete: `archived = true` + tombstone, atomically.

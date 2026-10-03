@@ -41,13 +41,17 @@ class TagRepository extends RepositoryBase {
   Future<Tag?> getById(String id) =>
       (db.select(db.tags)..where((t) => t.id.equals(id))).getSingleOrNull();
 
-  /// Active tags with their transaction counts, name-ordered. Keep
-  /// `readsFrom` in lockstep with the SQL — it is what keeps counts live.
+  /// Active tags with their transaction counts, in tree order: within each
+  /// level (siblings sharing a `parentId`) positioned tags come first by
+  /// `position`, the rest by name. Mirrors `compareByPositionThenName` in
+  /// @wallet-bot/shared. Keep `readsFrom` in lockstep with the SQL — it is
+  /// what keeps counts live.
   Stream<List<TagWithCount>> watchWithCounts() {
     final query = db.customSelect(
       '''
         SELECT tg.id, tg.name, tg.description, tg.parent_id, tg.color,
-               tg.is_archived, tg.created_at, tg.updated_at, tg.dirty,
+               tg.position, tg.is_archived, tg.created_at, tg.updated_at,
+               tg.dirty,
                COUNT(t.id) AS transaction_count
         FROM tags tg
         LEFT JOIN transaction_tags tt ON tt.tag_id = tg.id
@@ -57,8 +61,9 @@ class TagRepository extends RepositoryBase {
               AND t.date < $pastCutoffSql
         WHERE tg.is_archived = 0
         GROUP BY tg.id, tg.name, tg.description, tg.parent_id, tg.color,
-                 tg.is_archived, tg.created_at, tg.updated_at, tg.dirty
-        ORDER BY tg.name COLLATE NOCASE
+                 tg.position, tg.is_archived, tg.created_at, tg.updated_at,
+                 tg.dirty
+        ORDER BY tg.position IS NULL, tg.position, tg.name COLLATE NOCASE
       ''',
       readsFrom: {db.tags, db.transactionTags, db.transactions},
     );
@@ -72,6 +77,7 @@ class TagRepository extends RepositoryBase {
             description: row.readNullable<String>('description'),
             parentId: row.readNullable<String>('parent_id'),
             color: row.read<String>('color'),
+            position: row.readNullable<int>('position'),
             archived: row.read<bool>('is_archived'),
             createdAt: row.read<BigInt>('created_at'),
             updatedAt: row.read<BigInt>('updated_at'),
@@ -175,6 +181,8 @@ class TagRepository extends RepositoryBase {
       throw ArgumentError.value(id, 'id', 'Tag not found');
     }
     final previousParentId = current.parentId;
+    final parentChanged =
+        parentId.present && parentId.value != previousParentId;
 
     await db.transaction(() async {
       await (db.update(db.tags)..where((t) => t.id.equals(id))).write(
@@ -183,6 +191,9 @@ class TagRepository extends RepositoryBase {
           description: description,
           color: color,
           parentId: parentId,
+          // A position ranks the tag among its current siblings only; under
+          // a new parent it lands after the reordered ones, by name.
+          position: parentChanged ? const Value(null) : const Value.absent(),
           updatedAt: Value(now),
           dirty: const Value(true),
         ),
@@ -231,6 +242,41 @@ class TagRepository extends RepositoryBase {
     });
   }
 
+  /// Persists the user's order for one level of the tree: the active
+  /// children of [parentId] (top-level tags when null) get `position = index`,
+  /// in one transaction. The hierarchy never moves here: an id that is not a
+  /// sibling under [parentId] throws before anything is written. Rows already
+  /// at their index are left alone, so only moved tags re-sync.
+  Future<void> reorder(String? parentId, List<String> idsInOrder) async {
+    final now = currentMs;
+    await db.transaction(() async {
+      final rows = <Tag>[];
+      for (final id in idsInOrder) {
+        final row = await getById(id);
+        // Archived meanwhile: what remains still sorts correctly.
+        if (row == null || row.archived) continue;
+        if (row.parentId != parentId) {
+          throw ArgumentError.value(
+            id,
+            'idsInOrder',
+            'Tags can only be reordered among siblings',
+          );
+        }
+        rows.add(row);
+      }
+      for (var i = 0; i < rows.length; i++) {
+        if (rows[i].position == i) continue;
+        await (db.update(db.tags)..where((t) => t.id.equals(rows[i].id))).write(
+          TagsCompanion(
+            position: Value(i),
+            updatedAt: Value(now),
+            dirty: const Value(true),
+          ),
+        );
+      }
+    });
+  }
+
   /// Archives a tag (+ tombstone), handling descendants per [mode], all in
   /// one transaction.
   Future<void> archive(String id, {required TagArchiveMode mode}) async {
@@ -264,6 +310,8 @@ class TagRepository extends RepositoryBase {
           await (db.update(db.tags)..where((t) => t.id.equals(child.id))).write(
             TagsCompanion(
               parentId: Value(grandparentId),
+              // New siblings: the old position no longer applies.
+              position: const Value(null),
               updatedAt: Value(now),
               dirty: const Value(true),
             ),

@@ -108,8 +108,9 @@ class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
     if (!mounted) return;
     _series = series;
 
-    categories.sort((a, b) => a.name.compareTo(b.name));
-    tags.sort((a, b) => a.name.compareTo(b.name));
+    // Categories keep the user's order from the repository; tags stay
+    // strictly alphabetical in forms (not the user's tree order).
+    tags.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
 
     _transaction = transaction;
     _accounts = accounts;

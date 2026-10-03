@@ -4,6 +4,7 @@ import 'package:app/components/color_picker.dart';
 import 'package:app/components/color_utils.dart';
 import 'package:app/components/grouped_card.dart';
 import 'package:app/components/icon_picker.dart';
+import 'package:app/components/reorderable_grouped_list.dart';
 import 'package:app/components/transaction_row.dart';
 import 'package:app/data/data.dart';
 import 'package:app/database.dart';
@@ -66,12 +67,15 @@ class _CategoriesViewState extends State<CategoriesView>
           );
         }
 
-        return ListView.separated(
+        // Long-press a row to drag it into a new place (WAL-199).
+        return ReorderableGroupedList<CategoryWithCount>(
           padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
-          itemCount: data.length,
-          separatorBuilder: (_, _) => const SizedBox(height: kGroupSpacing),
-          itemBuilder: (context, index) {
-            final entry = data[index];
+          items: data,
+          idOf: (entry) => entry.category.id,
+          reorderFailedMessage: context.l10n.categoriesReorderFailed,
+          onReorder: (ordered) =>
+              categories.reorder([for (final e in ordered) e.category.id]),
+          itemBuilder: (context, entry, radius) {
             final category = entry.category;
             return CategoryListTile(
               name: category.name,
@@ -81,7 +85,7 @@ class _CategoriesViewState extends State<CategoriesView>
                 fallback: categoryDefaultColor,
               ),
               usageCount: entry.transactionCount,
-              borderRadius: groupedRadius(index, data.length),
+              borderRadius: radius,
               onTap: () => widget.onSelect(entry),
             );
           },

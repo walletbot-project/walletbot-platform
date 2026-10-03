@@ -1,3 +1,4 @@
+import { MAX_REORDER_ITEMS } from '@wallet-bot/shared'
 import { v } from 'convex/values'
 import { mutation } from '../../_generated/server'
 import { nextSeq, writeTombstone } from '../../sync/helpers'
@@ -117,5 +118,38 @@ export const archive = mutation({
             entityId: args.id,
             seq,
         })
+    },
+})
+
+/**
+ * Persists the user's order for their active categories: `position = index` for
+ * each id, all in one transaction so a drag never leaves the list half-moved.
+ * Ids that are not the caller's, or were archived meanwhile, are skipped — the
+ * caller's list may be a moment stale, and what remains still sorts correctly.
+ */
+export const reorder = mutation({
+    args: { ids: v.array(v.string()) },
+    handler: async (ctx, args) => {
+        const userId = await requireAuth(ctx)
+        if (args.ids.length > MAX_REORDER_ITEMS) {
+            throw new Error('Too many categories in one reorder')
+        }
+        if (new Set(args.ids).size !== args.ids.length) {
+            throw new Error('Duplicate category ids in reorder')
+        }
+
+        const now = BigInt(Date.now())
+        for (const [position, id] of args.ids.entries()) {
+            const row = await ctx.db
+                .query('categories')
+                .withIndex('by_user_id', (q) =>
+                    q.eq('userId', userId).eq('id', id),
+                )
+                .unique()
+            if (!row || row.isArchived) continue
+            if (row.position === position) continue
+            const seq = await nextSeq(ctx, userId)
+            await ctx.db.patch(row._id, { position, updatedAt: now, seq })
+        }
     },
 })

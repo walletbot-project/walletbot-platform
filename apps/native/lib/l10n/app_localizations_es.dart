@@ -745,6 +745,10 @@ class AppLocalizationsEs extends AppLocalizations {
   String get accountSaveFailed => 'No se pudo guardar la cuenta';
 
   @override
+  String get accountsReorderFailed =>
+      'No se pudo guardar el nuevo orden de tus cuentas';
+
+  @override
   String get adjustBalance => 'Ajustar saldo';
 
   @override
@@ -849,6 +853,10 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get categorySaveFailed => 'No se pudo guardar la categoría';
+
+  @override
+  String get categoriesReorderFailed =>
+      'No se pudo guardar el nuevo orden de tus categorías';
 
   @override
   String get latestMovements => 'Últimos movimientos';
@@ -1837,6 +1845,10 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get tagSaveFailed => 'No se pudo guardar la etiqueta';
+
+  @override
+  String get tagsReorderFailed =>
+      'No se pudo guardar el nuevo orden de tus etiquetas';
 
   @override
   String get legalFirstTitle => 'Antes de empezar';

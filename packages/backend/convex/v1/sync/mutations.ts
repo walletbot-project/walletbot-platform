@@ -24,6 +24,9 @@ const accountUpsert = v.object({
     description: v.optional(v.string()),
     color: v.string(),
     icon: v.string(),
+    // Optional for backward-compat: clients from before v6 never send it;
+    // replacement preserves the stored order (see applyAccountUpsert).
+    position: v.optional(v.number()),
     isArchived: v.boolean(),
     createdAt: v.int64(),
     updatedAt: v.int64(),
@@ -35,6 +38,8 @@ const categoryUpsert = v.object({
     description: v.optional(v.string()),
     color: v.string(),
     icon: v.string(),
+    // Optional for backward-compat, like `accountUpsert.position`.
+    position: v.optional(v.number()),
     isArchived: v.boolean(),
     createdAt: v.int64(),
     updatedAt: v.int64(),
@@ -46,6 +51,8 @@ const tagUpsert = v.object({
     description: v.optional(v.string()),
     parentId: v.optional(v.string()),
     color: v.string(),
+    // Optional for backward-compat, like `accountUpsert.position`.
+    position: v.optional(v.number()),
     isArchived: v.boolean(),
     createdAt: v.int64(),
     updatedAt: v.int64(),
@@ -168,6 +175,7 @@ type AccountUpsert = {
     description?: string
     color: string
     icon: string
+    position?: number
     isArchived: boolean
     createdAt: bigint
     updatedAt: bigint
@@ -178,6 +186,7 @@ type CategoryUpsert = {
     description?: string
     color: string
     icon: string
+    position?: number
     isArchived: boolean
     createdAt: bigint
     updatedAt: bigint
@@ -188,6 +197,7 @@ type TagUpsert = {
     description?: string
     parentId?: string
     color: string
+    position?: number
     isArchived: boolean
     createdAt: bigint
     updatedAt: bigint
@@ -315,6 +325,7 @@ async function applyAccountUpsert(
         description: payload.description,
         color: payload.color,
         icon: payload.icon,
+        position: payload.position ?? existing?.position,
         isArchived: payload.isArchived,
         createdAt: payload.createdAt,
         updatedAt: payload.updatedAt,
@@ -359,6 +370,7 @@ async function applyCategoryUpsert(
         description: payload.description,
         color: payload.color,
         icon: payload.icon,
+        position: payload.position ?? existing?.position,
         isArchived: payload.isArchived,
         createdAt: payload.createdAt,
         updatedAt: payload.updatedAt,
@@ -411,6 +423,13 @@ async function applyTagUpsert(
         description: payload.description,
         parentId: payload.parentId,
         color: payload.color,
+        // A client without positions omits it: keep the stored one, unless
+        // the tag moved to another parent, where it no longer applies.
+        position:
+            payload.position ??
+            (existing?.parentId === payload.parentId
+                ? existing?.position
+                : undefined),
         isArchived: payload.isArchived,
         createdAt: payload.createdAt,
         updatedAt: payload.updatedAt,
