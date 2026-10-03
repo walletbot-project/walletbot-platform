@@ -175,6 +175,12 @@ class AppLocalizationsEs extends AppLocalizations {
   String get balanceUnavailable => 'Saldo no disponible';
 
   @override
+  String get declaredBalance => 'Saldo declarado';
+
+  @override
+  String get platformBalance => 'Saldo que marcaba la app';
+
+  @override
   String get sameAccounts => 'La cuenta origen y destino deben ser distintas';
 
   @override

@@ -175,6 +175,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get balanceUnavailable => 'Balance unavailable';
 
   @override
+  String get declaredBalance => 'Declared balance';
+
+  @override
+  String get platformBalance => 'Balance the app showed';
+
+  @override
   String get sameAccounts =>
       'The source and destination accounts must be different';
 

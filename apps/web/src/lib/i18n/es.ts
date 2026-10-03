@@ -636,6 +636,10 @@ export const es = {
         tags: 'Etiquetas',
         noTags: 'Sin etiquetas',
         balanceUnavailable: 'Saldo no disponible',
+        // A balance adjustment: what the user declared, and what the app had
+        // computed for the account just before it (it moves as the past does).
+        declaredBalance: 'Saldo declarado',
+        platformBalance: 'Saldo que marcaba la app',
         chooseAccount: 'Elegí una cuenta',
         sameAccounts: 'La cuenta origen y destino deben ser distintas',
         amountGreaterThanZero: 'Ingresá un monto mayor a cero',

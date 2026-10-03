@@ -422,6 +422,18 @@ abstract class AppLocalizations {
   /// **'Balance unavailable'**
   String get balanceUnavailable;
 
+  /// No description provided for @declaredBalance.
+  ///
+  /// In en, this message translates to:
+  /// **'Declared balance'**
+  String get declaredBalance;
+
+  /// No description provided for @platformBalance.
+  ///
+  /// In en, this message translates to:
+  /// **'Balance the app showed'**
+  String get platformBalance;
+
   /// No description provided for @sameAccounts.
   ///
   /// In en, this message translates to:

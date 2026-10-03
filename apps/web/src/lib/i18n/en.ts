@@ -596,6 +596,10 @@ export const en: Messages = {
         tags: 'Tags',
         noTags: 'No tags',
         balanceUnavailable: 'Balance unavailable',
+        // A balance adjustment: what the user declared, and what the app had
+        // computed for the account just before it (it moves as the past does).
+        declaredBalance: 'Declared balance',
+        platformBalance: 'Balance the app showed',
         chooseAccount: 'Choose an account',
         sameAccounts: 'Source and destination accounts must differ',
         amountGreaterThanZero: 'Enter an amount greater than zero',
