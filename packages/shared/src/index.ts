@@ -15,6 +15,15 @@ export {
 } from './agent-reports'
 export type { AgentSkill } from './agent-skills'
 export { AGENT_SKILLS, AGENT_SKILLS_BY_SLUG } from './agent-skills'
+export type { LedgerEntry } from './balance-adjustment'
+export {
+    adjustmentAmount,
+    adjustmentPreviousBalance,
+    compareLedgerOrder,
+    isBeforeInLedger,
+    ledgerDelta,
+    reconcileAdjustments,
+} from './balance-adjustment'
 export { MAX_DEVICE_ID_LENGTH } from './client'
 export {
     CURRENCIES,
