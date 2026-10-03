@@ -1,35 +1,21 @@
 import 'package:drift/drift.dart';
 
 import '../../database.dart';
+import '../balance_adjustments.dart';
 import '../occurrence.dart';
 import 'stream_utils.dart';
 
-/// Per-transaction balance arithmetic. MUST stay identical to the replay in
-/// `lib/sync/sync_recompute.dart` — if the two diverge, every sync cycle
-/// "corrects" freshly created balance adjustments and amounts visibly jump
-/// (guarded by test/sync/balance_recompute_test.dart).
+/// An account's balance: the sum of every row's [ledgerDelta]. The same
+/// arithmetic the balance-adjustment reconciliation replays
+/// (`lib/data/balance_adjustments.dart`) — if the two diverged, every write
+/// would "correct" freshly created balance adjustments and amounts would
+/// visibly jump (guarded by test/sync/balance_recompute_test.dart).
 ///
-/// Own side: expense/transfer subtract `amount`; income/balance_adjustment
-/// add `amount`. Incoming transfers add `toAmount ?? amount`. Archived rows
-/// are excluded by the queries below.
+/// Archived rows are excluded by the queries below.
 BigInt accountBalanceFromRows(List<Transaction> rows, String accountId) {
-  BigInt sum = BigInt.zero;
+  var sum = BigInt.zero;
   for (final t in rows) {
-    if (t.accountId == accountId) {
-      switch (t.type) {
-        case 'expense':
-        case 'transfer':
-          sum -= t.amount;
-          break;
-        case 'income':
-        case 'balance_adjustment':
-          sum += t.amount;
-          break;
-      }
-    }
-    if (t.type == 'transfer' && t.toAccountId == accountId) {
-      sum += t.toAmount ?? t.amount;
-    }
+    sum += ledgerDelta(LedgerEntry.fromTransaction(t), accountId);
   }
   return sum;
 }

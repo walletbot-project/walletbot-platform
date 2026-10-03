@@ -204,6 +204,13 @@ class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
     return _transaction?.type != 'balance_adjustment';
   }
 
+  /// A balance adjustment's date is when the declaration was made; its amount
+  /// is derived from everything before that moment, so moving it is not an
+  /// edit the user can make.
+  bool get _canEditDate {
+    return _transaction?.type != 'balance_adjustment';
+  }
+
   Future<void> _toggleEditing() async {
     if (!_editing) {
       setState(() => _editing = true);
@@ -704,7 +711,7 @@ class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
         label: _selectedDateConfirmed
             ? context.l10n.date
             : context.l10n.estimatedDate,
-        trailing: _editing
+        trailing: _editing && _canEditDate
             ? TextButton(onPressed: _pickDate, child: Text(context.l10n.change))
             : null,
         value: _filterableValue(
@@ -733,7 +740,7 @@ class _TransactionDetailsScreenState extends State<TransactionDetailsScreen> {
         label: timeNeedsAttention
             ? context.l10n.estimatedTime
             : context.l10n.time,
-        trailing: _editing
+        trailing: _editing && _canEditDate
             ? TextButton(onPressed: _pickTime, child: Text(context.l10n.change))
             : null,
         value: Text(_formatTime(context, _selectedDate)),

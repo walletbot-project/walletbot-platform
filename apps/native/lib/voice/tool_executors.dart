@@ -914,6 +914,28 @@ class ToolExecutors {
     final txn = await repos.transactions.getById(id);
     if (txn == null) return {'ok': false, 'error': 'Transaction not found'};
 
+    // An adjustment's amount is derived from the ledger and its date is when
+    // the declaration was made; neither is editable. A new declaration is a
+    // new adjustment. Mirrors the backend agent's `updateTransaction`.
+    if (txn.type == 'balance_adjustment') {
+      if (args['amount'] != null) {
+        return {
+          'ok': false,
+          'error':
+              'A balance adjustment amount cannot be changed; record a new '
+              'balance adjustment instead',
+        };
+      }
+      if (args['date'] != null ||
+          args['time'] != null ||
+          args['timeStatus'] != null) {
+        return {
+          'ok': false,
+          'error': 'A balance adjustment date cannot be changed',
+        };
+      }
+    }
+
     String? categoryId;
     if (args['categoryIdOrName'] != null) {
       final cat = _valueOrNull(
