@@ -140,18 +140,20 @@ which the SQLite database file access needs), and the seven data types the app
 actually collects. Crash data is deliberately **not** declared, because nothing
 collects it yet; add it with the SDK, not before.
 
-### 8. The voice engine has never been verified on iOS hardware
+### 8. The voice engine on iOS hardware (resolved 2026-09-08)
 
-`docs/riesgos.md` (R-003) still marks the unified native engine in
-`ios/Runner/PcmAudioPlayer.swift`, built on Apple's voice-processing I/O for
-echo cancellation, as **pendiente de verificación en hardware**, after a first
-attempt that failed with no diagnosis. The Dart Convex client swap is in the
-same state.
+The unified native engine in `ios/Runner/PcmAudioPlayer.swift`, built on
+Apple's voice-processing I/O for echo cancellation, works on real hardware.
+Owner device pass on an **iPhone 14 Pro** and an **iPad Pro 11" (3rd gen,
+M1)**: the live session connects, expenses are recorded end to end, and
+barge-in behaves. The Dart Convex client passed on the same devices, sign-in,
+sync and local persistence included, which closes the other half of this
+blocker. iOS versions were not recorded.
 
-Voice is the product's headline feature and the reason the app exists. If it
-fails on the reviewer's iPhone that is a guideline 2.1 rejection, and the
-feedback loop is days long. A device pass before the first upload is worth more
-than everything else on this list.
+Two things this does not cover. The iPad layout walk that blocker 5 asks for is
+a separate pass and is not done. And none of this is automated, so the next
+change to the audio engine or the transport needs the same manual pass on a
+device.
 
 ### 10. `MinimumOSVersion` was 13.0 (resolved 2026-09-07)
 
@@ -365,5 +367,5 @@ graphics and have no Apple equivalent.
   Private Email Relay. `apps/native/README.md` documents why it must be:
   password resets to `@privaterelay.appleid.com` users are silently dropped
   otherwise.
-- iPad layout behaviour, since no iPad build has been run.
-- Whether the app behaves on a real iPhone at all, beyond compiling (blocker 8).
+- iPad layout behaviour. The app has now run on an iPad Pro 11" (M1), but
+  walking the layout at that width is still not recorded as done.
