@@ -1,10 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
-import 'package:http/http.dart' as http;
-import 'package:web_socket_channel/web_socket_channel.dart';
 
 import '../convex/convex_client.dart';
 import '../data/data.dart';
@@ -14,390 +11,20 @@ import '../telemetry/agent_interaction_cost_tracker.dart';
 import '../telemetry/agent_metrics.dart';
 import '../user_settings/default_currency_controller.dart';
 import 'agent_generated.dart';
+import 'live_token_provider.dart';
+import 'live_connection.dart';
+import 'live_protocol.dart';
+import 'live_tool_dispatcher.dart';
+export 'live_token_provider.dart'
+    show LiveTokenRefusedException, MissingLiveCredentialsException;
 import 'pcm_audio_player.dart';
 import 'tool_executors.dart';
 import 'voice_event.dart';
+import 'voice_event_log.dart';
 import 'voice_expense_command.dart';
 import 'voice_session_remote_sync.dart';
 import 'voice_session_repository.dart';
-
-/// One-shot fetch of a constrained Gemini Live token from the backend,
-/// shared by the command's connect path and the factory's prefetch.
-///
-/// Nothing about starting a voice session waits on the Convex socket. The
-/// action rides that socket, which can itself be mid-reconnect exactly when a
-/// voice reconnect needs a token (network loss, resume from background), so
-/// it is bounded to 6 s *and* runs as a one-shot HTTP POST whenever the
-/// socket is not ready, rather than queueing behind the reconnect. The
-/// `/v1/live/token` endpoint below is the last resort and is independent of
-/// the Convex client entirely.
-/// The backend refused to mint (`live/helpers.ts:LiveTokenError`). Permanent
-/// for this session: the reconnect backoff cannot turn a rate limit or an
-/// unusable identity into a token, it only burns more of the caller's budget.
-class LiveTokenRefusedException implements Exception {
-  const LiveTokenRefusedException(this.reason, {this.retryAfter});
-
-  /// Server-side reason: `rate_limited` or `unidentified_client`.
-  final String reason;
-  final Duration? retryAfter;
-
-  @override
-  String toString() =>
-      'Live token refused: $reason'
-      '${retryAfter == null ? '' : ' (retry after ${retryAfter!.inSeconds}s)'}';
-}
-
-/// Nothing to authenticate the mint with: no bundled token or key, and no
-/// identity the backend would accept. Also permanent for this session.
-class MissingLiveCredentialsException implements Exception {
-  const MissingLiveCredentialsException();
-
-  @override
-  String toString() =>
-      'Missing Gemini credentials. Configure a Convex account or device id, '
-      'GEMINI_LIVE_TOKEN, or GEMINI_API_KEY.';
-}
-
-/// Reads a structured refusal out of a mint response. `retryAfter` is the
-/// rate limiter's millisecond hint.
-LiveTokenRefusedException? _refusalFrom(Map<String, Object?> body) {
-  final error = body['error'];
-  if (error is! String || error.isEmpty) return null;
-  final retryAfter = body['retryAfter'];
-  return LiveTokenRefusedException(
-    error,
-    retryAfter: retryAfter is num
-        ? Duration(milliseconds: retryAfter.round())
-        : null,
-  );
-}
-
-/// Turns a non-2xx mint response into the most specific error available: a
-/// structured refusal when the body carries one, the raw status otherwise.
-Object _httpFailure(int statusCode, String rawBody) {
-  try {
-    final decoded = jsonDecode(rawBody);
-    if (decoded is Map) {
-      final refusal = _refusalFrom(decoded.cast<String, Object?>());
-      if (refusal != null) return refusal;
-    }
-  } on FormatException {
-    // Not JSON (a proxy error page, an empty body): fall through to the raw
-    // status, which is more useful than hiding it behind a parse failure.
-  }
-  return StateError('Convex live token request failed: $statusCode $rawBody');
-}
-
-Future<String> _fetchLiveToken({
-  required bool useAuthenticatedTokenAction,
-  required ConvexClient? convexClient,
-  required String? sessionToken,
-  required String? deviceId,
-  required String convexSiteUrl,
-  Future<Map<String, Object?>> Function()? buildMintArgs,
-  void Function(String phase, Map<String, Object?> extra)? onPhase,
-}) async {
-  final fetchStopwatch = Stopwatch()..start();
-  // The mint args (platform identity, locale/timezone, USER_CONTEXT snapshot)
-  // are best-effort: a failed build must never block the token fetch.
-  Map<String, Object?> mintArgs = const {};
-  if (buildMintArgs != null) {
-    try {
-      mintArgs = await buildMintArgs();
-    } catch (e) {
-      onPhase?.call('mint_args_failed', {
-        'elapsedMs': fetchStopwatch.elapsedMilliseconds,
-        'error': e.toString(),
-      });
-    }
-  }
-  Map<String, Object?>? body;
-  var via = 'http_endpoint';
-  if (useAuthenticatedTokenAction && convexClient != null) {
-    final status = convexClient.currentConnectionState.status;
-    final ready = status == ConnectionStatus.ready;
-    onPhase?.call('token_action_start', {
-      'elapsedMs': fetchStopwatch.elapsedMilliseconds,
-      'connection': status.name,
-      'transport': ready ? 'convex_ws' : 'convex_http',
-    });
-    try {
-      final decoded = await convexClient.action<Object?>(
-        'v1/live/actions:requestLiveToken',
-        mintArgs,
-        options: const CallOptions(
-          operationTimeout: Duration(seconds: 6),
-          httpFallback: HttpFallback.whenNotReady,
-        ),
-      );
-      if (decoded is! Map) {
-        throw StateError('Malformed Convex live token response');
-      }
-      body = decoded.cast<String, Object?>();
-      via = ready ? 'convex_ws' : 'convex_http';
-    } catch (error) {
-      onPhase?.call('token_action_failed', {
-        'elapsedMs': fetchStopwatch.elapsedMilliseconds,
-        'connection': status.name,
-        'error': error.toString(),
-      });
-    }
-  }
-  if (body == null) {
-    if (convexSiteUrl.isEmpty) {
-      onPhase?.call('token_unavailable', {
-        'elapsedMs': fetchStopwatch.elapsedMilliseconds,
-        'reason': 'no_site_url',
-      });
-      return '';
-    }
-    // The endpoint takes either identity. A local account has no session and
-    // mints against its device id instead, which is the whole reason the agent
-    // works without an account; a signed-in caller sends both and the server
-    // lets the session win.
-    final credential = sessionToken;
-    final device = deviceId?.trim() ?? '';
-    if ((credential == null || credential.isEmpty) && device.isEmpty) {
-      onPhase?.call('token_unavailable', {
-        'elapsedMs': fetchStopwatch.elapsedMilliseconds,
-        'reason': 'unidentified_client',
-      });
-      return '';
-    }
-    final base = Uri.parse(convexSiteUrl);
-    final response = await http
-        .post(
-          base.replace(path: '/v1/live/token'),
-          headers: {
-            if (credential != null && credential.isNotEmpty)
-              'Authorization': 'Bearer $credential',
-            'Content-Type': 'application/json',
-          },
-          body: jsonEncode({
-            ...mintArgs,
-            if (device.isNotEmpty) 'deviceId': device,
-          }),
-        )
-        .timeout(const Duration(seconds: 15));
-    if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw _httpFailure(response.statusCode, response.body);
-    }
-    body = (jsonDecode(response.body) as Map).cast<String, Object?>();
-  }
-
-  // A refusal can arrive with a 200 from the Convex action or a 4xx from the
-  // endpoint; both land here as a permanent error rather than a retry.
-  final refusal = _refusalFrom(body);
-  if (refusal != null) throw refusal;
-
-  final token = body['token'];
-  if (token is! String || token.isEmpty) {
-    throw StateError('Convex live token response did not include token');
-  }
-  onPhase?.call('token_received', {
-    'elapsedMs': fetchStopwatch.elapsedMilliseconds,
-    // Which transport actually served it. A session that starts slowly is a
-    // different bug depending on this: `convex_ws` points at the socket,
-    // `http_endpoint` means the Convex action failed outright.
-    'via': via,
-    'model': body['model']?.toString(),
-    // Server-reported breakdown (google round trip, mint total, cold-start
-    // module age, action/http totals): elapsedMs minus the server total is
-    // network + Convex routing.
-    if (body['timings'] is Map) 'server': body['timings'],
-  });
-  return token;
-}
-
-class GeminiVoiceExpenseCommandFactory implements VoiceExpenseCommandFactory {
-  GeminiVoiceExpenseCommandFactory({
-    required this.repositories,
-    required this.sessionRepository,
-    this.remoteSync,
-    this.agentMetrics,
-    this.useAuthenticatedTokenAction = false,
-    this.sessionToken,
-    this.deviceId,
-    this.buildMintArgs,
-    this.displaySettings,
-    this.defaultCurrency,
-    this.fxRates,
-    this.convexClient,
-    this.apiKey = const String.fromEnvironment('GEMINI_API_KEY'),
-    this.liveToken = const String.fromEnvironment('GEMINI_LIVE_TOKEN'),
-    this.convexSiteUrl = const String.fromEnvironment('CONVEX_SITE_URL'),
-  });
-
-  final AppRepositories repositories;
-  final VoiceSessionRepository sessionRepository;
-  final VoiceSessionRemoteSync? remoteSync;
-  final AgentMetrics? agentMetrics;
-  final bool useAuthenticatedTokenAction;
-  final String? sessionToken;
-
-  /// Device identity for the unauthenticated mint (`ClientInfo.deviceId`).
-  /// This is what lets a local account run the agent at all; a remote account
-  /// sends it too, and the server's session wins.
-  final String? deviceId;
-
-  /// Builds the mint request (platform identity, locale/timezone and the
-  /// USER_CONTEXT snapshot from Drift) — see `agent_context.dart`. Null keeps
-  /// the bare mint of older builds.
-  final Future<Map<String, Object?>> Function()? buildMintArgs;
-
-  /// Controllers the `updateSettings` tool writes through, passed by
-  /// reference at factory construction (main.dart): the app-scoped display
-  /// settings and this account's default-currency controller.
-  final DisplaySettingsController? displaySettings;
-  final DefaultCurrencyController? defaultCurrency;
-
-  /// Device-scoped exchange-rate cache the `getExchangeRate` tool reads.
-  final FxRatesController? fxRates;
-
-  /// Null when the app runs without a Convex transport (widget tests, and a
-  /// local account without the authenticated action); the HTTP endpoint is
-  /// the only token source then.
-  final ConvexClient? convexClient;
-  final String apiKey;
-  final String liveToken;
-  final String convexSiteUrl;
-  GeminiVoiceExpenseCommand? _active;
-
-  // Tokens are single-use with a 2-minute new-session window (see
-  // packages/backend/convex/live/createToken.ts). The freshness bound stays
-  // well inside that window so a consumed prefetch is always startable.
-  static const _prefetchFreshness = Duration(seconds: 60);
-  Future<String>? _prefetchedToken;
-  DateTime? _prefetchedAt;
-
-  @override
-  VoiceExpenseCommand? get activeCommand {
-    final active = _active;
-    return active != null && active.isActive ? active : null;
-  }
-
-  @override
-  void prefetchToken() {
-    if (liveToken.isNotEmpty) return;
-    final startedAt = _prefetchedAt;
-    if (_prefetchedToken != null &&
-        startedAt != null &&
-        DateTime.now().difference(startedAt) < _prefetchFreshness) {
-      return;
-    }
-    late final Future<String> future;
-    future = _fetchLiveToken(
-      useAuthenticatedTokenAction: useAuthenticatedTokenAction,
-      convexClient: convexClient,
-      sessionToken: sessionToken,
-      deviceId: deviceId,
-      convexSiteUrl: convexSiteUrl,
-      buildMintArgs: buildMintArgs,
-      onPhase: (phase, extra) =>
-          debugPrint('[voice] token prefetch $phase: $extra'),
-    );
-    // A failed or credential-less prefetch must not poison the real connect:
-    // drop it so takeFreshPrefetch hands out nothing and the command runs
-    // its own fetch (with its own error surfacing).
-    future.then(
-      (token) {
-        if (token.isEmpty && identical(_prefetchedToken, future)) {
-          _prefetchedToken = null;
-          _prefetchedAt = null;
-        }
-      },
-      onError: (Object error) {
-        debugPrint('[voice] token prefetch failed: $error');
-        if (identical(_prefetchedToken, future)) {
-          _prefetchedToken = null;
-          _prefetchedAt = null;
-        }
-      },
-    );
-    _prefetchedToken = future;
-    _prefetchedAt = DateTime.now();
-  }
-
-  /// Hands a still-fresh prefetched token fetch to a connecting command,
-  /// consuming it. Null when none was started or it aged out of the token's
-  /// new-session window.
-  Future<String>? takeFreshPrefetch() {
-    final future = _prefetchedToken;
-    final startedAt = _prefetchedAt;
-    _prefetchedToken = null;
-    _prefetchedAt = null;
-    if (future == null || startedAt == null) return null;
-    if (DateTime.now().difference(startedAt) >= _prefetchFreshness) {
-      return null;
-    }
-    return future;
-  }
-
-  @override
-  VoiceExpenseCommand create() {
-    final existing = activeCommand;
-    if (existing != null) return existing;
-    late final GeminiVoiceExpenseCommand command;
-    command = GeminiVoiceExpenseCommand(
-      repositories: repositories,
-      sessionRepository: sessionRepository,
-      remoteSync: remoteSync,
-      agentMetrics: agentMetrics,
-      useAuthenticatedTokenAction: useAuthenticatedTokenAction,
-      sessionToken: sessionToken,
-      deviceId: deviceId,
-      buildMintArgs: buildMintArgs,
-      displaySettings: displaySettings,
-      defaultCurrency: defaultCurrency,
-      fxRates: fxRates,
-      convexClient: convexClient,
-      apiKey: apiKey,
-      liveToken: liveToken,
-      convexSiteUrl: convexSiteUrl,
-      takePrefetchedToken: takeFreshPrefetch,
-      onEnded: () {
-        if (identical(_active, command)) _active = null;
-      },
-    );
-    _active = command;
-    return command;
-  }
-
-  @override
-  Future<List<VoiceEvent>> restorableHistory() async {
-    final rows = await sessionRepository.resumableConversationEvents(
-      types: kConversationEventTypes,
-    );
-    final events = <VoiceEvent>[];
-    for (final row in rows) {
-      final decoded = jsonDecode(row.payloadJson);
-      if (decoded is! Map) continue;
-      final event = voiceEventFromRecord(
-        type: row.type,
-        payload: decoded.cast<String, Object?>(),
-        at: DateTime.fromMillisecondsSinceEpoch(row.occurredAt.toInt()),
-      );
-      if (event != null) events.add(event);
-    }
-    return events;
-  }
-
-  @override
-  Future<void> discardRestorableSession() async {
-    await sessionRepository.endResumableSession();
-    remoteSync?.schedule();
-  }
-
-  @override
-  Future<String?> restorableSessionId() =>
-      sessionRepository.resumableSessionId();
-
-  Future<void> dispose() async {
-    await _active?.dispose();
-    _active = null;
-    await remoteSync?.dispose();
-  }
-}
+export 'gemini_voice_command_factory.dart';
 
 class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
   GeminiVoiceExpenseCommand({
@@ -409,7 +36,6 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
     required this.sessionToken,
     required this.deviceId,
     required this.convexClient,
-    required this.apiKey,
     required this.liveToken,
     required this.convexSiteUrl,
     required this.onEnded,
@@ -425,13 +51,8 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
          fxQuotes: fxRates == null ? null : () => fxRates.quotes,
        );
 
-  // Model + voice come from the generated shared constants
-  // (agent_generated.dart ← packages/shared/src/tools/constants.ts), the same
-  // source the backend mint uses — a bump there can no longer desync native's
-  // setup frame from the token's constraints (defect D4).
-  static const _model = kAgentModel;
-  static const _voiceName = kAgentVoiceName;
-  static const _maxQueuedMessages = 200;
+  String get _model => _connection.model ?? kAgentModel;
+  static const _maxQueuedMessages = 20;
 
   final AppRepositories repositories;
   final VoiceSessionRepository sessionRepository;
@@ -441,7 +62,6 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
   final String? sessionToken;
   final String? deviceId;
   final ConvexClient? convexClient;
-  final String apiKey;
   final String liveToken;
   final String convexSiteUrl;
   final void Function() onEnded;
@@ -451,24 +71,99 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
 
   /// Consumes the factory's screen-open token prefetch, when one is still
   /// inside the token's new-session window. Null result → fetch fresh.
-  final Future<String>? Function()? takePrefetchedToken;
+  final Future<LiveToken>? Function()? takePrefetchedToken;
   final ToolExecutors _executors;
   final _audioPlayer = PcmAudioPlayer();
   final _events = StreamController<VoiceEvent>.broadcast();
   final List<VoiceEvent> _history = [];
   final List<Map<String, dynamic>> _pendingMessages = [];
-  final Set<String> _cancelledToolIds = {};
+  late final LiveConnection _connection = LiveConnection(
+    credentials: () async {
+      final prefetched = _prefetchedToken ?? takePrefetchedToken?.call();
+      _prefetchedToken = null;
+      final token = await (prefetched ?? _resolveLiveToken());
+      if (token.isEmpty) {
+        throw const MissingLiveCredentialsException();
+      }
+      return token;
+    },
+    beforeReady: () async {
+      // A write that already started can finish after a disconnect. Seed its
+      // committed result before admitting new work on the replacement socket.
+      await _tools.settled;
+      await sessionRepository.flush();
+      final id = _sessionId;
+      if (id != null) {
+        await sessionRepository.updateModel(id, _model);
+        if (!_sessionStartedMetricSent && isActive) {
+          _sessionStartedMetricSent = true;
+          // The backend's rollback flag chooses the actual model at token mint.
+          // Opening the local session earlier only knows the compiled default.
+          agentMetrics?.recordSessionStartedBestEffort(
+            sessionId: id,
+            model: _model,
+            resumed: _sessionStartResumed,
+          );
+        }
+      }
+      return _buildContextSeed();
+    },
+    onMessage: _handleServerMessage,
+    onMessageError: (error) =>
+        _emit(VoiceErrorEvent('Live message handling failed: $error')),
+    onSend: (message) => _persistProtocolEvent(
+      type: 'client_message',
+      direction: 'client',
+      raw: withoutInlineBinary(message),
+    ),
+    onState: (state) {
+      if (state == LiveConnectionState.ready) {
+        _emit(VoiceConnectedEvent());
+        final id = _sessionId;
+        if (id != null) unawaited(sessionRepository.markStatus(id, 'active'));
+        _flushPendingMessages();
+      } else if (state == LiveConnectionState.reconnecting) {
+        _audioStreamOpen = false;
+        _discardInterruptedOutput = false;
+        unawaited(_flushPlayback());
+        _emit(VoiceDisconnectedEvent());
+        _emit(VoiceConnectingEvent('Reconnecting to Gemini Live'));
+      }
+    },
+    onError: (error) {
+      final permanent =
+          error is LiveTokenRefusedException ||
+          error is MissingLiveCredentialsException;
+      _emit(
+        VoiceErrorEvent(
+          '$error',
+          isTransient: !permanent,
+          code: error is LiveTokenRefusedException ? error.reason : null,
+        ),
+      );
+      if (permanent) unawaited(stop());
+    },
+  );
+  late final LiveToolDispatcher _tools = LiveToolDispatcher(
+    execute: _executors.execute,
+    isCurrent: (epoch) =>
+        isActive && _connection.ready && _connection.isCurrent(epoch),
+    onCall: (id, name, args) {
+      _emit(VoiceToolCallEvent(id: id, name: name, args: args));
+      _interactionCostTracker.markToolCall();
+    },
+    onResult: (id, name, result) =>
+        _emit(VoiceToolResultEvent(id: id, name: name, result: result)),
+    respond: (response, epoch) =>
+        _connection.send(response, expectedEpoch: epoch),
+  );
 
-  WebSocketChannel? _channel;
-  StreamSubscription? _subscription;
-  Timer? _reconnectTimer;
-  Timer? _goAwayTimer;
-  Future<void>? _connectFuture;
-  Completer<void>? _setupComplete;
   String? _sessionId;
-  Future<String>? _prefetchedToken;
+  bool _sessionStartedMetricSent = false;
+  bool _sessionStartResumed = false;
+  Future<LiveToken>? _prefetchedToken;
+  Future<void>? _starting;
   bool _active = false;
-  bool _connected = false;
   bool _disposed = false;
   bool _explicitlyStopped = false;
   bool _audioPlaybackEnabled = true;
@@ -476,8 +171,7 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
   bool _screenAttached = false;
   bool _discardInterruptedOutput = false;
   bool _audioStreamOpen = false;
-  int _connectionGeneration = 0;
-  int _reconnectAttempt = 0;
+  int _playbackEpoch = 0;
   int _inputChunks = 0;
   int _textMessages = 0;
   int _outputAudioChunks = 0;
@@ -485,7 +179,6 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
   bool _sessionCostMetricSent = false;
   final AgentInteractionCostTracker _interactionCostTracker =
       AgentInteractionCostTracker();
-  Map<String, Object?>? _latestUsageMetadata;
 
   @override
   String get label => 'Gemini Live voice expense command';
@@ -503,27 +196,45 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
   bool get isActive => _active && !_explicitlyStopped && !_disposed;
 
   @override
-  bool get isConnected => _connected;
+  bool get isConnected => _connection.ready;
 
   @override
-  Future<void> start({bool respondWithAudio = true}) async {
+  Future<void> start({bool respondWithAudio = true}) {
+    if (_starting != null) return _starting!;
+    final operation = _start(respondWithAudio);
+    _starting = operation;
+    return operation.whenComplete(() {
+      if (identical(_starting, operation)) _starting = null;
+    });
+  }
+
+  Future<void> _start(bool respondWithAudio) async {
     _audioPlaybackEnabled = respondWithAudio;
     _mutedByDetach = false;
     if (isActive) {
       await ensureConnected();
       return;
     }
-    if (_disposed) throw StateError('Voice command is disposed');
+    if (_disposed || _explicitlyStopped) {
+      throw StateError('Voice command has ended');
+    }
+    _active = true;
 
     final startStopwatch = Stopwatch()..start();
     final session = await sessionRepository.openOrCreate(model: _model);
     _sessionId = session.id;
-    _active = true;
-    _explicitlyStopped = false;
+    if (!isActive) {
+      if (_explicitlyStopped) {
+        await sessionRepository.endExplicitly(session.id);
+      } else {
+        await sessionRepository.markStatus(session.id, 'suspended');
+      }
+      return;
+    }
     remoteSync?.schedule(delay: Duration.zero);
-    _logConnectionPhase('session_opened', startStopwatch, {
-      'resumed': session.resumeHandle != null,
-    });
+    final resumed = session.resumeHandle != null;
+    _logConnectionPhase('session_opened', startStopwatch, {'resumed': resumed});
+    _sessionStartResumed = resumed;
 
     _emit(VoiceConnectingEvent('Connecting to Gemini Live'));
     // The token fetch and the audio engine spin-up are independent and each
@@ -533,169 +244,24 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
     final tokenFetch = takePrefetchedToken?.call() ?? _resolveLiveToken();
     tokenFetch.ignore();
     _prefetchedToken = tokenFetch;
-    final engineDiagnostics = await _audioPlayer.start(sampleRate: 24000);
-    _logConnectionPhase('audio_engine_started', startStopwatch);
-    if (engineDiagnostics != null) {
-      // iOS voice engine state (voice processing, formats, route). Persisted
-      // with the session events so failed rounds are diagnosable without a
-      // console attached — see AUDIO.md § iOS.
-      _emit(VoiceSystemEvent('Voice engine: $engineDiagnostics'));
-    }
-    await _connect();
+    if (respondWithAudio) await prepareAudio();
+    if (isActive) await _connection.connect();
   }
 
   @override
   Future<void> ensureConnected() async {
-    if (!isActive || _connected) return;
-    _reconnectTimer?.cancel();
-    await _connect();
+    if (isActive) await _connection.connect();
   }
 
-  /// Runs one connection attempt, deduplicating concurrent callers.
-  ///
-  /// A failed attempt never propagates: any connect error (network loss,
-  /// token mint failure, setup timeout) is recorded as a transient event and
-  /// retried on the standard backoff, so no caller can turn a bad connection
-  /// into a session teardown. The user always keeps the conversation and the
-  /// explicit End button.
-  Future<void> _connect() {
-    final existing = _connectFuture;
-    if (existing != null) return existing;
-    final future = _connectOnce().then<void>(
-      (_) {},
-      onError: (Object error) {
-        if (!isActive) return;
-        // Credential failures are the exception to the retry-everything rule
-        // above: a refused mint or a caller the backend cannot identify will
-        // fail identically on every attempt, so the session ends with a final
-        // error instead of spinning on the backoff behind a "reconnecting"
-        // notice.
-        if (error is LiveTokenRefusedException) {
-          _emit(VoiceErrorEvent('$error', code: error.reason));
-          unawaited(stop());
-          return;
-        }
-        if (error is MissingLiveCredentialsException) {
-          _emit(VoiceErrorEvent('$error', code: 'missing_credentials'));
-          unawaited(stop());
-          return;
-        }
-        _emit(
-          VoiceErrorEvent('Connect attempt failed: $error', isTransient: true),
-        );
-        _scheduleReconnect();
-      },
-    );
-    _connectFuture = future;
-    return future.whenComplete(() {
-      if (identical(_connectFuture, future)) _connectFuture = null;
-    });
-  }
-
-  Future<void> _connectOnce() async {
+  @override
+  Future<void> prepareAudio() async {
     if (!isActive) return;
-    final connectStopwatch = Stopwatch()..start();
-    final prefetched = _prefetchedToken ?? takePrefetchedToken?.call();
-    _prefetchedToken = null;
-    final effectiveToken = prefetched != null
-        ? await prefetched
-        : await _resolveLiveToken();
-    if (apiKey.isEmpty && effectiveToken.isEmpty) {
-      throw const MissingLiveCredentialsException();
-    }
-    _logConnectionPhase('token_resolved', connectStopwatch, {
-      'prefetched': prefetched != null,
-    });
-
-    final generation = ++_connectionGeneration;
-    final uri = _connectionUri(effectiveToken);
-    final setupComplete = Completer<void>();
-    _setupComplete = setupComplete;
-    final channel = WebSocketChannel.connect(uri);
-    _channel = channel;
-    // Status writes queue behind the session's serialized write chain, which
-    // can be deep in buffered audio during a reconnect — keep them off the
-    // handshake's critical path. `_serial()` still preserves call order.
-    unawaited(sessionRepository.markStatus(_sessionId!, 'connecting'));
-
-    _subscription = channel.stream.listen(
-      (message) => _handleServerMessage(message, generation),
-      onError: (Object error, StackTrace stackTrace) {
-        if (generation != _connectionGeneration || !isActive) return;
-        _emit(VoiceErrorEvent('WebSocket error: $error', isTransient: true));
-        _persistProtocolEvent(
-          type: 'websocket_error',
-          direction: 'server',
-          payload: {'error': error.toString(), 'stackTrace': '$stackTrace'},
-        );
-      },
-      onDone: () => _handleSocketDone(channel, generation),
-      cancelOnError: false,
+    final diagnostics = await _audioPlayer.start(
+      sampleRate: LiveProtocol.outputRate,
     );
-
-    final setup = <String, dynamic>{
-      'setup': {
-        'model': 'models/$_model',
-        'generationConfig': {
-          'responseModalities': ['AUDIO'],
-          'speechConfig': {
-            'voiceConfig': {
-              'prebuiltVoiceConfig': {'voiceName': _voiceName},
-            },
-          },
-        },
-        'inputAudioTranscription': <String, dynamic>{},
-        'outputAudioTranscription': <String, dynamic>{},
-        // No resume handle is presented: after an abrupt disconnect a stale
-        // handle makes the server silently open a BLANK session (see
-        // buildConversationSeed). Context is restored by the transcript seed
-        // sent right after setup instead. Resumption updates still arrive
-        // (the minted token enables them) and their timestamps drive the
-        // local session-freshness gate.
-        'sessionResumption': <String, dynamic>{},
-        'contextWindowCompression': {'slidingWindow': <String, dynamic>{}},
-      },
-    };
-    _sendNow(setup);
-
-    try {
-      await setupComplete.future.timeout(const Duration(seconds: 20));
-    } catch (_) {
-      if (generation == _connectionGeneration) {
-        await _closeSocket(invalidateGeneration: true);
-      }
-      rethrow;
+    if (diagnostics != null && isActive) {
+      _emit(VoiceSystemEvent('Voice engine: $diagnostics'));
     }
-    if (generation != _connectionGeneration || !isActive) return;
-    // Every connect is a fresh server session; restore the conversation from
-    // the durable log before anything else is sent, so queued messages and
-    // live audio land after the model regained its context.
-    final seed = await _buildContextSeed();
-    if (generation != _connectionGeneration || !isActive) return;
-    _connected = true;
-    _reconnectAttempt = 0;
-    _logConnectionPhase('setup_complete', connectStopwatch);
-    unawaited(sessionRepository.markStatus(_sessionId!, 'active'));
-    if (seed != null) {
-      _sendNow({
-        'clientContent': {
-          'turns': [
-            {
-              'role': 'user',
-              'parts': [
-                {'text': seed},
-              ],
-            },
-          ],
-          'turnComplete': false,
-        },
-      });
-      _logConnectionPhase('context_seeded', connectStopwatch, {
-        'chars': seed.length,
-      });
-    }
-    _emit(VoiceConnectedEvent());
-    _flushPendingMessages();
   }
 
   /// Transcript seed for the fresh server session this connect just opened —
@@ -746,10 +312,10 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
   /// `uses: 1` and a short new-session window, so a token can never be
   /// reused across connection attempts — every (re)connect resolves a new
   /// one, and nothing is cached.
-  Future<String> _resolveLiveToken() async {
-    if (liveToken.isNotEmpty) return liveToken;
+  Future<LiveToken> _resolveLiveToken() async {
+    if (liveToken.isNotEmpty) return LiveToken(liveToken);
     _emit(VoiceSystemEvent('Requesting live token from Convex'));
-    final token = await _fetchLiveToken(
+    final token = await fetchLiveToken(
       useAuthenticatedTokenAction: useAuthenticatedTokenAction,
       convexClient: convexClient,
       sessionToken: sessionToken,
@@ -797,31 +363,12 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
     );
   }
 
-  Uri _connectionUri(String effectiveLiveToken) {
-    const basePath = '/ws/';
-    if (effectiveLiveToken.isNotEmpty) {
-      return Uri(
-        scheme: 'wss',
-        host: 'generativelanguage.googleapis.com',
-        path:
-            '${basePath}google.ai.generativelanguage.v1alpha.'
-            'GenerativeService.BidiGenerateContentConstrained',
-        queryParameters: {'access_token': effectiveLiveToken},
-      );
-    }
-    return Uri(
-      scheme: 'wss',
-      host: 'generativelanguage.googleapis.com',
-      path:
-          '${basePath}google.ai.generativelanguage.v1beta.'
-          'GenerativeService.BidiGenerateContent',
-      queryParameters: {'key': apiKey},
-    );
-  }
-
   @override
   Future<void> addAudioChunk(Uint8List chunk) async {
-    if (!isActive) return;
+    if (!isActive || !isConnected || chunk.isEmpty) return;
+    if (chunk.length.isOdd) {
+      throw const FormatException('Unaligned microphone PCM16');
+    }
     _inputChunks += 1;
     _audioStreamOpen = true;
     _persistProtocolEvent(
@@ -832,21 +379,14 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
       binaryData: Uint8List.fromList(chunk),
       binaryMimeType: 'audio/pcm;rate=16000',
     );
-    _sendOrQueue({
-      'realtimeInput': {
-        'audio': {
-          'data': base64Encode(chunk),
-          'mimeType': 'audio/pcm;rate=16000',
-        },
-      },
-    });
+    _connection.send(LiveProtocol.audio(chunk));
   }
 
   @override
   Future<void> endAudioStream() async {
     if (!isActive || !_audioStreamOpen) return;
     _audioStreamOpen = false;
-    _sendOrQueue({
+    _connection.send({
       'realtimeInput': {'audioStreamEnd': true},
     });
   }
@@ -857,6 +397,7 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
     if (_audioPlaybackEnabled == enabled) return;
     _audioPlaybackEnabled = enabled;
     recordClientEvent('audio_playback_changed', {'enabled': enabled});
+    if (!enabled) unawaited(_flushPlayback());
   }
 
   @override
@@ -870,19 +411,9 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
       'interactionModality': 'text',
       'text': trimmed,
     });
-    _sendOrQueue({
-      'clientContent': {
-        'turns': [
-          {
-            'role': 'user',
-            'parts': [
-              {'text': trimmed},
-            ],
-          },
-        ],
-        'turnComplete': true,
-      },
-    });
+    await _flushPlayback();
+    _discardInterruptedOutput = false;
+    _sendOrQueue(LiveProtocol.text(trimmed));
   }
 
   @override
@@ -913,8 +444,16 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
     if (!isActive) return;
     _audioPlaybackEnabled = false;
     _discardInterruptedOutput = true;
-    _emit(VoiceAgentInterruptedEvent(reason: reason));
-    await _audioPlayer.interrupt();
+    final suspend = reason == 'screen_detached' || reason == 'app_backgrounded';
+    if (suspend) {
+      recordClientEvent('audio_suspended', {'reason': reason});
+    } else {
+      _emit(VoiceAgentInterruptedEvent(reason: reason));
+    }
+    await _flushPlayback();
+    if (suspend) {
+      await _audioPlayer.stop();
+    }
   }
 
   @override
@@ -926,9 +465,9 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
     _explicitlyStopped = true;
     _active = false;
     _prefetchedToken = null;
-    _reconnectTimer?.cancel();
-    _goAwayTimer?.cancel();
-    await _closeSocket(invalidateGeneration: true);
+    await _connection.close();
+    _pendingMessages.clear();
+    await _tools.settled;
     await _audioPlayer.stop();
     final summary =
         'Sent $_inputChunks input chunks, received $_outputAudioChunks audio '
@@ -942,6 +481,7 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
     // 30 s operation timeout, and ending the conversation must never wait on
     // it. Unsynced rows stay in the durable outbox and retry later.
     unawaited(remoteSync?.flush());
+    _emit(VoiceDisconnectedEvent());
     onEnded();
     return VoiceExpenseCommandResult(message: summary);
   }
@@ -949,12 +489,11 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
   @override
   Future<void> dispose() async {
     if (_disposed) return;
-    _disposed = true;
     _active = false;
     _prefetchedToken = null;
-    _reconnectTimer?.cancel();
-    _goAwayTimer?.cancel();
-    await _closeSocket(invalidateGeneration: true);
+    await _connection.close();
+    _pendingMessages.clear();
+    await _tools.settled;
     await _audioPlayer.stop();
     final sessionId = _sessionId;
     if (!_explicitlyStopped && sessionId != null) {
@@ -962,41 +501,23 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
       await sessionRepository.markStatus(sessionId, 'suspended');
     }
     await sessionRepository.flush();
+    _disposed = true;
     await _events.close();
     onEnded();
   }
 
-  void _handleServerMessage(dynamic rawMessage, int generation) {
-    if (generation != _connectionGeneration || !isActive) return;
-    final text = rawMessage is String
-        ? rawMessage
-        : rawMessage is List<int>
-        ? utf8.decode(rawMessage)
-        : rawMessage.toString();
-
-    Map<String, dynamic> message;
-    try {
-      message = (jsonDecode(text) as Map).cast<String, dynamic>();
-    } catch (error) {
-      _emit(VoiceErrorEvent('Malformed Gemini message: $error'));
-      _persistProtocolEvent(
-        type: 'malformed_server_message',
-        direction: 'server',
-        payload: {'text': text, 'error': error.toString()},
-      );
-      return;
-    }
+  void _handleServerMessage(Map<String, dynamic> message, int generation) {
+    if (!_connection.isCurrent(generation) || !isActive) return;
     _persistProtocolEvent(
       type: 'server_message',
       direction: 'server',
       payload: const {},
-      raw: _withoutInlineBinary(message),
+      raw: withoutInlineBinary(message),
     );
 
     final usage = message['usageMetadata'];
     if (usage is Map) {
       final metadata = usage.cast<String, Object?>();
-      _latestUsageMetadata = metadata;
       _recordInteractionCostMetric(metadata);
       _emit(VoiceUsageMetadataEvent(metadata));
     }
@@ -1007,17 +528,12 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
     final goAway = message['goAway'];
     if (goAway is Map) _handleGoAway(goAway);
 
-    if (message.containsKey('setupComplete')) {
-      final completer = _setupComplete;
-      if (completer != null && !completer.isCompleted) completer.complete();
-    }
-
     final cancellation = message['toolCallCancellation'];
-    if (cancellation is Map) _handleToolCancellation(cancellation);
+    if (cancellation is Map) _handleToolCancellation(cancellation, generation);
 
     final toolCall = message['toolCall'];
     if (toolCall is Map) {
-      unawaited(_handleToolCall(toolCall.cast<String, dynamic>()));
+      unawaited(_tools.dispatch(toolCall.cast<String, dynamic>(), generation));
     }
 
     final serverContent = message['serverContent'];
@@ -1056,25 +572,20 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
   void _handleGoAway(Map<dynamic, dynamic> goAway) {
     final timeLeft = goAway['timeLeft']?.toString();
     _emit(VoiceGoAwayEvent(timeLeft));
-    _goAwayTimer?.cancel();
-    // Reconnect shortly before the announced kill; the transcript seed
-    // restores context on the new connection.
-    final remaining =
-        _parseGoogleDuration(timeLeft) ?? const Duration(seconds: 5);
-    final delay = remaining > const Duration(seconds: 2)
-        ? remaining - const Duration(seconds: 2)
-        : const Duration(milliseconds: 100);
-    _goAwayTimer = Timer(delay, () {
-      if (isActive) unawaited(_reconnectNow('goAway'));
-    });
+    _connection.rotateAfter(
+      _parseGoogleDuration(timeLeft) ?? const Duration(seconds: 5),
+    );
   }
 
-  void _handleToolCancellation(Map<dynamic, dynamic> cancellation) {
+  void _handleToolCancellation(
+    Map<dynamic, dynamic> cancellation,
+    int generation,
+  ) {
     final ids = cancellation['ids'];
     final idList = ids is List
         ? ids.map((value) => value.toString()).toList(growable: false)
         : <String>[];
-    _cancelledToolIds.addAll(idList);
+    _tools.cancel(idList, generation);
     _emit(VoiceToolCancelledEvent(idList));
   }
 
@@ -1100,9 +611,9 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
     }
 
     if (serverContent['interrupted'] == true) {
-      _discardInterruptedOutput = true;
+      _discardInterruptedOutput = false;
       _emit(VoiceAgentInterruptedEvent());
-      unawaited(_audioPlayer.interrupt());
+      unawaited(_flushPlayback());
     }
 
     final modelTurn = serverContent['modelTurn'];
@@ -1110,16 +621,21 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
       final parts = modelTurn['parts'];
       if (parts is List) {
         for (final part in parts) {
-          if (part is! Map) continue;
+          if (part is! Map || part['thought'] == true) continue;
           final text = part['text'];
-          if (text is String && text.isNotEmpty) {
+          if (text is String &&
+              text.isNotEmpty &&
+              outputTranscription is! Map) {
             _emit(VoiceAgentTranscriptDelta(text));
           }
-          final inlineData = part['inlineData'];
-          if (inlineData is! Map) continue;
-          final data = inlineData['data'];
-          if (data is! String) continue;
-          final pcmBytes = base64Decode(data);
+          final Uint8List? pcmBytes;
+          try {
+            pcmBytes = LiveProtocol.pcm(part);
+          } on FormatException catch (error) {
+            _emit(VoiceErrorEvent('Ignored malformed audio: $error'));
+            continue;
+          }
+          if (pcmBytes == null) continue;
           _outputAudioChunks += 1;
           _outputAudioBytes += pcmBytes.length;
           _persistProtocolEvent(
@@ -1131,11 +647,12 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
               'byteLength': pcmBytes.length,
             },
             binaryData: pcmBytes,
-            binaryMimeType:
-                inlineData['mimeType']?.toString() ?? 'audio/pcm;rate=24000',
+            binaryMimeType: 'audio/pcm;rate=24000',
           );
-          if (_audioPlaybackEnabled && !_discardInterruptedOutput) {
-            unawaited(_audioPlayer.enqueue(pcmBytes));
+          if (_audioPlaybackEnabled &&
+              !_discardInterruptedOutput &&
+              serverContent['interrupted'] != true) {
+            unawaited(_playAudio(pcmBytes));
           }
         }
       }
@@ -1147,132 +664,59 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
     }
   }
 
-  Future<void> _handleToolCall(Map<String, dynamic> toolCall) async {
-    final calls = toolCall['functionCalls'];
-    if (calls is! List) return;
-    final responses = <Map<String, dynamic>>[];
-    for (final call in calls) {
-      if (call is! Map) continue;
-      final id = call['id']?.toString() ?? '';
-      final name = call['name']?.toString() ?? '';
-      final rawArgs = call['args'];
-      final args = rawArgs is Map
-          ? rawArgs.cast<String, dynamic>()
-          : <String, dynamic>{};
-      _emit(VoiceToolCallEvent(id: id, name: name, args: args));
-      _interactionCostTracker.markToolCall();
-      if (_cancelledToolIds.contains(id)) continue;
-
-      final result = await _executors.execute(name, args);
-      if (_cancelledToolIds.contains(id) || !isActive) continue;
-      _emit(VoiceToolResultEvent(id: id, name: name, result: result));
-      responses.add({
-        if (id.isNotEmpty) 'id': id,
-        'name': name,
-        'response': {'result': result},
-      });
-    }
-    if (responses.isNotEmpty) {
-      _sendOrQueue({
-        'toolResponse': {'functionResponses': responses},
-      });
+  Future<void> _playAudio(Uint8List bytes) async {
+    final epoch = _playbackEpoch;
+    try {
+      await prepareAudio();
+      if (!isActive || !_audioPlaybackEnabled || epoch != _playbackEpoch) {
+        return;
+      }
+      await _audioPlayer.enqueue(bytes);
+    } catch (error) {
+      _emit(VoiceErrorEvent('Audio playback failed: $error'));
     }
   }
 
-  void _sendOrQueue(Map<String, dynamic> message) {
-    _persistProtocolEvent(
-      type: 'client_message',
-      direction: 'client',
-      payload: const {},
-      raw: _withoutInlineBinary(message),
-    );
-    if (_connected && _channel != null) {
-      _sendNow(message, persist: false);
-      return;
+  Future<void> _flushPlayback() async {
+    ++_playbackEpoch;
+    try {
+      await _audioPlayer.interrupt();
+    } catch (error) {
+      _emit(VoiceErrorEvent('Audio interruption failed: $error'));
     }
+  }
+
+  // Only intentional user text survives a reconnect. Replaying microphone
+  // fragments or old tool responses produces stale turns and duplicate writes.
+  void _sendOrQueue(Map<String, dynamic> message) {
+    if (_connection.send(message)) return;
     if (_pendingMessages.length >= _maxQueuedMessages) {
-      _pendingMessages.removeAt(0);
-      _emit(VoiceSystemEvent('Dropped oldest queued message during reconnect'));
+      throw StateError('Too many pending messages; wait for the connection');
     }
     _pendingMessages.add(message);
   }
 
-  void _sendNow(Map<String, dynamic> message, {bool persist = true}) {
-    if (persist) {
-      _persistProtocolEvent(
-        type: 'client_message',
-        direction: 'client',
-        payload: const {},
-        raw: _withoutInlineBinary(message),
-      );
-    }
-    _channel?.sink.add(jsonEncode(message));
-  }
-
   void _flushPendingMessages() {
-    if (!_connected || _channel == null) return;
-    final pending = List<Map<String, dynamic>>.of(_pendingMessages);
-    _pendingMessages.clear();
-    for (final message in pending) {
-      _sendNow(message, persist: false);
+    while (_pendingMessages.isNotEmpty && _connection.ready) {
+      if (!_connection.send(_pendingMessages.first)) return;
+      _pendingMessages.removeAt(0);
     }
-  }
-
-  void _handleSocketDone(WebSocketChannel channel, int generation) {
-    if (generation != _connectionGeneration) return;
-    _connected = false;
-    final completer = _setupComplete;
-    if (completer != null && !completer.isCompleted) {
-      completer.completeError(
-        StateError('Gemini disconnected before setup completed'),
-      );
-    }
-    _emit(
-      VoiceDisconnectedEvent(
-        code: channel.closeCode,
-        reason: channel.closeReason,
-      ),
-    );
-    if (isActive) _scheduleReconnect();
-  }
-
-  void _scheduleReconnect() {
-    if (!isActive || _reconnectTimer?.isActive == true) return;
-    _reconnectAttempt += 1;
-    final seconds = math.min(30, math.pow(2, _reconnectAttempt - 1).toInt());
-    _emit(VoiceConnectingEvent('Reconnecting to Gemini Live in ${seconds}s'));
-    _reconnectTimer = Timer(Duration(seconds: seconds), () {
-      if (!isActive) return;
-      unawaited(
-        _reconnectNow('socket_closed').catchError((Object error) {
-          _emit(VoiceErrorEvent('Reconnect failed: $error', isTransient: true));
-          _scheduleReconnect();
-        }),
-      );
-    });
-  }
-
-  Future<void> _reconnectNow(String reason) async {
-    if (!isActive) return;
-    _reconnectTimer?.cancel();
-    _goAwayTimer?.cancel();
-    _emit(VoiceConnectingEvent('Reconnecting to Gemini Live ($reason)'));
-    await _closeSocket(invalidateGeneration: true);
-    await _connect();
   }
 
   void _recordSessionCostMetric() {
     if (_sessionCostMetricSent) return;
-    final usage = _latestUsageMetadata;
     final sessionId = _sessionId;
-    if (usage == null || sessionId == null) return;
+    if (sessionId == null) return;
     _sessionCostMetricSent = true;
-    agentMetrics?.recordSessionCostFromUsageBestEffort(
-      sessionId: sessionId,
-      model: _model,
-      mode: _sessionMode(),
-      usage: usage,
-    );
+    for (final entry in _interactionCostTracker.totalsByModel.entries) {
+      agentMetrics?.recordSessionCostBestEffort(
+        sessionId: sessionId,
+        model: entry.key,
+        mode: _sessionMode(),
+        costUsd: entry.value.costUsd,
+        tokenAttributes: entry.value.tokens,
+      );
+    }
   }
 
   void _recordInteractionCostMetric(Map<String, Object?> usage) {
@@ -1280,11 +724,12 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
     if (sessionId == null) return;
     final metrics = agentMetrics;
     if (metrics == null) return;
-    final totalCostUsd = metrics.estimateSessionCostUsd(usage);
-    if (totalCostUsd == null) return;
+    final generationCostUsd = metrics.estimateSessionCostUsd(usage);
+    if (generationCostUsd == null) return;
     final sample = _interactionCostTracker.nextSample(
       sessionId: sessionId,
-      totalCostUsd: totalCostUsd,
+      model: _model,
+      generationCostUsd: generationCostUsd,
       fallbackInteractionType: _sessionMode(),
       tokenAttributes: AgentMetrics.usageTokenAttributes(usage),
     );
@@ -1306,21 +751,11 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
     return 'text';
   }
 
-  Future<void> _closeSocket({required bool invalidateGeneration}) async {
-    if (invalidateGeneration) _connectionGeneration += 1;
-    final subscription = _subscription;
-    final channel = _channel;
-    _subscription = null;
-    _channel = null;
-    _connected = false;
-    await subscription?.cancel();
-    await channel?.sink.close();
-  }
-
   void _emit(VoiceEvent event) {
+    if (_disposed) return;
     _history.add(event);
     if (!_events.isClosed) _events.add(event);
-    final record = _eventRecord(event);
+    final record = voiceEventRecord(event);
     _persistProtocolEvent(
       type: record.type,
       direction: record.direction,
@@ -1359,109 +794,6 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
     );
   }
 
-  _VoiceEventRecord _eventRecord(VoiceEvent event) => switch (event) {
-    VoiceConnectingEvent(:final message) => _VoiceEventRecord(
-      'connecting',
-      'local',
-      {'message': message},
-    ),
-    VoiceConnectedEvent() => const _VoiceEventRecord('connected', 'local', {}),
-    VoiceDisconnectedEvent(:final code, :final reason) => _VoiceEventRecord(
-      'disconnected',
-      'server',
-      {'code': ?code, 'reason': ?reason},
-    ),
-    VoiceErrorEvent(:final message, :final isTransient, :final code) =>
-      _VoiceEventRecord('error', 'local', {
-        'message': message,
-        'isTransient': isTransient,
-        'code': ?code,
-      }),
-    VoiceSystemEvent(:final message) => _VoiceEventRecord('system', 'local', {
-      'message': message,
-    }),
-    VoiceClientActionEvent(:final action, :final details) => _VoiceEventRecord(
-      action,
-      'client',
-      details,
-      modality: details['interactionModality']?.toString(),
-    ),
-    VoiceSessionResumptionEvent(:final resumable, :final hasNewHandle) =>
-      _VoiceEventRecord('session_resumption_update', 'server', {
-        'resumable': resumable,
-        'hasNewHandle': hasNewHandle,
-      }),
-    VoiceGoAwayEvent(:final timeLeft) => _VoiceEventRecord(
-      'go_away',
-      'server',
-      {'timeLeft': ?timeLeft},
-    ),
-    VoiceUsageMetadataEvent(:final metadata) => _VoiceEventRecord(
-      'usage_metadata',
-      'server',
-      metadata,
-    ),
-    VoiceUserTranscriptDelta(:final text) => _VoiceEventRecord(
-      'user_transcript_delta',
-      'server',
-      {'text': text},
-      modality: 'voice',
-    ),
-    VoiceAgentTranscriptDelta(:final text) => _VoiceEventRecord(
-      'agent_transcript_delta',
-      'server',
-      {'text': text},
-      modality: 'voice',
-    ),
-    VoiceAgentTurnComplete() => const _VoiceEventRecord(
-      'agent_turn_complete',
-      'server',
-      {},
-    ),
-    VoiceAgentInterruptedEvent(:final reason) => _VoiceEventRecord(
-      'agent_interrupted',
-      reason == 'server_interrupted' ? 'server' : 'client',
-      {'reason': reason},
-    ),
-    VoiceToolCallEvent(:final id, :final name, :final args) =>
-      _VoiceEventRecord('tool_call', 'server', {
-        'id': id,
-        'name': name,
-        'args': args,
-      }, modality: 'tool'),
-    VoiceToolResultEvent(:final id, :final name, :final result) =>
-      _VoiceEventRecord('tool_result', 'client', {
-        'id': id,
-        'name': name,
-        'result': result,
-      }, modality: 'tool'),
-    VoiceToolCancelledEvent(:final ids) => _VoiceEventRecord(
-      'tool_cancelled',
-      'server',
-      {'ids': ids},
-      modality: 'tool',
-    ),
-  };
-
-  Map<String, Object?> _withoutInlineBinary(Map<dynamic, dynamic> value) {
-    Object? clean(Object? node) {
-      if (node is List) return node.map(clean).toList(growable: false);
-      if (node is! Map) return node;
-      final mimeType = node['mimeType']?.toString();
-      return <String, Object?>{
-        for (final entry in node.entries)
-          entry.key.toString():
-              entry.key == 'data' &&
-                  mimeType != null &&
-                  mimeType.startsWith('audio/')
-              ? '<stored in binary event>'
-              : clean(entry.value),
-      };
-    }
-
-    return (clean(value) as Map).cast<String, Object?>();
-  }
-
   Duration? _parseGoogleDuration(String? value) {
     if (value == null) return null;
     final match = RegExp(r'^([0-9]+(?:\.[0-9]+)?)s$').firstMatch(value);
@@ -1470,18 +802,4 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
     if (seconds == null) return null;
     return Duration(milliseconds: (seconds * 1000).round());
   }
-}
-
-class _VoiceEventRecord {
-  const _VoiceEventRecord(
-    this.type,
-    this.direction,
-    this.payload, {
-    this.modality,
-  });
-
-  final String type;
-  final String direction;
-  final Map<String, Object?> payload;
-  final String? modality;
 }

@@ -14,6 +14,7 @@ export const metricNames = new Set<MetricName>([
     'business.transfers.created_count',
     'business.users.registered_total',
     'business.user_accounts.signed_in_count',
+    'agent.sessions.started_count',
     'agent.session.cost_usd',
     'agent.interaction.cost_usd',
     'agent.user.monthly_cost_usd',
@@ -89,6 +90,23 @@ export const metricCatalog: Record<
         attributes: {
             auth_method: new Set(['email_password', 'google', 'apple']),
             client_platform: new Set(['native', 'web']),
+        },
+    },
+    // One live session opened on a client, counted where the session actually
+    // begins (the client's session repository) rather than where its token is
+    // minted: a mint happens on every reconnect and on the screen's speculative
+    // prefetch, so minting is not a session.
+    //
+    // `start_kind` is the difference the mint could never report: `new` is a
+    // session that did not exist a moment ago, `resumed` is the same
+    // conversation picked up again through a live resume handle. Sessions
+    // created = `new`; re-opened = `resumed`.
+    'agent.sessions.started_count': {
+        type: 'counter',
+        unit: 'count',
+        attributes: {
+            model: 'string',
+            start_kind: new Set(['new', 'resumed']),
         },
     },
     'agent.session.cost_usd': {

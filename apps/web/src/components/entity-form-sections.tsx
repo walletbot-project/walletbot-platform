@@ -83,6 +83,7 @@ export function IconColorSection({
                         value={color}
                         onChange={onColorChange}
                         options={COLOR_OPTIONS}
+                        themed
                     />
                 </div>
             </div>

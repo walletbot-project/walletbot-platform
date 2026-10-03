@@ -139,6 +139,7 @@ import type * as v1_users_internal from "../v1/users/internal.js";
 import type * as v1_users_mutations from "../v1/users/mutations.js";
 import type * as v1_users_queries from "../v1/users/queries.js";
 import type * as v1_users_utils from "../v1/users/utils.js";
+import type * as v1_voice_metrics from "../v1/voice/metrics.js";
 import type * as v1_voice_sessions from "../v1/voice/sessions.js";
 import type * as v1_voice_utils from "../v1/voice/utils.js";
 import type * as v1_whatsapp_mutations from "../v1/whatsapp/mutations.js";
@@ -290,6 +291,7 @@ declare const fullApi: ApiFromModules<{
   "v1/users/mutations": typeof v1_users_mutations;
   "v1/users/queries": typeof v1_users_queries;
   "v1/users/utils": typeof v1_users_utils;
+  "v1/voice/metrics": typeof v1_voice_metrics;
   "v1/voice/sessions": typeof v1_voice_sessions;
   "v1/voice/utils": typeof v1_voice_utils;
   "v1/whatsapp/mutations": typeof v1_whatsapp_mutations;

@@ -23,6 +23,7 @@ import {
     ACCOUNT_DEFAULT_COLOR,
     CATEGORY_DEFAULT_COLOR,
     normalizeColor,
+    useReadableAccent,
 } from '@/lib/entity-colors'
 import { useFormatLocale, useT } from '@/lib/i18n'
 import { formatMoney } from '@/lib/money'
@@ -155,6 +156,7 @@ function TransactionDetailsContent({
     const navigate = useNavigate()
     const t = useT()
     const formatLocale = useFormatLocale()
+    const paint = useReadableAccent()
 
     // The recurring series this movement belongs to, if any. A movement that
     // has already happened is still an occurrence of its rule, and "the 3rd of
@@ -242,6 +244,9 @@ function TransactionDetailsContent({
         category?.color,
         CATEGORY_DEFAULT_COLOR,
     )
+    // `CategoryIcon` adapts the stored color itself; only the tile behind it is
+    // painted here, so it is the one place that adapts (never twice).
+    const categoryTint = paint(categoryColor)
     const canEditAmount =
         transaction.type === 'income' ||
         transaction.type === 'expense' ||
@@ -432,7 +437,7 @@ function TransactionDetailsContent({
                     <div className="flex flex-col items-center px-6 py-7 text-center">
                         <span
                             className="flex size-16 items-center justify-center rounded-full"
-                            style={{ backgroundColor: `${categoryColor}29` }}
+                            style={{ backgroundColor: `${categoryTint}29` }}
                         >
                             <CategoryIcon
                                 name={category?.icon}

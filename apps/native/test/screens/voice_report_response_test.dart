@@ -318,6 +318,9 @@ class _ActiveVoiceCommand implements VoiceExpenseCommand {
   Future<void> start({bool respondWithAudio = true}) async {}
 
   @override
+  Future<void> prepareAudio() async {}
+
+  @override
   Future<void> ensureConnected() async {}
 
   @override

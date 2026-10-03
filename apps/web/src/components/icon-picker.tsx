@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { M3Dialog } from '@/components/m3/dialog'
 import { Icon } from '@/components/m3/icon'
 import type { IconOption } from '@/lib/account-icons'
+import { useReadableAccent } from '@/lib/entity-colors'
 import { useT } from '@/lib/i18n'
 import { cn } from '@/lib/utils'
 
@@ -25,6 +26,8 @@ export function IconPicker({
     icons,
 }: IconPickerProps) {
     const t = useT()
+    const paint = useReadableAccent()
+    const tint = paint(color)
     const [open, setOpen] = useState(false)
     const active = icons.find((option) => option.name === icon) ?? icons[0]
 
@@ -34,14 +37,14 @@ export function IconPicker({
                 type="button"
                 onClick={() => setOpen(true)}
                 className="m3-state-layer flex size-14 shrink-0 cursor-pointer items-center justify-center rounded-2xl"
-                style={{ backgroundColor: `${color}47` }}
+                style={{ backgroundColor: `${tint}47` }}
                 aria-label={t.common.chooseIcon}
             >
                 <Icon
                     name={active.symbol}
                     filled={active.filled}
                     size={28}
-                    style={{ color }}
+                    style={{ color: tint }}
                 />
             </button>
 
@@ -70,8 +73,8 @@ export function IconPicker({
                                 style={
                                     isSelected
                                         ? {
-                                              backgroundColor: `${color}47`,
-                                              borderColor: color,
+                                              backgroundColor: `${tint}47`,
+                                              borderColor: tint,
                                           }
                                         : undefined
                                 }
@@ -84,7 +87,7 @@ export function IconPicker({
                                     size={26}
                                     style={{
                                         color: isSelected
-                                            ? color
+                                            ? tint
                                             : 'var(--md-sys-color-on-surface-variant)',
                                     }}
                                 />

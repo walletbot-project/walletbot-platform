@@ -21,7 +21,7 @@ import {
 } from 'recharts'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useOccurrenceCutoff } from '@/hooks/use-occurrence-cutoff'
-import { COLOR_OPTIONS } from '@/lib/entity-colors'
+import { COLOR_OPTIONS, readableAccent } from '@/lib/entity-colors'
 import {
     dashboardTitle,
     transactionName,
@@ -255,7 +255,12 @@ export function BreakdownChartWidget({ spec }: { spec: WidgetSpec }) {
         key: slice.key,
         label: slice.label,
         value: Number(slice.totalCents) / 100,
-        color: slice.colorHex ?? COLOR_OPTIONS[index % COLOR_OPTIONS.length],
+        // An account slice paints its stored accent adapted to the theme, so it
+        // matches the account everywhere else.
+        color:
+            slice.colorHex != null
+                ? readableAccent(slice.colorHex, brightness)
+                : COLOR_OPTIONS[index % COLOR_OPTIONS.length],
     }))
     const total = slices.reduce((sum, slice) => sum + slice.value, 0)
 

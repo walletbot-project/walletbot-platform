@@ -15,11 +15,34 @@ import { supportsRecurrences } from '../sync/compatibility'
 // Deliberately NOT 'use node': minting is one HTTPS call, kept in Convex's
 // default runtime so token requests never pay a Node cold start.
 //
-// Model + voice come from packages/shared/src/tools/constants.ts — the same
-// source the native setup frame derives from (via the generated
-// apps/native/lib/voice/agent_generated.dart), so a bump here can never
-// silently desync the two sides.
-const MODEL = AGENT_MODEL
+// The token response is authoritative for model-aware native clients.
+// Older binaries still require the model compiled into their setup frame.
+export function liveModelFor(
+    platform?: string,
+    appVersion?: string,
+    flags?: Partial<Record<FlagKey, boolean>>,
+): string {
+    const native =
+        platform === 'android' || platform === 'ios' || platform === 'macos'
+    if (
+        platform === 'web' &&
+        compareVersions(appVersion ?? '0.0.0', '0.5.1') >= 0
+    ) {
+        return flags?.agentGemini31
+            ? 'gemini-3.1-flash-live-preview'
+            : AGENT_MODEL
+    }
+    if (!native || compareVersions(appVersion ?? '0.0.0', '0.5.0') < 0) {
+        return 'gemini-3.1-flash-live-preview'
+    }
+    if (
+        flags?.agentGemini31 === true &&
+        compareVersions(appVersion ?? '0.0.0', '0.5.1') >= 0
+    ) {
+        return 'gemini-3.1-flash-live-preview'
+    }
+    return AGENT_MODEL
+}
 // The clients open the Live constrained WebSocket against v1alpha; mint the
 // token against the same API version.
 const AUTH_TOKENS_URL =
@@ -458,6 +481,7 @@ type GoogleSchema = {
 }
 
 type FunctionDeclaration = {
+    behavior: 'BLOCKING' | 'NON_BLOCKING'
     name: string
     description: string
     parameters: GoogleSchema
@@ -492,6 +516,10 @@ function toFunctionDeclarations(
     }[],
 ): FunctionDeclaration[] {
     return defs.map((d) => ({
+        // Keep local financial operations ordered and wait for committed
+        // results before confirming them. Opt reads into async separately
+        // once the conversation UX represents outstanding work explicitly.
+        behavior: 'BLOCKING',
         name: d.name,
         description: d.description,
         parameters: toGoogleSchema(d.parameters),
@@ -521,6 +549,11 @@ export async function createLiveToken(
     timings: { googleMs: number; mintMs: number; moduleAgeMs: number }
 }> {
     const startedAt = Date.now()
+    const model = liveModelFor(
+        options.platform,
+        options.appVersion,
+        options.flags,
+    )
     const apiKey = process.env.GEMINI_API_KEY
     if (!apiKey) {
         throw new Error('GEMINI_API_KEY environment variable is not set')
@@ -541,7 +574,7 @@ export async function createLiveToken(
             Date.now() + NEW_SESSION_WINDOW_MS,
         ).toISOString(),
         bidiGenerateContentSetup: {
-            model: `models/${MODEL}`,
+            model: `models/${model}`,
             generationConfig: {
                 responseModalities: ['AUDIO'],
                 speechConfig: {
@@ -560,7 +593,11 @@ export async function createLiveToken(
                         options.platform,
                         options.appVersion,
                         options.flags,
-                    ),
+                    ).map((declaration) => {
+                        if (model === AGENT_MODEL) return declaration
+                        const { behavior: _behavior, ...legacy } = declaration
+                        return legacy
+                    }),
                 },
             ],
             inputAudioTranscription: {},
@@ -603,7 +640,7 @@ export async function createLiveToken(
     return {
         token: token.name,
         expireTime,
-        model: MODEL,
+        model,
         timings,
     }
 }

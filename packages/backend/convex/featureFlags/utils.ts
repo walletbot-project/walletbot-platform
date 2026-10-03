@@ -1,4 +1,5 @@
 export type FlagKey =
+    | 'agentGemini31'
     | 'agentLocalAccounts'
     | 'aiConsent'
     | 'agentReportButton'
@@ -13,6 +14,12 @@ export const KNOWN_FLAGS: {
     description: string
     enabledByDefault: boolean
 }[] = [
+    {
+        key: 'agentGemini31',
+        description:
+            'Use Gemini 3.1 Flash Live on native 0.5.1+ and updated web clients for rollback/comparison tests, keeping the new audio architecture. Off uses Gemini 3.8 Live. Takes effect on the next token mint; existing connections stay on their model.',
+        enabledByDefault: false,
+    },
     {
         key: 'agentLocalAccounts',
         description:
