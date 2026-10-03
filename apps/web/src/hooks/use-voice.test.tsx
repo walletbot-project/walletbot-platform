@@ -18,7 +18,7 @@ const f = vi.hoisted(() => {
         },
     )
     return {
-        client: { action: vi.fn() },
+        client: { action: vi.fn(), mutation: vi.fn() },
         catalog: { voice },
         connect: vi.fn(),
         capture: vi.fn(),
@@ -100,6 +100,7 @@ beforeEach(async () => {
         token: 'auth_tokens/test',
         model: 'gemini-3.8-live',
     })
+    f.client.mutation.mockResolvedValue({ accepted: 1 })
     f.connect.mockImplementation((opts) => {
         receive = opts.callbacks.onmessage
         onclose = opts.callbacks.onclose
@@ -195,6 +196,43 @@ it('silent text never acquires audio and preserves both usage and content in com
         expect.objectContaining({ model: 'gemini-3.8-live' }),
         undefined,
     )
+})
+it('counts one logical session through reconnects and sends only session totals outside history', async () => {
+    await start('text')
+    await establish()
+    await act(async () => {
+        onmessage({
+            usageMetadata: { promptTokenCount: 100, responseTokenCount: 20 },
+        })
+        // Rotate the socket without waiting for the network retry backoff.
+        onmessage({ goAway: { timeLeft: '0s' } })
+        await new Promise((resolve) => setTimeout(resolve, 150))
+        ready(session)
+        await tick()
+        onmessage({
+            usageMetadata: { promptTokenCount: 30, responseTokenCount: 10 },
+        })
+        voice.disconnect()
+        voice.disconnect()
+        await tick()
+    })
+    const metrics = f.client.mutation.mock.calls.flatMap(
+        (call) => call[1].metrics,
+    )
+    expect(metrics.map((metric) => metric.name)).toEqual([
+        'agent.sessions.started_count',
+        'agent.session.cost_usd',
+    ])
+    expect(metrics[1].attributes).toMatchObject({
+        model: 'gemini-3.8-live',
+        token_input_text: 130,
+        token_output_text: 30,
+    })
+    expect(
+        f.recorder.record.mock.calls.filter(
+            (call) => call[0] === 'usage_metadata',
+        ),
+    ).toHaveLength(2)
 })
 it('deduplicates tools, cancels queued work, and records committed results without replying to a dead connection', async () => {
     await start('text')

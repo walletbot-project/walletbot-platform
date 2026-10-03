@@ -2,9 +2,9 @@ import { api } from '@wallet-bot/backend/api'
 import type { AgentUserContext } from '@wallet-bot/shared'
 import { AGENT_CONTEXT_CAPS, pastCutoffBigInt } from '@wallet-bot/shared'
 import type { ConvexReactClient } from 'convex/react'
+import { appVersion } from '@/lib/app-version'
 import { readLanguagePreference } from '@/lib/i18n'
 import { readThemePreference } from '@/lib/theme/preference'
-import { WEB_LIVE_VERSION } from './gemini-live'
 
 /**
  * The arguments `v1/live/actions:requestLiveToken` accepts — platform
@@ -130,7 +130,7 @@ export async function buildLiveTokenMintArgs(opts: {
     return {
         platform: 'web',
         // Capability version keeps cached older web builds on their old model.
-        appVersion: WEB_LIVE_VERSION,
+        appVersion,
         locale,
         ...(timezone ? { timezone } : {}),
         timezoneOffsetMinutes: -new Date().getTimezoneOffset(),

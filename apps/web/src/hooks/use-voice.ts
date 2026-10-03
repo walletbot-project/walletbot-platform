@@ -4,6 +4,11 @@ import type { ToolName } from '@wallet-bot/shared'
 import { useConvex, useQuery } from 'convex/react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { LiveTokenMintArgs } from '@/lib/agent-context'
+import {
+    AgentSessionCostTracker,
+    recordAgentSessionCost,
+    recordAgentSessionStarted,
+} from '@/lib/agent-metrics'
 import { executeToolCall } from '@/lib/agent-tools'
 import type { AgentToolContext } from '@/lib/agent-tools/helpers'
 import {
@@ -231,6 +236,9 @@ export function useVoice(opts: UseVoiceOpts) {
     const historyRef = useRef<VoiceHistoryRecorder | null>(null)
     /** The model the current token was minted for, once it is known. */
     const modelRef = useRef<string | null>(null)
+    const sessionStartedMetricSentRef = useRef(false)
+    const sessionCostMetricSentRef = useRef(false)
+    const sessionCostTrackerRef = useRef(new AgentSessionCostTracker())
 
     useEffect(() => {
         ownerIdRef.current = ownerId
@@ -775,6 +783,16 @@ export function useVoice(opts: UseVoiceOpts) {
             // becomes uploadable.
             historyRef.current?.open(model)
             modelRef.current = model
+            const sessionId = historyRef.current?.sessionId
+            if (!sessionStartedMetricSentRef.current && sessionId) {
+                sessionStartedMetricSentRef.current = true
+                // Reconnects reuse the recorder and must not count another session.
+                void recordAgentSessionStarted(convex, {
+                    sessionId,
+                    model,
+                    resumed: false,
+                })
+            }
             recordHistory('system', 'local', { message: tokenNotice })
 
             const seenCalls = new Set<string>()
@@ -882,6 +900,16 @@ export function useVoice(opts: UseVoiceOpts) {
                         }
 
                         if (msg.usageMetadata) {
+                            // Main derives interaction metrics from these history events.
+                            // Only session totals are sent separately when the session ends.
+                            sessionCostTrackerRef.current.recordUsage({
+                                model,
+                                mode:
+                                    sessionModeRef.current === 'audio'
+                                        ? 'voice'
+                                        : 'text',
+                                usage: msg.usageMetadata,
+                            })
                             recordHistory('usage_metadata', 'server', {
                                 ...msg.usageMetadata,
                                 model,
@@ -1164,6 +1192,9 @@ export function useVoice(opts: UseVoiceOpts) {
             reconnectAttemptRef.current = 0
             conversationLogRef.current = []
             modelRef.current = null
+            sessionStartedMetricSentRef.current = false
+            sessionCostMetricSentRef.current = false
+            sessionCostTrackerRef.current = new AgentSessionCostTracker()
             pendingUserIdRef.current = null
             pendingAgentIdRef.current = null
             audioStreamOpenRef.current = false
@@ -1275,6 +1306,13 @@ export function useVoice(opts: UseVoiceOpts) {
     // the command.
     const disconnect = useCallback(() => {
         recordHistory('end_session', 'client')
+        const sessionId = historyRef.current?.sessionId
+        if (sessionId && !sessionCostMetricSentRef.current) {
+            sessionCostMetricSentRef.current = true
+            for (const sample of sessionCostTrackerRef.current.samples()) {
+                void recordAgentSessionCost(convex, { sessionId, ...sample })
+            }
+        }
         sessionActiveRef.current = false
         clearReconnectTimers()
         // Invalidate the socket's callbacks and any in-flight attempt before
@@ -1301,6 +1339,7 @@ export function useVoice(opts: UseVoiceOpts) {
             recorder?.end({ explicit: true }),
         )
     }, [
+        convex,
         endAudioStream,
         stopMicCapture,
         stopPlayback,

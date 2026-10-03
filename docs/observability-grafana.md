@@ -209,12 +209,12 @@ sum by (start_kind) (count_over_time(agent_sessions_started_count_total[$__range
 ```
 
 The counter is emitted where a session begins (the client's session
-repository), not where its token is minted: a mint also happens on every
-reconnect and on the voice screen's speculative prefetch, so mints are not
-sessions. `start_kind="new"` is a session that did not exist a moment before;
-`start_kind="resumed"` is the same conversation picked up again through a live
-resume handle. Only the native client emits it today — web has no telemetry
-client yet, so web sessions are missing from this counter.
+repository in native; the web voice hook uses its logical session), not where
+its token is minted: a mint also happens on every reconnect and on the voice
+screen's speculative prefetch, so mints are not sessions. `start_kind="new"`
+is a session that did not exist a moment before; `start_kind="resumed"` is the
+same conversation picked up again through a live resume handle. Web emits
+`new` once per logical session but does not classify live resumes yet.
 
 Sessions that never reported a cost (opened but produced no usage metadata):
 
@@ -226,7 +226,9 @@ sum(count_over_time(agent_sessions_started_count_total[$__range]))
 Every open is counted, resumed ones included: each is a connection episode that
 should end with a cost report. The difference can go slightly negative at the
 edges of a window, where a session's cost lands inside it and its open fell
-outside.
+outside. On web, a tab closed or reloaded without an explicit disconnect can
+leave a started session without a final cost report, so this panel also reflects
+that reporting gap.
 
 Agent session cost p95:
 
