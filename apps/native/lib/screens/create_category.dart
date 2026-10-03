@@ -31,6 +31,11 @@ class _CreateCategoryScreenState extends State<CreateCategoryScreen> {
   final _nameController = TextEditingController();
   final _descriptionController = TextEditingController();
   Color _color = categoryDefaultColor;
+
+  /// [_color] as painted in the current theme (see [readableAccent]); the
+  /// stored value stays the raw pick.
+  Color get _paintedColor =>
+      readableAccent(_color, Theme.of(context).brightness);
   IconData _icon = categoryDefaultIcon;
   bool _saving = false;
 
@@ -171,11 +176,11 @@ class _CreateCategoryScreenState extends State<CreateCategoryScreen> {
                     width: 56,
                     height: 56,
                     decoration: BoxDecoration(
-                      color: _color.withValues(alpha: 0.28),
+                      color: _paintedColor.withValues(alpha: 0.28),
                       borderRadius: BorderRadius.circular(18),
                     ),
                     alignment: Alignment.center,
-                    child: Icon(_icon, size: 28, color: _color),
+                    child: Icon(_icon, size: 28, color: _paintedColor),
                   ),
                 ),
                 const SizedBox(width: 16),
@@ -184,6 +189,7 @@ class _CreateCategoryScreenState extends State<CreateCategoryScreen> {
                   child: ColorPicker(
                     selected: _color,
                     options: colorOptions,
+                    themed: true,
                     onChanged: (color) => setState(() => _color = color),
                   ),
                 ),

@@ -200,6 +200,8 @@ const exportableMetricAttributeKeys = (
             return new Set(['auth_method'])
         case 'business.user_accounts.signed_in_count':
             return new Set(['auth_method', 'client_platform'])
+        case 'agent.sessions.started_count':
+            return new Set(['model', 'start_kind'])
         case 'agent.session.cost_usd':
         case 'agent.interaction.cost_usd':
             return new Set([

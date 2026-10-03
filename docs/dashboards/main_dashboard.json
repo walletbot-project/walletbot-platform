@@ -50,7 +50,7 @@
                                             "spec": {
                                                 "alias": "Visits",
                                                 "editorMode": "code",
-                                                "expr": "last_over_time(business_users_registered_total_count[25h])",
+                                                "expr": "last_over_time(business_users_registered_total_count{deployment_environment=\"$Scope\"}[25h])",
                                                 "instant": false,
                                                 "legendFormat": "__auto",
                                                 "max": 28000,
@@ -134,7 +134,7 @@
                                 "wideLayout": true
                             }
                         },
-                        "version": "13.2.0-31997728368"
+                        "version": "13.3.0-36394719073"
                     }
                 }
             },
@@ -157,7 +157,7 @@
                                             "kind": "DataQuery",
                                             "spec": {
                                                 "editorMode": "builder",
-                                                "expr": "max by(__name__) (agent_user_monthly_cost_usd{model=~\"$model\"})",
+                                                "expr": "max by(__name__) (agent_user_monthly_cost_usd{deployment_environment=\"$Scope\",model=~\"$model\"})",
                                                 "legendFormat": "__auto",
                                                 "range": true
                                             },
@@ -216,7 +216,7 @@
                                 "wideLayout": true
                             }
                         },
-                        "version": "13.2.0-31997728368"
+                        "version": "13.3.0-36394719073"
                     }
                 }
             },
@@ -238,19 +238,11 @@
                                             "group": "prometheus",
                                             "kind": "DataQuery",
                                             "spec": {
-                                                "alias": "Visits",
-                                                "editorMode": "builder",
-                                                "expr": "sum by(auth_method) (business_user_accounts_created_count_total)",
-                                                "instant": false,
-                                                "legendFormat": "__auto",
-                                                "max": 28000,
-                                                "min": 22000,
-                                                "noise": 150,
-                                                "range": true,
-                                                "scenarioId": "random_walk",
-                                                "seriesCount": 1,
-                                                "spread": 600,
-                                                "startValue": 25000
+                                                "editorMode": "code",
+                                                "expr": "sum by(auth_method, client_platform) (count_over_time(business_user_accounts_signed_in_count_total{deployment_environment=\"$Scope\"}[$__range]))",
+                                                "instant": true,
+                                                "legendFormat": "{{auth_method}} / {{client_platform}}",
+                                                "range": false
                                             },
                                             "version": "v0"
                                         },
@@ -262,10 +254,10 @@
                             "transformations": []
                         }
                     },
-                    "description": "Cantidad de cuentas creadas por metodo de autenticacion en el rango seleccionado.",
+                    "description": "Inicios de sesion en el rango seleccionado, abiertos por metodo de autenticacion y plataforma cliente (business.user_accounts.signed_in_count). No incluye altas: una cuenta nueva cuenta como alta y como log-in por separado.\n\nConteo real dentro del rango elegido: cambiar el selector de tiempo cambia el numero. Cuenta muestras exportadas, y cada evento produce exactamente una, asi que no hay extrapolacion ni decimales.",
                     "id": 11,
                     "links": [],
-                    "title": "User accounts created by auth method",
+                    "title": "Log-ins por metodo de autenticacion y plataforma",
                     "vizConfig": {
                         "group": "piechart",
                         "kind": "VizConfig",
@@ -311,7 +303,7 @@
                                 }
                             }
                         },
-                        "version": "13.2.0-31997728368"
+                        "version": "13.3.0-36394719073"
                     }
                 }
             },
@@ -335,7 +327,7 @@
                                             "spec": {
                                                 "editorMode": "code",
                                                 "exemplar": false,
-                                                "expr": "label_replace(sum(count_over_time((agent_session_cost_usd{model=~\"$model\"} < 0.01)[$__range:])), \"bucket\", \"0-0.01\", \"\", \"\") or label_replace(sum(count_over_time((agent_session_cost_usd{model=~\"$model\"} >= 0.01 and agent_session_cost_usd{model=~\"$model\"} < 0.05)[$__range:])), \"bucket\", \"0.01-0.05\", \"\", \"\") or label_replace(sum(count_over_time((agent_session_cost_usd{model=~\"$model\"} >= 0.05 and agent_session_cost_usd{model=~\"$model\"} < 0.10)[$__range:])), \"bucket\", \"0.05-0.10\", \"\", \"\") or label_replace(sum(count_over_time((agent_session_cost_usd{model=~\"$model\"} >= 0.10 and agent_session_cost_usd{model=~\"$model\"} < 0.50)[$__range:])), \"bucket\", \"0.10-0.50\", \"\", \"\") or label_replace(sum(count_over_time((agent_session_cost_usd{model=~\"$model\"} >= 0.50 and agent_session_cost_usd{model=~\"$model\"} < 1.00)[$__range:])), \"bucket\", \"0.50-1.00\", \"\", \"\") or label_replace(sum(count_over_time((agent_session_cost_usd{model=~\"$model\"} >= 1.00)[$__range:])), \"bucket\", \"1.00+\", \"\", \"\")",
+                                                "expr": "label_replace(sum(count_over_time((agent_session_cost_usd{deployment_environment=\"$Scope\",model=~\"$model\"} < 0.01)[$__range:])), \"bucket\", \"0-0.01\", \"\", \"\") or label_replace(sum(count_over_time((agent_session_cost_usd{deployment_environment=\"$Scope\",model=~\"$model\"} >= 0.01 and agent_session_cost_usd{deployment_environment=\"$Scope\",model=~\"$model\"} < 0.05)[$__range:])), \"bucket\", \"0.01-0.05\", \"\", \"\") or label_replace(sum(count_over_time((agent_session_cost_usd{deployment_environment=\"$Scope\",model=~\"$model\"} >= 0.05 and agent_session_cost_usd{deployment_environment=\"$Scope\",model=~\"$model\"} < 0.10)[$__range:])), \"bucket\", \"0.05-0.10\", \"\", \"\") or label_replace(sum(count_over_time((agent_session_cost_usd{deployment_environment=\"$Scope\",model=~\"$model\"} >= 0.10 and agent_session_cost_usd{deployment_environment=\"$Scope\",model=~\"$model\"} < 0.50)[$__range:])), \"bucket\", \"0.10-0.50\", \"\", \"\") or label_replace(sum(count_over_time((agent_session_cost_usd{deployment_environment=\"$Scope\",model=~\"$model\"} >= 0.50 and agent_session_cost_usd{deployment_environment=\"$Scope\",model=~\"$model\"} < 1.00)[$__range:])), \"bucket\", \"0.50-1.00\", \"\", \"\") or label_replace(sum(count_over_time((agent_session_cost_usd{deployment_environment=\"$Scope\",model=~\"$model\"} >= 1.00)[$__range:])), \"bucket\", \"1.00+\", \"\", \"\")",
                                                 "format": "table",
                                                 "instant": true,
                                                 "legendFormat": "{{bucket}}",
@@ -421,7 +413,7 @@
                                 "xTickLabelSpacing": 0
                             }
                         },
-                        "version": "13.2.0-31997728368"
+                        "version": "13.3.0-36394719073"
                     }
                 }
             },
@@ -443,11 +435,11 @@
                                             "group": "prometheus",
                                             "kind": "DataQuery",
                                             "spec": {
-                                                "editorMode": "builder",
-                                                "expr": "sum by(created_by, movement_type) (last_over_time(business_movements_created_count_total[$__range]))",
-                                                "instant": true,
-                                                "legendFormat": "{{created_by}}",
-                                                "range": false
+                                                "editorMode": "code",
+                                                "expr": "sum by(movement_type) (count_over_time(business_movements_created_count_total{deployment_environment=\"$Scope\"}[$__interval]))",
+                                                "instant": false,
+                                                "legendFormat": "{{movement_type}}",
+                                                "range": true
                                             },
                                             "version": "v0"
                                         },
@@ -456,83 +448,85 @@
                                 }
                             ],
                             "queryOptions": {},
-                            "transformations": [
-                                {
-                                    "group": "reduce",
-                                    "kind": "Transformation",
-                                    "spec": {
-                                        "options": {
-                                            "labelsToFields": true,
-                                            "reducers": ["max"]
-                                        }
-                                    }
-                                },
-                                {
-                                    "group": "organize",
-                                    "kind": "Transformation",
-                                    "spec": {
-                                        "options": {
-                                            "excludeByName": {
-                                                "Field": true
-                                            },
-                                            "includeByName": {},
-                                            "indexByName": {},
-                                            "renameByName": {
-                                                "Max": "Total",
-                                                "created_by": "Flujo",
-                                                "movement_type": "Tipo de movimiento"
-                                            }
-                                        }
-                                    }
-                                }
-                            ]
+                            "transformations": []
                         }
                     },
-                    "description": "",
+                    "description": "Movimientos creados por intervalo, apilados por tipo. No incluye transferencias: viajan en business.transfers.created_count.\n\nConteo real dentro del rango elegido: cambiar el selector de tiempo cambia el numero. Cuenta muestras exportadas, y cada evento produce exactamente una, asi que no hay extrapolacion ni decimales.",
                     "id": 2,
                     "links": [],
-                    "title": "Movement Creation",
+                    "title": "Movimientos creados en el tiempo",
                     "vizConfig": {
-                        "group": "table",
+                        "group": "timeseries",
                         "kind": "VizConfig",
                         "spec": {
                             "fieldConfig": {
                                 "defaults": {
                                     "color": {
-                                        "mode": "thresholds"
+                                        "mode": "palette-classic"
                                     },
                                     "custom": {
-                                        "align": "auto",
-                                        "cellOptions": {
-                                            "type": "auto"
+                                        "axisBorderShow": false,
+                                        "axisCenteredZero": false,
+                                        "axisColorMode": "text",
+                                        "axisLabel": "",
+                                        "axisPlacement": "auto",
+                                        "barAlignment": 0,
+                                        "barWidthFactor": 0.8,
+                                        "drawStyle": "bars",
+                                        "fillOpacity": 80,
+                                        "gradientMode": "none",
+                                        "hideFrom": {
+                                            "legend": false,
+                                            "tooltip": false,
+                                            "viz": false
                                         },
-                                        "footer": {
-                                            "reducers": []
+                                        "insertNulls": false,
+                                        "lineInterpolation": "linear",
+                                        "lineWidth": 0,
+                                        "pointSize": 6,
+                                        "scaleDistribution": {
+                                            "type": "linear"
                                         },
-                                        "inspect": false
+                                        "showPoints": "always",
+                                        "spanNulls": false,
+                                        "stacking": {
+                                            "group": "A",
+                                            "mode": "normal"
+                                        },
+                                        "thresholdsStyle": {
+                                            "mode": "off"
+                                        },
+                                        "showValues": false
                                     },
+                                    "min": 0,
                                     "thresholds": {
                                         "mode": "absolute",
                                         "steps": [
                                             {
                                                 "color": "green",
                                                 "value": 0
-                                            },
-                                            {
-                                                "color": "red",
-                                                "value": 80
                                             }
                                         ]
-                                    }
+                                    },
+                                    "unit": "short"
                                 },
                                 "overrides": []
                             },
                             "options": {
-                                "cellHeight": "sm",
-                                "showHeader": true
+                                "legend": {
+                                    "calcs": ["sum"],
+                                    "displayMode": "table",
+                                    "placement": "right",
+                                    "showLegend": true
+                                },
+                                "tooltip": {
+                                    "hideZeros": false,
+                                    "mode": "multi",
+                                    "sort": "desc"
+                                }
                             }
                         },
-                        "version": "13.2.0-31997728368"
+                        "version": "13.3.0-36394719073"
                     }
                 }
             },
@@ -554,10 +548,10 @@
                                             "group": "prometheus",
                                             "kind": "DataQuery",
                                             "spec": {
-                                                "editorMode": "builder",
+                                                "editorMode": "code",
                                                 "exemplar": false,
-                                                "expr": "max by(mode) (agent_session_cost_usd{model=~\"$model\"})",
-                                                "legendFormat": "{{mode}}",
+                                                "expr": "max by(model, mode) (agent_session_cost_usd{deployment_environment=\"$Scope\",model=~\"$model\"})",
+                                                "legendFormat": "{{model}} / {{mode}}",
                                                 "range": true
                                             },
                                             "version": "v0"
@@ -570,7 +564,7 @@
                             "transformations": []
                         }
                     },
-                    "description": "Costo del modelo agente separado por texto, voz o hibrido.\n\nAlgunos puntos se muestran duplicados",
+                    "description": "Costo del agente separado por modelo y modo (texto, voz o hibrido). Los nombres que contienen 3.8 se muestran en azul y los que contienen 3.1 en naranja. Selecciona All o ambos modelos en el selector Modelo para compararlos simultaneamente.\n\nAlgunos puntos se muestran duplicados.",
                     "id": 3,
                     "links": [],
                     "title": "Costo por modo",
@@ -629,9 +623,42 @@
                                                 "value": 80
                                             }
                                         ]
-                                    }
+                                    },
+                                    "unit": "currencyUSD",
+                                    "min": 0
                                 },
-                                "overrides": []
+                                "overrides": [
+                                    {
+                                        "matcher": {
+                                            "id": "byRegexp",
+                                            "options": "/.*3[.]8.*/"
+                                        },
+                                        "properties": [
+                                            {
+                                                "id": "color",
+                                                "value": {
+                                                    "mode": "fixed",
+                                                    "fixedColor": "#5794F2"
+                                                }
+                                            }
+                                        ]
+                                    },
+                                    {
+                                        "matcher": {
+                                            "id": "byRegexp",
+                                            "options": "/.*3[.]1.*/"
+                                        },
+                                        "properties": [
+                                            {
+                                                "id": "color",
+                                                "value": {
+                                                    "mode": "fixed",
+                                                    "fixedColor": "#FF9830"
+                                                }
+                                            }
+                                        ]
+                                    }
+                                ]
                             },
                             "options": {
                                 "legend": {
@@ -642,12 +669,12 @@
                                 },
                                 "tooltip": {
                                     "hideZeros": false,
-                                    "mode": "single",
-                                    "sort": "none"
+                                    "mode": "multi",
+                                    "sort": "desc"
                                 }
                             }
                         },
-                        "version": "13.2.0-31997728368"
+                        "version": "13.3.0-36394719073"
                     }
                 }
             },
@@ -671,7 +698,7 @@
                                             "spec": {
                                                 "editorMode": "builder",
                                                 "exemplar": false,
-                                                "expr": "max(agent_session_cost_usd{model=~\"$model\"})",
+                                                "expr": "max(agent_session_cost_usd{deployment_environment=\"$Scope\",model=~\"$model\"})",
                                                 "legendFormat": "Costo",
                                                 "range": true
                                             },
@@ -730,7 +757,7 @@
                                 "wideLayout": true
                             }
                         },
-                        "version": "13.2.0-31997728368"
+                        "version": "13.3.0-36394719073"
                     }
                 }
             },
@@ -754,10 +781,10 @@
                                             "spec": {
                                                 "editorMode": "code",
                                                 "exemplar": false,
-                                                "expr": "sum by (mode) (increase(agent_session_cost_bucket_count{model=~\"$model\"}[$__range]))",
+                                                "expr": "sum by(start_kind) (count_over_time(agent_sessions_started_count_total{deployment_environment=\"$Scope\",model=~\"$model\"}[$__range]))",
                                                 "instant": true,
-                                                "legendFormat": "{{mode}}",
-                                                "range": true
+                                                "legendFormat": "{{start_kind}}",
+                                                "range": false
                                             },
                                             "version": "v0"
                                         },
@@ -769,10 +796,10 @@
                             "transformations": []
                         }
                     },
-                    "description": "",
+                    "description": "Sesiones de voz abiertas en el rango seleccionado. Nuevas (`new`) son sesiones que no existian un momento antes; re-iniciadas (`resumed`) son la misma conversacion retomada con un resume handle. Se cuenta en el borde de la sesion, no en el mint del token: un mint ocurre tambien en cada reconexion y en el prefetch de la pantalla. Hoy solo emite el cliente nativo.\n\nConteo real dentro del rango elegido: cambiar el selector de tiempo cambia el numero. Cuenta muestras exportadas, y cada evento produce exactamente una, asi que no hay extrapolacion ni decimales.",
                     "id": 5,
                     "links": [],
-                    "title": "Cantidad de sesiones creadas (WIP)",
+                    "title": "Sesiones abiertas en el rango",
                     "vizConfig": {
                         "group": "stat",
                         "kind": "VizConfig",
@@ -780,7 +807,8 @@
                             "fieldConfig": {
                                 "defaults": {
                                     "color": {
-                                        "mode": "thresholds"
+                                        "mode": "fixed",
+                                        "fixedColor": "text"
                                     },
                                     "thresholds": {
                                         "mode": "absolute",
@@ -790,13 +818,56 @@
                                                 "value": 0
                                             }
                                         ]
-                                    }
+                                    },
+                                    "min": 0,
+                                    "noValue": "Sin sesiones",
+                                    "unit": "short",
+                                    "decimals": 0
                                 },
-                                "overrides": []
+                                "overrides": [
+                                    {
+                                        "matcher": {
+                                            "id": "byName",
+                                            "options": "new"
+                                        },
+                                        "properties": [
+                                            {
+                                                "id": "color",
+                                                "value": {
+                                                    "fixedColor": "green",
+                                                    "mode": "fixed"
+                                                }
+                                            },
+                                            {
+                                                "id": "displayName",
+                                                "value": "Nuevas"
+                                            }
+                                        ]
+                                    },
+                                    {
+                                        "matcher": {
+                                            "id": "byName",
+                                            "options": "resumed"
+                                        },
+                                        "properties": [
+                                            {
+                                                "id": "color",
+                                                "value": {
+                                                    "fixedColor": "orange",
+                                                    "mode": "fixed"
+                                                }
+                                            },
+                                            {
+                                                "id": "displayName",
+                                                "value": "Re-iniciadas"
+                                            }
+                                        ]
+                                    }
+                                ]
                             },
                             "options": {
                                 "colorMode": "value",
-                                "graphMode": "area",
+                                "graphMode": "none",
                                 "justifyMode": "auto",
                                 "orientation": "auto",
                                 "percentChangeColorMode": "standard",
@@ -806,11 +877,11 @@
                                     "values": false
                                 },
                                 "showPercentChange": false,
-                                "textMode": "auto",
+                                "textMode": "value_and_name",
                                 "wideLayout": true
                             }
                         },
-                        "version": "13.2.0-31997728368"
+                        "version": "13.3.0-36394719073"
                     }
                 }
             },
@@ -832,19 +903,11 @@
                                             "group": "prometheus",
                                             "kind": "DataQuery",
                                             "spec": {
-                                                "alias": "Visits",
-                                                "editorMode": "builder",
-                                                "expr": "sum by(auth_method) (business_user_accounts_created_count_total)",
-                                                "instant": false,
-                                                "legendFormat": "__auto",
-                                                "max": 28000,
-                                                "min": 22000,
-                                                "noise": 150,
-                                                "range": true,
-                                                "scenarioId": "random_walk",
-                                                "seriesCount": 1,
-                                                "spread": 600,
-                                                "startValue": 25000
+                                                "editorMode": "code",
+                                                "expr": "sum by(auth_method) (count_over_time(business_user_accounts_created_count_total{deployment_environment=\"$Scope\"}[$__range]))",
+                                                "instant": true,
+                                                "legendFormat": "{{auth_method}}",
+                                                "range": false
                                             },
                                             "version": "v0"
                                         },
@@ -856,10 +919,10 @@
                             "transformations": []
                         }
                     },
-                    "description": "Cantidad de cuentas creadas por metodo de autenticacion en el rango seleccionado.",
+                    "description": "Cuentas nuevas creadas por metodo de autenticacion dentro en el rango seleccionado seleccionado (business.user_accounts.created_count).\n\nConteo real dentro del rango elegido: cambiar el selector de tiempo cambia el numero. Cuenta muestras exportadas, y cada evento produce exactamente una, asi que no hay extrapolacion ni decimales.",
                     "id": 6,
                     "links": [],
-                    "title": "User accounts created by auth method",
+                    "title": "Altas de cuenta por metodo de autenticacion",
                     "vizConfig": {
                         "group": "piechart",
                         "kind": "VizConfig",
@@ -905,7 +968,7 @@
                                 }
                             }
                         },
-                        "version": "13.2.0-31997728368"
+                        "version": "13.3.0-36394719073"
                     }
                 }
             },
@@ -928,7 +991,7 @@
                                             "kind": "DataQuery",
                                             "spec": {
                                                 "editorMode": "code",
-                                                "expr": "max by(__name__) (last_over_time(agent_user_monthly_cost_usd{model=~\"$model\"}[25h]))",
+                                                "expr": "max by(__name__) (last_over_time(agent_user_monthly_cost_usd{deployment_environment=\"$Scope\",model=~\"$model\"}[25h]))",
                                                 "legendFormat": "__auto",
                                                 "range": true
                                             },
@@ -987,7 +1050,7 @@
                                 "wideLayout": true
                             }
                         },
-                        "version": "13.2.0-31997728368"
+                        "version": "13.3.0-36394719073"
                     }
                 }
             },
@@ -1010,7 +1073,7 @@
                                             "kind": "DataQuery",
                                             "spec": {
                                                 "editorMode": "code",
-                                                "expr": "sum by (user_hash) (last_over_time(agent_user_monthly_cost_usd{model=~\"$model\"}[25h]))",
+                                                "expr": "sum by (user_hash) (last_over_time(agent_user_monthly_cost_usd{deployment_environment=\"$Scope\",model=~\"$model\"}[$__range]))",
                                                 "format": "table",
                                                 "instant": true,
                                                 "legendFormat": "__auto",
@@ -1087,10 +1150,556 @@
                                         "desc": true,
                                         "displayName": "Consumo (USD)"
                                     }
-                                ]
+                                ],
+                                "zebraStriping": false
                             }
                         },
-                        "version": "13.2.0-31997728368"
+                        "version": "13.3.0-36394719073"
+                    }
+                }
+            },
+            "panel-14": {
+                "kind": "Panel",
+                "spec": {
+                    "data": {
+                        "kind": "QueryGroup",
+                        "spec": {
+                            "queries": [
+                                {
+                                    "kind": "PanelQuery",
+                                    "spec": {
+                                        "hidden": false,
+                                        "query": {
+                                            "datasource": {
+                                                "name": "grafanacloud-prom"
+                                            },
+                                            "group": "prometheus",
+                                            "kind": "DataQuery",
+                                            "spec": {
+                                                "editorMode": "code",
+                                                "expr": "(sum(count_over_time(business_movements_created_count_total{deployment_environment=\"$Scope\",created_by=\"agent\"}[$__range])) or vector(0)) / sum(count_over_time(business_movements_created_count_total{deployment_environment=\"$Scope\"}[$__range]))",
+                                                "instant": true,
+                                                "legendFormat": "% agente",
+                                                "range": false
+                                            },
+                                            "version": "v0"
+                                        },
+                                        "refId": "A"
+                                    }
+                                }
+                            ],
+                            "queryOptions": {},
+                            "transformations": []
+                        }
+                    },
+                    "description": "Porcentaje de movimientos en el rango seleccionado creados por el agente de voz sobre el total (form + agente).\n\nConteo real dentro del rango elegido: cambiar el selector de tiempo cambia el numero. Cuenta muestras exportadas, y cada evento produce exactamente una, asi que no hay extrapolacion ni decimales.",
+                    "id": 14,
+                    "links": [],
+                    "title": "Movimientos creados por el agente",
+                    "vizConfig": {
+                        "group": "stat",
+                        "kind": "VizConfig",
+                        "spec": {
+                            "fieldConfig": {
+                                "defaults": {
+                                    "color": {
+                                        "mode": "thresholds"
+                                    },
+                                    "decimals": 1,
+                                    "max": 1,
+                                    "min": 0,
+                                    "noValue": "Sin movimientos",
+                                    "thresholds": {
+                                        "mode": "absolute",
+                                        "steps": [
+                                            {
+                                                "color": "red",
+                                                "value": 0
+                                            },
+                                            {
+                                                "color": "orange",
+                                                "value": 0.2
+                                            },
+                                            {
+                                                "color": "green",
+                                                "value": 0.5
+                                            }
+                                        ]
+                                    },
+                                    "unit": "percentunit"
+                                },
+                                "overrides": []
+                            },
+                            "options": {
+                                "colorMode": "value",
+                                "graphMode": "none",
+                                "justifyMode": "auto",
+                                "orientation": "auto",
+                                "percentChangeColorMode": "standard",
+                                "reduceOptions": {
+                                    "calcs": ["lastNotNull"],
+                                    "fields": "",
+                                    "values": false
+                                },
+                                "showPercentChange": false,
+                                "textMode": "auto",
+                                "wideLayout": true
+                            }
+                        },
+                        "version": "13.3.0-36394719073"
+                    }
+                }
+            },
+            "panel-13": {
+                "kind": "Panel",
+                "spec": {
+                    "data": {
+                        "kind": "QueryGroup",
+                        "spec": {
+                            "queries": [
+                                {
+                                    "kind": "PanelQuery",
+                                    "spec": {
+                                        "hidden": false,
+                                        "query": {
+                                            "datasource": {
+                                                "name": "grafanacloud-prom"
+                                            },
+                                            "group": "prometheus",
+                                            "kind": "DataQuery",
+                                            "spec": {
+                                                "editorMode": "code",
+                                                "expr": "sum by(created_by) (count_over_time(business_movements_created_count_total{deployment_environment=\"$Scope\"}[$__range]))",
+                                                "instant": true,
+                                                "legendFormat": "{{created_by}}",
+                                                "range": false
+                                            },
+                                            "version": "v0"
+                                        },
+                                        "refId": "A"
+                                    }
+                                }
+                            ],
+                            "queryOptions": {},
+                            "transformations": []
+                        }
+                    },
+                    "description": "Movimientos creados en el rango seleccionado segun el flujo de origen: `form` (alta manual) vs `agent` (agente de voz).\n\nConteo real dentro del rango elegido: cambiar el selector de tiempo cambia el numero. Cuenta muestras exportadas, y cada evento produce exactamente una, asi que no hay extrapolacion ni decimales.",
+                    "id": 13,
+                    "links": [],
+                    "title": "Origen de los movimientos",
+                    "vizConfig": {
+                        "group": "piechart",
+                        "kind": "VizConfig",
+                        "spec": {
+                            "fieldConfig": {
+                                "defaults": {
+                                    "color": {
+                                        "mode": "palette-classic",
+                                        "fixedColor": "#73BF69"
+                                    },
+                                    "custom": {
+                                        "hideFrom": {
+                                            "legend": false,
+                                            "tooltip": false,
+                                            "viz": false
+                                        }
+                                    },
+                                    "min": 0,
+                                    "unit": "short",
+                                    "decimals": 0
+                                },
+                                "overrides": []
+                            },
+                            "options": {
+                                "displayLabels": ["name", "value", "percent"],
+                                "legend": {
+                                    "displayMode": "table",
+                                    "overflow": "ellipsis",
+                                    "placement": "right",
+                                    "showLegend": true,
+                                    "values": ["value", "percent"]
+                                },
+                                "pieType": "donut",
+                                "reduceOptions": {
+                                    "calcs": ["lastNotNull"],
+                                    "fields": "",
+                                    "values": false
+                                },
+                                "sort": "desc",
+                                "tooltip": {
+                                    "hideZeros": false,
+                                    "mode": "single",
+                                    "sort": "desc"
+                                }
+                            }
+                        },
+                        "version": "13.3.0-36394719073"
+                    }
+                }
+            },
+            "panel-15": {
+                "kind": "Panel",
+                "spec": {
+                    "data": {
+                        "kind": "QueryGroup",
+                        "spec": {
+                            "queries": [
+                                {
+                                    "kind": "PanelQuery",
+                                    "spec": {
+                                        "hidden": false,
+                                        "query": {
+                                            "datasource": {
+                                                "name": "grafanacloud-prom"
+                                            },
+                                            "group": "prometheus",
+                                            "kind": "DataQuery",
+                                            "spec": {
+                                                "editorMode": "code",
+                                                "expr": "sum by(movement_type, created_by) (count_over_time(business_movements_created_count_total{deployment_environment=\"$Scope\"}[$__range]))",
+                                                "instant": true,
+                                                "legendFormat": "{{movement_type}} / {{created_by}}",
+                                                "range": false
+                                            },
+                                            "version": "v0"
+                                        },
+                                        "refId": "A"
+                                    }
+                                }
+                            ],
+                            "queryOptions": {},
+                            "transformations": [
+                                {
+                                    "group": "reduce",
+                                    "kind": "Transformation",
+                                    "spec": {
+                                        "options": {
+                                            "labelsToFields": true,
+                                            "reducers": ["max"]
+                                        }
+                                    }
+                                },
+                                {
+                                    "group": "organize",
+                                    "kind": "Transformation",
+                                    "spec": {
+                                        "options": {
+                                            "excludeByName": {
+                                                "Field": true
+                                            },
+                                            "includeByName": {},
+                                            "indexByName": {},
+                                            "renameByName": {
+                                                "Max": "Total",
+                                                "created_by": "Flujo",
+                                                "movement_type": "Tipo de movimiento"
+                                            }
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "description": "Cruce tipo de movimiento x flujo de origen dentro en el rango seleccionado seleccionado.\n\nConteo real dentro del rango elegido: cambiar el selector de tiempo cambia el numero. Cuenta muestras exportadas, y cada evento produce exactamente una, asi que no hay extrapolacion ni decimales.",
+                    "id": 15,
+                    "links": [],
+                    "title": "Detalle por tipo y origen",
+                    "vizConfig": {
+                        "group": "table",
+                        "kind": "VizConfig",
+                        "spec": {
+                            "fieldConfig": {
+                                "defaults": {
+                                    "color": {
+                                        "mode": "thresholds"
+                                    },
+                                    "custom": {
+                                        "align": "auto",
+                                        "cellOptions": {
+                                            "type": "auto"
+                                        },
+                                        "filterable": false,
+                                        "footer": {
+                                            "reducers": []
+                                        },
+                                        "inspect": false
+                                    },
+                                    "thresholds": {
+                                        "mode": "absolute",
+                                        "steps": [
+                                            {
+                                                "color": "green",
+                                                "value": 0
+                                            }
+                                        ]
+                                    },
+                                    "unit": "short",
+                                    "decimals": 0
+                                },
+                                "overrides": []
+                            },
+                            "options": {
+                                "cellHeight": "sm",
+                                "showHeader": true,
+                                "sortBy": [
+                                    {
+                                        "desc": true,
+                                        "displayName": "Total"
+                                    }
+                                ],
+                                "zebraStriping": false
+                            }
+                        },
+                        "version": "13.3.0-36394719073"
+                    }
+                }
+            },
+            "panel-16": {
+                "kind": "Panel",
+                "spec": {
+                    "data": {
+                        "kind": "QueryGroup",
+                        "spec": {
+                            "queries": [
+                                {
+                                    "kind": "PanelQuery",
+                                    "spec": {
+                                        "hidden": false,
+                                        "query": {
+                                            "datasource": {
+                                                "name": "grafanacloud-prom"
+                                            },
+                                            "group": "prometheus",
+                                            "kind": "DataQuery",
+                                            "spec": {
+                                                "editorMode": "code",
+                                                "expr": "sum by(start_kind) (count_over_time(agent_sessions_started_count_total{deployment_environment=\"$Scope\",model=~\"$model\"}[$__interval]))",
+                                                "instant": false,
+                                                "legendFormat": "{{start_kind}}",
+                                                "range": true
+                                            },
+                                            "version": "v0"
+                                        },
+                                        "refId": "A"
+                                    }
+                                }
+                            ],
+                            "queryOptions": {},
+                            "transformations": []
+                        }
+                    },
+                    "description": "Sesiones de voz abiertas por intervalo. La linea verde son sesiones nuevas (no existia una un momento antes); la naranja son sesiones re-iniciadas, la misma conversacion retomada con un resume handle. Se cuenta en el borde de la sesion, no en el mint del token: hay un mint en cada reconexion y en el prefetch de la pantalla de voz. Con poco volumen conviene ensanchar el rango: increase sobre un intervalo sin muestras se ve como un hueco, no como un cero.\n\nConteo real dentro del rango elegido: cambiar el selector de tiempo cambia el numero. Cuenta muestras exportadas, y cada evento produce exactamente una, asi que no hay extrapolacion ni decimales.",
+                    "id": 16,
+                    "links": [],
+                    "title": "Sesiones abiertas en el tiempo",
+                    "vizConfig": {
+                        "group": "timeseries",
+                        "kind": "VizConfig",
+                        "spec": {
+                            "fieldConfig": {
+                                "defaults": {
+                                    "color": {
+                                        "mode": "palette-classic"
+                                    },
+                                    "custom": {
+                                        "axisBorderShow": false,
+                                        "axisCenteredZero": false,
+                                        "axisColorMode": "text",
+                                        "axisLabel": "",
+                                        "axisPlacement": "auto",
+                                        "barAlignment": 0,
+                                        "barWidthFactor": 0.6,
+                                        "drawStyle": "line",
+                                        "fillOpacity": 12,
+                                        "gradientMode": "none",
+                                        "hideFrom": {
+                                            "legend": false,
+                                            "tooltip": false,
+                                            "viz": false
+                                        },
+                                        "insertNulls": false,
+                                        "lineInterpolation": "linear",
+                                        "lineWidth": 2,
+                                        "pointSize": 6,
+                                        "scaleDistribution": {
+                                            "type": "linear"
+                                        },
+                                        "showPoints": "always",
+                                        "spanNulls": false,
+                                        "stacking": {
+                                            "group": "A",
+                                            "mode": "none"
+                                        },
+                                        "thresholdsStyle": {
+                                            "mode": "off"
+                                        },
+                                        "showValues": false
+                                    },
+                                    "decimals": 0,
+                                    "min": 0,
+                                    "noValue": "Sin sesiones en el rango",
+                                    "unit": "short",
+                                    "thresholds": {
+                                        "mode": "absolute",
+                                        "steps": [
+                                            {
+                                                "color": "green",
+                                                "value": 0
+                                            },
+                                            {
+                                                "color": "red",
+                                                "value": 80
+                                            }
+                                        ]
+                                    }
+                                },
+                                "overrides": [
+                                    {
+                                        "matcher": {
+                                            "id": "byName",
+                                            "options": "new"
+                                        },
+                                        "properties": [
+                                            {
+                                                "id": "color",
+                                                "value": {
+                                                    "fixedColor": "green",
+                                                    "mode": "fixed"
+                                                }
+                                            },
+                                            {
+                                                "id": "displayName",
+                                                "value": "Sesiones nuevas"
+                                            }
+                                        ]
+                                    },
+                                    {
+                                        "matcher": {
+                                            "id": "byName",
+                                            "options": "resumed"
+                                        },
+                                        "properties": [
+                                            {
+                                                "id": "color",
+                                                "value": {
+                                                    "fixedColor": "orange",
+                                                    "mode": "fixed"
+                                                }
+                                            },
+                                            {
+                                                "id": "displayName",
+                                                "value": "Sesiones re-iniciadas"
+                                            }
+                                        ]
+                                    }
+                                ]
+                            },
+                            "options": {
+                                "legend": {
+                                    "calcs": ["sum"],
+                                    "displayMode": "table",
+                                    "placement": "bottom",
+                                    "showLegend": true
+                                },
+                                "tooltip": {
+                                    "hideZeros": false,
+                                    "mode": "multi",
+                                    "sort": "desc"
+                                }
+                            }
+                        },
+                        "version": "13.3.0-36394719073"
+                    }
+                }
+            },
+            "panel-17": {
+                "kind": "Panel",
+                "spec": {
+                    "data": {
+                        "kind": "QueryGroup",
+                        "spec": {
+                            "queries": [
+                                {
+                                    "kind": "PanelQuery",
+                                    "spec": {
+                                        "hidden": false,
+                                        "query": {
+                                            "datasource": {
+                                                "name": "grafanacloud-prom"
+                                            },
+                                            "group": "prometheus",
+                                            "kind": "DataQuery",
+                                            "spec": {
+                                                "editorMode": "code",
+                                                "expr": "sum(count_over_time(agent_sessions_started_count_total{deployment_environment=\"$Scope\",model=~\"$model\"}[$__range])) - (sum(count_over_time(agent_session_cost_bucket_count_total{deployment_environment=\"$Scope\",model=~\"$model\"}[$__range])) or vector(0))",
+                                                "instant": true,
+                                                "legendFormat": "Sin costo reportado",
+                                                "range": false
+                                            },
+                                            "version": "v0"
+                                        },
+                                        "refId": "A"
+                                    }
+                                }
+                            ],
+                            "queryOptions": {},
+                            "transformations": []
+                        }
+                    },
+                    "description": "Sesiones abiertas en el rango seleccionado que nunca reportaron costo. El bucket de costo se emite como efecto de recibir un agent.session.cost_usd, asi que esta resta son sesiones que se abrieron y no produjeron nada: caidas antes del cierre, o sin usageMetadata. Cerca de cero es lo sano. Puede dar negativo en los bordes en el rango seleccionado, cuando el costo de una sesion cae dentro de la ventana y su apertura quedo afuera.\n\nConteo real dentro del rango elegido: cambiar el selector de tiempo cambia el numero. Cuenta muestras exportadas, y cada evento produce exactamente una, asi que no hay extrapolacion ni decimales.\n\nEl selector Modelo filtra tanto las sesiones abiertas como las que reportaron costo. Con All tambien se incluyen las series historicas sin etiqueta model.",
+                    "id": 17,
+                    "links": [],
+                    "title": "Sesiones sin costo reportado",
+                    "vizConfig": {
+                        "group": "stat",
+                        "kind": "VizConfig",
+                        "spec": {
+                            "fieldConfig": {
+                                "defaults": {
+                                    "color": {
+                                        "mode": "thresholds"
+                                    },
+                                    "decimals": 0,
+                                    "noValue": "Sin datos",
+                                    "thresholds": {
+                                        "mode": "absolute",
+                                        "steps": [
+                                            {
+                                                "color": "green",
+                                                "value": 0
+                                            },
+                                            {
+                                                "color": "orange",
+                                                "value": 3
+                                            },
+                                            {
+                                                "color": "red",
+                                                "value": 10
+                                            }
+                                        ]
+                                    },
+                                    "unit": "short"
+                                },
+                                "overrides": []
+                            },
+                            "options": {
+                                "colorMode": "value",
+                                "graphMode": "none",
+                                "justifyMode": "auto",
+                                "orientation": "auto",
+                                "percentChangeColorMode": "standard",
+                                "reduceOptions": {
+                                    "calcs": ["lastNotNull"],
+                                    "fields": "",
+                                    "values": false
+                                },
+                                "showPercentChange": false,
+                                "textMode": "auto",
+                                "wideLayout": true
+                            }
+                        },
+                        "version": "13.3.0-36394719073"
                     }
                 }
             }
@@ -1165,6 +1774,59 @@
                                             "spec": {
                                                 "element": {
                                                     "kind": "ElementReference",
+                                                    "name": "panel-5"
+                                                },
+                                                "height": 9,
+                                                "width": 5,
+                                                "x": 0,
+                                                "y": 0
+                                            }
+                                        },
+                                        {
+                                            "kind": "GridLayoutItem",
+                                            "spec": {
+                                                "element": {
+                                                    "kind": "ElementReference",
+                                                    "name": "panel-17"
+                                                },
+                                                "height": 9,
+                                                "width": 4,
+                                                "x": 5,
+                                                "y": 0
+                                            }
+                                        },
+                                        {
+                                            "kind": "GridLayoutItem",
+                                            "spec": {
+                                                "element": {
+                                                    "kind": "ElementReference",
+                                                    "name": "panel-16"
+                                                },
+                                                "height": 9,
+                                                "width": 15,
+                                                "x": 9,
+                                                "y": 0
+                                            }
+                                        }
+                                    ]
+                                }
+                            },
+                            "title": "Sesiones del agente"
+                        }
+                    },
+                    {
+                        "kind": "RowsLayoutRow",
+                        "spec": {
+                            "collapse": false,
+                            "layout": {
+                                "kind": "GridLayout",
+                                "spec": {
+                                    "items": [
+                                        {
+                                            "kind": "GridLayoutItem",
+                                            "spec": {
+                                                "element": {
+                                                    "kind": "ElementReference",
                                                     "name": "panel-3"
                                                 },
                                                 "height": 10,
@@ -1181,21 +1843,8 @@
                                                     "name": "panel-4"
                                                 },
                                                 "height": 10,
-                                                "width": 6,
+                                                "width": 12,
                                                 "x": 12,
-                                                "y": 0
-                                            }
-                                        },
-                                        {
-                                            "kind": "GridLayoutItem",
-                                            "spec": {
-                                                "element": {
-                                                    "kind": "ElementReference",
-                                                    "name": "panel-5"
-                                                },
-                                                "height": 10,
-                                                "width": 6,
-                                                "x": 18,
                                                 "y": 0
                                             }
                                         },
@@ -1262,22 +1911,62 @@
                         "spec": {
                             "collapse": false,
                             "layout": {
-                                "kind": "AutoGridLayout",
+                                "kind": "GridLayout",
                                 "spec": {
-                                    "columnWidthMode": "standard",
                                     "items": [
                                         {
-                                            "kind": "AutoGridLayoutItem",
+                                            "kind": "GridLayoutItem",
+                                            "spec": {
+                                                "element": {
+                                                    "kind": "ElementReference",
+                                                    "name": "panel-14"
+                                                },
+                                                "height": 7,
+                                                "width": 5,
+                                                "x": 0,
+                                                "y": 0
+                                            }
+                                        },
+                                        {
+                                            "kind": "GridLayoutItem",
+                                            "spec": {
+                                                "element": {
+                                                    "kind": "ElementReference",
+                                                    "name": "panel-13"
+                                                },
+                                                "height": 7,
+                                                "width": 9,
+                                                "x": 5,
+                                                "y": 0
+                                            }
+                                        },
+                                        {
+                                            "kind": "GridLayoutItem",
+                                            "spec": {
+                                                "element": {
+                                                    "kind": "ElementReference",
+                                                    "name": "panel-15"
+                                                },
+                                                "height": 7,
+                                                "width": 10,
+                                                "x": 14,
+                                                "y": 0
+                                            }
+                                        },
+                                        {
+                                            "kind": "GridLayoutItem",
                                             "spec": {
                                                 "element": {
                                                     "kind": "ElementReference",
                                                     "name": "panel-2"
-                                                }
+                                                },
+                                                "height": 9,
+                                                "width": 24,
+                                                "x": 0,
+                                                "y": 7
                                             }
                                         }
-                                    ],
-                                    "maxColumnCount": 3,
-                                    "rowHeightMode": "standard"
+                                    ]
                                 }
                             },
                             "title": "Creacion de movimientos"
@@ -1305,7 +1994,7 @@
                 "1d"
             ],
             "fiscalYearStartMonth": 0,
-            "from": "now-30d",
+            "from": "now-12h",
             "hideTimepicker": false,
             "timezone": "browser",
             "to": "now"
@@ -1313,18 +2002,39 @@
         "title": "User accounts created by auth method",
         "variables": [
             {
-                "kind": "TextVariable",
+                "kind": "QueryVariable",
                 "spec": {
                     "current": {
-                        "text": "",
-                        "value": ""
+                        "text": "production",
+                        "value": "production"
                     },
-                    "description": "Nombre del scope de convex utilizado",
+                    "description": "Entorno de despliegue (deployment_environment) del que vienen las metricas",
                     "hide": "dontHide",
                     "label": "Scope",
                     "name": "Scope",
-                    "query": "",
-                    "skipUrlSync": false
+                    "query": {
+                        "kind": "DataQuery",
+                        "group": "prometheus",
+                        "version": "v0",
+                        "datasource": {
+                            "name": "grafanacloud-prom"
+                        },
+                        "spec": {
+                            "qryType": 1,
+                            "query": "label_values(deployment_environment)",
+                            "refId": "PrometheusVariableQueryEditor-VariableQuery"
+                        }
+                    },
+                    "definition": "label_values(deployment_environment)",
+                    "regex": "",
+                    "sort": "alphabeticalAsc",
+                    "refresh": "onDashboardLoad",
+                    "options": [],
+                    "multi": false,
+                    "includeAll": false,
+                    "allowCustomValue": true,
+                    "skipUrlSync": false,
+                    "regexApplyTo": "value"
                 }
             },
             {
@@ -1345,13 +2055,13 @@
                         },
                         "spec": {
                             "qryType": 1,
-                            "query": "label_values(agent_session_cost_usd, model)",
+                            "query": "label_values(agent_session_cost_usd{deployment_environment=\"$Scope\"}, model)",
                             "refId": "PrometheusVariableQueryEditor-VariableQuery"
                         }
                     },
                     "regex": "",
                     "sort": "alphabeticalAsc",
-                    "definition": "label_values(agent_session_cost_usd, model)",
+                    "definition": "label_values(agent_session_cost_usd{deployment_environment=\"$Scope\"}, model)",
                     "options": [],
                     "multi": true,
                     "includeAll": true,

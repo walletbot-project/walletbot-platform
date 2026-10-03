@@ -1,19 +1,26 @@
+import { compareByPositionThenName } from '@wallet-bot/shared'
 import { v } from 'convex/values'
 import { query } from '../../_generated/server'
 import { resolveOccurrenceCutoff } from '../../occurrences/helpers'
 import { countTaggedBefore } from '../../tags/helpers'
 import { requireAuth } from '../../users/helpers'
 
+// Flat lists are strictly alphabetical: forms and pickers show tags by name,
+// ignoring the user's tree order (which only `listActiveWithCounts` carries).
+const byName = (a: { name: string }, b: { name: string }) =>
+    a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })
+
 export const listActive = query({
     args: {},
     handler: async (ctx) => {
         const userId = await requireAuth(ctx)
-        return await ctx.db
+        const rows = await ctx.db
             .query('tags')
             .withIndex('by_user_archived', (q) =>
                 q.eq('userId', userId).eq('isArchived', false),
             )
             .collect()
+        return rows.sort(byName)
     },
 })
 
@@ -21,18 +28,18 @@ export const list = query({
     args: { includeArchived: v.optional(v.boolean()) },
     handler: async (ctx, args) => {
         const userId = await requireAuth(ctx)
-        if (args.includeArchived) {
-            return await ctx.db
-                .query('tags')
-                .withIndex('by_user_seq', (q) => q.eq('userId', userId))
-                .collect()
-        }
-        return await ctx.db
-            .query('tags')
-            .withIndex('by_user_archived', (q) =>
-                q.eq('userId', userId).eq('isArchived', false),
-            )
-            .collect()
+        const rows = args.includeArchived
+            ? await ctx.db
+                  .query('tags')
+                  .withIndex('by_user_seq', (q) => q.eq('userId', userId))
+                  .collect()
+            : await ctx.db
+                  .query('tags')
+                  .withIndex('by_user_archived', (q) =>
+                      q.eq('userId', userId).eq('isArchived', false),
+                  )
+                  .collect()
+        return rows.sort(byName)
     },
 })
 
@@ -60,9 +67,9 @@ export const listActiveWithCounts = query({
             })),
         )
 
-        return withCounts.sort((a, b) =>
-            a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }),
-        )
+        // The tag tree's order: the client groups siblings by `parentId`
+        // and keeps this relative order inside each level.
+        return withCounts.sort(compareByPositionThenName)
     },
 })
 

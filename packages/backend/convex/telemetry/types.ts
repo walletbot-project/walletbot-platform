@@ -33,6 +33,7 @@ export type MetricName =
     | 'business.transfers.created_count'
     | 'business.users.registered_total'
     | 'business.user_accounts.signed_in_count'
+    | 'agent.sessions.started_count'
     | 'agent.session.cost_usd'
     | 'agent.interaction.cost_usd'
     | 'agent.user.monthly_cost_usd'

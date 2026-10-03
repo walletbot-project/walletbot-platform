@@ -1,18 +1,22 @@
+import { compareByPosition } from '@wallet-bot/shared'
 import { v } from 'convex/values'
 import { query } from '../../_generated/server'
 import { resolveOccurrenceCutoff } from '../../occurrences/helpers'
 import { requireAuth } from '../../users/helpers'
 
+// Every list of categories comes back in the user's order (see
+// `compareByPosition`), so forms and pickers show it without sorting again.
 export const listActive = query({
     args: {},
     handler: async (ctx) => {
         const userId = await requireAuth(ctx)
-        return await ctx.db
+        const rows = await ctx.db
             .query('categories')
             .withIndex('by_user_archived', (q) =>
                 q.eq('userId', userId).eq('isArchived', false),
             )
             .collect()
+        return rows.sort(compareByPosition)
     },
 })
 
@@ -20,18 +24,18 @@ export const list = query({
     args: { includeArchived: v.optional(v.boolean()) },
     handler: async (ctx, args) => {
         const userId = await requireAuth(ctx)
-        if (args.includeArchived) {
-            return await ctx.db
-                .query('categories')
-                .withIndex('by_user_seq', (q) => q.eq('userId', userId))
-                .collect()
-        }
-        return await ctx.db
-            .query('categories')
-            .withIndex('by_user_archived', (q) =>
-                q.eq('userId', userId).eq('isArchived', false),
-            )
-            .collect()
+        const rows = args.includeArchived
+            ? await ctx.db
+                  .query('categories')
+                  .withIndex('by_user_seq', (q) => q.eq('userId', userId))
+                  .collect()
+            : await ctx.db
+                  .query('categories')
+                  .withIndex('by_user_archived', (q) =>
+                      q.eq('userId', userId).eq('isArchived', false),
+                  )
+                  .collect()
+        return rows.sort(compareByPosition)
     },
 })
 
@@ -67,9 +71,7 @@ export const listActiveWithCounts = query({
             }),
         )
 
-        return withCounts.sort((a, b) =>
-            a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }),
-        )
+        return withCounts.sort(compareByPosition)
     },
 })
 

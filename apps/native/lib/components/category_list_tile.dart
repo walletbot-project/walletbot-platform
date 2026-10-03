@@ -1,3 +1,4 @@
+import 'package:app/components/color_utils.dart';
 import 'package:app/components/grouped_card.dart';
 import 'package:flutter/material.dart';
 import 'package:app/l10n/l10n.dart';
@@ -28,6 +29,7 @@ class CategoryListTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
+    final accent = readableAccent(color, Theme.of(context).brightness);
 
     return GroupedCard(
       borderRadius: borderRadius,
@@ -40,11 +42,11 @@ class CategoryListTile extends StatelessWidget {
               width: 40,
               height: 40,
               decoration: BoxDecoration(
-                color: color.withValues(alpha: 0.18),
+                color: accent.withValues(alpha: 0.18),
                 shape: BoxShape.circle,
               ),
               alignment: Alignment.center,
-              child: Icon(icon, size: 22, color: color),
+              child: Icon(icon, size: 22, color: accent),
             ),
             const SizedBox(width: 16),
             Expanded(

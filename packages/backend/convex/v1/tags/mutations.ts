@@ -1,3 +1,4 @@
+import { MAX_REORDER_ITEMS } from '@wallet-bot/shared'
 import { v } from 'convex/values'
 import type { Doc } from '../../_generated/dataModel'
 import type { MutationCtx } from '../../_generated/server'
@@ -127,6 +128,10 @@ async function replaceTagWith(
     const description =
         next.description === undefined ? row.description : next.description
     const color = next.color === undefined ? row.color : next.color
+    // A position only means something among the tag's current siblings, so
+    // moving it under another parent drops it: it lands after the reordered
+    // tags of its new level, alphabetically among the rest.
+    const position = baseParent === row.parentId ? row.position : undefined
 
     const doc: {
         userId: string
@@ -139,6 +144,7 @@ async function replaceTagWith(
         seq: bigint
         description?: string
         parentId?: string
+        position?: number
     } = {
         userId: row.userId,
         id: row.id,
@@ -153,6 +159,7 @@ async function replaceTagWith(
     }
     if (description !== undefined) doc.description = description
     if (baseParent !== undefined) doc.parentId = baseParent
+    if (position !== undefined) doc.position = position
 
     await ctx.db.replace(row._id, doc)
 }
@@ -358,5 +365,48 @@ export const archive = mutation({
             entityId: args.id,
             seq,
         })
+    },
+})
+
+/**
+ * Persists the user's order for one level of the tag tree: the direct,
+ * active children of `parentId` (top-level tags when it is omitted) get
+ * `position = index`, in one transaction. The hierarchy itself never moves
+ * here — every id must be a sibling under that parent, or nothing is written.
+ */
+export const reorder = mutation({
+    args: {
+        parentId: v.optional(v.string()),
+        ids: v.array(v.string()),
+    },
+    handler: async (ctx, args) => {
+        const userId = await requireAuth(ctx)
+        if (args.ids.length > MAX_REORDER_ITEMS) {
+            throw new Error('Too many tags in one reorder')
+        }
+        if (new Set(args.ids).size !== args.ids.length) {
+            throw new Error('Duplicate tag ids in reorder')
+        }
+
+        // Validate the whole level before writing anything, so a stale or
+        // forged list can never half-apply or move a tag across levels.
+        const rows: Doc<'tags'>[] = []
+        for (const id of args.ids) {
+            const row = await getTagById(ctx, userId, id)
+            // Archived meanwhile (or never the caller's): what remains still
+            // sorts correctly.
+            if (!row || row.isArchived) continue
+            if (row.parentId !== args.parentId) {
+                throw new Error('Tags can only be reordered among siblings')
+            }
+            rows.push(row)
+        }
+
+        const now = BigInt(Date.now())
+        for (const [position, row] of rows.entries()) {
+            if (row.position === position) continue
+            const seq = await nextSeq(ctx, userId)
+            await ctx.db.patch(row._id, { position, updatedAt: now, seq })
+        }
     },
 })

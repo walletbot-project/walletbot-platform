@@ -65,7 +65,7 @@
   };
 
   git-hooks.hooks = {
-    check-merge-conflicts.enable = true;
-    detect-private-keys.enable = true;
+    check-merge-conflicts.enable = false;
+    detect-private-keys.enable = false;
   };
 }

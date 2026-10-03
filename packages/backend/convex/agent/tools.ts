@@ -558,11 +558,16 @@ const updateTagTool = async (
     }
     if (args.description !== undefined) patch.description = args.description
     if (args.color !== undefined) patch.color = args.color
-    await ctx.db.patch(row._id, {
-        ...patch,
-        updatedAt: BigInt(Date.now()),
-        seq,
-    })
+    const updatedAt = BigInt(Date.now())
+    if (patch.parentId !== undefined && patch.parentId !== row.parentId) {
+        // Moving under another parent drops the tag's position among its old
+        // siblings. Written with `replace` and an explicit document, as below
+        // and in `v1/tags/mutations.ts`, so the field is really gone.
+        const { _id, _creationTime, position: _position, ...rest } = row
+        await ctx.db.replace(_id, { ...rest, ...patch, updatedAt, seq })
+        return ok({ id: row.id })
+    }
+    await ctx.db.patch(row._id, { ...patch, updatedAt, seq })
     return ok({ id: row.id })
 }
 
@@ -589,7 +594,9 @@ const archiveTagTool = async (
         // Written with `replace` and an explicitly built document, the same
         // way `v1/tags/mutations.ts` does it: a child of a top-level tag must
         // end up with no `parentId` field at all, and `patch(..., {parentId:
-        // undefined})` is ambiguous about whether that removes it.
+        // undefined})` is ambiguous about whether that removes it. `position`
+        // is deliberately left out: it ranked the child among its old
+        // siblings, and the child is changing parent.
         const doc: {
             userId: string
             id: string
