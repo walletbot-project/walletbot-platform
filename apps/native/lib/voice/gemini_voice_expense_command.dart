@@ -93,7 +93,19 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
       await _tools.settled;
       await sessionRepository.flush();
       final id = _sessionId;
-      if (id != null) await sessionRepository.updateModel(id, _model);
+      if (id != null) {
+        await sessionRepository.updateModel(id, _model);
+        if (!_sessionStartedMetricSent && isActive) {
+          _sessionStartedMetricSent = true;
+          // The backend's rollback flag chooses the actual model at token mint.
+          // Opening the local session earlier only knows the compiled default.
+          agentMetrics?.recordSessionStartedBestEffort(
+            sessionId: id,
+            model: _model,
+            resumed: _sessionStartResumed,
+          );
+        }
+      }
       return _buildContextSeed();
     },
     onMessage: _handleServerMessage,
@@ -147,6 +159,8 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
   );
 
   String? _sessionId;
+  bool _sessionStartedMetricSent = false;
+  bool _sessionStartResumed = false;
   Future<LiveToken>? _prefetchedToken;
   Future<void>? _starting;
   bool _active = false;
@@ -218,9 +232,9 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
       return;
     }
     remoteSync?.schedule(delay: Duration.zero);
-    _logConnectionPhase('session_opened', startStopwatch, {
-      'resumed': session.resumeHandle != null,
-    });
+    final resumed = session.resumeHandle != null;
+    _logConnectionPhase('session_opened', startStopwatch, {'resumed': resumed});
+    _sessionStartResumed = resumed;
 
     _emit(VoiceConnectingEvent('Connecting to Gemini Live'));
     // The token fetch and the audio engine spin-up are independent and each

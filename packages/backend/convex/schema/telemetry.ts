@@ -53,6 +53,7 @@ export const telemetryMetrics = defineTable({
         v.literal('business.transfers.created_count'),
         v.literal('business.users.registered_total'),
         v.literal('business.user_accounts.signed_in_count'),
+        v.literal('agent.sessions.started_count'),
         v.literal('agent.session.cost_usd'),
         v.literal('agent.interaction.cost_usd'),
         v.literal('agent.user.monthly_cost_usd'),

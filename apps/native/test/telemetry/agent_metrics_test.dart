@@ -109,6 +109,60 @@ void main() {
     telemetry.dispose();
   });
 
+  test('counts an opened session apart from a resumed one', () async {
+    FlutterSecureStorage.setMockInitialValues({});
+
+    final bodies = <String>[];
+    final telemetry = TelemetryClient(
+      convexSiteUrl: 'https://example.convex.site',
+      sessionId: 'app-session-2',
+      httpClient: MockClient((request) async {
+        bodies.add(request.body);
+        return http.Response('{"ok":true,"accepted":1}', 200);
+      }),
+    );
+    final metrics = AgentMetrics(telemetry);
+
+    await metrics.recordSessionStarted(
+      sessionId: 'voice-session-4',
+      model: 'gemini-3.1-flash-live-preview',
+      resumed: false,
+    );
+    await metrics.recordSessionStarted(
+      sessionId: 'voice-session-4',
+      model: 'gemini-3.1-flash-live-preview',
+      resumed: true,
+    );
+
+    expect(bodies, hasLength(2));
+
+    Map<String, Object?> onlyMetric(String body) {
+      final sent =
+          (jsonDecode(body) as Map<String, Object?>)['metrics']
+              as List<Object?>;
+      expect(sent, hasLength(1));
+      return sent.single as Map<String, Object?>;
+    }
+
+    final started = onlyMetric(bodies[0]);
+    expect(started['name'], 'agent.sessions.started_count');
+    expect(started['type'], 'counter');
+    expect(started['unit'], 'count');
+    expect(started['value'], 1);
+    expect(started['sessionId'], 'voice-session-4');
+    expect(started['attributes'], {
+      'model': 'gemini-3.1-flash-live-preview',
+      'start_kind': 'new',
+    });
+
+    expect(onlyMetric(bodies[1])['attributes'], {
+      'model': 'gemini-3.1-flash-live-preview',
+      'start_kind': 'resumed',
+    });
+
+    telemetry.dispose();
+  });
+
   test('estimates final session cost from total token count only', () {
     final metrics = AgentMetrics(null);
 

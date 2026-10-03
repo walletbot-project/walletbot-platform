@@ -14,6 +14,46 @@ class AgentMetrics {
   static const _geminiLiveOutputAudioUsdPerMillion = 12.00;
   final TelemetryClient? _telemetry;
 
+  /// One live session opened, counted at the session boundary rather than at
+  /// the token mint: a mint also happens on every reconnect and on the voice
+  /// screen's speculative prefetch, so it would never be a session count.
+  ///
+  /// [resumed] is what the mint could not tell apart — false is a session that
+  /// did not exist a moment ago, true is the same conversation picked up again
+  /// through a live resume handle.
+  Future<void> recordSessionStarted({
+    required String sessionId,
+    required String model,
+    required bool resumed,
+  }) async {
+    await _telemetry?.sendMetricBatch([
+      TelemetryMetric(
+        name: 'agent.sessions.started_count',
+        timestamp: DateTime.now(),
+        source: 'native',
+        type: 'counter',
+        value: 1,
+        unit: 'count',
+        attributes: {'model': model, 'start_kind': resumed ? 'resumed' : 'new'},
+        sessionId: sessionId,
+      ),
+    ]);
+  }
+
+  void recordSessionStartedBestEffort({
+    required String sessionId,
+    required String model,
+    required bool resumed,
+  }) {
+    unawaited(
+      recordSessionStarted(
+        sessionId: sessionId,
+        model: model,
+        resumed: resumed,
+      ),
+    );
+  }
+
   Future<double?> recordSessionCostFromUsage({
     required String sessionId,
     required String model,
