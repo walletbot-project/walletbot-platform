@@ -20,6 +20,7 @@ class LiveConnection {
     required this.beforeReady,
     this.onSend,
     this.onMessageError,
+    this.onSetupComplete,
     WebSocketChannel Function(Uri)? connectSocket,
     this.setupTimeout = const Duration(seconds: 20),
   }) : _connectSocket = connectSocket ?? WebSocketChannel.connect;
@@ -31,6 +32,10 @@ class LiveConnection {
   final void Function(LiveConnectionState) onState;
   final void Function(Object) onError;
   final void Function(Object)? onMessageError;
+
+  /// Reported once per successful connect: time from open to ready, and
+  /// whether it followed a failed attempt.
+  final void Function(int elapsedMs, bool resumed)? onSetupComplete;
   final Future<String?> Function() beforeReady;
   final void Function(Map<String, dynamic>)? onSend;
   final WebSocketChannel Function(Uri) _connectSocket;
@@ -63,6 +68,7 @@ class LiveConnection {
 
   Future<void> _open() async {
     final current = ++epoch;
+    final connectStopwatch = Stopwatch()..start();
     _setState(LiveConnectionState.connecting);
     try {
       await _release();
@@ -117,7 +123,9 @@ class LiveConnection {
       final seed = await beforeReady();
       if (!isCurrent(current)) return;
       if (seed != null) _write(LiveProtocol.text(seed, complete: false));
+      final resumed = _attempt > 0;
       _attempt = 0;
+      onSetupComplete?.call(connectStopwatch.elapsedMilliseconds, resumed);
       _setState(LiveConnectionState.ready);
     } catch (error) {
       _failed(error, current);

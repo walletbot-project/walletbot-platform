@@ -35,6 +35,11 @@ export const metricName = v.union(
     v.literal('agent.interactions.completed_count'),
     v.literal('agent.session.cost_bucket_count'),
     v.literal('agent.reports.submitted_count'),
+    v.literal('sync.errors.count'),
+    v.literal('agent.tool.errors.count'),
+    v.literal('system.function.duration_bucket_count'),
+    v.literal('voice.connect.setup_complete_bucket_count'),
+    v.literal('agent.response.first_token_bucket_count'),
 )
 
 export const metricSource = v.union(

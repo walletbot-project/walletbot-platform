@@ -162,6 +162,13 @@ class TelemetryClient {
   }
 }
 
+/// The same platform string every metric already carries as a top-level
+/// field (via [TelemetryMetric.toJson]) — exposed so callers that also need
+/// to send it as an *attribute* (e.g. `sync.errors.count`'s `platform` label,
+/// which matches the backend's catalog and has no top-level column for
+/// backend-sourced rows) don't duplicate the switch.
+String get currentPlatform => _platform;
+
 class TelemetryEvent {
   const TelemetryEvent({
     required this.name,

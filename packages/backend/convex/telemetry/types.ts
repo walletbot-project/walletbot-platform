@@ -40,6 +40,11 @@ export type MetricName =
     | 'agent.interactions.completed_count'
     | 'agent.session.cost_bucket_count'
     | 'agent.reports.submitted_count'
+    | 'sync.errors.count'
+    | 'agent.tool.errors.count'
+    | 'system.function.duration_bucket_count'
+    | 'voice.connect.setup_complete_bucket_count'
+    | 'agent.response.first_token_bucket_count'
 
 export type MetricSource = 'web' | 'native' | 'backend'
 
