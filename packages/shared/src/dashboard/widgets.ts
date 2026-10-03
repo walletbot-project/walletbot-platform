@@ -5,8 +5,34 @@
  * tiles out on the same 6-unit grid.
  */
 
-export const WIDGET_TYPES = ['stat', 'list', 'balance', 'chart'] as const
+export const WIDGET_TYPES = [
+    'stat',
+    'list',
+    'balance',
+    'chart',
+    'balance_comparison',
+] as const
 export type WidgetType = (typeof WIDGET_TYPES)[number]
+
+/**
+ * The widgets that read account balances rather than transactions: they are
+ * scoped by `currency` + `accountIds` and never carry a saved filter. The
+ * balance card shows the balance now; the balance comparison shows last
+ * month's closing balance, the current one, and the difference.
+ */
+export function isBalanceWidgetType(type: string): boolean {
+    return type === 'balance' || type === 'balance_comparison'
+}
+
+/**
+ * The as-of bound of "last month's balance" for a balance comparison: the
+ * local midnight that starts the month `now` is in. Balances are read with an
+ * exclusive bound, so every movement of the previous month's last day counts.
+ * Computed on the device, so the month boundary is the device's calendar.
+ */
+export function monthCloseAsOfMs(now: Date): number {
+    return new Date(now.getFullYear(), now.getMonth(), 1).getTime()
+}
 
 export const DASHBOARD_WIDTHS = ['full', 'two_thirds', 'half', 'third'] as const
 export type DashboardWidth = (typeof DASHBOARD_WIDTHS)[number]

@@ -79,11 +79,18 @@ class AccountRepository extends RepositoryBase {
 
   /// Live total balance across the active accounts in [currency], for the
   /// dashboard Balance card. [accountIds] narrows it to those accounts; empty
-  /// (the default) is every account in the currency.
+  /// (the default) is every account in the currency. [asOfMs] reads it at
+  /// another moment (exclusive) instead of now.
   Stream<BigInt> watchBalanceForCurrency(
     String currency, {
     List<String> accountIds = const [],
-  }) => watchTotalBalanceForCurrency(db, currency, accountIds: accountIds);
+    BigInt? asOfMs,
+  }) => watchTotalBalanceForCurrency(
+    db,
+    currency,
+    accountIds: accountIds,
+    asOfMs: asOfMs,
+  );
 
   /// Throws [DuplicateAccountException] when an active account with the
   /// same [currency] and a name equal to [name] (trim + case-insensitive)

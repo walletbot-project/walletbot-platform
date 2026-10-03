@@ -13,6 +13,7 @@ import {
     DEFAULT_CURRENCY,
     DEFAULT_VALUE_BACKGROUND,
     filterConfigToJson,
+    isBalanceWidgetType,
     isFilterEmpty,
     type LayoutCoord,
     mergeWidgetOptions,
@@ -207,7 +208,7 @@ export function WidgetSheet({
         return accountIds.filter((id) => allowed.has(id))
     }, [accountIds, accountOptions, accounts])
 
-    const usesFilter = type !== 'balance'
+    const usesFilter = !isBalanceWidgetType(type)
     /**
      * Every type that reads transactions needs a filter: a "no filter" tile
      * reads as the whole ledger and was never meant to be creatable.
@@ -220,7 +221,7 @@ export function WidgetSheet({
      */
     const filterExempt =
         widget !== null &&
-        widget.type !== 'balance' &&
+        !isBalanceWidgetType(widget.type) &&
         isFilterEmpty(existingFilter)
     const filterMissing = usesFilter && !filterExempt && isFilterEmpty(filter)
 
@@ -270,7 +271,7 @@ export function WidgetSheet({
                 ...(type === 'list'
                     ? { limit: parsedLimit > 0 ? parsedLimit : 5 }
                     : {}),
-                ...(type === 'balance'
+                ...(isBalanceWidgetType(type)
                     ? { currency, accountIds: scopedAccountIds }
                     : {}),
                 ...(type === 'chart' ? { groupBy, chartKind } : {}),
@@ -373,7 +374,7 @@ export function WidgetSheet({
                     />
                 ) : null}
 
-                {type === 'balance' ? (
+                {isBalanceWidgetType(type) ? (
                     <>
                         <PickerField
                             label={t.common.currency}
@@ -659,6 +660,7 @@ function defaultWidthFor(type: WidgetType, stored?: string): DashboardWidth {
         case 'stat':
             return 'third'
         case 'balance':
+        case 'balance_comparison':
             return 'half'
         default:
             return 'full'

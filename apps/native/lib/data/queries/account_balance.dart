@@ -66,12 +66,17 @@ Stream<BigInt> watchAccountBalance(AppDatabase db, String accountId) {
 /// stale id — an account since archived, deleted, or re-denominated — drops out
 /// of the sum instead of being counted.
 ///
+/// [asOfMs] reads the balance at another moment instead of now — an exclusive
+/// upper bound, like [computeAccountBalance] (the balance comparison's "last
+/// month" uses it).
+///
 /// Reuses [accountBalanceFromRows] per account so the arithmetic can never
 /// diverge from the per-account balance or the sync recompute.
 Stream<BigInt> watchTotalBalanceForCurrency(
   AppDatabase db,
   String currency, {
   List<String> accountIds = const [],
+  BigInt? asOfMs,
 }) {
   final scope = accountIds.toSet();
   final accountsStream =
@@ -82,7 +87,11 @@ Stream<BigInt> watchTotalBalanceForCurrency(
   final txnsStream =
       (db.select(db.transactions)
             ..where((t) => t.archived.equals(false))
-            ..where((t) => t.date.isSmallerThan(pastCutoffExpression())))
+            ..where(
+              (t) => asOfMs == null
+                  ? t.date.isSmallerThan(pastCutoffExpression())
+                  : t.date.isSmallerThanValue(asOfMs),
+            ))
           .watch();
   return combineLatest2(accountsStream, txnsStream, (accounts, txns) {
     var total = BigInt.zero;

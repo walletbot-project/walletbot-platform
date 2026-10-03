@@ -114,9 +114,9 @@ const toolDescriptions = {
     listDashboardWidgets:
         'List the home dashboard widgets in display order, including type, width, options, and resolved filter JSON. The same dashboard is shared across the user devices. Always call this before editing the layout — never invent widget ids.',
     createDashboardWidget:
-        'Create a home dashboard widget. Types: stat (aggregation sum/net/count over a filter), list (recent matching movements, `limit` rows), balance (as-of-now balance for `currency`, optionally scoped to accountIds — never date-bounded and it takes no filter), chart (breakdown by category/account/month; transfers are excluded from breakdowns). Width maps to a 6-unit grid: full=6, two_thirds=4, half=3, third=2. New widgets land on a fresh row below everything placed.',
+        'Create a home dashboard widget. Types: stat (aggregation sum/net/count over a filter), list (recent matching movements, `limit` rows), balance (as-of-now balance for `currency`, optionally scoped to accountIds — never date-bounded and it takes no filter), chart (breakdown by category/account/month; transfers are excluded from breakdowns), balance_comparison (the closing balance of last month — every movement of its last day counts —, the current balance, and the difference, for `currency` optionally scoped to accountIds; takes no filter). Width maps to a 6-unit grid: full=6, two_thirds=4, half=3, third=2. New widgets land on a fresh row below everything placed.',
     updateDashboardWidget:
-        'Edit a home dashboard widget: type, title, width, filter JSON, display options, background. Options not mentioned keep their current value, except balance accountIds which must be re-stated on every edit. Fails with "Dashboard widget not found" for unknown or archived ids.',
+        'Edit a home dashboard widget: type, title, width, filter JSON, display options, background. Options not mentioned keep their current value, except balance and balance_comparison accountIds, which must be re-stated on every edit. Fails with "Dashboard widget not found" for unknown or archived ids.',
     reorderDashboardWidgets:
         'Reorder the home dashboard by passing ALL live widget ids in display order (get them from listDashboardWidgets). Ids that name no live widget are skipped without shifting the rest.',
     archiveDashboardWidget:

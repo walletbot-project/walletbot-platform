@@ -1710,6 +1710,7 @@ class ToolExecutors {
     WidgetType.list => DashboardWidth.full,
     WidgetType.balance => DashboardWidth.half,
     WidgetType.chart => DashboardWidth.full,
+    WidgetType.balanceComparison => DashboardWidth.half,
   };
 
   ({Map<String, Object?> options, String? error}) _widgetOptionsFor(
@@ -1733,6 +1734,7 @@ class ToolExecutors {
             _positiveInt(existingOptions['limit']) ??
             5;
       case WidgetType.balance:
+      case WidgetType.balanceComparison:
         final currency =
             args['currency'] as String? ??
             existingOptions['currency'] as String?;
@@ -1834,7 +1836,7 @@ class ToolExecutors {
     String title,
     Map<String, dynamic> args,
   ) async {
-    if (type == WidgetType.balance || !args.containsKey('filterConfigJson')) {
+    if (type.readsBalances || !args.containsKey('filterConfigJson')) {
       return null;
     }
     final config = _canonicalFilterConfig(args['filterConfigJson'] as String);
@@ -1848,7 +1850,7 @@ class ToolExecutors {
     String title,
     Map<String, dynamic> args,
   ) async {
-    if (type == WidgetType.balance) return null;
+    if (type.readsBalances) return null;
 
     if (args.containsKey('filterConfigJson')) {
       final config = _canonicalFilterConfig(args['filterConfigJson'] as String);

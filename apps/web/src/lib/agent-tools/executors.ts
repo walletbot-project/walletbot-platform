@@ -21,6 +21,7 @@ import {
     filterConfigToJson,
     filterFromCanonical,
     fxAlternatives,
+    isBalanceWidgetType,
     isFilterEmpty,
     isFxQuoteStale,
     isValidCurrencyCode,
@@ -1638,6 +1639,7 @@ function defaultWidthFor(type: WidgetType): DashboardWidth {
         case 'stat':
             return 'third'
         case 'balance':
+        case 'balance_comparison':
             return 'half'
         default:
             return 'full'
@@ -1666,7 +1668,8 @@ function widgetOptionsFor(
                     ? Math.trunc(args.limit)
                     : existing.limit
             break
-        case 'balance': {
+        case 'balance':
+        case 'balance_comparison': {
             const currency = (args.currency ?? existing.currency).trim()
             if (!currency) {
                 return { error: 'Balance widgets require currency' }
@@ -1739,7 +1742,9 @@ async function createFilterForWidget(
     title: string,
     filterConfigJson: string | undefined,
 ): Promise<string | null> {
-    if (type === 'balance' || filterConfigJson === undefined) return null
+    if (isBalanceWidgetType(type) || filterConfigJson === undefined) {
+        return null
+    }
     const config = canonicalFilterConfig(filterConfigJson)
     if (isFilterEmpty(parseFilterConfig(config))) return null
     const id = newId()
@@ -1766,7 +1771,7 @@ async function filterIdForWidgetUpdate(
         titleChanged: boolean
     },
 ): Promise<string | null> {
-    if (args.type === 'balance') return null
+    if (isBalanceWidgetType(args.type)) return null
 
     if (args.filterConfigJson !== undefined) {
         const config = canonicalFilterConfig(args.filterConfigJson)

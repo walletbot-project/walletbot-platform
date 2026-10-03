@@ -1653,6 +1653,18 @@ class AppLocalizationsEs extends AppLocalizations {
   String get widgetTypeBalance => 'Saldo';
 
   @override
+  String get widgetTypeBalanceComparison => 'Comparación de saldo';
+
+  @override
+  String get dashboardLastMonthBalance => 'Saldo del mes pasado';
+
+  @override
+  String get dashboardCurrentBalance => 'Saldo actual';
+
+  @override
+  String get dashboardBalanceDifference => 'Diferencia';
+
+  @override
   String get widgetTypeChart => 'Gráfico';
 
   @override

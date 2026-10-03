@@ -643,6 +643,40 @@ void main() {
     },
   );
 
+  test(
+    'a balance comparison widget is scoped like a balance card, filterless',
+    () async {
+      final cash = await repos.accounts.create(
+        name: 'Efectivo',
+        currency: 'ARS',
+      );
+
+      final missingCurrency = await tools.execute('createDashboardWidget', {
+        'type': 'balance_comparison',
+        'title': 'Este mes',
+      });
+      expect(missingCurrency['ok'], isFalse);
+
+      final created = await tools.execute('createDashboardWidget', {
+        'type': 'balance_comparison',
+        'title': 'Este mes',
+        'currency': 'ars',
+        'accountIds': [cash],
+        'filterConfigJson':
+            '{"combinator":"and","children":[{"field":"type","operator":"in","value":["expense"]}]}',
+      });
+      expect(created['ok'], isTrue);
+
+      final listed = await tools.execute('listDashboardWidgets', {});
+      final widget = (listed['widgets'] as List).single as Map<String, dynamic>;
+      expect(widget['type'], 'balance_comparison');
+      expect(widget['width'], 'half');
+      expect(widget['filterId'], isNull);
+      expect(widget['options'], containsPair('currency', 'ARS'));
+      expect(widget['options'], containsPair('accountIds', [cash]));
+    },
+  );
+
   test('dashboard widget edit updates linked filter and can archive', () async {
     final initialFilter = {
       'combinator': 'and',

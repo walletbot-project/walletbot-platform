@@ -2996,6 +2996,30 @@ abstract class AppLocalizations {
   /// **'Balance'**
   String get widgetTypeBalance;
 
+  /// No description provided for @widgetTypeBalanceComparison.
+  ///
+  /// In en, this message translates to:
+  /// **'Balance comparison'**
+  String get widgetTypeBalanceComparison;
+
+  /// No description provided for @dashboardLastMonthBalance.
+  ///
+  /// In en, this message translates to:
+  /// **'Last month\'s balance'**
+  String get dashboardLastMonthBalance;
+
+  /// No description provided for @dashboardCurrentBalance.
+  ///
+  /// In en, this message translates to:
+  /// **'Current balance'**
+  String get dashboardCurrentBalance;
+
+  /// No description provided for @dashboardBalanceDifference.
+  ///
+  /// In en, this message translates to:
+  /// **'Difference'**
+  String get dashboardBalanceDifference;
+
   /// No description provided for @widgetTypeChart.
   ///
   /// In en, this message translates to:

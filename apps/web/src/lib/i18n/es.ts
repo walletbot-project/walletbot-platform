@@ -364,6 +364,11 @@ export const es = {
         typeList: 'Movimientos',
         typeBalance: 'Saldo',
         typeChart: 'Gráfico',
+        typeBalanceComparison: 'Comparación de saldo',
+        // Balance comparison rows: last month's close, now, and the change.
+        lastMonthBalance: 'Saldo del mes pasado',
+        currentBalance: 'Saldo actual',
+        balanceDifference: 'Diferencia',
 
         aggregation: 'Agregación',
         aggregationSum: 'Suma',

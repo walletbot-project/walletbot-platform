@@ -210,7 +210,7 @@ const DASHBOARD_GUIDE = `# Home dashboard and filters
 - Account filters need direction: "source", "destination", or "either". Tag filters can include "match": "any"|"all" and "includeSubtags": true.
 - Numeric widgets should usually include a currency condition in their filter unless they are count-only.
 - Units: amounts in tool arguments (and value-based background thresholds) are display units (e.g. 125.50); amount values stored inside filter JSON are cents (12550). Convert accordingly.
-- When creating or updating a widget, include only the relevant display options: stat aggregation, list limit, balance currency/accountIds, or chart groupBy/chartKind. Use background mode "none", "fixed", or "value" only when the user asks for it.`
+- When creating or updating a widget, include only the relevant display options: stat aggregation, list limit, balance or balance_comparison currency/accountIds, or chart groupBy/chartKind. Use background mode "none", "fixed", or "value" only when the user asks for it.`
 
 const CORE_RULES = `# Core rules
 - Refer to entities by the user's chosen name. Never read out UUIDs.

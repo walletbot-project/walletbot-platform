@@ -331,6 +331,11 @@ export const en: Messages = {
         typeList: 'Transactions',
         typeBalance: 'Balance',
         typeChart: 'Chart',
+        typeBalanceComparison: 'Balance comparison',
+        // Balance comparison rows: last month's close, now, and the change.
+        lastMonthBalance: "Last month's balance",
+        currentBalance: 'Current balance',
+        balanceDifference: 'Difference',
 
         aggregation: 'Aggregation',
         aggregationSum: 'Sum',

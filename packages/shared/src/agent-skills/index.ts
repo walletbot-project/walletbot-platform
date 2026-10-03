@@ -128,7 +128,7 @@ Recipes:
 - Money received into account X (either leg matters on transfers):
 {"combinator":"and","children":[{"field":"account","operator":"in","value":["<accountId>"],"direction":"destination"}]}
 
-Widget notes: numeric (stat sum/net) widgets should carry a currency condition; count-only stats need none. Balance widgets take NO filter — they use options currency/accountIds and are always as-of-now. Chart widgets exclude transfers regardless of the filter.`,
+Widget notes: numeric (stat sum/net) widgets should carry a currency condition; count-only stats need none. Balance widgets take NO filter — they use options currency/accountIds and are always as-of-now. balance_comparison widgets use the same currency/accountIds and no filter; they show last month's closing balance (its last day included), the current balance, and the difference — use them for "how much did my balance change since last month". Chart widgets exclude transfers regardless of the filter.`,
     },
     {
         slug: 'recurring-movements',
