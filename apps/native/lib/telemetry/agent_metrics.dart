@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'duration_bucket.dart';
 import 'telemetry_client.dart';
 
 class AgentMetrics {
@@ -191,6 +192,51 @@ class AgentMetrics {
         mode: mode,
         interactionType: interactionType,
         usage: usage,
+      ),
+    );
+  }
+
+  /// Redirects the connect-phase `Stopwatch` timing
+  /// `GeminiVoiceExpenseCommand` already computes
+  /// (`_logConnectionPhase('setup_complete', ...)`) into telemetry, bucketed
+  /// like every other latency metric here (see
+  /// docs/metrics/error-rate-and-latency.md).
+  void recordSetupCompleteBucket({
+    required int elapsedMs,
+    required bool resumed,
+  }) {
+    unawaited(
+      _telemetry?.trackMetric(
+        'voice.connect.setup_complete_bucket_count',
+        type: 'counter',
+        value: 1,
+        unit: 'count',
+        attributes: {
+          'bucket': clientDurationBucket(elapsedMs),
+          'platform': currentPlatform,
+          'resumed': resumed,
+        },
+      ),
+    );
+  }
+
+  /// Time from the user's turn being sent (voice: audio stream end; text:
+  /// `sendText`) to the model's first transcript delta or audio chunk.
+  void recordFirstResponseBucket({
+    required int elapsedMs,
+    required String mode,
+  }) {
+    unawaited(
+      _telemetry?.trackMetric(
+        'agent.response.first_token_bucket_count',
+        type: 'counter',
+        value: 1,
+        unit: 'count',
+        attributes: {
+          'bucket': clientDurationBucket(elapsedMs),
+          'mode': mode == 'text' ? 'text' : 'voice',
+          'platform': currentPlatform,
+        },
       ),
     );
   }

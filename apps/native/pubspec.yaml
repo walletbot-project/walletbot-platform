@@ -125,6 +125,19 @@ flutter_launcher_icons:
   adaptive_icon_foreground_inset: 0
   ios: true
   remove_alpha_ios: true
+  # Desktop and Flutter web reuse the flattened artwork (the white ground also
+  # keeps the web maskable icons safe), except Windows, whose .ico takes the
+  # alpha-backed card so it sits on the taskbar without a white box.
+  web:
+    generate: true
+    image_path: assets/icon/icon.png
+  windows:
+    generate: true
+    image_path: assets/icon/icon-android.png
+    icon_size: 256
+  macos:
+    generate: true
+    image_path: assets/icon/icon.png
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
