@@ -49,14 +49,14 @@
                                             "kind": "DataQuery",
                                             "spec": {
                                                 "alias": "Visits",
-                                                "editorMode": "builder",
-                                                "expr": "business_users_registered_total_count{deployment_environment=\"$Scope\"}",
-                                                "instant": false,
+                                                "editorMode": "code",
+                                                "expr": "max(last_over_time(business_users_registered_total_count{deployment_environment=\"$Scope\"}[25h]))",
+                                                "instant": true,
                                                 "legendFormat": "__auto",
                                                 "max": 28000,
                                                 "min": 22000,
                                                 "noise": 150,
-                                                "range": true,
+                                                "range": false,
                                                 "scenarioId": "random_walk",
                                                 "seriesCount": 1,
                                                 "spread": 600,
@@ -156,10 +156,12 @@
                                             "group": "prometheus",
                                             "kind": "DataQuery",
                                             "spec": {
-                                                "editorMode": "builder",
-                                                "expr": "max by(__name__) (agent_user_monthly_cost_usd{deployment_environment=\"$Scope\",model=~\"$model\"})",
+                                                "editorMode": "code",
+                                                "expr": "sum by (parent_hash, month) (max by (parent_hash, user_hash, month, model, mode) (last_over_time(agent_user_monthly_cost_usd{deployment_environment=\"$Scope\",model=~\"$model\",account_scope=\"local\"}[25h])))",
+                                                "format": "table",
+                                                "instant": true,
                                                 "legendFormat": "__auto",
-                                                "range": true
+                                                "range": false
                                             },
                                             "version": "v0"
                                         },
@@ -168,15 +170,34 @@
                                 }
                             ],
                             "queryOptions": {},
-                            "transformations": []
+                            "transformations": [
+                                {
+                                    "group": "organize",
+                                    "kind": "Transformation",
+                                    "spec": {
+                                        "options": {
+                                            "excludeByName": {
+                                                "Time": true
+                                            },
+                                            "renameByName": {
+                                                "Value": "Consumo (USD)",
+                                                "user_hash": "Identidad seudónima",
+                                                "account_scope": "Tipo de cuenta",
+                                                "parent_hash": "Instalación de origen",
+                                                "month": "Mes UTC"
+                                            }
+                                        }
+                                    }
+                                }
+                            ]
                         }
                     },
-                    "description": "",
+                    "description": "Suma del consumo mensual de las cuentas locales representadas en los snapshots (top 20 filas locales). No incluye necesariamente todas las cuentas o modelos de una instalación. El padre no identifica una persona verificada.",
                     "id": 10,
                     "links": [],
-                    "title": "Cantidad de llamadas por tool (WIP)",
+                    "title": "Consumo local por instalación de origen",
                     "vizConfig": {
-                        "group": "stat",
+                        "group": "table",
                         "kind": "VizConfig",
                         "spec": {
                             "fieldConfig": {
@@ -184,36 +205,41 @@
                                     "color": {
                                         "mode": "thresholds"
                                     },
+                                    "custom": {
+                                        "align": "auto",
+                                        "cellOptions": {
+                                            "type": "auto"
+                                        },
+                                        "footer": {
+                                            "reducers": []
+                                        },
+                                        "inspect": false,
+                                        "wrapText": false
+                                    },
+                                    "fieldMinMax": false,
                                     "thresholds": {
                                         "mode": "absolute",
                                         "steps": [
                                             {
                                                 "color": "green",
                                                 "value": 0
-                                            },
-                                            {
-                                                "color": "red",
-                                                "value": 80
                                             }
                                         ]
-                                    }
+                                    },
+                                    "unit": "currencyUSD"
                                 },
                                 "overrides": []
                             },
                             "options": {
-                                "colorMode": "value",
-                                "graphMode": "area",
-                                "justifyMode": "auto",
-                                "orientation": "auto",
-                                "percentChangeColorMode": "standard",
-                                "reduceOptions": {
-                                    "calcs": ["lastNotNull"],
-                                    "fields": "",
-                                    "values": false
-                                },
-                                "showPercentChange": false,
-                                "textMode": "auto",
-                                "wideLayout": true
+                                "cellHeight": "sm",
+                                "showHeader": true,
+                                "sortBy": [
+                                    {
+                                        "desc": true,
+                                        "displayName": "Consumo (USD)"
+                                    }
+                                ],
+                                "zebraStriping": false
                             }
                         },
                         "version": "13.3.0-36394719073"
@@ -327,10 +353,10 @@
                                             "spec": {
                                                 "editorMode": "code",
                                                 "exemplar": false,
-                                                "expr": "label_replace(sum(count_over_time((agent_session_cost_usd{deployment_environment=\"$Scope\",model=~\"$model\"} < 0.01)[$__range:])), \"bucket\", \"0-0.01\", \"\", \"\") or label_replace(sum(count_over_time((agent_session_cost_usd{deployment_environment=\"$Scope\",model=~\"$model\"} >= 0.01 and agent_session_cost_usd{deployment_environment=\"$Scope\",model=~\"$model\"} < 0.05)[$__range:])), \"bucket\", \"0.01-0.05\", \"\", \"\") or label_replace(sum(count_over_time((agent_session_cost_usd{deployment_environment=\"$Scope\",model=~\"$model\"} >= 0.05 and agent_session_cost_usd{deployment_environment=\"$Scope\",model=~\"$model\"} < 0.10)[$__range:])), \"bucket\", \"0.05-0.10\", \"\", \"\") or label_replace(sum(count_over_time((agent_session_cost_usd{deployment_environment=\"$Scope\",model=~\"$model\"} >= 0.10 and agent_session_cost_usd{deployment_environment=\"$Scope\",model=~\"$model\"} < 0.50)[$__range:])), \"bucket\", \"0.10-0.50\", \"\", \"\") or label_replace(sum(count_over_time((agent_session_cost_usd{deployment_environment=\"$Scope\",model=~\"$model\"} >= 0.50 and agent_session_cost_usd{deployment_environment=\"$Scope\",model=~\"$model\"} < 1.00)[$__range:])), \"bucket\", \"0.50-1.00\", \"\", \"\") or label_replace(sum(count_over_time((agent_session_cost_usd{deployment_environment=\"$Scope\",model=~\"$model\"} >= 1.00)[$__range:])), \"bucket\", \"1.00+\", \"\", \"\")",
+                                                "expr": "sum by (cost_bucket) (count_over_time(agent_session_cost_bucket_count_total{deployment_environment=\"$Scope\",model=~\"$model\"}[$__range]))",
                                                 "format": "table",
                                                 "instant": true,
-                                                "legendFormat": "{{bucket}}",
+                                                "legendFormat": "{{cost_bucket}}",
                                                 "range": false
                                             },
                                             "version": "v0"
@@ -343,10 +369,10 @@
                             "transformations": []
                         }
                     },
-                    "description": "",
+                    "description": "Cuenta eventos exportados por rango de costo. Una sesión puede generar muestras separadas por modelo; no es un conteo de sesiones únicas. Usa muestras reales, no pasos de evaluación de una subquery.",
                     "id": 12,
                     "links": [],
-                    "title": "Sesiones por bucket de costo (USD)",
+                    "title": "Muestras de costo por rango (USD)",
                     "vizConfig": {
                         "group": "barchart",
                         "kind": "VizConfig",
@@ -408,7 +434,7 @@
                                     "mode": "single",
                                     "sort": "none"
                                 },
-                                "xField": "bucket",
+                                "xField": "cost_bucket",
                                 "xTickLabelRotation": 0,
                                 "xTickLabelSpacing": 0
                             }
@@ -550,7 +576,7 @@
                                             "spec": {
                                                 "editorMode": "code",
                                                 "exemplar": false,
-                                                "expr": "max by(model, mode) (agent_session_cost_usd{deployment_environment=\"$Scope\",model=~\"$model\"})",
+                                                "expr": "max by (model, mode) (max_over_time(agent_session_cost_usd{deployment_environment=\"$Scope\",model=~\"$model\"}[$__interval]))",
                                                 "legendFormat": "{{model}} / {{mode}}",
                                                 "range": true
                                             },
@@ -567,7 +593,7 @@
                     "description": "Costo del agente separado por modelo y modo (texto, voz o hibrido). Los nombres que contienen 3.8 se muestran en azul y los que contienen 3.1 en naranja. Selecciona All o ambos modelos en el selector Modelo para compararlos simultaneamente.\n\nAlgunos puntos se muestran duplicados.",
                     "id": 3,
                     "links": [],
-                    "title": "Costo por modo",
+                    "title": "Máximo costo reportado por modelo y modo",
                     "vizConfig": {
                         "group": "timeseries",
                         "kind": "VizConfig",
@@ -696,11 +722,12 @@
                                             "group": "prometheus",
                                             "kind": "DataQuery",
                                             "spec": {
-                                                "editorMode": "builder",
+                                                "editorMode": "code",
                                                 "exemplar": false,
-                                                "expr": "max(agent_session_cost_usd{deployment_environment=\"$Scope\",model=~\"$model\"})",
+                                                "expr": "max(max_over_time(agent_session_cost_usd{deployment_environment=\"$Scope\",model=~\"$model\"}[$__range]))",
                                                 "legendFormat": "Costo",
-                                                "range": true
+                                                "range": false,
+                                                "instant": true
                                             },
                                             "version": "v0"
                                         },
@@ -715,7 +742,7 @@
                     "description": "",
                     "id": 4,
                     "links": [],
-                    "title": "Costo maximo de sesion",
+                    "title": "Máximo costo reportado en el período",
                     "vizConfig": {
                         "group": "stat",
                         "kind": "VizConfig",
@@ -737,7 +764,8 @@
                                                 "value": 80
                                             }
                                         ]
-                                    }
+                                    },
+                                    "unit": "currencyUSD"
                                 },
                                 "overrides": []
                             },
@@ -991,7 +1019,7 @@
                                             "kind": "DataQuery",
                                             "spec": {
                                                 "editorMode": "code",
-                                                "expr": "max by (account_scope) (sum by (account_scope, parent_hash, user_hash, month) (max by (account_scope, parent_hash, user_hash, month, model, mode) (last_over_time(agent_user_monthly_cost_usd{deployment_environment=\"$Scope\",model=~\"$model\"}[25h]))))",
+                                                "expr": "max by (account_scope) (sum by (account_scope, parent_hash, user_hash, month) (max by (account_scope, parent_hash, user_hash, month, model, mode) (last_over_time(agent_user_monthly_cost_usd{deployment_environment=\"$Scope\",model=~\"$model\",account_scope=~\"local|remote\"}[25h]) or label_replace(last_over_time(agent_user_monthly_cost_usd{deployment_environment=\"$Scope\",model=~\"$model\",account_scope=\"\"}[25h]), \"account_scope\", \"remote\", \"user_hash\", \".*\"))))",
                                                 "legendFormat": "{{account_scope}}",
                                                 "range": true
                                             },
@@ -1005,7 +1033,7 @@
                             "transformations": []
                         }
                     },
-                    "description": "Consumo mensual estimado: top 20 filas por tipo de cuenta (local/remota), modelo y modo. Cada cuenta local tiene identidad propia; el padre agrupa las creadas en una misma instalación, no una persona verificada. No es el total de facturación.",
+                    "description": "Mayor consumo mensual entre las cuentas representadas en los snapshots de las últimas 25 h, por tipo. Top 20 filas por tipo; un desglose puede estar incompleto. Incluye series remotas anteriores sin account_scope.",
                     "id": 7,
                     "links": [],
                     "title": "Máximo costo mensual por tipo de cuenta",
@@ -1074,7 +1102,7 @@
                                             "kind": "DataQuery",
                                             "spec": {
                                                 "editorMode": "code",
-                                                "expr": "sum by (account_scope, parent_hash, user_hash, month) (max by (account_scope, parent_hash, user_hash, month, model, mode) (last_over_time(agent_user_monthly_cost_usd{deployment_environment=\"$Scope\",model=~\"$model\"}[25h])))",
+                                                "expr": "sum by (account_scope, parent_hash, user_hash, month) (max by (account_scope, parent_hash, user_hash, month, model, mode) (last_over_time(agent_user_monthly_cost_usd{deployment_environment=\"$Scope\",model=~\"$model\",account_scope=~\"local|remote\"}[25h]) or label_replace(last_over_time(agent_user_monthly_cost_usd{deployment_environment=\"$Scope\",model=~\"$model\",account_scope=\"\"}[25h]), \"account_scope\", \"remote\", \"user_hash\", \".*\")))",
                                                 "format": "table",
                                                 "instant": true,
                                                 "legendFormat": "__auto",
@@ -1109,7 +1137,7 @@
                             ]
                         }
                     },
-                    "description": "Consumo mensual estimado: top 20 filas por tipo de cuenta (local/remota), modelo y modo. Cada cuenta local tiene identidad propia; el padre agrupa las creadas en una misma instalación, no una persona verificada. No es el total de facturación.",
+                    "description": "Consumo mensual estimado de las filas exportadas (top 20 por tipo local/remota; hasta 40). El desglose por modelo/modo puede estar incompleto. El padre agrupa cuentas de una instalación, no una persona verificada. Las series históricas sin account_scope se consideran remotas; se colapsan cambios de rank y etiquetas. Ventana de snapshot: 25 h. No es el total de facturación.",
                     "id": 8,
                     "links": [],
                     "title": "Consumo mensual: usuarios y cuentas locales",
@@ -1637,7 +1665,7 @@
                                             "kind": "DataQuery",
                                             "spec": {
                                                 "editorMode": "code",
-                                                "expr": "sum(count_over_time(agent_sessions_started_count_total{deployment_environment=\"$Scope\",model=~\"$model\"}[$__range])) - (sum(count_over_time(agent_session_cost_bucket_count_total{deployment_environment=\"$Scope\",model=~\"$model\"}[$__range])) or vector(0))",
+                                                "expr": "sum(count_over_time(agent_session_cost_bucket_count_total{deployment_environment=\"$Scope\",model=~\"$model\"}[$__range]))",
                                                 "instant": true,
                                                 "legendFormat": "Sin costo reportado",
                                                 "range": false
@@ -1652,10 +1680,10 @@
                             "transformations": []
                         }
                     },
-                    "description": "Sesiones abiertas en el rango seleccionado que nunca reportaron costo. El bucket de costo se emite como efecto de recibir un agent.session.cost_usd, asi que esta resta son sesiones que se abrieron y no produjeron nada: caidas antes del cierre, o sin usageMetadata. Cerca de cero es lo sano. Puede dar negativo en los bordes en el rango seleccionado, cuando el costo de una sesion cae dentro de la ventana y su apertura quedo afuera.\n\nConteo real dentro del rango elegido: cambiar el selector de tiempo cambia el numero. Cuenta muestras exportadas, y cada evento produce exactamente una, asi que no hay extrapolacion ni decimales.\n\nEl selector Modelo filtra tanto las sesiones abiertas como las que reportaron costo. Con All tambien se incluyen las series historicas sin etiqueta model.",
+                    "description": "Eventos de costo exportados en el período, separados por sesión/modelo. No se restan de aperturas: sus unidades no equivalen a sesiones únicas.",
                     "id": 17,
                     "links": [],
-                    "title": "Sesiones sin costo reportado",
+                    "title": "Muestras de costo reportadas",
                     "vizConfig": {
                         "group": "stat",
                         "kind": "VizConfig",
@@ -2060,13 +2088,13 @@
                         },
                         "spec": {
                             "qryType": 1,
-                            "query": "label_values(agent_session_cost_usd{deployment_environment=\"$Scope\"}, model)",
+                            "query": "label_values({__name__=~\"agent_session_cost_usd|agent_user_monthly_cost_usd\",deployment_environment=\"$Scope\"}, model)",
                             "refId": "PrometheusVariableQueryEditor-VariableQuery"
                         }
                     },
                     "regex": "",
                     "sort": "alphabeticalAsc",
-                    "definition": "label_values(agent_session_cost_usd{deployment_environment=\"$Scope\"}, model)",
+                    "definition": "label_values({__name__=~\"agent_session_cost_usd|agent_user_monthly_cost_usd\",deployment_environment=\"$Scope\"}, model)",
                     "options": [],
                     "multi": true,
                     "includeAll": true,

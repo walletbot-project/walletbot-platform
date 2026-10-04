@@ -440,3 +440,24 @@ Regression coverage also verifies that a failed secure-storage read/write can
 be retried on the next telemetry send and that local identity survives a failed
 optional mint-context build. This
 retry does not queue or replay the telemetry sample that already failed.
+
+### Confirmar el registro sin esperar a Grafana
+
+En el deployment de Convex usado por la app, abrir **Data → appUsers** después
+de abrir/usar IA. Debe existir una fila con `type = local`,
+`appUserId = local:<UUID>` y `parentId = device:<hash>`. Crear o cargar una
+cuenta offline no la registra: hace falta pedir el token de IA con el backend
+de este PR desplegado. La fila confirma registro, no consumo.
+
+Después de completar una interacción, buscar ese mismo `appUserId` en
+`agentUsageSamples` y `agentUsageMonthly` (`actorType = local`). Reiniciar y
+repetir no debe duplicar `appUsers`; otra cuenta de la misma instalación debe
+tener otro hijo y el mismo padre. Si falta la fila, comprobar primero que
+`CONVEX_SITE_URL` apunta al mismo deployment que se está inspeccionando.
+
+Para Grafana, ejecutar `telemetry/actions:recordAgentMonthlyUsageNow` desde
+Convex en desarrollo una vez que exista consumo; después esperar al export
+de la cola y seleccionar el `$Scope` correspondiente. El dashboard usa hashes
+seudónimos, por lo que sus IDs no coinciden literalmente con los de `appUsers`.
+Ver [la validación del dashboard](metrics/wal196-validation.md) para los datos
+reales comprobados y lo que sigue pendiente de validar en vivo.
