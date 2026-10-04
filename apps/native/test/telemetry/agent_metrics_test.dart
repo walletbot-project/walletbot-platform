@@ -163,6 +163,56 @@ void main() {
     telemetry.dispose();
   });
 
+  test(
+    'sends time to first response as raw milliseconds, not a bucket',
+    () async {
+      FlutterSecureStorage.setMockInitialValues({});
+
+      final bodies = <String>[];
+      final telemetry = TelemetryClient(
+        convexSiteUrl: 'https://example.convex.site',
+        httpClient: MockClient((request) async {
+          bodies.add(request.body);
+          return http.Response('{"ok":true,"accepted":1}', 200);
+        }),
+      );
+      final metrics = AgentMetrics(telemetry);
+
+      await metrics.recordFirstResponse(elapsedMs: 1830, mode: 'text');
+      await metrics.recordFirstResponse(elapsedMs: 420, mode: 'voice');
+      // Anything that is not 'text' is a voice turn.
+      await metrics.recordFirstResponse(elapsedMs: 7, mode: 'other');
+
+      final sent = [
+        for (final body in bodies)
+          ...((jsonDecode(body) as Map<String, Object?>)['metrics']
+                  as List<Object?>)
+              .cast<Map<String, Object?>>(),
+      ];
+      expect(sent, hasLength(3));
+      for (final metric in sent) {
+        expect(metric['name'], 'agent.response.first_token_ms');
+        expect(metric['type'], 'gauge');
+        expect(metric['unit'], 'ms');
+      }
+      expect(sent.map((m) => m['value']), [1830, 420, 7]);
+      expect(sent.map((m) => m['attributes']), [
+        {'mode': 'text', 'platform': currentPlatform},
+        {'mode': 'voice', 'platform': currentPlatform},
+        {'mode': 'voice', 'platform': currentPlatform},
+      ]);
+      expect(
+        sent.where(
+          (m) => m['name'] == 'agent.response.first_token_bucket_count',
+        ),
+        isEmpty,
+        reason: 'the backend derives the bucket counter from the gauge',
+      );
+
+      telemetry.dispose();
+    },
+  );
+
   test('estimates final session cost from total token count only', () {
     final metrics = AgentMetrics(null);
 

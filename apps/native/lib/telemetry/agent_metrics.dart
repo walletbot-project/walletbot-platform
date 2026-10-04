@@ -222,23 +222,35 @@ class AgentMetrics {
 
   /// Time from the user's turn being sent (voice: audio stream end; text:
   /// `sendText`) to the model's first transcript delta or audio chunk.
-  void recordFirstResponseBucket({
+  ///
+  /// Sent as the raw elapsed milliseconds (`agent.response.first_token_ms`,
+  /// a gauge), not as a bucket: the backend derives the bucketed
+  /// `agent.response.first_token_bucket_count` counter from it — the same way
+  /// `agent.session.cost_bucket_count` is derived from
+  /// `agent.session.cost_usd` — and also feeds its percentile source. Sending
+  /// the bucket counter from here too would count every response twice
+  /// (single emitter per event, docs/metrics/error-rate-and-latency.md).
+  Future<void> recordFirstResponse({
+    required int elapsedMs,
+    required String mode,
+  }) async {
+    await _telemetry?.trackMetric(
+      'agent.response.first_token_ms',
+      type: 'gauge',
+      value: elapsedMs.toDouble(),
+      unit: 'ms',
+      attributes: {
+        'mode': mode == 'text' ? 'text' : 'voice',
+        'platform': currentPlatform,
+      },
+    );
+  }
+
+  void recordFirstResponseBestEffort({
     required int elapsedMs,
     required String mode,
   }) {
-    unawaited(
-      _telemetry?.trackMetric(
-        'agent.response.first_token_bucket_count',
-        type: 'counter',
-        value: 1,
-        unit: 'count',
-        attributes: {
-          'bucket': clientDurationBucket(elapsedMs),
-          'mode': mode == 'text' ? 'text' : 'voice',
-          'platform': currentPlatform,
-        },
-      ),
-    );
+    unawaited(recordFirstResponse(elapsedMs: elapsedMs, mode: mode));
   }
 
   void recordInteractionCostBestEffort({

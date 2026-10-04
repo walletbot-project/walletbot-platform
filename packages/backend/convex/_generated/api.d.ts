@@ -8,6 +8,7 @@
  * @module
  */
 
+import type * as agent_helpers from "../agent/helpers.js";
 import type * as agent_idempotency from "../agent/idempotency.js";
 import type * as agent_internal from "../agent/internal.js";
 import type * as agent_prompt from "../agent/prompt.js";
@@ -94,6 +95,7 @@ import type * as telemetry_actions from "../telemetry/actions.js";
 import type * as telemetry_agentPricing from "../telemetry/agentPricing.js";
 import type * as telemetry_catalog from "../telemetry/catalog.js";
 import type * as telemetry_http from "../telemetry/http.js";
+import type * as telemetry_latency from "../telemetry/latency.js";
 import type * as telemetry_metrics from "../telemetry/metrics.js";
 import type * as telemetry_mutations from "../telemetry/mutations.js";
 import type * as telemetry_queries from "../telemetry/queries.js";
@@ -162,6 +164,7 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  "agent/helpers": typeof agent_helpers;
   "agent/idempotency": typeof agent_idempotency;
   "agent/internal": typeof agent_internal;
   "agent/prompt": typeof agent_prompt;
@@ -248,6 +251,7 @@ declare const fullApi: ApiFromModules<{
   "telemetry/agentPricing": typeof telemetry_agentPricing;
   "telemetry/catalog": typeof telemetry_catalog;
   "telemetry/http": typeof telemetry_http;
+  "telemetry/latency": typeof telemetry_latency;
   "telemetry/metrics": typeof telemetry_metrics;
   "telemetry/mutations": typeof telemetry_mutations;
   "telemetry/queries": typeof telemetry_queries;
@@ -345,4 +349,5 @@ export declare const components: {
   outflowsByAccount: import("@convex-dev/aggregate/_generated/component.js").ComponentApi<"outflowsByAccount">;
   inflowsByAccount: import("@convex-dev/aggregate/_generated/component.js").ComponentApi<"inflowsByAccount">;
   transactionsByTag: import("@convex-dev/aggregate/_generated/component.js").ComponentApi<"transactionsByTag">;
+  latencyByOperation: import("@convex-dev/aggregate/_generated/component.js").ComponentApi<"latencyByOperation">;
 };

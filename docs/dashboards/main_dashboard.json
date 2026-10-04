@@ -1702,6 +1702,1084 @@
                         "version": "13.3.0-36394719073"
                     }
                 }
+            },
+            "panel-18": {
+                "kind": "Panel",
+                "spec": {
+                    "data": {
+                        "kind": "QueryGroup",
+                        "spec": {
+                            "queries": [
+                                {
+                                    "kind": "PanelQuery",
+                                    "spec": {
+                                        "hidden": false,
+                                        "query": {
+                                            "datasource": {
+                                                "name": "grafanacloud-prom"
+                                            },
+                                            "group": "prometheus",
+                                            "kind": "DataQuery",
+                                            "spec": {
+                                                "editorMode": "code",
+                                                "exemplar": false,
+                                                "expr": "(sum(count_over_time(system_function_duration_bucket_count_total{deployment_environment=\"$Scope\", function=\"sync_push\", status=\"error\"}[$__range])) or vector(0)) / sum(count_over_time(system_function_duration_bucket_count_total{deployment_environment=\"$Scope\", function=\"sync_push\"}[$__range]))",
+                                                "instant": true,
+                                                "legendFormat": "",
+                                                "range": false
+                                            },
+                                            "version": "v0"
+                                        },
+                                        "refId": "A"
+                                    }
+                                }
+                            ],
+                            "queryOptions": {},
+                            "transformations": []
+                        }
+                    },
+                    "description": "Batches de sync cuyo apply en el backend tiro una excepcion, sobre todos los intentos de push en el rango. Los rechazos (`cursor_mismatch`, `client_outdated`) quedan afuera a proposito: son respuestas esperadas, sin escrituras, y no fallas del backend. Un solo emisor (el backend), una muestra por llamada. No incluye pushes que nunca llegaron o no autenticados: ver \"Fallas de push en el cliente\".\n\nConteo real dentro del rango elegido: cuenta muestras exportadas, y cada evento produce exactamente una, asi que no hay extrapolacion ni decimales.",
+                    "id": 18,
+                    "links": [],
+                    "title": "Tasa de error de sync push",
+                    "vizConfig": {
+                        "group": "stat",
+                        "kind": "VizConfig",
+                        "spec": {
+                            "fieldConfig": {
+                                "defaults": {
+                                    "color": {
+                                        "mode": "fixed",
+                                        "fixedColor": "text"
+                                    },
+                                    "thresholds": {
+                                        "mode": "absolute",
+                                        "steps": [
+                                            {
+                                                "color": "green",
+                                                "value": 0
+                                            }
+                                        ]
+                                    },
+                                    "min": 0,
+                                    "noValue": "Sin pushes",
+                                    "unit": "percentunit",
+                                    "decimals": 1
+                                },
+                                "overrides": []
+                            },
+                            "options": {
+                                "colorMode": "value",
+                                "graphMode": "none",
+                                "justifyMode": "auto",
+                                "orientation": "auto",
+                                "percentChangeColorMode": "standard",
+                                "reduceOptions": {
+                                    "calcs": ["lastNotNull"],
+                                    "fields": "",
+                                    "values": false
+                                },
+                                "showPercentChange": false,
+                                "textMode": "value_and_name",
+                                "wideLayout": true
+                            }
+                        },
+                        "version": "13.3.0-36394719073"
+                    }
+                }
+            },
+            "panel-19": {
+                "kind": "Panel",
+                "spec": {
+                    "data": {
+                        "kind": "QueryGroup",
+                        "spec": {
+                            "queries": [
+                                {
+                                    "kind": "PanelQuery",
+                                    "spec": {
+                                        "hidden": false,
+                                        "query": {
+                                            "datasource": {
+                                                "name": "grafanacloud-prom"
+                                            },
+                                            "group": "prometheus",
+                                            "kind": "DataQuery",
+                                            "spec": {
+                                                "editorMode": "code",
+                                                "exemplar": false,
+                                                "expr": "sum by (status) (count_over_time(system_function_duration_bucket_count_total{deployment_environment=\"$Scope\", function=\"sync_push\"}[$__range]))",
+                                                "instant": true,
+                                                "legendFormat": "{{status}}",
+                                                "range": false
+                                            },
+                                            "version": "v0"
+                                        },
+                                        "refId": "A"
+                                    }
+                                }
+                            ],
+                            "queryOptions": {},
+                            "transformations": []
+                        }
+                    },
+                    "description": "Intentos de push por resultado: `ok` aplicado, `rejected` rechazo devuelto como dato (cursor_mismatch / client_outdated), `error` excepcion al aplicar el batch.\n\nConteo real dentro del rango elegido: cuenta muestras exportadas, y cada evento produce exactamente una, asi que no hay extrapolacion ni decimales.",
+                    "id": 19,
+                    "links": [],
+                    "title": "Resultados de sync push",
+                    "vizConfig": {
+                        "group": "stat",
+                        "kind": "VizConfig",
+                        "spec": {
+                            "fieldConfig": {
+                                "defaults": {
+                                    "color": {
+                                        "mode": "fixed",
+                                        "fixedColor": "text"
+                                    },
+                                    "thresholds": {
+                                        "mode": "absolute",
+                                        "steps": [
+                                            {
+                                                "color": "green",
+                                                "value": 0
+                                            }
+                                        ]
+                                    },
+                                    "min": 0,
+                                    "noValue": "Sin pushes",
+                                    "unit": "short",
+                                    "decimals": 0
+                                },
+                                "overrides": []
+                            },
+                            "options": {
+                                "colorMode": "value",
+                                "graphMode": "none",
+                                "justifyMode": "auto",
+                                "orientation": "auto",
+                                "percentChangeColorMode": "standard",
+                                "reduceOptions": {
+                                    "calcs": ["lastNotNull"],
+                                    "fields": "",
+                                    "values": false
+                                },
+                                "showPercentChange": false,
+                                "textMode": "value_and_name",
+                                "wideLayout": true
+                            }
+                        },
+                        "version": "13.3.0-36394719073"
+                    }
+                }
+            },
+            "panel-20": {
+                "kind": "Panel",
+                "spec": {
+                    "data": {
+                        "kind": "QueryGroup",
+                        "spec": {
+                            "queries": [
+                                {
+                                    "kind": "PanelQuery",
+                                    "spec": {
+                                        "hidden": false,
+                                        "query": {
+                                            "datasource": {
+                                                "name": "grafanacloud-prom"
+                                            },
+                                            "group": "prometheus",
+                                            "kind": "DataQuery",
+                                            "spec": {
+                                                "editorMode": "code",
+                                                "exemplar": false,
+                                                "expr": "sum by (direction, reason) (count_over_time(sync_errors_count_total{deployment_environment=\"$Scope\"}[$__range]))",
+                                                "instant": true,
+                                                "legendFormat": "{{direction}} / {{reason}}",
+                                                "range": false
+                                            },
+                                            "version": "v0"
+                                        },
+                                        "refId": "A"
+                                    }
+                                }
+                            ],
+                            "queryOptions": {},
+                            "transformations": [
+                                {
+                                    "group": "reduce",
+                                    "kind": "Transformation",
+                                    "spec": {
+                                        "options": {
+                                            "labelsToFields": true,
+                                            "reducers": ["max"]
+                                        }
+                                    }
+                                },
+                                {
+                                    "group": "organize",
+                                    "kind": "Transformation",
+                                    "spec": {
+                                        "options": {
+                                            "excludeByName": {
+                                                "Field": true
+                                            },
+                                            "includeByName": {},
+                                            "indexByName": {},
+                                            "renameByName": {
+                                                "Max": "Total",
+                                                "direction": "Direccion",
+                                                "reason": "Motivo"
+                                            }
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "description": "Push lo emite el backend; pull lo emite el cliente nativo (pull es una query y no puede escribir). `cursor_mismatch` es recuperable: mide contencion, no rotura.\n\nConteo real dentro del rango elegido: cuenta muestras exportadas, y cada evento produce exactamente una, asi que no hay extrapolacion ni decimales.",
+                    "id": 20,
+                    "links": [],
+                    "title": "Errores de sync por direccion y motivo",
+                    "vizConfig": {
+                        "group": "table",
+                        "kind": "VizConfig",
+                        "spec": {
+                            "fieldConfig": {
+                                "defaults": {
+                                    "color": {
+                                        "mode": "thresholds"
+                                    },
+                                    "custom": {
+                                        "align": "auto",
+                                        "cellOptions": {
+                                            "type": "auto"
+                                        },
+                                        "filterable": false,
+                                        "footer": {
+                                            "reducers": []
+                                        },
+                                        "inspect": false
+                                    },
+                                    "thresholds": {
+                                        "mode": "absolute",
+                                        "steps": [
+                                            {
+                                                "color": "green",
+                                                "value": 0
+                                            }
+                                        ]
+                                    },
+                                    "unit": "short",
+                                    "decimals": 0
+                                },
+                                "overrides": []
+                            },
+                            "options": {
+                                "cellHeight": "sm",
+                                "showHeader": true,
+                                "sortBy": [
+                                    {
+                                        "desc": true,
+                                        "displayName": "Total"
+                                    }
+                                ],
+                                "zebraStriping": false
+                            }
+                        },
+                        "version": "13.3.0-36394719073"
+                    }
+                }
+            },
+            "panel-21": {
+                "kind": "Panel",
+                "spec": {
+                    "data": {
+                        "kind": "QueryGroup",
+                        "spec": {
+                            "queries": [
+                                {
+                                    "kind": "PanelQuery",
+                                    "spec": {
+                                        "hidden": false,
+                                        "query": {
+                                            "datasource": {
+                                                "name": "grafanacloud-prom"
+                                            },
+                                            "group": "prometheus",
+                                            "kind": "DataQuery",
+                                            "spec": {
+                                                "editorMode": "code",
+                                                "exemplar": false,
+                                                "expr": "sum by (reason, platform) (count_over_time(sync_push_client_failures_count_total{deployment_environment=\"$Scope\"}[$__range]))",
+                                                "instant": true,
+                                                "legendFormat": "{{reason}} / {{platform}}",
+                                                "range": false
+                                            },
+                                            "version": "v0"
+                                        },
+                                        "refId": "A"
+                                    }
+                                }
+                            ],
+                            "queryOptions": {},
+                            "transformations": [
+                                {
+                                    "group": "reduce",
+                                    "kind": "Transformation",
+                                    "spec": {
+                                        "options": {
+                                            "labelsToFields": true,
+                                            "reducers": ["max"]
+                                        }
+                                    }
+                                },
+                                {
+                                    "group": "organize",
+                                    "kind": "Transformation",
+                                    "spec": {
+                                        "options": {
+                                            "excludeByName": {
+                                                "Field": true
+                                            },
+                                            "includeByName": {},
+                                            "indexByName": {},
+                                            "renameByName": {
+                                                "Max": "Total",
+                                                "reason": "Motivo",
+                                                "platform": "Plataforma"
+                                            }
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "description": "Pushes que tiraron en el cliente antes de que el backend pudiera registrar un resultado: `auth_failure` (sesion vencida: `requireAuth` tira antes de registrar nada), `network` (timeout de la operacion) y `unknown`. Metrica aparte para que el backend siga siendo el unico emisor de los resultados de push. Hoy solo emite el cliente nativo (la web no hace sync).\n\nConteo real dentro del rango elegido: cuenta muestras exportadas, y cada evento produce exactamente una, asi que no hay extrapolacion ni decimales.",
+                    "id": 21,
+                    "links": [],
+                    "title": "Fallas de push en el cliente",
+                    "vizConfig": {
+                        "group": "table",
+                        "kind": "VizConfig",
+                        "spec": {
+                            "fieldConfig": {
+                                "defaults": {
+                                    "color": {
+                                        "mode": "thresholds"
+                                    },
+                                    "custom": {
+                                        "align": "auto",
+                                        "cellOptions": {
+                                            "type": "auto"
+                                        },
+                                        "filterable": false,
+                                        "footer": {
+                                            "reducers": []
+                                        },
+                                        "inspect": false
+                                    },
+                                    "thresholds": {
+                                        "mode": "absolute",
+                                        "steps": [
+                                            {
+                                                "color": "green",
+                                                "value": 0
+                                            }
+                                        ]
+                                    },
+                                    "unit": "short",
+                                    "decimals": 0
+                                },
+                                "overrides": []
+                            },
+                            "options": {
+                                "cellHeight": "sm",
+                                "showHeader": true,
+                                "sortBy": [
+                                    {
+                                        "desc": true,
+                                        "displayName": "Total"
+                                    }
+                                ],
+                                "zebraStriping": false
+                            }
+                        },
+                        "version": "13.3.0-36394719073"
+                    }
+                }
+            },
+            "panel-25": {
+                "kind": "Panel",
+                "spec": {
+                    "data": {
+                        "kind": "QueryGroup",
+                        "spec": {
+                            "queries": [
+                                {
+                                    "kind": "PanelQuery",
+                                    "spec": {
+                                        "hidden": false,
+                                        "query": {
+                                            "datasource": {
+                                                "name": "grafanacloud-prom"
+                                            },
+                                            "group": "prometheus",
+                                            "kind": "DataQuery",
+                                            "spec": {
+                                                "editorMode": "code",
+                                                "exemplar": false,
+                                                "expr": "sum by (tool_name) (count_over_time(agent_tool_calls_count_total{deployment_environment=\"$Scope\"}[$__range]))",
+                                                "instant": true,
+                                                "legendFormat": "",
+                                                "range": false,
+                                                "format": "table"
+                                            },
+                                            "version": "v0"
+                                        },
+                                        "refId": "calls"
+                                    }
+                                },
+                                {
+                                    "kind": "PanelQuery",
+                                    "spec": {
+                                        "hidden": false,
+                                        "query": {
+                                            "datasource": {
+                                                "name": "grafanacloud-prom"
+                                            },
+                                            "group": "prometheus",
+                                            "kind": "DataQuery",
+                                            "spec": {
+                                                "editorMode": "code",
+                                                "exemplar": false,
+                                                "expr": "sum by (tool_name) (count_over_time(agent_tool_errors_count_total{deployment_environment=\"$Scope\"}[$__range])) or (sum by (tool_name) (count_over_time(agent_tool_calls_count_total{deployment_environment=\"$Scope\"}[$__range])) * 0)",
+                                                "instant": true,
+                                                "legendFormat": "",
+                                                "range": false,
+                                                "format": "table"
+                                            },
+                                            "version": "v0"
+                                        },
+                                        "refId": "errors"
+                                    }
+                                },
+                                {
+                                    "kind": "PanelQuery",
+                                    "spec": {
+                                        "hidden": false,
+                                        "query": {
+                                            "datasource": {
+                                                "name": "grafanacloud-prom"
+                                            },
+                                            "group": "prometheus",
+                                            "kind": "DataQuery",
+                                            "spec": {
+                                                "editorMode": "code",
+                                                "exemplar": false,
+                                                "expr": "(sum by (tool_name) (count_over_time(agent_tool_errors_count_total{deployment_environment=\"$Scope\"}[$__range])) or (sum by (tool_name) (count_over_time(agent_tool_calls_count_total{deployment_environment=\"$Scope\"}[$__range])) * 0)) / sum by (tool_name) (count_over_time(agent_tool_calls_count_total{deployment_environment=\"$Scope\"}[$__range]))",
+                                                "instant": true,
+                                                "legendFormat": "",
+                                                "range": false,
+                                                "format": "table"
+                                            },
+                                            "version": "v0"
+                                        },
+                                        "refId": "rate"
+                                    }
+                                }
+                            ],
+                            "queryOptions": {},
+                            "transformations": [
+                                {
+                                    "group": "merge",
+                                    "kind": "Transformation",
+                                    "spec": {
+                                        "options": {}
+                                    }
+                                },
+                                {
+                                    "group": "organize",
+                                    "kind": "Transformation",
+                                    "spec": {
+                                        "options": {
+                                            "excludeByName": {
+                                                "Time": true
+                                            },
+                                            "includeByName": {},
+                                            "indexByName": {},
+                                            "renameByName": {
+                                                "tool_name": "Tool",
+                                                "Value #calls": "Llamadas",
+                                                "Value #errors": "Errores",
+                                                "Value #rate": "Tasa de error"
+                                            }
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "description": "Llamadas a tools del agente de WhatsApp, errores y tasa de error por tool. Una llamada se cuenta una sola vez: la registra `agent/tools.ts:execute` si devuelve, o `agent/runner.ts` si tira.\n\nConteo real dentro del rango elegido: cuenta muestras exportadas, y cada evento produce exactamente una, asi que no hay extrapolacion ni decimales.",
+                    "id": 25,
+                    "links": [],
+                    "title": "Tasa de error de tools (WhatsApp)",
+                    "vizConfig": {
+                        "group": "table",
+                        "kind": "VizConfig",
+                        "spec": {
+                            "fieldConfig": {
+                                "defaults": {
+                                    "color": {
+                                        "mode": "thresholds"
+                                    },
+                                    "custom": {
+                                        "align": "auto",
+                                        "cellOptions": {
+                                            "type": "auto"
+                                        },
+                                        "filterable": false,
+                                        "footer": {
+                                            "reducers": []
+                                        },
+                                        "inspect": false
+                                    },
+                                    "thresholds": {
+                                        "mode": "absolute",
+                                        "steps": [
+                                            {
+                                                "color": "green",
+                                                "value": 0
+                                            }
+                                        ]
+                                    },
+                                    "unit": "short",
+                                    "decimals": 0
+                                },
+                                "overrides": []
+                            },
+                            "options": {
+                                "cellHeight": "sm",
+                                "showHeader": true,
+                                "sortBy": [
+                                    {
+                                        "desc": true,
+                                        "displayName": "Llamadas"
+                                    }
+                                ],
+                                "zebraStriping": false
+                            }
+                        },
+                        "version": "13.3.0-36394719073"
+                    }
+                }
+            },
+            "panel-22": {
+                "kind": "Panel",
+                "spec": {
+                    "data": {
+                        "kind": "QueryGroup",
+                        "spec": {
+                            "queries": [
+                                {
+                                    "kind": "PanelQuery",
+                                    "spec": {
+                                        "hidden": false,
+                                        "query": {
+                                            "datasource": {
+                                                "name": "grafanacloud-prom"
+                                            },
+                                            "group": "prometheus",
+                                            "kind": "DataQuery",
+                                            "spec": {
+                                                "editorMode": "code",
+                                                "exemplar": false,
+                                                "expr": "max by (batch_size) (last_over_time(system_latency_quantile_ms_milliseconds{deployment_environment=\"$Scope\", operation=\"sync_push\", window=\"24h\", quantile=\"0.5\"}[2h]))",
+                                                "instant": true,
+                                                "legendFormat": "",
+                                                "range": false,
+                                                "format": "table"
+                                            },
+                                            "version": "v0"
+                                        },
+                                        "refId": "p50"
+                                    }
+                                },
+                                {
+                                    "kind": "PanelQuery",
+                                    "spec": {
+                                        "hidden": false,
+                                        "query": {
+                                            "datasource": {
+                                                "name": "grafanacloud-prom"
+                                            },
+                                            "group": "prometheus",
+                                            "kind": "DataQuery",
+                                            "spec": {
+                                                "editorMode": "code",
+                                                "exemplar": false,
+                                                "expr": "max by (batch_size) (last_over_time(system_latency_quantile_ms_milliseconds{deployment_environment=\"$Scope\", operation=\"sync_push\", window=\"24h\", quantile=\"0.95\"}[2h]))",
+                                                "instant": true,
+                                                "legendFormat": "",
+                                                "range": false,
+                                                "format": "table"
+                                            },
+                                            "version": "v0"
+                                        },
+                                        "refId": "p95"
+                                    }
+                                },
+                                {
+                                    "kind": "PanelQuery",
+                                    "spec": {
+                                        "hidden": false,
+                                        "query": {
+                                            "datasource": {
+                                                "name": "grafanacloud-prom"
+                                            },
+                                            "group": "prometheus",
+                                            "kind": "DataQuery",
+                                            "spec": {
+                                                "editorMode": "code",
+                                                "exemplar": false,
+                                                "expr": "max by (batch_size) (last_over_time(system_latency_quantile_ms_milliseconds{deployment_environment=\"$Scope\", operation=\"sync_push\", window=\"24h\", quantile=\"0.99\"}[2h]))",
+                                                "instant": true,
+                                                "legendFormat": "",
+                                                "range": false,
+                                                "format": "table"
+                                            },
+                                            "version": "v0"
+                                        },
+                                        "refId": "p99"
+                                    }
+                                },
+                                {
+                                    "kind": "PanelQuery",
+                                    "spec": {
+                                        "hidden": false,
+                                        "query": {
+                                            "datasource": {
+                                                "name": "grafanacloud-prom"
+                                            },
+                                            "group": "prometheus",
+                                            "kind": "DataQuery",
+                                            "spec": {
+                                                "editorMode": "code",
+                                                "exemplar": false,
+                                                "expr": "max by (batch_size) (last_over_time(system_latency_samples_count{deployment_environment=\"$Scope\", operation=\"sync_push\", window=\"24h\"}[2h]))",
+                                                "instant": true,
+                                                "legendFormat": "",
+                                                "range": false,
+                                                "format": "table"
+                                            },
+                                            "version": "v0"
+                                        },
+                                        "refId": "samples"
+                                    }
+                                }
+                            ],
+                            "queryOptions": {},
+                            "transformations": [
+                                {
+                                    "group": "merge",
+                                    "kind": "Transformation",
+                                    "spec": {
+                                        "options": {}
+                                    }
+                                },
+                                {
+                                    "group": "organize",
+                                    "kind": "Transformation",
+                                    "spec": {
+                                        "options": {
+                                            "excludeByName": {
+                                                "Time": true
+                                            },
+                                            "includeByName": {},
+                                            "indexByName": {},
+                                            "renameByName": {
+                                                "batch_size": "Filas del batch",
+                                                "Value #p50": "p50",
+                                                "Value #p95": "p95",
+                                                "Value #p99": "p99",
+                                                "Value #samples": "Muestras (24h)"
+                                            }
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "description": "Duracion del apply de un batch de sync en el backend (`sync_push`, solo los aplicados), por cantidad de filas del batch: un batch de 80 filas y uno de 1 no son la misma operacion. `all` junta todos.\n\nPercentiles exactos (rango mas cercano) sobre una ventana movil de 24h, calculados en Convex (`telemetry/latency.ts`) y exportados cada hora como gauges: muestra la ultima foto, no depende del selector de tiempo. Leer cada percentil junto a su cantidad de muestras: con pocas, p99 es una sola medicion.",
+                    "id": 22,
+                    "links": [],
+                    "title": "Latencia de sync push por tamano de batch",
+                    "vizConfig": {
+                        "group": "table",
+                        "kind": "VizConfig",
+                        "spec": {
+                            "fieldConfig": {
+                                "defaults": {
+                                    "color": {
+                                        "mode": "thresholds"
+                                    },
+                                    "custom": {
+                                        "align": "auto",
+                                        "cellOptions": {
+                                            "type": "auto"
+                                        },
+                                        "filterable": false,
+                                        "footer": {
+                                            "reducers": []
+                                        },
+                                        "inspect": false
+                                    },
+                                    "thresholds": {
+                                        "mode": "absolute",
+                                        "steps": [
+                                            {
+                                                "color": "green",
+                                                "value": 0
+                                            }
+                                        ]
+                                    },
+                                    "unit": "ms",
+                                    "decimals": 0
+                                },
+                                "overrides": []
+                            },
+                            "options": {
+                                "cellHeight": "sm",
+                                "showHeader": true,
+                                "sortBy": [],
+                                "zebraStriping": false
+                            }
+                        },
+                        "version": "13.3.0-36394719073"
+                    }
+                }
+            },
+            "panel-23": {
+                "kind": "Panel",
+                "spec": {
+                    "data": {
+                        "kind": "QueryGroup",
+                        "spec": {
+                            "queries": [
+                                {
+                                    "kind": "PanelQuery",
+                                    "spec": {
+                                        "hidden": false,
+                                        "query": {
+                                            "datasource": {
+                                                "name": "grafanacloud-prom"
+                                            },
+                                            "group": "prometheus",
+                                            "kind": "DataQuery",
+                                            "spec": {
+                                                "editorMode": "code",
+                                                "exemplar": false,
+                                                "expr": "max by (mode) (last_over_time(system_latency_quantile_ms_milliseconds{deployment_environment=\"$Scope\", operation=\"agent_first_response\", window=\"24h\", quantile=\"0.5\"}[2h]))",
+                                                "instant": true,
+                                                "legendFormat": "",
+                                                "range": false,
+                                                "format": "table"
+                                            },
+                                            "version": "v0"
+                                        },
+                                        "refId": "p50"
+                                    }
+                                },
+                                {
+                                    "kind": "PanelQuery",
+                                    "spec": {
+                                        "hidden": false,
+                                        "query": {
+                                            "datasource": {
+                                                "name": "grafanacloud-prom"
+                                            },
+                                            "group": "prometheus",
+                                            "kind": "DataQuery",
+                                            "spec": {
+                                                "editorMode": "code",
+                                                "exemplar": false,
+                                                "expr": "max by (mode) (last_over_time(system_latency_quantile_ms_milliseconds{deployment_environment=\"$Scope\", operation=\"agent_first_response\", window=\"24h\", quantile=\"0.95\"}[2h]))",
+                                                "instant": true,
+                                                "legendFormat": "",
+                                                "range": false,
+                                                "format": "table"
+                                            },
+                                            "version": "v0"
+                                        },
+                                        "refId": "p95"
+                                    }
+                                },
+                                {
+                                    "kind": "PanelQuery",
+                                    "spec": {
+                                        "hidden": false,
+                                        "query": {
+                                            "datasource": {
+                                                "name": "grafanacloud-prom"
+                                            },
+                                            "group": "prometheus",
+                                            "kind": "DataQuery",
+                                            "spec": {
+                                                "editorMode": "code",
+                                                "exemplar": false,
+                                                "expr": "max by (mode) (last_over_time(system_latency_quantile_ms_milliseconds{deployment_environment=\"$Scope\", operation=\"agent_first_response\", window=\"24h\", quantile=\"0.99\"}[2h]))",
+                                                "instant": true,
+                                                "legendFormat": "",
+                                                "range": false,
+                                                "format": "table"
+                                            },
+                                            "version": "v0"
+                                        },
+                                        "refId": "p99"
+                                    }
+                                },
+                                {
+                                    "kind": "PanelQuery",
+                                    "spec": {
+                                        "hidden": false,
+                                        "query": {
+                                            "datasource": {
+                                                "name": "grafanacloud-prom"
+                                            },
+                                            "group": "prometheus",
+                                            "kind": "DataQuery",
+                                            "spec": {
+                                                "editorMode": "code",
+                                                "exemplar": false,
+                                                "expr": "max by (mode) (last_over_time(system_latency_samples_count{deployment_environment=\"$Scope\", operation=\"agent_first_response\", window=\"24h\"}[2h]))",
+                                                "instant": true,
+                                                "legendFormat": "",
+                                                "range": false,
+                                                "format": "table"
+                                            },
+                                            "version": "v0"
+                                        },
+                                        "refId": "samples"
+                                    }
+                                }
+                            ],
+                            "queryOptions": {},
+                            "transformations": [
+                                {
+                                    "group": "merge",
+                                    "kind": "Transformation",
+                                    "spec": {
+                                        "options": {}
+                                    }
+                                },
+                                {
+                                    "group": "organize",
+                                    "kind": "Transformation",
+                                    "spec": {
+                                        "options": {
+                                            "excludeByName": {
+                                                "Time": true
+                                            },
+                                            "includeByName": {},
+                                            "indexByName": {},
+                                            "renameByName": {
+                                                "mode": "Modo",
+                                                "Value #p50": "p50",
+                                                "Value #p95": "p95",
+                                                "Value #p99": "p99",
+                                                "Value #samples": "Muestras (24h)"
+                                            }
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "description": "Desde que el usuario manda su turno (fin del audio o texto enviado) hasta el primer fragmento de la respuesta, medido en el cliente (nativo y web). Solo cuentan los requests autenticados, para que un llamador anonimo no pueda mover el p99.\n\nPercentiles exactos (rango mas cercano) sobre una ventana movil de 24h, calculados en Convex (`telemetry/latency.ts`) y exportados cada hora como gauges: muestra la ultima foto, no depende del selector de tiempo. Leer cada percentil junto a su cantidad de muestras: con pocas, p99 es una sola medicion.",
+                    "id": 23,
+                    "links": [],
+                    "title": "Tiempo hasta la primera respuesta del agente",
+                    "vizConfig": {
+                        "group": "table",
+                        "kind": "VizConfig",
+                        "spec": {
+                            "fieldConfig": {
+                                "defaults": {
+                                    "color": {
+                                        "mode": "thresholds"
+                                    },
+                                    "custom": {
+                                        "align": "auto",
+                                        "cellOptions": {
+                                            "type": "auto"
+                                        },
+                                        "filterable": false,
+                                        "footer": {
+                                            "reducers": []
+                                        },
+                                        "inspect": false
+                                    },
+                                    "thresholds": {
+                                        "mode": "absolute",
+                                        "steps": [
+                                            {
+                                                "color": "green",
+                                                "value": 0
+                                            }
+                                        ]
+                                    },
+                                    "unit": "ms",
+                                    "decimals": 0
+                                },
+                                "overrides": []
+                            },
+                            "options": {
+                                "cellHeight": "sm",
+                                "showHeader": true,
+                                "sortBy": [],
+                                "zebraStriping": false
+                            }
+                        },
+                        "version": "13.3.0-36394719073"
+                    }
+                }
+            },
+            "panel-24": {
+                "kind": "Panel",
+                "spec": {
+                    "data": {
+                        "kind": "QueryGroup",
+                        "spec": {
+                            "queries": [
+                                {
+                                    "kind": "PanelQuery",
+                                    "spec": {
+                                        "hidden": false,
+                                        "query": {
+                                            "datasource": {
+                                                "name": "grafanacloud-prom"
+                                            },
+                                            "group": "prometheus",
+                                            "kind": "DataQuery",
+                                            "spec": {
+                                                "editorMode": "code",
+                                                "exemplar": false,
+                                                "expr": "max by (batch_size) (last_over_time(system_latency_quantile_ms_milliseconds{deployment_environment=\"$Scope\", operation=\"sync_push\", window=\"24h\", quantile=\"0.95\", batch_size=\"all\"}[65m]))",
+                                                "instant": false,
+                                                "legendFormat": "sync_push",
+                                                "range": true
+                                            },
+                                            "version": "v0"
+                                        },
+                                        "refId": "push"
+                                    }
+                                },
+                                {
+                                    "kind": "PanelQuery",
+                                    "spec": {
+                                        "hidden": false,
+                                        "query": {
+                                            "datasource": {
+                                                "name": "grafanacloud-prom"
+                                            },
+                                            "group": "prometheus",
+                                            "kind": "DataQuery",
+                                            "spec": {
+                                                "editorMode": "code",
+                                                "exemplar": false,
+                                                "expr": "max by (mode) (last_over_time(system_latency_quantile_ms_milliseconds{deployment_environment=\"$Scope\", operation=\"agent_first_response\", window=\"24h\", quantile=\"0.95\"}[65m]))",
+                                                "instant": false,
+                                                "legendFormat": "primera respuesta / {{mode}}",
+                                                "range": true
+                                            },
+                                            "version": "v0"
+                                        },
+                                        "refId": "first"
+                                    }
+                                }
+                            ],
+                            "queryOptions": {},
+                            "transformations": []
+                        }
+                    },
+                    "description": "Cada punto es la foto horaria del p95 sobre las 24h anteriores, no el p95 de ese intervalo. Sirve para ver tendencias; para el valor actual y su cantidad de muestras, ver las tablas de arriba.",
+                    "id": 24,
+                    "links": [],
+                    "title": "p95 en el tiempo (ventana movil de 24h)",
+                    "vizConfig": {
+                        "group": "timeseries",
+                        "kind": "VizConfig",
+                        "spec": {
+                            "fieldConfig": {
+                                "defaults": {
+                                    "color": {
+                                        "mode": "palette-classic"
+                                    },
+                                    "custom": {
+                                        "axisBorderShow": false,
+                                        "axisCenteredZero": false,
+                                        "axisColorMode": "text",
+                                        "axisLabel": "",
+                                        "axisPlacement": "auto",
+                                        "barAlignment": 0,
+                                        "barWidthFactor": 0.8,
+                                        "drawStyle": "line",
+                                        "fillOpacity": 0,
+                                        "gradientMode": "none",
+                                        "hideFrom": {
+                                            "legend": false,
+                                            "tooltip": false,
+                                            "viz": false
+                                        },
+                                        "insertNulls": false,
+                                        "lineInterpolation": "linear",
+                                        "lineWidth": 2,
+                                        "pointSize": 6,
+                                        "scaleDistribution": {
+                                            "type": "linear"
+                                        },
+                                        "showPoints": "always",
+                                        "spanNulls": true,
+                                        "stacking": {
+                                            "group": "A",
+                                            "mode": "none"
+                                        },
+                                        "thresholdsStyle": {
+                                            "mode": "off"
+                                        },
+                                        "showValues": false
+                                    },
+                                    "min": 0,
+                                    "thresholds": {
+                                        "mode": "absolute",
+                                        "steps": [
+                                            {
+                                                "color": "green",
+                                                "value": 0
+                                            }
+                                        ]
+                                    },
+                                    "unit": "ms"
+                                },
+                                "overrides": []
+                            },
+                            "options": {
+                                "legend": {
+                                    "calcs": ["lastNotNull"],
+                                    "displayMode": "table",
+                                    "placement": "right",
+                                    "showLegend": true
+                                },
+                                "tooltip": {
+                                    "hideZeros": false,
+                                    "mode": "multi",
+                                    "sort": "desc"
+                                }
+                            }
+                        },
+                        "version": "13.3.0-36394719073"
+                    }
+                }
             }
         },
         "layout": {
@@ -1970,6 +3048,138 @@
                                 }
                             },
                             "title": "Creacion de movimientos"
+                        }
+                    },
+                    {
+                        "kind": "RowsLayoutRow",
+                        "spec": {
+                            "collapse": false,
+                            "layout": {
+                                "kind": "GridLayout",
+                                "spec": {
+                                    "items": [
+                                        {
+                                            "kind": "GridLayoutItem",
+                                            "spec": {
+                                                "element": {
+                                                    "kind": "ElementReference",
+                                                    "name": "panel-18"
+                                                },
+                                                "height": 7,
+                                                "width": 6,
+                                                "x": 0,
+                                                "y": 0
+                                            }
+                                        },
+                                        {
+                                            "kind": "GridLayoutItem",
+                                            "spec": {
+                                                "element": {
+                                                    "kind": "ElementReference",
+                                                    "name": "panel-19"
+                                                },
+                                                "height": 7,
+                                                "width": 6,
+                                                "x": 6,
+                                                "y": 0
+                                            }
+                                        },
+                                        {
+                                            "kind": "GridLayoutItem",
+                                            "spec": {
+                                                "element": {
+                                                    "kind": "ElementReference",
+                                                    "name": "panel-20"
+                                                },
+                                                "height": 7,
+                                                "width": 12,
+                                                "x": 12,
+                                                "y": 0
+                                            }
+                                        },
+                                        {
+                                            "kind": "GridLayoutItem",
+                                            "spec": {
+                                                "element": {
+                                                    "kind": "ElementReference",
+                                                    "name": "panel-21"
+                                                },
+                                                "height": 8,
+                                                "width": 12,
+                                                "x": 0,
+                                                "y": 7
+                                            }
+                                        },
+                                        {
+                                            "kind": "GridLayoutItem",
+                                            "spec": {
+                                                "element": {
+                                                    "kind": "ElementReference",
+                                                    "name": "panel-25"
+                                                },
+                                                "height": 8,
+                                                "width": 12,
+                                                "x": 12,
+                                                "y": 7
+                                            }
+                                        }
+                                    ]
+                                }
+                            },
+                            "title": "Salud operativa"
+                        }
+                    },
+                    {
+                        "kind": "RowsLayoutRow",
+                        "spec": {
+                            "collapse": false,
+                            "layout": {
+                                "kind": "GridLayout",
+                                "spec": {
+                                    "items": [
+                                        {
+                                            "kind": "GridLayoutItem",
+                                            "spec": {
+                                                "element": {
+                                                    "kind": "ElementReference",
+                                                    "name": "panel-22"
+                                                },
+                                                "height": 8,
+                                                "width": 12,
+                                                "x": 0,
+                                                "y": 0
+                                            }
+                                        },
+                                        {
+                                            "kind": "GridLayoutItem",
+                                            "spec": {
+                                                "element": {
+                                                    "kind": "ElementReference",
+                                                    "name": "panel-23"
+                                                },
+                                                "height": 8,
+                                                "width": 12,
+                                                "x": 12,
+                                                "y": 0
+                                            }
+                                        },
+                                        {
+                                            "kind": "GridLayoutItem",
+                                            "spec": {
+                                                "element": {
+                                                    "kind": "ElementReference",
+                                                    "name": "panel-24"
+                                                },
+                                                "height": 9,
+                                                "width": 24,
+                                                "x": 0,
+                                                "y": 8
+                                            }
+                                        }
+                                    ]
+                                }
+                            },
+                            "title": "Latencia (p50/p95/p99)"
                         }
                     }
                 ]

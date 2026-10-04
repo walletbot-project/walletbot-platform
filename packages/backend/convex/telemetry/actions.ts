@@ -219,6 +219,22 @@ const exportableMetricAttributeKeys = (
             return new Set(['bucket', 'platform', 'resumed'])
         case 'agent.response.first_token_bucket_count':
             return new Set(['bucket', 'mode', 'platform'])
+        case 'agent.response.first_token_ms':
+            return new Set(['mode', 'platform'])
+        case 'sync.push.client_failures.count':
+            return new Set(['reason', 'platform'])
+        case 'agent.tool.calls.count':
+            return new Set(['tool_name'])
+        case 'system.latency.quantile_ms':
+            return new Set([
+                'operation',
+                'batch_size',
+                'mode',
+                'quantile',
+                'window',
+            ])
+        case 'system.latency.samples_count':
+            return new Set(['operation', 'batch_size', 'mode', 'window'])
         case 'business.users.registered_total':
         case 'agent.session.cost_outlier_count':
             return new Set()

@@ -16,6 +16,7 @@ async function fixture() {
     aggregate.register(t, 'outflowsByAccount')
     aggregate.register(t, 'inflowsByAccount')
     aggregate.register(t, 'transactionsByTag')
+    aggregate.register(t, 'latencyByOperation')
     const authed = t.withIdentity({
         subject: userId,
         issuer: 'https://test.convex.site/native-auth',
@@ -83,6 +84,16 @@ async function backendMetrics(t: Awaited<ReturnType<typeof fixture>>['t']) {
     )
 }
 
+async function latencySamples(t: Awaited<ReturnType<typeof fixture>>['t']) {
+    await t.finishAllScheduledFunctions(vi.runAllTimers)
+    return await t.run(async (ctx) =>
+        (await ctx.db.query('latencySamples').take(20)).map((s) => ({
+            operation: s.operation,
+            segment: s.segment,
+        })),
+    )
+}
+
 describe('push telemetry', { timeout: 30000 }, () => {
     beforeEach(() => {
         vi.useFakeTimers()
@@ -111,6 +122,39 @@ describe('push telemetry', { timeout: 30000 }, () => {
                 }),
             },
         ])
+    })
+
+    it('feeds an applied batch to the percentile source, by batch size', async () => {
+        const { t, authed } = await fixture()
+        await authed.mutation(api.v1.sync.mutations.push, {
+            ...client,
+            expectedServerSeq: 2n,
+            upserts: {
+                categories: [category],
+                transactions: [transaction('ARS')],
+            },
+            tombstones: [
+                { tableName: 'categories', entityId: 'gone', deletedAt: 10n },
+            ],
+        })
+        expect(await latencySamples(t)).toEqual([
+            { operation: 'sync_push', segment: '2-10' },
+        ])
+    })
+
+    it('keeps rejected and failed batches out of the percentile source', async () => {
+        const { t, authed } = await fixture()
+        await authed.mutation(api.v1.sync.mutations.push, {
+            ...client,
+            expectedServerSeq: 1n,
+            upserts: { categories: [category] },
+        })
+        await authed.mutation(api.v1.sync.mutations.push, {
+            ...client,
+            expectedServerSeq: 2n,
+            upserts: { transactions: [transaction('USD')] },
+        })
+        expect(await latencySamples(t)).toEqual([])
     })
 
     it('rolls back a failed batch but commits its error telemetry', async () => {

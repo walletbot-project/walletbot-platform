@@ -2,6 +2,7 @@ import { ConvexError, v } from 'convex/values'
 import { internal } from '../../_generated/api'
 import { mutation } from '../../_generated/server'
 import { CLIENT_OUTDATED, isClientSupported } from '../../config/helpers'
+import { batchSizeBucket, scheduleLatencySample } from '../../telemetry/latency'
 import {
     recordFunctionDuration,
     recordSyncError,
@@ -12,6 +13,19 @@ import { SYNC_VALIDATION_ERROR } from './internal'
 import { pushTombstones, pushUpserts } from './validators'
 
 const PUSH_FAILED = 'push_failed'
+
+type PushArgs = {
+    upserts: Partial<Record<string, ReadonlyArray<unknown>>>
+    tombstones?: ReadonlyArray<unknown>
+}
+
+// Rows in the batch, counted the way native sizes a chunk
+// (`sync_engine.dart:_Chunk.size`).
+const batchRowCount = (args: PushArgs): number =>
+    Object.values(args.upserts).reduce(
+        (total, rows) => total + (rows?.length ?? 0),
+        args.tombstones?.length ?? 0,
+    )
 
 const isSyncValidationError = (error: unknown): boolean =>
     error instanceof ConvexError &&
@@ -33,13 +47,19 @@ const isSyncValidationError = (error: unknown): boolean =>
 //    rethrow would roll the telemetry back too. Clients from before this
 //    variant existed already treat an unknown `ok: false` as a failed round
 //    and retry, exactly as they did for the throw.
-//  - unauthenticated → `requireAuth` throws; not recorded (see
-//    docs/metrics/error-rate-and-latency.md, "Coverage").
+//  - unauthenticated → `requireAuth` throws before anything here can record
+//    it. The client records it instead, as
+//    `sync.push.client_failures.count{reason="auth_failure"}`, a separate
+//    metric so this mutation stays the only emitter of push outcomes (see
+//    docs/metrics/error-rate-and-latency.md, "Emitters and coverage").
 //
 // Records one `system.function.duration_bucket_count` sample per call (the
-// attempt count) and one `sync.errors.count` per non-ok outcome. Timed with
-// `performance.now()`: `Date.now()` is frozen for a mutation's whole
-// execution, `performance.now()` advances inside mutations.
+// attempt count) and one `sync.errors.count` per non-ok outcome. An applied
+// batch also feeds the p50/p95/p99 source, segmented by batch size
+// (telemetry/latency.ts); rejections and errors don't, since they never
+// applied a batch. Timed with `performance.now()`: `Date.now()` is frozen for
+// a mutation's whole execution, `performance.now()` advances inside
+// mutations.
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const push = mutation({
@@ -64,11 +84,19 @@ export const push = mutation({
                     platform: args.platform,
                 })
             }
+            const durationMs = performance.now() - startedAt
             await recordFunctionDuration(ctx, {
                 function: 'sync_push',
-                durationMs: performance.now() - startedAt,
+                durationMs,
                 status,
             })
+            if (status === 'ok') {
+                await scheduleLatencySample(ctx, {
+                    operation: 'sync_push',
+                    segment: batchSizeBucket(batchRowCount(args)),
+                    durationMs,
+                })
+            }
         }
 
         // Reject clients below the platform floor before touching any data —

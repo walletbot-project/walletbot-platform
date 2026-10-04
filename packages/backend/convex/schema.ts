@@ -24,6 +24,7 @@ import { supportEmails } from './schema/supportEmails'
 import { syncCounters, tombstones } from './schema/sync'
 import { tags } from './schema/tags'
 import {
+    latencySamples,
     telemetryEvents,
     telemetryMetricSeries,
     telemetryMetrics,
@@ -68,6 +69,7 @@ export default defineSchema({
     telemetryEvents,
     telemetryMetrics,
     telemetryMetricSeries,
+    latencySamples,
     tombstones,
     transactionTags,
     transactions,

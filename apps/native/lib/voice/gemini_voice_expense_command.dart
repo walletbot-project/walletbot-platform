@@ -412,7 +412,7 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
     if (stopwatch == null || mode == null) return;
     _firstResponseStopwatch = null;
     _firstResponseMode = null;
-    agentMetrics?.recordFirstResponseBucket(
+    agentMetrics?.recordFirstResponseBestEffort(
       elapsedMs: stopwatch.elapsedMilliseconds,
       mode: mode,
     );

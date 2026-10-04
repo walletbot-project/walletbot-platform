@@ -25,5 +25,8 @@ app.use(aggregate, { name: 'inflowsByAccount' })
 // the transaction's date: a tag's count up to the occurrence cutoff is one
 // O(log n) read instead of one document read per join.
 app.use(aggregate, { name: 'transactionsByTag' })
+// Raw operation durations for the p50/p95/p99 latency gauges
+// (telemetry/latency.ts).
+app.use(aggregate, { name: 'latencyByOperation' })
 
 export default app
