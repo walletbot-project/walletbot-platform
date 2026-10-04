@@ -413,8 +413,9 @@ isolation, old remote retries, month/model separation, OTLP pseudonyms, offline
 UUID persistence and account-switch telemetry. To validate live, use AI with two
 local accounts from the same installation, confirm separate samples and a shared
 parent, force `telemetry/actions:recordAgentMonthlyUsageNow` in development, and
-inspect both local accounts in Grafana. Live deployment validation remains to
-be performed after deploying the branch.
+inspect both local accounts in Grafana. Development validation was completed on 2026-10-04 with an existing local
+account and a newly created sibling; see [the validation record](metrics/wal196-validation.md).
+Production deployment and dashboard import remain separate release steps.
 
 ### Upgrade test for an existing local account
 
