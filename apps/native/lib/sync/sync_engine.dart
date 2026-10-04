@@ -7,6 +7,8 @@ import 'package:flutter/foundation.dart' hide Category;
 import '../app_config/client_info.dart';
 import '../convex/convex_client.dart';
 import '../database.dart';
+import '../telemetry/duration_bucket.dart';
+import '../telemetry/telemetry_client.dart';
 import 'sync_merge.dart';
 import 'sync_recompute.dart';
 import 'sync_status.dart';
@@ -36,6 +38,7 @@ class SyncEngine extends ChangeNotifier {
     required AppDatabase db,
     required ConvexClient? client,
     required ClientInfo clientInfo,
+    TelemetryClient? telemetryClient,
     this.onClientOutdated,
     this.pullPageLimit = 200,
     this.pushChunkLimit = 80,
@@ -44,10 +47,18 @@ class SyncEngine extends ChangeNotifier {
   }) : _db = db,
        _client = client,
        _clientInfo = clientInfo,
+       _telemetry = telemetryClient,
        _writeDebounce = writeDebounce,
        _retryFloor = retryFloor;
 
   final AppDatabase _db;
+
+  // One emitter per operation (docs/metrics/error-rate-and-latency.md):
+  // push results and timing are recorded by the backend, which applies the
+  // batch. `pull` is a Convex query and cannot write telemetry (no
+  // `ctx.db`/scheduler on the backend), so its errors and timing are
+  // reported only from here, sourced 'native'.
+  final TelemetryClient? _telemetry;
 
   /// Null when the app runs without a Convex transport (widget tests). The
   /// engine is inert then: [start] refuses to wire anything up.
@@ -233,6 +244,41 @@ class SyncEngine extends ChangeNotifier {
     return fut;
   }
 
+  void _recordPullErrorBestEffort({required String reason}) {
+    unawaited(
+      _telemetry?.trackMetric(
+        'sync.errors.count',
+        type: 'counter',
+        value: 1,
+        unit: 'count',
+        attributes: {
+          'direction': 'pull',
+          'reason': reason,
+          'platform': currentPlatform,
+        },
+      ),
+    );
+  }
+
+  void _recordSyncPullDurationBestEffort({
+    required int elapsedMs,
+    required String status,
+  }) {
+    unawaited(
+      _telemetry?.trackMetric(
+        'system.function.duration_bucket_count',
+        type: 'counter',
+        value: 1,
+        unit: 'count',
+        attributes: {
+          'function': 'sync_pull',
+          'bucket': functionDurationBucket(elapsedMs),
+          'status': status,
+        },
+      ),
+    );
+  }
+
   Future<void> _runOnce() async {
     _setStatus(SyncStatus.syncing, error: null);
     try {
@@ -317,65 +363,91 @@ class SyncEngine extends ChangeNotifier {
 
   // ─── Pull ────────────────────────────────────────────────────────────────
 
+  // Whole-operation timing (one Stopwatch across every page of the drain) —
+  // not per-page, since `system.function.duration_bucket_count` measures one
+  // logical pull, not one HTTP round trip. Unlike the backend's `sync_push`
+  // (batch application only), this includes the network download and the
+  // local Drift apply of every page.
   Future<void> _pullDrain() async {
-    final merger = PullPageMerger(_db);
-    BigInt since = await _readLastServerSeq();
+    final stopwatch = Stopwatch()..start();
+    var status = 'ok';
+    try {
+      final merger = PullPageMerger(_db);
+      BigInt since = await _readLastServerSeq();
 
-    BigInt finalCurrentCounter = since;
-    bool drained = false;
-    int safety = 0;
-    while (!drained) {
-      safety += 1;
-      if (safety > 10000) {
-        throw StateError('sync: pull loop exceeded 10k iterations');
-      }
-
-      final decoded = await _requireClient
-          .query<Object?>('v1/sync/queries:pull', {
-            'since': since,
-            'limit': pullPageLimit,
-            'platform': _clientInfo.platform,
-            'appVersion': _clientInfo.appVersion,
-          });
-      if (decoded is! Map) {
-        throw StateError('sync: malformed pull response: $decoded');
-      }
-      if (decoded['error'] == _clientOutdatedError) {
-        throw const _ClientOutdatedException();
-      }
-      final rows = (decoded['rows'] as List).cast<Map<String, Object?>>();
-      final tombstones = (decoded['tombstones'] as List)
-          .cast<Map<String, Object?>>();
-      final hasMore = decoded['hasMore'] as bool;
-      final nextCursor = decoded['nextCursor'];
-      final currentCounter = decoded['currentCounter'] as BigInt;
-      finalCurrentCounter = currentCounter;
-
-      await merger.applyPage(rows: rows, tombstones: tombstones);
-
-      if (!hasMore) {
-        drained = true;
-      } else {
-        if (nextCursor is! BigInt) {
-          throw StateError(
-            'sync: pull says hasMore=true but nextCursor is not int64: '
-            '${decoded['nextCursor']}',
-          );
+      BigInt finalCurrentCounter = since;
+      bool drained = false;
+      int safety = 0;
+      while (!drained) {
+        safety += 1;
+        if (safety > 10000) {
+          throw StateError('sync: pull loop exceeded 10k iterations');
         }
-        if (nextCursor <= since) {
-          throw StateError(
-            'sync: pull cursor did not advance (since=$since, nextCursor=$nextCursor)',
-          );
+
+        final decoded = await _requireClient
+            .query<Object?>('v1/sync/queries:pull', {
+              'since': since,
+              'limit': pullPageLimit,
+              'platform': _clientInfo.platform,
+              'appVersion': _clientInfo.appVersion,
+            });
+        if (decoded is! Map) {
+          throw StateError('sync: malformed pull response: $decoded');
         }
-        since = nextCursor;
+        if (decoded['error'] == _clientOutdatedError) {
+          status = 'rejected';
+          _recordPullErrorBestEffort(reason: 'client_outdated');
+          throw const _ClientOutdatedException();
+        }
+        final rows = (decoded['rows'] as List).cast<Map<String, Object?>>();
+        final tombstones = (decoded['tombstones'] as List)
+            .cast<Map<String, Object?>>();
+        final hasMore = decoded['hasMore'] as bool;
+        final nextCursor = decoded['nextCursor'];
+        final currentCounter = decoded['currentCounter'] as BigInt;
+        finalCurrentCounter = currentCounter;
+
+        await merger.applyPage(rows: rows, tombstones: tombstones);
+
+        if (!hasMore) {
+          drained = true;
+        } else {
+          if (nextCursor is! BigInt) {
+            throw StateError(
+              'sync: pull says hasMore=true but nextCursor is not int64: '
+              '${decoded['nextCursor']}',
+            );
+          }
+          if (nextCursor <= since) {
+            throw StateError(
+              'sync: pull cursor did not advance (since=$since, nextCursor=$nextCursor)',
+            );
+          }
+          since = nextCursor;
+        }
       }
+
+      // Only commit last_server_seq after every page is applied (spec
+      // §"Importante. No avanzar last_server_seq hasta drenar todas las
+      // páginas").
+      await _writeLastServerSeq(finalCurrentCounter);
+      _lastKnownRemoteCounter = finalCurrentCounter;
+    } on _ClientOutdatedException {
+      rethrow;
+    } catch (e) {
+      status = 'error';
+      _recordPullErrorBestEffort(
+        reason: e is ConvexFunctionError && e.errorMessage == 'Unauthenticated'
+            ? 'auth_failure'
+            : 'unknown',
+      );
+      rethrow;
+    } finally {
+      _recordSyncPullDurationBestEffort(
+        elapsedMs: stopwatch.elapsedMilliseconds,
+        status: status,
+      );
     }
-
-    // Only commit last_server_seq after every page is applied (spec
-    // §"Importante. No avanzar last_server_seq hasta drenar todas las
-    // páginas").
-    await _writeLastServerSeq(finalCurrentCounter);
-    _lastKnownRemoteCounter = finalCurrentCounter;
   }
 
   Future<BigInt> _readLastServerSeq() async {

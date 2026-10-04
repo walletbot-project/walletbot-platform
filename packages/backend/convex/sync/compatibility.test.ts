@@ -368,9 +368,14 @@ describe('legacy recurrence compatibility', { timeout: 30000 }, () => {
         if ('error' in page) throw new Error(page.error)
         expect(page.tombstones).toEqual([])
         expect(page.currentCounter).toBe(result.newSeq)
+        // Every push now records `sync_push` telemetry, whose export is
+        // scheduled; that's not a projection, so it's excluded here.
+        const scheduled = await t.run((ctx) =>
+            ctx.db.system.query('_scheduled_functions').take(10),
+        )
         expect(
-            await t.run((ctx) =>
-                ctx.db.system.query('_scheduled_functions').take(1),
+            scheduled.filter(
+                (s) => s.name !== 'telemetry/actions:exportPendingMetrics',
             ),
         ).toEqual([])
         expect(

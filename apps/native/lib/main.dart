@@ -528,6 +528,7 @@ class _AuthGate extends StatelessWidget {
               db: ctx.read<AppDatabase>(),
               client: ctx.read<ConvexClient?>(),
               clientInfo: ctx.read<ClientInfo>(),
+              telemetryClient: ctx.read<TelemetryClient?>(),
               // Backstop for the client-side gate: if the server rejects this
               // client as outdated, reflect it so the hard update banner shows
               // and sync stays gated off.

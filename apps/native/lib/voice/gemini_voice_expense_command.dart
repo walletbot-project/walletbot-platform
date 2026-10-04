@@ -108,6 +108,8 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
       }
       return _buildContextSeed();
     },
+    onSetupComplete: (elapsedMs, resumed) => agentMetrics
+        ?.recordSetupCompleteBucket(elapsedMs: elapsedMs, resumed: resumed),
     onMessage: _handleServerMessage,
     onMessageError: (error) =>
         _emit(VoiceErrorEvent('Live message handling failed: $error')),
@@ -179,6 +181,11 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
   bool _sessionCostMetricSent = false;
   final AgentInteractionCostTracker _interactionCostTracker =
       AgentInteractionCostTracker();
+  // Time-to-first-response: started when a turn is sent (voice: the user
+  // stops talking; text: `sendText`), stopped at the first transcript delta
+  // or audio chunk the model sends back. Null once reported for this turn.
+  Stopwatch? _firstResponseStopwatch;
+  String? _firstResponseMode;
 
   @override
   String get label => 'Gemini Live voice expense command';
@@ -386,9 +393,29 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
   Future<void> endAudioStream() async {
     if (!isActive || !_audioStreamOpen) return;
     _audioStreamOpen = false;
+    _startFirstResponseTimer(mode: 'voice');
     _connection.send({
       'realtimeInput': {'audioStreamEnd': true},
     });
+  }
+
+  void _startFirstResponseTimer({required String mode}) {
+    _firstResponseStopwatch = Stopwatch()..start();
+    _firstResponseMode = mode;
+  }
+
+  // Called once per turn, at the first sign of a reply — a transcript delta
+  // or an audio chunk, whichever the model sends first.
+  void _reportFirstResponseIfPending() {
+    final stopwatch = _firstResponseStopwatch;
+    final mode = _firstResponseMode;
+    if (stopwatch == null || mode == null) return;
+    _firstResponseStopwatch = null;
+    _firstResponseMode = null;
+    agentMetrics?.recordFirstResponseBucket(
+      elapsedMs: stopwatch.elapsedMilliseconds,
+      mode: mode,
+    );
   }
 
   @override
@@ -407,6 +434,7 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
     if (trimmed.isEmpty) return;
     _textMessages += 1;
     await endAudioStream();
+    _startFirstResponseTimer(mode: 'text');
     recordClientEvent('send_message', {
       'interactionModality': 'text',
       'text': trimmed,
@@ -606,6 +634,7 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
     if (outputTranscription is Map) {
       final text = outputTranscription['text'];
       if (text is String && text.isNotEmpty) {
+        _reportFirstResponseIfPending();
         _emit(VoiceAgentTranscriptDelta(text));
       }
     }
@@ -636,6 +665,7 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
             continue;
           }
           if (pcmBytes == null) continue;
+          _reportFirstResponseIfPending();
           _outputAudioChunks += 1;
           _outputAudioBytes += pcmBytes.length;
           _persistProtocolEvent(

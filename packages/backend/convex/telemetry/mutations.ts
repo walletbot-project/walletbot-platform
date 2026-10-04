@@ -1,7 +1,11 @@
 import { v } from 'convex/values'
 import { internal } from '../_generated/api'
 import { internalMutation } from '../_generated/server'
-import { insertMetricBatch } from './metrics'
+import {
+    insertMetricBatch,
+    recordAgentToolError,
+    recordFunctionDuration,
+} from './metrics'
 import { metricInput, telemetryEventInput } from './validators'
 
 const authMethod = v.union(
@@ -148,6 +152,35 @@ export const recordUserAccountSignedIn = internalMutation({
             })
             return { accepted: 0 }
         }
+    },
+})
+
+// Called via `ctx.runMutation` from `whatsapp/nodeActions.ts:runAgentTurn`
+// (an action, no direct DB access) — the same action→mutation hop
+// `recordUserAccountCreated`/`recordUserAccountSignedIn` above use.
+export const recordFunctionDurationInternal = internalMutation({
+    args: {
+        function: v.literal('agent_turn'),
+        durationMs: v.number(),
+        status: v.union(v.literal('ok'), v.literal('error')),
+    },
+    handler: async (ctx, args) => {
+        await recordFunctionDuration(ctx, args)
+        return null
+    },
+})
+
+// Called from `agent/runner.ts` when `agent/tools.ts:execute` throws. The
+// throw rolled back everything `execute` wrote, so the error can only be
+// recorded from outside that transaction, in a mutation of its own.
+export const recordAgentToolErrorInternal = internalMutation({
+    args: {
+        toolName: v.string(),
+        reason: v.literal('unknown'),
+    },
+    handler: async (ctx, args) => {
+        await recordAgentToolError(ctx, args)
+        return null
     },
 })
 
