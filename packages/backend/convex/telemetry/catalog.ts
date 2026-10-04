@@ -168,6 +168,7 @@ export const metricCatalog: Record<
         unit: 'usd',
         attributes: {
             user_hash: 'string',
+            parent_hash: 'string',
             account_scope: new Set(['local', 'remote']),
             rank: 'string',
             month: 'string',

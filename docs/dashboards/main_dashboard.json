@@ -991,7 +991,7 @@
                                             "kind": "DataQuery",
                                             "spec": {
                                                 "editorMode": "code",
-                                                "expr": "max by (account_scope) (sum by (account_scope, user_hash, month) (max by (account_scope, user_hash, month, model, mode) (last_over_time(agent_user_monthly_cost_usd{deployment_environment=\"$Scope\",model=~\"$model\"}[25h]))))",
+                                                "expr": "max by (account_scope) (sum by (account_scope, parent_hash, user_hash, month) (max by (account_scope, parent_hash, user_hash, month, model, mode) (last_over_time(agent_user_monthly_cost_usd{deployment_environment=\"$Scope\",model=~\"$model\"}[25h]))))",
                                                 "legendFormat": "{{account_scope}}",
                                                 "range": true
                                             },
@@ -1005,7 +1005,7 @@
                             "transformations": []
                         }
                     },
-                    "description": "Consumo mensual estimado: top 20 filas por tipo de cuenta (local/remota), modelo y modo. Local identifica una instalación, no una persona. No es el total de facturación.",
+                    "description": "Consumo mensual estimado: top 20 filas por tipo de cuenta (local/remota), modelo y modo. Cada cuenta local tiene identidad propia; el padre agrupa las creadas en una misma instalación, no una persona verificada. No es el total de facturación.",
                     "id": 7,
                     "links": [],
                     "title": "Máximo costo mensual por tipo de cuenta",
@@ -1074,7 +1074,7 @@
                                             "kind": "DataQuery",
                                             "spec": {
                                                 "editorMode": "code",
-                                                "expr": "sum by (account_scope, user_hash, month) (max by (account_scope, user_hash, month, model, mode) (last_over_time(agent_user_monthly_cost_usd{deployment_environment=\"$Scope\",model=~\"$model\"}[25h])))",
+                                                "expr": "sum by (account_scope, parent_hash, user_hash, month) (max by (account_scope, parent_hash, user_hash, month, model, mode) (last_over_time(agent_user_monthly_cost_usd{deployment_environment=\"$Scope\",model=~\"$model\"}[25h])))",
                                                 "format": "table",
                                                 "instant": true,
                                                 "legendFormat": "__auto",
@@ -1100,6 +1100,7 @@
                                                 "Value": "Consumo (USD)",
                                                 "user_hash": "Identidad seudónima",
                                                 "account_scope": "Tipo de cuenta",
+                                                "parent_hash": "Instalación de origen",
                                                 "month": "Mes UTC"
                                             }
                                         }
@@ -1108,10 +1109,10 @@
                             ]
                         }
                     },
-                    "description": "Consumo mensual estimado: top 20 filas por tipo de cuenta (local/remota), modelo y modo. Local identifica una instalación, no una persona. No es el total de facturación.",
+                    "description": "Consumo mensual estimado: top 20 filas por tipo de cuenta (local/remota), modelo y modo. Cada cuenta local tiene identidad propia; el padre agrupa las creadas en una misma instalación, no una persona verificada. No es el total de facturación.",
                     "id": 8,
                     "links": [],
-                    "title": "Consumo mensual: usuarios e instalaciones locales",
+                    "title": "Consumo mensual: usuarios y cuentas locales",
                     "vizConfig": {
                         "group": "table",
                         "kind": "VizConfig",

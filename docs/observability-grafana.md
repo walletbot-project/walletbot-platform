@@ -334,50 +334,84 @@ For manual tests, omit `timestamp` or use the current epoch milliseconds.
 Old timestamps may export successfully but will not appear in Grafana's default
 time range.
 
-## Local AI usage by installation (WAL-196)
+## Local account identities and AI usage (WAL-196)
 
-Anonymous interaction costs use the existing telemetry `installationId`, a UUID
-persisted under `telemetry_installation_id` in native secure storage. All local
-accounts on that installation share the same usage actor; it is not a person or
-a financial account. No extra registration endpoint, authenticated user, device
-identifier, financial data, memories or conversation content is created by this
-path. Reinstallation/storage reset can change the identity (secure storage may
-survive reinstall on some platforms). Different devices remain separate.
+`appUsers` records local accounts observed requesting an AI token. Each account
+gets a random UUID (`localAccountId`) persisted with its native account entry,
+separate from the on-device database ID. Existing accounts get that UUID once
+on load. The stable `appUserId` is `local:<UUID>`; it is not an authenticated
+`userId` and contains no name or financial data.
 
-`agentUsageSamples` and `agentUsageMonthly` store `actorType=installation` and
-`actorKey=installation:<SHA-256(installation:installationId)>`, without `userId`.
-Authenticated requests always use the server-verified user, even if the body
-supplies a different `userId` or an installation. Their existing keys and exported
-hashes remain unchanged, including historical rows with no actor fields. Thus
-replaying a pre-deployment remote sample does not count it again. Anonymous IDs
-must be 8–128 ASCII letters, digits, underscores or hyphens, starting alphanumeric.
-These self-reported identifiers are for analytics, not authorization or billing.
+The parent is `device:<SHA-256(device:deviceId)>`. Despite its name, the existing
+`ClientInfo.deviceId` is a random per-installation UUID stored under
+`native_device_id` in secure storage, not a hardware identifier. It already
+travels with live-token requests, so we reuse it instead of introducing another
+ID or unifying it with telemetry's independent `telemetry_installation_id`.
+That older telemetry ID continues to travel in telemetry envelopes but does
+not determine account identity or grouping. The `unknown` fallback is rejected.
 
-The sample key includes the local actor type/key and `sampleId`; monthly keys
-also include UTC month, model and mode. Backend token pricing still determines
-USD. Retrying the same sample leaves its rollup unchanged. Sample deduplication
-lasts while the sample exists: samples are retained for 90 days by the existing
-cleanup, and monthly rollups currently have no expiration. The existing raw
-telemetry buffer also retains `installationId` for up to 90 days (14 days for
-failed exports); this change adds no raw identifier to rollups or metric labels.
-Historical anonymous costs are not backfilled.
+Two different local accounts created on one installation have different
+`appUserId`s and the same `parentId`. Accounts originating on another installation
+have a different parent. This represents a common installation of origin, not
+proof of a common person or ownership. The parent is immutable after the first
+successful registration: restoring an account elsewhere does not rewrite its
+origin. Clearing secure storage or reinstalling may lose IDs (some platforms
+retain secure storage across reinstalls); an unregistered restored account's
+origin can only be the installation from which it first registers.
 
-Grafana receives only the existing 24-hex `user_hash` label (also used for hashed
-installation actors) plus `account_scope=local|remote`. Raw user, installation
-and device IDs are never metric labels. The dashboard compares scopes and shows
-month and pseudonymous identity, retaining `$Scope` and `$model` filters. Its
-25-hour lookback also works with the daily snapshots in PR #284. Queries collapse
-rank changes with a per-actor/model/mode maximum before summing, so moving in the
-ranking does not count the same cumulative cost twice. Snapshots are
-**top-N rows per scope**, not complete billing totals; an actor split across
-models/modes can have only some rows in the top-N. After rollout, older series
-without `account_scope` age out of that window.
+Registration happens in `/v1/live/token`, after the existing rate limit and
+before minting the provider token, and is idempotent on reconnect. It is not
+performed when a local account is created offline. Speculative token prefetch
+may register an account even if a conversation is never started. Bookkeeping
+failure does not block AI use; a later token request retries registration.
+Metrics for missing/unregistered identities remain in ordinary telemetry but
+do not enter the monthly rollup. Earlier lost costs are explicitly not recovered.
 
-For validation, send a local AI interaction, replay its `sampleId`, and confirm
-one sample and one monthly increment. Send an authenticated interaction from the
-same installation and verify it appears only in that user's rollup. Run
-`telemetry/actions:recordAgentMonthlyUsageNow` in the target development deployment
-and inspect both scopes in Grafana. The automated `localUsage.test.ts` suite
-covers ingestion, impersonation rejection, legacy retries, private user queries,
-backend pricing, bounded snapshot export, and absence of financial writes. Live
-Convex/Grafana validation must be performed after deploying the branch.
+Anonymous interaction samples carry a separate `appUserId`. Only a registered
+local identity may enter the rollup, and its parent is read from `appUsers`,
+never trusted from a metric body. Authenticated requests always use the
+server-verified user and ignore any supplied local identity. Native sessions
+capture their local identity when created; late metrics after account switching
+do not borrow another account's identity or bearer token. The registry provides
+no authentication and no public listing, linking or deletion endpoints.
+
+Samples and rollups carry explicit `actorType=local`, `actorKey`, `appUserId`, and
+`parentId`. Local deduplication and monthly keys include the individual account,
+not just its parent; siblings can reuse a sample ID without colliding. Remote
+keys, hashes and authenticated queries stay unchanged, including historical
+rows without actor fields. USD continues to be computed in the backend from
+tokens. No financial accounts, transactions, categories, tags, filters, widgets,
+memories or conversations are created by this identity/metrics path.
+
+`appUsers` is an observation registry, not a synchronized inventory of active
+accounts. Removing a local account does not remove its historical identity or
+costs, and creating a new account generates a new UUID. There is no reactivation
+flow. The schema separates stable `appUserId`, account type and optional
+authenticated `userId`: a later promotion can link the same row while retaining
+its origin. A local registration cannot downgrade a linked registered row.
+Promotion, verification of that link, and merging historical costs are future
+features; this PR does not implement them or register every Better Auth user.
+
+Samples are retained for 90 days by the existing cleanup, so sample deduplication
+is limited to that retention window. Monthly rollups and identity registry rows
+currently have no automatic expiration. The raw telemetry buffer retains its
+existing installation ID for up to 90 days (14 days for failed exports). No
+historical anonymous backfill is performed.
+
+Grafana receives only the existing 24-hex `user_hash` (the local account's hash),
+`parent_hash` for its installation of origin, and `account_scope=local|remote`.
+Raw user/account/device IDs are never metric labels. The account table shows the
+parent hash so sibling accounts are recognizable. Both panels preserve `$Scope`
+and `$model` and use a 25-hour lookback compatible with PR #284. Queries collapse
+rank changes per account/model/mode before summing. Snapshots contain the top 20
+rows **per scope**, at most 40 rows; they are not complete billing totals and a
+single actor's model/mode breakdown may be partially represented.
+
+Automated coverage includes sibling grouping, immutable origin, registration
+before token mint, reconnect idempotency, missing identities, authenticated
+isolation, old remote retries, month/model separation, OTLP pseudonyms, offline
+UUID persistence and account-switch telemetry. To validate live, use AI with two
+local accounts from the same installation, confirm separate samples and a shared
+parent, force `telemetry/actions:recordAgentMonthlyUsageNow` in development, and
+inspect both local accounts in Grafana. Live deployment validation remains to
+be performed after deploying the branch.

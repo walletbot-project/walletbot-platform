@@ -209,6 +209,7 @@ const exportableMetricAttributeKeys = (
                 'model',
                 'mode',
                 'account_scope',
+                'parent_hash',
             ])
         case 'agent.interactions.completed_count':
             return new Set(['model', 'mode', 'interaction_type'])
@@ -328,7 +329,8 @@ const recordAgentMonthlyUsageMetric = async (
 ): Promise<{ rows: number; exportedRows: number; accepted: number }> => {
     const rows: Array<{
         userId?: string
-        actorType: 'user' | 'installation'
+        actorType: 'user' | 'local'
+        parentId?: string
         actorKey: string
         month: string
         model: string
@@ -343,7 +345,7 @@ const recordAgentMonthlyUsageMetric = async (
 
     const now = Date.now()
     // Keep each scope visible even when remote users dominate the ranking.
-    const topRows = (['user', 'installation'] as const).flatMap((actorType) =>
+    const topRows = (['user', 'local'] as const).flatMap((actorType) =>
         rows
             .filter(
                 (row) =>
@@ -365,8 +367,10 @@ const recordAgentMonthlyUsageMetric = async (
             ...(row.userId ? { userId: row.userId } : {}),
             attributes: {
                 user_hash: await userHash(row.userId ?? row.actorKey),
-                account_scope:
-                    row.actorType === 'installation' ? 'local' : 'remote',
+                ...(row.parentId
+                    ? { parent_hash: await userHash(row.parentId) }
+                    : {}),
+                account_scope: row.actorType === 'local' ? 'local' : 'remote',
                 rank: `${index + 1}`,
                 month: row.month,
                 model: row.model,

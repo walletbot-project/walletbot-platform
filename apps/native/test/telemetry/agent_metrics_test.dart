@@ -8,6 +8,48 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 
 void main() {
+  test(
+    'local session metrics retain account identity and never borrow a remote token',
+    () async {
+      FlutterSecureStorage.setMockInitialValues({});
+      final sent = <Map<String, dynamic>>[];
+      final telemetry = TelemetryClient(
+        convexSiteUrl: 'https://example.convex.site',
+        accessTokenProvider: () async => 'another-account-token',
+        httpClient: MockClient((request) async {
+          expect(request.headers.containsKey('Authorization'), isFalse);
+          sent.addAll(
+            ((jsonDecode(request.body) as Map)['metrics'] as List)
+                .cast<Map<String, dynamic>>(),
+          );
+          return http.Response('{}', 200);
+        }),
+      );
+      final base = AgentMetrics(telemetry);
+      final accountA = base.forLocalAccount(
+        'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      );
+      base.forLocalAccount('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb');
+      await accountA.recordInteractionCostFromUsage(
+        sessionId: 'session-a',
+        sampleId: 'sample-a',
+        model: 'gemini-3.8-live',
+        mode: 'text',
+        interactionType: 'text',
+        usage: {'promptTokenCount': 1000, 'responseTokenCount': 1000},
+      );
+      expect(sent, hasLength(2));
+      expect(
+        sent.every(
+          (m) => m['appUserId'] == 'local:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+        ),
+        isTrue,
+      );
+      expect(sent.every((m) => !m.containsKey('userId')), isTrue);
+      telemetry.dispose();
+    },
+  );
+
   for (final model in ['gemini-3.8-live', 'gemini-3.1-flash-live-preview']) {
     test('HTTP metric payloads preserve selected model $model', () async {
       FlutterSecureStorage.setMockInitialValues({});

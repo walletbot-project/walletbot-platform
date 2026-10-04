@@ -481,7 +481,11 @@ class _AuthGate extends StatelessWidget {
                 remoteSync: active.type == AccountType.remote
                     ? ctx.read<VoiceSessionRemoteSync>()
                     : null,
-                agentMetrics: ctx.read<AgentMetrics?>(),
+                agentMetrics: ctx.read<AgentMetrics?>()?.forLocalAccount(
+                  active.type == AccountType.local
+                      ? active.localAccountId
+                      : null,
+                ),
                 useAuthenticatedTokenAction: active.type == AccountType.remote,
                 sessionToken: active.sessionToken,
                 // A local account has no session, so the device id is its only
@@ -495,20 +499,25 @@ class _AuthGate extends StatelessWidget {
                 defaultCurrency: defaultCurrency,
                 // The getExchangeRate tool reads this cache.
                 fxRates: fxRates,
-                buildMintArgs: () => buildLiveTokenMintArgs(
-                  repositories: repositories,
-                  clientInfo: clientInfo,
-                  localeTag: displaySettings.localeTag,
-                  userName: active.name,
-                  userEmail: active.email,
-                  defaultCurrency: defaultCurrency.value,
-                  language: switch (displaySettings.language) {
-                    DisplayLanguage.system => 'system',
-                    DisplayLanguage.english => 'en',
-                    DisplayLanguage.spanish => 'es',
-                  },
-                  theme: displaySettings.theme.name,
-                ),
+                buildMintArgs: () async => {
+                  ...await buildLiveTokenMintArgs(
+                    repositories: repositories,
+                    clientInfo: clientInfo,
+                    localeTag: displaySettings.localeTag,
+                    userName: active.name,
+                    userEmail: active.email,
+                    defaultCurrency: defaultCurrency.value,
+                    language: switch (displaySettings.language) {
+                      DisplayLanguage.system => 'system',
+                      DisplayLanguage.english => 'en',
+                      DisplayLanguage.spanish => 'es',
+                    },
+                    theme: displaySettings.theme.name,
+                  ),
+                  if (active.type == AccountType.local &&
+                      active.localAccountId != null)
+                    'localAccountId': active.localAccountId,
+                },
               );
             },
             dispose: (_, factory) => unawaited(factory.dispose()),

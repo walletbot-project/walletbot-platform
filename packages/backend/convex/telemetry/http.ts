@@ -1,6 +1,7 @@
 import type { HttpRouter } from 'convex/server'
 import { internal } from '../_generated/api'
 import { httpAction } from '../_generated/server'
+import { isLocalAppUserId } from '../appUsers/helpers'
 import { requireAuth } from '../users/helpers'
 import {
     metricCatalog,
@@ -20,7 +21,6 @@ import type {
     TelemetryEventInput,
     TelemetryPlatform,
 } from './types'
-
 import { validInstallationId } from './usageActor'
 
 const maxBatchSize = 50
@@ -311,6 +311,9 @@ const normalizeMetric = (
             ? { sampleId: normalizeString(value.sampleId) }
             : {}),
         ...(userId ? { userId } : {}),
+        ...(!userId && isLocalAppUserId(value.appUserId)
+            ? { appUserId: value.appUserId }
+            : {}),
         ...(normalizeString(value.appVersion)
             ? { appVersion: normalizeString(value.appVersion) }
             : {}),

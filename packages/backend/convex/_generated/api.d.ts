@@ -22,6 +22,8 @@ import type * as agentReports_rateLimits from "../agentReports/rateLimits.js";
 import type * as agentReports_utils from "../agentReports/utils.js";
 import type * as agentUsage_queries from "../agentUsage/queries.js";
 import type * as aggregates from "../aggregates.js";
+import type * as appUsers_helpers from "../appUsers/helpers.js";
+import type * as appUsers_internal from "../appUsers/internal.js";
 import type * as auth from "../auth.js";
 import type * as authNative_http from "../authNative/http.js";
 import type * as authNative_mutations from "../authNative/mutations.js";
@@ -176,6 +178,8 @@ declare const fullApi: ApiFromModules<{
   "agentReports/utils": typeof agentReports_utils;
   "agentUsage/queries": typeof agentUsage_queries;
   aggregates: typeof aggregates;
+  "appUsers/helpers": typeof appUsers_helpers;
+  "appUsers/internal": typeof appUsers_internal;
   auth: typeof auth;
   "authNative/http": typeof authNative_http;
   "authNative/mutations": typeof authNative_mutations;

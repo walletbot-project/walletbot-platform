@@ -61,7 +61,7 @@ const recordAgentUsageMonthly = async (
 ): Promise<void> => {
     if (metric.name !== 'agent.interaction.cost_usd') return
     if (!metric.sampleId || metric.value <= 0) return
-    const actor = await usageActor(metric)
+    const actor = await usageActor(ctx, metric)
     if (!actor) return
     // Preserve the exact existing remote keys, including property order, so a
     // retry of a pre-deployment sample cannot be counted a second time.

@@ -8,6 +8,18 @@ import type { MetricInput } from './telemetry/types'
 
 const modules = import.meta.glob('./**/*.ts')
 const month = '2026-10'
+const accountA = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+const accountB = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
+const deviceId = 'origin-device-uuid'
+const register = (
+    t: Pick<ReturnType<typeof convexTest>, 'mutation'>,
+    localAccountId = accountA,
+    device = deviceId,
+) =>
+    t.mutation(internal.appUsers.internal.registerLocal, {
+        deviceId: device,
+        localAccountId,
+    })
 const installationId = 'eeeb0b51-959e-4e9e-84c1-c53c49d88415'
 const sample = (overrides: Partial<MetricInput> = {}): MetricInput => ({
     name: 'agent.interaction.cost_usd',
@@ -17,6 +29,7 @@ const sample = (overrides: Partial<MetricInput> = {}): MetricInput => ({
     value: 999, // The server must reprice this from tokens.
     unit: 'usd',
     installationId,
+    appUserId: `local:${accountA}`,
     sampleId: 'interaction-1',
     attributes: {
         model: 'gemini-3.8-live',
@@ -51,13 +64,15 @@ afterEach(() => {
     vi.unstubAllGlobals()
 })
 
-it('ingests local costs once per installation and keeps financial data local', async () => {
+it('ingests local costs once per account and keeps financial data local', async () => {
     const t = convexTest(schema, modules)
+    await register(t)
+    await register(t, accountB)
     for (const metric of [
         sample(),
         sample(),
         sample({ sampleId: 'interaction-2' }),
-        sample({ installationId: 'another-installation' }),
+        sample({ appUserId: `local:${accountB}` }),
     ]) {
         const response = await post(t, [metric])
         expect(response.status).toBe(200)
@@ -67,7 +82,7 @@ it('ingests local costs once per installation and keeps financial data local', a
         expect(samples).toHaveLength(3)
         expect(
             samples.every(
-                (s) => s.actorType === 'installation' && s.userId === undefined,
+                (s) => s.actorType === 'local' && s.userId === undefined,
             ),
         ).toBe(true)
         expect(samples.every((s) => Math.abs(s.costUsd - 0.00525) < 1e-9)).toBe(
@@ -98,6 +113,7 @@ it('ingests local costs once per installation and keeps financial data local', a
 
 it('uses only server-authenticated users and isolates their monthly query', async () => {
     const t = convexTest(schema, modules)
+    await register(t)
     const remote = t.withIdentity({
         subject: 'remote-user',
         issuer: 'https://test.convex.site/native-auth',
@@ -126,10 +142,7 @@ it('uses only server-authenticated users and isolates their monthly query', asyn
     await t.run(async (ctx) => {
         const rows = await ctx.db.query('agentUsageMonthly').take(10)
         expect(rows).toHaveLength(2)
-        expect(rows.map((r) => r.actorType).sort()).toEqual([
-            'installation',
-            'user',
-        ])
+        expect(rows.map((r) => r.actorType).sort()).toEqual(['local', 'user'])
         expect(rows.find((r) => r.actorType === 'user')?.userId).toBe(
             'remote-user',
         )
@@ -138,6 +151,7 @@ it('uses only server-authenticated users and isolates their monthly query', asyn
 
 it('rejects missing or malformed anonymous IDs without creating usage', async () => {
     const t = convexTest(schema, modules)
+    await register(t)
     for (const id of [
         undefined,
         '',
@@ -156,6 +170,7 @@ it('rejects missing or malformed anonymous IDs without creating usage', async ()
 
 it('retains pre-deployment remote idempotency keys and rollups', async () => {
     const t = convexTest(schema, modules)
+    await register(t)
     const metric = sample({ userId: 'legacy-user' })
     await t.run(async (ctx) => {
         await ctx.db.insert('agentUsageSamples', {
@@ -211,8 +226,11 @@ it('retains pre-deployment remote idempotency keys and rollups', async () => {
 
 it('exports a bounded ranking for both scopes with pseudonyms and environment', async () => {
     const t = convexTest(schema, modules)
+    await register(t)
+    await register(t, accountB)
     const metrics = [
         sample(),
+        sample({ appUserId: `local:${accountB}` }),
         ...Array.from({ length: 22 }, (_, i) =>
             sample({ userId: `remote-${i}` }),
         ),
@@ -230,7 +248,7 @@ it('exports a bounded ranking for both scopes with pseudonyms and environment', 
         internal.telemetry.actions.recordAgentMonthlyUsageNow,
         { month },
     )
-    expect(result).toMatchObject({ rows: 23, exportedRows: 21, accepted: 21 })
+    expect(result).toMatchObject({ rows: 24, exportedRows: 22, accepted: 22 })
     vi.stubEnv(
         'OTEL_EXPORTER_OTLP_METRICS_ENDPOINT',
         'https://metrics.test/v1/metrics',
@@ -242,7 +260,7 @@ it('exports a bounded ranking for both scopes with pseudonyms and environment', 
     vi.stubGlobal('fetch', fetchMock)
     expect(
         await t.action(internal.telemetry.actions.exportPendingMetrics, {}),
-    ).toEqual({ exported: 21 })
+    ).toEqual({ exported: 22 })
     const payload = JSON.parse(fetchMock.mock.calls[0][1].body)
     const resource = payload.resourceMetrics[0]
     expect(resource.resource.attributes).toContainEqual({
@@ -268,7 +286,7 @@ it('exports a bounded ranking for both scopes with pseudonyms and environment', 
             p.attributes.find((a) => a.key === 'account_scope')?.value
                 .stringValue,
     )
-    expect(scopes.filter((s: string) => s === 'local')).toHaveLength(1)
+    expect(scopes.filter((s: string) => s === 'local')).toHaveLength(2)
     expect(scopes.filter((s: string) => s === 'remote')).toHaveLength(20)
     for (const point of points) {
         expect(
@@ -276,7 +294,20 @@ it('exports a bounded ranking for both scopes with pseudonyms and environment', 
                 .value.stringValue,
         ).toMatch(/^[0-9a-f]{24}$/)
     }
+    const parents = points.flatMap(
+        (p: {
+            attributes: Array<{ key: string; value: { stringValue: string } }>
+        }) =>
+            p.attributes
+                .filter((a) => a.key === 'parent_hash')
+                .map((a) => a.value.stringValue),
+    )
+    expect(parents).toHaveLength(2)
+    expect(parents[0]).toMatch(/^[0-9a-f]{24}$/)
+    expect(parents[0]).toBe(parents[1])
     const encoded = JSON.stringify(payload)
+    expect(encoded).not.toContain(accountA)
+    expect(encoded).not.toContain(deviceId)
     expect(encoded).not.toContain(installationId)
     expect(encoded).not.toContain('remote-')
     expect(encoded).not.toContain('installation:')
@@ -284,6 +315,7 @@ it('exports a bounded ranking for both scopes with pseudonyms and environment', 
 
 it('keeps local month/model rollups separate and skips missing samples', async () => {
     const t = convexTest(schema, modules)
+    await register(t)
     await t.mutation(internal.telemetry.mutations.insertMetricBatchMutation, {
         receivedAt: Date.now(),
         metrics: [
@@ -300,7 +332,7 @@ it('keeps local month/model rollups separate and skips missing samples', async (
                 },
             }),
             sample({ sampleId: undefined }),
-            sample({ sampleId: 'no-identity', installationId: undefined }),
+            sample({ sampleId: 'no-identity', appUserId: undefined }),
             sample({
                 sampleId: 'zero',
                 attributes: { model: 'gemini-3.8-live', mode: 'text' },
@@ -324,4 +356,68 @@ it('keeps local month/model rollups separate and skips missing samples', async (
     expect(
         [...october, ...november].every((r) => r.interactionCount === 1),
     ).toBe(true)
+})
+
+it('records sibling accounts under one immutable installation parent', async () => {
+    const t = convexTest(schema, modules)
+    const a = await register(t)
+    const b = await register(t, accountB)
+    const c = await register(
+        t,
+        'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
+        'other-device',
+    )
+    expect(a.ok && b.ok && c.ok).toBe(true)
+    if (!a.ok || !b.ok || !c.ok) throw new Error('registration failed')
+    expect(a.appUserId).not.toBe(b.appUserId)
+    expect(a.parentId).toBe(b.parentId)
+    expect(c.parentId).not.toBe(a.parentId)
+    expect(a.parentId).toMatch(/^device:[0-9a-f]{64}$/)
+    expect(await register(t, accountA, 'restored-device')).toEqual(a)
+    await t.run(async (ctx) => {
+        const siblings = await ctx.db
+            .query('appUsers')
+            .withIndex('by_parentId', (q) => q.eq('parentId', a.parentId))
+            .take(10)
+        expect(siblings).toHaveLength(2)
+        expect(JSON.stringify(siblings)).not.toContain(deviceId)
+    })
+    await post(t, [sample(), sample({ appUserId: b.appUserId })])
+    const rows = await t.query(
+        internal.agentUsage.queries.listMonthlyUsageForTelemetry,
+        { month },
+    )
+    expect(rows).toHaveLength(2)
+    expect(rows.every((r) => r.parentId === a.parentId)).toBe(true)
+})
+
+it('does not create users or recover costs from unregistered or legacy samples', async () => {
+    const t = convexTest(schema, modules)
+    await post(t, [
+        sample(),
+        sample({ appUserId: undefined }),
+        sample({ appUserId: 'user:forged' }),
+    ])
+    await t.run(async (ctx) => {
+        expect(await ctx.db.query('appUsers').take(1)).toEqual([])
+        expect(await ctx.db.query('agentUsageMonthly').take(1)).toEqual([])
+    })
+    await register(t)
+    // Registration does not backfill any preceding usage.
+    expect(
+        await t.query(
+            internal.agentUsage.queries.listMonthlyUsageForTelemetry,
+            { month },
+        ),
+    ).toEqual([])
+    await post(t, [sample({ sampleId: 'after-registration' })])
+    expect(
+        (
+            await t.query(
+                internal.agentUsage.queries.listMonthlyUsageForTelemetry,
+                { month },
+            )
+        )[0].interactionCount,
+    ).toBe(1)
+    expect((await register(t, accountB, 'unknown')).ok).toBe(false)
 })

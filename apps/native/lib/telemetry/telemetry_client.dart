@@ -112,7 +112,11 @@ class TelemetryClient {
 
     try {
       final installationId = await _installationId();
-      final accessToken = await _accessTokenProvider?.call();
+      // Local session samples remain anonymous even if the user switched to
+      // a remote account before their final telemetry was flushed.
+      final accessToken = metrics.any((m) => m.appUserId != null)
+          ? null
+          : await _accessTokenProvider?.call();
       final headers = <String, String>{'Content-Type': 'application/json'};
       if (accessToken != null && accessToken.isNotEmpty) {
         headers['Authorization'] = 'Bearer $accessToken';
@@ -207,6 +211,7 @@ class TelemetryMetric {
     this.attributes = const {},
     this.sessionId,
     this.sampleId,
+    this.appUserId,
   });
 
   final String name;
@@ -218,6 +223,7 @@ class TelemetryMetric {
   final Map<String, Object?> attributes;
   final String? sessionId;
   final String? sampleId;
+  final String? appUserId;
 
   Map<String, Object?> toJson({
     required String installationId,
@@ -235,6 +241,7 @@ class TelemetryMetric {
     'installationId': installationId,
     'sessionId': this.sessionId ?? sessionId,
     if (sampleId != null) 'sampleId': sampleId,
+    if (appUserId != null) 'appUserId': appUserId,
     'appVersion': appVersion,
     'platform': platform,
   };
