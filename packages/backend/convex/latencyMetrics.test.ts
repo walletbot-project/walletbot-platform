@@ -155,8 +155,59 @@ describe('latency percentiles', { timeout: 30000 }, () => {
             value: 0,
             attributes: {
                 operation: 'agent_first_response',
-                mode: 'all',
+                mode: 'text',
                 window: '24h',
+            },
+        })
+    })
+
+    it('ranks text and voice first responses apart, never combined', async () => {
+        const t = fixture()
+        const firstResponse = (durationMs: number, segment: 'text' | 'voice') =>
+            t.mutation(internal.telemetry.mutations.recordLatencySample, {
+                sample: {
+                    operation: 'agent_first_response',
+                    segment,
+                    durationMs,
+                },
+            })
+        await firstResponse(1000, 'text')
+        await firstResponse(78, 'voice')
+        await t.mutation(internal.telemetry.mutations.recordLatencyPercentiles)
+        const firstResponseGauges = (await gauges(t)).filter(
+            (g) =>
+                typeof g.attributes === 'object' &&
+                g.attributes !== null &&
+                'operation' in g.attributes &&
+                g.attributes.operation === 'agent_first_response',
+        )
+        expect(
+            firstResponseGauges.filter(
+                (g) =>
+                    typeof g.attributes === 'object' &&
+                    g.attributes !== null &&
+                    'mode' in g.attributes &&
+                    g.attributes.mode === 'all',
+            ),
+        ).toEqual([])
+        expect(firstResponseGauges).toContainEqual({
+            name: 'system.latency.quantile_ms',
+            value: 1000,
+            attributes: {
+                operation: 'agent_first_response',
+                mode: 'text',
+                window: '24h',
+                quantile: '0.5',
+            },
+        })
+        expect(firstResponseGauges).toContainEqual({
+            name: 'system.latency.quantile_ms',
+            value: 78,
+            attributes: {
+                operation: 'agent_first_response',
+                mode: 'voice',
+                window: '24h',
+                quantile: '0.5',
             },
         })
     })

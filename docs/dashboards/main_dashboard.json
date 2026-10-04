@@ -2479,7 +2479,7 @@
                                             "spec": {
                                                 "editorMode": "code",
                                                 "exemplar": false,
-                                                "expr": "max by (mode) (last_over_time(system_latency_quantile_ms_milliseconds{deployment_environment=\"$Scope\", operation=\"agent_first_response\", window=\"24h\", quantile=\"0.5\"}[2h]))",
+                                                "expr": "max by (mode) (last_over_time(system_latency_quantile_ms_milliseconds{deployment_environment=\"$Scope\", operation=\"agent_first_response\", mode=\"text\", window=\"24h\", quantile=\"0.5\"}[2h]))",
                                                 "instant": true,
                                                 "legendFormat": "",
                                                 "range": false,
@@ -2503,7 +2503,7 @@
                                             "spec": {
                                                 "editorMode": "code",
                                                 "exemplar": false,
-                                                "expr": "max by (mode) (last_over_time(system_latency_quantile_ms_milliseconds{deployment_environment=\"$Scope\", operation=\"agent_first_response\", window=\"24h\", quantile=\"0.95\"}[2h]))",
+                                                "expr": "max by (mode) (last_over_time(system_latency_quantile_ms_milliseconds{deployment_environment=\"$Scope\", operation=\"agent_first_response\", mode=\"text\", window=\"24h\", quantile=\"0.95\"}[2h]))",
                                                 "instant": true,
                                                 "legendFormat": "",
                                                 "range": false,
@@ -2527,7 +2527,7 @@
                                             "spec": {
                                                 "editorMode": "code",
                                                 "exemplar": false,
-                                                "expr": "max by (mode) (last_over_time(system_latency_quantile_ms_milliseconds{deployment_environment=\"$Scope\", operation=\"agent_first_response\", window=\"24h\", quantile=\"0.99\"}[2h]))",
+                                                "expr": "max by (mode) (last_over_time(system_latency_quantile_ms_milliseconds{deployment_environment=\"$Scope\", operation=\"agent_first_response\", mode=\"text\", window=\"24h\", quantile=\"0.99\"}[2h]))",
                                                 "instant": true,
                                                 "legendFormat": "",
                                                 "range": false,
@@ -2551,7 +2551,7 @@
                                             "spec": {
                                                 "editorMode": "code",
                                                 "exemplar": false,
-                                                "expr": "max by (mode) (last_over_time(system_latency_samples_count{deployment_environment=\"$Scope\", operation=\"agent_first_response\", window=\"24h\"}[2h]))",
+                                                "expr": "max by (mode) (last_over_time(system_latency_samples_count{deployment_environment=\"$Scope\", operation=\"agent_first_response\", mode=\"text\", window=\"24h\"}[2h]))",
                                                 "instant": true,
                                                 "legendFormat": "",
                                                 "range": false,
@@ -2578,12 +2578,12 @@
                                     "spec": {
                                         "options": {
                                             "excludeByName": {
-                                                "Time": true
+                                                "Time": true,
+                                                "mode": true
                                             },
                                             "includeByName": {},
                                             "indexByName": {},
                                             "renameByName": {
-                                                "mode": "Modo",
                                                 "Value #p50": "p50",
                                                 "Value #p95": "p95",
                                                 "Value #p99": "p99",
@@ -2595,10 +2595,10 @@
                             ]
                         }
                     },
-                    "description": "Desde que el usuario manda su turno (fin del audio o texto enviado) hasta el primer fragmento de la respuesta, medido en el cliente (nativo y web). Solo cuentan los requests autenticados, para que un llamador anonimo no pueda mover el p99.\n\nPercentiles exactos (rango mas cercano) sobre una ventana movil de 24h, calculados en Convex (`telemetry/latency.ts`) y exportados cada hora como gauges: muestra la ultima foto, no depende del selector de tiempo. Leer cada percentil junto a su cantidad de muestras: con pocas, p99 es una sola medicion.",
+                    "description": "Desde que el usuario envia el mensaje de texto hasta el primer fragmento de la respuesta, medido en el cliente (nativo y web). Es la metrica confiable: el inicio es exacto (el envio del mensaje). Solo cuentan los requests autenticados, para que un llamador anonimo no pueda mover el p99.\n\nPercentiles exactos (rango mas cercano) sobre una ventana movil de 24h, calculados en Convex (`telemetry/latency.ts`) y exportados cada hora como gauges: muestra la ultima foto, no depende del selector de tiempo. Leer cada percentil junto a su cantidad de muestras: con pocas, p99 es una sola medicion.",
                     "id": 23,
                     "links": [],
-                    "title": "Tiempo hasta la primera respuesta del agente",
+                    "title": "Tiempo hasta la primera respuesta (texto)",
                     "vizConfig": {
                         "group": "table",
                         "kind": "VizConfig",
@@ -2687,9 +2687,9 @@
                                             "spec": {
                                                 "editorMode": "code",
                                                 "exemplar": false,
-                                                "expr": "max by (mode) (last_over_time(system_latency_quantile_ms_milliseconds{deployment_environment=\"$Scope\", operation=\"agent_first_response\", window=\"24h\", quantile=\"0.95\"}[65m]))",
+                                                "expr": "max(last_over_time(system_latency_quantile_ms_milliseconds{deployment_environment=\"$Scope\", operation=\"agent_first_response\", mode=\"text\", window=\"24h\", quantile=\"0.95\"}[65m]))",
                                                 "instant": false,
-                                                "legendFormat": "primera respuesta / {{mode}}",
+                                                "legendFormat": "primera respuesta (texto)",
                                                 "range": true
                                             },
                                             "version": "v0"
@@ -2702,7 +2702,7 @@
                             "transformations": []
                         }
                     },
-                    "description": "Cada punto es la foto horaria del p95 sobre las 24h anteriores, no el p95 de ese intervalo. Sirve para ver tendencias; para el valor actual y su cantidad de muestras, ver las tablas de arriba.",
+                    "description": "Cada punto es la foto horaria del p95 sobre las 24h anteriores, no el p95 de ese intervalo. Sirve para ver tendencias; para el valor actual y su cantidad de muestras, ver las tablas de arriba. La primera respuesta de voz queda afuera a proposito: es aproximada (ver su tabla).",
                     "id": 24,
                     "links": [],
                     "title": "p95 en el tiempo (ventana movil de 24h)",
@@ -2775,6 +2775,417 @@
                                     "mode": "multi",
                                     "sort": "desc"
                                 }
+                            }
+                        },
+                        "version": "13.3.0-36394719073"
+                    }
+                }
+            },
+            "panel-26": {
+                "kind": "Panel",
+                "spec": {
+                    "data": {
+                        "kind": "QueryGroup",
+                        "spec": {
+                            "queries": [
+                                {
+                                    "kind": "PanelQuery",
+                                    "spec": {
+                                        "hidden": false,
+                                        "query": {
+                                            "datasource": {
+                                                "name": "grafanacloud-prom"
+                                            },
+                                            "group": "prometheus",
+                                            "kind": "DataQuery",
+                                            "spec": {
+                                                "editorMode": "code",
+                                                "exemplar": false,
+                                                "expr": "max by (mode) (last_over_time(system_latency_quantile_ms_milliseconds{deployment_environment=\"$Scope\", operation=\"agent_first_response\", mode=\"voice\", window=\"24h\", quantile=\"0.5\"}[2h]))",
+                                                "instant": true,
+                                                "legendFormat": "",
+                                                "range": false,
+                                                "format": "table"
+                                            },
+                                            "version": "v0"
+                                        },
+                                        "refId": "p50"
+                                    }
+                                },
+                                {
+                                    "kind": "PanelQuery",
+                                    "spec": {
+                                        "hidden": false,
+                                        "query": {
+                                            "datasource": {
+                                                "name": "grafanacloud-prom"
+                                            },
+                                            "group": "prometheus",
+                                            "kind": "DataQuery",
+                                            "spec": {
+                                                "editorMode": "code",
+                                                "exemplar": false,
+                                                "expr": "max by (mode) (last_over_time(system_latency_quantile_ms_milliseconds{deployment_environment=\"$Scope\", operation=\"agent_first_response\", mode=\"voice\", window=\"24h\", quantile=\"0.95\"}[2h]))",
+                                                "instant": true,
+                                                "legendFormat": "",
+                                                "range": false,
+                                                "format": "table"
+                                            },
+                                            "version": "v0"
+                                        },
+                                        "refId": "p95"
+                                    }
+                                },
+                                {
+                                    "kind": "PanelQuery",
+                                    "spec": {
+                                        "hidden": false,
+                                        "query": {
+                                            "datasource": {
+                                                "name": "grafanacloud-prom"
+                                            },
+                                            "group": "prometheus",
+                                            "kind": "DataQuery",
+                                            "spec": {
+                                                "editorMode": "code",
+                                                "exemplar": false,
+                                                "expr": "max by (mode) (last_over_time(system_latency_quantile_ms_milliseconds{deployment_environment=\"$Scope\", operation=\"agent_first_response\", mode=\"voice\", window=\"24h\", quantile=\"0.99\"}[2h]))",
+                                                "instant": true,
+                                                "legendFormat": "",
+                                                "range": false,
+                                                "format": "table"
+                                            },
+                                            "version": "v0"
+                                        },
+                                        "refId": "p99"
+                                    }
+                                },
+                                {
+                                    "kind": "PanelQuery",
+                                    "spec": {
+                                        "hidden": false,
+                                        "query": {
+                                            "datasource": {
+                                                "name": "grafanacloud-prom"
+                                            },
+                                            "group": "prometheus",
+                                            "kind": "DataQuery",
+                                            "spec": {
+                                                "editorMode": "code",
+                                                "exemplar": false,
+                                                "expr": "max by (mode) (last_over_time(system_latency_samples_count{deployment_environment=\"$Scope\", operation=\"agent_first_response\", mode=\"voice\", window=\"24h\"}[2h]))",
+                                                "instant": true,
+                                                "legendFormat": "",
+                                                "range": false,
+                                                "format": "table"
+                                            },
+                                            "version": "v0"
+                                        },
+                                        "refId": "samples"
+                                    }
+                                }
+                            ],
+                            "queryOptions": {},
+                            "transformations": [
+                                {
+                                    "group": "merge",
+                                    "kind": "Transformation",
+                                    "spec": {
+                                        "options": {}
+                                    }
+                                },
+                                {
+                                    "group": "organize",
+                                    "kind": "Transformation",
+                                    "spec": {
+                                        "options": {
+                                            "excludeByName": {
+                                                "Time": true,
+                                                "mode": true
+                                            },
+                                            "includeByName": {},
+                                            "indexByName": {},
+                                            "renameByName": {
+                                                "Value #p50": "p50",
+                                                "Value #p95": "p95",
+                                                "Value #p99": "p99",
+                                                "Value #samples": "Muestras (24h)"
+                                            }
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "description": "Aproximado: el inicio del turno de voz no es exacto. El timer arranca en `endAudioStream()`, que se llama al silenciar el mic, al tipear o al salir de la pantalla, y en manos libres el fin del turno lo decide el VAD de Gemini sin avisarnos: no sabemos cuando termino de hablar el usuario. Leerlo como orden de magnitud, nunca combinado con texto.\n\nDesde el fin del turno de audio hasta el primer fragmento de la respuesta, medido en el cliente (nativo y web). Solo cuentan los requests autenticados.\n\nPercentiles exactos (rango mas cercano) sobre una ventana movil de 24h, calculados en Convex (`telemetry/latency.ts`) y exportados cada hora como gauges: muestra la ultima foto, no depende del selector de tiempo. Leer cada percentil junto a su cantidad de muestras: con pocas, p99 es una sola medicion.",
+                    "id": 26,
+                    "links": [],
+                    "title": "Tiempo hasta la primera respuesta (voz, aproximado)",
+                    "vizConfig": {
+                        "group": "table",
+                        "kind": "VizConfig",
+                        "spec": {
+                            "fieldConfig": {
+                                "defaults": {
+                                    "color": {
+                                        "mode": "thresholds"
+                                    },
+                                    "custom": {
+                                        "align": "auto",
+                                        "cellOptions": {
+                                            "type": "auto"
+                                        },
+                                        "filterable": false,
+                                        "footer": {
+                                            "reducers": []
+                                        },
+                                        "inspect": false
+                                    },
+                                    "thresholds": {
+                                        "mode": "absolute",
+                                        "steps": [
+                                            {
+                                                "color": "green",
+                                                "value": 0
+                                            }
+                                        ]
+                                    },
+                                    "unit": "ms",
+                                    "decimals": 0
+                                },
+                                "overrides": []
+                            },
+                            "options": {
+                                "cellHeight": "sm",
+                                "showHeader": true,
+                                "sortBy": [],
+                                "zebraStriping": false
+                            }
+                        },
+                        "version": "13.3.0-36394719073"
+                    }
+                }
+            },
+            "panel-27": {
+                "kind": "Panel",
+                "spec": {
+                    "data": {
+                        "kind": "QueryGroup",
+                        "spec": {
+                            "queries": [
+                                {
+                                    "kind": "PanelQuery",
+                                    "spec": {
+                                        "hidden": false,
+                                        "query": {
+                                            "datasource": {
+                                                "name": "grafanacloud-prom"
+                                            },
+                                            "group": "prometheus",
+                                            "kind": "DataQuery",
+                                            "spec": {
+                                                "editorMode": "code",
+                                                "exemplar": false,
+                                                "expr": "sum by (bucket, platform) (count_over_time(agent_response_first_token_bucket_count_total{deployment_environment=\"$Scope\", mode=\"text\"}[$__range]))",
+                                                "instant": true,
+                                                "legendFormat": "{{bucket}} / {{platform}}",
+                                                "range": false
+                                            },
+                                            "version": "v0"
+                                        },
+                                        "refId": "A"
+                                    }
+                                }
+                            ],
+                            "queryOptions": {},
+                            "transformations": [
+                                {
+                                    "group": "reduce",
+                                    "kind": "Transformation",
+                                    "spec": {
+                                        "options": {
+                                            "labelsToFields": true,
+                                            "reducers": ["max"]
+                                        }
+                                    }
+                                },
+                                {
+                                    "group": "organize",
+                                    "kind": "Transformation",
+                                    "spec": {
+                                        "options": {
+                                            "excludeByName": {
+                                                "Field": true
+                                            },
+                                            "includeByName": {},
+                                            "indexByName": {},
+                                            "renameByName": {
+                                                "Max": "Turnos",
+                                                "bucket": "Bucket (ms)",
+                                                "platform": "Plataforma"
+                                            }
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "description": "Turnos de texto por rango de tiempo hasta la primera respuesta, incluidos los anonimos (los percentiles solo usan autenticados). Es la metrica confiable: el inicio es el envio del mensaje.\n\nConteo real dentro del rango elegido: cuenta muestras exportadas, y cada turno produce exactamente una, asi que no hay extrapolacion ni decimales.",
+                    "id": 27,
+                    "links": [],
+                    "title": "Primera respuesta (texto) por bucket",
+                    "vizConfig": {
+                        "group": "table",
+                        "kind": "VizConfig",
+                        "spec": {
+                            "fieldConfig": {
+                                "defaults": {
+                                    "color": {
+                                        "mode": "thresholds"
+                                    },
+                                    "custom": {
+                                        "align": "auto",
+                                        "cellOptions": {
+                                            "type": "auto"
+                                        },
+                                        "filterable": false,
+                                        "footer": {
+                                            "reducers": []
+                                        },
+                                        "inspect": false
+                                    },
+                                    "thresholds": {
+                                        "mode": "absolute",
+                                        "steps": [
+                                            {
+                                                "color": "green",
+                                                "value": 0
+                                            }
+                                        ]
+                                    },
+                                    "unit": "short",
+                                    "decimals": 0
+                                },
+                                "overrides": []
+                            },
+                            "options": {
+                                "cellHeight": "sm",
+                                "showHeader": true,
+                                "sortBy": [],
+                                "zebraStriping": false
+                            }
+                        },
+                        "version": "13.3.0-36394719073"
+                    }
+                }
+            },
+            "panel-28": {
+                "kind": "Panel",
+                "spec": {
+                    "data": {
+                        "kind": "QueryGroup",
+                        "spec": {
+                            "queries": [
+                                {
+                                    "kind": "PanelQuery",
+                                    "spec": {
+                                        "hidden": false,
+                                        "query": {
+                                            "datasource": {
+                                                "name": "grafanacloud-prom"
+                                            },
+                                            "group": "prometheus",
+                                            "kind": "DataQuery",
+                                            "spec": {
+                                                "editorMode": "code",
+                                                "exemplar": false,
+                                                "expr": "sum by (bucket, platform) (count_over_time(agent_response_first_token_bucket_count_total{deployment_environment=\"$Scope\", mode=\"voice\"}[$__range]))",
+                                                "instant": true,
+                                                "legendFormat": "{{bucket}} / {{platform}}",
+                                                "range": false
+                                            },
+                                            "version": "v0"
+                                        },
+                                        "refId": "A"
+                                    }
+                                }
+                            ],
+                            "queryOptions": {},
+                            "transformations": [
+                                {
+                                    "group": "reduce",
+                                    "kind": "Transformation",
+                                    "spec": {
+                                        "options": {
+                                            "labelsToFields": true,
+                                            "reducers": ["max"]
+                                        }
+                                    }
+                                },
+                                {
+                                    "group": "organize",
+                                    "kind": "Transformation",
+                                    "spec": {
+                                        "options": {
+                                            "excludeByName": {
+                                                "Field": true
+                                            },
+                                            "includeByName": {},
+                                            "indexByName": {},
+                                            "renameByName": {
+                                                "Max": "Turnos",
+                                                "bucket": "Bucket (ms)",
+                                                "platform": "Plataforma"
+                                            }
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "description": "Aproximado: el inicio del turno de voz no es exacto. El timer arranca en `endAudioStream()`, que se llama al silenciar el mic, al tipear o al salir de la pantalla, y en manos libres el fin del turno lo decide el VAD de Gemini sin avisarnos: no sabemos cuando termino de hablar el usuario. Leerlo como orden de magnitud, nunca combinado con texto.\n\nTurnos de voz por rango de tiempo hasta la primera respuesta, incluidos los anonimos.\n\nConteo real dentro del rango elegido: cuenta muestras exportadas, y cada turno produce exactamente una, asi que no hay extrapolacion ni decimales.",
+                    "id": 28,
+                    "links": [],
+                    "title": "Primera respuesta (voz, aproximado) por bucket",
+                    "vizConfig": {
+                        "group": "table",
+                        "kind": "VizConfig",
+                        "spec": {
+                            "fieldConfig": {
+                                "defaults": {
+                                    "color": {
+                                        "mode": "thresholds"
+                                    },
+                                    "custom": {
+                                        "align": "auto",
+                                        "cellOptions": {
+                                            "type": "auto"
+                                        },
+                                        "filterable": false,
+                                        "footer": {
+                                            "reducers": []
+                                        },
+                                        "inspect": false
+                                    },
+                                    "thresholds": {
+                                        "mode": "absolute",
+                                        "steps": [
+                                            {
+                                                "color": "green",
+                                                "value": 0
+                                            }
+                                        ]
+                                    },
+                                    "unit": "short",
+                                    "decimals": 0
+                                },
+                                "overrides": []
+                            },
+                            "options": {
+                                "cellHeight": "sm",
+                                "showHeader": true,
+                                "sortBy": [],
+                                "zebraStriping": false
                             }
                         },
                         "version": "13.3.0-36394719073"
@@ -3145,7 +3556,7 @@
                                                     "name": "panel-22"
                                                 },
                                                 "height": 8,
-                                                "width": 12,
+                                                "width": 24,
                                                 "x": 0,
                                                 "y": 0
                                             }
@@ -3157,10 +3568,49 @@
                                                     "kind": "ElementReference",
                                                     "name": "panel-23"
                                                 },
+                                                "height": 6,
+                                                "width": 12,
+                                                "x": 0,
+                                                "y": 8
+                                            }
+                                        },
+                                        {
+                                            "kind": "GridLayoutItem",
+                                            "spec": {
+                                                "element": {
+                                                    "kind": "ElementReference",
+                                                    "name": "panel-26"
+                                                },
+                                                "height": 6,
+                                                "width": 12,
+                                                "x": 12,
+                                                "y": 8
+                                            }
+                                        },
+                                        {
+                                            "kind": "GridLayoutItem",
+                                            "spec": {
+                                                "element": {
+                                                    "kind": "ElementReference",
+                                                    "name": "panel-27"
+                                                },
+                                                "height": 8,
+                                                "width": 12,
+                                                "x": 0,
+                                                "y": 14
+                                            }
+                                        },
+                                        {
+                                            "kind": "GridLayoutItem",
+                                            "spec": {
+                                                "element": {
+                                                    "kind": "ElementReference",
+                                                    "name": "panel-28"
+                                                },
                                                 "height": 8,
                                                 "width": 12,
                                                 "x": 12,
-                                                "y": 0
+                                                "y": 14
                                             }
                                         },
                                         {
@@ -3173,7 +3623,7 @@
                                                 "height": 9,
                                                 "width": 24,
                                                 "x": 0,
-                                                "y": 8
+                                                "y": 22
                                             }
                                         }
                                     ]

@@ -185,7 +185,7 @@ existing metric.
 | `agent.response.first_token_ms` (WAL-216) | gauge | ms | `mode` (`voice`\|`text`), `platform` | native and web: the raw time to first response, one per turn |
 | `sync.push.client_failures.count` (WAL-216) | counter | count | `reason` (`auth_failure`\|`network`\|`unknown`), `platform` | native: push calls that **threw** before the backend could record an outcome |
 | `agent.tool.calls.count` (WAL-216) | counter | count | `tool_name` | backend: one per tool call, the denominator of the tool error rate |
-| `system.latency.quantile_ms` (WAL-216) | gauge | ms | `operation` (`sync_push`\|`agent_first_response`), `batch_size` or `mode` (or `all`), `quantile` (`0.5`\|`0.95`\|`0.99`), `window` (`24h`) | backend, hourly cron |
+| `system.latency.quantile_ms` (WAL-216) | gauge | ms | `operation` (`sync_push`\|`agent_first_response`), `batch_size` (or `all`) or `mode` (never `all`: text and voice stay apart), `quantile` (`0.5`\|`0.95`\|`0.99`), `window` (`24h`) | backend, hourly cron |
 | `system.latency.samples_count` (WAL-216) | gauge | count | same as above, without `quantile` | backend, hourly cron |
 
 All of them are total-duration/count signals — none of them break a call down
@@ -217,9 +217,20 @@ double-counting, so each operation has a single owner:
 | Sync pull | `sync.errors.count{direction="pull"}` | `sync_pull` | **Native.** `pull` is a Convex query and cannot write. The duration covers the network download **and** the local Drift apply of every page, not backend time alone. |
 | Agent tool call (WhatsApp) | `agent.tool.errors.count`, over `agent.tool.calls.count` | — | **Backend.** `execute` records calls that return; `agent/runner.ts` records calls that throw (their rollback discards whatever `execute` wrote). Each call is counted exactly once. |
 | Agent turn (WhatsApp) | — | `agent_turn` | **Backend.** Model + tools loop only, not queue wait or reply send. |
-| Time to first agent response | — | `agent.response.first_token_ms` → derived `agent.response.first_token_bucket_count` + percentile sample | **Client (native and web).** One raw sample per turn; the backend derives the bucket counter, so a client never sends both. `mode` separates text from voice. |
+| Time to first agent response | — | `agent.response.first_token_ms` → derived `agent.response.first_token_bucket_count` + percentile sample | **Client (native and web).** One raw sample per turn; the backend derives the bucket counter, so a client never sends both. `mode` separates text from voice, and the two are never combined (see below). |
 | Voice connect | — | `voice.connect.setup_complete_bucket_count` | **Client (native and web).** |
 | Push calls that threw on the client | `sync.push.client_failures.count` | — | **Native.** A *separate* metric: the backend stays the only emitter of push outcomes (`sync.errors.count{direction="push"}` and the `sync_push` duration). A push that **returned** `ok: false` is never counted here. |
+
+**Time to first response: text is the reliable metric, voice is
+approximate.** In text the start is exact: the message is sent. In voice we
+don't know when the user finished speaking. The timer starts in
+`endAudioStream()`, which also runs when the mic is muted, when the user
+starts typing or when they leave the screen, and in hands-free mode Gemini's
+VAD ends the turn without telling us. A 78 ms voice sample on the WAL-216
+preview is that error showing. So the two are never combined: there is no
+`mode="all"` percentile, and the dashboard shows text and voice in separate
+panels (percentiles and buckets), the voice ones marked as approximate.
+Read voice as an order of magnitude.
 
 **Recording errors outside the failing transaction.** A Convex mutation that
 throws rolls back *all* its writes, a telemetry row included, so "catch →
@@ -372,9 +383,19 @@ Voice connect and time to first response:
 sum by (bucket, resumed) (count_over_time(voice_connect_setup_complete_bucket_count_total{deployment_environment="$Scope"}[$__range]))
 ```
 
+Text and voice in separate queries (and panels), never as series of one:
+
 ```promql
-sum by (mode, bucket) (count_over_time(agent_response_first_token_bucket_count_total{deployment_environment="$Scope"}[$__range]))
+sum by (bucket, platform) (count_over_time(agent_response_first_token_bucket_count_total{deployment_environment="$Scope", mode="text"}[$__range]))
+sum by (bucket, platform) (count_over_time(agent_response_first_token_bucket_count_total{deployment_environment="$Scope", mode="voice"}[$__range]))
 ```
+
+```promql
+max by (quantile) (last_over_time(system_latency_quantile_ms_milliseconds{deployment_environment="$Scope", operation="agent_first_response", mode="text", window="24h"}[2h]))
+max(last_over_time(system_latency_samples_count{deployment_environment="$Scope", operation="agent_first_response", mode="text", window="24h"}[2h]))
+```
+
+The voice percentiles are the same queries with `mode="voice"`.
 
 ### Grafana validation checklist
 
@@ -407,7 +428,7 @@ trigger time, not just presence.
 | 10 | Push client failures | APK on the WAL-216 preview: airplane mode while a push is in flight (≥ the 30s operation timeout) → `network`; revoke the session server-side, then edit → `auth_failure` | `sum by (reason, platform) (count_over_time(sync_push_client_failures_count_total{deployment_environment="preview"}[2h]))` | 1 sample per failed push call with the matching `reason`, `metric_source="native"`; none for a push that returned `ok: false` | **Pending** |
 | 11 | `auth_failure` classification | Same as row 10, auth case | same | `reason="auth_failure"`, not `unknown` — confirms the `'Unauthenticated'` message survives on the deployment | **Pending** |
 | 12 | Latency gauges | Edits on the APK (WAL-216 preview), then `pnpm -C packages/backend exec convex run telemetry/mutations:recordLatencyPercentiles` instead of waiting for the hourly cron | `--series-days 1 '{__name__=~"system_latency.*"}'`, then the panel queries | the exact `quantile` series name (fix the dashboard and this doc if it isn't `system_latency_quantile_ms_milliseconds`); `samples_count` = applied pushes | **Pending** |
-| 13 | First response percentiles | Text and voice turns while signed in, then force the snapshot as in row 12 | `max by (mode, quantile) (last_over_time(system_latency_quantile_ms_milliseconds{deployment_environment="preview", operation="agent_first_response"}[2h]))` | `mode="text"` / `"voice"` / `"all"` rows; still exactly one `agent_response_first_token_bucket_count_total` sample per turn | **Pending** |
+| 13 | First response percentiles | Text and voice turns while signed in, then force the snapshot as in row 12 | `max by (mode, quantile) (last_over_time(system_latency_quantile_ms_milliseconds{deployment_environment="preview", operation="agent_first_response"}[2h]))` | `mode="text"` / `"voice"` rows and no `"all"`; still exactly one `agent_response_first_token_bucket_count_total` sample per turn | **Pending** |
 | 14 | Tool calls | WhatsApp only | `sum by (tool_name) (count_over_time(agent_tool_calls_count_total{deployment_environment="preview"}[1h]))` | — | **Not verifiable on preview** |
 | 15 | Web first response and connect | A web voice session on the WAL-216 preview | rows 7–9 queries with `platform="web"` | samples with `metric_source="web"` | **Pending** |
 
@@ -519,11 +540,13 @@ separate scope decision, not an extension of Option A.
 - **Source.** A `latencySamples` table (raw `durationMs`, `recordedAt`) and a
   `latencyByOperation` `DirectAggregate`, namespaced
   `${operation}:${segment}` and keyed by duration, so `.at(rank)` is a
-  percentile. Every sample goes in twice: under its own segment and under
-  `all` (`telemetry/latency.ts`).
+  percentile. A `sync_push` sample goes in twice, under its batch size and
+  under `all`; a first response only under its `mode` (`telemetry/latency.ts`).
 - **Segments.** `sync_push` by **batch size** (rows in the batch, counted the
   way native sizes a chunk: `0-1`, `2-10`, `11-40`, `41-80`, `81+`; native
-  caps a chunk at 80). `agent_first_response` by `mode` (`text`, `voice`).
+  caps a chunk at 80). `agent_first_response` by `mode` (`text`, `voice`),
+  with no combined segment: voice timing is approximate, so text is never
+  ranked together with it (see "Emitters and coverage").
 - **What is sampled.** `sync_push`: only applied batches (`status: ok`).
   Rejections and errors never applied a batch, and they already have their
   own counters. First response: only **authenticated** requests, since the

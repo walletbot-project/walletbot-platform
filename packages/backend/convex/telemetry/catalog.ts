@@ -317,14 +317,15 @@ export const metricCatalog: Record<
     },
     // Backend-only gauges, exported hourly from the rolling window in
     // `telemetry/latency.ts`. `batch_size` segments `sync_push`, `mode`
-    // segments `agent_first_response`; `all` is every segment together.
+    // segments `agent_first_response`; `batch_size="all"` is every push
+    // together. Text and voice are never combined (voice timing is approximate).
     'system.latency.quantile_ms': {
         type: 'gauge',
         unit: 'ms',
         attributes: {
             operation: new Set(LATENCY_OPERATIONS),
             batch_size: new Set(['all', ...BATCH_SIZE_BUCKETS]),
-            mode: new Set(['all', ...FIRST_RESPONSE_MODES]),
+            mode: new Set(FIRST_RESPONSE_MODES),
             quantile: new Set(['0.5', '0.95', '0.99']),
             window: new Set(['24h']),
         },
@@ -335,7 +336,7 @@ export const metricCatalog: Record<
         attributes: {
             operation: new Set(LATENCY_OPERATIONS),
             batch_size: new Set(['all', ...BATCH_SIZE_BUCKETS]),
-            mode: new Set(['all', ...FIRST_RESPONSE_MODES]),
+            mode: new Set(FIRST_RESPONSE_MODES),
             window: new Set(['24h']),
         },
     },

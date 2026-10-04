@@ -7,7 +7,7 @@ import type { MetricInput } from './types'
 // error-rate-and-latency.md, "Path to p50/p95/p99", option 1). The bucketed
 // `*_bucket_count` counters can't produce a percentile, so every sample's raw
 // duration is also kept here for a rolling window: one `latencySamples` row
-// plus one aggregate entry per segment it belongs to. An hourly cron reads the
+// plus one aggregate entry per segment it belongs to (see `segmentsOf`). An hourly cron reads the
 // percentiles with `.at(rank)` and exports them as gauges.
 
 export const LATENCY_WINDOW_MS = 24 * 60 * 60 * 1000
@@ -61,6 +61,16 @@ export const batchSizeBucket = (rows: number): BatchSizeBucket => {
 const namespaceOf = (operation: string, segment: string): string =>
     `${operation}:${segment}`
 
+// First responses get no `all` segment: the voice start time is approximate,
+// so text must never be ranked together with voice.
+const segmentsOf = (sample: {
+    operation: LatencySample['operation']
+    segment: string
+}): string[] =>
+    sample.operation === 'sync_push'
+        ? [sample.segment, ALL_SEGMENTS]
+        : [sample.segment]
+
 /**
  * Hands the sample to `recordLatencySample` instead of writing it here: the
  * aggregate is shared by every user, so writing it inside the caller's
@@ -96,7 +106,7 @@ export const insertLatencySample = async (
         durationMs: sample.durationMs,
         recordedAt: Date.now(),
     })
-    for (const segment of [sample.segment, ALL_SEGMENTS]) {
+    for (const segment of segmentsOf(sample)) {
         await latencyByOperation.insert(ctx, {
             namespace: namespaceOf(sample.operation, segment),
             key: sample.durationMs,
@@ -117,7 +127,7 @@ export const deleteExpiredLatencySamples = async (
         )
         .take(args.limit)
     for (const row of rows) {
-        for (const segment of [row.segment, ALL_SEGMENTS]) {
+        for (const segment of segmentsOf(row)) {
             await latencyByOperation.deleteIfExists(ctx, {
                 namespace: namespaceOf(row.operation, segment),
                 key: row.durationMs,
@@ -197,7 +207,7 @@ export const latencySnapshotMetrics = async (
             })),
         )
     }
-    for (const segment of [ALL_SEGMENTS, ...FIRST_RESPONSE_MODES]) {
+    for (const segment of FIRST_RESPONSE_MODES) {
         metrics.push(
             ...(await snapshotMetrics(ctx, {
                 operation: 'agent_first_response',
