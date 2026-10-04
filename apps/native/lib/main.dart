@@ -492,6 +492,9 @@ class _AuthGate extends StatelessWidget {
                 // identity at the mint. Sent for remote accounts too; the
                 // server lets the validated session win.
                 deviceId: clientInfo.deviceId,
+                localAccountId: active.type == AccountType.local
+                    ? active.localAccountId
+                    : null,
                 convexClient: ctx.read<ConvexClient?>(),
                 convexSiteUrl: AppConfig.convexSiteUrl,
                 // The updateSettings tool writes through these controllers.
@@ -499,25 +502,20 @@ class _AuthGate extends StatelessWidget {
                 defaultCurrency: defaultCurrency,
                 // The getExchangeRate tool reads this cache.
                 fxRates: fxRates,
-                buildMintArgs: () async => {
-                  ...await buildLiveTokenMintArgs(
-                    repositories: repositories,
-                    clientInfo: clientInfo,
-                    localeTag: displaySettings.localeTag,
-                    userName: active.name,
-                    userEmail: active.email,
-                    defaultCurrency: defaultCurrency.value,
-                    language: switch (displaySettings.language) {
-                      DisplayLanguage.system => 'system',
-                      DisplayLanguage.english => 'en',
-                      DisplayLanguage.spanish => 'es',
-                    },
-                    theme: displaySettings.theme.name,
-                  ),
-                  if (active.type == AccountType.local &&
-                      active.localAccountId != null)
-                    'localAccountId': active.localAccountId,
-                },
+                buildMintArgs: () => buildLiveTokenMintArgs(
+                  repositories: repositories,
+                  clientInfo: clientInfo,
+                  localeTag: displaySettings.localeTag,
+                  userName: active.name,
+                  userEmail: active.email,
+                  defaultCurrency: defaultCurrency.value,
+                  language: switch (displaySettings.language) {
+                    DisplayLanguage.system => 'system',
+                    DisplayLanguage.english => 'en',
+                    DisplayLanguage.spanish => 'es',
+                  },
+                  theme: displaySettings.theme.name,
+                ),
               );
             },
             dispose: (_, factory) => unawaited(factory.dispose()),

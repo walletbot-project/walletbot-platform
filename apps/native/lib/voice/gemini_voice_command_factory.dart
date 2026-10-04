@@ -26,6 +26,7 @@ class GeminiVoiceExpenseCommandFactory implements VoiceExpenseCommandFactory {
     this.useAuthenticatedTokenAction = false,
     this.sessionToken,
     this.deviceId,
+    this.localAccountId,
     this.buildMintArgs,
     this.displaySettings,
     this.defaultCurrency,
@@ -46,6 +47,9 @@ class GeminiVoiceExpenseCommandFactory implements VoiceExpenseCommandFactory {
   /// This is what lets a local account run the agent at all; a remote account
   /// sends it too, and the server's session wins.
   final String? deviceId;
+
+  /// Stable local identity, independent of the optional context snapshot.
+  final String? localAccountId;
 
   /// Builds the mint request (platform identity, locale/timezone and the
   /// USER_CONTEXT snapshot from Drift) — see `agent_context.dart`. Null keeps
@@ -97,6 +101,7 @@ class GeminiVoiceExpenseCommandFactory implements VoiceExpenseCommandFactory {
       convexClient: convexClient,
       sessionToken: sessionToken,
       deviceId: deviceId,
+      localAccountId: localAccountId,
       convexSiteUrl: convexSiteUrl,
       buildMintArgs: buildMintArgs,
       onPhase: (phase, extra) =>
@@ -152,6 +157,7 @@ class GeminiVoiceExpenseCommandFactory implements VoiceExpenseCommandFactory {
       useAuthenticatedTokenAction: useAuthenticatedTokenAction,
       sessionToken: sessionToken,
       deviceId: deviceId,
+      localAccountId: localAccountId,
       buildMintArgs: buildMintArgs,
       displaySettings: displaySettings,
       defaultCurrency: defaultCurrency,

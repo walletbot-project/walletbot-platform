@@ -152,13 +152,19 @@ class TelemetryClient {
   }
 
   Future<String> _installationId() {
-    return _installationIdFuture ??= () async {
-      final existing = await _storage.read(key: _installationIdKey);
-      if (existing != null && existing.isNotEmpty) return existing;
-      final created = const Uuid().v4();
-      await _storage.write(key: _installationIdKey, value: created);
-      return created;
-    }();
+    return _installationIdFuture ??=
+        () async {
+          final existing = await _storage.read(key: _installationIdKey);
+          if (existing != null && existing.isNotEmpty) return existing;
+          final created = const Uuid().v4();
+          await _storage.write(key: _installationIdKey, value: created);
+          return created;
+        }().catchError((Object error, StackTrace stack) {
+          // Share in-flight reads and successful IDs, but let the next send
+          // retry after a temporary secure-storage read or write failure.
+          _installationIdFuture = null;
+          Error.throwWithStackTrace(error, stack);
+        });
   }
 
   void dispose() {

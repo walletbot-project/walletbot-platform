@@ -415,3 +415,28 @@ local accounts from the same installation, confirm separate samples and a shared
 parent, force `telemetry/actions:recordAgentMonthlyUsageNow` in development, and
 inspect both local accounts in Grafana. Live deployment validation remains to
 be performed after deploying the branch.
+
+### Upgrade test for an existing local account
+
+1. Run a build without WAL-196 (for example commit `593f910`) on a test iOS
+   simulator/device. Create a local account and a recognizable transaction.
+2. Stop the app, then run this PR's build on the **same** simulator/device,
+   with the same bundle identifier (`live.walletbot.app`) and signing/keychain
+   configuration. Do not uninstall, erase the simulator or clear secure storage.
+   Separate Git worktrees are fine; preservation depends on installed app identity.
+3. Use debug builds and the same explicit development `CONVEX_URL` and
+   `CONVEX_SITE_URL` for both runs. Deploy the PR backend to that development
+   deployment before exercising the new AI flow.
+4. Confirm the original local account, selected account and transaction survive.
+   Loading the new app assigns and persists its missing `localAccountId`; it
+   does not change the on-device database ID or register it remotely yet.
+5. Open/use AI. Token prefetch or a real token request creates its `appUsers`
+   record. Complete an interaction and check its sample and monthly rollup.
+6. Fully restart and use AI again: the same `appUserId` and `parentId` must be
+   reused, with no duplicate registry row. Repeat for a second old local account
+   and verify a distinct child under the same parent.
+
+Regression coverage also verifies that a failed secure-storage read/write can
+be retried on the next telemetry send and that local identity survives a failed
+optional mint-context build. This
+retry does not queue or replay the telemetry sample that already failed.

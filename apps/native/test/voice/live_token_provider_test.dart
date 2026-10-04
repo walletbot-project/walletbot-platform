@@ -34,7 +34,7 @@ void main() {
     });
   }
   test(
-    'failed context building still accepts the legacy model from the backend',
+    'failed context building preserves local identity and accepts the legacy model',
     () async {
       final token = await http.runWithClient(
         () => fetchLiveToken(
@@ -42,18 +42,23 @@ void main() {
           convexClient: null,
           sessionToken: null,
           deviceId: 'test-device',
+          localAccountId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
           convexSiteUrl: 'https://test.invalid',
           buildMintArgs: () async => throw StateError('context unavailable'),
         ),
-        () => MockClient(
-          (_) async => http.Response(
+        () => MockClient((request) async {
+          expect(jsonDecode(request.body), {
+            'deviceId': 'test-device',
+            'localAccountId': 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+          });
+          return http.Response(
             jsonEncode({
               'token': 'auth_tokens/test',
               'model': LiveToken.legacyModel,
             }),
             200,
-          ),
-        ),
+          );
+        }),
       );
       expect(token.model, LiveToken.legacyModel);
     },
