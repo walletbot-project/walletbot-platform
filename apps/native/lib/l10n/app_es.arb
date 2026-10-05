@@ -545,6 +545,8 @@
   "voiceLiveHint": "Como una llamada (manos libres)",
   "voiceExitLive": "Salir del modo en vivo",
   "voiceRecordVoiceNote": "Grabar un audio",
+  "voiceDiscardVoiceNote": "Descartar audio",
+  "voiceNoteLimit": "Límite de 5 minutos",
   "voiceRecordHint": "Tocá o mantené apretado para grabar un audio",
   "voicePreparingMic": "Preparando el micrófono",
   "voiceListening": "Te escucho",

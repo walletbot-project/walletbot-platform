@@ -35,7 +35,11 @@ class _Command extends DebugVoiceExpenseCommand {
   Future<void> start({
     bool respondWithAudio = true,
     VoiceConversationMode mode = VoiceConversationMode.chat,
-  }) => connecting.future;
+  }) {
+    this.mode = mode;
+    return connecting.future;
+  }
+
   @override
   Future<void> addAudioChunk(Uint8List chunk) async {}
   int turnsEnded = 0;
@@ -43,6 +47,14 @@ class _Command extends DebugVoiceExpenseCommand {
   Future<void> endTurn() async {
     if (connected) turnsEnded += 1;
   }
+
+  bool noteFull = false;
+  @override
+  bool get isNoteFull => noteFull;
+
+  int discards = 0;
+  @override
+  void discardTurn() => discards += 1;
 
   final modes = <VoiceConversationMode>[];
   @override
@@ -262,6 +274,75 @@ void main() {
   );
 
   testWidgets(
+    'a full note pauses and waits for Send, with Resume disabled',
+    (tester) async {
+      final command = _Command();
+      await tester.pumpWidget(app(command));
+      await tester.pump();
+      await tester.tap(composerMic());
+      await tester.pump();
+      await tester.pump();
+      command.ready();
+      await tester.pump();
+      await tester.pump();
+
+      command.noteFull = true;
+      await messenger.handlePlatformMessage(
+        _capture,
+        const StandardMethodCodec().encodeSuccessEnvelope(
+          Uint8List.fromList([1, 0]),
+        ),
+        (_) {},
+      );
+      await settleCapture(tester);
+      expect(captureCalls, ['listen', 'cancel']);
+      expect(find.text('5 minute limit'), findsOneWidget);
+      final resume = tester.widget<FilledButton>(
+        find.ancestor(
+          of: find.text('Resume'),
+          matching: find.byWidgetPredicate((w) => w is FilledButton),
+        ),
+      );
+      expect(resume.onPressed, isNull);
+      expect(command.turnsEnded, 0);
+
+      command.noteFull = false;
+      await tester.tap(find.byTooltip('Send'));
+      await settleCapture(tester);
+      expect(command.turnsEnded, 1);
+      expect(find.byType(TextField), findsOneWidget);
+      await tester.pumpWidget(const SizedBox());
+    },
+    variant: TargetPlatformVariant.only(TargetPlatform.android),
+  );
+
+  testWidgets(
+    'Discard drops a locked note without ending its turn',
+    (tester) async {
+      final command = _Command();
+      await tester.pumpWidget(app(command));
+      await tester.pump();
+      await tester.tap(composerMic());
+      await tester.pump();
+      await tester.pump();
+      command.ready();
+      await tester.pump();
+      await tester.pump();
+      expect(find.byTooltip('Send'), findsOneWidget);
+
+      await tester.tap(find.byTooltip('Discard voice note'));
+      await settleCapture(tester);
+      expect(captureCalls, ['listen', 'cancel']);
+      expect(command.discards, 1);
+      expect(command.turnsEnded, 0);
+      expect(find.byType(TextField), findsOneWidget);
+      expect(find.byTooltip('Discard voice note'), findsNothing);
+      await tester.pumpWidget(const SizedBox());
+    },
+    variant: TargetPlatformVariant.only(TargetPlatform.android),
+  );
+
+  testWidgets(
     'the composer enters live mode and X returns to the chat',
     (tester) async {
       final command = _Command();
@@ -283,6 +364,7 @@ void main() {
       expect(captureCalls, ['listen', 'cancel', 'listen']);
       expect(find.byTooltip('Exit live mode'), findsOneWidget);
       expect(find.byTooltip('Send'), findsNothing);
+      expect(find.byTooltip('Discard voice note'), findsNothing);
       expect(find.text("I'm listening"), findsOneWidget);
 
       await tester.tap(find.text('Pause'));

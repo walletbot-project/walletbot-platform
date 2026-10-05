@@ -708,6 +708,8 @@ export const en: Messages = {
         liveHint: 'Like a phone call (hands-free)',
         exitLive: 'Exit live mode',
         recordVoiceNote: 'Record a voice note',
+        discardVoiceNote: 'Discard voice note',
+        noteLimit: '5 minute limit',
         recordHint: 'Tap or hold to record a voice note',
         preparingMic: 'Getting the mic ready',
         listening: "I'm listening",

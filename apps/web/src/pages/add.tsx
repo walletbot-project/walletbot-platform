@@ -853,10 +853,12 @@ function RecordingStrip({
     variant,
     phase,
     level,
+    full,
 }: {
     variant: 'holding' | 'locked'
     phase: MicPhase
     level: number
+    full: boolean
 }) {
     const t = useT()
     const listening = phase === 'listening'
@@ -900,6 +902,10 @@ function RecordingStrip({
                     <span className="m3-body-medium truncate">
                         {t.voice.slideToLock}
                     </span>
+                </span>
+            ) : full ? (
+                <span className="m3-body-medium ml-auto truncate text-on-surface-variant">
+                    {t.voice.noteLimit}
                 </span>
             ) : (
                 <Waveform level={level} running={listening} />
@@ -979,6 +985,7 @@ function LockedControls({
     canResume,
     onPause,
     onResume,
+    onDiscard,
     onDone,
 }: {
     variant: 'chat' | 'live'
@@ -987,6 +994,7 @@ function LockedControls({
     canResume: boolean
     onPause: () => void
     onResume: () => void
+    onDiscard: () => void
     onDone: () => void
 }) {
     const t = useT()
@@ -995,6 +1003,17 @@ function LockedControls({
         'm3-label-large m3-state-layer flex h-12 flex-1 cursor-pointer items-center justify-center gap-2 rounded-full disabled:cursor-default disabled:opacity-40'
     return (
         <div className="flex items-center gap-2">
+            {variant === 'chat' && (
+                <button
+                    type="button"
+                    onClick={onDiscard}
+                    aria-label={t.voice.discardVoiceNote}
+                    title={t.voice.discardVoiceNote}
+                    className="m3-state-layer grid size-12 shrink-0 cursor-pointer place-items-center rounded-full bg-surface-container-high text-on-surface-variant"
+                >
+                    <Icon name="delete" size={24} />
+                </button>
+            )}
             {paused ? (
                 <button
                     type="button"
@@ -1096,7 +1115,7 @@ export function Add() {
             : micStarting || voice.isConnecting
               ? 'opening'
               : 'paused'
-        : paused
+        : paused || voice.isNoteFull
           ? 'paused'
           : isListening
             ? 'listening'
@@ -1105,14 +1124,16 @@ export function Add() {
               : 'idle'
     const barMode: BarMode = live
         ? 'live'
-        : holding
-          ? 'holding'
-          : paused ||
-              voice.isMicCaptureActive ||
-              openingMic ||
-              (locked && voice.isConnecting)
-            ? 'locked'
-            : 'composer'
+        : voice.isNoteFull
+          ? 'locked'
+          : holding
+            ? 'holding'
+            : paused ||
+                voice.isMicCaptureActive ||
+                openingMic ||
+                (locked && voice.isConnecting)
+              ? 'locked'
+              : 'composer'
 
     const bottomRef = useRef<HTMLDivElement>(null)
     useEffect(() => {
@@ -1296,15 +1317,26 @@ export function Add() {
      */
     const handleLockedSend = () => {
         setLocked(false)
+        setHolding(false)
         setPaused(false)
         if (
             voice.isConnecting ||
             openingMic ||
             voice.isMicCaptureActive ||
-            paused
+            paused ||
+            voice.isNoteFull
         ) {
             voice.setMicOn(false)
         }
+    }
+
+    // A hold that hits the note limit swaps the mic for this bar mid-press, so
+    // its release never arrives: Send and Discard end the hold too.
+    const handleLockedDiscard = () => {
+        setLocked(false)
+        setHolding(false)
+        setPaused(false)
+        voice.cancelVoiceNote()
     }
 
     const handleSwitchToText = () => {
@@ -1462,6 +1494,7 @@ export function Add() {
                                     }
                                     phase={phase}
                                     level={voice.micLevel}
+                                    full={voice.isNoteFull}
                                 />
                             )}
                         </div>
@@ -1497,9 +1530,14 @@ export function Add() {
                                 voice.isMicCaptureActive &&
                                 voice.isMicOn
                             }
-                            canResume={!voice.isConnecting && !micStarting}
+                            canResume={
+                                !voice.isConnecting &&
+                                !micStarting &&
+                                !voice.isNoteFull
+                            }
                             onPause={handlePause}
                             onResume={handleResume}
+                            onDiscard={handleLockedDiscard}
                             onDone={
                                 barMode === 'live'
                                     ? handleExitLive

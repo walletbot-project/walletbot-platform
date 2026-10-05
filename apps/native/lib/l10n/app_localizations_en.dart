@@ -1769,6 +1769,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get voiceRecordVoiceNote => 'Record a voice note';
 
   @override
+  String get voiceDiscardVoiceNote => 'Discard voice note';
+
+  @override
+  String get voiceNoteLimit => '5 minute limit';
+
+  @override
   String get voiceRecordHint => 'Tap or hold to record a voice note';
 
   @override

@@ -55,6 +55,9 @@ import {
  */
 const RESPOND_TO_TEXT_WITH_AUDIO = false
 
+/** A chat voice note stops recording at 5 minutes of 16 kHz audio. */
+const NOTE_LIMIT_SAMPLES = 16000 * 60 * 5
+
 /** Which interaction opened the session — it decides the reply modality. */
 export type SessionMode = 'audio' | 'text'
 
@@ -159,6 +162,7 @@ export function useVoice(opts: UseVoiceOpts) {
         useState<ConnectionStatus>('disconnected')
     const [isMicCaptureActive, setIsMicCaptureActive] = useState(false)
     const [isMicOpening, setIsMicOpening] = useState(false)
+    const [isNoteFull, setIsNoteFull] = useState(false)
     const [isMicOn, setIsMicOn] = useState(false)
     const [mode, setMode] = useState<ConversationMode>('chat')
     const [micLevel, setMicLevel] = useState(0)
@@ -178,16 +182,20 @@ export function useVoice(opts: UseVoiceOpts) {
     const micAbortRef = useRef<AbortController | null>(null)
     const microphoneRef = useRef<{ stop: () => void } | null>(null)
     const playbackRef = useRef(new VoicePlayback())
-    /**
-     * Speech captured before the socket is ready. `ended` marks a chat turn
-     * the user already released: it is sent and closed on connect instead of
-     * being dropped with the mic.
-     */
+    /** Speech captured before a live socket is ready. */
     const startupAudioRef = useRef<{
         chunks: string[]
         samples: number
-        ended: boolean
     } | null>(null)
+    /**
+     * The chat voice note being recorded. It stays on the device until it
+     * ends, so a discarded note never reaches Gemini.
+     */
+    const noteRef = useRef<{ chunks: string[]; samples: number } | null>(
+        null,
+    )
+    /** Ended notes waiting for a chat socket, oldest first. */
+    const pendingNotesRef = useRef<string[][]>([])
     const selectedDeviceIdRef = useRef(selectedDeviceId)
     /** The mic the user chose, which a fallback in the picker never replaces. */
     const preferredDeviceIdRef = useRef(selectedDeviceId)
@@ -560,39 +568,55 @@ export function useVoice(opts: UseVoiceOpts) {
         }
     }, [])
 
+    /** A whole chat note as one turn; the model answers right after. */
+    const sendNote = useCallback((session: LiveSession, chunks: string[]) => {
+        session.sendRealtimeInput({ activityStart: {} })
+        for (const data of chunks) {
+            session.sendRealtimeInput({
+                audio: { data, mimeType: 'audio/pcm;rate=16000' },
+            })
+        }
+        session.sendRealtimeInput({ activityEnd: {} })
+        firstResponseRef.current = {
+            startedAt: performance.now(),
+            mode: 'voice',
+        }
+    }, [])
+
     /**
-     * Tell the server the audio turn is over. Sent when the mic goes away, is
-     * muted, or the user starts typing: chunks stop flowing on our side
-     * immediately, but the server still holds whatever it buffered for the
-     * turn. Only meaningful while a stream is actually open.
+     * The audio turn is over: the mic went away, was muted, or the user
+     * started typing.
      *
-     * In chat this is `activityEnd`, which makes the model answer right away.
-     * In live it is `audioStreamEnd`, which only flushes the server's buffer:
+     * In chat the recorded note is sent now, or once a socket is ready. In
+     * live this is `audioStreamEnd`, which only flushes the server's buffer:
      * its voice activity detection still decides when the turn is over.
      */
     const endTurn = useCallback(() => {
+        if (modeRef.current === 'chat') {
+            const note = noteRef.current
+            noteRef.current = null
+            setIsNoteFull(false)
+            if (!note || note.chunks.length === 0) return
+            const session = sessionRef.current
+            if (session) sendNote(session, note.chunks)
+            else if (sessionActiveRef.current) {
+                pendingNotesRef.current.push(note.chunks)
+            }
+            return
+        }
         if (!audioStreamOpenRef.current) return
         audioStreamOpenRef.current = false
         firstResponseRef.current = {
             startedAt: performance.now(),
             mode: 'voice',
         }
-        sessionRef.current?.sendRealtimeInput(
-            modeRef.current === 'chat'
-                ? { activityEnd: {} }
-                : { audioStreamEnd: true },
-        )
-    }, [])
+        sessionRef.current?.sendRealtimeInput({ audioStreamEnd: true })
+    }, [sendNote])
 
     const sendAudio = useCallback((data: string) => {
         const session = sessionRef.current
         if (!session) return
-        if (!audioStreamOpenRef.current) {
-            audioStreamOpenRef.current = true
-            if (modeRef.current === 'chat') {
-                session.sendRealtimeInput({ activityStart: {} })
-            }
-        }
+        audioStreamOpenRef.current = true
         session.sendRealtimeInput({
             audio: { data, mimeType: 'audio/pcm;rate=16000' },
         })
@@ -609,30 +633,19 @@ export function useVoice(opts: UseVoiceOpts) {
         })
     }, [])
 
-    /**
-     * Release the mic. `keepStartupTurn` is a chat note released before the
-     * socket is ready: its buffered speech stays, marked ended, for the
-     * connect to send. Every other stop drops that buffer.
-     */
-    const stopMicCapture = useCallback(
-        (opts?: { keepStartupTurn?: boolean }) => {
-            const pending = startupAudioRef.current
-            startupAudioRef.current =
-                opts?.keepStartupTurn && pending && pending.chunks.length > 0
-                    ? { ...pending, ended: true }
-                    : null
-            micAbortRef.current?.abort()
-            microphoneRef.current?.stop()
-            microphoneRef.current = null
-            micCaptureActiveRef.current = false
-            micOnRef.current = false
-            setIsMicCaptureActive(false)
-            setIsMicOn(false)
-            setMicLevel(0)
-            recordHistory('mic_capture_stopped', 'client', { muted: true })
-        },
-        [recordHistory],
-    )
+    // Stop mic capture
+    const stopMicCapture = useCallback(() => {
+        startupAudioRef.current = null
+        micAbortRef.current?.abort()
+        microphoneRef.current?.stop()
+        microphoneRef.current = null
+        micCaptureActiveRef.current = false
+        micOnRef.current = false
+        setIsMicCaptureActive(false)
+        setIsMicOn(false)
+        setMicLevel(0)
+        recordHistory('mic_capture_stopped', 'client', { muted: true })
+    }, [recordHistory])
 
     /** Muting releases the browser's microphone indicator and hardware. */
     const setMicOn = useCallback(
@@ -643,7 +656,7 @@ export function useVoice(opts: UseVoiceOpts) {
             if (on) return
             setMicLevel(0)
             endTurn()
-            stopMicCapture({ keepStartupTurn: modeRef.current === 'chat' })
+            stopMicCapture()
         },
         [endTurn, recordMute, stopMicCapture],
     )
@@ -658,6 +671,14 @@ export function useVoice(opts: UseVoiceOpts) {
         recordMute('tap_pause')
         stopMicCapture()
     }, [recordMute, stopMicCapture])
+
+    /** Throws the chat note away; nothing of it was sent. */
+    const cancelVoiceNote = useCallback(() => {
+        noteRef.current = null
+        setIsNoteFull(false)
+        recordHistory('voice_note_discarded', 'client')
+        stopMicCapture()
+    }, [recordHistory, stopMicCapture])
 
     /** Open the mic — prompts for permission the first time. */
     const openMic = useCallback(
@@ -693,6 +714,26 @@ export function useVoice(opts: UseVoiceOpts) {
                             return
                         const chunk = microphonePcm(samples)
                         setMicLevel(chunk.level)
+                        if (modeRef.current === 'chat') {
+                            const note = noteRef.current ?? {
+                                chunks: [],
+                                samples: 0,
+                            }
+                            noteRef.current = note
+                            if (note.samples >= NOTE_LIMIT_SAMPLES) return
+                            note.chunks.push(chunk.data)
+                            note.samples += samples.length
+                            // Full: the note waits, paused, for Send or Discard.
+                            if (note.samples >= NOTE_LIMIT_SAMPLES) {
+                                setIsNoteFull(true)
+                                recordHistory(
+                                    'voice_note_limit_reached',
+                                    'client',
+                                )
+                                stopMicCapture()
+                            }
+                            return
+                        }
                         const pending = startupAudioRef.current
                         if (pending) {
                             pending.samples += samples.length
@@ -1231,15 +1272,16 @@ export function useVoice(opts: UseVoiceOpts) {
                 })
             }
             flushPendingText()
-            const pendingAudio = startupAudioRef.current
-            startupAudioRef.current = null
-            if (
-                pendingAudio &&
-                (pendingAudio.ended ||
-                    (micOnRef.current && !composingRef.current))
-            ) {
-                for (const data of pendingAudio.chunks) sendAudio(data)
-                if (pendingAudio.ended) endTurn()
+            if (mode === 'chat') {
+                const notes = pendingNotesRef.current
+                pendingNotesRef.current = []
+                for (const note of notes) sendNote(session, note)
+            } else {
+                const pendingAudio = startupAudioRef.current
+                startupAudioRef.current = null
+                if (pendingAudio && micOnRef.current && !composingRef.current) {
+                    for (const data of pendingAudio.chunks) sendAudio(data)
+                }
             }
         } catch (err) {
             if (generation !== generationRef.current) return
@@ -1270,7 +1312,7 @@ export function useVoice(opts: UseVoiceOpts) {
         stopMicCapture,
         flushPendingText,
         sendAudio,
-        endTurn,
+        sendNote,
         reportFirstResponse,
         addSystem,
         addToolCall,
@@ -1324,11 +1366,12 @@ export function useVoice(opts: UseVoiceOpts) {
                 message: catalog.voice.systemConnecting,
             })
 
+            noteRef.current = null
+            pendingNotesRef.current = []
+            setIsNoteFull(false)
             if (mode === 'audio') {
-                startupAudioRef.current = {
-                    chunks: [],
-                    samples: 0,
-                    ended: false,
+                if (modeRef.current === 'live') {
+                    startupAudioRef.current = { chunks: [], samples: 0 }
                 }
                 await Promise.all([connectAttempt(), openMic({ turnOn: true })])
             } else {
@@ -1394,7 +1437,7 @@ export function useVoice(opts: UseVoiceOpts) {
         }
         switchMode('live')
         // Speech during the rotation is kept until the new socket is ready.
-        startupAudioRef.current = { chunks: [], samples: 0, ended: false }
+        startupAudioRef.current = { chunks: [], samples: 0 }
         await openMic({ turnOn: true })
     }, [connect, switchMode, openMic])
 
@@ -1472,14 +1515,7 @@ export function useVoice(opts: UseVoiceOpts) {
             const started = composing && !composingRef.current
             composingRef.current = composing
             if (started) recordMute('text_composing')
-            // A chat note recorded while connecting is sent, not dropped.
-            if (
-                started &&
-                startupAudioRef.current &&
-                !startupAudioRef.current.ended
-            ) {
-                stopMicCapture({ keepStartupTurn: modeRef.current === 'chat' })
-            }
+            if (started && startupAudioRef.current) stopMicCapture()
             if (composing) setMicLevel(0)
             if (
                 started &&
@@ -1504,6 +1540,9 @@ export function useVoice(opts: UseVoiceOpts) {
         // closing, so the close below is not mistaken for a drop.
         generationRef.current += 1
         connectAbortRef.current?.abort()
+        noteRef.current = null
+        pendingNotesRef.current = []
+        setIsNoteFull(false)
         endTurn()
         // Native drops the whole command (and its timer) at the End; the next
         // conversation must not report this turn.
@@ -1644,6 +1683,8 @@ export function useVoice(opts: UseVoiceOpts) {
         isMicCaptureActive,
         /** A mic open is in flight (permission prompt, device start). */
         isMicOpening,
+        /** The chat note hit its 5 minute limit and can only be sent or discarded. */
+        isNoteFull,
         /** The user has the mic on — the tap/push-to-talk toggle. */
         isMicOn,
         micLevel,
@@ -1658,6 +1699,7 @@ export function useVoice(opts: UseVoiceOpts) {
         openMic,
         setMicOn,
         pauseMic,
+        cancelVoiceNote,
         enterLive,
         exitLive,
         sendText,

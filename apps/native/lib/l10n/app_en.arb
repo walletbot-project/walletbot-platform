@@ -588,6 +588,8 @@
   "voiceLiveHint": "Like a phone call (hands-free)",
   "voiceExitLive": "Exit live mode",
   "voiceRecordVoiceNote": "Record a voice note",
+  "voiceDiscardVoiceNote": "Discard voice note",
+  "voiceNoteLimit": "5 minute limit",
   "voiceRecordHint": "Tap or hold to record a voice note",
   "voicePreparingMic": "Getting the mic ready",
   "voiceListening": "I'm listening",

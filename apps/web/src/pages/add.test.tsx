@@ -13,6 +13,7 @@ const f = vi.hoisted(() => ({
         isMicCaptureActive: false,
         isMicOpening: false,
         isMicOn: false,
+        isNoteFull: false,
         micLevel: 0,
         mode: 'chat' as 'chat' | 'live',
     },
@@ -27,6 +28,7 @@ const f = vi.hoisted(() => ({
         openMic: vi.fn(async () => {}),
         setMicOn: vi.fn(),
         pauseMic: vi.fn(),
+        cancelVoiceNote: vi.fn(),
         enterLive: vi.fn(async () => {}),
         exitLive: vi.fn(),
         sendText: vi.fn(),
@@ -120,6 +122,7 @@ beforeEach(() => {
         isMicCaptureActive: false,
         isMicOpening: false,
         isMicOn: false,
+        isNoteFull: false,
         micLevel: 0,
         mode: 'chat',
     })
@@ -283,6 +286,42 @@ it('typing while the mic is still opening stops it and brings the composer back'
     expect(textarea.value).toBe('café')
 })
 
+it('Discard drops a locked note and brings the composer back', async () => {
+    setVoice({ isConnected: true })
+    act(() => byLabel('Record a voice note').click())
+    await flush()
+    setVoice({ isMicCaptureActive: true, isMicOn: true })
+    expect(byLabel('Send')).toBeDefined()
+
+    act(() => byLabel('Discard voice note').click())
+    expect(f.voice.cancelVoiceNote).toHaveBeenCalledOnce()
+    expect(f.voice.setMicOn).not.toHaveBeenCalledWith(false)
+    setVoice({ isMicCaptureActive: false, isMicOn: false })
+    expect(container.querySelector('.sr-only')).toBeNull()
+})
+
+it('a held note that fills up waits for Send, then the composer comes back', async () => {
+    setVoice({ isConnected: true })
+    const mic = byLabel('Record a voice note')
+    pointer(mic, 'pointerdown', 500)
+    act(() => vi.advanceTimersByTime(300))
+    await flush()
+    setVoice({ isMicCaptureActive: true, isMicOn: true })
+    expect(byText('Slide up to lock')).toBeDefined()
+
+    setVoice({ isMicCaptureActive: false, isMicOn: false, isNoteFull: true })
+    expect(byText('5 minute limit')).toBeDefined()
+    expect(byText('Slide up to lock')).toBeUndefined()
+    expect(button('Resume')?.disabled).toBe(true)
+    expect(f.voice.setMicOn).not.toHaveBeenCalledWith(false)
+
+    act(() => byLabel('Send').click())
+    expect(f.voice.setMicOn).toHaveBeenCalledWith(false)
+    setVoice({ isNoteFull: false })
+    expect(byText('Slide up to lock')).toBeUndefined()
+    expect(container.querySelector('.sr-only')).toBeNull()
+})
+
 it('the welcome button and the composer button both enter live mode', () => {
     act(() => button('Talk live')?.click())
     expect(f.voice.enterLive).toHaveBeenCalledOnce()
@@ -306,6 +345,9 @@ it('live mode mutes with Pause and leaves with X, keeping the chat', () => {
         isMicOn: true,
     })
     expect(container.querySelector('button[aria-label="Talk live"]')).toBeNull()
+    expect(
+        container.querySelector('button[aria-label="Discard voice note"]'),
+    ).toBeNull()
     expect(
         container.querySelector('button[aria-label="Record a voice note"]'),
     ).toBeNull()

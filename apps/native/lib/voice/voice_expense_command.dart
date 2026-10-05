@@ -89,6 +89,8 @@ abstract interface class VoiceExpenseCommand {
   /// Text-only sessions do not need an audio device or audio focus.
   Future<void> prepareAudio();
 
+  /// In [VoiceConversationMode.chat] the chunk stays on the device until
+  /// [endTurn] sends the whole note, so [discardTurn] can drop it.
   Future<void> addAudioChunk(Uint8List chunk);
 
   /// Ends the current audio turn. In [VoiceConversationMode.chat] this is
@@ -98,6 +100,13 @@ abstract interface class VoiceExpenseCommand {
   /// the turn is over. Safe to call when no audio has been sent since the
   /// last end; implementations no-op in that case.
   Future<void> endTurn();
+
+  /// Drops the chat note being recorded without sending any of it.
+  void discardTurn();
+
+  /// The chat note reached its 5 minute limit: further audio is dropped and
+  /// the note can only be sent with [endTurn] or dropped with [discardTurn].
+  bool get isNoteFull;
 
   Future<void> sendText(String text);
 
@@ -215,6 +224,14 @@ class DebugVoiceExpenseCommand implements VoiceExpenseCommand {
   Future<void> endTurn() async {
     _events.add(VoiceSystemEvent('Debug audio turn ended'));
   }
+
+  @override
+  void discardTurn() {
+    _events.add(VoiceSystemEvent('Debug audio turn discarded'));
+  }
+
+  @override
+  bool get isNoteFull => false;
 
   @override
   Future<void> sendText(String text) async {

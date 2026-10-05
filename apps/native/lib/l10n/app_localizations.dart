@@ -3230,6 +3230,18 @@ abstract class AppLocalizations {
   /// **'Record a voice note'**
   String get voiceRecordVoiceNote;
 
+  /// No description provided for @voiceDiscardVoiceNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Discard voice note'**
+  String get voiceDiscardVoiceNote;
+
+  /// No description provided for @voiceNoteLimit.
+  ///
+  /// In en, this message translates to:
+  /// **'5 minute limit'**
+  String get voiceNoteLimit;
+
   /// No description provided for @voiceRecordHint.
   ///
   /// In en, this message translates to:

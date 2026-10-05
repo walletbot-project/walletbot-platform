@@ -25,17 +25,27 @@ class _Command extends DebugVoiceExpenseCommand {
   Future<void> start({
     bool respondWithAudio = true,
     VoiceConversationMode mode = VoiceConversationMode.chat,
-  }) => connecting.future;
+  }) {
+    this.mode = mode;
+    return connecting.future;
+  }
+
   @override
   Future<void> addAudioChunk(Uint8List chunk) async {
-    if (connected) audio.add(chunk.toList());
+    if (connected || mode == VoiceConversationMode.chat) {
+      audio.add(chunk.toList());
+    }
   }
 
   int turnsEnded = 0;
   @override
   Future<void> endTurn() async {
-    if (connected) turnsEnded += 1;
+    turnsEnded += 1;
   }
+
+  int discards = 0;
+  @override
+  void discardTurn() => discards += 1;
 
   final modes = <VoiceConversationMode>[];
   @override
@@ -198,7 +208,7 @@ void main() {
   );
 
   testWidgets(
-    'a chat note released before setup is sent and ended once connected',
+    'a chat note released before setup is handed to the command and ended',
     (tester) async {
       final command = _Command();
       await tester.pumpWidget(
@@ -224,10 +234,6 @@ void main() {
       await tester.runAsync(() => Future<void>.delayed(Duration.zero));
       await tester.pump();
       expect(captureCalls, ['listen', 'cancel']);
-      expect(command.audio, isEmpty);
-
-      command.ready();
-      await tester.pump();
       expect(command.audio, [
         [1, 0],
         [2, 0],

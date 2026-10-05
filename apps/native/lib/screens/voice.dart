@@ -75,13 +75,11 @@ class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
   bool _micStarting = false;
   Future<void>? _micStopping;
   int _micGeneration = 0;
-  // Only the initial, user-requested connection may buffer microphone audio.
+  // Only a live connection buffers microphone audio here: the command keeps a
+  // chat note on the device until it ends.
   static const _startupAudioLimit = MicCapture.sampleRate * 2 * 5;
   List<Uint8List>? _startupAudio;
   int _startupAudioBytes = 0;
-  // A chat note released before the socket was ready: sent and closed on
-  // connect instead of being dropped with the mic.
-  bool _startupAudioEnded = false;
   bool _resumeMicrophone = false;
   bool _foreground = true;
   int _lifecycleGeneration = 0;
@@ -353,9 +351,8 @@ class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
     final startedComposing = isComposing && !_wasTextComposing;
     _wasTextComposing = isComposing;
     setState(() {});
-    if (startedComposing && _startupAudio != null && !_startupAudioEnded) {
-      // A chat note recorded while connecting is sent, not dropped.
-      unawaited(_stopMicCapture(keepStartupTurn: !_live));
+    if (startedComposing && _startupAudio != null) {
+      unawaited(_stopMicCapture());
     }
     if (startedComposing && _isConnected && _micActive) {
       // User started typing while the mic was open: we already stop
@@ -386,7 +383,7 @@ class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
       _paused = false;
     });
     if (_micActive || _micStarting) {
-      unawaited(_stopMicCapture(keepStartupTurn: true));
+      unawaited(_stopMicCapture());
     } else if (wasPaused) {
       unawaited(_command?.endTurn());
     }
@@ -397,7 +394,7 @@ class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
   void _handleVoiceTap() {
     _resumeMicrophone = false;
     if (_isStarting) {
-      unawaited(_stopMicCapture(keepStartupTurn: !_live));
+      unawaited(_stopMicCapture());
       return;
     }
     if (_isTextComposing) return;
@@ -452,7 +449,7 @@ class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
     });
     _recordMuteEvent('long_press_end');
     if (wasOn || _micStarting) {
-      unawaited(_stopMicCapture(keepStartupTurn: !_live));
+      unawaited(_stopMicCapture());
     }
   }
 
@@ -519,6 +516,31 @@ class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
     _handleVoiceTap();
   }
 
+  /// The note waits, paused, for Send or Discard. A hold becomes a lock so
+  /// its release does not send it.
+  void _onNoteFull() {
+    setState(() {
+      _holding = false;
+      _locked = true;
+      _paused = true;
+      _userMicOn = false;
+      _level = 0;
+    });
+    unawaited(_stopMicCapture(endTurn: false));
+  }
+
+  void _onLockedDiscardPressed() {
+    _resumeMicrophone = false;
+    setState(() {
+      _locked = false;
+      _paused = false;
+      _userMicOn = false;
+      _level = 0;
+    });
+    _command?.discardTurn();
+    unawaited(_stopMicCapture(endTurn: false));
+  }
+
   void _onLockedSendPressed() {
     final micOn = _isStarting || (_micActive && _userMicOn);
     final wasPaused = _paused;
@@ -531,7 +553,7 @@ class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
     } else if (_micStarting || _micActive) {
       // A tap here would open the mic again instead of closing it.
       _resumeMicrophone = false;
-      unawaited(_stopMicCapture(keepStartupTurn: true));
+      unawaited(_stopMicCapture());
     } else if (wasPaused) {
       unawaited(_command?.endTurn());
     }
@@ -559,7 +581,6 @@ class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
     setState(() => _isConnected = false);
     _startupAudio = [];
     _startupAudioBytes = 0;
-    _startupAudioEnded = false;
     _setAudioPlaybackEnabled(true);
     unawaited(command.switchMode(VoiceConversationMode.live));
     unawaited(_startMicCapture(turnOn: true));
@@ -766,9 +787,10 @@ class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
         mode: conversation,
       );
       if (mode == _SessionMode.audio) {
-        _startupAudio = [];
-        _startupAudioBytes = 0;
-        _startupAudioEnded = false;
+        if (conversation == VoiceConversationMode.live) {
+          _startupAudio = [];
+          _startupAudioBytes = 0;
+        }
         await Future.wait([connecting, _startMicCapture(turnOn: true)]);
       } else {
         await connecting;
@@ -924,33 +946,20 @@ class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
     }
   }
 
-  /// Releases the mic. [keepStartupTurn] is a chat note released before the
-  /// socket is ready: its buffered speech stays, marked ended, for the
-  /// connect to send. [endTurn] false leaves the turn open (a paused note).
-  Future<void> _stopMicCapture({
-    bool keepStartupTurn = false,
-    bool endTurn = true,
-  }) {
+  /// Releases the mic. [endTurn] false leaves the turn open (a paused or
+  /// discarded note).
+  Future<void> _stopMicCapture({bool endTurn = true}) {
     final existing = _micStopping;
     if (existing != null) return existing;
-    final operation = _stopMicCaptureOnce(
-      keepStartupTurn: keepStartupTurn,
-      endTurn: endTurn,
-    );
+    final operation = _stopMicCaptureOnce(endTurn: endTurn);
     _micStopping = operation;
     return operation.whenComplete(() {
       if (identical(_micStopping, operation)) _micStopping = null;
     });
   }
 
-  Future<void> _stopMicCaptureOnce({
-    required bool keepStartupTurn,
-    required bool endTurn,
-  }) async {
-    final pending = _startupAudio;
-    final keep = keepStartupTurn && pending != null && pending.isNotEmpty;
-    _startupAudio = keep ? pending : null;
-    _startupAudioEnded = keep;
+  Future<void> _stopMicCaptureOnce({required bool endTurn}) async {
+    _startupAudio = null;
     ++_micGeneration;
     final audio = _audioSubscription;
     final amplitude = _amplitudeSubscription;
@@ -1065,6 +1074,10 @@ class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
         _startupAudioBytes += chunk.length;
       } else {
         unawaited(_command?.addAudioChunk(chunk));
+        if (!_live && (_command?.isNoteFull ?? false)) {
+          _onNoteFull();
+          return;
+        }
       }
     }
     if (_level == 0 && !_isMicEffectivelyMuted) {
@@ -1093,16 +1106,11 @@ class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
           conversationChanged = _connectionNotice != null;
           _clearConnectionNotice();
           final pending = _startupAudio;
-          final ended = _startupAudioEnded;
           _startupAudio = null;
-          _startupAudioEnded = false;
-          if (pending != null &&
-              (ended || !_isMicEffectivelyMuted) &&
-              _command?.isConnected == true) {
-            for (final chunk in pending) {
+          if (!_isMicEffectivelyMuted && _command?.isConnected == true) {
+            for (final chunk in pending ?? <Uint8List>[]) {
               unawaited(_command?.addAudioChunk(chunk));
             }
-            if (ended) unawaited(_command?.endTurn());
           }
           _flushPendingTexts();
         case VoiceDisconnectedEvent():
@@ -1440,6 +1448,7 @@ class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
         ? _BarMode.locked
         : _BarMode.composer;
     final canEnterLive = !_isStarting && !_isReconnecting && !_isTextComposing;
+    final noteFull = !_live && (_command?.isNoteFull ?? false);
 
     final suggestionsEnabled =
         context.watch<AppConfigController?>()?.isFlagEnabled(
@@ -1566,7 +1575,8 @@ class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
             hasText: _isTextComposing,
             level: _level,
             canPause: _isConnected && _micActive && _userMicOn && !_isStarting,
-            canResume: !_isStarting && !_micStarting,
+            canResume: !_isStarting && !_micStarting && !noteFull,
+            noteFull: noteFull,
             textController: _textController,
             textFocusNode: _textFocusNode,
             recordingTimerKey: _recordingTimerKey,
@@ -1579,6 +1589,7 @@ class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
             onHoldEnd: _onHoldEnd,
             onPause: _onPausePressed,
             onResume: _onResumePressed,
+            onDiscard: _onLockedDiscardPressed,
             onDone: _live ? _onExitLivePressed : _onLockedSendPressed,
           ),
         ],
@@ -2460,6 +2471,7 @@ class _ControlBar extends StatelessWidget {
     required this.level,
     required this.canPause,
     required this.canResume,
+    required this.noteFull,
     required this.textController,
     required this.textFocusNode,
     required this.recordingTimerKey,
@@ -2472,6 +2484,7 @@ class _ControlBar extends StatelessWidget {
     required this.onHoldEnd,
     required this.onPause,
     required this.onResume,
+    required this.onDiscard,
     required this.onDone,
   });
 
@@ -2483,6 +2496,7 @@ class _ControlBar extends StatelessWidget {
   final double level;
   final bool canPause;
   final bool canResume;
+  final bool noteFull;
   final TextEditingController textController;
   final FocusNode textFocusNode;
   final GlobalKey recordingTimerKey;
@@ -2495,6 +2509,7 @@ class _ControlBar extends StatelessWidget {
   final VoidCallback onHoldEnd;
   final VoidCallback onPause;
   final VoidCallback onResume;
+  final VoidCallback onDiscard;
   final VoidCallback onDone;
 
   @override
@@ -2605,7 +2620,16 @@ class _ControlBar extends StatelessWidget {
               _RecordingTimer(key: recordingTimerKey, running: listening),
               const SizedBox(width: 16),
               Expanded(
-                child: _Waveform(level: level, running: listening),
+                child: noteFull
+                    ? Text(
+                        l10n.voiceNoteLimit,
+                        textAlign: TextAlign.end,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                      )
+                    : _Waveform(level: level, running: listening),
               ),
               const SizedBox(width: 8),
             ],
@@ -2614,6 +2638,19 @@ class _ControlBar extends StatelessWidget {
         const SizedBox(height: 8),
         Row(
           children: [
+            if (mode == _BarMode.locked) ...[
+              IconButton.filled(
+                onPressed: onDiscard,
+                tooltip: l10n.voiceDiscardVoiceNote,
+                style: IconButton.styleFrom(
+                  minimumSize: const Size.square(48),
+                  backgroundColor: theme.colorScheme.surfaceContainerHigh,
+                  foregroundColor: theme.colorScheme.onSurfaceVariant,
+                ),
+                icon: const Icon(Icons.delete_outline_rounded),
+              ),
+              const SizedBox(width: 8),
+            ],
             Expanded(
               child: paused
                   ? FilledButton.icon(

@@ -339,6 +339,12 @@ class _ActiveVoiceCommand implements VoiceExpenseCommand {
   Future<void> switchMode(VoiceConversationMode next) async {}
 
   @override
+  void discardTurn() {}
+
+  @override
+  bool get isNoteFull => false;
+
+  @override
   Future<void> sendText(String text) async {}
 
   @override

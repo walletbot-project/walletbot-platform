@@ -748,6 +748,8 @@ export const es = {
         liveHint: 'Como una llamada (manos libres)',
         exitLive: 'Salir del modo en vivo',
         recordVoiceNote: 'Grabar un audio',
+        discardVoiceNote: 'Descartar audio',
+        noteLimit: 'Límite de 5 minutos',
         recordHint: 'Tocá o mantené apretado para grabar un audio',
         preparingMic: 'Preparando el micrófono',
         listening: 'Te escucho',
