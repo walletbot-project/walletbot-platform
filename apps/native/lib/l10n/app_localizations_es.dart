@@ -1762,7 +1762,7 @@ class AppLocalizationsEs extends AppLocalizations {
   String get voiceStartTalking => 'Empezar a hablar';
 
   @override
-  String get voiceHoldHint => 'Mantené apretado para hablar';
+  String get voiceHoldHint => 'Apretá una vez o mantené apretado para hablar';
 
   @override
   String get voicePreparingMic => 'Preparando el micrófono';

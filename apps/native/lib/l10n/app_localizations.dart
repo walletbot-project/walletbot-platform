@@ -3215,7 +3215,7 @@ abstract class AppLocalizations {
   /// No description provided for @voiceHoldHint.
   ///
   /// In en, this message translates to:
-  /// **'Hold to talk'**
+  /// **'Press once or hold to talk'**
   String get voiceHoldHint;
 
   /// No description provided for @voicePreparingMic.

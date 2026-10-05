@@ -542,7 +542,7 @@
   "voiceWelcomeTitle": "¿En qué te ayudo?",
   "voiceWelcome": "Contame un gasto o preguntame por tus cuentas",
   "voiceStartTalking": "Empezar a hablar",
-  "voiceHoldHint": "Mantené apretado para hablar",
+  "voiceHoldHint": "Apretá una vez o mantené apretado para hablar",
   "voicePreparingMic": "Preparando el micrófono",
   "voiceListening": "Te escucho",
   "voiceMicPaused": "Micrófono en pausa",

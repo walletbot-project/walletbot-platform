@@ -585,7 +585,7 @@
   "voiceWelcomeTitle": "How can I help?",
   "voiceWelcome": "Tell me about an expense or ask about your accounts",
   "voiceStartTalking": "Start talking",
-  "voiceHoldHint": "Hold to talk",
+  "voiceHoldHint": "Press once or hold to talk",
   "voicePreparingMic": "Getting the mic ready",
   "voiceListening": "I'm listening",
   "voiceMicPaused": "Mic paused",
