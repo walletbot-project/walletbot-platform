@@ -47,7 +47,8 @@ const WAVEFORM_BARS = 64
 
 /**
  * Whether the chat shows a card ("Herramienta") for each tool call the agent
- * makes. Hidden for now, as on native (`_kShowToolCards`).
+ * makes. Hidden for now unless `debugToolCalls` is on, as on native
+ * (`_kShowToolCards`).
  */
 const SHOW_TOOL_CARDS = false
 
@@ -491,7 +492,7 @@ function MessageView({
                 />
             )
         case 'tool':
-            return SHOW_TOOL_CARDS ? (
+            return SHOW_TOOL_CARDS || debugEnabled ? (
                 <ToolCard message={message} debugEnabled={debugEnabled} />
             ) : null
         case 'system':

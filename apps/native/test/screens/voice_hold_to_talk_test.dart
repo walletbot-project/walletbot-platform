@@ -355,4 +355,44 @@ void main() {
       label,
     );
   });
+
+  for (final debug in [false, true]) {
+    testWidgets(
+      'tool cards show only with debugToolCalls on (debug: $debug)',
+      (tester) async {
+        final config = AppConfigController(
+          httpClient: MockClient(
+            (_) async => http.Response(
+              jsonEncode({
+                'flags': {'debugToolCalls': debug},
+              }),
+              200,
+            ),
+          ),
+        );
+        addTearDown(config.dispose);
+        await config.loadAccount(_localAccount);
+        final command = _Command();
+        await tester.pumpWidget(
+          ChangeNotifierProvider<AppConfigController>.value(
+            value: config,
+            child: app(command),
+          ),
+        );
+        await tester.pump();
+        await tester.tap(find.text('Start talking'));
+        await tester.pump();
+        await tester.pump();
+        command.ready();
+        command.controller.add(
+          VoiceToolCallEvent(id: 't1', name: 'get_balance', args: const {}),
+        );
+        await tester.pump();
+        await tester.pump();
+        expect(find.text('get_balance'), debug ? findsOneWidget : findsNothing);
+        await tester.pumpWidget(const SizedBox());
+      },
+      variant: TargetPlatformVariant.only(TargetPlatform.android),
+    );
+  }
 }

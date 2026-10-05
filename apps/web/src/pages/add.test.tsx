@@ -3,8 +3,10 @@
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+import type { ChatMessage } from '@/hooks/use-voice'
 
 const f = vi.hoisted(() => ({
+    flags: {} as { debugToolCalls?: boolean },
     state: {
         isConnected: false,
         isConnecting: false,
@@ -15,7 +17,7 @@ const f = vi.hoisted(() => ({
     voice: {
         devices: [],
         selectedDeviceId: undefined,
-        messages: [],
+        messages: [] as ChatMessage[],
         attach: vi.fn(),
         detach: vi.fn(),
         connect: vi.fn(async () => {}),
@@ -31,7 +33,7 @@ const f = vi.hoisted(() => ({
 }))
 
 vi.mock('convex/react', () => ({
-    useQuery: () => ({}),
+    useQuery: () => f.flags,
     useConvex: () => ({ query: vi.fn() }),
 }))
 vi.mock('react-router-dom', () => ({ useNavigate: () => vi.fn() }))
@@ -114,10 +116,13 @@ beforeEach(() => {
         isMicOn: false,
         micLevel: 0,
     })
+    f.flags = {}
+    f.voice.messages = []
     for (const fn of Object.values(f.voice)) {
         if (typeof fn === 'function' && 'mockClear' in fn) fn.mockClear()
     }
     HTMLElement.prototype.setPointerCapture = vi.fn()
+    HTMLElement.prototype.scrollIntoView = vi.fn()
     container = document.createElement('div')
     document.body.append(container)
     root = createRoot(container)
@@ -267,4 +272,24 @@ it('typing while the mic is still opening stops it and brings the composer back'
     await act(async () => opened())
     expect(container.querySelector('.sr-only')).toBeNull()
     expect(textarea.value).toBe('café')
+})
+
+it('shows tool cards only while debugToolCalls is on', () => {
+    f.voice.messages = [
+        {
+            kind: 'tool',
+            id: 't1',
+            at: new Date(),
+            callId: 'c1',
+            name: 'get_balance',
+            args: {},
+            status: 'completed',
+        },
+    ]
+    render()
+    expect(byText('get_balance')).toBeUndefined()
+
+    f.flags.debugToolCalls = true
+    render()
+    expect(byText('get_balance')).toBeDefined()
 })

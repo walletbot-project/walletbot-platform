@@ -29,7 +29,7 @@ import 'voice_action_widget.dart';
 const bool _kRespondToTextWithAudio = false;
 
 /// Whether the chat shows a card ("Herramienta") for each tool call the agent
-/// makes. Hidden for now.
+/// makes. Hidden for now unless `debugToolCalls` is on.
 const bool _kShowToolCards = false;
 
 const double _kLockDistance = 80;
@@ -1341,6 +1341,12 @@ class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
           orElse: true,
         ) ??
         true;
+    final showToolCards =
+        _kShowToolCards ||
+        (context.watch<AppConfigController?>()?.isFlagEnabled(
+              'debugToolCalls',
+            ) ??
+            false);
 
     // Anything to end? A live/reconnecting session, or a restored
     // transcript whose logged session is still resumable.
@@ -1399,7 +1405,7 @@ class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
                       itemCount: _items.length,
                       itemBuilder: (context, i) {
                         final item = _items[i];
-                        if (item is _ToolItem && !_kShowToolCards) {
+                        if (item is _ToolItem && !showToolCards) {
                           return SizedBox.shrink(key: ObjectKey(item));
                         }
                         return Padding(
