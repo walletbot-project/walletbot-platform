@@ -573,7 +573,7 @@ function WelcomeView({
                 type="button"
                 onClick={onStart}
                 disabled={startDisabled}
-                className="m3-label-large m3-state-layer mt-7 flex h-14 cursor-pointer items-center gap-2 rounded-full bg-surface-container-high px-7 text-on-surface-variant disabled:cursor-default disabled:opacity-40"
+                className="m3-label-large m3-state-layer mt-7 flex h-14 cursor-pointer items-center gap-2 rounded-full bg-secondary-container px-7 text-on-secondary-container disabled:cursor-default disabled:opacity-40"
             >
                 <Icon name="graphic_eq" size={20} />
                 {t.voice.startTalking}
@@ -676,7 +676,7 @@ function LiveButton({
             title={t.voice.startTalking}
             // Entering live must not pull focus out of the composer.
             onMouseDown={(event) => event.preventDefault()}
-            className="m3-state-layer grid size-12 shrink-0 cursor-pointer place-items-center rounded-full bg-surface-container-high text-on-surface-variant disabled:cursor-default disabled:opacity-40"
+            className="m3-state-layer grid size-12 shrink-0 cursor-pointer place-items-center rounded-full bg-secondary-container text-on-secondary-container disabled:cursor-default disabled:opacity-40"
         >
             <Icon name="graphic_eq" size={24} />
         </button>
