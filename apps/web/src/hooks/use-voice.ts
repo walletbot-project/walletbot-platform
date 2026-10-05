@@ -1,16 +1,27 @@
-import {
-    GoogleGenAI,
-    type LiveServerMessage,
-    type Session,
-} from '@google/genai'
+import type { LiveServerMessage } from '@google/genai'
 import { api } from '@wallet-bot/backend/api'
 import type { ToolName } from '@wallet-bot/shared'
 import { useConvex, useQuery } from 'convex/react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { LiveTokenMintArgs } from '@/lib/agent-context'
+import { recordFirstResponse, recordSetupComplete } from '@/lib/agent-metrics'
 import { executeToolCall } from '@/lib/agent-tools'
 import type { AgentToolContext } from '@/lib/agent-tools/helpers'
+import {
+    connectGeminiLive,
+    type LiveSession,
+    WEB_LIVE_VERSION,
+} from '@/lib/gemini-live'
 import { useT } from '@/lib/i18n'
+import {
+    readMicrophonePreference,
+    writeMicrophonePreference,
+} from '@/lib/microphone-preference'
+import {
+    captureMicrophone,
+    microphonePcm,
+    VoicePlayback,
+} from '@/lib/voice-audio'
 import {
     createVoiceHistoryRecorder,
     type VoiceEventDirection,
@@ -24,9 +35,6 @@ import {
 } from '@/lib/voice-seed'
 
 // Constants
-
-const INPUT_SAMPLE_RATE = 16000
-const OUTPUT_SAMPLE_RATE = 24000
 
 /**
  * Whether the model's spoken answer is played back when the user's turn was
@@ -47,49 +55,20 @@ const OUTPUT_SAMPLE_RATE = 24000
  */
 const RESPOND_TO_TEXT_WITH_AUDIO = false
 
+/** A chat voice note stops recording at 5 minutes of 16 kHz audio. */
+const NOTE_LIMIT_SAMPLES = 16000 * 60 * 5
+
 /** Which interaction opened the session — it decides the reply modality. */
 export type SessionMode = 'audio' | 'text'
 
-// Audio helpers
-
-function floatTo16BitPCM(float32: Float32Array): ArrayBuffer {
-    const int16 = new Int16Array(float32.length)
-    for (let i = 0; i < float32.length; i++) {
-        int16[i] = Math.max(-1, Math.min(1, float32[i])) * 0x7fff
-    }
-    return int16.buffer
-}
-
-function arrayBufferToBase64(buffer: ArrayBuffer): string {
-    const bytes = new Uint8Array(buffer)
-    let binary = ''
-    for (let i = 0; i < bytes.byteLength; i++) {
-        binary += String.fromCharCode(bytes[i])
-    }
-    return btoa(binary)
-}
-
-function base64ToPcmFloat32(base64: string): Float32Array {
-    const binary = atob(base64)
-    const bytes = new Uint8Array(binary.length)
-    for (let i = 0; i < binary.length; i++) {
-        bytes[i] = binary.charCodeAt(i)
-    }
-    const int16 = new Int16Array(bytes.buffer)
-    const float32 = new Float32Array(int16.length)
-    for (let i = 0; i < int16.length; i++) {
-        float32[i] = int16[i] / 32768
-    }
-    return float32
-}
-
-function computeRMS(float32: Float32Array): number {
-    let sum = 0
-    for (let i = 0; i < float32.length; i++) {
-        sum += float32[i] * float32[i]
-    }
-    return Math.sqrt(sum / float32.length)
-}
+/**
+ * Who ends a spoken turn. In `chat` the client does: server voice activity
+ * detection is off and each voice note is bracketed by `activityStart` and
+ * `activityEnd`, so releasing mid-word still sends it. In `live` the server
+ * does, which is what a hands-free conversation needs. The mode is fixed per
+ * socket, so switching it opens a new one, seeded from the conversation log.
+ */
+export type ConversationMode = 'chat' | 'live'
 
 // Chat message model
 
@@ -182,30 +161,50 @@ export function useVoice(opts: UseVoiceOpts) {
     const [connectionStatus, setConnectionStatus] =
         useState<ConnectionStatus>('disconnected')
     const [isMicCaptureActive, setIsMicCaptureActive] = useState(false)
+    const [isMicOpening, setIsMicOpening] = useState(false)
+    const [isNoteFull, setIsNoteFull] = useState(false)
     const [isMicOn, setIsMicOn] = useState(false)
+    const [mode, setMode] = useState<ConversationMode>('chat')
     const [micLevel, setMicLevel] = useState(0)
     const [devices, setDevices] = useState<MediaDeviceInfo[]>([])
-    const [selectedDeviceId, setSelectedDeviceId] = useState<string>('')
+    const [selectedDeviceId, setSelectedDeviceId] = useState<string>(
+        readMicrophonePreference,
+    )
     const [messages, setMessages] = useState<ChatMessage[]>([])
 
     const optsRef = useRef(opts)
     // eslint-disable-next-line react-hooks/refs
     optsRef.current = opts
 
-    const sessionRef = useRef<Session | null>(null)
-    const captureContextRef = useRef<AudioContext | null>(null)
-    const captureWorkletRef = useRef<AudioWorkletNode | null>(null)
-    const mediaStreamRef = useRef<MediaStream | null>(null)
-    const playbackContextRef = useRef<AudioContext | null>(null)
-    const playbackWorkletRef = useRef<AudioWorkletNode | null>(null)
+    const sessionRef = useRef<LiveSession | null>(null)
+    const connectAbortRef = useRef<AbortController | null>(null)
+    const toolsSettledRef = useRef<Promise<void>>(Promise.resolve())
+    const micAbortRef = useRef<AbortController | null>(null)
+    const microphoneRef = useRef<{ stop: () => void } | null>(null)
+    const playbackRef = useRef(new VoicePlayback())
+    /** Speech captured before a live socket is ready. */
+    const startupAudioRef = useRef<{
+        chunks: string[]
+        samples: number
+    } | null>(null)
+    /**
+     * The chat voice note being recorded. It stays on the device until it
+     * ends, so a discarded note never reaches Gemini.
+     */
+    const noteRef = useRef<{ chunks: string[]; samples: number } | null>(
+        null,
+    )
+    /** Ended notes waiting for a chat socket, oldest first. */
+    const pendingNotesRef = useRef<string[][]>([])
     const selectedDeviceIdRef = useRef(selectedDeviceId)
+    /** The mic the user chose, which a fallback in the picker never replaces. */
+    const preferredDeviceIdRef = useRef(selectedDeviceId)
 
     // Mirrors of the state above, so the audio callbacks and the message
     // handler read the live value instead of the one captured at render.
     const statusRef = useRef<ConnectionStatus>('disconnected')
     const micCaptureActiveRef = useRef(false)
     const micOnRef = useRef(false)
-    const micOpeningRef = useRef(false)
     const composingRef = useRef(false)
 
     // Reply-modality state — see RESPOND_TO_TEXT_WITH_AUDIO above.
@@ -213,6 +212,15 @@ export function useVoice(opts: UseVoiceOpts) {
     const discardOutputRef = useRef(false)
     const audioStreamOpenRef = useRef(false)
     const pendingTextRef = useRef<string[]>([])
+    /**
+     * The turn waiting for its first reply chunk — native's
+     * `_firstResponseStopwatch` / `_firstResponseMode`. One per turn: the
+     * first transcript delta or audio chunk reports it and clears it.
+     */
+    const firstResponseRef = useRef<{
+        startedAt: number
+        mode: 'text' | 'voice'
+    } | null>(null)
 
     // Reconnection state, porting native's design
     // (apps/native/lib/voice/gemini_voice_expense_command.dart):
@@ -225,6 +233,9 @@ export function useVoice(opts: UseVoiceOpts) {
     //   reads back from its durable Drift log.
     const sessionActiveRef = useRef(false)
     const sessionModeRef = useRef<SessionMode>('audio')
+    const modeRef = useRef<ConversationMode>('chat')
+    /** The next connect is a mode switch: no connection notices in the chat. */
+    const quietConnectRef = useRef(false)
     const generationRef = useRef(0)
     const reconnectAttemptRef = useRef(0)
     const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -539,7 +550,7 @@ export function useVoice(opts: UseVoiceOpts) {
         const mics = all.filter((d) => d.kind === 'audioinput')
         setDevices(mics)
         if (
-            mics.length > 0 &&
+            mics.some((d) => d.deviceId.length > 0) &&
             !mics.some((d) => d.deviceId === selectedDeviceIdRef.current)
         ) {
             setSelectedDeviceId(mics[0].deviceId)
@@ -548,7 +559,7 @@ export function useVoice(opts: UseVoiceOpts) {
 
     useEffect(() => {
         const handler = () => {
-            refreshDevicesRef.current()
+            void refreshDevicesRef.current().catch(() => {})
         }
         handler()
         navigator.mediaDevices.addEventListener('devicechange', handler)
@@ -557,79 +568,77 @@ export function useVoice(opts: UseVoiceOpts) {
         }
     }, [])
 
-    /**
-     * Tell the server the audio turn is over. Sent when the mic goes away, is
-     * muted, or the user starts typing: chunks stop flowing on our side
-     * immediately, but the server still holds whatever it buffered for the
-     * turn. Only meaningful while a stream is actually open.
-     */
-    const endAudioStream = useCallback(() => {
-        if (!audioStreamOpenRef.current) return
-        audioStreamOpenRef.current = false
-        sessionRef.current?.sendRealtimeInput({ audioStreamEnd: true })
-    }, [])
-
-    // Mic capture (16kHz AudioWorklet)
-    const startMicCapture = useCallback(async (deviceId: string) => {
-        const stream = await navigator.mediaDevices.getUserMedia({
-            audio: {
-                deviceId: deviceId ? { exact: deviceId } : undefined,
-                sampleRate: INPUT_SAMPLE_RATE,
-                channelCount: 1,
-                echoCancellation: true,
-                noiseSuppression: true,
-                autoGainControl: true,
-            },
-        })
-        mediaStreamRef.current = stream
-
-        const captureCtx = new AudioContext({ sampleRate: INPUT_SAMPLE_RATE })
-        await captureCtx.audioWorklet.addModule(
-            '/audio-processors/capture.worklet.js',
-        )
-
-        const worklet = new AudioWorkletNode(
-            captureCtx,
-            'audio-capture-processor',
-        )
-
-        worklet.port.onmessage = (event: MessageEvent) => {
-            const float32: Float32Array = event.data.data
-            // Muted covers all three native conditions: capture off, user mic
-            // off, or the user is composing text (`_isMicEffectivelyMuted`).
-            const muted = !micOnRef.current || composingRef.current
-            setMicLevel(muted ? 0 : Math.min(1, computeRMS(float32) * 10))
-            if (muted) return
-
-            const session = sessionRef.current
-            if (!session) return
-
-            const pcm = floatTo16BitPCM(float32)
-            const base64 = arrayBufferToBase64(pcm)
-            audioStreamOpenRef.current = true
+    /** A whole chat note as one turn; the model answers right after. */
+    const sendNote = useCallback((session: LiveSession, chunks: string[]) => {
+        session.sendRealtimeInput({ activityStart: {} })
+        for (const data of chunks) {
             session.sendRealtimeInput({
-                audio: { data: base64, mimeType: 'audio/pcm;rate=16000' },
+                audio: { data, mimeType: 'audio/pcm;rate=16000' },
             })
         }
+        session.sendRealtimeInput({ activityEnd: {} })
+        firstResponseRef.current = {
+            startedAt: performance.now(),
+            mode: 'voice',
+        }
+    }, [])
 
-        const source = captureCtx.createMediaStreamSource(stream)
-        source.connect(worklet)
+    /**
+     * The audio turn is over: the mic went away, was muted, or the user
+     * started typing.
+     *
+     * In chat the recorded note is sent now, or once a socket is ready. In
+     * live this is `audioStreamEnd`, which only flushes the server's buffer:
+     * its voice activity detection still decides when the turn is over.
+     */
+    const endTurn = useCallback(() => {
+        if (modeRef.current === 'chat') {
+            const note = noteRef.current
+            noteRef.current = null
+            setIsNoteFull(false)
+            if (!note || note.chunks.length === 0) return
+            const session = sessionRef.current
+            if (session) sendNote(session, note.chunks)
+            else if (sessionActiveRef.current) {
+                pendingNotesRef.current.push(note.chunks)
+            }
+            return
+        }
+        if (!audioStreamOpenRef.current) return
+        audioStreamOpenRef.current = false
+        firstResponseRef.current = {
+            startedAt: performance.now(),
+            mode: 'voice',
+        }
+        sessionRef.current?.sendRealtimeInput({ audioStreamEnd: true })
+    }, [sendNote])
 
-        captureContextRef.current = captureCtx
-        captureWorkletRef.current = worklet
+    const sendAudio = useCallback((data: string) => {
+        const session = sessionRef.current
+        if (!session) return
+        audioStreamOpenRef.current = true
+        session.sendRealtimeInput({
+            audio: { data, mimeType: 'audio/pcm;rate=16000' },
+        })
+    }, [])
+
+    /** Native's `_reportFirstResponseIfPending`: once per turn. */
+    const reportFirstResponse = useCallback(() => {
+        const pending = firstResponseRef.current
+        if (!pending) return
+        firstResponseRef.current = null
+        recordFirstResponse({
+            elapsedMs: performance.now() - pending.startedAt,
+            mode: pending.mode,
+        })
     }, [])
 
     // Stop mic capture
     const stopMicCapture = useCallback(() => {
-        captureWorkletRef.current?.disconnect()
-        captureWorkletRef.current?.port.close()
-        captureContextRef.current?.close()
-        for (const track of mediaStreamRef.current?.getTracks() ?? []) {
-            track.stop()
-        }
-        captureWorkletRef.current = null
-        captureContextRef.current = null
-        mediaStreamRef.current = null
+        startupAudioRef.current = null
+        micAbortRef.current?.abort()
+        microphoneRef.current?.stop()
+        microphoneRef.current = null
         micCaptureActiveRef.current = false
         micOnRef.current = false
         setIsMicCaptureActive(false)
@@ -638,7 +647,7 @@ export function useVoice(opts: UseVoiceOpts) {
         recordHistory('mic_capture_stopped', 'client', { muted: true })
     }, [recordHistory])
 
-    /** Turn the user's mic on or off without tearing capture down. */
+    /** Muting releases the browser's microphone indicator and hardware. */
     const setMicOn = useCallback(
         (on: boolean) => {
             micOnRef.current = on
@@ -646,10 +655,30 @@ export function useVoice(opts: UseVoiceOpts) {
             recordMute(on ? 'tap_unmute' : 'tap_mute')
             if (on) return
             setMicLevel(0)
-            endAudioStream()
+            endTurn()
+            stopMicCapture()
         },
-        [endAudioStream, recordMute],
+        [endTurn, recordMute, stopMicCapture],
     )
+
+    /**
+     * A locked chat note on hold: the mic is released but the turn stays
+     * open, so resuming continues the same note and only Send ends it.
+     */
+    const pauseMic = useCallback(() => {
+        micOnRef.current = false
+        setIsMicOn(false)
+        recordMute('tap_pause')
+        stopMicCapture()
+    }, [recordMute, stopMicCapture])
+
+    /** Throws the chat note away; nothing of it was sent. */
+    const cancelVoiceNote = useCallback(() => {
+        noteRef.current = null
+        setIsNoteFull(false)
+        recordHistory('voice_note_discarded', 'client')
+        stopMicCapture()
+    }, [recordHistory, stopMicCapture])
 
     /** Open the mic — prompts for permission the first time. */
     const openMic = useCallback(
@@ -658,17 +687,94 @@ export function useVoice(opts: UseVoiceOpts) {
                 if (turnOn) setMicOn(true)
                 return
             }
-            if (micOpeningRef.current) return
-            micOpeningRef.current = true
+            if (micAbortRef.current && !micAbortRef.current.signal.aborted)
+                return
+            const controller = new AbortController()
+            micAbortRef.current = controller
+            setIsMicOpening(true)
+            // A newer open owns the flag once this one is superseded.
+            const settle = () => {
+                if (micAbortRef.current === controller) setIsMicOpening(false)
+            }
             try {
-                await startMicCapture(selectedDeviceIdRef.current)
-                // Device labels are only exposed once permission is granted.
-                await refreshDevicesRef.current()
+                // Resume playback during the gesture, before network/permission waits.
+                await playbackRef.current.open()
+                controller.signal.throwIfAborted()
+                const microphone = await captureMicrophone({
+                    deviceId:
+                        preferredDeviceIdRef.current ||
+                        selectedDeviceIdRef.current,
+                    signal: controller.signal,
+                    onAudio: (samples) => {
+                        if (
+                            controller.signal.aborted ||
+                            !micOnRef.current ||
+                            composingRef.current
+                        )
+                            return
+                        const chunk = microphonePcm(samples)
+                        setMicLevel(chunk.level)
+                        if (modeRef.current === 'chat') {
+                            const note = noteRef.current ?? {
+                                chunks: [],
+                                samples: 0,
+                            }
+                            noteRef.current = note
+                            if (note.samples >= NOTE_LIMIT_SAMPLES) return
+                            note.chunks.push(chunk.data)
+                            note.samples += samples.length
+                            // Full: the note waits, paused, for Send or Discard.
+                            if (note.samples >= NOTE_LIMIT_SAMPLES) {
+                                setIsNoteFull(true)
+                                recordHistory(
+                                    'voice_note_limit_reached',
+                                    'client',
+                                )
+                                stopMicCapture()
+                            }
+                            return
+                        }
+                        const pending = startupAudioRef.current
+                        if (pending) {
+                            pending.samples += samples.length
+                            if (pending.samples > 16000 * 5) {
+                                stopMicCapture()
+                                addSystem(
+                                    catalog.voice.startupAudioTimeout,
+                                    'error',
+                                )
+                                return
+                            }
+                            pending.chunks.push(chunk.data)
+                            return
+                        }
+                        sendAudio(chunk.data)
+                    },
+                })
+                settle()
+                if (controller.signal.aborted) {
+                    microphone.stop()
+                    return
+                }
+                microphoneRef.current = microphone
                 micCaptureActiveRef.current = true
+                // The picker shows the mic that is recording, not just the
+                // one that was asked for.
+                if (
+                    microphone.deviceId &&
+                    microphone.deviceId !== selectedDeviceIdRef.current
+                ) {
+                    selectedDeviceIdRef.current = microphone.deviceId
+                    setSelectedDeviceId(microphone.deviceId)
+                }
                 setIsMicCaptureActive(true)
                 setMicOn(turnOn)
                 recordMute('mic_capture_started')
+                // Device labels are available now; listing them must not delay capture.
+                void refreshDevicesRef.current().catch(() => {})
             } catch (err) {
+                settle()
+                if (controller.signal.aborted) return
                 stopMicCapture()
                 const message = catalog.voice.systemMicOpenFailed({
                     error: err instanceof Error ? err.message : String(err),
@@ -679,14 +785,11 @@ export function useVoice(opts: UseVoiceOpts) {
                     isTransient: false,
                 })
             }
-            // Cleared on both paths — `finally` would stop the React Compiler
-            // from lowering this hook (`react-hooks/todo`).
-            micOpeningRef.current = false
         },
         [
-            startMicCapture,
             stopMicCapture,
             setMicOn,
+            sendAudio,
             addSystem,
             catalog,
             recordMute,
@@ -697,15 +800,18 @@ export function useVoice(opts: UseVoiceOpts) {
     // Switch mic while connected
     const handleDeviceChange = useCallback(
         async (deviceId: string) => {
+            writeMicrophonePreference(deviceId)
             setSelectedDeviceId(deviceId)
             selectedDeviceIdRef.current = deviceId
+            preferredDeviceIdRef.current = deviceId
             if (!micCaptureActiveRef.current) return
             const wasOn = micOnRef.current
-            endAudioStream()
+            // A chat note carries on from the new mic in the same turn.
+            if (modeRef.current === 'live') endTurn()
             stopMicCapture()
             await openMic({ turnOn: wasOn })
         },
-        [endAudioStream, stopMicCapture, openMic],
+        [endTurn, stopMicCapture, openMic],
     )
 
     /**
@@ -714,10 +820,7 @@ export function useVoice(opts: UseVoiceOpts) {
      * a server-side close used to leak one per attempt.
      */
     const stopPlayback = useCallback(() => {
-        playbackWorkletRef.current?.disconnect()
-        playbackContextRef.current?.close()
-        playbackWorkletRef.current = null
-        playbackContextRef.current = null
+        playbackRef.current.close()
     }, [])
 
     /** Send the turns typed before the session was up, in order. */
@@ -728,6 +831,12 @@ export function useVoice(opts: UseVoiceOpts) {
         if (!session || queued.length === 0) return
         // These are typed turns, so they follow the text reply rule.
         audioPlaybackEnabledRef.current = RESPOND_TO_TEXT_WITH_AUDIO
+        // Native sends each queued turn through `sendText`, which restarts
+        // the timer every time; in one synchronous loop the last one wins.
+        firstResponseRef.current = {
+            startedAt: performance.now(),
+            mode: 'text',
+        }
         for (const text of queued) {
             session.sendClientContent({
                 turns: [{ role: 'user', parts: [{ text }] }],
@@ -778,6 +887,15 @@ export function useVoice(opts: UseVoiceOpts) {
     const connectAttempt = useCallback(async () => {
         if (!sessionActiveRef.current) return
         const generation = ++generationRef.current
+        // Native's `connectStopwatch`: from the attempt's start (token mint
+        // included) to the session being ready.
+        const attemptStartedAt = performance.now()
+        const quiet = quietConnectRef.current
+        quietConnectRef.current = false
+        const mode = modeRef.current
+        connectAbortRef.current?.abort()
+        const controller = new AbortController()
+        connectAbortRef.current = controller
         applyStatus('connecting')
 
         try {
@@ -788,7 +906,12 @@ export function useVoice(opts: UseVoiceOpts) {
                 .catch(() => undefined)
             const minted = await convex.action(
                 api.v1.live.actions.requestLiveToken,
-                mintArgs ?? {},
+                {
+                    ...mintArgs,
+                    platform: 'web',
+                    appVersion: WEB_LIVE_VERSION,
+                    turnDetection: mode === 'chat' ? 'manual' : 'auto',
+                },
             )
             if (generation !== generationRef.current) return
             if (!sessionActiveRef.current) return
@@ -802,106 +925,113 @@ export function useVoice(opts: UseVoiceOpts) {
                     isTransient: false,
                 })
                 sessionActiveRef.current = false
+                stopMicCapture()
+                stopPlayback()
                 clearReconnectTimers()
                 applyStatus('disconnected')
                 return
             }
             const { token, model } = minted
             const tokenNotice = catalog.voice.systemTokenReceived({ model })
-            addSystem(tokenNotice, 'info')
+            if (!quiet) addSystem(tokenNotice, 'info')
             // The model is only known now, so this is where the session row
             // becomes uploadable.
             historyRef.current?.open(model)
             modelRef.current = model
             recordHistory('system', 'local', { message: tokenNotice })
 
-            const playbackCtx = new AudioContext({
-                sampleRate: OUTPUT_SAMPLE_RATE,
-            })
-            await playbackCtx.audioWorklet.addModule(
-                '/audio-processors/playback.worklet.js',
-            )
-            const playbackNode = new AudioWorkletNode(
-                playbackCtx,
-                'pcm-processor',
-            )
-            playbackNode.connect(playbackCtx.destination)
-            playbackContextRef.current = playbackCtx
-            playbackWorkletRef.current = playbackNode
-
-            const ai = new GoogleGenAI({
-                apiKey: token,
-                httpOptions: { apiVersion: 'v1alpha' },
-            })
-            const session = await ai.live.connect({
-                model: `models/${model}`,
+            const seenCalls = new Set<string>()
+            const cancelledCalls = new Set<string>()
+            const toolContext = optsRef.current.context
+            const conversation = conversationLogRef.current
+            const recorder = historyRef.current
+            const current = () =>
+                generation === generationRef.current && sessionActiveRef.current
+            const session = await connectGeminiLive({
+                token,
+                model,
+                signal: controller.signal,
                 callbacks: {
-                    onmessage: async (msg: LiveServerMessage) => {
+                    onmessage: (msg: LiveServerMessage) => {
                         if (generation !== generationRef.current) return
-                        if (msg.toolCall) {
-                            const functionCalls =
-                                msg.toolCall.functionCalls ?? []
-                            const functionResponses: {
-                                id?: string
-                                name?: string
-                                response: {
-                                    result: Record<string, unknown>
-                                }
-                            }[] = []
-                            for (const fc of functionCalls) {
-                                addToolCall(
-                                    fc.id ?? '',
-                                    fc.name ?? '',
-                                    (fc.args ?? {}) as Record<string, unknown>,
-                                )
-                                conversationLogRef.current.push({
-                                    type: 'tool_call',
-                                })
-                                recordHistory(
-                                    'tool_call',
-                                    'server',
-                                    {
-                                        id: fc.id ?? '',
-                                        name: fc.name ?? '',
-                                        args: fc.args ?? {},
-                                    },
-                                    'tool',
-                                )
-                            }
-                            for (const fc of functionCalls) {
-                                const result = await executeToolCall(
-                                    optsRef.current.context,
-                                    fc.name ?? '',
-                                    (fc.args ?? {}) as Record<string, unknown>,
-                                )
-                                completeToolCall(fc.id ?? '', result)
-                                conversationLogRef.current.push({
-                                    type: 'tool_result',
-                                })
-                                recordHistory(
-                                    'tool_result',
-                                    'client',
-                                    {
-                                        id: fc.id ?? '',
-                                        name: fc.name ?? '',
+                        for (const fc of msg.toolCall?.functionCalls ?? []) {
+                            if (!fc.id || !fc.name || seenCalls.has(fc.id))
+                                continue
+                            seenCalls.add(fc.id)
+                            const { id, name } = fc
+                            const args = (fc.args ?? {}) as Record<
+                                string,
+                                unknown
+                            >
+                            addToolCall(id, name, args)
+                            conversation.push({
+                                type: 'tool_call',
+                                id,
+                                name,
+                                args,
+                            })
+                            recorder?.record(
+                                'tool_call',
+                                'server',
+                                { id, name, args },
+                                'tool',
+                            )
+                            toolsSettledRef.current = toolsSettledRef.current
+                                .then(async () => {
+                                    if (!current() || cancelledCalls.has(id))
+                                        return
+                                    let result: Record<string, unknown>
+                                    try {
+                                        result = await executeToolCall(
+                                            toolContext,
+                                            name,
+                                            args,
+                                        )
+                                    } catch {
+                                        result = {
+                                            error: 'Tool execution failed',
+                                        }
+                                    }
+                                    // A committed write stays in its original conversation even if
+                                    // cancellation or a disconnect arrived while it was executing.
+                                    conversation.push({
+                                        type: 'tool_result',
+                                        id,
+                                        name,
                                         result,
-                                    },
-                                    'tool',
-                                )
-                                functionResponses.push({
-                                    id: fc.id,
-                                    name: fc.name,
-                                    response: { result },
+                                    })
+                                    recorder?.record(
+                                        'tool_result',
+                                        'client',
+                                        { id, name, result },
+                                        'tool',
+                                    )
+                                    if (
+                                        historyRef.current === recorder &&
+                                        !cancelledCalls.has(id)
+                                    )
+                                        completeToolCall(id, result)
+                                    if (!current() || cancelledCalls.has(id))
+                                        return
+                                    session.sendToolResponse({
+                                        functionResponses: [
+                                            { id, name, response: { result } },
+                                        ],
+                                    })
                                 })
-                            }
-                            session.sendToolResponse({ functionResponses })
-                            return
+                                .catch((error) =>
+                                    console.warn(
+                                        'Live tool response failed',
+                                        error,
+                                    ),
+                                )
                         }
 
                         if (msg.toolCallCancellation) {
                             const ids = (
                                 msg.toolCallCancellation.ids ?? []
                             ).filter((x): x is string => typeof x === 'string')
+                            for (const id of ids) cancelledCalls.add(id)
                             cancelToolCalls(ids)
                             conversationLogRef.current.push({
                                 type: 'tool_cancelled',
@@ -912,12 +1042,13 @@ export function useVoice(opts: UseVoiceOpts) {
                                 { ids },
                                 'tool',
                             )
-                            return
                         }
 
                         if (msg.usageMetadata) {
                             recordHistory('usage_metadata', 'server', {
                                 ...msg.usageMetadata,
+                                model,
+                                mode: sessionModeRef.current,
                             })
                         }
                         if (msg.goAway) {
@@ -944,7 +1075,7 @@ export function useVoice(opts: UseVoiceOpts) {
                                 // is ignored, then reconnect immediately.
                                 generationRef.current += 1
                                 sessionRef.current = null
-                                stopPlayback()
+                                playbackRef.current.interrupt()
                                 try {
                                     session.close()
                                 } catch {
@@ -984,7 +1115,10 @@ export function useVoice(opts: UseVoiceOpts) {
                         }
 
                         const outputText = sc.outputTranscription?.text
-                        if (outputText) appendAgent(outputText)
+                        if (outputText) {
+                            reportFirstResponse()
+                            appendAgent(outputText)
+                        }
 
                         if (sc.interrupted) {
                             conversationLogRef.current.push({
@@ -994,7 +1128,7 @@ export function useVoice(opts: UseVoiceOpts) {
                                 reason: 'server_interrupted',
                             })
                             discardOutputRef.current = true
-                            playbackNode.port.postMessage('interrupt')
+                            playbackRef.current.interrupt()
                             finalisePendingAgent({ interrupted: true })
                         }
 
@@ -1004,14 +1138,30 @@ export function useVoice(opts: UseVoiceOpts) {
                                 audioPlaybackEnabledRef.current &&
                                 !discardOutputRef.current
                             for (const part of parts) {
-                                if (playable && part.inlineData?.data) {
-                                    playbackNode.port.postMessage(
-                                        base64ToPcmFloat32(
-                                            part.inlineData.data,
-                                        ),
+                                if (part.thought) continue
+                                const audio =
+                                    part.inlineData?.data &&
+                                    /^audio\/pcm(?:;|$)/.test(
+                                        part.inlineData.mimeType ?? '',
                                     )
+                                        ? part.inlineData.data
+                                        : undefined
+                                // Native counts every audio chunk, played or
+                                // not — the reply arrived either way.
+                                if (audio) reportFirstResponse()
+                                if (playable && audio) {
+                                    try {
+                                        playbackRef.current.enqueue(
+                                            audio,
+                                            part.inlineData?.mimeType ?? '',
+                                        )
+                                    } catch (error) {
+                                        recordHistory('error', 'local', {
+                                            message: String(error),
+                                        })
+                                    }
                                 }
-                                if (part.text) {
+                                if (part.text && !outputText) {
                                     appendAgent(part.text)
                                 }
                             }
@@ -1021,7 +1171,10 @@ export function useVoice(opts: UseVoiceOpts) {
                             conversationLogRef.current.push({
                                 type: 'agent_turn_complete',
                             })
-                            recordHistory('agent_turn_complete', 'server')
+                            recordHistory('agent_turn_complete', 'server', {
+                                model,
+                                mode: sessionModeRef.current,
+                            })
                             discardOutputRef.current = false
                             finalisePendingAgent()
                         }
@@ -1033,14 +1186,16 @@ export function useVoice(opts: UseVoiceOpts) {
                             message: catalog.voice.systemSocketError,
                             isTransient: true,
                         })
-                        // Recovery belongs to onclose, which follows an
-                        // errored socket; nothing else to do here.
+                        // Closing also handles errors that don't close themselves.
+                        sessionRef.current?.close()
                     },
                     onclose: (event: CloseEvent) => {
                         if (generation !== generationRef.current) return
+                        generationRef.current += 1
                         sessionRef.current = null
                         audioStreamOpenRef.current = false
-                        stopPlayback()
+                        playbackRef.current.interrupt()
+                        if (startupAudioRef.current) stopMicCapture()
                         finalisePendingUser()
                         finalisePendingAgent()
                         // The explicit End already cleaned everything up —
@@ -1076,17 +1231,30 @@ export function useVoice(opts: UseVoiceOpts) {
                 }
                 return
             }
+            await toolsSettledRef.current
+            if (!current()) {
+                session.close()
+                return
+            }
             sessionRef.current = session
+            // Native's `LiveConnection._open`: `resumed` is "this attempt
+            // followed a failed one", read before the counter resets.
+            recordSetupComplete({
+                elapsedMs: performance.now() - attemptStartedAt,
+                resumed: reconnectAttemptRef.current > 0,
+            })
             reconnectAttemptRef.current = 0
             applyStatus('connected')
             historyRef.current?.markStatus('active')
-            recordHistory('connected', 'local')
-            addSystem(
-                sessionModeRef.current === 'audio'
-                    ? catalog.voice.systemConnected
-                    : catalog.voice.systemConnectedTyping,
-                'success',
-            )
+            recordHistory('connected', 'local', { mode })
+            if (!quiet) {
+                addSystem(
+                    sessionModeRef.current === 'audio'
+                        ? catalog.voice.systemConnected
+                        : catalog.voice.systemConnectedTyping,
+                    'success',
+                )
+            }
             // Every connect is a fresh server session; restore the
             // conversation from the event log before anything else is sent,
             // so queued messages and live audio land after the model regained
@@ -1104,9 +1272,21 @@ export function useVoice(opts: UseVoiceOpts) {
                 })
             }
             flushPendingText()
+            if (mode === 'chat') {
+                const notes = pendingNotesRef.current
+                pendingNotesRef.current = []
+                for (const note of notes) sendNote(session, note)
+            } else {
+                const pendingAudio = startupAudioRef.current
+                startupAudioRef.current = null
+                if (pendingAudio && micOnRef.current && !composingRef.current) {
+                    for (const data of pendingAudio.chunks) sendAudio(data)
+                }
+            }
         } catch (err) {
             if (generation !== generationRef.current) return
-            stopPlayback()
+            if (startupAudioRef.current) stopMicCapture()
+            playbackRef.current.interrupt()
             const message = catalog.voice.systemConnectionFailed({
                 error: err instanceof Error ? err.message : String(err),
             })
@@ -1129,7 +1309,11 @@ export function useVoice(opts: UseVoiceOpts) {
         applyStatus,
         clearReconnectTimers,
         stopPlayback,
+        stopMicCapture,
         flushPendingText,
+        sendAudio,
+        sendNote,
+        reportFirstResponse,
         addSystem,
         addToolCall,
         completeToolCall,
@@ -1161,6 +1345,7 @@ export function useVoice(opts: UseVoiceOpts) {
             sessionModeRef.current = mode
             reconnectAttemptRef.current = 0
             conversationLogRef.current = []
+            modelRef.current = null
             pendingUserIdRef.current = null
             pendingAgentIdRef.current = null
             audioStreamOpenRef.current = false
@@ -1181,17 +1366,86 @@ export function useVoice(opts: UseVoiceOpts) {
                 message: catalog.voice.systemConnecting,
             })
 
-            await connectAttempt()
-            // Only on the session's first successful connect: reconnects keep
-            // whatever capture state the user had. A live session handle is
-            // the "connected" signal (TS keeps the guard's narrowing of
-            // statusRef.current across the await, so the ref can't be read).
-            if (mode === 'audio' && sessionRef.current !== null) {
-                await openMic({ turnOn: true })
+            noteRef.current = null
+            pendingNotesRef.current = []
+            setIsNoteFull(false)
+            if (mode === 'audio') {
+                if (modeRef.current === 'live') {
+                    startupAudioRef.current = { chunks: [], samples: 0 }
+                }
+                await Promise.all([connectAttempt(), openMic({ turnOn: true })])
+            } else {
+                await connectAttempt()
             }
         },
         [convex, catalog, addSystem, recordHistory, connectAttempt, openMic],
     )
+
+    /**
+     * Moves the conversation to the other mode. The mode is baked into the
+     * token, so an open socket is replaced the way a goAway rotation replaces
+     * it: the new one is seeded from the conversation log, and no
+     * disconnected or connected notice reaches the chat.
+     */
+    const switchMode = useCallback(
+        (next: ConversationMode) => {
+            const from = modeRef.current
+            if (from === next) return
+            endTurn()
+            // The closing socket will never answer that turn.
+            firstResponseRef.current = null
+            modeRef.current = next
+            setMode(next)
+            recordHistory('mode_changed', 'client', { from, to: next })
+            // A scheduled reconnect already mints for the new mode.
+            if (
+                !sessionActiveRef.current ||
+                reconnectTimerRef.current !== null
+            ) {
+                return
+            }
+            if (goAwayTimerRef.current !== null) {
+                clearTimeout(goAwayTimerRef.current)
+                goAwayTimerRef.current = null
+            }
+            generationRef.current += 1
+            const previous = sessionRef.current
+            sessionRef.current = null
+            audioStreamOpenRef.current = false
+            discardOutputRef.current = false
+            playbackRef.current.interrupt()
+            finalisePendingUser()
+            finalisePendingAgent()
+            try {
+                previous?.close()
+            } catch {
+                // Already closing, the switch proceeds.
+            }
+            quietConnectRef.current = true
+            void connectAttemptRef.current()
+        },
+        [endTurn, recordHistory, finalisePendingUser, finalisePendingAgent],
+    )
+
+    const enterLive = useCallback(async () => {
+        if (modeRef.current === 'live') return
+        if (!sessionActiveRef.current) {
+            modeRef.current = 'live'
+            setMode('live')
+            await connect('audio')
+            return
+        }
+        switchMode('live')
+        // Speech during the rotation is kept until the new socket is ready.
+        startupAudioRef.current = { chunks: [], samples: 0 }
+        await openMic({ turnOn: true })
+    }, [connect, switchMode, openMic])
+
+    const exitLive = useCallback(() => {
+        if (modeRef.current !== 'live') return
+        setMicOn(false)
+        switchMode('chat')
+    }, [setMicOn, switchMode])
 
     /**
      * Send a typed turn. With no session yet it starts one in text mode and
@@ -1203,12 +1457,22 @@ export function useVoice(opts: UseVoiceOpts) {
             const text = raw.trim()
             if (!text) return
             const status = statusRef.current
+            if (status !== 'connected' && pendingTextRef.current.length >= 20) {
+                addSystem(catalog.voice.systemUnavailable, 'error')
+                return
+            }
 
             if (status === 'connected') {
                 appendTypedUser(text)
                 recordSendMessage(text)
                 audioPlaybackEnabledRef.current = RESPOND_TO_TEXT_WITH_AUDIO
-                endAudioStream()
+                endTurn()
+                // Overrides the voice timer `endTurn` may have just started,
+                // exactly like native's `sendText`.
+                firstResponseRef.current = {
+                    startedAt: performance.now(),
+                    mode: 'text',
+                }
                 sessionRef.current?.sendClientContent({
                     turns: [{ role: 'user', parts: [{ text }] }],
                     turnComplete: true,
@@ -1231,7 +1495,14 @@ export function useVoice(opts: UseVoiceOpts) {
             pendingTextRef.current = [...pendingTextRef.current, text]
             recordSendMessage(text)
         },
-        [appendTypedUser, endAudioStream, connect, recordSendMessage],
+        [
+            appendTypedUser,
+            endTurn,
+            connect,
+            recordSendMessage,
+            addSystem,
+            catalog,
+        ],
     )
 
     /**
@@ -1244,16 +1515,17 @@ export function useVoice(opts: UseVoiceOpts) {
             const started = composing && !composingRef.current
             composingRef.current = composing
             if (started) recordMute('text_composing')
+            if (started && startupAudioRef.current) stopMicCapture()
             if (composing) setMicLevel(0)
             if (
                 started &&
                 statusRef.current === 'connected' &&
                 micCaptureActiveRef.current
             ) {
-                endAudioStream()
+                endTurn()
             }
         },
-        [endAudioStream, recordMute],
+        [endTurn, recordMute, stopMicCapture],
     )
 
     // Disconnect — the explicit End. The only path that closes a
@@ -1267,7 +1539,14 @@ export function useVoice(opts: UseVoiceOpts) {
         // Invalidate the socket's callbacks and any in-flight attempt before
         // closing, so the close below is not mistaken for a drop.
         generationRef.current += 1
-        endAudioStream()
+        connectAbortRef.current?.abort()
+        noteRef.current = null
+        pendingNotesRef.current = []
+        setIsNoteFull(false)
+        endTurn()
+        // Native drops the whole command (and its timer) at the End; the next
+        // conversation must not report this turn.
+        firstResponseRef.current = null
         stopMicCapture()
         stopPlayback()
         sessionRef.current?.close()
@@ -1277,14 +1556,20 @@ export function useVoice(opts: UseVoiceOpts) {
         conversationLogRef.current = []
         discardOutputRef.current = false
         audioPlaybackEnabledRef.current = true
+        modeRef.current = 'chat'
+        setMode('chat')
+        quietConnectRef.current = false
         applyStatus('disconnected')
         finalisePendingUser()
         finalisePendingAgent()
         setMessages([])
         // Ends the row and flushes the tail, native's `endExplicitly` + flush.
-        historyRef.current?.end({ explicit: true })
+        const recorder = historyRef.current
+        void toolsSettledRef.current.then(() =>
+            recorder?.end({ explicit: true }),
+        )
     }, [
-        endAudioStream,
+        endTurn,
         stopMicCapture,
         stopPlayback,
         applyStatus,
@@ -1331,11 +1616,26 @@ export function useVoice(opts: UseVoiceOpts) {
         // are cleared again by the next spoken turn / `turnComplete`.
         audioPlaybackEnabledRef.current = false
         discardOutputRef.current = true
-        playbackWorkletRef.current?.port.postMessage('interrupt')
+        playbackRef.current.interrupt()
         finalisePendingAgent({ interrupted: true })
-        endAudioStream()
+        endTurn()
         stopMicCapture()
-    }, [recordHistory, finalisePendingAgent, endAudioStream, stopMicCapture])
+        stopPlayback()
+    }, [
+        recordHistory,
+        finalisePendingAgent,
+        endTurn,
+        stopMicCapture,
+        stopPlayback,
+    ])
+
+    useEffect(() => {
+        const hidden = () => {
+            if (document.visibilityState === 'hidden') detach()
+        }
+        document.addEventListener('visibilitychange', hidden)
+        return () => document.removeEventListener('visibilitychange', hidden)
+    }, [detach])
 
     const clearMessages = useCallback(() => setMessages([]), [])
 
@@ -1381,18 +1681,27 @@ export function useVoice(opts: UseVoiceOpts) {
         isConnecting: connectionStatus === 'connecting',
         /** Capture is running (the browser gave us the mic). */
         isMicCaptureActive,
+        /** A mic open is in flight (permission prompt, device start). */
+        isMicOpening,
+        /** The chat note hit its 5 minute limit and can only be sent or discarded. */
+        isNoteFull,
         /** The user has the mic on — the tap/push-to-talk toggle. */
         isMicOn,
         micLevel,
         devices,
         selectedDeviceId,
         handleDeviceChange,
+        mode,
         connect,
         disconnect,
         attach,
         detach,
         openMic,
         setMicOn,
+        pauseMic,
+        cancelVoiceNote,
+        enterLive,
+        exitLive,
         sendText,
         setComposing,
         messages,

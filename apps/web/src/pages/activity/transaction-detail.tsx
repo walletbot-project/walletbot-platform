@@ -1,6 +1,9 @@
 import { api } from '@wallet-bot/backend/api'
 import type { SimpleFilter } from '@wallet-bot/shared'
-import { computeExchangeRate } from '@wallet-bot/shared'
+import {
+    adjustmentPreviousBalance,
+    computeExchangeRate,
+} from '@wallet-bot/shared'
 import { CircularProgress, IconButton, Select, SelectOption } from 'actify'
 import { useMutation, useQuery } from 'convex/react'
 import type { FunctionReturnType } from 'convex/server'
@@ -23,6 +26,7 @@ import {
     ACCOUNT_DEFAULT_COLOR,
     CATEGORY_DEFAULT_COLOR,
     normalizeColor,
+    useReadableAccent,
 } from '@/lib/entity-colors'
 import { useFormatLocale, useT } from '@/lib/i18n'
 import { formatMoney } from '@/lib/money'
@@ -155,6 +159,7 @@ function TransactionDetailsContent({
     const navigate = useNavigate()
     const t = useT()
     const formatLocale = useFormatLocale()
+    const paint = useReadableAccent()
 
     // The recurring series this movement belongs to, if any. A movement that
     // has already happened is still an occurrence of its rule, and "the 3rd of
@@ -242,11 +247,17 @@ function TransactionDetailsContent({
         category?.color,
         CATEGORY_DEFAULT_COLOR,
     )
+    // `CategoryIcon` adapts the stored color itself; only the tile behind it is
+    // painted here, so it is the one place that adapts (never twice).
+    const categoryTint = paint(categoryColor)
     const canEditAmount =
         transaction.type === 'income' ||
         transaction.type === 'expense' ||
         transaction.type === 'transfer'
     const canEditAccount = transaction.type !== 'balance_adjustment'
+    // A balance adjustment's date is when the declaration was made; its amount
+    // is derived from everything before that moment, so it cannot be moved.
+    const canEditDate = transaction.type !== 'balance_adjustment'
     const isTransfer = transaction.type === 'transfer'
     const exchangeRate = crossCurrencyExchangeRate(transaction)
     const hasSelectedTags = tags.some((tag) => selectedTagIds.has(tag.id))
@@ -432,7 +443,7 @@ function TransactionDetailsContent({
                     <div className="flex flex-col items-center px-6 py-7 text-center">
                         <span
                             className="flex size-16 items-center justify-center rounded-full"
-                            style={{ backgroundColor: `${categoryColor}29` }}
+                            style={{ backgroundColor: `${categoryTint}29` }}
                         >
                             <CategoryIcon
                                 name={category?.icon}
@@ -548,7 +559,7 @@ function TransactionDetailsContent({
                             }
                             attention={!dateConfirmed}
                         >
-                            {editing ? (
+                            {editing && canEditDate ? (
                                 <DateField
                                     value={date}
                                     onChange={(next) => {
@@ -560,6 +571,8 @@ function TransactionDetailsContent({
                                     compact
                                     className="w-auto"
                                 />
+                            ) : editing ? (
+                                formatDate(transaction.date, formatLocale)
                             ) : (
                                 <button
                                     type="button"
@@ -597,7 +610,7 @@ function TransactionDetailsContent({
                             }
                             attention={timeNeedsAttention}
                         >
-                            {editing ? (
+                            {editing && canEditDate ? (
                                 <TimeField
                                     value={time}
                                     onChange={(next) => {
@@ -612,6 +625,42 @@ function TransactionDetailsContent({
                                 formatTime(transaction.date, formatLocale)
                             )}
                         </ReceiptRow>
+
+                        {transaction.type === 'balance_adjustment' &&
+                        transaction.balanceAfter !== undefined ? (
+                            <>
+                                <ReceiptRow
+                                    icon={<Icon name="fact_check" />}
+                                    label={t.transaction.declaredBalance}
+                                >
+                                    <span className="tabular-nums">
+                                        {formatMoney(
+                                            Number(transaction.balanceAfter),
+                                            transaction.currency,
+                                            formatLocale,
+                                        )}
+                                    </span>
+                                </ReceiptRow>
+                                <ReceiptRow
+                                    icon={<Icon name="calculate" />}
+                                    label={t.transaction.platformBalance}
+                                >
+                                    <span className="tabular-nums">
+                                        {formatMoney(
+                                            Number(
+                                                adjustmentPreviousBalance({
+                                                    amount: transaction.amount,
+                                                    balanceAfter:
+                                                        transaction.balanceAfter,
+                                                }),
+                                            ),
+                                            transaction.currency,
+                                            formatLocale,
+                                        )}
+                                    </span>
+                                </ReceiptRow>
+                            </>
+                        ) : null}
 
                         <ReceiptRow
                             icon={

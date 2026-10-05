@@ -1,3 +1,4 @@
+import 'package:app/components/color_utils.dart';
 import 'package:app/components/raised_card.dart';
 import 'package:app/shared/money.dart';
 import 'package:flutter/material.dart';
@@ -217,17 +218,18 @@ class _IdentityIcon extends StatelessWidget {
       );
     }
 
+    final accent = readableAccent(identity.color, Theme.of(context).brightness);
     return Tooltip(
       message: identity.label,
       child: Container(
         width: size,
         height: size,
         decoration: BoxDecoration(
-          color: identity.color.withValues(alpha: 0.16),
+          color: accent.withValues(alpha: 0.16),
           shape: BoxShape.circle,
         ),
         alignment: Alignment.center,
-        child: Icon(identity.icon, size: iconSize, color: identity.color),
+        child: Icon(identity.icon, size: iconSize, color: accent),
       ),
     );
   }

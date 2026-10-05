@@ -56,6 +56,33 @@ Notes:
 OTEL_EXPORTER_OTLP_METRICS_ENDPOINT=https://otlp-gateway-<REGION>.grafana.net/otlp/v1/metrics
 ```
 
+### Preview (PR staging) deployments
+
+Every PR preview (`create-staging-web`/`create-staging-mobile` labels,
+`.github/workflows/preview-deploy.yml`) is a brand-new, empty Convex
+deployment — it has none of production's env vars, so the exporter always
+no-ops with `OTEL_EXPORTER_OTLP_ENDPOINT not configured` unless configured.
+The `web` job's "Set backend preview OTLP export env vars" step sets this
+automatically, pointed at the **same Grafana Cloud stack as production** (no
+second stack to provision) via two dedicated GitHub Actions repo secrets:
+
+- `OTEL_EXPORTER_OTLP_ENDPOINT_PREVIEW`
+- `OTEL_EXPORTER_OTLP_HEADERS_PREVIEW`
+
+These are separate from any production credential — same split as
+`JWT_PRIVATE_KEY_PREVIEW`/`JWKS_PREVIEW` already use, so a leaked/misused
+preview credential can't be used against production. In Grafana Cloud,
+create a second OTLP access policy/token scoped to metrics write only (same
+`Connections` → `OpenTelemetry` flow as the production setup above), and add
+its endpoint/headers as those two secrets.
+
+The step also sets `OTEL_RESOURCE_ATTRIBUTES` with
+`deployment.environment=preview`, so preview data lands as its own series —
+filter it out of production dashboards/PromQL with
+`deployment_environment="production"` (or filter it in, to look at a
+specific preview). If the secrets aren't set yet, the step warns and skips
+rather than failing the staging deploy.
+
 ## Expected Metrics
 
 Grafana/Mimir often normalizes OTLP metric names to Prometheus-style names, so
@@ -67,11 +94,27 @@ dots may appear as underscores.
 - `business_transfers_created_count`
 - `business_users_registered_total`
 - `business_user_accounts_signed_in_count`
+- `agent_sessions_started_count`
 - `agent_session_cost_usd`
 - `agent_interaction_cost_usd`
 - `agent_user_monthly_cost_usd`
 - `agent_interactions_completed_count`
 - `agent_session_cost_bucket_count`
+
+Operational metrics (WAL-203 / WAL-216, see
+[`metrics/error-rate-and-latency.md`](./metrics/error-rate-and-latency.md)).
+Counters gain `_total`; the `ms`-unit names are not yet confirmed in Mimir:
+
+- `sync_errors_count_total`
+- `sync_push_client_failures_count_total`
+- `agent_tool_errors_count_total`
+- `agent_tool_calls_count_total`
+- `system_function_duration_bucket_count_total`
+- `voice_connect_setup_complete_bucket_count_total`
+- `agent_response_first_token_bucket_count_total`
+- `agent_response_first_token_ms` (expected `..._milliseconds`, unconfirmed)
+- `system_latency_quantile_ms` (expected `..._milliseconds`, unconfirmed)
+- `system_latency_samples_count`
 
 Useful labels:
 
@@ -87,12 +130,46 @@ Useful labels:
 - `user_hash`
 - `month`
 - `interaction_type`
+- `start_kind`
 - `cost_bucket`
+- `direction`, `reason`, `platform`, `tool_name`, `function`, `bucket`, `status`
+- `operation`, `batch_size`, `quantile`, `window`
 - `deployment_environment`
 - `service_namespace`
 - `service_name`
 
 ## Starter PromQL
+
+> **`increase()` lies at low volume.** These counters are cumulative and only
+> get a sample when an event actually happens. `increase(v[w])` is
+> `rate(v[w]) * w`, and `rate()` extrapolates to the edges of the window, so a
+> handful of events clustered inside a much wider window gets projected across
+> all of it — three movements reported as `40.9` — and the result is fractional
+> rather than a count. Worse, `increase()` needs at least two samples in the
+> window, so sparse series return **no data at all** instead of a number.
+>
+> Count the samples instead: `count_over_time(v[$__range])`, which is what the
+> panels in `docs/dashboards/` do. Every event produces exactly one exported
+> row, and every row becomes one OTLP data point stamped with its own
+> `receivedAt`, so counting samples is counting events — exact, integer, and
+> genuinely scoped to the picked range, so 24h answers for 24h and 6h answers
+> for 6h. Per bucket over time, the same function against `[$__interval]`.
+>
+> This holds only while one event is one sample. Rows exported in a single HTTP
+> request share a `receivedAt`, so same-series events emitted inside one
+> mutation would collapse into one data point. Today nothing does that:
+> movements are recorded one mutation per movement and sessions one per open.
+> A future bulk path that emits several of the same counter at once would need
+> distinct timestamps, or this undercounts.
+>
+> Two alternatives, each with a catch: `max_over_time(v[w]) - min_over_time(v[w])`
+> is exact and window-scoped but misses the increment that produced the first
+> sample in the window; `last_over_time(v[$__range])` reads the running total,
+> which is exact but answers "how many ever", not "how many in this window".
+>
+> The queries below keep `increase()` because they are written for a busy
+> deployment, where samples are dense enough that the extrapolation is
+> negligible. On dev, or on any low-traffic series, prefer `count_over_time`.
 
 Movements created per minute:
 
@@ -142,6 +219,32 @@ Sign-ins by auth method and client:
 sum by (auth_method, client_platform) (increase(business_user_accounts_signed_in_count[1d]))
 ```
 
+Agent sessions opened, new vs resumed:
+
+```promql
+sum by (start_kind) (count_over_time(agent_sessions_started_count_total[$__range]))
+```
+
+The counter is emitted where a session begins (the client's session
+repository), not where its token is minted: a mint also happens on every
+reconnect and on the voice screen's speculative prefetch, so mints are not
+sessions. `start_kind="new"` is a session that did not exist a moment before;
+`start_kind="resumed"` is the same conversation picked up again through a live
+resume handle. Only the native client emits it today — web has no telemetry
+client yet, so web sessions are missing from this counter.
+
+Sessions that never reported a cost (opened but produced no usage metadata):
+
+```promql
+sum(count_over_time(agent_sessions_started_count_total[$__range]))
+  - sum(count_over_time(agent_session_cost_bucket_count[$__range]))
+```
+
+Every open is counted, resumed ones included: each is a connection episode that
+should end with a cost report. The difference can go slightly negative at the
+edges of a window, where a session's cost lands inside it and its open fell
+outside.
+
 Agent session cost p95:
 
 ```promql
@@ -176,6 +279,15 @@ gauge with the latest total registered accounts.
 `record agent monthly usage`. It reads the current `agentUsageMonthly` rollup
 and exports one gauge for each of the top 20 `user_hash + month + model + mode`
 rows by monthly estimated cost.
+
+`system.latency.quantile_ms` and `system.latency.samples_count` are emitted
+every hour by the Convex cron `record latency percentiles`: p50/p95/p99 and
+the sample count over a rolling 24h window (`telemetry/latency.ts`). To force
+a snapshot:
+
+```sh
+pnpm -C packages/backend exec convex run telemetry/mutations:recordLatencyPercentiles
+```
 
 To force a refresh while testing, run the internal action from the Convex CLI:
 
@@ -235,7 +347,10 @@ Common failures:
   was not sent as a cumulative monotonic OTLP `Sum`. The exporter keeps
   cumulative state in `telemetryMetricSeries`.
 - `OTEL_EXPORTER_OTLP_ENDPOINT not configured`: env vars are not set in the
-  Convex deployment running the action.
+  Convex deployment running the action. On a PR preview, see "Preview (PR
+  staging) deployments" above — most likely the
+  `OTEL_EXPORTER_OTLP_ENDPOINT_PREVIEW`/`OTEL_EXPORTER_OTLP_HEADERS_PREVIEW`
+  repo secrets aren't set yet.
 
 The exporter also writes a structured `console.warn("telemetry export failed",
 ...)` without headers or tokens.

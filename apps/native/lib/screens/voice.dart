@@ -9,13 +9,16 @@ import 'package:app/app_config/app_config_controller.dart';
 import 'package:app/app_config/client_info.dart';
 import 'package:app/components/voice/ai_consent_sheet.dart';
 import 'package:app/components/voice/report_response_sheet.dart';
+import 'package:app/data/data.dart';
 import 'package:app/l10n/l10n.dart';
 import 'package:app/legal/ai_consent_controller.dart';
+import 'package:flutter_svg/flutter_svg.dart';
+import 'package:intl/intl.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:provider/provider.dart';
 
-import '../voice/agent_generated.dart';
 import '../voice/mic_capture.dart';
+import '../voice/prompt_suggestions.dart';
 import '../voice/voice_event.dart';
 import '../voice/voice_expense_command.dart';
 import 'voice_action_widget.dart';
@@ -24,6 +27,12 @@ import 'voice_action_widget.dart';
 /// the session by sending a text message. Hardcoded for now; future work will
 /// expose this as a user-configurable preference.
 const bool _kRespondToTextWithAudio = false;
+
+/// Whether the chat shows a card ("Herramienta") for each tool call the agent
+/// makes. Hidden for now unless `debugToolCalls` is on.
+const bool _kShowToolCards = false;
+
+const double _kLockDistance = 80;
 
 enum _SessionMode { audio, text }
 
@@ -63,11 +72,35 @@ class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
   bool _isConnected = false;
   bool _isReconnecting = false;
   bool _micActive = false;
+  bool _micStarting = false;
+  Future<void>? _micStopping;
+  int _micGeneration = 0;
+  // Only a live connection buffers microphone audio here: the command keeps a
+  // chat note on the device until it ends.
+  static const _startupAudioLimit = MicCapture.sampleRate * 2 * 5;
+  List<Uint8List>? _startupAudio;
+  int _startupAudioBytes = 0;
+  bool _resumeMicrophone = false;
+  bool _foreground = true;
+  int _lifecycleGeneration = 0;
+  bool _playbackEnabled = true;
+  Future<void>? _backgroundAudioStop;
   bool _userMicOn = false;
   bool _isBrowsingHistory = false;
   bool _conversationRestored = false;
   bool _aiConsentAsked = false;
   double _level = 0;
+
+  bool _locked = false;
+  // Hands-free conversation. The command's mode follows it, but this flag
+  // flips first so the bar never flashes the composer while it switches.
+  bool _live = false;
+  bool _holding = false;
+  bool _paused = false;
+  final ValueNotifier<double> _holdDrag = ValueNotifier(0);
+  final GlobalKey _recordingTimerKey = GlobalKey();
+  List<PromptSuggestion>? _suggestions;
+  bool _suggestionsRequested = false;
 
   bool get _isTextComposing => _textController.text.trim().isNotEmpty;
   bool get _isMicEffectivelyMuted =>
@@ -83,6 +116,7 @@ class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
       _command = active;
       _commandEventsSubscription = active.events.listen(_onVoiceEvent);
       _isConnected = active.isConnected;
+      _live = active.mode == VoiceConversationMode.live;
       _isReconnecting = !active.isConnected;
       active.recordClientEvent('screen_attached');
       // Don't sit out a pending backoff delay while the user is looking at
@@ -123,13 +157,54 @@ class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.hidden) {
+      if (!_foreground) return;
+      _foreground = false;
+      ++_lifecycleGeneration;
+      _resumeMicrophone = _resumeMicrophone || _userMicOn || _micStarting;
+      _backgroundAudioStop = _suspendAudioForBackground();
+      return;
+    }
     if (state != AppLifecycleState.resumed) return;
+    _foreground = true;
+    ++_lifecycleGeneration;
+    unawaited(_resumeAudioAfterBackground());
     final command = _command;
     // The OS may have killed the socket and suspended the reconnect timer
     // while backgrounded — reconnect immediately on return.
     if (command != null && command.isActive && !command.isConnected) {
       unawaited(command.ensureConnected());
     }
+  }
+
+  Future<void> _suspendAudioForBackground() async {
+    await _stopMicCapture();
+    try {
+      await _command?.interruptAgentResponse(reason: 'app_backgrounded');
+    } catch (error) {
+      debugPrint('[voice] background audio cleanup failed: $error');
+    }
+  }
+
+  Future<void> _resumeAudioAfterBackground() async {
+    final generation = _lifecycleGeneration;
+    final stopping = _backgroundAudioStop;
+    await stopping;
+    if (!mounted || !_foreground || generation != _lifecycleGeneration) return;
+    if (identical(_backgroundAudioStop, stopping)) _backgroundAudioStop = null;
+    if (_command?.isActive != true) return;
+    // Playback intent is independent of the microphone's mute state.
+    _command?.setAudioPlaybackEnabled(_playbackEnabled);
+    // A pending permission dialog will retry here from its finally block.
+    if (!_resumeMicrophone || _micStarting) return;
+    _resumeMicrophone = false;
+    await _startMicCapture(turnOn: true);
+  }
+
+  void _setAudioPlaybackEnabled(bool enabled) {
+    _playbackEnabled = enabled;
+    _command?.setAudioPlaybackEnabled(enabled);
   }
 
   /// Rebuilds the visible conversation from already-emitted session events in
@@ -223,7 +298,9 @@ class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
       reportedText: reportedText,
       precedingUserText: precedingUserText,
       sessionId: sessionId,
-      model: kAgentModel,
+      // The session/setup log identifies the actual model, including switches.
+      // A compiled default would mislabel reports from rollback sessions.
+      model: null,
       occurredAt: occurredAt,
     );
   }
@@ -239,6 +316,8 @@ class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
 
   @override
   void dispose() {
+    ++_micGeneration;
+    _startupAudio = null;
     WidgetsBinding.instance.removeObserver(this);
     _command?.recordClientEvent('screen_detached', {
       'micMuted': true,
@@ -248,7 +327,7 @@ class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
       ),
     });
     unawaited(_command?.interruptAgentResponse(reason: 'screen_detached'));
-    unawaited(_command?.endAudioStream());
+    unawaited(_command?.endTurn());
     unawaited(_audioSubscription?.cancel());
     unawaited(_amplitudeSubscription?.cancel());
     unawaited(_commandEventsSubscription?.cancel());
@@ -260,6 +339,7 @@ class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
     _textController.removeListener(_onTextChanged);
     _textController.dispose();
     _textFocusNode.dispose();
+    _holdDrag.dispose();
     super.dispose();
   }
 
@@ -271,22 +351,62 @@ class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
     final startedComposing = isComposing && !_wasTextComposing;
     _wasTextComposing = isComposing;
     setState(() {});
+    if (startedComposing && _startupAudio != null) {
+      unawaited(_stopMicCapture());
+    }
     if (startedComposing && _isConnected && _micActive) {
       // User started typing while the mic was open: we already stop
       // forwarding audio chunks via _isMicEffectivelyMuted, but the
-      // server still has buffered audio for this turn. Flush it so the
+      // server still has buffered audio for this turn. End it so the
       // next utterance starts clean once the user goes back to voice.
-      unawaited(_command?.endAudioStream());
+      unawaited(_command?.endTurn());
       _recordMuteEvent('text_composing');
+    }
+    if (startedComposing) _switchToTextOnTyping();
+  }
+
+  /// The hidden text field keeps the keyboard up while the mic is open, so
+  /// typing is the same as the locked bar's trailing button: a chat note is
+  /// sent, live mode ends, and the composer comes back with what was typed.
+  void _switchToTextOnTyping() {
+    if (_live) {
+      _onExitLivePressed();
+      return;
+    }
+    if (!_locked && !_holding && !_paused && !_micActive && !_micStarting) {
+      return;
+    }
+    final wasPaused = _paused;
+    setState(() {
+      _locked = false;
+      _holding = false;
+      _paused = false;
+    });
+    if (_micActive || _micStarting) {
+      unawaited(_stopMicCapture());
+    } else if (wasPaused) {
+      unawaited(_command?.endTurn());
     }
   }
 
   // -- Voice button gestures ------------------------------------------------
 
   void _handleVoiceTap() {
-    if (_isStarting || _isTextComposing) return;
+    _resumeMicrophone = false;
+    if (_isStarting) {
+      unawaited(_stopMicCapture());
+      return;
+    }
+    if (_isTextComposing) return;
     if (!_isConnected) {
-      unawaited(_startSession(mode: _SessionMode.audio));
+      unawaited(
+        _startSession(
+          mode: _SessionMode.audio,
+          conversation: _live
+              ? VoiceConversationMode.live
+              : VoiceConversationMode.chat,
+        ),
+      );
       return;
     }
     if (!_micActive) {
@@ -300,9 +420,7 @@ class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
     });
     _recordMuteEvent(wasOn ? 'tap_mute' : 'tap_unmute');
     if (wasOn) {
-      // Mic just went from on → off mid-turn: flush whatever the server
-      // has buffered so the next utterance starts clean.
-      unawaited(_command?.endAudioStream());
+      unawaited(_stopMicCapture());
     }
   }
 
@@ -330,9 +448,241 @@ class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
       _level = 0;
     });
     _recordMuteEvent('long_press_end');
-    if (wasOn) {
-      unawaited(_command?.endAudioStream());
+    if (wasOn || _micStarting) {
+      unawaited(_stopMicCapture());
     }
+  }
+
+  // The controls of the welcome view and the recording bar. They only drive
+  // the UI state and delegate every microphone action to the handlers above.
+
+  void _onMicPressed() {
+    if (_isTextComposing) return;
+    if (!_isStarting) {
+      setState(() {
+        _locked = true;
+        _paused = false;
+      });
+    }
+    _handleVoiceTap();
+  }
+
+  void _onHoldStart() {
+    if (_isStarting || _isTextComposing) return;
+    unawaited(HapticFeedback.lightImpact());
+    _holdDrag.value = 0;
+    setState(() {
+      _holding = true;
+      _paused = false;
+    });
+    _handleVoiceLongPressStart();
+  }
+
+  void _onHoldMove(double dy) {
+    if (!_holding) return;
+    _holdDrag.value = dy.clamp(-_kLockDistance, 0);
+    if (dy > -_kLockDistance) return;
+    unawaited(HapticFeedback.mediumImpact());
+    setState(() {
+      _holding = false;
+      _locked = true;
+    });
+  }
+
+  void _onHoldEnd() {
+    if (!_holding) return;
+    setState(() => _holding = false);
+    _handleVoiceLongPressEnd();
+  }
+
+  /// Live mode mutes, which ends the turn. A chat note only releases the
+  /// mic: its turn stays open so Resume continues it and Send ends it.
+  void _onPausePressed() {
+    if (_live) {
+      _handleVoiceTap();
+      return;
+    }
+    setState(() {
+      _paused = true;
+      _userMicOn = false;
+      _level = 0;
+    });
+    _recordMuteEvent('tap_pause');
+    unawaited(_stopMicCapture(endTurn: false));
+  }
+
+  void _onResumePressed() {
+    setState(() => _paused = false);
+    _handleVoiceTap();
+  }
+
+  /// The note waits, paused, for Send or Discard. A hold becomes a lock so
+  /// its release does not send it.
+  void _onNoteFull() {
+    setState(() {
+      _holding = false;
+      _locked = true;
+      _paused = true;
+      _userMicOn = false;
+      _level = 0;
+    });
+    unawaited(_stopMicCapture(endTurn: false));
+  }
+
+  void _onLockedDiscardPressed() {
+    _resumeMicrophone = false;
+    setState(() {
+      _locked = false;
+      _paused = false;
+      _userMicOn = false;
+      _level = 0;
+    });
+    _command?.discardTurn();
+    unawaited(_stopMicCapture(endTurn: false));
+  }
+
+  void _onLockedSendPressed() {
+    final micOn = _isStarting || (_micActive && _userMicOn);
+    final wasPaused = _paused;
+    setState(() {
+      _locked = false;
+      _paused = false;
+    });
+    if (micOn) {
+      _handleVoiceTap();
+    } else if (_micStarting || _micActive) {
+      // A tap here would open the mic again instead of closing it.
+      _resumeMicrophone = false;
+      unawaited(_stopMicCapture());
+    } else if (wasPaused) {
+      unawaited(_command?.endTurn());
+    }
+  }
+
+  void _onEnterLivePressed() {
+    if (_isStarting || _isTextComposing) return;
+    setState(() {
+      _live = true;
+      _locked = false;
+      _holding = false;
+      _paused = false;
+    });
+    final command = _command;
+    if (command == null || !_isConnected) {
+      unawaited(
+        _startSession(
+          mode: _SessionMode.audio,
+          conversation: VoiceConversationMode.live,
+        ),
+      );
+      return;
+    }
+    // Speech during the switch waits for the new socket.
+    setState(() => _isConnected = false);
+    _startupAudio = [];
+    _startupAudioBytes = 0;
+    _setAudioPlaybackEnabled(true);
+    unawaited(command.switchMode(VoiceConversationMode.live));
+    unawaited(_startMicCapture(turnOn: true));
+  }
+
+  void _onExitLivePressed() {
+    if (!_live) return;
+    _resumeMicrophone = false;
+    setState(() {
+      _live = false;
+      _userMicOn = false;
+      _level = 0;
+      if (_command?.isActive ?? false) _isConnected = false;
+    });
+    unawaited(_exitLive());
+  }
+
+  Future<void> _exitLive() async {
+    // Ends the live turn on the live socket before it is replaced.
+    await _stopMicCapture();
+    await _command?.switchMode(VoiceConversationMode.chat);
+  }
+
+  void _onSendPressed() {
+    setState(() => _locked = false);
+    _handleSendText();
+  }
+
+  void _onEndPressed() {
+    setState(() {
+      _locked = false;
+      _live = false;
+      _holding = false;
+      _paused = false;
+    });
+    unawaited(_endConversation());
+  }
+
+  void _applySuggestion(String text) {
+    _textController.value = TextEditingValue(
+      text: text,
+      selection: TextSelection.collapsed(offset: text.length),
+    );
+    _textFocusNode.requestFocus();
+  }
+
+  Future<void> _loadSuggestions() async {
+    final repositories = context.read<AppRepositories?>();
+    if (repositories == null) return;
+    try {
+      final data = await loadSuggestionData(repositories);
+      if (!mounted) return;
+      setState(() => _suggestions = nextPromptSuggestions(data));
+    } catch (error) {
+      debugPrint('[voice] prompt suggestions failed: $error');
+    }
+  }
+
+  String _suggestionText(PromptSuggestion s) {
+    final l10n = context.l10n;
+    String amount() => NumberFormat.decimalPattern(
+      Localizations.localeOf(context).toString(),
+    ).format((s.amountCents ?? 0) / 100);
+    final category = s.category ?? '';
+    final account = s.account ?? '';
+    return switch (s.kind) {
+      PromptSuggestionKind.logExpense =>
+        s.account == null
+            ? l10n.suggestionLogExpense(amount(), category)
+            : l10n.suggestionLogExpenseWithAccount(amount(), category, account),
+      PromptSuggestionKind.spentInCategoryThisMonth =>
+        l10n.suggestionSpentInCategoryThisMonth(category),
+      PromptSuggestionKind.accountBalance => l10n.suggestionAccountBalance(
+        account,
+      ),
+      PromptSuggestionKind.topSpendingThisMonth =>
+        l10n.suggestionTopSpendingThisMonth,
+      PromptSuggestionKind.compareCategoryLastMonth =>
+        l10n.suggestionCompareCategoryLastMonth(category),
+      PromptSuggestionKind.transfer => l10n.suggestionTransfer(
+        amount(),
+        account,
+        s.toAccount ?? '',
+      ),
+      PromptSuggestionKind.logIncome => l10n.suggestionLogIncome(
+        amount(),
+        account,
+      ),
+      PromptSuggestionKind.spentWithTag => l10n.suggestionSpentWithTag(
+        s.tag ?? '',
+      ),
+      PromptSuggestionKind.recentExpenses => l10n.suggestionRecentExpenses,
+      PromptSuggestionKind.whatCanYouDo => l10n.suggestionWhatCanYouDo,
+      PromptSuggestionKind.createCashAccount =>
+        l10n.suggestionCreateCashAccount,
+      PromptSuggestionKind.setupCategories => l10n.suggestionSetupCategories,
+      PromptSuggestionKind.howToLogExpense => l10n.suggestionHowToLogExpense,
+      PromptSuggestionKind.homeWidget =>
+        s.category == null
+            ? l10n.suggestionHomeWidget
+            : l10n.suggestionHomeWidgetForCategory(category),
+    };
   }
 
   // -- Text input -----------------------------------------------------------
@@ -357,7 +707,7 @@ class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
     if (wasConnected) {
       // Text send → expect a silent (text-only) reply, even mid-session.
       // sendText() also flushes any open audio turn server-side.
-      _command?.setAudioPlaybackEnabled(false);
+      _setAudioPlaybackEnabled(false);
       unawaited(_command?.sendText(text));
     } else if (startingFresh) {
       unawaited(_startSession(mode: _SessionMode.text));
@@ -372,7 +722,7 @@ class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
     final pending = List<String>.of(_pendingTexts);
     _pendingTexts.clear();
     // Same semantics as a live typed send: expect a silent text-only reply.
-    _command?.setAudioPlaybackEnabled(false);
+    _setAudioPlaybackEnabled(false);
     for (final text in pending) {
       unawaited(_command?.sendText(text));
     }
@@ -400,9 +750,13 @@ class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
     Navigator.of(context).maybePop();
   }
 
-  Future<void> _startSession({required _SessionMode mode}) async {
+  Future<void> _startSession({
+    required _SessionMode mode,
+    VoiceConversationMode conversation = VoiceConversationMode.chat,
+  }) async {
     if (_isStarting || _isConnected) return;
     final l10n = context.l10n;
+    final micGeneration = _micGeneration;
 
     setState(() {
       _isStarting = true;
@@ -415,6 +769,7 @@ class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
       _SessionMode.text => _kRespondToTextWithAudio,
     };
 
+    _playbackEnabled = respondWithAudio;
     try {
       final command = widget.commandFactory.create();
       if (!identical(_command, command)) {
@@ -422,8 +777,25 @@ class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
         _command = command;
         _commandEventsSubscription = command.events.listen(_onVoiceEvent);
       }
-      await _command?.start(respondWithAudio: respondWithAudio);
-      _command?.recordClientEvent('screen_attached', {'startMode': mode.name});
+      if (!mounted) return;
+      if (micGeneration != _micGeneration) {
+        setState(() => _isStarting = false);
+        return;
+      }
+      final connecting = command.start(
+        respondWithAudio: respondWithAudio,
+        mode: conversation,
+      );
+      if (mode == _SessionMode.audio) {
+        if (conversation == VoiceConversationMode.live) {
+          _startupAudio = [];
+          _startupAudioBytes = 0;
+        }
+        await Future.wait([connecting, _startMicCapture(turnOn: true)]);
+      } else {
+        await connecting;
+      }
+      command.recordClientEvent('screen_attached', {'startMode': mode.name});
     } catch (error) {
       // Unexpected startup failure (connect errors retry inside the command
       // and never surface here). Release the command without ending the
@@ -431,6 +803,13 @@ class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
       // queued text is kept for the next attempt. Raw errors never reach the
       // chat — details go to the debug console and the session log.
       debugPrint('[voice] start failed: $error');
+      try {
+        await _stopMicCapture();
+      } catch (cleanupError) {
+        debugPrint('[voice] startup cleanup failed: $cleanupError');
+      } finally {
+        if (mounted) setState(() => _isStarting = false);
+      }
       final failedSubscription = _commandEventsSubscription;
       final failedCommand = _command;
       _commandEventsSubscription = null;
@@ -444,13 +823,17 @@ class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
         });
         _scrollToBottom();
       }
-      await failedSubscription?.cancel();
-      await failedCommand?.dispose();
+      try {
+        await failedSubscription?.cancel();
+      } catch (cleanupError) {
+        debugPrint('[voice] subscription cleanup failed: $cleanupError');
+      }
+      try {
+        await failedCommand?.dispose();
+      } catch (cleanupError) {
+        debugPrint('[voice] command cleanup failed: $cleanupError');
+      }
       return;
-    }
-
-    if (mode == _SessionMode.audio) {
-      await _startMicCapture(turnOn: true);
     }
 
     if (mounted) {
@@ -461,6 +844,12 @@ class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
   }
 
   Future<void> _startMicCapture({required bool turnOn}) async {
+    if (_micStarting || !mounted || !_foreground) return;
+    final stopping = _micStopping;
+    if (stopping != null) {
+      await stopping;
+      if (!mounted || _micStarting) return;
+    }
     if (_micActive) {
       if (turnOn && mounted) {
         setState(() => _userMicOn = true);
@@ -468,9 +857,14 @@ class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
       return;
     }
     final l10n = context.l10n;
+    final generation = ++_micGeneration;
+    _micStarting = true;
+    bool current() => mounted && _foreground && generation == _micGeneration;
 
     try {
       final permission = await Permission.microphone.request();
+      if (!permission.isGranted) _resumeMicrophone = false;
+      if (!current()) return;
       if (!permission.isGranted) {
         _addSystemSetState(
           l10n.microphonePermissionDenied,
@@ -480,6 +874,7 @@ class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
       }
 
       final issue = await _mic.checkAvailability();
+      if (!current()) return;
       if (issue == MicCaptureIssue.permissionDenied) {
         _addSystemSetState(
           l10n.recorderPermissionFailed,
@@ -492,14 +887,17 @@ class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
         return;
       }
 
-      // On iOS this streams from the native voice engine's echo-cancelled
-      // input tap (PcmAudioPlayer.swift), which requires the engine to be
-      // running — guaranteed because _command.start() precedes mic capture.
-      // Elsewhere it streams from the `record` plugin. See mic_capture.dart.
+      await _command?.prepareAudio();
+      if (!current()) return;
       final audioStream = await _mic.start();
+      if (!current()) {
+        await _mic.stop();
+        return;
+      }
       _audioSubscription = audioStream.listen(
         _handleAudioChunk,
         onError: (Object error) {
+          if (!current()) return;
           _addSystemSetState(
             l10n.audioStreamFailed(error),
             kind: _SystemKind.error,
@@ -510,12 +908,17 @@ class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
 
       _amplitudeSubscription = _mic
           .onAmplitudeDbfs(const Duration(milliseconds: 100))
-          .listen((dbfs) {
-            if (!mounted) return;
-            setState(() {
-              _level = _dbfsToLevel(dbfs);
-            });
-          });
+          .listen(
+            (dbfs) {
+              if (!mounted) return;
+              setState(() {
+                _level = _dbfsToLevel(dbfs);
+              });
+            },
+            onError: (Object _) {
+              /* Audio subscription reports capture errors. */
+            },
+          );
 
       if (mounted) {
         setState(() {
@@ -525,19 +928,51 @@ class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
         _recordMuteEvent('mic_capture_started');
       }
     } catch (error) {
+      if (!current()) return;
       _addSystemSetState(
         l10n.microphoneOpenFailed(error),
         kind: _SystemKind.error,
       );
       await _stopMicCapture();
+    } finally {
+      if (mounted) {
+        setState(() => _micStarting = false);
+      } else {
+        _micStarting = false;
+      }
+      if (mounted && _foreground && _resumeMicrophone) {
+        unawaited(_resumeAudioAfterBackground());
+      }
     }
   }
 
-  Future<void> _stopMicCapture() async {
-    await _audioSubscription?.cancel();
-    await _amplitudeSubscription?.cancel();
+  /// Releases the mic. [endTurn] false leaves the turn open (a paused or
+  /// discarded note).
+  Future<void> _stopMicCapture({bool endTurn = true}) {
+    final existing = _micStopping;
+    if (existing != null) return existing;
+    final operation = _stopMicCaptureOnce(endTurn: endTurn);
+    _micStopping = operation;
+    return operation.whenComplete(() {
+      if (identical(_micStopping, operation)) _micStopping = null;
+    });
+  }
+
+  Future<void> _stopMicCaptureOnce({required bool endTurn}) async {
+    _startupAudio = null;
+    ++_micGeneration;
+    final audio = _audioSubscription;
+    final amplitude = _amplitudeSubscription;
     _audioSubscription = null;
     _amplitudeSubscription = null;
+    _micActive = false;
+    for (final subscription in [audio, amplitude]) {
+      try {
+        await subscription?.cancel();
+      } catch (error) {
+        debugPrint('[voice] capture subscription cleanup failed: $error');
+      }
+    }
 
     try {
       await _mic.stop();
@@ -545,9 +980,13 @@ class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
       // best-effort cleanup
     }
 
-    // Mic is going away entirely — flush any buffered audio on the server.
-    await _command?.endAudioStream();
-    _command?.recordClientEvent('mic_capture_stopped', {'muted': true});
+    // Mic is going away entirely, so end the turn the server is holding.
+    try {
+      if (endTurn) await _command?.endTurn();
+      _command?.recordClientEvent('mic_capture_stopped', {'muted': true});
+    } catch (error) {
+      debugPrint('[voice] audio stream cleanup failed: $error');
+    }
 
     if (!mounted) return;
     setState(() {
@@ -578,6 +1017,7 @@ class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
   }
 
   Future<void> _stop() async {
+    _resumeMicrophone = false;
     await _stopMicCapture();
 
     try {
@@ -598,6 +1038,7 @@ class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
       _isConnected = false;
       _isStarting = false;
       _isReconnecting = false;
+      _live = false;
       _pendingTexts.clear();
       _clearConnectionNotice();
       _finalisePending();
@@ -617,7 +1058,27 @@ class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
   void _handleAudioChunk(Uint8List chunk) {
     if (!mounted) return;
     if (!_isMicEffectivelyMuted) {
-      unawaited(_command?.addAudioChunk(chunk));
+      final pending = _startupAudio;
+      if (pending != null) {
+        if (_startupAudioBytes + chunk.length > _startupAudioLimit) {
+          // Keep the beginning intact or discard the whole attempt. Never
+          // silently send a truncated utterance after a slow connection.
+          unawaited(_stopMicCapture());
+          _addSystemSetState(
+            context.l10n.voiceStartFailed,
+            kind: _SystemKind.error,
+          );
+          return;
+        }
+        pending.add(Uint8List.fromList(chunk));
+        _startupAudioBytes += chunk.length;
+      } else {
+        unawaited(_command?.addAudioChunk(chunk));
+        if (!_live && (_command?.isNoteFull ?? false)) {
+          _onNoteFull();
+          return;
+        }
+      }
     }
     if (_level == 0 && !_isMicEffectivelyMuted) {
       setState(() {
@@ -644,8 +1105,16 @@ class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
           _isReconnecting = false;
           conversationChanged = _connectionNotice != null;
           _clearConnectionNotice();
+          final pending = _startupAudio;
+          _startupAudio = null;
+          if (!_isMicEffectivelyMuted && _command?.isConnected == true) {
+            for (final chunk in pending ?? <Uint8List>[]) {
+              unawaited(_command?.addAudioChunk(chunk));
+            }
+          }
           _flushPendingTexts();
         case VoiceDisconnectedEvent():
+          if (_startupAudio != null) unawaited(_stopMicCapture());
           conversationChanged = true;
           _isConnected = false;
           _isReconnecting = _command?.isActive ?? false;
@@ -659,6 +1128,7 @@ class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
             _clearConnectionNotice();
           }
         case VoiceErrorEvent(:final message, :final isTransient, :final code):
+          if (_startupAudio != null) unawaited(_stopMicCapture());
           // Raw error text never reaches the chat; details are persisted in
           // the session log. Most errors leave the session running (and
           // reconnecting) — the End button is the explicit way out. Only a
@@ -691,7 +1161,7 @@ class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
         case VoiceUserTranscriptDelta():
           // A typed turn disables playback for its reply. Voice input starts a
           // new audio turn, so subsequent agent audio must be audible again.
-          _command?.setAudioPlaybackEnabled(true);
+          _setAudioPlaybackEnabled(true);
           conversationChanged = _applyConversationEvent(event, replay: false);
         case VoiceAgentTranscriptDelta():
         case VoiceAgentTurnComplete():
@@ -955,11 +1425,45 @@ class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final status = _isConnected
-        ? _StatusLevel.connected
-        : _isStarting || _isReconnecting
-        ? _StatusLevel.connecting
-        : _StatusLevel.disconnected;
+    // Live mode reads its phase from the mic and connection alone, so coming
+    // back to a live conversation whose mic was released shows it paused.
+    final phase = _live
+        ? _micActive && _userMicOn
+              ? _MicPhase.listening
+              : _micStarting || _isStarting || !_isConnected
+              ? _MicPhase.opening
+              : _MicPhase.paused
+        : _paused
+        ? _MicPhase.paused
+        : _micActive && _userMicOn
+        ? _MicPhase.listening
+        : _micStarting || (_isStarting && (_locked || _holding))
+        ? _MicPhase.opening
+        : _MicPhase.idle;
+    final barMode = _live
+        ? _BarMode.live
+        : _holding
+        ? _BarMode.holding
+        : _paused || _micActive || _micStarting || (_locked && _isStarting)
+        ? _BarMode.locked
+        : _BarMode.composer;
+    final canEnterLive = !_isStarting && !_isReconnecting && !_isTextComposing;
+    final noteFull = !_live && (_command?.isNoteFull ?? false);
+
+    final suggestionsEnabled =
+        context.watch<AppConfigController?>()?.isFlagEnabled(
+          'agentPromptSuggestions',
+        ) ??
+        false;
+    if (suggestionsEnabled && !_suggestionsRequested) {
+      _suggestionsRequested = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) unawaited(_loadSuggestions());
+      });
+    }
+    final suggestions = suggestionsEnabled
+        ? [for (final s in _suggestions ?? const []) _suggestionText(s)]
+        : const <String>[];
 
     // Defaults to shown, both when the controller is absent (tests build this
     // screen bare) and when its config fetch never landed: this is the control
@@ -970,6 +1474,18 @@ class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
           orElse: true,
         ) ??
         true;
+    final showRecordHint =
+        context.watch<AppConfigController?>()?.isFlagEnabled(
+          'agentRecordHint',
+          orElse: true,
+        ) ??
+        true;
+    final showToolCards =
+        _kShowToolCards ||
+        (context.watch<AppConfigController?>()?.isFlagEnabled(
+              'debugToolCalls',
+            ) ??
+            false);
 
     // Anything to end? A live/reconnecting session, or a restored
     // transcript whose logged session is still resumable.
@@ -979,11 +1495,6 @@ class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
       appBar: AppBar(
         title: Text(context.l10n.liveVoice),
         actions: [
-          if (!_isConnected)
-            Padding(
-              padding: EdgeInsets.only(right: showEndButton ? 0 : 12),
-              child: Center(child: _StatusChip(level: status)),
-            ),
           if (showEndButton)
             Padding(
               padding: const EdgeInsets.only(right: 4),
@@ -994,7 +1505,7 @@ class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
                     color: theme.colorScheme.error,
                   ),
                   tooltip: context.l10n.endSession,
-                  onPressed: () => unawaited(_endConversation()),
+                  onPressed: _onEndPressed,
                 ),
               ),
             ),
@@ -1016,7 +1527,12 @@ class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
         children: [
           Expanded(
             child: _items.isEmpty
-                ? _EmptyState(isStarting: _isStarting)
+                ? _WelcomeView(
+                    phase: phase,
+                    suggestions: suggestions,
+                    onSuggestion: _applySuggestion,
+                    onStart: canEnterLive ? _onEnterLivePressed : null,
+                  )
                 : NotificationListener<UserScrollNotification>(
                     onNotification: _handleUserScroll,
                     child: ListView.builder(
@@ -1028,6 +1544,9 @@ class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
                       itemCount: _items.length,
                       itemBuilder: (context, i) {
                         final item = _items[i];
+                        if (item is _ToolItem && !showToolCards) {
+                          return SizedBox.shrink(key: ObjectKey(item));
+                        }
                         return Padding(
                           // The report icon's fade keeps state, so its element
                           // has to track the item and not the row index.
@@ -1044,17 +1563,34 @@ class _VoiceScreenState extends State<VoiceScreen> with WidgetsBindingObserver {
                   ),
           ),
           _ControlBar(
-            isStarting: _isStarting,
-            isMicActive: _micActive,
-            isMicMuted: _isMicEffectivelyMuted,
-            isTextComposing: _isTextComposing,
+            mode: barMode,
+            phase: phase,
+            showSpinner: _isStarting && !_micActive && !_isTextComposing,
+            showRecordHint:
+                showRecordHint &&
+                _items.isEmpty &&
+                barMode == _BarMode.composer &&
+                phase == _MicPhase.idle &&
+                !_isTextComposing,
+            hasText: _isTextComposing,
             level: _level,
+            canPause: _isConnected && _micActive && _userMicOn && !_isStarting,
+            canResume: !_isStarting && !_micStarting && !noteFull,
+            noteFull: noteFull,
             textController: _textController,
             textFocusNode: _textFocusNode,
-            onSendText: _handleSendText,
-            onTap: _handleVoiceTap,
-            onLongPressStart: _handleVoiceLongPressStart,
-            onLongPressEnd: _handleVoiceLongPressEnd,
+            recordingTimerKey: _recordingTimerKey,
+            holdDrag: _holdDrag,
+            onSendText: _onSendPressed,
+            onMicTap: _onMicPressed,
+            onEnterLive: canEnterLive ? _onEnterLivePressed : null,
+            onHoldStart: _onHoldStart,
+            onHoldMove: _onHoldMove,
+            onHoldEnd: _onHoldEnd,
+            onPause: _onPausePressed,
+            onResume: _onResumePressed,
+            onDiscard: _onLockedDiscardPressed,
+            onDone: _live ? _onExitLivePressed : _onLockedSendPressed,
           ),
         ],
       ),
@@ -1135,7 +1671,9 @@ class _ActionResultItem extends _ChatItem {
 
 enum _SystemKind { info, success, error }
 
-enum _StatusLevel { disconnected, connecting, connected }
+enum _MicPhase { idle, opening, listening, paused }
+
+enum _BarMode { composer, holding, locked, live }
 
 // =============================================================================
 // Widgets
@@ -1788,82 +2326,136 @@ class _SpeakingDotsState extends State<_SpeakingDots>
   }
 }
 
-class _StatusChip extends StatelessWidget {
-  const _StatusChip({required this.level});
-  final _StatusLevel level;
+class _WelcomeView extends StatelessWidget {
+  const _WelcomeView({
+    required this.phase,
+    required this.suggestions,
+    required this.onSuggestion,
+    required this.onStart,
+  });
+
+  final _MicPhase phase;
+  final List<String> suggestions;
+  final ValueChanged<String> onSuggestion;
+  final VoidCallback? onStart;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final (color, label) = switch (level) {
-      _StatusLevel.connected => (
-        theme.colorScheme.primary,
-        context.l10n.connected,
-      ),
-      _StatusLevel.connecting => (
-        theme.colorScheme.tertiary,
-        context.l10n.connecting,
-      ),
-      _StatusLevel.disconnected => (
-        theme.colorScheme.outline,
-        context.l10n.idle,
-      ),
-    };
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(
-        border: Border.all(color: color),
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (level == _StatusLevel.connecting)
-            SizedBox(
-              width: 10,
-              height: 10,
-              child: CircularProgressIndicator(strokeWidth: 1.5, color: color),
-            )
-          else
-            Container(
-              width: 8,
-              height: 8,
-              decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-            ),
-          const SizedBox(width: 6),
-          Text(label, style: TextStyle(color: color, fontSize: 12)),
-        ],
-      ),
-    );
-  }
-}
-
-class _EmptyState extends StatelessWidget {
-  const _EmptyState({required this.isStarting});
-  final bool isStarting;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            isStarting ? Icons.cloud_sync_rounded : Icons.mic_none_rounded,
-            size: 56,
-            color: theme.colorScheme.onSurfaceVariant,
+    final l10n = context.l10n;
+    final muted = theme.colorScheme.onSurfaceVariant;
+    final Widget content = phase == _MicPhase.idle
+        ? Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 72,
+                height: 72,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.secondaryContainer,
+                  shape: BoxShape.circle,
+                ),
+                child: SvgPicture.asset(
+                  'assets/agent-glyph.svg',
+                  width: 34,
+                  height: 34,
+                  colorFilter: ColorFilter.mode(
+                    theme.colorScheme.onSecondaryContainer,
+                    BlendMode.srcIn,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 20),
+              Text(
+                l10n.voiceWelcomeTitle,
+                textAlign: TextAlign.center,
+                style: theme.textTheme.headlineSmall?.copyWith(
+                  color: theme.colorScheme.onSurface,
+                ),
+              ),
+              const SizedBox(height: 8),
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 320),
+                child: Text(
+                  l10n.voiceWelcome,
+                  textAlign: TextAlign.center,
+                  style: theme.textTheme.bodyMedium?.copyWith(color: muted),
+                ),
+              ),
+              if (suggestions.isNotEmpty) ...[
+                const SizedBox(height: 28),
+                ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 560),
+                  child: Wrap(
+                    alignment: WrapAlignment.center,
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      for (final text in suggestions)
+                        ActionChip(
+                          visualDensity: VisualDensity.compact,
+                          label: Text(text),
+                          onPressed: () => onSuggestion(text),
+                        ),
+                    ],
+                  ),
+                ),
+              ],
+              const SizedBox(height: 28),
+              FilledButton.tonalIcon(
+                onPressed: onStart,
+                style: FilledButton.styleFrom(
+                  minimumSize: const Size(0, 56),
+                  padding: const EdgeInsets.symmetric(horizontal: 28),
+                  // Keep the tonal look of the composer's live button; the
+                  // global filledButtonTheme turns solid buttons turquoise.
+                  backgroundColor: theme.colorScheme.secondaryContainer,
+                  foregroundColor: theme.colorScheme.onSecondaryContainer,
+                ),
+                icon: const Icon(Icons.graphic_eq_rounded),
+                label: Text(l10n.voiceStartTalking),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                l10n.voiceLiveHint,
+                style: theme.textTheme.bodySmall?.copyWith(color: muted),
+              ),
+            ],
+          )
+        : Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Image.asset(
+                'assets/icon/icon-android.png',
+                width: 96,
+                height: 96,
+                fit: BoxFit.contain,
+              ),
+              const SizedBox(height: 16),
+              Text(
+                switch (phase) {
+                  _MicPhase.opening => l10n.voicePreparingMic,
+                  _MicPhase.paused => l10n.voiceMicPaused,
+                  _ => l10n.voiceListening,
+                },
+                style: theme.textTheme.titleMedium?.copyWith(
+                  color: phase == _MicPhase.listening
+                      ? theme.colorScheme.onSurface
+                      : muted,
+                ),
+              ),
+            ],
+          );
+    return LayoutBuilder(
+      builder: (context, constraints) => SingleChildScrollView(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            minHeight: math.max(0, constraints.maxHeight - 32),
           ),
-          const SizedBox(height: 12),
-          Text(
-            isStarting
-                ? context.l10n.connectingPrompt
-                : context.l10n.voiceStartPrompt,
-            style: theme.textTheme.bodyMedium?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
-            ),
-          ),
-        ],
+          child: Center(child: content),
+        ),
       ),
     );
   }
@@ -1871,84 +2463,591 @@ class _EmptyState extends StatelessWidget {
 
 class _ControlBar extends StatelessWidget {
   const _ControlBar({
-    required this.isStarting,
-    required this.isMicActive,
-    required this.isMicMuted,
-    required this.isTextComposing,
+    required this.mode,
+    required this.phase,
+    required this.showSpinner,
+    required this.showRecordHint,
+    required this.hasText,
     required this.level,
+    required this.canPause,
+    required this.canResume,
+    required this.noteFull,
     required this.textController,
     required this.textFocusNode,
+    required this.recordingTimerKey,
+    required this.holdDrag,
     required this.onSendText,
-    required this.onTap,
-    required this.onLongPressStart,
-    required this.onLongPressEnd,
+    required this.onMicTap,
+    required this.onEnterLive,
+    required this.onHoldStart,
+    required this.onHoldMove,
+    required this.onHoldEnd,
+    required this.onPause,
+    required this.onResume,
+    required this.onDiscard,
+    required this.onDone,
   });
 
-  final bool isStarting;
-  final bool isMicActive;
-  final bool isMicMuted;
-  final bool isTextComposing;
+  final _BarMode mode;
+  final _MicPhase phase;
+  final bool showSpinner;
+  final bool showRecordHint;
+  final bool hasText;
   final double level;
+  final bool canPause;
+  final bool canResume;
+  final bool noteFull;
   final TextEditingController textController;
   final FocusNode textFocusNode;
+  final GlobalKey recordingTimerKey;
+  final ValueListenable<double> holdDrag;
   final VoidCallback onSendText;
-  final VoidCallback onTap;
-  final VoidCallback onLongPressStart;
-  final VoidCallback onLongPressEnd;
+  final VoidCallback onMicTap;
+  final VoidCallback? onEnterLive;
+  final VoidCallback onHoldStart;
+  final ValueChanged<double> onHoldMove;
+  final VoidCallback onHoldEnd;
+  final VoidCallback onPause;
+  final VoidCallback onResume;
+  final VoidCallback onDiscard;
+  final VoidCallback onDone;
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final showLevel = isMicActive && !isMicMuted;
     return Material(
-      color: theme.colorScheme.surfaceContainer,
+      color: Theme.of(context).colorScheme.surface,
       child: SafeArea(
         top: false,
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          // The composer stays mounted while the mic is open, so the text
+          // field keeps its focus and the keyboard stays up.
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              if (showLevel) ...[
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(999),
-                  child: LinearProgressIndicator(
-                    value: level,
-                    minHeight: 4,
-                    backgroundColor: theme.colorScheme.surfaceContainerHighest,
-                  ),
-                ),
-                const SizedBox(height: 10),
-              ],
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Expanded(
-                    child: _TextComposer(
-                      controller: textController,
-                      focusNode: textFocusNode,
-                      onSend: onSendText,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  _PrimaryActionButton(
-                    isStarting: isStarting,
-                    isMicActive: isMicActive,
-                    isMicMuted: isMicMuted,
-                    hasText: isTextComposing,
-                    onTap: onTap,
-                    onLongPressStart: onLongPressStart,
-                    onLongPressEnd: onLongPressEnd,
-                    onSend: onSendText,
-                  ),
-                ],
+              Offstage(
+                offstage: mode == _BarMode.locked || mode == _BarMode.live,
+                child: _buildComposer(context),
               ),
+              if (mode == _BarMode.locked || mode == _BarMode.live)
+                _buildLocked(context),
             ],
           ),
         ),
       ),
     );
   }
+
+  Widget _buildComposer(BuildContext context) {
+    final holding = mode == _BarMode.holding;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _RecordHint(visible: showRecordHint && !holding),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            Expanded(
+              child: Stack(
+                fit: StackFit.passthrough,
+                children: [
+                  Offstage(
+                    offstage: holding,
+                    child: _TextComposer(
+                      controller: textController,
+                      focusNode: textFocusNode,
+                      onSend: onSendText,
+                    ),
+                  ),
+                  if (holding)
+                    _HoldStrip(
+                      timerKey: recordingTimerKey,
+                      listening: phase == _MicPhase.listening,
+                    ),
+                ],
+              ),
+            ),
+            if (!holding && !hasText) ...[
+              const SizedBox(width: 8),
+              IconButton.filledTonal(
+                onPressed: onEnterLive,
+                tooltip: context.l10n.voiceStartTalking,
+                style: IconButton.styleFrom(minimumSize: const Size.square(48)),
+                icon: const Icon(Icons.graphic_eq_rounded),
+              ),
+            ],
+            const SizedBox(width: 8),
+            _MicButton(
+              holding: holding,
+              showSpinner: showSpinner,
+              hasText: hasText,
+              holdDrag: holdDrag,
+              onTap: hasText ? onSendText : onMicTap,
+              onHoldStart: hasText ? null : onHoldStart,
+              onHoldMove: onHoldMove,
+              onHoldEnd: onHoldEnd,
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildLocked(BuildContext context) {
+    final theme = Theme.of(context);
+    final l10n = context.l10n;
+    final paused = phase == _MicPhase.paused;
+    final listening = phase == _MicPhase.listening;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        SizedBox(
+          height: 40,
+          child: Row(
+            children: [
+              const SizedBox(width: 8),
+              if (phase == _MicPhase.opening)
+                SizedBox.square(
+                  dimension: 12,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                )
+              else
+                _RecordingDot(active: listening),
+              const SizedBox(width: 10),
+              _RecordingTimer(key: recordingTimerKey, running: listening),
+              const SizedBox(width: 16),
+              Expanded(
+                child: noteFull
+                    ? Text(
+                        l10n.voiceNoteLimit,
+                        textAlign: TextAlign.end,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                      )
+                    : mode == _BarMode.live
+                    ? Row(
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        children: [
+                          Icon(
+                            Icons.call_rounded,
+                            size: 18,
+                            color: theme.colorScheme.onSurfaceVariant,
+                          ),
+                          const SizedBox(width: 6),
+                          Flexible(
+                            child: Text(
+                              l10n.voiceOnCall,
+                              overflow: TextOverflow.ellipsis,
+                              style: theme.textTheme.bodyMedium?.copyWith(
+                                color: theme.colorScheme.onSurfaceVariant,
+                              ),
+                            ),
+                          ),
+                        ],
+                      )
+                    : _Waveform(level: level, running: listening),
+              ),
+              const SizedBox(width: 8),
+            ],
+          ),
+        ),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            if (mode == _BarMode.locked) ...[
+              IconButton.filled(
+                onPressed: onDiscard,
+                tooltip: l10n.voiceDiscardVoiceNote,
+                style: IconButton.styleFrom(
+                  minimumSize: const Size.square(48),
+                  backgroundColor: theme.colorScheme.surfaceContainerHigh,
+                  foregroundColor: theme.colorScheme.onSurfaceVariant,
+                ),
+                icon: const Icon(Icons.delete_outline_rounded),
+              ),
+              const SizedBox(width: 8),
+            ],
+            Expanded(
+              child: paused
+                  ? FilledButton.icon(
+                      onPressed: canResume ? onResume : null,
+                      style: FilledButton.styleFrom(
+                        minimumSize: const Size(0, 48),
+                      ),
+                      icon: const Icon(Icons.mic_rounded),
+                      label: Text(l10n.voiceResume),
+                    )
+                  : FilledButton.icon(
+                      onPressed: canPause ? onPause : null,
+                      style: FilledButton.styleFrom(
+                        minimumSize: const Size(0, 48),
+                        backgroundColor:
+                            theme.colorScheme.surfaceContainerHighest,
+                        foregroundColor: theme.colorScheme.onSurface,
+                      ),
+                      icon: const Icon(Icons.pause_rounded),
+                      label: Text(l10n.voicePause),
+                    ),
+            ),
+            const SizedBox(width: 8),
+            IconButton.filled(
+              onPressed: onDone,
+              tooltip: mode == _BarMode.live
+                  ? l10n.voiceExitLive
+                  : l10n.voiceSend,
+              style: IconButton.styleFrom(
+                minimumSize: const Size.square(48),
+                backgroundColor: theme.colorScheme.primaryContainer,
+                foregroundColor: theme.colorScheme.onPrimaryContainer,
+              ),
+              icon: Icon(
+                mode == _BarMode.live
+                    ? Icons.close_rounded
+                    : Icons.arrow_upward_rounded,
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+/// Points at the composer's mic, so it reads apart from the live button.
+class _RecordHint extends StatelessWidget {
+  const _RecordHint({required this.visible});
+
+  final bool visible;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!visible) return const SizedBox.shrink();
+    final theme = Theme.of(context);
+    final color = theme.colorScheme.inverseSurface;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Align(
+        alignment: Alignment.centerRight,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            DecoratedBox(
+              decoration: BoxDecoration(
+                color: color,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 8,
+                ),
+                child: Text(
+                  context.l10n.voiceRecordHint,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onInverseSurface,
+                  ),
+                ),
+              ),
+            ),
+            Padding(
+              // Centres the caret on the 48px mic button below.
+              padding: const EdgeInsets.only(right: 18),
+              child: CustomPaint(
+                size: const Size(12, 6),
+                painter: _CaretPainter(color),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _CaretPainter extends CustomPainter {
+  const _CaretPainter(this.color);
+
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    canvas.drawPath(
+      Path()
+        ..lineTo(size.width, 0)
+        ..lineTo(size.width / 2, size.height)
+        ..close(),
+      Paint()..color = color,
+    );
+  }
+
+  @override
+  bool shouldRepaint(_CaretPainter oldDelegate) => oldDelegate.color != color;
+}
+
+class _HoldStrip extends StatelessWidget {
+  const _HoldStrip({required this.timerKey, required this.listening});
+
+  final GlobalKey timerKey;
+  final bool listening;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final muted = theme.colorScheme.onSurfaceVariant;
+    return Container(
+      height: 48,
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerHigh,
+        borderRadius: BorderRadius.circular(24),
+      ),
+      child: Row(
+        children: [
+          _RecordingDot(active: listening, icon: Icons.mic_rounded),
+          const SizedBox(width: 10),
+          _RecordingTimer(key: timerKey, running: listening),
+          const Spacer(),
+          Icon(Icons.keyboard_arrow_up_rounded, size: 18, color: muted),
+          const SizedBox(width: 4),
+          Flexible(
+            child: Text(
+              context.l10n.voiceSlideToLock,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.bodyMedium?.copyWith(color: muted),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _RecordingDot extends StatefulWidget {
+  const _RecordingDot({required this.active, this.icon});
+
+  final bool active;
+  final IconData? icon;
+
+  @override
+  State<_RecordingDot> createState() => _RecordingDotState();
+}
+
+class _RecordingDotState extends State<_RecordingDot>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _blink = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 600),
+  );
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _syncBlink();
+  }
+
+  @override
+  void didUpdateWidget(_RecordingDot oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _syncBlink();
+  }
+
+  void _syncBlink() {
+    final blink = widget.active && !MediaQuery.disableAnimationsOf(context);
+    if (blink && !_blink.isAnimating) {
+      _blink.repeat(reverse: true);
+    } else if (!blink && _blink.isAnimating) {
+      _blink
+        ..stop()
+        ..value = 0;
+    }
+  }
+
+  @override
+  void dispose() {
+    _blink.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final color = widget.active ? scheme.error : scheme.onSurfaceVariant;
+    final icon = widget.icon;
+    return FadeTransition(
+      opacity: Tween(begin: 1.0, end: 0.25).animate(_blink),
+      child: icon == null
+          ? Container(
+              width: 10,
+              height: 10,
+              decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+            )
+          : Icon(icon, size: 20, color: color),
+    );
+  }
+}
+
+class _RecordingTimer extends StatefulWidget {
+  const _RecordingTimer({super.key, required this.running});
+
+  final bool running;
+
+  @override
+  State<_RecordingTimer> createState() => _RecordingTimerState();
+}
+
+class _RecordingTimerState extends State<_RecordingTimer> {
+  final Stopwatch _stopwatch = Stopwatch();
+  Timer? _ticker;
+
+  @override
+  void initState() {
+    super.initState();
+    _sync();
+  }
+
+  @override
+  void didUpdateWidget(_RecordingTimer oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _sync();
+  }
+
+  void _sync() {
+    if (widget.running && !_stopwatch.isRunning) {
+      _stopwatch.start();
+      _ticker = Timer.periodic(
+        const Duration(milliseconds: 250),
+        (_) => setState(() {}),
+      );
+    } else if (!widget.running && _stopwatch.isRunning) {
+      _stopwatch.stop();
+      _ticker?.cancel();
+      _ticker = null;
+    }
+  }
+
+  @override
+  void dispose() {
+    _ticker?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final seconds = _stopwatch.elapsed.inSeconds;
+    return Text(
+      '${seconds ~/ 60}:${(seconds % 60).toString().padLeft(2, '0')}',
+      style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+        fontFeatures: const [FontFeature.tabularFigures()],
+      ),
+    );
+  }
+}
+
+class _Waveform extends StatefulWidget {
+  const _Waveform({required this.level, required this.running});
+
+  final double level;
+  final bool running;
+
+  @override
+  State<_Waveform> createState() => _WaveformState();
+}
+
+class _WaveformState extends State<_Waveform> {
+  static const _capacity = 64;
+
+  List<double> _levels = List.filled(_capacity, 0);
+  Timer? _ticker;
+
+  @override
+  void initState() {
+    super.initState();
+    _sync();
+  }
+
+  @override
+  void didUpdateWidget(_Waveform oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _sync();
+  }
+
+  void _sync() {
+    if (widget.running && _ticker == null) {
+      _ticker = Timer.periodic(const Duration(milliseconds: 100), (_) {
+        setState(() => _levels = [..._levels.skip(1), widget.level]);
+      });
+    } else if (!widget.running && _ticker != null) {
+      _ticker?.cancel();
+      _ticker = null;
+    }
+  }
+
+  @override
+  void dispose() {
+    _ticker?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 32,
+      child: CustomPaint(
+        size: Size.infinite,
+        painter: _WaveformPainter(
+          levels: _levels,
+          color: Theme.of(context).colorScheme.onSurfaceVariant,
+        ),
+      ),
+    );
+  }
+}
+
+class _WaveformPainter extends CustomPainter {
+  const _WaveformPainter({required this.levels, required this.color});
+
+  static const _barWidth = 3.0;
+  static const _gap = 3.0;
+
+  final List<double> levels;
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()..color = color;
+    final count = math.min(
+      levels.length,
+      (size.width / (_barWidth + _gap)).floor(),
+    );
+    final centerY = size.height / 2;
+    for (var i = 0; i < count; i++) {
+      final level = levels[levels.length - 1 - i];
+      final height = math.max(_barWidth, level * size.height);
+      final right = size.width - i * (_barWidth + _gap);
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromLTRB(
+            right - _barWidth,
+            centerY - height / 2,
+            right,
+            centerY + height / 2,
+          ),
+          const Radius.circular(_barWidth / 2),
+        ),
+        paint,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(_WaveformPainter oldDelegate) =>
+      !identical(oldDelegate.levels, levels) || oldDelegate.color != color;
 }
 
 class _TextComposer extends StatelessWidget {
@@ -1962,116 +3061,242 @@ class _TextComposer extends StatelessWidget {
   final FocusNode focusNode;
   final VoidCallback onSend;
 
+  /// A physical keyboard's Enter sends and Shift+Enter breaks the line. An
+  /// on-screen keyboard types its Enter as text instead of a key event, so it
+  /// never reaches here: the multiline field breaks the line and the send
+  /// button sends.
+  KeyEventResult _handleKey(FocusNode node, KeyEvent event) {
+    final isEnter =
+        event.logicalKey == LogicalKeyboardKey.enter ||
+        event.logicalKey == LogicalKeyboardKey.numpadEnter;
+    if (!isEnter || event is KeyUpEvent) return KeyEventResult.ignored;
+    if (HardwareKeyboard.instance.isShiftPressed) {
+      return KeyEventResult.ignored;
+    }
+    // An input method composing from a physical keyboard commits on Enter.
+    if (controller.value.isComposingRangeValid) return KeyEventResult.ignored;
+    if (event is KeyDownEvent && controller.text.trim().isNotEmpty) onSend();
+    return KeyEventResult.handled;
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Container(
+      constraints: const BoxConstraints(minHeight: 48),
+      alignment: Alignment.centerLeft,
       decoration: BoxDecoration(
-        color: theme.colorScheme.surface,
+        color: theme.colorScheme.surfaceContainerHigh,
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: theme.colorScheme.outlineVariant),
       ),
       padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: TextField(
-        controller: controller,
-        focusNode: focusNode,
-        maxLines: 4,
-        minLines: 1,
-        textInputAction: TextInputAction.send,
-        onSubmitted: (_) {
-          if (controller.text.trim().isNotEmpty) onSend();
-        },
-        decoration: InputDecoration(
-          hintText: context.l10n.typeMessage,
-          border: InputBorder.none,
-          isDense: true,
-          contentPadding: const EdgeInsets.symmetric(vertical: 12),
+      child: Focus(
+        canRequestFocus: false,
+        skipTraversal: true,
+        onKeyEvent: _handleKey,
+        child: TextField(
+          controller: controller,
+          focusNode: focusNode,
+          maxLines: 4,
+          minLines: 1,
+          keyboardType: TextInputType.multiline,
+          textInputAction: TextInputAction.newline,
+          decoration: InputDecoration(
+            hintText: context.l10n.typeMessage,
+            border: InputBorder.none,
+            isDense: true,
+            contentPadding: const EdgeInsets.symmetric(vertical: 12),
+          ),
         ),
       ),
     );
   }
 }
 
-class _PrimaryActionButton extends StatelessWidget {
-  const _PrimaryActionButton({
-    required this.isStarting,
-    required this.isMicActive,
-    required this.isMicMuted,
+class _MicButton extends StatefulWidget {
+  const _MicButton({
+    required this.holding,
+    required this.showSpinner,
     required this.hasText,
+    required this.holdDrag,
     required this.onTap,
-    required this.onLongPressStart,
-    required this.onLongPressEnd,
-    required this.onSend,
+    required this.onHoldStart,
+    required this.onHoldMove,
+    required this.onHoldEnd,
   });
 
-  final bool isStarting;
-  final bool isMicActive;
-  final bool isMicMuted;
+  final bool holding;
+  final bool showSpinner;
   final bool hasText;
+  final ValueListenable<double> holdDrag;
   final VoidCallback onTap;
-  final VoidCallback onLongPressStart;
-  final VoidCallback onLongPressEnd;
-  final VoidCallback onSend;
+  final VoidCallback? onHoldStart;
+  final ValueChanged<double> onHoldMove;
+  final VoidCallback onHoldEnd;
+
+  @override
+  State<_MicButton> createState() => _MicButtonState();
+}
+
+/// Press and hold to talk, drag up to lock, tap for hands-free. Raw pointer
+/// events instead of a long-press recognizer: the button's subtree is swapped
+/// for the locked bar while the finger is still down, and every callback here
+/// has to tolerate arriving after that.
+class _MicButtonState extends State<_MicButton> {
+  static const _holdDelay = Duration(milliseconds: 300);
+
+  int? _pointer;
+  Offset _origin = Offset.zero;
+  Timer? _holdTimer;
+  bool _held = false;
+
+  void _onDown(PointerDownEvent event) {
+    if (_pointer != null) return;
+    _pointer = event.pointer;
+    _origin = event.position;
+    _held = false;
+    final onHoldStart = widget.onHoldStart;
+    if (onHoldStart == null) return;
+    _holdTimer = Timer(_holdDelay, () {
+      _holdTimer = null;
+      if (!mounted) return;
+      _held = true;
+      onHoldStart();
+    });
+  }
+
+  void _onMove(PointerMoveEvent event) {
+    if (event.pointer != _pointer || !_held || !mounted) return;
+    widget.onHoldMove(event.position.dy - _origin.dy);
+  }
+
+  void _onUp(PointerUpEvent event) {
+    if (event.pointer != _pointer) return;
+    _pointer = null;
+    _holdTimer?.cancel();
+    _holdTimer = null;
+    if (!mounted) return;
+    if (_held) {
+      _held = false;
+      widget.onHoldEnd();
+    } else {
+      widget.onTap();
+    }
+  }
+
+  void _onCancel(PointerCancelEvent event) {
+    if (event.pointer != _pointer) return;
+    _pointer = null;
+    _holdTimer?.cancel();
+    _holdTimer = null;
+    if (!mounted || !_held) return;
+    _held = false;
+    widget.onHoldEnd();
+  }
+
+  @override
+  void dispose() {
+    _holdTimer?.cancel();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final showMutedStyle = !hasText && isMicActive && isMicMuted;
-
-    final Color bg;
-    final Color fg;
-    final BorderSide border;
-    final double elevation;
-
-    if (showMutedStyle) {
-      bg = Colors.transparent;
-      fg = theme.colorScheme.onSurfaceVariant;
-      border = BorderSide(color: theme.colorScheme.outline, width: 1.5);
-      elevation = 0;
-    } else {
-      bg = theme.colorScheme.primaryContainer;
-      fg = theme.colorScheme.onPrimaryContainer;
-      border = BorderSide.none;
-      elevation = 2;
-    }
-
-    final IconData iconData;
-    if (hasText) {
-      iconData = Icons.arrow_upward_rounded;
-    } else if (showMutedStyle) {
-      iconData = Icons.mic_off_rounded;
-    } else {
-      iconData = Icons.mic_rounded;
-    }
-
-    final button = SizedBox(
-      width: 56,
-      height: 56,
-      child: Material(
-        color: bg,
-        shape: CircleBorder(side: border),
-        elevation: elevation,
-        child: Center(
-          child: isStarting && !hasText
-              ? SizedBox(
-                  width: 26,
-                  height: 26,
-                  child: CircularProgressIndicator(strokeWidth: 2.5, color: fg),
-                )
-              : Icon(iconData, color: fg, size: 26),
+    final scheme = Theme.of(context).colorScheme;
+    final l10n = context.l10n;
+    final fg = scheme.onPrimaryContainer;
+    return Semantics(
+      button: true,
+      label: widget.hasText ? l10n.voiceSend : l10n.voiceRecordVoiceNote,
+      onTap: widget.onTap,
+      child: Listener(
+        onPointerDown: _onDown,
+        onPointerMove: _onMove,
+        onPointerUp: _onUp,
+        onPointerCancel: _onCancel,
+        child: Stack(
+          clipBehavior: Clip.none,
+          alignment: Alignment.center,
+          children: [
+            AnimatedScale(
+              scale: widget.holding ? 1.45 : 1,
+              duration: const Duration(milliseconds: 150),
+              child: SizedBox.square(
+                dimension: 48,
+                child: Material(
+                  color: scheme.primaryContainer,
+                  shape: const CircleBorder(),
+                  elevation: widget.holding ? 3 : 0,
+                  child: Center(
+                    child: widget.showSpinner
+                        ? SizedBox.square(
+                            dimension: 22,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2.5,
+                              color: fg,
+                            ),
+                          )
+                        : Icon(
+                            widget.hasText
+                                ? Icons.arrow_upward_rounded
+                                : Icons.mic_rounded,
+                            color: fg,
+                          ),
+                  ),
+                ),
+              ),
+            ),
+            if (widget.holding)
+              Positioned(bottom: 72, child: _LockPill(drag: widget.holdDrag)),
+          ],
         ),
       ),
     );
+  }
+}
 
-    if (hasText) {
-      return GestureDetector(onTap: onSend, child: button);
-    }
+class _LockPill extends StatelessWidget {
+  const _LockPill({required this.drag});
 
-    return GestureDetector(
-      onTap: onTap,
-      onLongPressStart: (_) => onLongPressStart(),
-      onLongPressEnd: (_) => onLongPressEnd(),
-      child: button,
+  final ValueListenable<double> drag;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return ValueListenableBuilder<double>(
+      valueListenable: drag,
+      builder: (context, offset, _) {
+        final progress = (-offset / _kLockDistance).clamp(0.0, 1.0);
+        return Transform.translate(
+          offset: Offset(0, offset * 0.6),
+          child: Material(
+            color: scheme.surfaceContainerHigh,
+            elevation: 2,
+            borderRadius: BorderRadius.circular(20),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    progress > 0.6
+                        ? Icons.lock_rounded
+                        : Icons.lock_open_rounded,
+                    size: 22,
+                    color: scheme.onSurfaceVariant,
+                  ),
+                  const SizedBox(height: 6),
+                  Icon(
+                    Icons.keyboard_arrow_up_rounded,
+                    size: 22,
+                    color: scheme.onSurfaceVariant,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 }

@@ -1,3 +1,4 @@
+import 'package:app/components/color_utils.dart';
 import 'package:flutter/material.dart';
 import 'package:app/l10n/l10n.dart';
 
@@ -21,6 +22,7 @@ class IconPicker extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
+    final tint = readableAccent(accent, Theme.of(context).brightness);
     return Wrap(
       spacing: 12,
       runSpacing: 12,
@@ -36,11 +38,11 @@ class IconPicker extends StatelessWidget {
             height: 52,
             decoration: BoxDecoration(
               color: isSelected
-                  ? accent.withValues(alpha: 0.28)
+                  ? tint.withValues(alpha: 0.28)
                   : colors.surfaceContainerHighest,
               borderRadius: BorderRadius.circular(16),
               border: Border.all(
-                color: isSelected ? accent : Colors.transparent,
+                color: isSelected ? tint : Colors.transparent,
                 width: 2,
               ),
             ),
@@ -48,7 +50,7 @@ class IconPicker extends StatelessWidget {
             child: Icon(
               icon,
               size: 26,
-              color: isSelected ? accent : colors.onSurfaceVariant,
+              color: isSelected ? tint : colors.onSurfaceVariant,
             ),
           ),
         );

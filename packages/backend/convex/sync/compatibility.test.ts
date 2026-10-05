@@ -19,6 +19,7 @@ async function fixture() {
     aggregate.register(t, 'outflowsByAccount')
     aggregate.register(t, 'inflowsByAccount')
     aggregate.register(t, 'transactionsByTag')
+    aggregate.register(t, 'latencyByOperation')
     const authed = t.withIdentity({
         subject: userId,
         issuer: 'https://test.convex.site/native-auth',
@@ -368,11 +369,17 @@ describe('legacy recurrence compatibility', { timeout: 30000 }, () => {
         if ('error' in page) throw new Error(page.error)
         expect(page.tombstones).toEqual([])
         expect(page.currentCounter).toBe(result.newSeq)
-        expect(
-            await t.run((ctx) =>
-                ctx.db.system.query('_scheduled_functions').take(1),
-            ),
-        ).toEqual([])
+        // Every push now records `sync_push` telemetry, whose export and
+        // latency sample are scheduled; neither is a projection, so both are
+        // excluded here.
+        const telemetry = new Set([
+            'telemetry/actions:exportPendingMetrics',
+            'telemetry/mutations:recordLatencySample',
+        ])
+        const scheduled = await t.run((ctx) =>
+            ctx.db.system.query('_scheduled_functions').take(10),
+        )
+        expect(scheduled.filter((s) => !telemetry.has(s.name))).toEqual([])
         expect(
             page.rows.filter((x) => x.tableName === 'transactions'),
         ).toHaveLength(0)

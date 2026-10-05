@@ -479,9 +479,10 @@ class _DashboardSectionState extends State<DashboardSection> {
       StatWidgetSpec(:final filter) => filter,
       TransactionListWidgetSpec(:final filter) => filter,
       ChartWidgetSpec(:final filter) => filter,
-      BalanceCardWidgetSpec(:final currency) => TransactionFilter(
-        currency: currency.isEmpty ? null : currency,
-      ),
+      BalanceCardWidgetSpec(:final currency) ||
+      BalanceComparisonWidgetSpec(
+        :final currency,
+      ) => TransactionFilter(currency: currency.isEmpty ? null : currency),
     };
   }
 
@@ -491,7 +492,8 @@ class _DashboardSectionState extends State<DashboardSection> {
       StatWidgetSpec(:final title) ||
       TransactionListWidgetSpec(:final title) ||
       BalanceCardWidgetSpec(:final title) ||
-      ChartWidgetSpec(:final title) =>
+      ChartWidgetSpec(:final title) ||
+      BalanceComparisonWidgetSpec(:final title) =>
         title.isEmpty ? _typeLabelOf(row) : context.l10n.dashboardTitle(title),
       null => _typeLabelOf(row),
     };

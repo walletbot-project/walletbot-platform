@@ -73,6 +73,9 @@ export const requestLiveToken = action({
         timezone: v.optional(v.string()),
         timezoneOffsetMinutes: v.optional(v.number()),
         context: v.optional(contextValidator),
+        turnDetection: v.optional(
+            v.union(v.literal('manual'), v.literal('auto')),
+        ),
     },
     handler: async (ctx, args): Promise<LiveTokenResponse> => {
         const startedAt = Date.now()
@@ -118,6 +121,7 @@ export const requestLiveToken = action({
             timezoneOffsetMinutes: args.timezoneOffsetMinutes,
             context: args.context,
             flags,
+            turnDetection: args.turnDetection,
         })
         return {
             ...result,

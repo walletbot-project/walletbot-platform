@@ -3,6 +3,20 @@ import 'dart:typed_data';
 
 import 'voice_event.dart';
 
+/// Who ends a spoken turn. The mode is baked into the Live token, so changing
+/// it opens a new socket, seeded from the conversation log.
+enum VoiceConversationMode {
+  /// Voice notes and text. Gemini's voice activity detection is off and the
+  /// client brackets each turn with `activityStart`/`activityEnd`, so a note
+  /// released mid-word is still answered.
+  chat,
+
+  /// Hands-free conversation: Gemini's voice activity detection ends turns.
+  live;
+
+  String get turnDetection => this == chat ? 'manual' : 'auto';
+}
+
 abstract interface class VoiceExpenseCommandFactory {
   VoiceExpenseCommand? get activeCommand;
 
@@ -53,22 +67,46 @@ abstract interface class VoiceExpenseCommand {
 
   bool get isConnected;
 
-  Future<void> start({bool respondWithAudio = true});
+  VoiceConversationMode get mode;
+
+  Future<void> start({
+    bool respondWithAudio = true,
+    VoiceConversationMode mode = VoiceConversationMode.chat,
+  });
+
+  /// Moves the conversation to [next]: closes any open turn and replaces the
+  /// socket with one minted for that mode, seeded from the conversation log.
+  /// The replacement emits [VoiceConnectingEvent] and [VoiceConnectedEvent]
+  /// but no [VoiceDisconnectedEvent]: it is not a dropped connection.
+  Future<void> switchMode(VoiceConversationMode next);
 
   /// Reconnects immediately when the session is active but the transport is
   /// down (e.g. after the OS resumes the app, skipping any pending backoff
   /// timer). No-op when already connected or when there is no session.
   Future<void> ensureConnected();
 
+  /// Acquires native audio for microphone capture or audible responses.
+  /// Text-only sessions do not need an audio device or audio focus.
+  Future<void> prepareAudio();
+
+  /// In [VoiceConversationMode.chat] the chunk stays on the device until
+  /// [endTurn] sends the whole note, so [discardTurn] can drop it.
   Future<void> addAudioChunk(Uint8List chunk);
 
-  /// Flushes any audio buffered server-side since the last chunk so the
-  /// model treats the current audio turn as complete. Safe to call when no
-  /// audio has been sent since the last flush — implementations no-op in
-  /// that case. Required by Gemini Live's automatic VAD whenever the
-  /// client pauses the stream (mic mute, switching to text input, etc.)
-  /// so that the next utterance isn't concatenated with a half-spoken one.
-  Future<void> endAudioStream();
+  /// Ends the current audio turn. In [VoiceConversationMode.chat] this is
+  /// `activityEnd`, which makes the model answer right away. In
+  /// [VoiceConversationMode.live] it is `audioStreamEnd`, which flushes the
+  /// server's buffer while its voice activity detection still decides when
+  /// the turn is over. Safe to call when no audio has been sent since the
+  /// last end; implementations no-op in that case.
+  Future<void> endTurn();
+
+  /// Drops the chat note being recorded without sending any of it.
+  void discardTurn();
+
+  /// The chat note reached its 5 minute limit: further audio is dropped and
+  /// the note can only be sent with [endTurn] or dropped with [discardTurn].
+  bool get isNoteFull;
 
   Future<void> sendText(String text);
 
@@ -144,9 +182,16 @@ class DebugVoiceExpenseCommand implements VoiceExpenseCommand {
   bool get isConnected => true;
 
   @override
-  Future<void> start({bool respondWithAudio = true}) async {
+  VoiceConversationMode mode = VoiceConversationMode.chat;
+
+  @override
+  Future<void> start({
+    bool respondWithAudio = true,
+    VoiceConversationMode mode = VoiceConversationMode.chat,
+  }) async {
     _chunks = 0;
     _bytes = 0;
+    this.mode = mode;
     _events.add(
       VoiceConnectingEvent(
         'Debug command started (respondWithAudio=$respondWithAudio)',
@@ -156,7 +201,18 @@ class DebugVoiceExpenseCommand implements VoiceExpenseCommand {
   }
 
   @override
+  Future<void> switchMode(VoiceConversationMode next) async {
+    if (next == mode) return;
+    mode = next;
+    _events.add(VoiceConnectingEvent('Debug switched to ${next.name}'));
+    _events.add(VoiceConnectedEvent());
+  }
+
+  @override
   Future<void> ensureConnected() async {}
+
+  @override
+  Future<void> prepareAudio() async {}
 
   @override
   Future<void> addAudioChunk(Uint8List chunk) async {
@@ -165,9 +221,17 @@ class DebugVoiceExpenseCommand implements VoiceExpenseCommand {
   }
 
   @override
-  Future<void> endAudioStream() async {
-    _events.add(VoiceSystemEvent('Debug audio stream ended'));
+  Future<void> endTurn() async {
+    _events.add(VoiceSystemEvent('Debug audio turn ended'));
   }
+
+  @override
+  void discardTurn() {
+    _events.add(VoiceSystemEvent('Debug audio turn discarded'));
+  }
+
+  @override
+  bool get isNoteFull => false;
 
   @override
   Future<void> sendText(String text) async {

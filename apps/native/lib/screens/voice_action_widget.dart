@@ -496,7 +496,10 @@ class _AccountActionWidgetState extends State<_AccountActionWidget> {
     if (_failed) return _ActionErrorCard(onRetry: _load);
     final account = _account;
     if (account == null) return const SizedBox.shrink();
-    final accent = colorFromHex(account.color, fallback: accountDefaultColor);
+    final accent = readableAccent(
+      colorFromHex(account.color, fallback: accountDefaultColor),
+      Theme.of(context).brightness,
+    );
     return _ActionCard(
       icon: accountIconFromName(account.icon),
       iconColor: accent,
@@ -530,6 +533,11 @@ class _AccountEditSheetState extends State<_AccountEditSheet> {
   late final TextEditingController _nameController;
   late final TextEditingController _descriptionController;
   late Color _color;
+
+  /// [_color] as painted in the current theme (see [readableAccent]); the
+  /// stored value stays the raw pick.
+  Color get _paintedColor =>
+      readableAccent(_color, Theme.of(context).brightness);
   late IconData _icon;
   bool _saving = false;
 
@@ -552,7 +560,11 @@ class _AccountEditSheetState extends State<_AccountEditSheet> {
   }
 
   Future<void> _pickColor() async {
-    final picked = await showColorPickerDialog(context, selected: _color);
+    final picked = await showColorPickerDialog(
+      context,
+      selected: _color,
+      themed: true,
+    );
     if (picked != null && mounted) setState(() => _color = picked);
   }
 
@@ -621,12 +633,12 @@ class _AccountEditSheetState extends State<_AccountEditSheet> {
         const SizedBox(height: 12),
         _AppearanceTile(
           label: context.l10n.color,
-          leading: CircleAvatar(backgroundColor: _color, radius: 12),
+          leading: CircleAvatar(backgroundColor: _paintedColor, radius: 12),
           onTap: _pickColor,
         ),
         _AppearanceTile(
           label: context.l10n.icon,
-          leading: Icon(_icon, color: _color),
+          leading: Icon(_icon, color: _paintedColor),
           onTap: _pickIcon,
         ),
       ],
@@ -711,7 +723,10 @@ class _CategoryActionWidgetState extends State<_CategoryActionWidget> {
     if (_failed) return _ActionErrorCard(onRetry: _load);
     final category = _category;
     if (category == null) return const SizedBox.shrink();
-    final accent = colorFromHex(category.color, fallback: categoryDefaultColor);
+    final accent = readableAccent(
+      colorFromHex(category.color, fallback: categoryDefaultColor),
+      Theme.of(context).brightness,
+    );
     return _ActionCard(
       icon: categoryIconFromName(category.icon),
       iconColor: accent,
@@ -745,6 +760,11 @@ class _CategoryEditSheetState extends State<_CategoryEditSheet> {
   late final TextEditingController _nameController;
   late final TextEditingController _descriptionController;
   late Color _color;
+
+  /// [_color] as painted in the current theme (see [readableAccent]); the
+  /// stored value stays the raw pick.
+  Color get _paintedColor =>
+      readableAccent(_color, Theme.of(context).brightness);
   late IconData _icon;
   bool _saving = false;
 
@@ -770,7 +790,11 @@ class _CategoryEditSheetState extends State<_CategoryEditSheet> {
   }
 
   Future<void> _pickColor() async {
-    final picked = await showColorPickerDialog(context, selected: _color);
+    final picked = await showColorPickerDialog(
+      context,
+      selected: _color,
+      themed: true,
+    );
     if (picked != null && mounted) setState(() => _color = picked);
   }
 
@@ -839,12 +863,12 @@ class _CategoryEditSheetState extends State<_CategoryEditSheet> {
         const SizedBox(height: 12),
         _AppearanceTile(
           label: context.l10n.color,
-          leading: CircleAvatar(backgroundColor: _color, radius: 12),
+          leading: CircleAvatar(backgroundColor: _paintedColor, radius: 12),
           onTap: _pickColor,
         ),
         _AppearanceTile(
           label: context.l10n.icon,
-          leading: Icon(_icon, color: _color),
+          leading: Icon(_icon, color: _paintedColor),
           onTap: _pickIcon,
         ),
       ],

@@ -138,7 +138,7 @@ class _IdleFactory implements VoiceExpenseCommandFactory {
   Future<String?> restorableSessionId() async => null;
 }
 
-class _IdleCommand implements VoiceExpenseCommand {
+class _IdleCommand extends DebugVoiceExpenseCommand {
   final _events = StreamController<VoiceEvent>.broadcast();
 
   @override
@@ -166,7 +166,4 @@ class _IdleCommand implements VoiceExpenseCommand {
   Future<void> dispose() async {
     await _events.close();
   }
-
-  @override
-  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }

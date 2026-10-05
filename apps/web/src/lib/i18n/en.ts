@@ -331,6 +331,11 @@ export const en: Messages = {
         typeList: 'Transactions',
         typeBalance: 'Balance',
         typeChart: 'Chart',
+        typeBalanceComparison: 'Balance comparison',
+        // Balance comparison rows: last month's close, now, and the change.
+        lastMonthBalance: "Last month's balance",
+        currentBalance: 'Current balance',
+        balanceDifference: 'Difference',
 
         aggregation: 'Aggregation',
         aggregationSum: 'Sum',
@@ -479,6 +484,25 @@ export const en: Messages = {
             'This session is no longer valid. Taking you back to sign in.',
     },
 
+    reorder: {
+        roleDescription: 'sortable item',
+        reorderAccounts: 'Reorder accounts',
+        reorderCategories: 'Reorder categories',
+        accountsFailed: 'Could not save the new order of your accounts',
+        categoriesFailed: 'Could not save the new order of your categories',
+        reorderTags: 'Reorder tags',
+        tagsFailed: 'Could not save the new order of your tags',
+        dragHandle: (p) => `Move ${p.name}`,
+        instructions:
+            'To move an item, press space or enter, move it with the arrow keys, and press space or enter again to drop it. Press escape to cancel.',
+        picked: (p) =>
+            `Picked up ${p.name}, at position ${p.position} of ${p.total}.`,
+        moved: (p) => `${p.name} is at position ${p.position} of ${p.total}.`,
+        dropped: (p) =>
+            `Dropped ${p.name} at position ${p.position} of ${p.total}.`,
+        cancelled: (p) => `Move cancelled. ${p.name} went back to its place.`,
+    },
+
     accounts: {
         accountDetails: 'Account details',
         newAccount: 'New account',
@@ -577,6 +601,10 @@ export const en: Messages = {
         tags: 'Tags',
         noTags: 'No tags',
         balanceUnavailable: 'Balance unavailable',
+        // A balance adjustment: what the user declared, and what the app had
+        // computed for the account just before it (it moves as the past does).
+        declaredBalance: 'Declared balance',
+        platformBalance: 'Calculated balance',
         chooseAccount: 'Choose an account',
         sameAccounts: 'Source and destination accounts must differ',
         amountGreaterThanZero: 'Enter an amount greater than zero',
@@ -660,9 +688,6 @@ export const en: Messages = {
 
     voice: {
         title: 'Talk to Gaston',
-        statusIdle: 'idle',
-        statusConnecting: 'connecting',
-        statusConnected: 'connected',
         speaking: 'Speaking',
         you: 'You',
         agent: 'Gaston',
@@ -671,23 +696,69 @@ export const en: Messages = {
         toolRunning: 'Running',
         toolDone: 'Done',
         toolCancelled: 'Cancelled',
-        connectingEllipsis: 'Connecting…',
-        tapToStart: 'Tap the mic or type a message to start',
         microphone: 'Microphone',
-        mute: 'Mute',
-        unmute: 'Unmute',
         connect: 'Connect',
         disconnect: 'Disconnect',
-        startConversation: 'Start a conversation',
         endSession: 'End session',
         typeMessage: 'Type a message…',
         send: 'Send',
+        welcomeTitle: 'How can I help?',
+        welcome: 'Tell me about an expense or ask about your accounts',
+        startTalking: 'Start call',
+        liveHint: 'Hands-free mode',
+        exitLive: 'End call',
+        recordVoiceNote: 'Record a voice note',
+        discardVoiceNote: 'Discard voice note',
+        noteLimit: '5 minute limit',
+        onCall: 'On a call',
+        recordHint: 'Tap or hold to record a voice note',
+        preparingMic: 'Getting the mic ready',
+        listening: "I'm listening",
+        micPaused: 'Mic paused',
+        slideToLock: 'Slide up to lock',
+        pause: 'Pause',
+        resume: 'Resume',
+        suggestions: {
+            logExpense: (p: { amount: string; category: string }) =>
+                `I spent ${p.amount} on ${p.category}`,
+            logExpenseWithAccount: (p: {
+                amount: string
+                category: string
+                account: string
+            }) => `I spent ${p.amount} on ${p.category} with ${p.account}`,
+            spentInCategoryThisMonth: (p: { category: string }) =>
+                `How much did I spend on ${p.category} this month?`,
+            accountBalance: (p: { account: string }) =>
+                `How much do I have in ${p.account}?`,
+            topSpendingThisMonth: 'What did I spend the most on this month?',
+            compareCategoryLastMonth: (p: { category: string }) =>
+                `Did I spend more on ${p.category} than last month?`,
+            transfer: (p: {
+                amount: string
+                account: string
+                toAccount: string
+            }) => `I moved ${p.amount} from ${p.account} to ${p.toAccount}`,
+            logIncome: (p: { amount: string; account: string }) =>
+                `I got paid ${p.amount} into ${p.account}`,
+            spentWithTag: (p: { tag: string }) =>
+                `How much did I spend tagged ${p.tag}?`,
+            recentExpenses: 'What were my latest expenses?',
+            whatCanYouDo: 'What can you do?',
+            createCashAccount: 'Create a cash account',
+            setupCategories: 'Help me set up my categories',
+            howToLogExpense: 'How do I record an expense?',
+            homeWidget: "Add a Home widget with this month's spending",
+            homeWidgetForCategory: (p: { category: string }) =>
+                `Add a Home widget with my spending on ${p.category}`,
+        },
         systemConnecting: 'Connecting…',
         systemTokenReceived: (p) => `Token received for ${p.model}`,
         systemSocketError: 'WebSocket error',
         systemDisconnected: 'Disconnected',
         systemConnected: 'Connected. Start speaking.',
         systemConnectedTyping: 'Connected. Sending your message…',
+        startupAudioTimeout:
+            'Connection took too long. Tap the microphone to try again.',
         systemConnectionFailed: (p) => `Connection failed: ${p.error}`,
         systemUnavailable:
             'Gastón is not available right now. Please try again in a few minutes.',

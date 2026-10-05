@@ -3,9 +3,9 @@ import type { FunctionReturnType } from 'convex/server'
 import { CategoryIcon } from '@/components/category-icon'
 import { EntityAvatar, EntityListTile } from '@/components/m3/entity-list-tile'
 import { StateMessage } from '@/components/m3/state-message'
+import { SortableList } from '@/components/sortable-list'
 import { Skeleton } from '@/components/ui/skeleton'
 import { CATEGORY_DEFAULT_COLOR, normalizeColor } from '@/lib/entity-colors'
-import { GROUP_SPACING, groupedRadius } from '@/lib/grouped-list'
 import { useT } from '@/lib/i18n'
 
 type CategoryWithCount = FunctionReturnType<
@@ -16,6 +16,9 @@ type CategoriesViewProps = {
     /** `undefined` while loading. */
     categories: CategoryWithCount[] | undefined
     onSelect: (id: string) => void
+    /** Reorder mode: rows show a drag handle and stop opening on click. */
+    editing: boolean
+    onReorder: (ids: string[]) => void
 }
 
 /**
@@ -23,7 +26,12 @@ type CategoriesViewProps = {
  * detail and creation presentation live in the Insights screen, so the shared
  * pane can sit outside the tab pages.
  */
-export function CategoriesView({ categories, onSelect }: CategoriesViewProps) {
+export function CategoriesView({
+    categories,
+    onSelect,
+    editing,
+    onReorder,
+}: CategoriesViewProps) {
     const t = useT()
 
     if (categories === undefined) return <CategoriesSkeleton />
@@ -38,21 +46,28 @@ export function CategoriesView({ categories, onSelect }: CategoriesViewProps) {
     }
 
     return (
-        <div
-            className="flex flex-col px-4 pt-4 pb-24"
-            style={{ gap: GROUP_SPACING }}
-        >
-            {categories.map((category, index) => {
+        <SortableList
+            className="px-4 pt-4 pb-24"
+            items={categories}
+            idOf={(category) => category.id}
+            nameOf={(category) => category.name}
+            editing={editing}
+            onReorder={onReorder}
+            renderItem={(category, { radius, dragHandle }) => {
                 const accent = normalizeColor(
                     category.color,
                     CATEGORY_DEFAULT_COLOR,
                 )
                 return (
                     <EntityListTile
-                        key={category.id}
-                        radius={groupedRadius(index, categories.length)}
-                        onClick={() => onSelect(category.id)}
-                        chevron
+                        radius={radius}
+                        // While reordering, rows only move; the handle
+                        // takes the chevron's place.
+                        onClick={
+                            editing ? undefined : () => onSelect(category.id)
+                        }
+                        chevron={!editing}
+                        dragHandle={dragHandle}
                         leading={
                             <EntityAvatar color={accent}>
                                 <CategoryIcon
@@ -68,8 +83,8 @@ export function CategoriesView({ categories, onSelect }: CategoriesViewProps) {
                         })}
                     />
                 )
-            })}
-        </div>
+            }}
+        />
     )
 }
 

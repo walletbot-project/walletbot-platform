@@ -191,6 +191,8 @@ const exportableMetricAttributeKeys = (
             return new Set(['auth_method'])
         case 'business.user_accounts.signed_in_count':
             return new Set(['auth_method', 'client_platform'])
+        case 'agent.sessions.started_count':
+            return new Set(['model', 'start_kind'])
         case 'agent.session.cost_usd':
         case 'agent.interaction.cost_usd':
             return new Set([
@@ -207,6 +209,32 @@ const exportableMetricAttributeKeys = (
             return new Set(['model', 'mode', 'cost_bucket'])
         case 'agent.reports.submitted_count':
             return new Set(['reason', 'scope', 'client_platform'])
+        case 'sync.errors.count':
+            return new Set(['direction', 'reason', 'platform'])
+        case 'agent.tool.errors.count':
+            return new Set(['tool_name', 'reason'])
+        case 'system.function.duration_bucket_count':
+            return new Set(['function', 'bucket', 'status'])
+        case 'voice.connect.setup_complete_bucket_count':
+            return new Set(['bucket', 'platform', 'resumed'])
+        case 'agent.response.first_token_bucket_count':
+            return new Set(['bucket', 'mode', 'platform'])
+        case 'agent.response.first_token_ms':
+            return new Set(['mode', 'platform'])
+        case 'sync.push.client_failures.count':
+            return new Set(['reason', 'platform'])
+        case 'agent.tool.calls.count':
+            return new Set(['tool_name'])
+        case 'system.latency.quantile_ms':
+            return new Set([
+                'operation',
+                'batch_size',
+                'mode',
+                'quantile',
+                'window',
+            ])
+        case 'system.latency.samples_count':
+            return new Set(['operation', 'batch_size', 'mode', 'window'])
         case 'business.users.registered_total':
         case 'agent.session.cost_outlier_count':
             return new Set()

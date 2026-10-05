@@ -175,6 +175,12 @@ class AppLocalizationsEs extends AppLocalizations {
   String get balanceUnavailable => 'Saldo no disponible';
 
   @override
+  String get declaredBalance => 'Saldo declarado';
+
+  @override
+  String get platformBalance => 'Saldo calculado';
+
+  @override
   String get sameAccounts => 'La cuenta origen y destino deben ser distintas';
 
   @override
@@ -748,6 +754,10 @@ class AppLocalizationsEs extends AppLocalizations {
   String get accountSaveFailed => 'No se pudo guardar la cuenta';
 
   @override
+  String get accountsReorderFailed =>
+      'No se pudo guardar el nuevo orden de tus cuentas';
+
+  @override
   String get adjustBalance => 'Ajustar saldo';
 
   @override
@@ -852,6 +862,10 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get categorySaveFailed => 'No se pudo guardar la categoría';
+
+  @override
+  String get categoriesReorderFailed =>
+      'No se pudo guardar el nuevo orden de tus categorías';
 
   @override
   String get latestMovements => 'Últimos movimientos';
@@ -1642,6 +1656,18 @@ class AppLocalizationsEs extends AppLocalizations {
   String get widgetTypeBalance => 'Saldo';
 
   @override
+  String get widgetTypeBalanceComparison => 'Comparación de saldo';
+
+  @override
+  String get dashboardLastMonthBalance => 'Saldo del mes pasado';
+
+  @override
+  String get dashboardCurrentBalance => 'Saldo actual';
+
+  @override
+  String get dashboardBalanceDifference => 'Diferencia';
+
+  @override
   String get widgetTypeChart => 'Gráfico';
 
   @override
@@ -1723,27 +1749,133 @@ class AppLocalizationsEs extends AppLocalizations {
   String get result => 'resultado';
 
   @override
-  String get connected => 'conectado';
-
-  @override
-  String get connecting => 'conectando';
-
-  @override
-  String get idle => 'inactivo';
-
-  @override
   String get connectionLostReconnecting =>
       'Se perdió la conexión. Reconectando automáticamente…';
 
   @override
-  String get connectingPrompt => 'Conectando…';
-
-  @override
-  String get voiceStartPrompt =>
-      'Tocá el micrófono para iniciar una conversación';
-
-  @override
   String get typeMessage => 'Escribí un mensaje…';
+
+  @override
+  String get voiceWelcomeTitle => '¿En qué te ayudo?';
+
+  @override
+  String get voiceWelcome => 'Contame un gasto o preguntame por tus cuentas';
+
+  @override
+  String get voiceStartTalking => 'Iniciar llamada';
+
+  @override
+  String get voiceLiveHint => 'Modo manos libres';
+
+  @override
+  String get voiceExitLive => 'Terminar llamada';
+
+  @override
+  String get voiceRecordVoiceNote => 'Grabar un audio';
+
+  @override
+  String get voiceDiscardVoiceNote => 'Descartar audio';
+
+  @override
+  String get voiceNoteLimit => 'Límite de 5 minutos';
+
+  @override
+  String get voiceOnCall => 'En llamada';
+
+  @override
+  String get voiceRecordHint => 'Tocá o mantené apretado para grabar un audio';
+
+  @override
+  String get voicePreparingMic => 'Preparando el micrófono';
+
+  @override
+  String get voiceListening => 'Te escucho';
+
+  @override
+  String get voiceMicPaused => 'Micrófono en pausa';
+
+  @override
+  String get voiceSlideToLock => 'Deslizá para bloquear';
+
+  @override
+  String get voicePause => 'Pausar';
+
+  @override
+  String get voiceResume => 'Continuar';
+
+  @override
+  String get voiceSend => 'Enviar';
+
+  @override
+  String suggestionLogExpense(String amount, String category) {
+    return 'Gasté $amount en $category';
+  }
+
+  @override
+  String suggestionLogExpenseWithAccount(
+    String amount,
+    String category,
+    String account,
+  ) {
+    return 'Gasté $amount en $category con $account';
+  }
+
+  @override
+  String suggestionSpentInCategoryThisMonth(String category) {
+    return '¿Cuánto gasté en $category este mes?';
+  }
+
+  @override
+  String suggestionAccountBalance(String account) {
+    return '¿Cuánto tengo en $account?';
+  }
+
+  @override
+  String get suggestionTopSpendingThisMonth => '¿En qué gasté más este mes?';
+
+  @override
+  String suggestionCompareCategoryLastMonth(String category) {
+    return '¿Gasté más en $category que el mes pasado?';
+  }
+
+  @override
+  String suggestionTransfer(String amount, String account, String toAccount) {
+    return 'Pasé $amount de $account a $toAccount';
+  }
+
+  @override
+  String suggestionLogIncome(String amount, String account) {
+    return 'Cobré $amount en $account';
+  }
+
+  @override
+  String suggestionSpentWithTag(String tag) {
+    return '¿Cuánto gasté con la etiqueta $tag?';
+  }
+
+  @override
+  String get suggestionRecentExpenses => '¿Cuáles fueron mis últimos gastos?';
+
+  @override
+  String get suggestionWhatCanYouDo => '¿Qué podés hacer?';
+
+  @override
+  String get suggestionCreateCashAccount => 'Creá una cuenta de efectivo';
+
+  @override
+  String get suggestionSetupCategories => 'Ayudame a armar mis categorías';
+
+  @override
+  String get suggestionHowToLogExpense => '¿Cómo anoto un gasto?';
+
+  @override
+  String get suggestionHomeWidget =>
+      'Agregá un widget en Inicio con mis gastos del mes';
+
+  @override
+  String suggestionHomeWidgetForCategory(String category) {
+    return 'Agregá un widget en Inicio con mis gastos en $category';
+  }
 
   @override
   String get microphonePermissionDenied => 'Se denegó el permiso del micrófono';
@@ -1840,6 +1972,10 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get tagSaveFailed => 'No se pudo guardar la etiqueta';
+
+  @override
+  String get tagsReorderFailed =>
+      'No se pudo guardar el nuevo orden de tus etiquetas';
 
   @override
   String get legalFirstTitle => 'Antes de empezar';

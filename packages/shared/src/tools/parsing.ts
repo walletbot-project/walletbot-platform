@@ -1,3 +1,5 @@
+import { pastCutoffMs } from '../occurrence'
+
 // Shared pure helpers used by tool executors on web. The native (Dart) side
 // must mirror these in Dart — keep this file the canonical reference.
 
@@ -107,6 +109,31 @@ export function parseNaturalDate(
         throw new Error(`Unrecognized date: ${input}`)
     }
     return BigInt(parsed)
+}
+
+/**
+ * The exclusive upper bound of "the balance on <input>" — what a balance read
+ * passes as its `asOfMs`. Every movement of that local calendar day counts, so
+ * the day is inclusive: the bound is the next local midnight.
+ *
+ * Today is the exception: its bound is the occurrence cutoff, so a movement
+ * scheduled for later today does not count yet and the answer matches the
+ * balance the app shows right now. A future day counts the movements already
+ * scheduled up to its end (recurring occurrences, future-dated movements).
+ */
+export function balanceAsOfMs(input: string, now: Date = new Date()): bigint {
+    const day = new Date(Number(parseNaturalDate(input, now)))
+    const isToday =
+        day.getFullYear() === now.getFullYear() &&
+        day.getMonth() === now.getMonth() &&
+        day.getDate() === now.getDate()
+    if (isToday) return BigInt(pastCutoffMs(now))
+    const nextMidnight = new Date(
+        day.getFullYear(),
+        day.getMonth(),
+        day.getDate() + 1,
+    )
+    return BigInt(nextMidnight.getTime())
 }
 
 /** Optional version: returns undefined when input is undefined. */

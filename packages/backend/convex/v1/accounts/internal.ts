@@ -4,6 +4,7 @@ import type { MutationCtx } from '../../_generated/server'
 import { internalMutation } from '../../_generated/server'
 import { inflowsByAccount, outflowsByAccount } from '../../aggregates'
 import { nextSeq, writeTombstone } from '../../sync/helpers'
+import { reconcileAfterLedgerChange } from '../../transactions/helpers'
 import { resolveAccountId } from './helpers'
 
 // Batch size for the transaction repoint below. Kept well under Convex's
@@ -66,6 +67,7 @@ export const mergeTransactionBatch = internalMutation({
                 if (newDoc) {
                     await outflowsByAccount.replace(ctx, oldDoc, newDoc)
                     await inflowsByAccount.replace(ctx, oldDoc, newDoc)
+                    await reconcileAfterLedgerChange(ctx, oldDoc, newDoc)
                 }
             }
             sourceDone = page.isDone
@@ -89,6 +91,7 @@ export const mergeTransactionBatch = internalMutation({
                 if (newDoc) {
                     await outflowsByAccount.replace(ctx, oldDoc, newDoc)
                     await inflowsByAccount.replace(ctx, oldDoc, newDoc)
+                    await reconcileAfterLedgerChange(ctx, oldDoc, newDoc)
                 }
             }
             destDone = page.isDone

@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:app/components/dashboard/balance_card_widget.dart';
+import 'package:app/components/dashboard/balance_comparison_widget.dart';
 import 'package:app/components/dashboard/breakdown_chart_widget.dart';
 import 'package:app/components/dashboard/dashboard_layout.dart';
 import 'package:app/components/dashboard/dashboard_models.dart';
@@ -504,6 +505,7 @@ class DashboardView extends StatelessWidget {
       TransactionListWidgetSpec() => TransactionListWidget(spec: spec),
       BalanceCardWidgetSpec() => BalanceCardWidget(spec: spec),
       ChartWidgetSpec() => BreakdownChartWidget(spec: spec),
+      BalanceComparisonWidgetSpec() => BalanceComparisonWidget(spec: spec),
     };
   }
 }
@@ -919,7 +921,8 @@ class _DashboardDragPreview extends StatelessWidget {
       StatWidgetSpec(:final title) ||
       TransactionListWidgetSpec(:final title) ||
       BalanceCardWidgetSpec(:final title) ||
-      ChartWidgetSpec(:final title) =>
+      ChartWidgetSpec(:final title) ||
+      BalanceComparisonWidgetSpec(:final title) =>
         title.isEmpty
             ? context.l10n.widget
             : context.l10n.dashboardTitle(title),
@@ -929,6 +932,7 @@ class _DashboardDragPreview extends StatelessWidget {
       TransactionListWidgetSpec() => Icons.receipt_long_outlined,
       BalanceCardWidgetSpec() => Icons.account_balance_wallet_outlined,
       ChartWidgetSpec() => Icons.donut_large_rounded,
+      BalanceComparisonWidgetSpec() => Icons.compare_arrows_rounded,
     };
 
     return DecoratedBox(

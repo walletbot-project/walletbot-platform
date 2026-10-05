@@ -23,6 +23,7 @@ import {
     CATEGORY_DEFAULT_COLOR,
     COLOR_OPTIONS,
     normalizeColor,
+    useReadableAccent,
 } from '@/lib/entity-colors'
 import {
     type Messages,
@@ -193,6 +194,7 @@ function AccountActionWidget({
     wasUpdated: boolean
 }) {
     const t = useT()
+    const paint = useReadableAccent()
     const account = useQuery(api.v1.accounts.queries.get, { id: entityId })
     const updateAccount = useMutation(api.v1.accounts.mutations.update)
     const [editOpen, setEditOpen] = useState(false)
@@ -203,7 +205,7 @@ function AccountActionWidget({
     return (
         <>
             <ActionCard>
-                <EntityIcon color={accent}>
+                <EntityIcon color={paint(accent)}>
                     <AccountIcon name={account.icon} size={16} color={accent} />
                 </EntityIcon>
                 <ActionCopy
@@ -252,6 +254,7 @@ function CategoryActionWidget({
     wasUpdated: boolean
 }) {
     const t = useT()
+    const paint = useReadableAccent()
     const category = useQuery(api.v1.categories.queries.get, { id: entityId })
     const updateCategory = useMutation(api.v1.categories.mutations.update)
     const [editOpen, setEditOpen] = useState(false)
@@ -262,7 +265,7 @@ function CategoryActionWidget({
     return (
         <>
             <ActionCard>
-                <EntityIcon color={accent}>
+                <EntityIcon color={paint(accent)}>
                     <CategoryIcon
                         name={category.icon}
                         size={16}
@@ -677,6 +680,11 @@ function EditButton({ onClick }: { onClick: () => void }) {
     )
 }
 
+/**
+ * Tinted circle behind an action card's glyph. Paints `color` as given: tags
+ * pass their raw color, accounts and categories pass it already adapted by
+ * `readableAccent` (their glyphs adapt the stored color on their own).
+ */
 function EntityIcon({
     color,
     children,
@@ -747,6 +755,7 @@ function VisualIdentityFields({
                     value={color}
                     onChange={onColorChange}
                     options={COLOR_OPTIONS}
+                    themed
                 />
             </div>
             <div className="flex flex-col gap-2">

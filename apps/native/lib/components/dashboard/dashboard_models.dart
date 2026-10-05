@@ -65,11 +65,18 @@ enum WidgetType {
   stat('stat'),
   list('list'),
   balance('balance'),
-  chart('chart');
+  chart('chart'),
+  balanceComparison('balance_comparison');
 
   const WidgetType(this.wire);
 
   final String wire;
+
+  /// The widgets that read account balances rather than transactions: scoped
+  /// by currency + accounts, never by a saved filter. Mirrors
+  /// `isBalanceWidgetType` in `packages/shared/src/dashboard/widgets.ts`.
+  bool get readsBalances =>
+      this == WidgetType.balance || this == WidgetType.balanceComparison;
 
   static WidgetType? fromWire(String wire) {
     for (final t in values) {
@@ -145,6 +152,30 @@ class BalanceCardWidgetSpec extends DashboardWidgetSpec {
   final String currency;
   final List<String> accountIds;
 }
+
+/// A Balance comparison: last month's closing balance, the current one, and
+/// the difference, across the same [currency]/[accountIds] scope as the
+/// balance card (an empty [accountIds] is every account in [currency]).
+class BalanceComparisonWidgetSpec extends DashboardWidgetSpec {
+  const BalanceComparisonWidgetSpec({
+    required this.title,
+    required this.currency,
+    this.accountIds = const [],
+    super.background,
+    super.width = DashboardWidth.half,
+  });
+
+  final String title;
+  final String currency;
+  final List<String> accountIds;
+}
+
+/// The as-of bound of "last month's balance": the local midnight that starts
+/// the month [now] is in. Balances are read with an exclusive bound, so every
+/// movement of the previous month's last day counts. Mirrors
+/// `monthCloseAsOfMs` in `packages/shared/src/dashboard/widgets.ts`.
+BigInt monthCloseAsOfMs(DateTime now) =>
+    BigInt.from(DateTime(now.year, now.month).millisecondsSinceEpoch);
 
 /// A Breakdown chart: the transactions matching [filter] bucketed by [groupBy]
 /// and drawn as [chartKind] (pie / bar / line). For a meaningful single-number
@@ -230,6 +261,15 @@ DashboardWidgetSpec? dashboardSpecFromRow(
             BreakdownChartKind.pie,
         background: background,
         width: width ?? DashboardWidth.full,
+      );
+    case WidgetType.balanceComparison:
+      final rawCurrency = options['currency'];
+      return BalanceComparisonWidgetSpec(
+        title: title,
+        currency: rawCurrency is String ? rawCurrency : '',
+        accountIds: dashboardIdListFromJson(options['accountIds']),
+        background: background,
+        width: width ?? DashboardWidth.half,
       );
   }
 }

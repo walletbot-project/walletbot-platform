@@ -1,11 +1,11 @@
 import 'dart:async';
-import 'dart:typed_data';
 
 import 'package:app/l10n/l10n.dart';
 import 'package:app/screens/voice.dart';
 import 'package:app/voice/voice_event.dart';
 import 'package:app/voice/voice_expense_command.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -38,7 +38,8 @@ void main() {
   testWidgets(
     'a failed start keeps the conversation and queued text, without raw errors',
     (tester) async {
-      final command = _RecordingCommand(active: false, failStarts: true);
+      final command = _RecordingCommand(active: false, failStarts: true)
+        ..failCleanup = true;
       final factory = _RecordingFactory(command);
       await tester.pumpWidget(_voiceApp(factory));
       await tester.pump();
@@ -55,6 +56,8 @@ void main() {
       expect(find.textContaining('StateError'), findsNothing);
       expect(factory.discardCalls, 0);
 
+      expect(find.byType(CircularProgressIndicator), findsNothing);
+      command.failCleanup = false;
       command.failStarts = false;
       await _sendText(tester, 'second message');
       command.emit(VoiceConnectedEvent());
@@ -70,7 +73,7 @@ void main() {
 
 Future<void> _sendText(WidgetTester tester, String text) async {
   await tester.enterText(find.byType(TextField), text);
-  await tester.testTextInput.receiveAction(TextInputAction.send);
+  await tester.sendKeyEvent(LogicalKeyboardKey.enter);
   await tester.pump();
 }
 
@@ -113,6 +116,7 @@ class _RecordingCommand implements VoiceExpenseCommand {
   final _events = StreamController<VoiceEvent>.broadcast();
   final List<String> sentTexts = [];
   bool failStarts;
+  bool failCleanup = false;
   bool _active;
 
   void emit(VoiceEvent event) => _events.add(event);
@@ -136,10 +140,16 @@ class _RecordingCommand implements VoiceExpenseCommand {
   String get label => 'test';
 
   @override
-  Future<void> start({bool respondWithAudio = true}) async {
+  Future<void> start({
+    bool respondWithAudio = true,
+    VoiceConversationMode mode = VoiceConversationMode.chat,
+  }) async {
     if (failStarts) throw StateError('injected start failure');
     _active = true;
   }
+
+  @override
+  Future<void> prepareAudio() async {}
 
   @override
   Future<void> ensureConnected() async {}
@@ -148,7 +158,21 @@ class _RecordingCommand implements VoiceExpenseCommand {
   Future<void> addAudioChunk(Uint8List chunk) async {}
 
   @override
-  Future<void> endAudioStream() async {}
+  Future<void> endTurn() async {
+    if (failCleanup) throw StateError('injected cleanup failure');
+  }
+
+  @override
+  VoiceConversationMode get mode => VoiceConversationMode.chat;
+
+  @override
+  Future<void> switchMode(VoiceConversationMode next) async {}
+
+  @override
+  void discardTurn() {}
+
+  @override
+  bool get isNoteFull => false;
 
   @override
   Future<void> sendText(String text) async {
@@ -174,5 +198,7 @@ class _RecordingCommand implements VoiceExpenseCommand {
   }
 
   @override
-  Future<void> dispose() async {}
+  Future<void> dispose() async {
+    if (failCleanup) throw StateError('injected dispose failure');
+  }
 }
