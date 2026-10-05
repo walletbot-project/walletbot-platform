@@ -15,6 +15,15 @@ export {
 } from './agent-reports'
 export type { AgentSkill } from './agent-skills'
 export { AGENT_SKILLS, AGENT_SKILLS_BY_SLUG } from './agent-skills'
+export type { LedgerEntry } from './balance-adjustment'
+export {
+    adjustmentAmount,
+    adjustmentPreviousBalance,
+    compareLedgerOrder,
+    isBeforeInLedger,
+    ledgerDelta,
+    reconcileAdjustments,
+} from './balance-adjustment'
 export { MAX_DEVICE_ID_LENGTH } from './client'
 export {
     CURRENCIES,
@@ -97,8 +106,10 @@ export {
     DASHBOARD_WIDTHS,
     DEFAULT_VALUE_BACKGROUND,
     GRID_UNITS,
+    isBalanceWidgetType,
     isSpanFree,
     mergeWidgetOptions,
+    monthCloseAsOfMs,
     NO_BACKGROUND,
     parseWidgetOptions,
     resolvePlacements,
@@ -216,6 +227,7 @@ export type { ToolDefinition, ToolSchema } from './tools/helpers'
 export { SchemaType, zodToToolSchema } from './tools/helpers'
 export type { TransactionTimeStatus } from './tools/parsing'
 export {
+    balanceAsOfMs,
     normalizeName,
     parseAmountToCents,
     parseNaturalDate,

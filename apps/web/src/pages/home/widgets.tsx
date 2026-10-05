@@ -1,9 +1,10 @@
 import { api } from '@wallet-bot/backend/api'
-import type {
-    BreakdownChartKind,
-    BreakdownGroupBy,
-    StatAggregation,
-    WidgetOptions,
+import {
+    type BreakdownChartKind,
+    type BreakdownGroupBy,
+    monthCloseAsOfMs,
+    type StatAggregation,
+    type WidgetOptions,
 } from '@wallet-bot/shared'
 import { useQuery } from 'convex/react'
 import {
@@ -136,11 +137,7 @@ export function BalanceCardWidget({ spec }: { spec: WidgetSpec }) {
             title={dashboardTitle(spec.options.title, t)}
             icon="account_balance_wallet"
             minHeight={128}
-            trailing={
-                <span className="m3-label-small rounded-full bg-secondary-container/60 px-2 py-0.5 font-extrabold text-on-secondary-container">
-                    {currency}
-                </span>
-            }
+            trailing={<CurrencyPill currency={currency} />}
             backgroundColor={resolveBackground(
                 spec.options.background,
                 result === undefined ? null : Number(result.balance) / 100,
@@ -159,6 +156,109 @@ export function BalanceCardWidget({ spec }: { spec: WidgetSpec }) {
                 </p>
             )}
         </DashboardCell>
+    )
+}
+
+/**
+ * Last month's closing balance, the current one, and the change between them,
+ * for the same currency/accounts scope as the balance card. Both reads use
+ * `currencyBalance`: last month's at the local midnight that starts this month
+ * (an exclusive bound, so the previous month's last day counts whole), the
+ * current one at the occurrence cutoff.
+ */
+export function BalanceComparisonWidget({ spec }: { spec: WidgetSpec }) {
+    const t = useT()
+    const formatLocale = useFormatLocale()
+    const { brightness } = useTheme()
+    const currency = spec.options.currency
+    const cutoff = useOccurrenceCutoff()
+    // Derived from the cutoff, not from `new Date()`: the month boundary moves
+    // when the cutoff hook ticks over, which is what re-runs these queries.
+    const monthClose = BigInt(monthCloseAsOfMs(new Date(Number(cutoff) - 1)))
+    const current = useQuery(api.v1.dashboard.queries.currencyBalance, {
+        currency,
+        accountIds: spec.options.accountIds,
+        asOfMs: cutoff,
+    })
+    const lastMonth = useQuery(api.v1.dashboard.queries.currencyBalance, {
+        currency,
+        accountIds: spec.options.accountIds,
+        asOfMs: monthClose,
+    })
+    const difference =
+        current === undefined || lastMonth === undefined
+            ? null
+            : current.balance - lastMonth.balance
+
+    const rows: { label: string; cents: bigint | null; signed?: boolean }[] = [
+        {
+            label: t.dashboard.lastMonthBalance,
+            cents: lastMonth?.balance ?? null,
+        },
+        { label: t.dashboard.currentBalance, cents: current?.balance ?? null },
+        {
+            label: t.dashboard.balanceDifference,
+            cents: difference,
+            signed: true,
+        },
+    ]
+
+    return (
+        <DashboardCell
+            title={dashboardTitle(spec.options.title, t)}
+            icon="compare_arrows"
+            minHeight={160}
+            trailing={<CurrencyPill currency={currency} />}
+            backgroundColor={resolveBackground(
+                spec.options.background,
+                difference === null ? null : Number(difference) / 100,
+                brightness,
+            )}
+        >
+            <ul className="flex flex-col">
+                {rows.map((row, index) => (
+                    <li
+                        key={row.label}
+                        className={
+                            index === 0
+                                ? 'flex items-center gap-3 py-2'
+                                : 'flex items-center gap-3 border-outline-variant border-t py-2'
+                        }
+                    >
+                        <span className="m3-body-medium min-w-0 flex-1 truncate text-on-surface-variant">
+                            {row.label}
+                        </span>
+                        {row.cents === null ? (
+                            <Skeleton className="h-5 w-20" />
+                        ) : (
+                            <span
+                                className={
+                                    row.signed && row.cents > 0n
+                                        ? 'm3-body-medium shrink-0 font-extrabold tabular-nums text-positive'
+                                        : 'm3-body-medium shrink-0 font-extrabold tabular-nums text-on-surface'
+                                }
+                            >
+                                {row.signed && row.cents > 0n ? '+' : ''}
+                                {formatMoney(
+                                    Number(row.cents),
+                                    currency,
+                                    formatLocale,
+                                )}
+                            </span>
+                        )}
+                    </li>
+                ))}
+            </ul>
+        </DashboardCell>
+    )
+}
+
+/** The currency badge a balance-reading tile shows in its header. */
+function CurrencyPill({ currency }: { currency: string }) {
+    return (
+        <span className="m3-label-small rounded-full bg-secondary-container/60 px-2 py-0.5 font-extrabold text-on-secondary-container">
+            {currency}
+        </span>
     )
 }
 

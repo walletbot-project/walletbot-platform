@@ -23,6 +23,7 @@
 
 import {
     AGENT_CONTEXT_CAPS,
+    adjustmentAmount,
     convertAmount,
     DEFAULT_FX_MARKET,
     fxAlternatives,
@@ -54,7 +55,11 @@ import {
     recordMovementCreated,
     recordTransferCreated,
 } from '../telemetry/metrics'
-import { aggregateInsert, aggregateReplace } from '../transactions/helpers'
+import {
+    aggregateInsert,
+    aggregateReplace,
+    balanceBeforeInLedger,
+} from '../transactions/helpers'
 import { hasDuplicateAccount } from '../v1/accounts/helpers'
 import {
     DEFAULT_ACCOUNT_COLOR,
@@ -75,6 +80,7 @@ import { resolveAccount, resolveCategory, resolveTag } from './resolve'
 import {
     formatLocalDateTime,
     hostDateAtLocalWallClock,
+    parseAgentBalanceAsOf,
     parseAgentDate,
     parseAgentDateEndOfDay,
     parseAgentTransactionDate,
@@ -1045,17 +1051,6 @@ const addBalanceAdjustmentTool = async (
     const replay = await getTransactionRow(ctx, userId, id)
     if (replay) return ok({ id, duplicate: true })
 
-    // `balanceAfter` is the user's observed truth and is stored verbatim; the
-    // delta is derived, never the other way around.
-    const balanceAfter = parseAmountToCents(args.balanceAfter)
-    const current = await computeAccountBalance(
-        ctx,
-        userId,
-        account.value.id,
-        pastCutoffBigInt(new Date(clock.nowMs)),
-    )
-    const amount = balanceAfter - current
-
     const date = BigInt(
         parseAgentTransactionDate(
             args.date,
@@ -1065,9 +1060,25 @@ const addBalanceAdjustmentTool = async (
             clock.offsetMinutes,
         ),
     )
+    const now = BigInt(Date.now())
+
+    // `balanceAfter` is the user's declaration and is stored verbatim; the
+    // delta is derived from the ledger just before the adjustment's own date,
+    // never the other way around, and later writes before it re-derive it.
+    const balanceAfter = parseAmountToCents(args.balanceAfter)
+    const current = await balanceBeforeInLedger(ctx, userId, account.value.id, {
+        id,
+        type: 'balance_adjustment',
+        accountId: account.value.id,
+        amount: 0n,
+        balanceAfter,
+        date,
+        createdAt: now,
+        isArchived: false,
+    })
+    const amount = adjustmentAmount(balanceAfter, current)
 
     const seq = await nextSeq(ctx, userId)
-    const now = BigInt(Date.now())
     const inserted = await ctx.db.insert('transactions', {
         userId,
         id,
@@ -1113,6 +1124,24 @@ const updateTransactionTool = async (
 ): Promise<ToolResult> => {
     const row = await getTransactionRow(ctx, userId, args.id)
     if (!row) return fail('Transaction not found')
+
+    // An adjustment's amount is derived from the ledger and its date is when
+    // the declaration was made; neither is editable. A new declaration is a
+    // new adjustment.
+    if (row.type === 'balance_adjustment') {
+        if (args.amount !== undefined) {
+            return fail(
+                'A balance adjustment amount cannot be changed; record a new balance adjustment instead',
+            )
+        }
+        if (
+            args.date !== undefined ||
+            args.time !== undefined ||
+            args.timeStatus !== undefined
+        ) {
+            return fail('A balance adjustment date cannot be changed')
+        }
+    }
 
     let categoryId: string | undefined
     if (args.categoryIdOrName !== undefined) {
@@ -1615,17 +1644,28 @@ const dispatch = async (
             const args = toolSchemas.getAccountBalance.parse(raw)
             const found = await resolveAccount(ctx, userId, args.idOrName)
             if (found.kind !== 'resolved') return unresolved('Account', found)
+            // With a date, the balance at the end of that day in the user's
+            // calendar; without one, the balance right now.
+            const asOfMs =
+                args.date === undefined
+                    ? pastCutoffBigInt(new Date(clock.nowMs))
+                    : parseAgentBalanceAsOf(
+                          args.date,
+                          clock.nowMs,
+                          clock.offsetMinutes,
+                      )
             const balance = await computeAccountBalance(
                 ctx,
                 userId,
                 found.value.id,
-                pastCutoffBigInt(new Date(clock.nowMs)),
+                asOfMs,
             )
             return ok({
                 accountId: found.value.id,
                 accountName: found.value.name,
                 balance: centsToDecimal(balance),
                 currency: found.value.currency,
+                ...(args.date !== undefined ? { date: args.date } : {}),
             })
         }
         case 'createAccount':

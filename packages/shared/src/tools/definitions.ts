@@ -30,7 +30,13 @@ const transactionTime = z
     .describe(
         'Transaction clock in 24-hour HH:mm format. REQUIRED whenever timeStatus is confirmed or approximation — the create is rejected without it, so never omit it for those. For confirmed, use the exact time stated. For approximation, map the part-of-day cue to its representative clock: morning/desayuno/mañana = 10:00; lunch/almuerzo/mediodía = 13:00; afternoon/merienda/tarde = 16:00; dinner/cena/noche = 22:00; madrugada = 02:00. Leave it empty only when timeStatus is none. It is independent from date and may be supplied when date is omitted.',
     )
-const dashboardWidgetType = z.enum(['stat', 'list', 'balance', 'chart'])
+const dashboardWidgetType = z.enum([
+    'stat',
+    'list',
+    'balance',
+    'chart',
+    'balance_comparison',
+])
 const dashboardWidth = z.enum(['full', 'two_thirds', 'half', 'third'])
 const statAggregation = z.enum(['sum', 'net', 'count'])
 const breakdownGroupBy = z.enum(['category', 'account', 'month'])
@@ -122,6 +128,11 @@ export const toolSchemas = {
     }),
     getAccountBalance: z.object({
         idOrName: idOrName,
+        date: isoOrNaturalDate
+            .optional()
+            .describe(
+                'Optional day to read the balance on, e.g. "2026-08-15" or "el jueves pasado". The balance at the END of that day: every movement of the day counts. Omit for the current balance.',
+            ),
     }),
     createAccount: z.object({
         name: z.string().describe('Display name (e.g. "BBVA", "Efectivo")'),
@@ -413,7 +424,7 @@ export const toolSchemas = {
             .array(z.string())
             .optional()
             .describe(
-                'Balance widgets: the account ids to sum, all within `currency`. Omit or pass an empty list for every account in that currency.',
+                'balance and balance_comparison widgets: the account ids to sum, all within `currency`. Omit or pass an empty list for every account in that currency.',
             ),
         groupBy: breakdownGroupBy.optional(),
         chartKind: breakdownChartKind.optional(),
@@ -432,7 +443,7 @@ export const toolSchemas = {
             .array(z.string())
             .optional()
             .describe(
-                'Balance widgets: the account ids to sum, all within `currency`. Omit or pass an empty list for every account in that currency.',
+                'balance and balance_comparison widgets: the account ids to sum, all within `currency`. Omit or pass an empty list for every account in that currency.',
             ),
         groupBy: breakdownGroupBy.optional(),
         chartKind: breakdownChartKind.optional(),

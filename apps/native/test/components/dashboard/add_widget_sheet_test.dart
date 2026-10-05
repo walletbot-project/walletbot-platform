@@ -173,6 +173,33 @@ void main() {
     });
   });
 
+  group('balance comparison', () {
+    testWidgets('is scoped like a balance card and needs no filter', (
+      tester,
+    ) async {
+      final cash = await repos.accounts.create(
+        name: 'Efectivo',
+        currency: 'ARS',
+      );
+      await repos.accounts.create(name: 'Banco', currency: 'ARS');
+
+      await openSheet(tester, (context) => showAddWidgetSheet(context, repos));
+      await tapChip(tester, 'Balance comparison');
+      await typeTitle(tester, 'Este mes');
+      expect(confirmEnabled(tester, editing: false), isTrue);
+      await tapVisible(tester, find.widgetWithText(FilterChip, 'Efectivo'));
+      await submit(tester, editing: false);
+
+      final rows = await repos.dashboard.listActive();
+      expect(rows.single.type, 'balance_comparison');
+      expect(rows.single.filterId, isNull);
+      expect(rows.single.width, 'half');
+      final options = await storedOptions();
+      expect(options['currency'], 'ARS');
+      expect(options['accountIds'], [cash]);
+    });
+  });
+
   group('balance card scope', () {
     testWidgets('with no account chosen it stores an empty scope', (
       tester,

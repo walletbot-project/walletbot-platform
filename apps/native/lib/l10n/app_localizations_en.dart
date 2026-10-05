@@ -175,6 +175,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get balanceUnavailable => 'Balance unavailable';
 
   @override
+  String get declaredBalance => 'Declared balance';
+
+  @override
+  String get platformBalance => 'Calculated balance';
+
+  @override
   String get sameAccounts =>
       'The source and destination accounts must be different';
 
@@ -1642,6 +1648,18 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get widgetTypeBalance => 'Balance';
+
+  @override
+  String get widgetTypeBalanceComparison => 'Balance comparison';
+
+  @override
+  String get dashboardLastMonthBalance => 'Last month\'s balance';
+
+  @override
+  String get dashboardCurrentBalance => 'Current balance';
+
+  @override
+  String get dashboardBalanceDifference => 'Difference';
 
   @override
   String get widgetTypeChart => 'Chart';

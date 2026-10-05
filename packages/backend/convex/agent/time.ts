@@ -18,6 +18,8 @@
 // midnight. Recorded in docs/riesgos.md rather than solved with a timezone
 // database.
 
+import { pastCutoffBigInt } from '@wallet-bot/shared'
+
 const MINUTE_MS = 60 * 1000
 const DAY_MS = 24 * 60 * MINUTE_MS
 
@@ -285,6 +287,23 @@ export const parseAgentDateEndOfDay = (
         { ...clock, hour: 23, minute: 59, second: 59, ms: 999 },
         offsetMinutes,
     )
+}
+
+// Server-side twin of `balanceAsOfMs` in @wallet-bot/shared, in the user's
+// offset: the exclusive upper bound of "the balance on <input>". The day is
+// inclusive, so the bound is the next local midnight — except today, which
+// stops at the occurrence cutoff so the answer matches the balance the app
+// shows right now. A future day counts what is already scheduled up to its
+// end.
+export const parseAgentBalanceAsOf = (
+    input: string,
+    nowMs: number,
+    offsetMinutes: number,
+): bigint => {
+    const end = parseAgentDateEndOfDay(input, nowMs, offsetMinutes) + 1
+    const todayEnd = parseAgentDateEndOfDay('today', nowMs, offsetMinutes) + 1
+    if (end === todayEnd) return pastCutoffBigInt(new Date(nowMs))
+    return BigInt(end)
 }
 
 // `YYYY-MM-DD HH:mm` in the user's timezone. Tool results carry this next to

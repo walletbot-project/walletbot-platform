@@ -6,6 +6,7 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:app/data/occurrence.dart' show pastCutoffMs;
 import 'package:app/database.dart';
 import 'package:app/voice/tool_parsing.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -91,6 +92,28 @@ void main() {
         final expected = _toDate((c['expect'] as Map).cast<String, Object?>());
         expect(
           parseTransactionDate(date, timeStatus: status, time: time, now: now),
+          BigInt.from(expected.millisecondsSinceEpoch),
+        );
+      });
+    }
+  });
+
+  group('balanceAsOfMs fixtures', () {
+    for (final raw in fixtures['balanceAsOf'] as List) {
+      final c = (raw as Map).cast<String, Object?>();
+      final input = c['input'] as String;
+      test(input, () {
+        if (c['throws'] == true) {
+          expect(() => balanceAsOfMs(input, now: now), throwsA(anything));
+          return;
+        }
+        if (c['cutoff'] == true) {
+          expect(balanceAsOfMs(input, now: now), pastCutoffMs(now));
+          return;
+        }
+        final expected = _toDate((c['expect'] as Map).cast<String, Object?>());
+        expect(
+          balanceAsOfMs(input, now: now),
           BigInt.from(expected.millisecondsSinceEpoch),
         );
       });

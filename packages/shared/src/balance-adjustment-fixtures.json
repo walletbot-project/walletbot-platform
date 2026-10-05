@@ -1,0 +1,316 @@
+{
+    "cases": [
+        {
+            "name": "back-dated income shrinks the adjustment (2000 → declare 5000 → +1000 yesterday)",
+            "entries": [
+                {
+                    "id": "init",
+                    "type": "balance_adjustment",
+                    "accountId": "cash",
+                    "amount": 0,
+                    "balanceAfter": 200000,
+                    "date": 1000,
+                    "createdAt": 1000
+                },
+                {
+                    "id": "adj",
+                    "type": "balance_adjustment",
+                    "accountId": "cash",
+                    "amount": 300000,
+                    "balanceAfter": 500000,
+                    "date": 3000,
+                    "createdAt": 3000
+                },
+                {
+                    "id": "debt-paid",
+                    "type": "income",
+                    "accountId": "cash",
+                    "amount": 100000,
+                    "date": 2000,
+                    "createdAt": 4000
+                }
+            ],
+            "expected": { "init": 200000, "adj": 200000 }
+        },
+        {
+            "name": "a movement after the adjustment does not change it",
+            "entries": [
+                {
+                    "id": "adj",
+                    "type": "balance_adjustment",
+                    "accountId": "cash",
+                    "amount": 0,
+                    "balanceAfter": 500000,
+                    "date": 1000,
+                    "createdAt": 1000
+                },
+                {
+                    "id": "lunch",
+                    "type": "expense",
+                    "accountId": "cash",
+                    "amount": 10000,
+                    "date": 2000,
+                    "createdAt": 2000
+                }
+            ],
+            "expected": { "adj": 500000 }
+        },
+        {
+            "name": "deleting a back-dated expense grows the adjustment back",
+            "entries": [
+                {
+                    "id": "init",
+                    "type": "balance_adjustment",
+                    "accountId": "cash",
+                    "amount": 0,
+                    "balanceAfter": 200000,
+                    "date": 1000,
+                    "createdAt": 1000
+                },
+                {
+                    "id": "gone",
+                    "type": "expense",
+                    "accountId": "cash",
+                    "amount": 50000,
+                    "date": 2000,
+                    "createdAt": 2000,
+                    "isArchived": true
+                },
+                {
+                    "id": "adj",
+                    "type": "balance_adjustment",
+                    "accountId": "cash",
+                    "amount": 350000,
+                    "balanceAfter": 500000,
+                    "date": 3000,
+                    "createdAt": 3000
+                }
+            ],
+            "expected": { "init": 200000, "adj": 300000 }
+        },
+        {
+            "name": "only the first adjustment after a movement absorbs it",
+            "entries": [
+                {
+                    "id": "adj1",
+                    "type": "balance_adjustment",
+                    "accountId": "cash",
+                    "amount": 0,
+                    "balanceAfter": 100000,
+                    "date": 1000,
+                    "createdAt": 1000
+                },
+                {
+                    "id": "early",
+                    "type": "expense",
+                    "accountId": "cash",
+                    "amount": 30000,
+                    "date": 500,
+                    "createdAt": 5000
+                },
+                {
+                    "id": "mid",
+                    "type": "income",
+                    "accountId": "cash",
+                    "amount": 20000,
+                    "date": 1500,
+                    "createdAt": 1500
+                },
+                {
+                    "id": "adj2",
+                    "type": "balance_adjustment",
+                    "accountId": "cash",
+                    "amount": 0,
+                    "balanceAfter": 150000,
+                    "date": 2000,
+                    "createdAt": 2000
+                }
+            ],
+            "expected": { "adj1": 130000, "adj2": 30000 }
+        },
+        {
+            "name": "a movement at the adjustment's exact date counts before it",
+            "entries": [
+                {
+                    "id": "adj",
+                    "type": "balance_adjustment",
+                    "accountId": "cash",
+                    "amount": 0,
+                    "balanceAfter": 500000,
+                    "date": 1000,
+                    "createdAt": 1000
+                },
+                {
+                    "id": "same-ms",
+                    "type": "expense",
+                    "accountId": "cash",
+                    "amount": 10000,
+                    "date": 1000,
+                    "createdAt": 2000
+                }
+            ],
+            "expected": { "adj": 510000 }
+        },
+        {
+            "name": "two adjustments at the same date apply in creation order",
+            "entries": [
+                {
+                    "id": "z-first",
+                    "type": "balance_adjustment",
+                    "accountId": "cash",
+                    "amount": 0,
+                    "balanceAfter": 100000,
+                    "date": 1000,
+                    "createdAt": 1000
+                },
+                {
+                    "id": "a-second",
+                    "type": "balance_adjustment",
+                    "accountId": "cash",
+                    "amount": 0,
+                    "balanceAfter": 400000,
+                    "date": 1000,
+                    "createdAt": 2000
+                }
+            ],
+            "expected": { "z-first": 100000, "a-second": 300000 }
+        },
+        {
+            "name": "a back-dated transfer moves both accounts' adjustments",
+            "entries": [
+                {
+                    "id": "bank-adj",
+                    "type": "balance_adjustment",
+                    "accountId": "bank",
+                    "amount": 0,
+                    "balanceAfter": 1000000,
+                    "date": 3000,
+                    "createdAt": 3000
+                },
+                {
+                    "id": "cash-adj",
+                    "type": "balance_adjustment",
+                    "accountId": "cash",
+                    "amount": 0,
+                    "balanceAfter": 500000,
+                    "date": 3000,
+                    "createdAt": 3000
+                },
+                {
+                    "id": "withdraw",
+                    "type": "transfer",
+                    "accountId": "bank",
+                    "toAccountId": "cash",
+                    "amount": 200000,
+                    "toAmount": 200000,
+                    "date": 2000,
+                    "createdAt": 4000
+                }
+            ],
+            "expected": { "bank-adj": 1200000, "cash-adj": 300000 }
+        },
+        {
+            "name": "a cross-currency transfer credits the destination with toAmount",
+            "entries": [
+                {
+                    "id": "usd-adj",
+                    "type": "balance_adjustment",
+                    "accountId": "usd",
+                    "amount": 0,
+                    "balanceAfter": 10000,
+                    "date": 3000,
+                    "createdAt": 3000
+                },
+                {
+                    "id": "buy-usd",
+                    "type": "transfer",
+                    "accountId": "ars",
+                    "toAccountId": "usd",
+                    "amount": 1500000,
+                    "toAmount": 1000,
+                    "date": 2000,
+                    "createdAt": 2000
+                }
+            ],
+            "expected": { "usd-adj": 9000 }
+        },
+        {
+            "name": "other accounts' movements are ignored",
+            "entries": [
+                {
+                    "id": "adj",
+                    "type": "balance_adjustment",
+                    "accountId": "cash",
+                    "amount": 0,
+                    "balanceAfter": 500000,
+                    "date": 3000,
+                    "createdAt": 3000
+                },
+                {
+                    "id": "elsewhere",
+                    "type": "expense",
+                    "accountId": "bank",
+                    "amount": 70000,
+                    "date": 2000,
+                    "createdAt": 2000
+                }
+            ],
+            "expected": { "adj": 500000 }
+        },
+        {
+            "name": "an archived adjustment no longer pins the balance",
+            "entries": [
+                {
+                    "id": "old",
+                    "type": "balance_adjustment",
+                    "accountId": "cash",
+                    "amount": 100000,
+                    "balanceAfter": 100000,
+                    "date": 1000,
+                    "createdAt": 1000,
+                    "isArchived": true
+                },
+                {
+                    "id": "salary",
+                    "type": "income",
+                    "accountId": "cash",
+                    "amount": 40000,
+                    "date": 2000,
+                    "createdAt": 2000
+                },
+                {
+                    "id": "adj",
+                    "type": "balance_adjustment",
+                    "accountId": "cash",
+                    "amount": 0,
+                    "balanceAfter": 300000,
+                    "date": 3000,
+                    "createdAt": 3000
+                }
+            ],
+            "expected": { "adj": 260000 }
+        },
+        {
+            "name": "an adjustment without a declared balance is a no-op",
+            "entries": [
+                {
+                    "id": "salary",
+                    "type": "income",
+                    "accountId": "cash",
+                    "amount": 40000,
+                    "date": 1000,
+                    "createdAt": 1000
+                },
+                {
+                    "id": "legacy",
+                    "type": "balance_adjustment",
+                    "accountId": "cash",
+                    "amount": 999,
+                    "date": 2000,
+                    "createdAt": 2000
+                }
+            ],
+            "expected": { "legacy": 0 }
+        }
+    ]
+}

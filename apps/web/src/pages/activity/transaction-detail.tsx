@@ -1,6 +1,9 @@
 import { api } from '@wallet-bot/backend/api'
 import type { SimpleFilter } from '@wallet-bot/shared'
-import { computeExchangeRate } from '@wallet-bot/shared'
+import {
+    adjustmentPreviousBalance,
+    computeExchangeRate,
+} from '@wallet-bot/shared'
 import { CircularProgress, IconButton, Select, SelectOption } from 'actify'
 import { useMutation, useQuery } from 'convex/react'
 import type { FunctionReturnType } from 'convex/server'
@@ -252,6 +255,9 @@ function TransactionDetailsContent({
         transaction.type === 'expense' ||
         transaction.type === 'transfer'
     const canEditAccount = transaction.type !== 'balance_adjustment'
+    // A balance adjustment's date is when the declaration was made; its amount
+    // is derived from everything before that moment, so it cannot be moved.
+    const canEditDate = transaction.type !== 'balance_adjustment'
     const isTransfer = transaction.type === 'transfer'
     const exchangeRate = crossCurrencyExchangeRate(transaction)
     const hasSelectedTags = tags.some((tag) => selectedTagIds.has(tag.id))
@@ -553,7 +559,7 @@ function TransactionDetailsContent({
                             }
                             attention={!dateConfirmed}
                         >
-                            {editing ? (
+                            {editing && canEditDate ? (
                                 <DateField
                                     value={date}
                                     onChange={(next) => {
@@ -565,6 +571,8 @@ function TransactionDetailsContent({
                                     compact
                                     className="w-auto"
                                 />
+                            ) : editing ? (
+                                formatDate(transaction.date, formatLocale)
                             ) : (
                                 <button
                                     type="button"
@@ -602,7 +610,7 @@ function TransactionDetailsContent({
                             }
                             attention={timeNeedsAttention}
                         >
-                            {editing ? (
+                            {editing && canEditDate ? (
                                 <TimeField
                                     value={time}
                                     onChange={(next) => {
@@ -617,6 +625,42 @@ function TransactionDetailsContent({
                                 formatTime(transaction.date, formatLocale)
                             )}
                         </ReceiptRow>
+
+                        {transaction.type === 'balance_adjustment' &&
+                        transaction.balanceAfter !== undefined ? (
+                            <>
+                                <ReceiptRow
+                                    icon={<Icon name="fact_check" />}
+                                    label={t.transaction.declaredBalance}
+                                >
+                                    <span className="tabular-nums">
+                                        {formatMoney(
+                                            Number(transaction.balanceAfter),
+                                            transaction.currency,
+                                            formatLocale,
+                                        )}
+                                    </span>
+                                </ReceiptRow>
+                                <ReceiptRow
+                                    icon={<Icon name="calculate" />}
+                                    label={t.transaction.platformBalance}
+                                >
+                                    <span className="tabular-nums">
+                                        {formatMoney(
+                                            Number(
+                                                adjustmentPreviousBalance({
+                                                    amount: transaction.amount,
+                                                    balanceAfter:
+                                                        transaction.balanceAfter,
+                                                }),
+                                            ),
+                                            transaction.currency,
+                                            formatLocale,
+                                        )}
+                                    </span>
+                                </ReceiptRow>
+                            </>
+                        ) : null}
 
                         <ReceiptRow
                             icon={

@@ -2,12 +2,12 @@ import 'package:drift/drift.dart';
 
 import '../../database.dart';
 import '../../telemetry/business_metrics.dart';
+import '../balance_adjustments.dart';
 import '../ids.dart';
 import '../models/recurrence_series.dart';
 import '../models/transaction_filter.dart';
 import '../occurrence.dart';
 import '../recurrence.dart';
-import '../queries/account_balance.dart';
 import '../queries/stream_utils.dart';
 import '../queries/transaction_query.dart';
 import 'repository_base.dart';
@@ -214,7 +214,7 @@ class TransactionRepository extends RepositoryBase {
   }
 
   /// Replays the local ledger for [accountId] and returns the balance
-  /// immediately before and after [transactionId].
+  /// immediately before and after [transactionId], in ledger order.
   Future<AccountBalanceAroundTransaction?> balanceAroundTransaction({
     required String transactionId,
     required String accountId,
@@ -230,19 +230,16 @@ class TransactionRepository extends RepositoryBase {
               ))
             .get();
 
-    rows.sort((a, b) {
-      final dateCompare = a.date.compareTo(b.date);
-      if (dateCompare != 0) return dateCompare;
-      final createdCompare = a.createdAt.compareTo(b.createdAt);
-      if (createdCompare != 0) return createdCompare;
-      return a.id.compareTo(b.id);
-    });
+    // Ledger order — the same one a balance adjustment is derived in, so the
+    // "before" next to an adjustment is exactly what it was measured against.
+    final entries = rows.map(LedgerEntry.fromTransaction).toList()
+      ..sort(compareLedgerOrder);
 
     var running = BigInt.zero;
-    for (final row in rows) {
+    for (final entry in entries) {
       final before = running;
-      running += _accountDelta(row, accountId);
-      if (row.id == transactionId) {
+      running += ledgerDelta(entry, accountId);
+      if (entry.id == transactionId) {
         return AccountBalanceAroundTransaction(before: before, after: running);
       }
     }
@@ -456,6 +453,7 @@ class TransactionRepository extends RepositoryBase {
               );
         }
       }
+      await _reconcileAdjustments({accountId});
     });
     _trackCreatedMetric(type: type, createdBy: createdBy);
     return id;
@@ -552,6 +550,7 @@ class TransactionRepository extends RepositoryBase {
               ),
             );
       }
+      await _reconcileAdjustments(_accountsOf([anchorRow]));
     });
     return count;
   }
@@ -644,6 +643,7 @@ class TransactionRepository extends RepositoryBase {
       for (final row in tail) {
         await _deleteTx(row.id, now);
       }
+      await _reconcileAdjustments(_accountsOf(tail));
     });
     return tail.length;
   }
@@ -679,29 +679,35 @@ class TransactionRepository extends RepositoryBase {
     }
 
     final now = currentMs;
-    // One statement for the whole tail: unlike the delete, a value edit needs
-    // no per-row tombstone or join cascade, so there is nothing to loop over.
-    return db.transaction(
-      () =>
-          (db.update(db.transactions)..where(
-                (t) =>
-                    t.recurrenceId.equals(found.rule.id) &
-                    t.recurrenceIndex.isBiggerOrEqualValue(found.index) &
-                    t.archived.equals(false),
-              ))
-              .write(
-                TransactionsCompanion(
-                  name: name,
-                  description: description,
-                  amount: amount,
-                  accountId: accountId,
-                  currency: currency,
-                  categoryId: categoryId,
-                  updatedAt: Value(now),
-                  dirty: const Value(true),
-                ),
-              ),
-    );
+    Expression<bool> inTail($TransactionsTable t) =>
+        t.recurrenceId.equals(found.rule.id) &
+        t.recurrenceIndex.isBiggerOrEqualValue(found.index) &
+        t.archived.equals(false);
+    return db.transaction(() async {
+      // The accounts the tail sits on before the edit, too: moving it to
+      // another account changes the adjustments it leaves behind.
+      final before = await (db.select(db.transactions)..where(inTail)).get();
+      // One statement for the whole tail: unlike the delete, a value edit
+      // needs no per-row tombstone or join cascade, so there is nothing to
+      // loop over.
+      final changed = await (db.update(db.transactions)..where(inTail)).write(
+        TransactionsCompanion(
+          name: name,
+          description: description,
+          amount: amount,
+          accountId: accountId,
+          currency: currency,
+          categoryId: categoryId,
+          updatedAt: Value(now),
+          dirty: const Value(true),
+        ),
+      );
+      await _reconcileAdjustments({
+        ..._accountsOf(before),
+        if (accountId.present) accountId.value,
+      });
+      return changed;
+    });
   }
 
   /// Re-cadences a series from this occurrence on, by splitting it in two.
@@ -824,6 +830,7 @@ class TransactionRepository extends RepositoryBase {
             ),
           );
       await _attachTagsTx(id, tagIds, now);
+      await _reconcileAdjustments({fromAccountId, toAccountId});
     });
     _trackTransferCreatedMetric(
       createdBy: createdBy,
@@ -832,9 +839,10 @@ class TransactionRepository extends RepositoryBase {
     return id;
   }
 
-  /// Records `balanceAfter` and stores the local best-effort delta as the
-  /// amount; the recompute pass (and the server) correct the delta when
-  /// back-dated rows arrive later.
+  /// Records the declaration `balanceAfter` and derives the amount from the
+  /// ledger just before the adjustment's own date. Later writes before it —
+  /// local, or merged by sync — re-derive the amount, so the declaration keeps
+  /// holding (`lib/data/balance_adjustments.dart`).
   Future<String> addBalanceAdjustment({
     required String accountId,
     required BigInt balanceAfterCents,
@@ -848,12 +856,29 @@ class TransactionRepository extends RepositoryBase {
   }) async {
     final id = newUuid();
     final now = currentMs;
+    final date = _resolveTransactionDate(
+      dateMs: dateMs,
+      timeStatus: timeStatus,
+      loadedAtMs: now,
+    );
     // Read-then-write in one SQL transaction so a concurrent write can't slip
     // in between the balance read and the insert and make the stored delta
     // inconsistent with the balance it was computed against.
     await db.transaction(() async {
-      final currentBalance = await computeAccountBalance(db, accountId);
-      final amount = balanceAfterCents - currentBalance;
+      final previousBalance = await localBalanceBeforeInLedger(
+        db,
+        accountId,
+        LedgerEntry(
+          id: id,
+          type: 'balance_adjustment',
+          accountId: accountId,
+          amount: BigInt.zero,
+          balanceAfter: balanceAfterCents,
+          date: date,
+          createdAt: now,
+        ),
+      );
+      final amount = balanceAfterCents - previousBalance;
       await db
           .into(db.transactions)
           .insert(
@@ -863,11 +888,7 @@ class TransactionRepository extends RepositoryBase {
               name: name,
               description: Value(description),
               status: 'cleared',
-              date: _resolveTransactionDate(
-                dateMs: dateMs,
-                timeStatus: timeStatus,
-                loadedAtMs: now,
-              ),
+              date: date,
               timeStatus: Value(timeStatus),
               accountId: accountId,
               categoryId: '',
@@ -880,6 +901,9 @@ class TransactionRepository extends RepositoryBase {
               dirty: const Value(true),
             ),
           );
+      // The declaration pins the balance after it, so the next adjustment
+      // on the account now starts from it.
+      await _reconcileAdjustments({accountId});
     });
     _trackCreatedMetric(type: 'balance_adjustment', createdBy: createdBy);
     return id;
@@ -900,7 +924,11 @@ class TransactionRepository extends RepositoryBase {
   }
 
   /// Partial update via `Value<T>` (absent = keep). Always bumps `updatedAt`
-  /// and re-dirties.
+  /// and re-dirties. No-op when the transaction does not exist.
+  ///
+  /// A balance adjustment's amount is derived from the ledger and its date and
+  /// account are where the declaration was made, so changing any of them
+  /// throws [ArgumentError].
   Future<void> update(
     String id, {
     Value<String> name = const Value.absent(),
@@ -918,10 +946,22 @@ class TransactionRepository extends RepositoryBase {
     Value<double?> exchangeRate = const Value.absent(),
     Value<String> status = const Value.absent(),
   }) async {
+    final existing = await getById(id);
+    if (existing == null) return;
+    if (existing.type == 'balance_adjustment') {
+      if (amount.present) {
+        throw ArgumentError('Balance adjustment amount cannot be changed');
+      }
+      if (date.present || dateConfirmed.present || timeStatus.present) {
+        throw ArgumentError('Balance adjustment date cannot be changed');
+      }
+      if (accountId.present && accountId.value != existing.accountId) {
+        throw ArgumentError('Balance adjustment account cannot be changed');
+      }
+    }
+
     var resolvedDate = date;
     if (date.present) {
-      final existing = await getById(id);
-      if (existing == null) return;
       resolvedDate = Value(
         _resolveTransactionDate(
           dateMs: date.value,
@@ -933,26 +973,36 @@ class TransactionRepository extends RepositoryBase {
       );
     }
 
-    await (db.update(db.transactions)..where((t) => t.id.equals(id))).write(
-      TransactionsCompanion(
-        name: name,
-        description: description,
-        date: resolvedDate,
-        dateConfirmed: dateConfirmed,
-        timeStatus: timeStatus,
-        accountId: accountId,
-        amount: amount,
-        currency: currency,
-        categoryId: categoryId,
-        toAccountId: toAccountId,
-        toAmount: toAmount,
-        toCurrency: toCurrency,
-        exchangeRate: exchangeRate,
-        status: status,
-        updatedAt: Value(currentMs),
-        dirty: const Value(true),
-      ),
-    );
+    await db.transaction(() async {
+      await (db.update(db.transactions)..where((t) => t.id.equals(id))).write(
+        TransactionsCompanion(
+          name: name,
+          description: description,
+          date: resolvedDate,
+          dateConfirmed: dateConfirmed,
+          timeStatus: timeStatus,
+          accountId: accountId,
+          amount: amount,
+          currency: currency,
+          categoryId: categoryId,
+          toAccountId: toAccountId,
+          toAmount: toAmount,
+          toCurrency: toCurrency,
+          exchangeRate: exchangeRate,
+          status: status,
+          updatedAt: Value(currentMs),
+          dirty: const Value(true),
+        ),
+      );
+      // Both where it was and where it is now: a move between accounts, or
+      // across an adjustment's date, changes the adjustments on both sides.
+      await _reconcileAdjustments({
+        ..._accountsOf([existing]),
+        if (accountId.present) accountId.value,
+        if (toAccountId.present && toAccountId.value != null)
+          toAccountId.value!,
+      });
+    });
   }
 
   /// Soft-deletes a transaction: hard-deletes + tombstones every tag join,
@@ -962,7 +1012,10 @@ class TransactionRepository extends RepositoryBase {
   Future<void> delete(String id) async {
     final txn = await getById(id);
     if (txn == null) return;
-    await db.transaction(() => _deleteTx(id, currentMs));
+    await db.transaction(() async {
+      await _deleteTx(id, currentMs);
+      await _reconcileAdjustments(_accountsOf([txn]));
+    });
   }
 
   /// The body of [delete], without its transaction, so a scoped delete can
@@ -1025,25 +1078,18 @@ class TransactionRepository extends RepositoryBase {
     return removed;
   }
 
-  BigInt _accountDelta(Transaction t, String accountId) {
-    var delta = BigInt.zero;
-    if (t.accountId == accountId) {
-      switch (t.type) {
-        case 'expense':
-        case 'transfer':
-          delta -= t.amount;
-          break;
-        case 'income':
-        case 'balance_adjustment':
-          delta += t.amount;
-          break;
-      }
-    }
-    if (t.type == 'transfer' && t.toAccountId == accountId) {
-      delta += t.toAmount ?? t.amount;
-    }
-    return delta;
-  }
+  /// The accounts whose balance [rows] move.
+  Set<String> _accountsOf(Iterable<Transaction> rows) => {
+    for (final row in rows) ...[
+      row.accountId,
+      if (row.type == 'transfer' && row.toAccountId != null) row.toAccountId!,
+    ],
+  };
+
+  /// Re-derives the balance adjustments on [accountIds] after a write moved
+  /// what came before them. Call inside the write's own `db.transaction`.
+  Future<void> _reconcileAdjustments(Set<String> accountIds) =>
+      reconcileLocalAdjustments(db, accountIds: accountIds);
 
   /// Join ids are deterministic (`txnId__tagId`) so an untag → retag
   /// round-trip recreates the same id with a newer `updatedAt`, letting the

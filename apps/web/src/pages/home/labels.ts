@@ -30,6 +30,8 @@ export function widgetTypeLabel(type: WidgetType, t: Messages): string {
             return t.dashboard.typeBalance
         case 'chart':
             return t.dashboard.typeChart
+        case 'balance_comparison':
+            return t.dashboard.typeBalanceComparison
     }
 }
 
@@ -45,6 +47,7 @@ export function widgetLabel(title: string, type: string, t: Messages): string {
         case 'list':
         case 'balance':
         case 'chart':
+        case 'balance_comparison':
             return widgetTypeLabel(type, t)
         default:
             return t.dashboard.widget

@@ -49,7 +49,12 @@ export const AGENT_SKILLS: readonly AgentSkill[] = [
 - Two accounts may share a name only across different currencies. When a name matches several accounts, the one in the user's default currency wins automatically; otherwise ask which one, mentioning the currencies.
 - Same name AND same currency is not allowed: sync auto-merges such duplicates (see sync-and-offline). Reuse the existing account instead of creating a twin.
 - Transfers: same-currency transfers derive the received amount automatically. Cross-currency transfers require the amount received on the destination side (toAmount) — ask the user for it. exchangeRate is stored as reference metadata only and never derives toAmount. Transfers are excluded from category breakdowns and category summaries.
-- Balance adjustment records the user's observed truth: pass balanceAfter exactly as the user stated it and the system computes the signed difference against the current balance. Never compute a "spent" amount yourself.
+- Balance adjustment records the user's declaration "this account holds X at this moment": pass balanceAfter exactly as the user stated it and the system computes the signed difference from the balance it had just before that moment. Never compute a "spent" amount yourself.
+- That difference stays current on its own. Recording, editing or deleting a movement dated before the adjustment changes the difference so the declared balance still holds; movements dated after it never touch it. Only the first adjustment after a movement absorbs it — a later declaration starts from the earlier one.
+- Movements are placed by their own date and time. One recorded today without a time is placed at the moment it was recorded, so it lands after an adjustment declared earlier today. If the user says it happened before they counted, give it a time before the adjustment.
+- An adjustment's amount and date cannot be edited. To correct a declared balance, record a new balance adjustment.
+- Balance on a day: getAccountBalance with \`date\` returns the balance at the end of that day — every movement of the day counts. For "how much did I have in total", read each account in that currency and add them; never add balances across currencies.
+- A past balance only reflects what was recorded. Money the user never recorded shows up on the date of the next balance adjustment, not spread over the days before it — so a past balance can differ from what the user remembers having. Say so if they question it.
 - Balances are per account, in that account's currency. There is no automatic currency conversion anywhere: totals never mix currencies meaningfully, so keep summaries and numeric widgets scoped to one currency.`,
     },
     {
@@ -123,7 +128,7 @@ Recipes:
 - Money received into account X (either leg matters on transfers):
 {"combinator":"and","children":[{"field":"account","operator":"in","value":["<accountId>"],"direction":"destination"}]}
 
-Widget notes: numeric (stat sum/net) widgets should carry a currency condition; count-only stats need none. Balance widgets take NO filter — they use options currency/accountIds and are always as-of-now. Chart widgets exclude transfers regardless of the filter.`,
+Widget notes: numeric (stat sum/net) widgets should carry a currency condition; count-only stats need none. Balance widgets take NO filter — they use options currency/accountIds and are always as-of-now. balance_comparison widgets use the same currency/accountIds and no filter; they show last month's closing balance (its last day included), the current balance, and the difference — use them for "how much did my balance change since last month". Chart widgets exclude transfers regardless of the filter.`,
     },
     {
         slug: 'recurring-movements',
