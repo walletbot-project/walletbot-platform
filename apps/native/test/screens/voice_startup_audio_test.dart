@@ -22,10 +22,42 @@ class _Command extends DebugVoiceExpenseCommand {
   @override
   Stream<VoiceEvent> get events => controller.stream;
   @override
-  Future<void> start({bool respondWithAudio = true}) => connecting.future;
+  Future<void> start({
+    bool respondWithAudio = true,
+    VoiceConversationMode mode = VoiceConversationMode.chat,
+  }) {
+    this.mode = mode;
+    return connecting.future;
+  }
+
   @override
   Future<void> addAudioChunk(Uint8List chunk) async {
-    if (connected) audio.add(chunk.toList());
+    if (connected || mode == VoiceConversationMode.chat) {
+      audio.add(chunk.toList());
+    }
+  }
+
+  int turnsEnded = 0;
+  @override
+  Future<void> endTurn() async {
+    turnsEnded += 1;
+  }
+
+  int discards = 0;
+  @override
+  void discardTurn() => discards += 1;
+
+  final modes = <VoiceConversationMode>[];
+  @override
+  Future<void> switchMode(VoiceConversationMode next) async {
+    if (next == mode) return;
+    mode = next;
+    modes.add(next);
+    connected = false;
+    scheduleMicrotask(() {
+      connected = true;
+      controller.add(VoiceConnectedEvent());
+    });
   }
 
   @override
@@ -75,7 +107,7 @@ void main() {
       ),
     );
     await tester.pump();
-    await tester.tap(find.byIcon(Icons.mic_rounded));
+    await tester.tap(find.text('Start call'));
     await tester.pump();
     await tester.pump();
     expect(captureCalls, ['listen']);
@@ -101,7 +133,7 @@ void main() {
       await chunk(tester, [1, 0]);
       await chunk(tester, [2, 0]);
       expect(command.audio, isEmpty);
-      expect(find.byType(LinearProgressIndicator), findsOneWidget);
+      expect(find.text("I'm listening"), findsOneWidget);
       command.ready();
       await tester.pump();
       await chunk(tester, [3, 0]);
@@ -142,7 +174,7 @@ void main() {
         ),
       );
       await tester.pump();
-      await tester.tap(find.byIcon(Icons.mic_rounded));
+      await tester.tap(find.text('Start call'));
       await tester.pump();
       binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
       binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
@@ -175,6 +207,43 @@ void main() {
     variant: TargetPlatformVariant.only(TargetPlatform.android),
   );
 
+  testWidgets(
+    'a chat note released before setup is handed to the command and ended',
+    (tester) async {
+      final command = _Command();
+      await tester.pumpWidget(
+        MaterialApp(
+          locale: const Locale('en'),
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: VoiceScreen(commandFactory: _Factory(command)),
+        ),
+      );
+      await tester.pump();
+      final gesture = await tester.startGesture(
+        tester.getCenter(find.byIcon(Icons.mic_rounded).last),
+      );
+      await tester.pump(const Duration(milliseconds: 350));
+      await tester.pump();
+      await tester.pump();
+      expect(captureCalls, ['listen']);
+      await chunk(tester, [1, 0]);
+      await chunk(tester, [2, 0]);
+      await gesture.up();
+      await tester.pump();
+      await tester.runAsync(() => Future<void>.delayed(Duration.zero));
+      await tester.pump();
+      expect(captureCalls, ['listen', 'cancel']);
+      expect(command.audio, [
+        [1, 0],
+        [2, 0],
+      ]);
+      expect(command.turnsEnded, 1);
+      await tester.pumpWidget(const SizedBox());
+    },
+    variant: TargetPlatformVariant.only(TargetPlatform.android),
+  );
+
   for (final cancel in [
     'tap',
     'background',
@@ -191,7 +260,7 @@ void main() {
         await chunk(tester, [1, 0]);
         switch (cancel) {
           case 'tap':
-            await tester.tap(find.byIcon(Icons.mic_rounded));
+            await tester.tap(find.byTooltip('End call'));
           case 'background':
             binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
           case 'error':
@@ -201,7 +270,11 @@ void main() {
           case 'overflow':
             await chunk(tester, List.filled(160000, 0));
           case 'text':
-            await tester.enterText(find.byType(TextField), 'hello');
+            // Hidden behind the recording bar, but still there for the keyboard.
+            await tester.enterText(
+              find.byType(TextField, skipOffstage: false),
+              'hello',
+            );
           case 'leave':
             await tester.pumpWidget(const SizedBox());
         }

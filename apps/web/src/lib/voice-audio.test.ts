@@ -84,3 +84,90 @@ it('uses bounded standard Web Audio playback and interrupts scheduled sources', 
     playback.close()
     expect(close).toHaveBeenCalledOnce()
 })
+
+function stubAudioGraph() {
+    vi.stubGlobal(
+        'AudioContext',
+        class {
+            state = 'running'
+            sampleRate = 16000
+            destination = {}
+            audioWorklet = { addModule: async () => {} }
+            resume = async () => {}
+            close = async () => {}
+            createMediaStreamSource = () => ({ connect: () => {} })
+        },
+    )
+    vi.stubGlobal(
+        'AudioWorkletNode',
+        class {
+            port = { onmessage: null, close: () => {} }
+            connect = () => {}
+            disconnect = () => {}
+        },
+    )
+}
+
+function stream(deviceId: string) {
+    const track = {
+        label: deviceId,
+        muted: false,
+        enabled: true,
+        readyState: 'live',
+        stop: () => {},
+        getSettings: () => ({ deviceId }),
+    }
+    return { getTracks: () => [track], getAudioTracks: () => [track] }
+}
+
+it('opens exactly the chosen microphone', async () => {
+    stubAudioGraph()
+    const getUserMedia = vi.fn(async () => stream('usb'))
+    vi.stubGlobal('navigator', { mediaDevices: { getUserMedia } })
+
+    const microphone = await captureMicrophone({
+        deviceId: 'usb',
+        signal: new AbortController().signal,
+        onAudio: () => {},
+    })
+
+    expect(getUserMedia).toHaveBeenCalledTimes(1)
+    expect(getUserMedia.mock.calls[0]).toMatchObject([
+        { audio: { deviceId: { exact: 'usb' } } },
+    ])
+    expect(microphone.deviceId).toBe('usb')
+})
+
+it('falls back to the default microphone when the chosen one is gone', async () => {
+    stubAudioGraph()
+    const getUserMedia = vi
+        .fn()
+        .mockRejectedValueOnce({ name: 'OverconstrainedError' })
+        .mockResolvedValueOnce(stream('built-in'))
+    vi.stubGlobal('navigator', { mediaDevices: { getUserMedia } })
+
+    const microphone = await captureMicrophone({
+        deviceId: 'unplugged',
+        signal: new AbortController().signal,
+        onAudio: () => {},
+    })
+
+    expect(getUserMedia).toHaveBeenCalledTimes(2)
+    expect(getUserMedia.mock.calls[1][0].audio).not.toHaveProperty('deviceId')
+    expect(microphone.deviceId).toBe('built-in')
+})
+
+it('does not retry a denied permission on another microphone', async () => {
+    stubAudioGraph()
+    const getUserMedia = vi.fn().mockRejectedValue({ name: 'NotAllowedError' })
+    vi.stubGlobal('navigator', { mediaDevices: { getUserMedia } })
+
+    await expect(
+        captureMicrophone({
+            deviceId: 'usb',
+            signal: new AbortController().signal,
+            onAudio: () => {},
+        }),
+    ).rejects.toMatchObject({ name: 'NotAllowedError' })
+    expect(getUserMedia).toHaveBeenCalledTimes(1)
+})

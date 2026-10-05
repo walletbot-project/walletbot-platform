@@ -77,9 +77,17 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
   final _events = StreamController<VoiceEvent>.broadcast();
   final List<VoiceEvent> _history = [];
   final List<Map<String, dynamic>> _pendingMessages = [];
+  // The chat voice note being recorded. It stays on the device until it
+  // ends, so a discarded note never reaches Gemini.
+  List<Uint8List>? _note;
+  int _noteBytes = 0;
+  // A chat voice note stops recording at 5 minutes of 16 kHz PCM16.
+  static const _noteLimitBytes = LiveProtocol.inputRate * 2 * 60 * 5;
+  // Ended notes waiting for a chat socket, oldest first.
+  final List<List<Uint8List>> _pendingNotes = [];
   late final LiveConnection _connection = LiveConnection(
     credentials: () async {
-      final prefetched = _prefetchedToken ?? takePrefetchedToken?.call();
+      final prefetched = _prefetchedToken ?? _takeChatPrefetch();
       _prefetchedToken = null;
       final token = await (prefetched ?? _resolveLiveToken());
       if (token.isEmpty) {
@@ -120,19 +128,27 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
     ),
     onState: (state) {
       if (state == LiveConnectionState.ready) {
+        _switchingMode = false;
         _emit(VoiceConnectedEvent());
         final id = _sessionId;
         if (id != null) unawaited(sessionRepository.markStatus(id, 'active'));
         _flushPendingMessages();
+        if (_mode == VoiceConversationMode.chat) _flushPendingNotes();
       } else if (state == LiveConnectionState.reconnecting) {
         _audioStreamOpen = false;
         _discardInterruptedOutput = false;
         unawaited(_flushPlayback());
-        _emit(VoiceDisconnectedEvent());
-        _emit(VoiceConnectingEvent('Reconnecting to Gemini Live'));
+        if (_switchingMode) {
+          _emit(VoiceConnectingEvent('Switching to ${_mode.name} mode'));
+        } else {
+          _emit(VoiceDisconnectedEvent());
+          _emit(VoiceConnectingEvent('Reconnecting to Gemini Live'));
+        }
       }
     },
     onError: (error) {
+      // A failed switch retries like any dropped connection.
+      _switchingMode = false;
       final permanent =
           error is LiveTokenRefusedException ||
           error is MissingLiveCredentialsException;
@@ -173,6 +189,8 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
   bool _screenAttached = false;
   bool _discardInterruptedOutput = false;
   bool _audioStreamOpen = false;
+  VoiceConversationMode _mode = VoiceConversationMode.chat;
+  bool _switchingMode = false;
   int _playbackEpoch = 0;
   int _inputChunks = 0;
   int _textMessages = 0;
@@ -206,19 +224,26 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
   bool get isConnected => _connection.ready;
 
   @override
-  Future<void> start({bool respondWithAudio = true}) {
+  VoiceConversationMode get mode => _mode;
+
+  @override
+  Future<void> start({
+    bool respondWithAudio = true,
+    VoiceConversationMode mode = VoiceConversationMode.chat,
+  }) {
     if (_starting != null) return _starting!;
-    final operation = _start(respondWithAudio);
+    final operation = _start(respondWithAudio, mode);
     _starting = operation;
     return operation.whenComplete(() {
       if (identical(_starting, operation)) _starting = null;
     });
   }
 
-  Future<void> _start(bool respondWithAudio) async {
+  Future<void> _start(bool respondWithAudio, VoiceConversationMode mode) async {
     _audioPlaybackEnabled = respondWithAudio;
     _mutedByDetach = false;
     if (isActive) {
+      await switchMode(mode);
       await ensureConnected();
       return;
     }
@@ -226,6 +251,7 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
       throw StateError('Voice command has ended');
     }
     _active = true;
+    _mode = mode;
 
     final startStopwatch = Stopwatch()..start();
     final session = await sessionRepository.openOrCreate(model: _model);
@@ -248,7 +274,7 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
     // can take hundreds of milliseconds — overlap them. `_connectOnce`
     // consumes the prefetched future (or fetches fresh on reconnects).
     // Prefer a fetch the factory already started when the screen opened.
-    final tokenFetch = takePrefetchedToken?.call() ?? _resolveLiveToken();
+    final tokenFetch = _takeChatPrefetch() ?? _resolveLiveToken();
     tokenFetch.ignore();
     _prefetchedToken = tokenFetch;
     if (respondWithAudio) await prepareAudio();
@@ -258,6 +284,26 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
   @override
   Future<void> ensureConnected() async {
     if (isActive) await _connection.connect();
+  }
+
+  /// The factory's prefetch is minted for chat, so live mode never takes it.
+  Future<LiveToken>? _takeChatPrefetch() =>
+      _mode == VoiceConversationMode.chat ? takePrefetchedToken?.call() : null;
+
+  @override
+  Future<void> switchMode(VoiceConversationMode next) async {
+    if (next == _mode) return;
+    final from = _mode;
+    await endTurn();
+    // The closing socket will never answer that turn.
+    _firstResponseStopwatch = null;
+    _firstResponseMode = null;
+    _mode = next;
+    recordClientEvent('mode_changed', {'from': from.name, 'to': next.name});
+    if (!isActive) return;
+    _prefetchedToken = null;
+    _switchingMode = true;
+    await _connection.reconnect();
   }
 
   @override
@@ -329,6 +375,7 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
       deviceId: deviceId,
       convexSiteUrl: convexSiteUrl,
       buildMintArgs: buildMintArgs,
+      turnDetection: _mode.turnDetection,
       onPhase: (phase, extra) {
         if (phase == 'token_action_failed') {
           _emit(
@@ -372,12 +419,24 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
 
   @override
   Future<void> addAudioChunk(Uint8List chunk) async {
-    if (!isActive || !isConnected || chunk.isEmpty) return;
+    if (!isActive || chunk.isEmpty) return;
     if (chunk.length.isOdd) {
       throw const FormatException('Unaligned microphone PCM16');
     }
-    _inputChunks += 1;
+    if (_mode == VoiceConversationMode.chat) {
+      if (isNoteFull) return;
+      (_note ??= []).add(Uint8List.fromList(chunk));
+      _noteBytes += chunk.length;
+      if (isNoteFull) recordClientEvent('voice_note_limit_reached');
+      return;
+    }
+    if (!isConnected) return;
     _audioStreamOpen = true;
+    _sendAudio(chunk);
+  }
+
+  void _sendAudio(Uint8List chunk) {
+    _inputChunks += 1;
     _persistProtocolEvent(
       type: 'audio_input_chunk',
       direction: 'client',
@@ -389,14 +448,56 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
     _connection.send(LiveProtocol.audio(chunk));
   }
 
+  /// A whole chat note as one turn; the model answers right after.
+  void _sendNote(List<Uint8List> chunks) {
+    _connection.send(LiveProtocol.activityStart());
+    for (final chunk in chunks) {
+      _sendAudio(chunk);
+    }
+    _connection.send(LiveProtocol.activityEnd());
+    _startFirstResponseTimer(mode: 'voice');
+  }
+
+  void _flushPendingNotes() {
+    final notes = List<List<Uint8List>>.of(_pendingNotes);
+    _pendingNotes.clear();
+    for (final note in notes) {
+      _sendNote(note);
+    }
+  }
+
   @override
-  Future<void> endAudioStream() async {
-    if (!isActive || !_audioStreamOpen) return;
+  Future<void> endTurn() async {
+    if (!isActive) return;
+    if (_mode == VoiceConversationMode.chat) {
+      final note = _note;
+      _note = null;
+      _noteBytes = 0;
+      if (note == null || note.isEmpty) return;
+      if (isConnected) {
+        _sendNote(note);
+      } else {
+        _pendingNotes.add(note);
+      }
+      return;
+    }
+    if (!_audioStreamOpen) return;
     _audioStreamOpen = false;
     _startFirstResponseTimer(mode: 'voice');
     _connection.send({
       'realtimeInput': {'audioStreamEnd': true},
     });
+  }
+
+  @override
+  bool get isNoteFull => _noteBytes >= _noteLimitBytes;
+
+  @override
+  void discardTurn() {
+    _noteBytes = 0;
+    if (_note == null) return;
+    _note = null;
+    recordClientEvent('voice_note_discarded');
   }
 
   void _startFirstResponseTimer({required String mode}) {
@@ -433,7 +534,7 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
     final trimmed = text.trim();
     if (trimmed.isEmpty) return;
     _textMessages += 1;
-    await endAudioStream();
+    await endTurn();
     _startFirstResponseTimer(mode: 'text');
     recordClientEvent('send_message', {
       'interactionModality': 'text',
@@ -495,6 +596,9 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
     _prefetchedToken = null;
     await _connection.close();
     _pendingMessages.clear();
+    _note = null;
+    _noteBytes = 0;
+    _pendingNotes.clear();
     await _tools.settled;
     await _audioPlayer.stop();
     final summary =
@@ -521,6 +625,9 @@ class GeminiVoiceExpenseCommand implements VoiceExpenseCommand {
     _prefetchedToken = null;
     await _connection.close();
     _pendingMessages.clear();
+    _note = null;
+    _noteBytes = 0;
+    _pendingNotes.clear();
     await _tools.settled;
     await _audioPlayer.stop();
     final sessionId = _sessionId;

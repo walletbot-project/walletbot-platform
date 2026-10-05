@@ -1,3 +1,24 @@
+function microphoneConstraints(deviceId?: string): MediaTrackConstraints {
+    return {
+        ...(deviceId ? { deviceId: { exact: deviceId } } : {}),
+        sampleRate: 16000,
+        channelCount: 1,
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true,
+    }
+}
+
+function isMissingDevice(error: unknown): boolean {
+    return (
+        typeof error === 'object' &&
+        error !== null &&
+        'name' in error &&
+        (error.name === 'OverconstrainedError' ||
+            error.name === 'NotFoundError')
+    )
+}
+
 /** Browser-owned audio resources. Gemini transport stays in the official SDK. */
 export async function captureMicrophone(opts: {
     deviceId: string
@@ -5,16 +26,22 @@ export async function captureMicrophone(opts: {
     onAudio: (samples: Float32Array) => void
 }) {
     opts.signal.throwIfAborted()
-    const stream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-            ...(opts.deviceId ? { deviceId: { ideal: opts.deviceId } } : {}),
-            sampleRate: 16000,
-            channelCount: 1,
-            echoCancellation: true,
-            noiseSuppression: true,
-            autoGainControl: true,
-        },
-    })
+    // `exact`, not `ideal`: with `ideal` the browser weighs the chosen mic
+    // against the other constraints and can open a different one, which on a
+    // MacBook with the lid closed is a built-in mic that records only zeros.
+    let stream: MediaStream
+    try {
+        stream = await navigator.mediaDevices.getUserMedia({
+            audio: microphoneConstraints(opts.deviceId),
+        })
+    } catch (error) {
+        // The chosen mic is gone (unplugged, or ids reset with site data).
+        if (!opts.deviceId || !isMissingDevice(error)) throw error
+        opts.signal.throwIfAborted()
+        stream = await navigator.mediaDevices.getUserMedia({
+            audio: microphoneConstraints(),
+        })
+    }
     let context: AudioContext | undefined
     let worklet: AudioWorkletNode | undefined
     const stop = () => {
@@ -41,7 +68,12 @@ export async function captureMicrophone(opts: {
         context.createMediaStreamSource(stream).connect(worklet)
         // Keep the render graph active; the capture processor outputs silence.
         worklet.connect(context.destination)
-        return { stop }
+        const [track] = stream.getAudioTracks()
+        return {
+            stop,
+            /** The mic actually opened, which may differ after a fallback. */
+            deviceId: track?.getSettings().deviceId ?? '',
+        }
     } catch (error) {
         stop()
         throw error

@@ -10,6 +10,24 @@ void main() {
     expect(setup['generationConfig'].containsKey('thinkingConfig'), false);
     expect(setup.containsKey('proactivity'), false);
   });
+  test('setup leaves turn detection to the minted token', () {
+    // The token decides chat (manual) or live (auto); a client-side
+    // realtimeInputConfig would contradict it.
+    expect(
+      LiveProtocol.setup()['setup'].containsKey('realtimeInputConfig'),
+      false,
+    );
+  });
+  test('manual turns are bracketed by activity markers', () {
+    expect(
+      jsonEncode(LiveProtocol.activityStart()),
+      '{"realtimeInput":{"activityStart":{}}}',
+    );
+    expect(
+      jsonEncode(LiveProtocol.activityEnd()),
+      '{"realtimeInput":{"activityEnd":{}}}',
+    );
+  });
   test('accepts PCM only and validates rate and sample alignment', () {
     Map<String, dynamic> part(String mime, List<int> bytes) => {
       'inlineData': {'mimeType': mime, 'data': base64Encode(bytes)},
